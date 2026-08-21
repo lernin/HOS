@@ -13,10 +13,13 @@ const clamp = (value: number, min: number, max: number) => Math.max(min, Math.mi
 export function World3D({ onExit }: World3DProps) {
   const mountRef = useRef<HTMLDivElement>(null)
   const moveRef = useRef({ x: 0, y: 0 })
+  const turnRef = useRef({ x: 0, y: 0 })
   const movePointerRef = useRef<number | null>(null)
   const lookPointerRef = useRef<number | null>(null)
+  const turnPointerRef = useRef<number | null>(null)
   const lookStartRef = useRef({ x: 0, y: 0 })
   const knobRef = useRef<HTMLDivElement>(null)
+  const turnKnobRef = useRef<HTMLDivElement>(null)
   const [showHelp, setShowHelp] = useState(true)
 
   useEffect(() => {
@@ -172,6 +175,9 @@ export function World3D({ onExit }: World3DProps) {
     const render = () => {
       const dt = Math.min(clock.getDelta(), 0.05)
       const touch = moveRef.current
+      const turn = turnRef.current
+      yaw -= turn.x * 2.35 * dt
+      pitch = clamp(pitch - turn.y * 1.7 * dt, -1.12, 1.05)
       const moveForward = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0) - touch.y
       const moveSide = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + touch.x
       const length = Math.hypot(moveForward, moveSide)
@@ -238,6 +244,21 @@ export function World3D({ onExit }: World3DProps) {
     target.applyLook?.(dx, dy)
   }
 
+  const updateTurn = (event: React.PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = clamp((event.clientX - (rect.left + rect.width / 2)) / (rect.width * 0.34), -1, 1)
+    const y = clamp((event.clientY - (rect.top + rect.height / 2)) / (rect.height * 0.34), -1, 1)
+    turnRef.current = { x, y }
+    if (turnKnobRef.current) turnKnobRef.current.style.transform = `translate(${x * 30}px, ${y * 30}px)`
+  }
+
+  const stopTurn = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (turnPointerRef.current !== event.pointerId) return
+    turnPointerRef.current = null
+    turnRef.current = { x: 0, y: 0 }
+    if (turnKnobRef.current) turnKnobRef.current.style.transform = 'translate(0, 0)'
+  }
+
   return (
     <main className="world3d-shell">
       <div className="world3d-canvas" ref={mountRef} />
@@ -274,6 +295,22 @@ export function World3D({ onExit }: World3DProps) {
         onPointerUp={event => { if (lookPointerRef.current === event.pointerId) lookPointerRef.current = null }}
         onPointerCancel={event => { if (lookPointerRef.current === event.pointerId) lookPointerRef.current = null }}
       />
+      <div
+        className="world3d-turn-joystick"
+        aria-label="Turning and looking control"
+        onPointerDown={event => {
+          turnPointerRef.current = event.pointerId
+          event.currentTarget.setPointerCapture(event.pointerId)
+          updateTurn(event)
+          setShowHelp(false)
+        }}
+        onPointerMove={event => { if (turnPointerRef.current === event.pointerId) updateTurn(event) }}
+        onPointerUp={stopTurn}
+        onPointerCancel={stopTurn}
+      >
+        <span>LOOK</span>
+        <div className="world3d-turn-knob" ref={turnKnobRef} />
+      </div>
       <div className="world3d-rotate"><strong>Rotate your phone</strong><span>This experience uses landscape mode.</span></div>
     </main>
   )
