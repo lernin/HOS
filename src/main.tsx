@@ -355,7 +355,7 @@ function App() {
   if (!pin) return (
     <main className="shell pin-shell" data-theme={theme} style={styleVars}>
       <section className="pin-card">
-        <div className="eyebrow">Procedia</div><h1>Thekonym</h1>
+        <div className="eyebrow">Ashley’s private workspace</div><h1>Experiment Hub</h1>
         <form onSubmit={unlock} className="pin-form">
           <input autoFocus inputMode="numeric" maxLength={4} value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))} placeholder="PIN" />
           <button disabled={loading || pinInput.length !== 4}>{loading ? 'Opening…' : 'Open'}</button>
