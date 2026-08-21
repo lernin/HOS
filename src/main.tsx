@@ -8,6 +8,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural'
+type View = 'hub' | 'thekonym'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type Term = {
   id: string
@@ -47,6 +48,7 @@ const FONT_KEY = 'thekonym-font-prefs'
 const DEFAULT_FONTS: FontPrefs = { definition: 16, thoughts: 17, rail: 15, judgment: 15 }
 
 function App() {
+  const [view, setView] = useState<View>(() => window.location.pathname === '/thekonym' ? 'thekonym' : 'hub')
   const [pin, setPin] = useState(() => sessionStorage.getItem(PIN_KEY) ?? '')
   const [pinInput, setPinInput] = useState('')
   const [terms, setTerms] = useState<Term[]>([])
@@ -79,6 +81,19 @@ function App() {
   const releaseTimerRef = useRef<number | null>(null)
   const defHoldTimerRef = useRef<number | null>(null)
   const defHoldActivatedRef = useRef(false)
+
+  useEffect(() => {
+    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : 'hub')
+    window.addEventListener('popstate', syncView)
+    return () => window.removeEventListener('popstate', syncView)
+  }, [])
+
+  function navigate(next: View) {
+    const path = next === 'thekonym' ? '/thekonym' : '/'
+    window.history.pushState({}, '', path)
+    setView(next)
+    window.scrollTo(0, 0)
+  }
 
   function markReviewed(id: string) {
     setReviewedIds(prev => {
@@ -352,11 +367,34 @@ function App() {
 
   if (loading) return <main className="shell" data-theme={theme} style={styleVars}><div className="center">Loading…</div></main>
 
+  if (view === 'hub') return (
+    <main className="shell hub-shell" data-theme={theme} style={styleVars}>
+      <header className="hub-top">
+        <div><div className="eyebrow">Ashley’s private workspace</div><h1>Experiment Hub</h1></div>
+      </header>
+      <section className="hub-intro">
+        <strong>Your experiences</strong>
+        <span>Open an existing tool or add another experiment here later.</span>
+      </section>
+      <section className="experience-grid">
+        <button className="experience-card" onClick={() => navigate('thekonym')}>
+          <span className="experience-icon">T</span>
+          <span className="experience-copy">
+            <strong>Thekonym</strong>
+            <small>Review and organize Procedia terminology.</small>
+          </span>
+          <span className="experience-arrow">→</span>
+        </button>
+      </section>
+      <div className="hub-footer">One app · many experiments</div>
+    </main>
+  )
+
   return (
     <main className={`shell app-shell${recording ? ' is-recording' : ''}`} data-theme={theme} style={styleVars}>
       <header className="top">
         <div><div className="eyebrow">Procedia · Thekonym</div><h1>{current?.term ?? 'Thekonym'}</h1></div>
-        <div className="top-actions"><button className="settings-button" onClick={() => setSettingsOpen(true)} aria-label="Appearance settings">⚙</button><div className="counter">{visible.length ? index + 1 : 0}<span>/</span>{visible.length}</div></div>
+        <div className="top-actions"><button className="hub-button" onClick={() => navigate('hub')}>Hub</button><button className="settings-button" onClick={() => setSettingsOpen(true)} aria-label="Appearance settings">⚙</button><div className="counter">{visible.length ? index + 1 : 0}<span>/</span>{visible.length}</div></div>
       </header>
 
       <div className="definition-row"><div className="definition hero-definition">{current?.plain_definition || 'No plain-language definition yet.'}</div></div>
