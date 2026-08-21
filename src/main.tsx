@@ -3,11 +3,12 @@ import { createRoot } from 'react-dom/client'
 import { supabase } from './lib/supabase'
 import './thekonym.css'
 import './thekonym-font-controls.css'
+import './thekonym-interactions.css'
 
 type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' | 'superseded'
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
-type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural'
+type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type Term = {
   id: string
@@ -38,6 +39,8 @@ const themes: { value: Theme; label: string }[] = [
   { value: 'cyberpunk', label: 'Cyberpunk Neon' },
   { value: 'holographic', label: 'Holographic Glass' },
   { value: 'neural', label: 'Neural Wild' },
+  { value: 'deep-space', label: 'Deep Space' },
+  { value: 'orbital', label: 'Orbital Neon' },
 ]
 
 const PIN_KEY = 'thekonym-review-pin'
@@ -52,13 +55,11 @@ function App() {
   const [terms, setTerms] = useState<Term[]>([])
   const [index, setIndex] = useState(0)
   const [loading, setLoading] = useState(Boolean(pin))
-  const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
   const [note, setNote] = useState('')
   const [recording, setRecording] = useState(false)
-  const [recordingSource, setRecordingSource] = useState<'mic' | 'definition' | null>(null)
   const [transcribing, setTranscribing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme) || 'terminal-cream')
@@ -77,8 +78,8 @@ function App() {
   const endingRef = useRef(false)
   const recordingTermIdRef = useRef<string | null>(null)
   const releaseTimerRef = useRef<number | null>(null)
-  const defHoldTimerRef = useRef<number | null>(null)
-  const defHoldActivatedRef = useRef(false)
+  const statusSaveChainRef = useRef<Promise<void>>(Promise.resolve())
+  const definitionSaveChainRef = useRef<Promise<void>>(Promise.resolve())
 
   function markReviewed(id: string) {
     setReviewedIds(prev => {
@@ -160,14 +161,12 @@ function App() {
 
   async function persistNote(termId: string, text: string, toast = false) {
     if (!pin) return
-    setSaving(true)
     const { error } = await supabase.rpc('thekonym_review_set_note', { pin, term_id: termId, new_note: text })
     if (error) setMessage(error.message)
     else {
       setTerms(all => all.map(t => t.id === termId ? { ...t, review_note: text.trim() || null } : t))
       if (toast) setMessage('Saved')
     }
-    setSaving(false)
   }
 
   function editNote(value: string) {
@@ -210,7 +209,6 @@ function App() {
     endingRef.current = false
     isFingerDownRef.current = false
     setRecording(false)
-    setRecordingSource(null)
     setTranscribing(true)
     const text = chunksRef.current.join(' ').replace(/\s+/g, ' ').trim()
     setNote(text)
@@ -218,10 +216,9 @@ function App() {
     await persistNote(termId, text, true)
     setTranscribing(false)
     recordingTermIdRef.current = null
-    setIndex(i => Math.min(visible.length - 1, i + 1))
   }
 
-  function startRecording(source: 'mic' | 'definition') {
+  function startRecording() {
     if (!current || recording || transcribing) return
     if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current)
     if (noteTimerRef.current) clearTimeout(noteTimerRef.current)
@@ -235,41 +232,13 @@ function App() {
     setTerms(all => all.map(t => t.id === current.id ? { ...t, review_note: null } : t))
     setMessage('')
     setRecording(true)
-    setRecordingSource(source)
     listen(current.id)
   }
 
   function beginRecording(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault()
     try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-    startRecording('mic')
-  }
-
-  async function setDefinitionNeedsWork(id: string) {
-    setTerms(all => all.map(t => t.id === id ? { ...t, definition_status: 'needs_work' } : t))
-    const { error } = await supabase.rpc('thekonym_review_set_definition_status', { pin, term_id: id, new_status: 'needs_work' })
-    if (error) setMessage(error.message)
-  }
-
-  function definitionPointerDown(event: React.PointerEvent<HTMLButtonElement>) {
-    if (!current || recording || transcribing) return
-    event.preventDefault()
-    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
-    defHoldActivatedRef.current = false
-    const id = current.id
-    defHoldTimerRef.current = window.setTimeout(() => {
-      defHoldActivatedRef.current = true
-      void setDefinitionNeedsWork(id)
-      startRecording('definition')
-    }, 360)
-  }
-
-  function definitionPointerUp() {
-    if (defHoldTimerRef.current) {
-      clearTimeout(defHoldTimerRef.current)
-      defHoldTimerRef.current = null
-    }
-    if (!defHoldActivatedRef.current) void toggleDefinition()
+    startRecording()
   }
 
   useEffect(() => {
@@ -291,8 +260,22 @@ function App() {
     }
   }, [visible.length])
 
-  async function choose(status: Status) {
-    if (!current || saving || recording || transcribing || !pin) return
+  function queueStatusSave(termId: string, status: Status) {
+    statusSaveChainRef.current = statusSaveChainRef.current.then(async () => {
+      const { error } = await supabase.rpc('thekonym_review_set_status', { pin, term_id: termId, new_status: status })
+      if (error) setMessage(error.message)
+    }).catch(error => setMessage(error instanceof Error ? error.message : String(error)))
+  }
+
+  function queueDefinitionSave(termId: string, status: DefinitionStatus) {
+    definitionSaveChainRef.current = definitionSaveChainRef.current.then(async () => {
+      const { error } = await supabase.rpc('thekonym_review_set_definition_status', { pin, term_id: termId, new_status: status })
+      if (error) setMessage(error.message)
+    }).catch(error => setMessage(error instanceof Error ? error.message : String(error)))
+  }
+
+  function choose(status: Status) {
+    if (!current || !pin) return
     const id = current.id
     const nextReviewed = new Set(reviewedIds)
     nextReviewed.add(id)
@@ -304,21 +287,15 @@ function App() {
     setTerms(nextTerms)
     markReviewed(id)
     setMessage('Saved')
-    setSaving(true)
-    const { error } = await supabase.rpc('thekonym_review_set_status', { pin, term_id: id, new_status: status })
-    if (error) setMessage(error.message)
-    setSaving(false)
+    queueStatusSave(id, status)
   }
 
-  async function toggleDefinition() {
-    if (!current || saving || recording || transcribing || !pin) return
+  function toggleDefinition() {
+    if (!current || !pin) return
     const id = current.id
     const next: DefinitionStatus = current.definition_status === 'good' ? 'needs_work' : 'good'
     setTerms(all => all.map(t => t.id === id ? { ...t, definition_status: next } : t))
-    setSaving(true)
-    const { error } = await supabase.rpc('thekonym_review_set_definition_status', { pin, term_id: id, new_status: next })
-    if (error) setMessage(error.message)
-    setSaving(false)
+    queueDefinitionSave(id, next)
   }
 
   function go(delta: number) {
@@ -389,25 +366,25 @@ function App() {
       {current ? <section className="workspace">
         <div className="work-row">
           <div className="action-rail">
-            <button className={`rail-button mic-button${recording && recordingSource === 'mic' ? ' recording' : ''}`} onPointerDown={beginRecording} disabled={transcribing}>
+            <button className={`rail-button mic-button${recording ? ' recording' : ''}`} onPointerDown={beginRecording} disabled={transcribing}>
               <span>🎙</span><strong>{recording ? 'Recording' : 'Hold to talk'}</strong>
             </button>
-            <button className={`rail-button definition-toggle ${current.definition_status}${recording && recordingSource === 'definition' ? ' recording' : ''}`} onPointerDown={definitionPointerDown} onPointerUp={definitionPointerUp} onPointerCancel={definitionPointerUp}>
+            <button className={`rail-button definition-toggle ${current.definition_status}`} onPointerDown={event => { event.preventDefault(); toggleDefinition() }}>
               <span>{current.definition_status === 'good' ? '✓' : '✎'}</span><strong>{current.definition_status === 'good' ? 'Definition good' : 'Needs work'}</strong>
             </button>
-            <button className="rail-button next-rail" onClick={() => go(1)} disabled={index >= visible.length - 1 || recording}><span>→</span><strong>Next</strong></button>
-            <button className="rail-button back-rail" onClick={() => go(-1)} disabled={index === 0 || recording}><span>←</span><strong>Back</strong></button>
+            <button className="rail-button next-rail" onPointerDown={event => { event.preventDefault(); go(1) }} disabled={index >= visible.length - 1 || recording}><span>→</span><strong>Next</strong></button>
+            <button className="rail-button back-rail" onPointerDown={event => { event.preventDefault(); go(-1) }} disabled={index === 0 || recording}><span>←</span><strong>Back</strong></button>
           </div>
           <div className="note-panel"><div className="note-title">Your thoughts</div><textarea value={note} onChange={e => editNote(e.target.value)} placeholder="Hold to talk or type…" /></div>
         </div>
         <div className="question">Your judgment</div>
-        <div className="status-grid">{statuses.map(s => <button key={s.value} disabled={saving || recording || transcribing} className={`status-button ${current.status === s.value ? 'selected' : ''}`} onClick={() => void choose(s.value)}><strong>{s.label}</strong><span>{s.hint}</span></button>)}</div>
+        <div className="status-grid">{statuses.map(s => <button key={s.value} className={`status-button ${current.status === s.value ? 'selected' : ''}`} onPointerDown={event => { event.preventDefault(); choose(s.value) }}><strong>{s.label}</strong><span>{s.hint}</span></button>)}</div>
       </section> : <section className="empty">No matches.</section>}
 
       {settingsOpen && <div className="settings-overlay" onClick={() => setSettingsOpen(false)}>
         <section className="settings-panel" onClick={e => e.stopPropagation()}>
           <div className="settings-head"><strong>Appearance</strong><button onClick={() => setSettingsOpen(false)}>×</button></div>
-          <div className="theme-grid">{themes.map(t => <button key={t.value} className={`theme-choice theme-${t.value}${theme === t.value ? ' active' : ''}`} onClick={() => chooseTheme(t.value)}><span className="theme-swatch"/><strong>{t.label}</strong></button>)}</div>
+          <div className="theme-grid">{themes.map(t => <button key={t.value} className={`theme-choice theme-${t.value}${theme === t.value ? ' active' : ''}`} onPointerDown={event => { event.preventDefault(); chooseTheme(t.value) }}><span className="theme-swatch"/><strong>{t.label}</strong></button>)}</div>
           <div className="font-settings">
             <div className="font-setting"><label>Definition text <span className="sample-definition">A sibling concept</span></label><input type="range" min="12" max="26" value={fontPrefs.definition} onChange={e => saveFontPrefs({ ...fontPrefs, definition: +e.target.value })}/></div>
             <div className="font-setting"><label>Your thoughts <span className="sample-thoughts">My note looks like this</span></label><input type="range" min="12" max="28" value={fontPrefs.thoughts} onChange={e => saveFontPrefs({ ...fontPrefs, thoughts: +e.target.value })}/></div>
