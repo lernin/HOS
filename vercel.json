@@ -1,7 +1,8 @@
 {
   "cleanUrls": true,
   "rewrites": [
-    { "source": "/thekonym", "destination": "/" }
+    { "source": "/thekonym", "destination": "/" },
+    { "source": "/world-3d", "destination": "/" }
   ],
   "headers": [
     {

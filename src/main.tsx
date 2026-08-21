@@ -1,4 +1,4 @@
-import { StrictMode, useEffect, useMemo, useRef, useState } from 'react'
+import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { supabase } from './lib/supabase'
 import './thekonym.css'
@@ -9,7 +9,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
-type View = 'hub' | 'thekonym'
+type View = 'hub' | 'thekonym' | 'world3d'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -55,6 +55,7 @@ const FONT_KEY = 'thekonym-font-prefs'
 const TERMS_CACHE_KEY = 'thekonym-terms-cache-v1'
 const OUTBOX_KEY = 'thekonym-sync-outbox-v1'
 const DEFAULT_FONTS: FontPrefs = { definition: 16, thoughts: 17, rail: 15, judgment: 15 }
+const World3D = lazy(() => import('./experiences/World3D').then(module => ({ default: module.World3D })))
 
 function readCachedTerms(): Term[] {
   try { return JSON.parse(localStorage.getItem(TERMS_CACHE_KEY) || '[]') as Term[] } catch { return [] }
@@ -111,13 +112,14 @@ function App() {
 
   useEffect(() => {
     window.history.replaceState({}, '', '/')
-    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : 'hub')
+    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : 'hub')
     window.addEventListener('popstate', syncView)
     return () => window.removeEventListener('popstate', syncView)
   }, [])
 
   function navigate(next: View) {
-    window.history.pushState({}, '', next === 'thekonym' ? '/thekonym' : '/')
+    const path = next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : '/'
+    window.history.pushState({}, '', path)
     setView(next)
     window.scrollTo(0, 0)
   }
@@ -399,6 +401,25 @@ function App() {
     localStorage.setItem(THEME_KEY, next)
   }
 
+  function jumpToFirstUnlabeled() {
+    if (recording) return
+    const firstIndex = terms.findIndex(term => term.status === null)
+    if (firstIndex < 0) {
+      setMessage('Everything has a label.')
+      return
+    }
+    if (current && noteTimerRef.current) {
+      clearTimeout(noteTimerRef.current)
+      noteTimerRef.current = null
+      void persistNote(current.id, note)
+    }
+    setSearch('')
+    setFilter('all')
+    setNavigationAnchorId(null)
+    setIndex(firstIndex)
+    setMessage('First unlabeled term')
+  }
+
   const styleVars = {
     '--definition-size': `${fontPrefs.definition}px`,
     '--thoughts-size': `${fontPrefs.thoughts}px`,
@@ -436,15 +457,17 @@ function App() {
           <span className="experience-copy"><strong>Thekonym</strong><small>Review and organize Procedia terminology.</small></span>
           <button className="experience-go" onClick={() => navigate('thekonym')}>Go</button>
         </article>
-        <article className="experience-card is-next">
+        <article className="experience-card">
           <span className="experience-icon">3D</span>
           <span className="experience-copy"><strong>3D Environment</strong><small>A simple landscape-mode space to move around and explore.</small></span>
-          <span className="experience-soon">Next</span>
+          <button className="experience-go" onClick={() => navigate('world3d')}>Go</button>
         </article>
       </section>
       <div className="hub-footer">One app · many experiments</div>
     </main>
   )
+
+  if (view === 'world3d') return <Suspense fallback={<main className="shell"><div className="center">Opening 3D world…</div></main>}><World3D onExit={() => navigate('hub')} /></Suspense>
 
   return (
     <main className={`shell app-shell${recording ? ' is-recording' : ''}`} data-theme={theme} style={styleVars}>
@@ -460,6 +483,7 @@ function App() {
         <select value={filter} onChange={e => { setFilter(e.target.value as Filter); setNavigationAnchorId(null); setIndex(0) }}>
           <option value="all">All</option><option value="unlabeled">No label yet</option>{statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
+        <button className="jump-unlabeled" onClick={jumpToFirstUnlabeled} disabled={recording} aria-label="Jump to first unlabeled term" title="First unlabeled term">→?</button>
       </div>
 
       {message && <div className="toast">{message}</div>}

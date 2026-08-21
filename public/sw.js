@@ -1,5 +1,5 @@
-const CACHE = 'experiment-hub-v3'
-const SHELL = ['/', '/thekonym', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png']
+const CACHE = 'experiment-hub-v4'
+const SHELL = ['/', '/thekonym', '/world-3d', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)))
