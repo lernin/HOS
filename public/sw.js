@@ -1,4 +1,4 @@
-const CACHE = 'thekonym-standalone-v1'
+const CACHE = 'thekonym-standalone-v2'
 const SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png']
 
 self.addEventListener('install', (event) => {
