@@ -9,6 +9,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
+type View = 'hub' | 'thekonym'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -48,7 +49,7 @@ const themes: { value: Theme; label: string }[] = [
   { value: 'orbital', label: 'Orbital Neon' },
 ]
 
-const PIN_KEY = 'thekonym-review-pin'
+const ACCESS_PIN = '3476'
 const THEME_KEY = 'thekonym-theme'
 const FONT_KEY = 'thekonym-font-prefs'
 const TERMS_CACHE_KEY = 'thekonym-terms-cache-v1'
@@ -80,7 +81,8 @@ function applyPendingChanges(source: Term[], changes = readOutbox()) {
 }
 
 function App() {
-  const [pin, setPin] = useState(() => localStorage.getItem(PIN_KEY) ?? '')
+  const [view, setView] = useState<View>('hub')
+  const [pin, setPin] = useState('')
   const [pinInput, setPinInput] = useState('')
   const [terms, setTerms] = useState<Term[]>([])
   const [index, setIndex] = useState(0)
@@ -106,6 +108,19 @@ function App() {
   const endingRef = useRef(false)
   const recordingTermIdRef = useRef<string | null>(null)
   const flushingRef = useRef(false)
+
+  useEffect(() => {
+    window.history.replaceState({}, '', '/')
+    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : 'hub')
+    window.addEventListener('popstate', syncView)
+    return () => window.removeEventListener('popstate', syncView)
+  }, [])
+
+  function navigate(next: View) {
+    window.history.pushState({}, '', next === 'thekonym' ? '/thekonym' : '/')
+    setView(next)
+    window.scrollTo(0, 0)
+  }
 
   function saveFontPrefs(next: FontPrefs) {
     setFontPrefs(next)
@@ -163,12 +178,10 @@ function App() {
         setSyncState('offline')
         setMessage('Offline — changes will sync automatically.')
       } else {
-        localStorage.removeItem(PIN_KEY)
         setPin('')
         setMessage('Could not open while offline.')
       }
     } else if (!data?.length) {
-      localStorage.removeItem(PIN_KEY)
       setPin('')
       setMessage('Wrong PIN.')
     } else {
@@ -201,12 +214,15 @@ function App() {
     e.preventDefault()
     const candidate = pinInput.trim()
     if (!candidate) return
+    if (candidate !== ACCESS_PIN) {
+      setMessage('Wrong PIN.')
+      return
+    }
     setLoading(true)
     const { data, error } = await supabase.rpc('thekonym_review_list', { pin: candidate })
     if (error) {
       const cached = readCachedTerms()
       if (cached.length) {
-        localStorage.setItem(PIN_KEY, candidate)
         setPin(candidate)
         setTerms(applyPendingChanges(cached))
         setSyncState('offline')
@@ -221,7 +237,6 @@ function App() {
       setLoading(false)
       return
     }
-    localStorage.setItem(PIN_KEY, candidate)
     setPin(candidate)
     const loaded = applyPendingChanges(data as Term[])
     setTerms(loaded)
@@ -394,7 +409,7 @@ function App() {
   if (!pin) return (
     <main className="shell pin-shell" data-theme={theme} style={styleVars}>
       <section className="pin-card">
-        <div className="eyebrow">Procedia</div><h1>Thekonym</h1>
+        <div className="eyebrow">Ashley’s private workspace</div><h1>Experiment Hub</h1>
         <form onSubmit={unlock} className="pin-form">
           <input autoFocus inputMode="numeric" maxLength={4} value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))} placeholder="PIN" />
           <button disabled={loading || pinInput.length !== 4}>{loading ? 'Opening…' : 'Open'}</button>
@@ -406,11 +421,36 @@ function App() {
 
   if (loading) return <main className="shell" data-theme={theme} style={styleVars}><div className="center">Loading…</div></main>
 
+  if (view === 'hub') return (
+    <main className="shell hub-shell" data-theme={theme} style={styleVars}>
+      <header className="hub-top">
+        <div><div className="eyebrow">Ashley’s private workspace</div><h1>Experiment Hub</h1></div>
+      </header>
+      <section className="hub-intro">
+        <strong>Your experiments</strong>
+        <span>Choose an experience, then tap Go.</span>
+      </section>
+      <section className="experience-grid">
+        <article className="experience-card">
+          <span className="experience-icon">T</span>
+          <span className="experience-copy"><strong>Thekonym</strong><small>Review and organize Procedia terminology.</small></span>
+          <button className="experience-go" onClick={() => navigate('thekonym')}>Go</button>
+        </article>
+        <article className="experience-card is-next">
+          <span className="experience-icon">3D</span>
+          <span className="experience-copy"><strong>3D Environment</strong><small>A simple landscape-mode space to move around and explore.</small></span>
+          <span className="experience-soon">Next</span>
+        </article>
+      </section>
+      <div className="hub-footer">One app · many experiments</div>
+    </main>
+  )
+
   return (
     <main className={`shell app-shell${recording ? ' is-recording' : ''}`} data-theme={theme} style={styleVars}>
       <header className="top">
         <div><div className="eyebrow">Procedia · Thekonym</div><h1>{current?.term ?? 'Thekonym'}</h1></div>
-        <div className="top-actions"><div className={`sync-indicator sync-${syncState}`} role="status" aria-label={syncState === 'synced' ? 'All changes synced' : syncState === 'syncing' ? 'Syncing changes' : 'Offline changes waiting'} title={syncState === 'synced' ? 'Synced' : syncState === 'syncing' ? 'Syncing' : 'Offline'} /><button className="settings-button" onClick={() => setSettingsOpen(true)} aria-label="Appearance settings">⚙</button><div className="counter">{visible.length ? index + 1 : 0}<span>/</span>{visible.length}</div></div>
+        <div className="top-actions"><button className="hub-button" onClick={() => navigate('hub')}>Hub</button><div className={`sync-indicator sync-${syncState}`} role="status" aria-label={syncState === 'synced' ? 'All changes synced' : syncState === 'syncing' ? 'Syncing changes' : 'Offline changes waiting'} title={syncState === 'synced' ? 'Synced' : syncState === 'syncing' ? 'Syncing' : 'Offline'} /><button className="settings-button" onClick={() => setSettingsOpen(true)} aria-label="Appearance settings">⚙</button><div className="counter">{visible.length ? index + 1 : 0}<span>/</span>{visible.length}</div></div>
       </header>
 
       <div className="definition-row"><div className="definition hero-definition">{current?.plain_definition || 'No plain-language definition yet.'}</div></div>

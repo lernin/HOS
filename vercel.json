@@ -1,5 +1,8 @@
 {
   "cleanUrls": true,
+  "rewrites": [
+    { "source": "/thekonym", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/manifest.webmanifest",
