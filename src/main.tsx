@@ -68,6 +68,7 @@ function App() {
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(REVIEWED_KEY) || '[]')) } catch { return new Set() }
   })
+  const [recentlyReviewedId, setRecentlyReviewedId] = useState<string | null>(null)
 
   const recognitionRef = useRef<any>(null)
   const chunksRef = useRef<string[]>([])
@@ -145,10 +146,10 @@ function App() {
   }
 
   const visible = useMemo(() => terms.filter(t => {
-    const statusOk = filter === 'all' || (filter === 'unlabeled' ? !reviewedIds.has(t.id) : t.status === filter)
+    const statusOk = filter === 'all' || (filter === 'unlabeled' ? !reviewedIds.has(t.id) || t.id === recentlyReviewedId : t.status === filter)
     const q = search.trim().toLowerCase()
     return statusOk && (!q || t.term.toLowerCase().includes(q) || (t.plain_definition ?? '').toLowerCase().includes(q))
-  }), [terms, filter, search, reviewedIds])
+  }), [terms, filter, search, reviewedIds, recentlyReviewedId])
 
   useEffect(() => { if (index >= visible.length) setIndex(Math.max(0, visible.length - 1)) }, [visible.length, index])
   const current = visible[index]
@@ -295,6 +296,19 @@ function App() {
   async function choose(status: Status) {
     if (!current || saving || recording || transcribing || !pin) return
     const id = current.id
+    if (filter === 'unlabeled') {
+      const nextReviewed = new Set(reviewedIds)
+      nextReviewed.add(id)
+      const q = search.trim().toLowerCase()
+      const nextVisible = terms.filter(t => {
+        const matchesStatus = !nextReviewed.has(t.id) || t.id === id
+        const matchesSearch = !q || t.term.toLowerCase().includes(q) || (t.plain_definition ?? '').toLowerCase().includes(q)
+        return matchesStatus && matchesSearch
+      })
+      const nextIndex = nextVisible.findIndex(t => t.id === id)
+      setRecentlyReviewedId(id)
+      if (nextIndex >= 0) setIndex(nextIndex)
+    }
     setTerms(all => all.map(t => t.id === id ? { ...t, status } : t))
     markReviewed(id)
     setMessage('Saved')
@@ -363,7 +377,7 @@ function App() {
 
       <div className="tools">
         <input value={search} onChange={e => { setSearch(e.target.value); setIndex(0) }} placeholder="Find a term…" />
-        <select value={filter} onChange={e => { setFilter(e.target.value as Filter); setIndex(0) }}>
+        <select value={filter} onChange={e => { setFilter(e.target.value as Filter); setRecentlyReviewedId(null); setIndex(0) }}>
           <option value="all">All</option><option value="unlabeled">No label yet</option>{statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </div>
