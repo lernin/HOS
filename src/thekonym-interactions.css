@@ -62,8 +62,13 @@
   position: relative;
 }
 
+.definition-row {
+  flex: 0 0 76px;
+  max-height: 76px;
+}
+
 .work-row {
-  height: 232px;
+  height: 300px;
 }
 
 .action-rail {
@@ -136,8 +141,13 @@
 }
 
 @media(max-height:760px) {
+  .definition-row {
+    flex-basis: 64px;
+    max-height: 64px;
+  }
+
   .work-row {
-    height: 206px;
+    height: 276px;
   }
 
   .action-rail {
