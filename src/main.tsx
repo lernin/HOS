@@ -58,8 +58,8 @@ function App() {
   const [search, setSearch] = useState('')
   const [note, setNote] = useState('')
   const [recording, setRecording] = useState(false)
+  const [recordingSource, setRecordingSource] = useState<'mic' | 'definition' | null>(null)
   const [transcribing, setTranscribing] = useState(false)
-  const [offset, setOffset] = useState({ x: 0, y: 0 })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme) || 'terminal-cream')
   const [fontPrefs, setFontPrefs] = useState<FontPrefs>(() => {
@@ -68,7 +68,7 @@ function App() {
   const [reviewedIds, setReviewedIds] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(REVIEWED_KEY) || '[]')) } catch { return new Set() }
   })
-  const [recentlyReviewedId, setRecentlyReviewedId] = useState<string | null>(null)
+  const [navigationAnchorId, setNavigationAnchorId] = useState<string | null>(null)
 
   const recognitionRef = useRef<any>(null)
   const chunksRef = useRef<string[]>([])
@@ -76,7 +76,6 @@ function App() {
   const isFingerDownRef = useRef(false)
   const endingRef = useRef(false)
   const recordingTermIdRef = useRef<string | null>(null)
-  const pointerStartRef = useRef({ x: 0, y: 0 })
   const releaseTimerRef = useRef<number | null>(null)
   const defHoldTimerRef = useRef<number | null>(null)
   const defHoldActivatedRef = useRef(false)
@@ -145,11 +144,15 @@ function App() {
     setLoading(false)
   }
 
-  const visible = useMemo(() => terms.filter(t => {
-    const statusOk = filter === 'all' || (filter === 'unlabeled' ? !reviewedIds.has(t.id) || t.id === recentlyReviewedId : t.status === filter)
+  function filterTerms(source: Term[], reviewed: Set<string>, anchorId: string | null) {
     const q = search.trim().toLowerCase()
-    return statusOk && (!q || t.term.toLowerCase().includes(q) || (t.plain_definition ?? '').toLowerCase().includes(q))
-  }), [terms, filter, search, reviewedIds, recentlyReviewedId])
+    return source.filter(t => {
+      const statusOk = t.id === anchorId || filter === 'all' || (filter === 'unlabeled' ? !reviewed.has(t.id) : t.status === filter)
+      return statusOk && (!q || t.term.toLowerCase().includes(q) || (t.plain_definition ?? '').toLowerCase().includes(q))
+    })
+  }
+
+  const visible = useMemo(() => filterTerms(terms, reviewedIds, navigationAnchorId), [terms, filter, search, reviewedIds, navigationAnchorId])
 
   useEffect(() => { if (index >= visible.length) setIndex(Math.max(0, visible.length - 1)) }, [visible.length, index])
   const current = visible[index]
@@ -188,7 +191,7 @@ function App() {
     if (!SpeechRecognition || !isFingerDownRef.current || endingRef.current) return
     const recognition = new SpeechRecognition()
     recognition.lang = 'en-US'
-    recognition.continuous = false
+    recognition.continuous = true
     recognition.interimResults = false
     recognition.maxAlternatives = 1
     recognition.onresult = (event: any) => addChunk((event.results?.[event.resultIndex] ?? event.results?.[event.results.length - 1])?.[0]?.transcript ?? '')
@@ -207,8 +210,8 @@ function App() {
     endingRef.current = false
     isFingerDownRef.current = false
     setRecording(false)
+    setRecordingSource(null)
     setTranscribing(true)
-    setOffset({ x: 0, y: 0 })
     const text = chunksRef.current.join(' ').replace(/\s+/g, ' ').trim()
     setNote(text)
     setTerms(all => all.map(t => t.id === termId ? { ...t, review_note: text || null } : t))
@@ -218,9 +221,8 @@ function App() {
     setIndex(i => Math.min(visible.length - 1, i + 1))
   }
 
-  function beginRecording(event: React.PointerEvent<HTMLButtonElement>) {
+  function startRecording(source: 'mic' | 'definition') {
     if (!current || recording || transcribing) return
-    event.preventDefault()
     if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current)
     if (noteTimerRef.current) clearTimeout(noteTimerRef.current)
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -228,13 +230,19 @@ function App() {
     isFingerDownRef.current = true
     endingRef.current = false
     recordingTermIdRef.current = current.id
-    pointerStartRef.current = { x: event.clientX, y: event.clientY }
     chunksRef.current = []
     setNote('')
     setTerms(all => all.map(t => t.id === current.id ? { ...t, review_note: null } : t))
     setMessage('')
     setRecording(true)
+    setRecordingSource(source)
     listen(current.id)
+  }
+
+  function beginRecording(event: React.PointerEvent<HTMLButtonElement>) {
+    event.preventDefault()
+    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
+    startRecording('mic')
   }
 
   async function setDefinitionNeedsWork(id: string) {
@@ -246,13 +254,13 @@ function App() {
   function definitionPointerDown(event: React.PointerEvent<HTMLButtonElement>) {
     if (!current || recording || transcribing) return
     event.preventDefault()
+    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
     defHoldActivatedRef.current = false
     const id = current.id
-    const clonedEvent = event
     defHoldTimerRef.current = window.setTimeout(() => {
       defHoldActivatedRef.current = true
       void setDefinitionNeedsWork(id)
-      beginRecording(clonedEvent)
+      startRecording('definition')
     }, 360)
   }
 
@@ -265,29 +273,19 @@ function App() {
   }
 
   useEffect(() => {
-    const move = (event: PointerEvent) => {
-      if (!isFingerDownRef.current) return
-      setOffset({
-        x: Math.max(-70, Math.min(70, event.clientX - pointerStartRef.current.x)),
-        y: Math.max(-34, Math.min(34, event.clientY - pointerStartRef.current.y)),
-      })
-    }
     const release = () => {
       if (!isFingerDownRef.current || endingRef.current) return
       if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current)
       releaseTimerRef.current = window.setTimeout(() => {
         endingRef.current = true
         isFingerDownRef.current = false
-        setOffset({ x: 0, y: 0 })
         try { recognitionRef.current?.stop() } catch {}
         if (!recognitionRef.current && recordingTermIdRef.current) void finishRecording(recordingTermIdRef.current)
-      }, 450)
+      }, 120)
     }
-    window.addEventListener('pointermove', move, { passive: true })
     window.addEventListener('pointerup', release, { passive: true })
     window.addEventListener('pointercancel', release, { passive: true })
     return () => {
-      window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', release)
       window.removeEventListener('pointercancel', release)
     }
@@ -296,20 +294,14 @@ function App() {
   async function choose(status: Status) {
     if (!current || saving || recording || transcribing || !pin) return
     const id = current.id
-    if (filter === 'unlabeled') {
-      const nextReviewed = new Set(reviewedIds)
-      nextReviewed.add(id)
-      const q = search.trim().toLowerCase()
-      const nextVisible = terms.filter(t => {
-        const matchesStatus = !nextReviewed.has(t.id) || t.id === id
-        const matchesSearch = !q || t.term.toLowerCase().includes(q) || (t.plain_definition ?? '').toLowerCase().includes(q)
-        return matchesStatus && matchesSearch
-      })
-      const nextIndex = nextVisible.findIndex(t => t.id === id)
-      setRecentlyReviewedId(id)
-      if (nextIndex >= 0) setIndex(nextIndex)
-    }
-    setTerms(all => all.map(t => t.id === id ? { ...t, status } : t))
+    const nextReviewed = new Set(reviewedIds)
+    nextReviewed.add(id)
+    const nextTerms = terms.map(t => t.id === id ? { ...t, status } : t)
+    const nextVisible = filterTerms(nextTerms, nextReviewed, id)
+    const nextIndex = nextVisible.findIndex(t => t.id === id)
+    setNavigationAnchorId(id)
+    if (nextIndex >= 0) setIndex(nextIndex)
+    setTerms(nextTerms)
     markReviewed(id)
     setMessage('Saved')
     setSaving(true)
@@ -335,6 +327,16 @@ function App() {
       clearTimeout(noteTimerRef.current)
       noteTimerRef.current = null
       void persistNote(current.id, note)
+    }
+    if (delta > 0 && current) {
+      const nextReviewed = new Set(reviewedIds)
+      nextReviewed.add(current.id)
+      const nextVisible = filterTerms(terms, nextReviewed, current.id)
+      const currentIndex = nextVisible.findIndex(t => t.id === current.id)
+      markReviewed(current.id)
+      setNavigationAnchorId(current.id)
+      if (currentIndex >= 0) setIndex(Math.min(nextVisible.length - 1, currentIndex + 1))
+      return
     }
     setIndex(i => Math.max(0, Math.min(visible.length - 1, i + delta)))
   }
@@ -377,7 +379,7 @@ function App() {
 
       <div className="tools">
         <input value={search} onChange={e => { setSearch(e.target.value); setIndex(0) }} placeholder="Find a term…" />
-        <select value={filter} onChange={e => { setFilter(e.target.value as Filter); setRecentlyReviewedId(null); setIndex(0) }}>
+        <select value={filter} onChange={e => { setFilter(e.target.value as Filter); setNavigationAnchorId(null); setIndex(0) }}>
           <option value="all">All</option><option value="unlabeled">No label yet</option>{statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </div>
@@ -387,10 +389,10 @@ function App() {
       {current ? <section className="workspace">
         <div className="work-row">
           <div className="action-rail">
-            <button className={`rail-button mic-button${recording ? ' recording' : ''}`} style={{ transform: `translate(${offset.x}px,${offset.y}px)` }} onPointerDown={beginRecording} disabled={transcribing}>
+            <button className={`rail-button mic-button${recording && recordingSource === 'mic' ? ' recording' : ''}`} onPointerDown={beginRecording} disabled={transcribing}>
               <span>🎙</span><strong>{recording ? 'Recording' : 'Hold to talk'}</strong>
             </button>
-            <button className={`rail-button definition-toggle ${current.definition_status}`} onPointerDown={definitionPointerDown} onPointerUp={definitionPointerUp} onPointerCancel={definitionPointerUp}>
+            <button className={`rail-button definition-toggle ${current.definition_status}${recording && recordingSource === 'definition' ? ' recording' : ''}`} onPointerDown={definitionPointerDown} onPointerUp={definitionPointerUp} onPointerCancel={definitionPointerUp}>
               <span>{current.definition_status === 'good' ? '✓' : '✎'}</span><strong>{current.definition_status === 'good' ? 'Definition good' : 'Needs work'}</strong>
             </button>
             <button className="rail-button next-rail" onClick={() => go(1)} disabled={index >= visible.length - 1 || recording}><span>→</span><strong>Next</strong></button>
