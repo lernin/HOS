@@ -41,7 +41,7 @@ const themes: { value: Theme; label: string }[] = [
   { value: 'terminal-cream', label: 'Terminal Cream' },
   { value: 'terminal-green', label: 'Terminal Green' },
   { value: 'ocean-blue', label: 'Ocean Blue' },
-  { value: 'cyberpunk', label: 'Cyberpunk Neon' },
+  { value: 'cyberpunk', label: 'Night Mode' },
   { value: 'holographic', label: 'Holographic Glass' },
   { value: 'neural', label: 'Neural Wild' },
   { value: 'deep-space', label: 'Deep Space' },

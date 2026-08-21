@@ -44,6 +44,35 @@
     linear-gradient(145deg, #07010d, #170525 56%, #040106);
 }
 
+.shell[data-theme="cyberpunk"] {
+  --bg: #000;
+  --panel: #000;
+  --panel2: #050505;
+  --text: #fff;
+  --muted: #b8b8b8;
+  --line: #fff;
+  --accent: #fff;
+  --accent2: #777;
+  --dark: #000;
+  --glow: rgba(255, 255, 255, .14);
+  --on-accent: #000;
+  background: #000;
+}
+
+.shell[data-theme="cyberpunk"] .workspace,
+.shell[data-theme="cyberpunk"] .note-panel,
+.shell[data-theme="cyberpunk"] .status-button {
+  box-shadow: none;
+}
+
+.shell[data-theme="cyberpunk"] .definition-toggle.good,
+.shell[data-theme="cyberpunk"] .definition-toggle.needs_work {
+  background: #000;
+  color: #fff;
+  border-color: #fff;
+  box-shadow: none;
+}
+
 .shell[data-theme="deep-space"] .workspace,
 .shell[data-theme="orbital"] .workspace {
   box-shadow: 0 0 0 1px var(--glow), 0 0 28px var(--glow), inset 0 0 28px rgba(255, 255, 255, .025);
@@ -60,6 +89,8 @@
 
 .workspace {
   position: relative;
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
 }
 
 .sync-indicator {
@@ -92,17 +123,37 @@
 }
 
 .work-row {
-  height: 300px;
+  height: auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 92px) minmax(0, 1fr);
 }
 
 .action-rail {
   grid-template-rows: repeat(4, minmax(0, 1fr));
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .rail-button {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   -webkit-user-select: none;
   user-select: none;
   transition: background .05s, color .05s, border-color .05s, box-shadow .05s;
+}
+
+.rail-button strong {
+  max-width: 100%;
+  font-size: clamp(11px, var(--rail-size, 15px), 18px) !important;
+  overflow-wrap: anywhere;
+}
+
+.rail-button span {
+  max-width: 100%;
+  font-size: clamp(17px, calc(var(--rail-size, 15px) * 1.35), 27px) !important;
 }
 
 .rail-button > *,
@@ -114,7 +165,7 @@
 }
 
 .mic-button .mic-glyph {
-  font-size: 30px;
+  font-size: 30px !important;
 }
 
 .mic-button.recording {
@@ -148,6 +199,10 @@
 }
 
 .note-panel {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   padding: 6px;
 }
 
@@ -180,6 +235,11 @@
   touch-action: none;
 }
 
+.theme-cyberpunk .theme-swatch {
+  background: #000;
+  border-color: #fff;
+}
+
 .theme-deep-space .theme-swatch {
   background: radial-gradient(circle at 70% 20%, #745cff, transparent 28%), linear-gradient(145deg, #020316, #7df9ff);
 }
@@ -195,7 +255,8 @@
   }
 
   .work-row {
-    height: 276px;
+    height: auto;
+    grid-template-columns: minmax(0, 84px) minmax(0, 1fr);
   }
 
   .action-rail {
