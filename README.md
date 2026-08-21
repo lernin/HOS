@@ -1,3 +1,5 @@
-# Hello World PWA
+# Thekonym standalone
 
-A deliberately minimal, root-level Progressive Web App used to isolate Android installation behavior from Procedia and Thekonym routing.
+The Procedia Thekonym review tool, isolated as a root-level PWA so Android installs it as a standalone application.
+
+The original Hello World proof is preserved on the `baseline/hello-world` branch.
