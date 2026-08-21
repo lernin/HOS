@@ -76,13 +76,37 @@
 }
 
 .rail-button {
+  -webkit-user-select: none;
+  user-select: none;
   transition: background .05s, color .05s, border-color .05s, box-shadow .05s;
 }
 
+.rail-button > *,
+.status-button > *,
+.theme-choice > * {
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.mic-button .mic-glyph {
+  font-size: 30px;
+}
+
 .mic-button.recording {
-  color: var(--on-accent);
-  border: 2px solid var(--accent);
-  box-shadow: 0 0 0 3px var(--glow), 0 0 24px var(--glow);
+  background: #b51e2e;
+  color: #fff;
+  border: 2px solid #ff5365;
+  animation: micPulse 1.15s ease-in-out infinite;
+}
+
+.app-shell.is-recording {
+  animation: none;
+}
+
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 83, 101, .22), 0 0 12px rgba(255, 50, 70, .30); }
+  50% { box-shadow: 0 0 0 5px rgba(255, 83, 101, .30), 0 0 24px rgba(255, 50, 70, .58); }
 }
 
 .definition-toggle.good {

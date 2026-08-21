@@ -77,7 +77,6 @@ function App() {
   const isFingerDownRef = useRef(false)
   const endingRef = useRef(false)
   const recordingTermIdRef = useRef<string | null>(null)
-  const releaseTimerRef = useRef<number | null>(null)
   const statusSaveChainRef = useRef<Promise<void>>(Promise.resolve())
   const definitionSaveChainRef = useRef<Promise<void>>(Promise.resolve())
 
@@ -220,7 +219,6 @@ function App() {
 
   function startRecording() {
     if (!current || recording || transcribing) return
-    if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current)
     if (noteTimerRef.current) clearTimeout(noteTimerRef.current)
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     if (!SpeechRecognition) { setMessage('Voice transcription needs Chrome on your phone.'); return }
@@ -235,30 +233,20 @@ function App() {
     listen(current.id)
   }
 
-  function beginRecording(event: React.PointerEvent<HTMLButtonElement>) {
+  function toggleRecording(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault()
-    try { event.currentTarget.setPointerCapture(event.pointerId) } catch {}
+    if (recording) {
+      if (endingRef.current) return
+      endingRef.current = true
+      isFingerDownRef.current = false
+      setRecording(false)
+      setTranscribing(true)
+      try { recognitionRef.current?.stop() } catch {}
+      if (!recognitionRef.current && recordingTermIdRef.current) void finishRecording(recordingTermIdRef.current)
+      return
+    }
     startRecording()
   }
-
-  useEffect(() => {
-    const release = () => {
-      if (!isFingerDownRef.current || endingRef.current) return
-      if (releaseTimerRef.current) clearTimeout(releaseTimerRef.current)
-      releaseTimerRef.current = window.setTimeout(() => {
-        endingRef.current = true
-        isFingerDownRef.current = false
-        try { recognitionRef.current?.stop() } catch {}
-        if (!recognitionRef.current && recordingTermIdRef.current) void finishRecording(recordingTermIdRef.current)
-      }, 120)
-    }
-    window.addEventListener('pointerup', release, { passive: true })
-    window.addEventListener('pointercancel', release, { passive: true })
-    return () => {
-      window.removeEventListener('pointerup', release)
-      window.removeEventListener('pointercancel', release)
-    }
-  }, [visible.length])
 
   function queueStatusSave(termId: string, status: Status) {
     statusSaveChainRef.current = statusSaveChainRef.current.then(async () => {
@@ -366,8 +354,8 @@ function App() {
       {current ? <section className="workspace">
         <div className="work-row">
           <div className="action-rail">
-            <button className={`rail-button mic-button${recording ? ' recording' : ''}`} onPointerDown={beginRecording} disabled={transcribing}>
-              <span>🎙</span><strong>{recording ? 'Recording' : 'Hold to talk'}</strong>
+            <button className={`rail-button mic-button${recording ? ' recording' : ''}`} onPointerDown={toggleRecording} disabled={transcribing} aria-label={recording ? 'Stop recording' : 'Start recording'}>
+              <span className="mic-glyph" aria-hidden="true">🎙</span>
             </button>
             <button className={`rail-button definition-toggle ${current.definition_status}`} onPointerDown={event => { event.preventDefault(); toggleDefinition() }}>
               <span>{current.definition_status === 'good' ? '✓' : '✎'}</span><strong>{current.definition_status === 'good' ? 'Definition good' : 'Needs work'}</strong>
@@ -375,7 +363,7 @@ function App() {
             <button className="rail-button next-rail" onPointerDown={event => { event.preventDefault(); go(1) }} disabled={index >= visible.length - 1 || recording}><span>→</span><strong>Next</strong></button>
             <button className="rail-button back-rail" onPointerDown={event => { event.preventDefault(); go(-1) }} disabled={index === 0 || recording}><span>←</span><strong>Back</strong></button>
           </div>
-          <div className="note-panel"><div className="note-title">Your thoughts</div><textarea value={note} onChange={e => editNote(e.target.value)} placeholder="Hold to talk or type…" /></div>
+          <div className="note-panel"><div className="note-title">Your thoughts</div><textarea value={note} onChange={e => editNote(e.target.value)} placeholder="Tap the mic or type…" /></div>
         </div>
         <div className="question">Your judgment</div>
         <div className="status-grid">{statuses.map(s => <button key={s.value} className={`status-button ${current.status === s.value ? 'selected' : ''}`} onPointerDown={event => { event.preventDefault(); choose(s.value) }}><strong>{s.label}</strong><span>{s.hint}</span></button>)}</div>
@@ -388,7 +376,7 @@ function App() {
           <div className="font-settings">
             <div className="font-setting"><label>Definition text <span className="sample-definition">A sibling concept</span></label><input type="range" min="12" max="26" value={fontPrefs.definition} onChange={e => saveFontPrefs({ ...fontPrefs, definition: +e.target.value })}/></div>
             <div className="font-setting"><label>Your thoughts <span className="sample-thoughts">My note looks like this</span></label><input type="range" min="12" max="28" value={fontPrefs.thoughts} onChange={e => saveFontPrefs({ ...fontPrefs, thoughts: +e.target.value })}/></div>
-            <div className="font-setting"><label>Action buttons <span className="sample-rail">Hold to talk · Next</span></label><input type="range" min="11" max="24" value={fontPrefs.rail} onChange={e => saveFontPrefs({ ...fontPrefs, rail: +e.target.value })}/></div>
+            <div className="font-setting"><label>Action buttons <span className="sample-rail">Mic · Next</span></label><input type="range" min="11" max="24" value={fontPrefs.rail} onChange={e => saveFontPrefs({ ...fontPrefs, rail: +e.target.value })}/></div>
             <div className="font-setting"><label>Judgment buttons <span className="sample-judgment">Canonical</span></label><input type="range" min="11" max="24" value={fontPrefs.judgment} onChange={e => saveFontPrefs({ ...fontPrefs, judgment: +e.target.value })}/></div>
           </div>
         </section>
