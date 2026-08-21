@@ -10,11 +10,12 @@ type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
+type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
   id: string
   term: string
   plain_definition: string | null
-  status: Status
+  status: Status | null
   former_names: string[]
   superseded_by: string | null
   technical_definition: string | null
@@ -22,6 +23,10 @@ type Term = {
   review_note: string | null
   definition_status: DefinitionStatus
 }
+type PendingChange =
+  | { key: string; kind: 'status'; termId: string; value: Status; changedAt: number }
+  | { key: string; kind: 'definition'; termId: string; value: DefinitionStatus; changedAt: number }
+  | { key: string; kind: 'note'; termId: string; value: string; changedAt: number }
 
 const statuses: { value: Status; label: string; hint: string }[] = [
   { value: 'canonical', label: 'Canonical', hint: 'Keep it' },
@@ -44,18 +49,44 @@ const themes: { value: Theme; label: string }[] = [
 ]
 
 const PIN_KEY = 'thekonym-review-pin'
-const REVIEWED_KEY = 'thekonym-reviewed-status-ids'
 const THEME_KEY = 'thekonym-theme'
 const FONT_KEY = 'thekonym-font-prefs'
+const TERMS_CACHE_KEY = 'thekonym-terms-cache-v1'
+const OUTBOX_KEY = 'thekonym-sync-outbox-v1'
 const DEFAULT_FONTS: FontPrefs = { definition: 16, thoughts: 17, rail: 15, judgment: 15 }
 
+function readCachedTerms(): Term[] {
+  try { return JSON.parse(localStorage.getItem(TERMS_CACHE_KEY) || '[]') as Term[] } catch { return [] }
+}
+
+function readOutbox(): PendingChange[] {
+  try { return JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]') as PendingChange[] } catch { return [] }
+}
+
+function writeOutbox(changes: PendingChange[]) {
+  localStorage.setItem(OUTBOX_KEY, JSON.stringify(changes))
+}
+
+function applyPendingChanges(source: Term[], changes = readOutbox()) {
+  const byId = new Map(source.map(term => [term.id, { ...term }]))
+  for (const change of changes) {
+    const term = byId.get(change.termId)
+    if (!term) continue
+    if (change.kind === 'status') term.status = change.value
+    if (change.kind === 'definition') term.definition_status = change.value
+    if (change.kind === 'note') term.review_note = change.value.trim() || null
+  }
+  return [...byId.values()]
+}
+
 function App() {
-  const [pin, setPin] = useState(() => sessionStorage.getItem(PIN_KEY) ?? '')
+  const [pin, setPin] = useState(() => localStorage.getItem(PIN_KEY) ?? '')
   const [pinInput, setPinInput] = useState('')
   const [terms, setTerms] = useState<Term[]>([])
   const [index, setIndex] = useState(0)
   const [loading, setLoading] = useState(Boolean(pin))
   const [message, setMessage] = useState('')
+  const [syncState, setSyncState] = useState<SyncState>(() => navigator.onLine ? 'synced' : 'offline')
   const [filter, setFilter] = useState<Filter>('all')
   const [search, setSearch] = useState('')
   const [note, setNote] = useState('')
@@ -66,9 +97,6 @@ function App() {
   const [fontPrefs, setFontPrefs] = useState<FontPrefs>(() => {
     try { return { ...DEFAULT_FONTS, ...JSON.parse(localStorage.getItem(FONT_KEY) || '{}') } } catch { return DEFAULT_FONTS }
   })
-  const [reviewedIds, setReviewedIds] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem(REVIEWED_KEY) || '[]')) } catch { return new Set() }
-  })
   const [navigationAnchorId, setNavigationAnchorId] = useState<string | null>(null)
 
   const recognitionRef = useRef<any>(null)
@@ -77,46 +105,97 @@ function App() {
   const isFingerDownRef = useRef(false)
   const endingRef = useRef(false)
   const recordingTermIdRef = useRef<string | null>(null)
-  const statusSaveChainRef = useRef<Promise<void>>(Promise.resolve())
-  const definitionSaveChainRef = useRef<Promise<void>>(Promise.resolve())
-
-  function markReviewed(id: string) {
-    setReviewedIds(prev => {
-      const next = new Set(prev)
-      next.add(id)
-      localStorage.setItem(REVIEWED_KEY, JSON.stringify([...next]))
-      return next
-    })
-  }
+  const flushingRef = useRef(false)
 
   function saveFontPrefs(next: FontPrefs) {
     setFontPrefs(next)
     localStorage.setItem(FONT_KEY, JSON.stringify(next))
   }
 
-  async function load(reviewPin = pin) {
+  useEffect(() => {
+    if (terms.length) localStorage.setItem(TERMS_CACHE_KEY, JSON.stringify(terms))
+  }, [terms])
+
+  function enqueueChange(change: Omit<PendingChange, 'key' | 'changedAt'>) {
+    const item = { ...change, key: `${change.kind}:${change.termId}`, changedAt: Date.now() } as PendingChange
+    const next = readOutbox().filter(existing => existing.key !== item.key)
+    next.push(item)
+    writeOutbox(next)
+    setSyncState(navigator.onLine ? 'syncing' : 'offline')
+    void flushOutbox()
+  }
+
+  async function flushOutbox(reviewPin = pin) {
+    if (!reviewPin || flushingRef.current) return
+    if (!navigator.onLine) { setSyncState('offline'); return }
+    flushingRef.current = true
+    setSyncState('syncing')
+    try {
+      while (true) {
+        const change = readOutbox()[0]
+        if (!change) break
+        const response = change.kind === 'status'
+          ? await supabase.rpc('thekonym_review_set_status', { pin: reviewPin, term_id: change.termId, new_status: change.value })
+          : change.kind === 'definition'
+            ? await supabase.rpc('thekonym_review_set_definition_status', { pin: reviewPin, term_id: change.termId, new_status: change.value })
+            : await supabase.rpc('thekonym_review_set_note', { pin: reviewPin, term_id: change.termId, new_note: change.value })
+        if (response.error) throw response.error
+        const latest = readOutbox()
+        writeOutbox(latest.filter(item => item.key !== change.key || item.changedAt !== change.changedAt))
+      }
+      setSyncState('synced')
+    } catch (error) {
+      setSyncState('offline')
+      if (navigator.onLine) setMessage(error instanceof Error ? error.message : 'Changes are waiting to sync.')
+    } finally {
+      flushingRef.current = false
+    }
+  }
+
+  async function load(reviewPin = pin, silent = false) {
     if (!reviewPin) return
-    setLoading(true)
+    if (!silent) setLoading(true)
     const { data, error } = await supabase.rpc('thekonym_review_list', { pin: reviewPin })
-    if (error || !data?.length) {
-      sessionStorage.removeItem(PIN_KEY)
+    if (error) {
+      const cached = readCachedTerms()
+      if (cached.length) {
+        setTerms(applyPendingChanges(cached))
+        setSyncState('offline')
+        setMessage('Offline — changes will sync automatically.')
+      } else {
+        localStorage.removeItem(PIN_KEY)
+        setPin('')
+        setMessage('Could not open while offline.')
+      }
+    } else if (!data?.length) {
+      localStorage.removeItem(PIN_KEY)
       setPin('')
       setMessage('Wrong PIN.')
     } else {
-      const loaded = data as Term[]
+      const loaded = applyPendingChanges(data as Term[])
       setTerms(loaded)
-      setReviewedIds(prev => {
-        const next = new Set(prev)
-        loaded.filter(t => t.review_note).forEach(t => next.add(t.id))
-        localStorage.setItem(REVIEWED_KEY, JSON.stringify([...next]))
-        return next
-      })
+      setSyncState(readOutbox().length ? 'syncing' : 'synced')
       setMessage('')
+      void flushOutbox(reviewPin)
     }
-    setLoading(false)
+    if (!silent) setLoading(false)
   }
 
   useEffect(() => { if (pin) void load(pin) }, [])
+
+  useEffect(() => {
+    const sync = () => { if (pin) void load(pin, true) }
+    const offline = () => setSyncState('offline')
+    const visible = () => { if (document.visibilityState === 'visible' && pin && navigator.onLine) void load(pin, true) }
+    window.addEventListener('online', sync)
+    window.addEventListener('offline', offline)
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      window.removeEventListener('online', sync)
+      window.removeEventListener('offline', offline)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [pin])
 
   async function unlock(e: React.FormEvent) {
     e.preventDefault()
@@ -124,48 +203,54 @@ function App() {
     if (!candidate) return
     setLoading(true)
     const { data, error } = await supabase.rpc('thekonym_review_list', { pin: candidate })
-    if (error || !data?.length) {
+    if (error) {
+      const cached = readCachedTerms()
+      if (cached.length) {
+        localStorage.setItem(PIN_KEY, candidate)
+        setPin(candidate)
+        setTerms(applyPendingChanges(cached))
+        setSyncState('offline')
+        setPinInput('')
+        setMessage('Offline — changes will sync automatically.')
+      } else setMessage('Could not open while offline.')
+      setLoading(false)
+      return
+    }
+    if (!data?.length) {
       setMessage('Wrong PIN.')
       setLoading(false)
       return
     }
-    sessionStorage.setItem(PIN_KEY, candidate)
+    localStorage.setItem(PIN_KEY, candidate)
     setPin(candidate)
-    const loaded = data as Term[]
+    const loaded = applyPendingChanges(data as Term[])
     setTerms(loaded)
-    setReviewedIds(prev => {
-      const next = new Set(prev)
-      loaded.filter(t => t.review_note).forEach(t => next.add(t.id))
-      localStorage.setItem(REVIEWED_KEY, JSON.stringify([...next]))
-      return next
-    })
+    setSyncState(readOutbox().length ? 'syncing' : 'synced')
     setPinInput('')
     setMessage('')
     setLoading(false)
+    void flushOutbox(candidate)
   }
 
-  function filterTerms(source: Term[], reviewed: Set<string>, anchorId: string | null) {
+  function filterTerms(source: Term[], anchorId: string | null) {
     const q = search.trim().toLowerCase()
     return source.filter(t => {
-      const statusOk = t.id === anchorId || filter === 'all' || (filter === 'unlabeled' ? !reviewed.has(t.id) : t.status === filter)
+      const statusOk = t.id === anchorId || filter === 'all' || (filter === 'unlabeled' ? t.status === null : t.status === filter)
       return statusOk && (!q || t.term.toLowerCase().includes(q) || (t.plain_definition ?? '').toLowerCase().includes(q))
     })
   }
 
-  const visible = useMemo(() => filterTerms(terms, reviewedIds, navigationAnchorId), [terms, filter, search, reviewedIds, navigationAnchorId])
+  const visible = useMemo(() => filterTerms(terms, navigationAnchorId), [terms, filter, search, navigationAnchorId])
 
   useEffect(() => { if (index >= visible.length) setIndex(Math.max(0, visible.length - 1)) }, [visible.length, index])
   const current = visible[index]
   useEffect(() => { if (!recording) setNote(current?.review_note ?? '') }, [current?.id])
 
-  async function persistNote(termId: string, text: string, toast = false) {
+  function persistNote(termId: string, text: string, toast = false) {
     if (!pin) return
-    const { error } = await supabase.rpc('thekonym_review_set_note', { pin, term_id: termId, new_note: text })
-    if (error) setMessage(error.message)
-    else {
-      setTerms(all => all.map(t => t.id === termId ? { ...t, review_note: text.trim() || null } : t))
-      if (toast) setMessage('Saved')
-    }
+    setTerms(all => all.map(t => t.id === termId ? { ...t, review_note: text.trim() || null } : t))
+    enqueueChange({ kind: 'note', termId, value: text })
+    if (toast) setMessage(navigator.onLine ? 'Syncing…' : 'Saved on phone')
   }
 
   function editNote(value: string) {
@@ -212,7 +297,7 @@ function App() {
     const text = chunksRef.current.join(' ').replace(/\s+/g, ' ').trim()
     setNote(text)
     setTerms(all => all.map(t => t.id === termId ? { ...t, review_note: text || null } : t))
-    await persistNote(termId, text, true)
+    persistNote(termId, text, true)
     setTranscribing(false)
     recordingTermIdRef.current = null
   }
@@ -249,32 +334,23 @@ function App() {
   }
 
   function queueStatusSave(termId: string, status: Status) {
-    statusSaveChainRef.current = statusSaveChainRef.current.then(async () => {
-      const { error } = await supabase.rpc('thekonym_review_set_status', { pin, term_id: termId, new_status: status })
-      if (error) setMessage(error.message)
-    }).catch(error => setMessage(error instanceof Error ? error.message : String(error)))
+    enqueueChange({ kind: 'status', termId, value: status })
   }
 
   function queueDefinitionSave(termId: string, status: DefinitionStatus) {
-    definitionSaveChainRef.current = definitionSaveChainRef.current.then(async () => {
-      const { error } = await supabase.rpc('thekonym_review_set_definition_status', { pin, term_id: termId, new_status: status })
-      if (error) setMessage(error.message)
-    }).catch(error => setMessage(error instanceof Error ? error.message : String(error)))
+    enqueueChange({ kind: 'definition', termId, value: status })
   }
 
   function choose(status: Status) {
     if (!current || !pin) return
     const id = current.id
-    const nextReviewed = new Set(reviewedIds)
-    nextReviewed.add(id)
     const nextTerms = terms.map(t => t.id === id ? { ...t, status } : t)
-    const nextVisible = filterTerms(nextTerms, nextReviewed, id)
+    const nextVisible = filterTerms(nextTerms, id)
     const nextIndex = nextVisible.findIndex(t => t.id === id)
     setNavigationAnchorId(id)
     if (nextIndex >= 0) setIndex(nextIndex)
     setTerms(nextTerms)
-    markReviewed(id)
-    setMessage('Saved')
+    setMessage(navigator.onLine ? 'Syncing…' : 'Saved on phone')
     queueStatusSave(id, status)
   }
 
@@ -294,11 +370,8 @@ function App() {
       void persistNote(current.id, note)
     }
     if (delta > 0 && current) {
-      const nextReviewed = new Set(reviewedIds)
-      nextReviewed.add(current.id)
-      const nextVisible = filterTerms(terms, nextReviewed, current.id)
+      const nextVisible = filterTerms(terms, current.id)
       const currentIndex = nextVisible.findIndex(t => t.id === current.id)
-      markReviewed(current.id)
       setNavigationAnchorId(current.id)
       if (currentIndex >= 0) setIndex(Math.min(nextVisible.length - 1, currentIndex + 1))
       return
@@ -337,7 +410,7 @@ function App() {
     <main className={`shell app-shell${recording ? ' is-recording' : ''}`} data-theme={theme} style={styleVars}>
       <header className="top">
         <div><div className="eyebrow">Procedia · Thekonym</div><h1>{current?.term ?? 'Thekonym'}</h1></div>
-        <div className="top-actions"><button className="settings-button" onClick={() => setSettingsOpen(true)} aria-label="Appearance settings">⚙</button><div className="counter">{visible.length ? index + 1 : 0}<span>/</span>{visible.length}</div></div>
+        <div className="top-actions"><div className={`sync-indicator sync-${syncState}`} role="status" aria-label={syncState === 'synced' ? 'All changes synced' : syncState === 'syncing' ? 'Syncing changes' : 'Offline changes waiting'} title={syncState === 'synced' ? 'Synced' : syncState === 'syncing' ? 'Syncing' : 'Offline'} /><button className="settings-button" onClick={() => setSettingsOpen(true)} aria-label="Appearance settings">⚙</button><div className="counter">{visible.length ? index + 1 : 0}<span>/</span>{visible.length}</div></div>
       </header>
 
       <div className="definition-row"><div className="definition hero-definition">{current?.plain_definition || 'No plain-language definition yet.'}</div></div>

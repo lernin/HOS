@@ -62,6 +62,30 @@
   position: relative;
 }
 
+.sync-indicator {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #35d267;
+  box-shadow: 0 0 10px rgba(53, 210, 103, .55);
+}
+
+.sync-indicator.sync-syncing {
+  background: #ffc247;
+  box-shadow: 0 0 10px rgba(255, 194, 71, .65);
+  animation: syncPulse .8s ease-in-out infinite;
+}
+
+.sync-indicator.sync-offline {
+  background: #ff5365;
+  box-shadow: 0 0 10px rgba(255, 83, 101, .6);
+}
+
+@keyframes syncPulse {
+  50% { opacity: .35; transform: scale(.78); }
+}
+
 .definition-row {
   flex: 0 0 76px;
   max-height: 76px;
