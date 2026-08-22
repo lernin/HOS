@@ -11,6 +11,15 @@ type LockableOrientation = ScreenOrientation & {
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 const LOOK_SENSITIVITY_KEY = 'world3d-look-sensitivity'
 const sensitivityPresets = [0.5, 1, 1.2, 1.5, 2]
+const WALKABLE_CENTER_Z = -10
+const WALKABLE_RADIUS_X = 54
+const WALKABLE_RADIUS_Z = 70
+
+const isInsideWalkableWorld = (x: number, z: number) => {
+  const normalizedX = x / WALKABLE_RADIUS_X
+  const normalizedZ = (z - WALKABLE_CENTER_Z) / WALKABLE_RADIUS_Z
+  return normalizedX * normalizedX + normalizedZ * normalizedZ <= 1
+}
 
 export function World3D({ onExit }: World3DProps) {
   const mountRef = useRef<HTMLDivElement>(null)
@@ -80,6 +89,15 @@ export function World3D({ onExit }: World3DProps) {
     sun.shadow.camera.top = 55
     sun.shadow.camera.bottom = -55
     scene.add(sun)
+
+    const ocean = new THREE.Mesh(
+      new THREE.PlaneGeometry(420, 420),
+      new THREE.MeshStandardMaterial({ color: 0x2d84aa, roughness: 0.72, metalness: 0.08 }),
+    )
+    ocean.rotation.x = -Math.PI / 2
+    ocean.position.y = -0.72
+    ocean.receiveShadow = true
+    scene.add(ocean)
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(180, 180),
@@ -179,6 +197,7 @@ export function World3D({ onExit }: World3DProps) {
     const clock = new THREE.Clock()
     const forward = new THREE.Vector3()
     const side = new THREE.Vector3()
+    const lastSafePosition = new THREE.Vector3(camera.position.x, 1.7, camera.position.z)
 
     const resize = () => {
       const width = Math.max(1, mount.clientWidth)
@@ -198,13 +217,20 @@ export function World3D({ onExit }: World3DProps) {
       const moveSide = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0) + touch.x
       const length = Math.hypot(moveForward, moveSide)
       if (length > 0.02) {
+        const previousX = camera.position.x
+        const previousZ = camera.position.z
         forward.set(-Math.sin(yaw), 0, -Math.cos(yaw))
         side.set(Math.cos(yaw), 0, -Math.sin(yaw))
         const scale = (7.3 * dt) / Math.max(1, length)
         camera.position.addScaledVector(forward, moveForward * scale)
         camera.position.addScaledVector(side, moveSide * scale)
-        camera.position.x = clamp(camera.position.x, -72, 72)
-        camera.position.z = clamp(camera.position.z, -82, 72)
+        if (isInsideWalkableWorld(camera.position.x, camera.position.z)) {
+          lastSafePosition.set(camera.position.x, 1.7, camera.position.z)
+        } else {
+          camera.position.x = previousX
+          camera.position.z = previousZ
+          if (!isInsideWalkableWorld(previousX, previousZ)) camera.position.copy(lastSafePosition)
+        }
       }
       camera.position.y = 1.7
       camera.rotation.y = yaw
@@ -216,7 +242,7 @@ export function World3D({ onExit }: World3DProps) {
     const applyLook = (dx: number, dy: number) => {
       const sensitivity = lookSensitivityRef.current
       yaw -= dx * 0.0042 * sensitivity
-      pitch = clamp(pitch - dy * 0.0034 * sensitivity, -1.12, 1.05)
+      pitch = clamp(pitch - dy * 0.0034 * sensitivity, -0.92, 1.05)
     }
     mount.dataset.ready = 'true'
     ;(mount as HTMLDivElement & { applyLook?: (dx: number, dy: number) => void }).applyLook = applyLook
