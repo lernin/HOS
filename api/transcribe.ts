@@ -41,7 +41,10 @@ export default {
       return json({ text })
     } catch (error) {
       console.error('Transcription failed', error)
-      return json({ error: 'Transcription failed. Your existing note was not changed.' }, 500)
+      return json({
+        error: 'Transcription failed. Your existing note was not changed.',
+        diagnostic: error instanceof Error ? error.message : String(error),
+      }, 500)
     }
   },
 }
