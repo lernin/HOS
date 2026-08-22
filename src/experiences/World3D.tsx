@@ -9,6 +9,8 @@ type LockableOrientation = ScreenOrientation & {
 }
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+const LOOK_SENSITIVITY_KEY = 'world3d-look-sensitivity'
+const sensitivityPresets = [0.5, 1, 1.2, 1.5, 2]
 
 export function World3D({ onExit }: World3DProps) {
   const mountRef = useRef<HTMLDivElement>(null)
@@ -18,6 +20,26 @@ export function World3D({ onExit }: World3DProps) {
   const lookStartRef = useRef({ x: 0, y: 0 })
   const knobRef = useRef<HTMLDivElement>(null)
   const [showHelp, setShowHelp] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [lookSensitivity, setLookSensitivity] = useState(() => {
+    const saved = Number(localStorage.getItem(LOOK_SENSITIVITY_KEY))
+    return Number.isFinite(saved) && saved >= 0.5 && saved <= 2 ? saved : 1
+  })
+  const lookSensitivityRef = useRef(lookSensitivity)
+
+  const updateLookSensitivity = (next: number) => {
+    const value = clamp(Math.round(next * 10) / 10, 0.5, 2)
+    lookSensitivityRef.current = value
+    setLookSensitivity(value)
+    localStorage.setItem(LOOK_SENSITIVITY_KEY, String(value))
+  }
+
+  const openSettings = () => {
+    moveRef.current = { x: 0, y: 0 }
+    if (knobRef.current) knobRef.current.style.transform = 'translate(0, 0)'
+    setShowHelp(false)
+    setSettingsOpen(true)
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => setShowHelp(false), 4200)
@@ -192,8 +214,9 @@ export function World3D({ onExit }: World3DProps) {
     renderer.setAnimationLoop(render)
 
     const applyLook = (dx: number, dy: number) => {
-      yaw -= dx * 0.0042
-      pitch = clamp(pitch - dy * 0.0034, -1.12, 1.05)
+      const sensitivity = lookSensitivityRef.current
+      yaw -= dx * 0.0042 * sensitivity
+      pitch = clamp(pitch - dy * 0.0034 * sensitivity, -1.12, 1.05)
     }
     mount.dataset.ready = 'true'
     ;(mount as HTMLDivElement & { applyLook?: (dx: number, dy: number) => void }).applyLook = applyLook
@@ -243,6 +266,7 @@ export function World3D({ onExit }: World3DProps) {
       <div className="world3d-canvas" ref={mountRef} />
       <div className="world3d-shade" />
       <button className="world3d-hub" onClick={onExit}>← Hub</button>
+      <button className="world3d-settings-button" onClick={openSettings} aria-label="Camera settings">⚙</button>
       <div className="world3d-title"><strong>3D Environment</strong><span>Explore freely</span></div>
       <div className="world3d-crosshair" aria-hidden="true" />
       {showHelp && <div className="world3d-help"><strong>Left thumb: move</strong><span>Drag the world: look around</span></div>}
@@ -274,6 +298,19 @@ export function World3D({ onExit }: World3DProps) {
         onPointerUp={event => { if (lookPointerRef.current === event.pointerId) lookPointerRef.current = null }}
         onPointerCancel={event => { if (lookPointerRef.current === event.pointerId) lookPointerRef.current = null }}
       />
+      {settingsOpen && <div className="world3d-settings-backdrop" onPointerDown={() => setSettingsOpen(false)}>
+        <section className="world3d-settings-hud" role="dialog" aria-modal="true" aria-labelledby="world3d-settings-title" onPointerDown={event => event.stopPropagation()}>
+          <header><div><small>Controls</small><strong id="world3d-settings-title">Camera Sensitivity</strong></div><button onClick={() => setSettingsOpen(false)} aria-label="Close settings">×</button></header>
+          <div className="world3d-sensitivity-value">{lookSensitivity.toFixed(1)}<span>×</span></div>
+          <input type="range" min="0.5" max="2" step="0.1" value={lookSensitivity} onChange={event => updateLookSensitivity(Number(event.target.value))} aria-label="Camera sensitivity" />
+          <div className="world3d-sensitivity-scale"><span>Slower</span><span>Default</span><span>Faster</span></div>
+          <div className="world3d-sensitivity-presets">
+            {sensitivityPresets.map(value => <button key={value} className={lookSensitivity === value ? 'active' : ''} onClick={() => updateLookSensitivity(value)}>{value.toFixed(1)}×</button>)}
+          </div>
+          <p>Higher sensitivity turns the view farther with the same finger movement.</p>
+          <button className="world3d-settings-done" onClick={() => setSettingsOpen(false)}>Done</button>
+        </section>
+      </div>}
       <div className="world3d-rotate"><strong>Rotate your phone</strong><span>This experience uses landscape mode.</span></div>
     </main>
   )
