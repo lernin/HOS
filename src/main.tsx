@@ -483,7 +483,13 @@ function App() {
             <button className="rail-button next-rail" onPointerDown={event => { event.preventDefault(); go(1) }} disabled={index >= visible.length - 1 || recording}><span>→</span><strong>Next</strong></button>
             <button className="rail-button back-rail" onPointerDown={event => { event.preventDefault(); go(-1) }} disabled={index === 0 || recording}><span>←</span><strong>Back</strong></button>
           </div>
-          <div className="note-panel"><div className="note-title">Your thoughts</div><textarea value={note} onChange={e => editNote(e.target.value)} placeholder="Tap the mic or type…" /></div>
+          <div className={`note-panel${transcribing ? ' is-transcribing' : ''}`}>
+            <div className="note-title">Your thoughts</div>
+            <div className="note-editor">
+              <textarea value={note} onChange={e => editNote(e.target.value)} placeholder="Tap the mic or type…" readOnly={transcribing} />
+              {transcribing && <div className="transcription-status" role="status" aria-live="polite"><span className="transcription-spinner" aria-hidden="true"/><strong>Turning speech into text…</strong></div>}
+            </div>
+          </div>
         </div>
         <div className="question">Your judgment</div>
         <div className="status-grid">{statuses.map(s => <button key={s.value} className={`status-button ${current.status === s.value ? 'selected' : ''}`} onPointerDown={event => { event.preventDefault(); choose(s.value) }}><strong>{s.label}</strong><span>{s.hint}</span></button>)}</div>

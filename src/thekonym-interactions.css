@@ -65,8 +65,7 @@
   box-shadow: none;
 }
 
-.shell[data-theme="cyberpunk"] .definition-toggle.good,
-.shell[data-theme="cyberpunk"] .definition-toggle.needs_work {
+.shell[data-theme="cyberpunk"] .definition-toggle.good {
   background: #000;
   color: #fff;
   border-color: #fff;
@@ -172,7 +171,19 @@
   background: #b51e2e;
   color: #fff;
   border: 2px solid #ff5365;
-  animation: micPulse 1.15s ease-in-out infinite;
+  animation: micPulse 1.05s ease-in-out infinite;
+  overflow: visible;
+}
+
+.mic-button.recording::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  z-index: -1;
+  border: 3px solid rgba(255, 72, 92, .72);
+  border-radius: 18px;
+  pointer-events: none;
+  animation: micHalo 1.05s ease-out infinite;
 }
 
 .app-shell.is-recording {
@@ -180,8 +191,13 @@
 }
 
 @keyframes micPulse {
-  0%, 100% { box-shadow: 0 0 0 2px rgba(255, 83, 101, .22), 0 0 12px rgba(255, 50, 70, .30); }
-  50% { box-shadow: 0 0 0 5px rgba(255, 83, 101, .30), 0 0 24px rgba(255, 50, 70, .58); }
+  0%, 100% { filter: brightness(.92); box-shadow: 0 0 0 2px rgba(255, 83, 101, .28), 0 0 14px rgba(255, 50, 70, .38); }
+  50% { filter: brightness(1.2); box-shadow: 0 0 0 6px rgba(255, 83, 101, .38), 0 0 32px rgba(255, 50, 70, .78); }
+}
+
+@keyframes micHalo {
+  0% { opacity: .92; transform: scale(.91); }
+  75%, 100% { opacity: 0; transform: scale(1.12); }
 }
 
 .definition-toggle.good {
@@ -192,10 +208,17 @@
 }
 
 .definition-toggle.needs_work {
-  background: #8d2030;
-  color: #fff;
-  border: 2px solid #ff667a;
-  box-shadow: 0 0 0 2px rgba(255, 102, 122, .16), 0 0 18px rgba(255, 102, 122, .30);
+  background: #9b6800;
+  color: #fff9df;
+  border: 2px solid #ffd34f;
+  box-shadow: 0 0 0 2px rgba(255, 211, 79, .18), 0 0 18px rgba(255, 181, 35, .34);
+}
+
+.shell[data-theme="cyberpunk"] .definition-toggle.needs_work {
+  background: #5c3d00;
+  color: #fff5c2;
+  border-color: #ffd34f;
+  box-shadow: 0 0 0 2px rgba(255, 211, 79, .16), 0 0 18px rgba(255, 181, 35, .28);
 }
 
 .note-panel {
@@ -212,6 +235,60 @@
 
 .note-panel textarea {
   padding: 7px;
+}
+
+.note-editor {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.note-editor textarea {
+  flex: 1 1 auto;
+}
+
+.note-panel.is-transcribing textarea {
+  opacity: .42;
+}
+
+.transcription-status {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  color: var(--text);
+  text-align: center;
+  pointer-events: none;
+}
+
+.transcription-status strong {
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.transcription-spinner {
+  width: 34px;
+  height: 34px;
+  border: 4px solid color-mix(in srgb, var(--accent) 22%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 16px var(--glow);
+  animation: transcriptionSpin .72s linear infinite;
+}
+
+@keyframes transcriptionSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mic-button.recording,
+  .mic-button.recording::after,
+  .transcription-spinner { animation-duration: 1.8s; }
 }
 
 .status-button {

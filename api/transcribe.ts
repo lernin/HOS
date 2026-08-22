@@ -30,8 +30,7 @@ export default {
       return json({ text: result.text.trim() })
     } catch (error) {
       console.error('Transcription failed', error)
-      const detail = error instanceof Error ? error.message : String(error)
-      return json({ error: 'Transcription failed. Your existing note was not changed.', detail }, 500)
+      return json({ error: 'Transcription failed. Your existing note was not changed.' }, 500)
     }
   },
 }
