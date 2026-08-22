@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { releaseRecordingStream, startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
+import { clearRoyAudioJobs, deleteRoyAudioJob, listRoyAudioJobs, saveRoyAudioJob, updateRoyAudioJob, type RoyAudioJob } from '../lib/royQueue'
 import './roy-vocab.css'
 import './roy-errors.css'
 
@@ -61,6 +62,11 @@ const items: VocabItem[] = [
 ]
 
 const normalize = (value: string) => value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+const MicIcon = () => <svg className="roy-mic-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3Zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5Zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2Z"/></svg>
+const ROY_ANSWERS_KEY = 'roy-vocabulary-answers-v1'
+const loadSavedAnswers = () => {
+  try { return JSON.parse(localStorage.getItem(ROY_ANSWERS_KEY) || '{}') as Record<number, string> } catch { return {} }
+}
 const isAccepted = (spoken: string, accepted: string[]) => {
   const heard = normalize(spoken)
   return heard.length > 1 && accepted.some(answer => {
@@ -70,28 +76,114 @@ const isAccepted = (spoken: string, accepted: string[]) => {
 }
 
 export function RoyVocab({ onExit, pin }: RoyVocabProps) {
-  const [answers, setAnswers] = useState<Record<number, string>>({})
+  const [answers, setAnswers] = useState<Record<number, string>>(loadSavedAnswers)
   const [results, setResults] = useState<Record<number, Result>>({})
   const [rowMessage, setRowMessage] = useState<Record<number, string>>({})
   const [errorIndices, setErrorIndices] = useState<number[]>([])
   const [recordingIndex, setRecordingIndex] = useState<number | null>(null)
   const [processingIndices, setProcessingIndices] = useState<number[]>([])
+  const [activeProcessingIndex, setActiveProcessingIndex] = useState<number | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const sessionRef = useRef<RecordingSession | null>(null)
   const pressingRef = useRef(false)
   const activeIndexRef = useRef<number | null>(null)
   const startedAtRef = useRef(0)
-  const transcriptionQueueRef = useRef<Promise<void>>(Promise.resolve())
   const lastTranscriptionStartedRef = useRef(0)
+  const queueRunningRef = useRef(false)
+  const mountedRef = useRef(true)
+  const retryTimerRef = useRef<number | null>(null)
 
   const answeredCount = Object.values(answers).filter(answer => answer.trim()).length
+  const capturedCount = new Set([...Object.keys(answers).filter(key => answers[Number(key)]?.trim()).map(Number), ...processingIndices]).size
   const correctCount = Object.values(results).filter(result => result === 'correct').length
 
-  useEffect(() => () => {
-    pressingRef.current = false
-    sessionRef.current?.stop()
-    releaseRecordingStream()
+  useEffect(() => {
+    mountedRef.current = true
+    void listRoyAudioJobs().then(jobs => {
+      if (!mountedRef.current) return
+      const pending = [...new Set(jobs.map(job => job.itemIndex))]
+      setProcessingIndices(pending)
+      setRowMessage(previous => ({ ...previous, ...Object.fromEntries(pending.map(index => [index, 'Saved on phone · waiting to transcribe…'])) }))
+      void processQueue()
+    })
+    const resume = () => void processQueue()
+    window.addEventListener('online', resume)
+    return () => {
+      mountedRef.current = false
+      pressingRef.current = false
+      if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current)
+      sessionRef.current?.stop()
+      releaseRecordingStream()
+      window.removeEventListener('online', resume)
+    }
   }, [])
+
+  useEffect(() => { localStorage.setItem(ROY_ANSWERS_KEY, JSON.stringify(answers)) }, [answers])
+
+  async function processQueue() {
+    if (queueRunningRef.current || !navigator.onLine) return
+    queueRunningRef.current = true
+    let retryLater = false
+    try {
+      while (navigator.onLine) {
+        const [job] = await listRoyAudioJobs()
+        if (!job) break
+        if (!mountedRef.current) break
+        setProcessingIndices(indices => indices.includes(job.itemIndex) ? indices : [...indices, job.itemIndex])
+        const queueDelay = Math.max(0, 6500 - (Date.now() - lastTranscriptionStartedRef.current))
+        if (queueDelay) await new Promise(resolve => window.setTimeout(resolve, queueDelay))
+        lastTranscriptionStartedRef.current = Date.now()
+        setActiveProcessingIndex(job.itemIndex)
+        setRowMessage(previous => ({ ...previous, [job.itemIndex]: '말한 내용을 글자로 바꾸고 있어요…' }))
+        try {
+          const extension = job.blob.type.includes('mp4') ? 'm4a' : 'webm'
+          const form = new FormData()
+          form.append('audio', job.blob, `roy-${job.id}.${extension}`)
+          const response = await fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin, 'x-transcription-language': 'ko' }, body: form })
+          const data = await response.json() as { text?: string; error?: string }
+          if (response.ok) {
+            const transcript = (data.text || '').trim()
+            if (!transcript) throw new Error('no-speech')
+            const newerJobExists = (await listRoyAudioJobs()).some(candidate => candidate.itemIndex === job.itemIndex && candidate.id !== job.id)
+            await deleteRoyAudioJob(job.id)
+            if (!newerJobExists && mountedRef.current) {
+              setAnswers(previous => ({ ...previous, [job.itemIndex]: transcript }))
+              setErrorIndices(indices => indices.filter(value => value !== job.itemIndex))
+              setRowMessage(previous => ({ ...previous, [job.itemIndex]: '필요하면 글자를 눌러 고치세요.' }))
+              setProcessingIndices(indices => indices.filter(value => value !== job.itemIndex))
+            }
+            setActiveProcessingIndex(null)
+            continue
+          }
+          if (response.status === 422) {
+            await deleteRoyAudioJob(job.id)
+            if (mountedRef.current) {
+              setErrorIndices(indices => indices.includes(job.itemIndex) ? indices : [...indices, job.itemIndex])
+              setRowMessage(previous => ({ ...previous, [job.itemIndex]: "Sorry, I didn't understand. Please try again." }))
+              setProcessingIndices(indices => indices.filter(value => value !== job.itemIndex))
+            }
+            setActiveProcessingIndex(null)
+            continue
+          }
+          await updateRoyAudioJob({ ...job, attempts: job.attempts + 1 })
+          if (mountedRef.current) setRowMessage(previous => ({ ...previous, [job.itemIndex]: 'Saved on phone · retrying automatically…' }))
+          retryLater = true
+          break
+        } catch {
+          await updateRoyAudioJob({ ...job, attempts: job.attempts + 1 })
+          if (mountedRef.current) setRowMessage(previous => ({ ...previous, [job.itemIndex]: 'Saved on phone · waiting for connection…' }))
+          retryLater = true
+          break
+        }
+      }
+    } finally {
+      queueRunningRef.current = false
+      if (mountedRef.current) setActiveProcessingIndex(null)
+      if (retryLater && mountedRef.current) {
+        retryTimerRef.current = window.setTimeout(() => void processQueue(), 15000)
+      }
+    }
+  }
 
   function editAnswer(index: number, value: string) {
     setAnswers(previous => ({ ...previous, [index]: value }))
@@ -106,7 +198,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
 
   async function startAnswer(event: React.PointerEvent<HTMLButtonElement>, index: number) {
     event.preventDefault()
-    if (recordingIndex !== null || processingIndices.includes(index)) return
+    if (pressingRef.current || recordingIndex !== null || processingIndices.includes(index)) return
     event.currentTarget.setPointerCapture(event.pointerId)
     pressingRef.current = true
     activeIndexRef.current = index
@@ -153,41 +245,22 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     await new Promise(resolve => window.setTimeout(resolve, 500))
     session.stop()
     const blob = await session.blobPromise
-    const transcribeAnswer = async () => {
-      const queueDelay = Math.max(0, 6500 - (Date.now() - lastTranscriptionStartedRef.current))
-      if (queueDelay) await new Promise(resolve => window.setTimeout(resolve, queueDelay))
-      lastTranscriptionStartedRef.current = Date.now()
-      setRowMessage(previous => ({ ...previous, [index]: '말한 내용을 글자로 바꾸고 있어요…' }))
-      const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
-      try {
-        let lastError = '대답을 확인하지 못했어요.'
-        for (let attempt = 0; attempt < 3; attempt += 1) {
-          const form = new FormData()
-          form.append('audio', blob, `roy-answer.${extension}`)
-          const response = await fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin, 'x-transcription-language': 'ko' }, body: form })
-          const data = await response.json() as { text?: string; error?: string }
-          if (response.ok) {
-            const transcript = (data.text || '').trim()
-            if (!transcript) throw new Error('말을 듣지 못했어요. 다시 해보세요.')
-            setAnswers(previous => ({ ...previous, [index]: transcript }))
-            setErrorIndices(indices => indices.filter(value => value !== index))
-            setRowMessage(previous => ({ ...previous, [index]: '필요하면 글자를 눌러 고치세요.' }))
-            return
-          }
-          lastError = data.error || lastError
-          if (response.status !== 429 || attempt === 2) break
-          setRowMessage(previous => ({ ...previous, [index]: '잠시 기다렸다가 자동으로 다시 시도해요…' }))
-          await new Promise(resolve => window.setTimeout(resolve, 3500 * (attempt + 1)))
-        }
-        throw new Error(lastError)
-      } catch (error) {
-        setErrorIndices(indices => indices.includes(index) ? indices : [...indices, index])
-        setRowMessage(previous => ({ ...previous, [index]: "Sorry, I didn't understand. Please try again." }))
-      } finally {
-        setProcessingIndices(indices => indices.filter(value => value !== index))
-      }
+    const job: RoyAudioJob = {
+      id: crypto.randomUUID?.() || `${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
+      itemIndex: index,
+      createdAt: Date.now(),
+      attempts: 0,
+      blob,
     }
-    transcriptionQueueRef.current = transcriptionQueueRef.current.then(transcribeAnswer, transcribeAnswer)
+    try {
+      await saveRoyAudioJob(job)
+      setRowMessage(previous => ({ ...previous, [index]: 'Saved on phone · waiting to transcribe…' }))
+      void processQueue()
+    } catch {
+      setProcessingIndices(indices => indices.filter(value => value !== index))
+      setErrorIndices(indices => indices.includes(index) ? indices : [...indices, index])
+      setRowMessage(previous => ({ ...previous, [index]: 'Could not save this recording. Please retry.' }))
+    }
   }
 
   function submit() {
@@ -198,11 +271,14 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     document.querySelector('.roy-list')?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  function reset() {
+  async function reset() {
+    await clearRoyAudioJobs()
+    localStorage.removeItem(ROY_ANSWERS_KEY)
     setAnswers({})
     setResults({})
     setRowMessage({})
     setErrorIndices([])
+    setActiveProcessingIndex(null)
     setSubmitted(false)
     document.querySelector('.roy-list')?.scrollTo({ top: 0, behavior: 'smooth' })
   }
@@ -211,7 +287,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     <header className="roy-top">
       <button onClick={onExit}>← Hub</button>
       <div><span>EXPERIMENT 03</span><strong>Roy</strong></div>
-      <div className="roy-count">{answeredCount}<small> / {items.length}</small></div>
+      <div className="roy-count">{capturedCount}<small> / {items.length}</small></div>
     </header>
     <section className="roy-intro">
       <div><span>English → Korean</span><strong>{submitted ? `${correctCount} correct` : 'Hold. Say it. Release.'}</strong></div>
@@ -221,19 +297,19 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
       {items.map((item, index) => {
         const result = results[index]
         const active = recordingIndex === index
-        const processing = processingIndices.includes(index)
+        const processing = activeProcessingIndex === index
+        const queued = processingIndices.includes(index) && !processing
         const hasError = errorIndices.includes(index)
-        return <article key={item.word} className={`roy-word-card${result ? ` result-${result}` : ''}${active ? ' is-recording' : ''}${processing ? ' is-processing' : ''}${hasError ? ' has-error' : ''}`}>
+        return <article key={item.word} className={`roy-word-card${result ? ` result-${result}` : ''}${active ? ' is-recording' : ''}${processing ? ' is-processing' : ''}${queued ? ' is-queued' : ''}${hasError ? ' has-error' : ''}`}>
           <span className="roy-number">{String(index + 1).padStart(2, '0')}</span>
           <div className="roy-word-copy">
             <label htmlFor={`roy-answer-${index}`}>{item.word}</label>
-            <input id={`roy-answer-${index}`} value={answers[index] || ''} onChange={event => editAnswer(index, event.target.value)} placeholder={processing ? 'The text will appear here when ready…' : '한국어 뜻'} readOnly={processing}/>
+            <input id={`roy-answer-${index}`} value={answers[index] || ''} onChange={event => editAnswer(index, event.target.value)} placeholder={processing ? 'The text will appear here when ready…' : queued ? 'Safely queued on this phone…' : '한국어 뜻'} readOnly={processing || queued}/>
             {rowMessage[index] && <small>{rowMessage[index]}</small>}
             {result === 'incorrect' && <em>예: {item.answers.slice(0, 3).join(' · ')}</em>}
           </div>
-          <button className="roy-card-mic" onPointerDown={event => void startAnswer(event, index)} onPointerUp={event => void finishAnswer(event, index)} onPointerCancel={event => void finishAnswer(event, index)} disabled={(recordingIndex !== null && !active) || processing} aria-label={`Hold to answer ${item.word}`}>
-            {processing ? <span className="roy-spinner"/> : <span>{active ? '●' : '🎙'}</span>}
-            <small>{processing ? 'WAIT' : active ? 'TALK' : hasError ? 'RETRY' : 'HOLD'}</small>
+          <button className="roy-card-mic" onPointerDown={event => void startAnswer(event, index)} onPointerUp={event => void finishAnswer(event, index)} onPointerCancel={event => void finishAnswer(event, index)} disabled={(recordingIndex !== null && !active) || processing || queued} aria-label={`Hold to answer ${item.word}`}>
+            <span className={processing ? 'roy-processing-icon' : 'roy-mic-icon-wrap'}><MicIcon/></span>
           </button>
           {result && <span className="roy-result-mark">{result === 'correct' ? '✓' : '!'}</span>}
         </article>
@@ -241,7 +317,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
       <div className="roy-list-end">That’s all {items.length} words.</div>
     </section>
     <footer className="roy-submit-bar">
-      <div><strong>{submitted ? `${correctCount} / ${items.length}` : `${answeredCount} answered`}</strong><small>{submitted ? 'correct' : `${items.length - answeredCount} remaining`}</small></div>
+      <div><strong>{submitted ? `${correctCount} / ${items.length}` : `${capturedCount} captured`}</strong><small>{submitted ? 'correct' : processingIndices.length ? `${processingIndices.length} safely queued` : `${items.length - answeredCount} remaining`}</small></div>
       {submitted && <button className="roy-reset" onClick={reset}>Reset</button>}
       <button className="roy-submit" onClick={submit} disabled={recordingIndex !== null || processingIndices.length > 0}>{processingIndices.length ? `${processingIndices.length} processing` : submitted ? 'Check again' : 'Submit'}</button>
     </footer>

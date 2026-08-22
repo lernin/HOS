@@ -12,3 +12,59 @@
   border-color: #ffd16c;
   background: linear-gradient(155deg, #b97819, #8e5610);
 }
+
+.roy-word-card.is-queued {
+  border-color: rgba(135, 161, 225, .42);
+}
+
+.roy-word-card.is-queued .roy-card-mic {
+  border-color: rgba(150, 174, 235, .45);
+  background: rgba(60, 78, 127, .52);
+  box-shadow: none;
+}
+
+.roy-mic-icon-wrap,
+.roy-processing-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+}
+
+.roy-mic-icon {
+  width: 32px;
+  height: 32px;
+  fill: currentColor;
+}
+
+.roy-processing-icon::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: 3px solid rgba(255, 255, 255, .2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: roySpin .72s linear infinite;
+}
+
+.roy-processing-icon .roy-mic-icon {
+  width: 23px;
+  height: 23px;
+}
+
+.roy-word-card.is-queued .roy-mic-icon-wrap::after {
+  content: '✓';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #9bb5f6;
+  color: #14224a;
+  font-size: 11px;
+  font-weight: 950;
+}
