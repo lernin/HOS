@@ -107,12 +107,14 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   const recognizedTextRef = useRef('')
   const recognitionIndexRef = useRef<number | null>(null)
   const recognitionErrorRef = useRef(false)
+  const recognitionTailTimerRef = useRef<number | null>(null)
 
   const answeredCount = Object.values(answers).filter(answer => answer.trim()).length
   const correctCount = Object.values(results).filter(result => result === 'correct').length
 
   useEffect(() => () => {
     pressingRef.current = false
+    if (recognitionTailTimerRef.current) window.clearTimeout(recognitionTailTimerRef.current)
     recognizerRef.current?.abort()
     sessionRef.current?.stop()
     releaseRecordingStream()
@@ -130,7 +132,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
 
   async function startAnswer(event: React.PointerEvent<HTMLButtonElement>, index: number) {
     event.preventDefault()
-    if (recordingIndex !== null || processingIndices.includes(index)) return
+    if (recordingIndex !== null || recognizerRef.current || processingIndices.includes(index)) return
     event.currentTarget.setPointerCapture(event.pointerId)
     pressingRef.current = true
     activeIndexRef.current = index
@@ -161,6 +163,8 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
         setRowMessage(previous => ({ ...previous, [index]: errorEvent.error === 'no-speech' ? '말을 듣지 못했어요. 다시 해보세요.' : '음성 인식을 다시 시도해 주세요.' }))
       }
       recognizer.onend = () => {
+        if (recognitionTailTimerRef.current) window.clearTimeout(recognitionTailTimerRef.current)
+        recognitionTailTimerRef.current = null
         const targetIndex = recognitionIndexRef.current
         const hangul = recognizedTextRef.current.replace(/[A-Za-z]+/g, '').replace(/\s+/g, ' ').trim()
         recognizerRef.current = null
@@ -217,8 +221,11 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     if (recognizer && recognitionIndexRef.current === index) {
       setRecordingIndex(null)
       setProcessingIndices(indices => indices.includes(index) ? indices : [...indices, index])
-      setRowMessage(previous => ({ ...previous, [index]: '한글로 바꾸고 있어요…' }))
-      recognizer.stop()
+      setRowMessage(previous => ({ ...previous, [index]: '마지막 소리까지 듣고 있어요…' }))
+      recognitionTailTimerRef.current = window.setTimeout(() => {
+        recognitionTailTimerRef.current = null
+        recognizer.stop()
+      }, 500)
       return
     }
     const session = sessionRef.current
@@ -306,7 +313,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
             {rowMessage[index] && <small>{rowMessage[index]}</small>}
             {result === 'incorrect' && <em>예: {item.answers.slice(0, 3).join(' · ')}</em>}
           </div>
-          <button className="roy-card-mic" onPointerDown={event => void startAnswer(event, index)} onPointerUp={event => void finishAnswer(event, index)} onPointerCancel={event => void finishAnswer(event, index)} disabled={(recordingIndex !== null && !active) || processing} aria-label={`Hold to answer ${item.word}`}>
+          <button className="roy-card-mic" onPointerDown={event => void startAnswer(event, index)} onPointerUp={event => void finishAnswer(event, index)} onPointerCancel={event => void finishAnswer(event, index)} disabled={(recordingIndex !== null && !active) || (recognizerRef.current !== null && !active) || processing} aria-label={`Hold to answer ${item.word}`}>
             {processing ? <span className="roy-spinner"/> : <span>{active ? '●' : '🎙'}</span>}
             <small>{processing ? 'WAIT' : active ? 'TALK' : 'HOLD'}</small>
           </button>
