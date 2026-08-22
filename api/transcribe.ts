@@ -24,7 +24,7 @@ export default {
       const koreanOnly = request.headers.get('x-transcription-language') === 'ko'
 
       const result = await transcribe({
-        model: gateway.transcriptionModel('openai/whisper-1'),
+        model: gateway.transcriptionModel(koreanOnly ? 'openai/gpt-4o-mini-transcribe' : 'openai/whisper-1'),
         audio: new Uint8Array(await audio.arrayBuffer()),
         providerOptions: koreanOnly ? {
           openai: {
