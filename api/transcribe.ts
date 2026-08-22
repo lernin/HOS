@@ -41,10 +41,11 @@ export default {
       return json({ text })
     } catch (error) {
       console.error('Transcription failed', error)
+      const detail = error instanceof Error ? error.message : String(error)
+      const rateLimited = /rate.?limit/i.test(detail)
       return json({
-        error: 'Transcription failed. Your existing note was not changed.',
-        diagnostic: error instanceof Error ? error.message : String(error),
-      }, 500)
+        error: rateLimited ? 'Transcription is busy. Waiting to try again…' : 'Transcription failed. Please try again.',
+      }, rateLimited ? 429 : 500)
     }
   },
 }

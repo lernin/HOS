@@ -79,6 +79,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   const pressingRef = useRef(false)
   const activeIndexRef = useRef<number | null>(null)
   const startedAtRef = useRef(0)
+  const transcriptionQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   const answeredCount = Object.values(answers).filter(answer => answer.trim()).length
   const correctCount = Object.values(results).filter(result => result === 'correct').length
@@ -143,24 +144,38 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
       return
     }
     setProcessingIndices(indices => indices.includes(index) ? indices : [...indices, index])
-    setRowMessage(previous => ({ ...previous, [index]: '말한 내용을 글자로 바꾸고 있어요…' }))
-    try {
-      const blob = await session.blobPromise
+    setRowMessage(previous => ({ ...previous, [index]: '대기 중… 다음 단어를 녹음해도 돼요.' }))
+    const blob = await session.blobPromise
+    const transcribeAnswer = async () => {
+      setRowMessage(previous => ({ ...previous, [index]: '말한 내용을 글자로 바꾸고 있어요…' }))
       const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
-      const form = new FormData()
-      form.append('audio', blob, `roy-answer.${extension}`)
-      const response = await fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin, 'x-transcription-language': 'ko' }, body: form })
-      const data = await response.json() as { text?: string; error?: string }
-      if (!response.ok) throw new Error(data.error || '대답을 확인하지 못했어요.')
-      const transcript = (data.text || '').trim()
-      if (!transcript) throw new Error('말을 듣지 못했어요. 다시 해보세요.')
-      setAnswers(previous => ({ ...previous, [index]: transcript }))
-      setRowMessage(previous => ({ ...previous, [index]: '필요하면 글자를 눌러 고치세요.' }))
-    } catch (error) {
-      setRowMessage(previous => ({ ...previous, [index]: error instanceof Error ? error.message : '대답을 확인하지 못했어요.' }))
-    } finally {
-      setProcessingIndices(indices => indices.filter(value => value !== index))
+      try {
+        let lastError = '대답을 확인하지 못했어요.'
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const form = new FormData()
+          form.append('audio', blob, `roy-answer.${extension}`)
+          const response = await fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin, 'x-transcription-language': 'ko' }, body: form })
+          const data = await response.json() as { text?: string; error?: string }
+          if (response.ok) {
+            const transcript = (data.text || '').trim()
+            if (!transcript) throw new Error('말을 듣지 못했어요. 다시 해보세요.')
+            setAnswers(previous => ({ ...previous, [index]: transcript }))
+            setRowMessage(previous => ({ ...previous, [index]: '필요하면 글자를 눌러 고치세요.' }))
+            return
+          }
+          lastError = data.error || lastError
+          if (response.status !== 429 || attempt === 2) break
+          setRowMessage(previous => ({ ...previous, [index]: '잠시 기다렸다가 자동으로 다시 시도해요…' }))
+          await new Promise(resolve => window.setTimeout(resolve, 3500 * (attempt + 1)))
+        }
+        throw new Error(lastError)
+      } catch (error) {
+        setRowMessage(previous => ({ ...previous, [index]: error instanceof Error ? error.message : '대답을 확인하지 못했어요.' }))
+      } finally {
+        setProcessingIndices(indices => indices.filter(value => value !== index))
+      }
     }
+    transcriptionQueueRef.current = transcriptionQueueRef.current.then(transcribeAnswer, transcribeAnswer)
   }
 
   function submit() {
