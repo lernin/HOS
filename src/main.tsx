@@ -1,6 +1,7 @@
 import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { supabase } from './lib/supabase'
+import { startRecordingSession, type RecordingSession } from './lib/voiceCapture'
 import './thekonym.css'
 import './thekonym-font-controls.css'
 import './thekonym-interactions.css'
@@ -102,12 +103,10 @@ function App() {
   })
   const [navigationAnchorId, setNavigationAnchorId] = useState<string | null>(null)
 
-  const recognitionRef = useRef<any>(null)
-  const chunksRef = useRef<string[]>([])
   const noteTimerRef = useRef<number | null>(null)
-  const isFingerDownRef = useRef(false)
-  const endingRef = useRef(false)
+  const recordingSessionRef = useRef<RecordingSession | null>(null)
   const recordingTermIdRef = useRef<string | null>(null)
+  const recordingBaseNoteRef = useRef('')
   const flushingRef = useRef(false)
 
   useEffect(() => {
@@ -278,76 +277,60 @@ function App() {
     noteTimerRef.current = window.setTimeout(() => void persistNote(current.id, value), 500)
   }
 
-  function addChunk(value: string) {
-    const clean = value.replace(/\s+/g, ' ').trim()
-    if (!clean) return
-    if (chunksRef.current.at(-1)?.toLowerCase() === clean.toLowerCase()) return
-    chunksRef.current.push(clean)
-    setNote(chunksRef.current.join(' '))
-  }
-
-  function listen(termId: string) {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition || !isFingerDownRef.current || endingRef.current) return
-    const recognition = new SpeechRecognition()
-    recognition.lang = 'en-US'
-    recognition.continuous = true
-    recognition.interimResults = false
-    recognition.maxAlternatives = 1
-    recognition.onresult = (event: any) => addChunk((event.results?.[event.resultIndex] ?? event.results?.[event.results.length - 1])?.[0]?.transcript ?? '')
-    recognition.onerror = (event: any) => { if (!['aborted', 'no-speech'].includes(event.error)) setMessage('Mic: ' + event.error) }
-    recognition.onend = () => {
-      recognitionRef.current = null
-      if (isFingerDownRef.current && !endingRef.current) setTimeout(() => listen(termId), 70)
-      else if (endingRef.current) void finishRecording(termId)
-    }
-    recognitionRef.current = recognition
-    try { recognition.start() } catch { setTimeout(() => listen(termId), 130) }
-  }
-
-  async function finishRecording(termId: string) {
-    if (!endingRef.current) return
-    endingRef.current = false
-    isFingerDownRef.current = false
-    setRecording(false)
-    setTranscribing(true)
-    const text = chunksRef.current.join(' ').replace(/\s+/g, ' ').trim()
-    setNote(text)
-    setTerms(all => all.map(t => t.id === termId ? { ...t, review_note: text || null } : t))
-    persistNote(termId, text, true)
-    setTranscribing(false)
-    recordingTermIdRef.current = null
-  }
-
-  function startRecording() {
+  async function startRecording() {
     if (!current || recording || transcribing) return
     if (noteTimerRef.current) clearTimeout(noteTimerRef.current)
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    if (!SpeechRecognition) { setMessage('Voice transcription needs Chrome on your phone.'); return }
-    isFingerDownRef.current = true
-    endingRef.current = false
-    recordingTermIdRef.current = current.id
-    chunksRef.current = []
-    setNote('')
-    setTerms(all => all.map(t => t.id === current.id ? { ...t, review_note: null } : t))
-    setMessage('')
-    setRecording(true)
-    listen(current.id)
+    noteTimerRef.current = null
+    try {
+      recordingSessionRef.current = await startRecordingSession()
+      recordingTermIdRef.current = current.id
+      recordingBaseNoteRef.current = note.trim()
+      setMessage('Recording — tap the mic again when you are done.')
+      setRecording(true)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not start the microphone.')
+    }
+  }
+
+  async function stopRecording() {
+    const session = recordingSessionRef.current
+    const termId = recordingTermIdRef.current
+    if (!session || !termId) return
+    recordingSessionRef.current = null
+    setRecording(false)
+    setTranscribing(true)
+    setMessage('Transcribing…')
+    session.stop()
+    try {
+      const blob = await session.blobPromise
+      const form = new FormData()
+      const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
+      form.append('audio', blob, `thekonym-note.${extension}`)
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'x-review-pin': pin },
+        body: form,
+      })
+      const result = await response.json() as { text?: string; error?: string }
+      if (!response.ok) throw new Error(result.error || 'Transcription failed.')
+      const transcript = (result.text || '').replace(/\s+/g, ' ').trim()
+      if (!transcript) throw new Error('I did not hear any words in that recording.')
+      const text = [recordingBaseNoteRef.current, transcript].filter(Boolean).join(' ')
+      setNote(text)
+      persistNote(termId, text, true)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Transcription failed. Your existing note was not changed.')
+    } finally {
+      setTranscribing(false)
+      recordingTermIdRef.current = null
+      recordingBaseNoteRef.current = ''
+    }
   }
 
   function toggleRecording(event: React.PointerEvent<HTMLButtonElement>) {
     event.preventDefault()
-    if (recording) {
-      if (endingRef.current) return
-      endingRef.current = true
-      isFingerDownRef.current = false
-      setRecording(false)
-      setTranscribing(true)
-      try { recognitionRef.current?.stop() } catch {}
-      if (!recognitionRef.current && recordingTermIdRef.current) void finishRecording(recordingTermIdRef.current)
-      return
-    }
-    startRecording()
+    if (recording) void stopRecording()
+    else void startRecording()
   }
 
   function queueStatusSave(termId: string, status: Status) {
@@ -491,8 +474,8 @@ function App() {
       {current ? <section className="workspace">
         <div className="work-row">
           <div className="action-rail">
-            <button className={`rail-button mic-button${recording ? ' recording' : ''}`} onPointerDown={toggleRecording} disabled={transcribing} aria-label={recording ? 'Stop recording' : 'Start recording'}>
-              <span className="mic-glyph" aria-hidden="true">🎙</span>
+            <button className={`rail-button mic-button${recording ? ' recording' : ''}`} onPointerDown={toggleRecording} disabled={transcribing} aria-label={recording ? 'Stop recording' : transcribing ? 'Transcribing' : 'Start recording'}>
+              <span className="mic-glyph" aria-hidden="true">{transcribing ? '…' : recording ? '■' : '🎙'}</span>
             </button>
             <button className={`rail-button definition-toggle ${current.definition_status}`} onPointerDown={event => { event.preventDefault(); toggleDefinition() }}>
               <span>{current.definition_status === 'good' ? '✓' : '✎'}</span><strong>{current.definition_status === 'good' ? 'Definition good' : 'Needs work'}</strong>
