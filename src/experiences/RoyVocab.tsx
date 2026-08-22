@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { releaseRecordingStream, startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
-import { clearRoyAudioJobs, deleteRoyAudioJob, listRoyAudioJobs, saveRoyAudioJob, updateRoyAudioJob, type RoyAudioJob } from '../lib/royQueue'
+import { clearRoyAudioJobs, deleteRoyAudioJob, listRoyAudioJobs, saveRoyAudioJob, type RoyAudioJob } from '../lib/royQueue'
 import './roy-vocab.css'
 import './roy-errors.css'
 
@@ -91,7 +91,6 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   const lastTranscriptionStartedRef = useRef(0)
   const queueRunningRef = useRef(false)
   const mountedRef = useRef(true)
-  const retryTimerRef = useRef<number | null>(null)
 
   const answeredCount = Object.values(answers).filter(answer => answer.trim()).length
   const capturedCount = new Set([...Object.keys(answers).filter(key => answers[Number(key)]?.trim()).map(Number), ...processingIndices]).size
@@ -111,7 +110,6 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     return () => {
       mountedRef.current = false
       pressingRef.current = false
-      if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current)
       sessionRef.current?.stop()
       releaseRecordingStream()
       window.removeEventListener('online', resume)
@@ -123,7 +121,6 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   async function processQueue() {
     if (queueRunningRef.current || !navigator.onLine) return
     queueRunningRef.current = true
-    let retryLater = false
     try {
       while (navigator.onLine) {
         const [job] = await listRoyAudioJobs()
@@ -139,7 +136,14 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
           const extension = job.blob.type.includes('mp4') ? 'm4a' : 'webm'
           const form = new FormData()
           form.append('audio', job.blob, `roy-${job.id}.${extension}`)
-          const response = await fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin, 'x-transcription-language': 'ko' }, body: form })
+          const controller = new AbortController()
+          const timeout = window.setTimeout(() => controller.abort(), 20000)
+          const response = await fetch('/api/transcribe', {
+            method: 'POST',
+            headers: { 'x-review-pin': pin, 'x-transcription-language': 'ko' },
+            body: form,
+            signal: controller.signal,
+          }).finally(() => window.clearTimeout(timeout))
           const data = await response.json() as { text?: string; error?: string }
           if (response.ok) {
             const transcript = (data.text || '').trim()
@@ -165,23 +169,32 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
             setActiveProcessingIndex(null)
             continue
           }
-          await updateRoyAudioJob({ ...job, attempts: job.attempts + 1 })
-          if (mountedRef.current) setRowMessage(previous => ({ ...previous, [job.itemIndex]: 'Saved on phone · retrying automatically…' }))
-          retryLater = true
-          break
+          await deleteRoyAudioJob(job.id)
+          if (mountedRef.current) {
+            setErrorIndices(indices => indices.includes(job.itemIndex) ? indices : [...indices, job.itemIndex])
+            setRowMessage(previous => ({ ...previous, [job.itemIndex]: 'Transcription failed. Please record it again.' }))
+            setProcessingIndices(indices => indices.filter(value => value !== job.itemIndex))
+          }
+          setActiveProcessingIndex(null)
+          continue
         } catch {
-          await updateRoyAudioJob({ ...job, attempts: job.attempts + 1 })
-          if (mountedRef.current) setRowMessage(previous => ({ ...previous, [job.itemIndex]: 'Saved on phone · waiting for connection…' }))
-          retryLater = true
-          break
+          if (!navigator.onLine) {
+            if (mountedRef.current) setRowMessage(previous => ({ ...previous, [job.itemIndex]: 'Saved on phone · waiting for connection…' }))
+            break
+          }
+          await deleteRoyAudioJob(job.id)
+          if (mountedRef.current) {
+            setErrorIndices(indices => indices.includes(job.itemIndex) ? indices : [...indices, job.itemIndex])
+            setRowMessage(previous => ({ ...previous, [job.itemIndex]: 'Transcription failed. Please record it again.' }))
+            setProcessingIndices(indices => indices.filter(value => value !== job.itemIndex))
+          }
+          setActiveProcessingIndex(null)
+          continue
         }
       }
     } finally {
       queueRunningRef.current = false
       if (mountedRef.current) setActiveProcessingIndex(null)
-      if (retryLater && mountedRef.current) {
-        retryTimerRef.current = window.setTimeout(() => void processQueue(), 15000)
-      }
     }
   }
 
