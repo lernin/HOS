@@ -1,5 +1,13 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
+  "git": {
+    "deploymentEnabled": {
+      "*": false,
+      "main": true
+    }
+  },
+  "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
     { "source": "/thekonym", "destination": "/" },
     { "source": "/world-3d", "destination": "/" },
