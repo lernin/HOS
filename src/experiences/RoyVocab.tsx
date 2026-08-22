@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
+import { releaseRecordingStream, startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import './roy-vocab.css'
 
 type RoyVocabProps = { onExit: () => void; pin: string }
@@ -86,6 +86,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   useEffect(() => () => {
     pressingRef.current = false
     sessionRef.current?.stop()
+    releaseRecordingStream()
   }, [])
 
   function editAnswer(index: number, value: string) {
@@ -107,7 +108,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     setRecordingIndex(index)
     setRowMessage(previous => ({ ...previous, [index]: '듣고 있어요…' }))
     try {
-      const session = await startRecordingSession()
+      const session = await startRecordingSession({ keepStreamAlive: true })
       if (!pressingRef.current || activeIndexRef.current !== index) {
         session.stop()
         await session.blobPromise

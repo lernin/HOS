@@ -3,6 +3,9 @@ export type RecordingSession = {
   blobPromise: Promise<Blob>
 }
 
+type RecordingOptions = { keepStreamAlive?: boolean }
+let reusableStream: MediaStream | null = null
+
 function preferredMimeType() {
   const candidates = [
     'audio/webm;codecs=opus',
@@ -12,18 +15,27 @@ function preferredMimeType() {
   return candidates.find(type => MediaRecorder.isTypeSupported(type))
 }
 
-export async function startRecordingSession(): Promise<RecordingSession> {
+export function releaseRecordingStream() {
+  reusableStream?.getTracks().forEach(track => track.stop())
+  reusableStream = null
+}
+
+export async function startRecordingSession(options: RecordingOptions = {}): Promise<RecordingSession> {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
     throw new Error('Audio recording is not supported by this browser.')
   }
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    audio: {
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
-  })
+  const reusableIsLive = reusableStream?.getAudioTracks().some(track => track.readyState === 'live')
+  const stream = options.keepStreamAlive && reusableIsLive
+    ? reusableStream!
+    : await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
+  if (options.keepStreamAlive) reusableStream = stream
 
   const mimeType = preferredMimeType()
   const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream)
@@ -35,11 +47,12 @@ export async function startRecordingSession(): Promise<RecordingSession> {
       if (event.data.size) chunks.push(event.data)
     })
     recorder.addEventListener('error', event => {
-      stream.getTracks().forEach(track => track.stop())
+      if (options.keepStreamAlive) releaseRecordingStream()
+      else stream.getTracks().forEach(track => track.stop())
       reject(new Error((event as ErrorEvent).message || 'The recording failed.'))
     })
     recorder.addEventListener('stop', () => {
-      stream.getTracks().forEach(track => track.stop())
+      if (!options.keepStreamAlive) stream.getTracks().forEach(track => track.stop())
       resolve(new Blob(chunks, { type: recorder.mimeType || mimeType || 'audio/webm' }))
     })
   })
