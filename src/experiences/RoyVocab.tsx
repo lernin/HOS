@@ -73,7 +73,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   const [results, setResults] = useState<Record<number, Result>>({})
   const [rowMessage, setRowMessage] = useState<Record<number, string>>({})
   const [recordingIndex, setRecordingIndex] = useState<number | null>(null)
-  const [processingIndex, setProcessingIndex] = useState<number | null>(null)
+  const [processingIndices, setProcessingIndices] = useState<number[]>([])
   const [submitted, setSubmitted] = useState(false)
   const sessionRef = useRef<RecordingSession | null>(null)
   const pressingRef = useRef(false)
@@ -100,7 +100,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
 
   async function startAnswer(event: React.PointerEvent<HTMLButtonElement>, index: number) {
     event.preventDefault()
-    if (recordingIndex !== null || processingIndex !== null) return
+    if (recordingIndex !== null || processingIndices.includes(index)) return
     event.currentTarget.setPointerCapture(event.pointerId)
     pressingRef.current = true
     activeIndexRef.current = index
@@ -141,14 +141,14 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
       setRowMessage(previous => ({ ...previous, [index]: '조금 더 길게 누르고 말하세요.' }))
       return
     }
-    setProcessingIndex(index)
+    setProcessingIndices(indices => indices.includes(index) ? indices : [...indices, index])
     setRowMessage(previous => ({ ...previous, [index]: '말한 내용을 글자로 바꾸고 있어요…' }))
     try {
       const blob = await session.blobPromise
       const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
       const form = new FormData()
       form.append('audio', blob, `roy-answer.${extension}`)
-      const response = await fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin }, body: form })
+      const response = await fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin, 'x-transcription-language': 'ko' }, body: form })
       const data = await response.json() as { text?: string; error?: string }
       if (!response.ok) throw new Error(data.error || '대답을 확인하지 못했어요.')
       const transcript = (data.text || '').trim()
@@ -158,7 +158,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     } catch (error) {
       setRowMessage(previous => ({ ...previous, [index]: error instanceof Error ? error.message : '대답을 확인하지 못했어요.' }))
     } finally {
-      setProcessingIndex(null)
+      setProcessingIndices(indices => indices.filter(value => value !== index))
     }
   }
 
@@ -192,7 +192,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
       {items.map((item, index) => {
         const result = results[index]
         const active = recordingIndex === index
-        const processing = processingIndex === index
+        const processing = processingIndices.includes(index)
         return <article key={item.word} className={`roy-word-card${result ? ` result-${result}` : ''}${active ? ' is-recording' : ''}${processing ? ' is-processing' : ''}`}>
           <span className="roy-number">{String(index + 1).padStart(2, '0')}</span>
           <div className="roy-word-copy">
@@ -201,7 +201,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
             {rowMessage[index] && <small>{rowMessage[index]}</small>}
             {result === 'incorrect' && <em>예: {item.answers.slice(0, 3).join(' · ')}</em>}
           </div>
-          <button className="roy-card-mic" onPointerDown={event => void startAnswer(event, index)} onPointerUp={event => void finishAnswer(event, index)} onPointerCancel={event => void finishAnswer(event, index)} disabled={(recordingIndex !== null && !active) || processingIndex !== null} aria-label={`Hold to answer ${item.word}`}>
+          <button className="roy-card-mic" onPointerDown={event => void startAnswer(event, index)} onPointerUp={event => void finishAnswer(event, index)} onPointerCancel={event => void finishAnswer(event, index)} disabled={(recordingIndex !== null && !active) || processing} aria-label={`Hold to answer ${item.word}`}>
             {processing ? <span className="roy-spinner"/> : <span>{active ? '●' : '🎙'}</span>}
             <small>{processing ? 'WAIT' : active ? 'TALK' : 'HOLD'}</small>
           </button>
@@ -213,7 +213,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     <footer className="roy-submit-bar">
       <div><strong>{submitted ? `${correctCount} / ${items.length}` : `${answeredCount} answered`}</strong><small>{submitted ? 'correct' : `${items.length - answeredCount} remaining`}</small></div>
       {submitted && <button className="roy-reset" onClick={reset}>Reset</button>}
-      <button className="roy-submit" onClick={submit} disabled={recordingIndex !== null || processingIndex !== null}>{submitted ? 'Check again' : 'Submit'}</button>
+      <button className="roy-submit" onClick={submit} disabled={recordingIndex !== null || processingIndices.length > 0}>{processingIndices.length ? `${processingIndices.length} processing` : submitted ? 'Check again' : 'Submit'}</button>
     </footer>
   </main>
 }

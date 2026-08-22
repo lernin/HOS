@@ -21,13 +21,24 @@ export default {
       const audio = form.get('audio')
       if (!(audio instanceof File) || audio.size === 0) return json({ error: 'No audio was received.' }, 400)
       if (audio.size > MAX_AUDIO_BYTES) return json({ error: 'That recording is too long to transcribe.' }, 413)
+      const koreanOnly = request.headers.get('x-transcription-language') === 'ko'
 
       const result = await transcribe({
         model: gateway.transcriptionModel('openai/whisper-1'),
         audio: new Uint8Array(await audio.arrayBuffer()),
+        providerOptions: koreanOnly ? {
+          openai: {
+            language: 'ko',
+            prompt: '한국어 음성을 한글로만 받아쓰세요. 로마자로 표기하거나 영어로 번역하지 마세요.',
+          },
+        } : undefined,
       })
 
-      return json({ text: result.text.trim() })
+      const text = koreanOnly
+        ? result.text.replace(/[A-Za-z]+/g, '').replace(/\s+/g, ' ').trim()
+        : result.text.trim()
+      if (koreanOnly && !/[가-힣]/.test(text)) return json({ error: '한글을 듣지 못했어요. 다시 말해 보세요.' }, 422)
+      return json({ text })
     } catch (error) {
       console.error('Transcription failed', error)
       return json({ error: 'Transcription failed. Your existing note was not changed.' }, 500)

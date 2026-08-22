@@ -1,4 +1,4 @@
-const CACHE = 'experiment-hub-v9'
+const CACHE = 'experiment-hub-v10'
 const SHELL = ['/', '/thekonym', '/world-3d', '/roy', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png']
 
 self.addEventListener('install', (event) => {
