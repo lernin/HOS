@@ -10,7 +10,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
-type View = 'hub' | 'thekonym' | 'world3d'
+type View = 'hub' | 'thekonym' | 'world3d' | 'roy'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -57,6 +57,7 @@ const TERMS_CACHE_KEY = 'thekonym-terms-cache-v1'
 const OUTBOX_KEY = 'thekonym-sync-outbox-v1'
 const DEFAULT_FONTS: FontPrefs = { definition: 16, thoughts: 17, rail: 15, judgment: 15 }
 const World3D = lazy(() => import('./experiences/World3D').then(module => ({ default: module.World3D })))
+const RoyVocab = lazy(() => import('./experiences/RoyVocab').then(module => ({ default: module.RoyVocab })))
 
 function readCachedTerms(): Term[] {
   try { return JSON.parse(localStorage.getItem(TERMS_CACHE_KEY) || '[]') as Term[] } catch { return [] }
@@ -95,7 +96,7 @@ function App() {
   const [search, setSearch] = useState('')
   const [note, setNote] = useState('')
   const [recording, setRecording] = useState(false)
-  const [transcribing, setTranscribing] = useState(false)
+  const [transcribingTermIds, setTranscribingTermIds] = useState<string[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme) || 'terminal-cream')
   const [fontPrefs, setFontPrefs] = useState<FontPrefs>(() => {
@@ -107,17 +108,18 @@ function App() {
   const recordingSessionRef = useRef<RecordingSession | null>(null)
   const recordingTermIdRef = useRef<string | null>(null)
   const recordingBaseNoteRef = useRef('')
+  const currentTermIdRef = useRef<string | null>(null)
   const flushingRef = useRef(false)
 
   useEffect(() => {
     window.history.replaceState({}, '', '/')
-    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : 'hub')
+    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : 'hub')
     window.addEventListener('popstate', syncView)
     return () => window.removeEventListener('popstate', syncView)
   }, [])
 
   function navigate(next: View) {
-    const path = next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : '/'
+    const path = next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : '/'
     window.history.pushState({}, '', path)
     setView(next)
     window.scrollTo(0, 0)
@@ -260,6 +262,8 @@ function App() {
 
   useEffect(() => { if (index >= visible.length) setIndex(Math.max(0, visible.length - 1)) }, [visible.length, index])
   const current = visible[index]
+  const transcribing = Boolean(current && transcribingTermIds.includes(current.id))
+  useEffect(() => { currentTermIdRef.current = current?.id ?? null }, [current?.id])
   useEffect(() => { if (!recording) setNote(current?.review_note ?? '') }, [current?.id])
 
   function persistNote(termId: string, text: string, toast = false) {
@@ -296,10 +300,13 @@ function App() {
     const session = recordingSessionRef.current
     const termId = recordingTermIdRef.current
     if (!session || !termId) return
+    const baseNote = recordingBaseNoteRef.current
     recordingSessionRef.current = null
+    recordingTermIdRef.current = null
+    recordingBaseNoteRef.current = ''
     setRecording(false)
-    setTranscribing(true)
-    setMessage('Transcribing…')
+    setTranscribingTermIds(ids => ids.includes(termId) ? ids : [...ids, termId])
+    setMessage('The text will appear here when the transcription is ready.')
     session.stop()
     try {
       const blob = await session.blobPromise
@@ -315,15 +322,14 @@ function App() {
       if (!response.ok) throw new Error(result.error || 'Transcription failed.')
       const transcript = (result.text || '').replace(/\s+/g, ' ').trim()
       if (!transcript) throw new Error('I did not hear any words in that recording.')
-      const text = [recordingBaseNoteRef.current, transcript].filter(Boolean).join(' ')
-      setNote(text)
+      const text = [baseNote, transcript].filter(Boolean).join(' ')
+      if (currentTermIdRef.current === termId) setNote(text)
       persistNote(termId, text, true)
+      setMessage(`Transcript added to ${terms.find(term => term.id === termId)?.term || 'the term'}.`)
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Transcription failed. Your existing note was not changed.')
     } finally {
-      setTranscribing(false)
-      recordingTermIdRef.current = null
-      recordingBaseNoteRef.current = ''
+      setTranscribingTermIds(ids => ids.filter(id => id !== termId))
     }
   }
 
@@ -445,12 +451,18 @@ function App() {
           <span className="experience-copy"><strong>3D Environment</strong><small>A simple landscape-mode space to move around and explore.</small></span>
           <button className="experience-go" onClick={() => navigate('world3d')}>Go</button>
         </article>
+        <article className="experience-card">
+          <span className="experience-icon">R</span>
+          <span className="experience-copy"><strong>Roy</strong><small>A hold-to-talk Korean vocabulary test.</small></span>
+          <button className="experience-go" onClick={() => navigate('roy')}>Go</button>
+        </article>
       </section>
       <div className="hub-footer">One app · many experiments</div>
     </main>
   )
 
   if (view === 'world3d') return <Suspense fallback={<main className="shell"><div className="center">Opening 3D world…</div></main>}><World3D onExit={() => navigate('hub')} /></Suspense>
+  if (view === 'roy') return <Suspense fallback={<main className="shell"><div className="center">Opening Roy…</div></main>}><RoyVocab onExit={() => navigate('hub')} pin={pin} /></Suspense>
 
   return (
     <main className={`shell app-shell${recording ? ' is-recording' : ''}`} data-theme={theme} style={styleVars}>
@@ -475,7 +487,7 @@ function App() {
         <div className="work-row">
           <div className="action-rail">
             <button className={`rail-button mic-button${recording ? ' recording' : ''}`} onPointerDown={toggleRecording} disabled={transcribing} aria-label={recording ? 'Stop recording' : transcribing ? 'Transcribing' : 'Start recording'}>
-              <span className="mic-glyph" aria-hidden="true">{transcribing ? '…' : recording ? '■' : '🎙'}</span>
+              <span className="mic-glyph" aria-hidden="true">{recording ? '■' : '🎙'}</span>
             </button>
             <button className={`rail-button definition-toggle ${current.definition_status}`} onPointerDown={event => { event.preventDefault(); toggleDefinition() }}>
               <span>{current.definition_status === 'good' ? '✓' : '✎'}</span><strong>{current.definition_status === 'good' ? 'Definition good' : 'Needs work'}</strong>
@@ -487,7 +499,7 @@ function App() {
             <div className="note-title">Your thoughts</div>
             <div className="note-editor">
               <textarea value={note} onChange={e => editNote(e.target.value)} placeholder="Tap the mic or type…" readOnly={transcribing} />
-              {transcribing && <div className="transcription-status" role="status" aria-live="polite"><span className="transcription-spinner" aria-hidden="true"/><strong>Turning speech into text…</strong></div>}
+              {transcribing && <div className="transcription-status" role="status" aria-live="polite"><strong>The text will appear here when the transcription is ready.</strong></div>}
             </div>
           </div>
         </div>
