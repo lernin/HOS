@@ -5,6 +5,29 @@ import './roy-vocab.css'
 type RoyVocabProps = { onExit: () => void; pin: string }
 type Result = 'correct' | 'incorrect'
 type VocabItem = { word: string; answers: string[] }
+type RecognitionResultLike = { length: number; [index: number]: { transcript: string } }
+type RecognitionEventLike = { resultIndex: number; results: { length: number; [index: number]: RecognitionResultLike } }
+type RecognitionErrorLike = { error: string }
+type KoreanRecognizer = {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives: number
+  start: () => void
+  stop: () => void
+  abort: () => void
+  onresult: ((event: RecognitionEventLike) => void) | null
+  onerror: ((event: RecognitionErrorLike) => void) | null
+  onend: (() => void) | null
+}
+
+function getKoreanRecognizer() {
+  const speechWindow = window as typeof window & {
+    SpeechRecognition?: new () => KoreanRecognizer
+    webkitSpeechRecognition?: new () => KoreanRecognizer
+  }
+  return speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
+}
 
 const items: VocabItem[] = [
   { word: 'further', answers: ['더 멀리', '더 나아가', '추가의', '더욱'] },
@@ -80,12 +103,17 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   const activeIndexRef = useRef<number | null>(null)
   const startedAtRef = useRef(0)
   const transcriptionQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const recognizerRef = useRef<KoreanRecognizer | null>(null)
+  const recognizedTextRef = useRef('')
+  const recognitionIndexRef = useRef<number | null>(null)
+  const recognitionErrorRef = useRef(false)
 
   const answeredCount = Object.values(answers).filter(answer => answer.trim()).length
   const correctCount = Object.values(results).filter(result => result === 'correct').length
 
   useEffect(() => () => {
     pressingRef.current = false
+    recognizerRef.current?.abort()
     sessionRef.current?.stop()
     releaseRecordingStream()
   }, [])
@@ -108,6 +136,59 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     activeIndexRef.current = index
     setRecordingIndex(index)
     setRowMessage(previous => ({ ...previous, [index]: '듣고 있어요…' }))
+    const Recognizer = getKoreanRecognizer()
+    if (Recognizer) {
+      releaseRecordingStream()
+      const recognizer = new Recognizer()
+      recognizer.lang = 'ko-KR'
+      recognizer.continuous = false
+      recognizer.interimResults = true
+      recognizer.maxAlternatives = 1
+      recognizerRef.current = recognizer
+      recognitionIndexRef.current = index
+      recognizedTextRef.current = ''
+      recognitionErrorRef.current = false
+      recognizer.onresult = resultEvent => {
+        let text = ''
+        for (let resultIndex = 0; resultIndex < resultEvent.results.length; resultIndex += 1) {
+          text += `${resultEvent.results[resultIndex][0]?.transcript || ''} `
+        }
+        recognizedTextRef.current = text.trim()
+      }
+      recognizer.onerror = errorEvent => {
+        if (errorEvent.error === 'aborted') return
+        recognitionErrorRef.current = true
+        setRowMessage(previous => ({ ...previous, [index]: errorEvent.error === 'no-speech' ? '말을 듣지 못했어요. 다시 해보세요.' : '음성 인식을 다시 시도해 주세요.' }))
+      }
+      recognizer.onend = () => {
+        const targetIndex = recognitionIndexRef.current
+        const hangul = recognizedTextRef.current.replace(/[A-Za-z]+/g, '').replace(/\s+/g, ' ').trim()
+        recognizerRef.current = null
+        recognitionIndexRef.current = null
+        pressingRef.current = false
+        activeIndexRef.current = null
+        setRecordingIndex(null)
+        if (targetIndex === null) return
+        setProcessingIndices(indices => indices.filter(value => value !== targetIndex))
+        if (hangul && /[가-힣]/.test(hangul)) {
+          setAnswers(previous => ({ ...previous, [targetIndex]: hangul }))
+          setRowMessage(previous => ({ ...previous, [targetIndex]: '필요하면 글자를 눌러 고치세요.' }))
+        } else if (!recognitionErrorRef.current) {
+          setRowMessage(previous => ({ ...previous, [targetIndex]: '한글을 듣지 못했어요. 다시 말해 보세요.' }))
+        }
+      }
+      try {
+        recognizer.start()
+      } catch {
+        recognizerRef.current = null
+        recognitionIndexRef.current = null
+        pressingRef.current = false
+        activeIndexRef.current = null
+        setRecordingIndex(null)
+        setRowMessage(previous => ({ ...previous, [index]: '음성 인식을 다시 시도해 주세요.' }))
+      }
+      return
+    }
     try {
       const session = await startRecordingSession({ keepStreamAlive: true })
       if (!pressingRef.current || activeIndexRef.current !== index) {
@@ -132,6 +213,14 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     if (!pressingRef.current || activeIndexRef.current !== index) return
     pressingRef.current = false
     activeIndexRef.current = null
+    const recognizer = recognizerRef.current
+    if (recognizer && recognitionIndexRef.current === index) {
+      setRecordingIndex(null)
+      setProcessingIndices(indices => indices.includes(index) ? indices : [...indices, index])
+      setRowMessage(previous => ({ ...previous, [index]: '한글로 바꾸고 있어요…' }))
+      recognizer.stop()
+      return
+    }
     const session = sessionRef.current
     sessionRef.current = null
     setRecordingIndex(null)
