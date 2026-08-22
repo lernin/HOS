@@ -3,6 +3,7 @@ export type RoyAudioJob = {
   itemIndex: number
   createdAt: number
   attempts: number
+  transcriptionMode?: 'openai-mini' | 'openai-full'
   blob: Blob
 }
 

@@ -7,6 +7,42 @@ import './roy-errors.css'
 type RoyVocabProps = { onExit: () => void; pin: string }
 type Result = 'correct' | 'incorrect'
 type VocabItem = { word: string; answers: string[] }
+type TranscriptionMode = 'android' | 'openai-mini' | 'openai-full'
+type RecognitionResultLike = { length: number; [index: number]: { transcript: string } }
+type RecognitionEventLike = { results: { length: number; [index: number]: RecognitionResultLike } }
+type RecognitionErrorLike = { error: string }
+type KoreanRecognizer = {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives: number
+  start: () => void
+  stop: () => void
+  abort: () => void
+  onresult: ((event: RecognitionEventLike) => void) | null
+  onerror: ((event: RecognitionErrorLike) => void) | null
+  onend: (() => void) | null
+}
+
+const ROY_TRANSCRIPTION_MODE_KEY = 'roy-transcription-mode-v1'
+const TRANSCRIPTION_LABELS: Record<TranscriptionMode, string> = {
+  android: 'Android',
+  'openai-mini': 'OpenAI Mini',
+  'openai-full': 'OpenAI Full',
+}
+
+function getKoreanRecognizer() {
+  const speechWindow = window as typeof window & {
+    SpeechRecognition?: new () => KoreanRecognizer
+    webkitSpeechRecognition?: new () => KoreanRecognizer
+  }
+  return speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
+}
+
+function loadSavedTranscriptionMode(): TranscriptionMode {
+  const saved = localStorage.getItem(ROY_TRANSCRIPTION_MODE_KEY)
+  return saved === 'android' || saved === 'openai-full' || saved === 'openai-mini' ? saved : 'openai-mini'
+}
 
 const items: VocabItem[] = [
   { word: 'further', answers: ['더 멀리', '더 나아가', '추가의', '더욱'] },
@@ -84,6 +120,8 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   const [processingIndices, setProcessingIndices] = useState<number[]>([])
   const [activeProcessingIndex, setActiveProcessingIndex] = useState<number | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [transcriptionMode, setTranscriptionMode] = useState<TranscriptionMode>(loadSavedTranscriptionMode)
   const sessionRef = useRef<RecordingSession | null>(null)
   const pressingRef = useRef(false)
   const activeIndexRef = useRef<number | null>(null)
@@ -91,10 +129,16 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   const lastTranscriptionStartedRef = useRef(0)
   const queueRunningRef = useRef(false)
   const mountedRef = useRef(true)
+  const recognizerRef = useRef<KoreanRecognizer | null>(null)
+  const recognizedTextRef = useRef('')
+  const recognitionIndexRef = useRef<number | null>(null)
+  const recognitionErrorRef = useRef(false)
+  const recognitionStartedAtRef = useRef(0)
 
   const answeredCount = Object.values(answers).filter(answer => answer.trim()).length
   const capturedCount = new Set([...Object.keys(answers).filter(key => answers[Number(key)]?.trim()).map(Number), ...processingIndices]).size
   const correctCount = Object.values(results).filter(result => result === 'correct').length
+  const androidAvailable = Boolean(getKoreanRecognizer())
 
   useEffect(() => {
     mountedRef.current = true
@@ -110,6 +154,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     return () => {
       mountedRef.current = false
       pressingRef.current = false
+      recognizerRef.current?.abort()
       sessionRef.current?.stop()
       releaseRecordingStream()
       window.removeEventListener('online', resume)
@@ -117,6 +162,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   }, [])
 
   useEffect(() => { localStorage.setItem(ROY_ANSWERS_KEY, JSON.stringify(answers)) }, [answers])
+  useEffect(() => { localStorage.setItem(ROY_TRANSCRIPTION_MODE_KEY, transcriptionMode) }, [transcriptionMode])
 
   async function processQueue() {
     if (queueRunningRef.current || !navigator.onLine) return
@@ -130,8 +176,11 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
         const queueDelay = Math.max(0, 6500 - (Date.now() - lastTranscriptionStartedRef.current))
         if (queueDelay) await new Promise(resolve => window.setTimeout(resolve, queueDelay))
         lastTranscriptionStartedRef.current = Date.now()
+        const jobMode = job.transcriptionMode || 'openai-mini'
+        const modelLabel = TRANSCRIPTION_LABELS[jobMode]
+        const transcriptionStartedAt = performance.now()
         setActiveProcessingIndex(job.itemIndex)
-        setRowMessage(previous => ({ ...previous, [job.itemIndex]: '말한 내용을 글자로 바꾸고 있어요…' }))
+        setRowMessage(previous => ({ ...previous, [job.itemIndex]: `${modelLabel} · 말한 내용을 글자로 바꾸고 있어요…` }))
         try {
           const extension = job.blob.type.includes('mp4') ? 'm4a' : 'webm'
           const form = new FormData()
@@ -140,7 +189,7 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
           const timeout = window.setTimeout(() => controller.abort(), 20000)
           const response = await fetch('/api/transcribe', {
             method: 'POST',
-            headers: { 'x-review-pin': pin, 'x-transcription-language': 'ko' },
+            headers: { 'x-review-pin': pin, 'x-transcription-language': 'ko', 'x-transcription-model': jobMode },
             body: form,
             signal: controller.signal,
           }).finally(() => window.clearTimeout(timeout))
@@ -151,9 +200,10 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
             const newerJobExists = (await listRoyAudioJobs()).some(candidate => candidate.itemIndex === job.itemIndex && candidate.id !== job.id)
             await deleteRoyAudioJob(job.id)
             if (!newerJobExists && mountedRef.current) {
+              const seconds = ((performance.now() - transcriptionStartedAt) / 1000).toFixed(1)
               setAnswers(previous => ({ ...previous, [job.itemIndex]: transcript }))
               setErrorIndices(indices => indices.filter(value => value !== job.itemIndex))
-              setRowMessage(previous => ({ ...previous, [job.itemIndex]: '필요하면 글자를 눌러 고치세요.' }))
+              setRowMessage(previous => ({ ...previous, [job.itemIndex]: `${modelLabel} · ${seconds}s · 필요하면 글자를 눌러 고치세요.` }))
               setProcessingIndices(indices => indices.filter(value => value !== job.itemIndex))
             }
             setActiveProcessingIndex(null)
@@ -212,12 +262,83 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
   async function startAnswer(event: React.PointerEvent<HTMLButtonElement>, index: number) {
     event.preventDefault()
     if (pressingRef.current || recordingIndex !== null || processingIndices.includes(index)) return
+    if (transcriptionMode === 'android' && recognizerRef.current) {
+      setRowMessage(previous => ({ ...previous, [index]: 'Android가 이전 단어를 마무리하고 있어요…' }))
+      return
+    }
     event.currentTarget.setPointerCapture(event.pointerId)
     pressingRef.current = true
     activeIndexRef.current = index
     setErrorIndices(indices => indices.filter(value => value !== index))
     setRecordingIndex(index)
     setRowMessage(previous => ({ ...previous, [index]: '듣고 있어요…' }))
+    if (transcriptionMode === 'android') {
+      const Recognizer = getKoreanRecognizer()
+      if (!Recognizer) {
+        pressingRef.current = false
+        activeIndexRef.current = null
+        setRecordingIndex(null)
+        setErrorIndices(indices => indices.includes(index) ? indices : [...indices, index])
+        setRowMessage(previous => ({ ...previous, [index]: '이 브라우저에서는 Android 음성 인식을 사용할 수 없어요.' }))
+        return
+      }
+      releaseRecordingStream()
+      const recognizer = new Recognizer()
+      recognizer.lang = 'ko-KR'
+      recognizer.continuous = false
+      recognizer.interimResults = true
+      recognizer.maxAlternatives = 1
+      recognizerRef.current = recognizer
+      recognitionIndexRef.current = index
+      recognizedTextRef.current = ''
+      recognitionErrorRef.current = false
+      recognitionStartedAtRef.current = performance.now()
+      recognizer.onresult = resultEvent => {
+        let text = ''
+        for (let resultIndex = 0; resultIndex < resultEvent.results.length; resultIndex += 1) {
+          text += `${resultEvent.results[resultIndex][0]?.transcript || ''} `
+        }
+        recognizedTextRef.current = text.trim()
+      }
+      recognizer.onerror = errorEvent => {
+        if (errorEvent.error === 'aborted') return
+        recognitionErrorRef.current = true
+        setErrorIndices(indices => indices.includes(index) ? indices : [...indices, index])
+        setRowMessage(previous => ({ ...previous, [index]: errorEvent.error === 'no-speech' ? 'Android · 말을 듣지 못했어요. 다시 해보세요.' : 'Android 음성 인식을 다시 시도해 주세요.' }))
+      }
+      recognizer.onend = () => {
+        const targetIndex = recognitionIndexRef.current
+        const hangul = recognizedTextRef.current.replace(/[A-Za-z]+/g, '').replace(/\s+/g, ' ').trim()
+        const seconds = ((performance.now() - recognitionStartedAtRef.current) / 1000).toFixed(1)
+        recognizerRef.current = null
+        recognitionIndexRef.current = null
+        pressingRef.current = false
+        activeIndexRef.current = null
+        if (!mountedRef.current || targetIndex === null) return
+        setRecordingIndex(null)
+        setProcessingIndices(indices => indices.filter(value => value !== targetIndex))
+        if (hangul && /[가-힣]/.test(hangul)) {
+          setAnswers(previous => ({ ...previous, [targetIndex]: hangul }))
+          setErrorIndices(indices => indices.filter(value => value !== targetIndex))
+          setRowMessage(previous => ({ ...previous, [targetIndex]: `Android · ${seconds}s · 필요하면 글자를 눌러 고치세요.` }))
+        } else if (!recognitionErrorRef.current) {
+          setErrorIndices(indices => indices.includes(targetIndex) ? indices : [...indices, targetIndex])
+          setRowMessage(previous => ({ ...previous, [targetIndex]: 'Android · 한글을 듣지 못했어요. 다시 말해 보세요.' }))
+        }
+      }
+      try {
+        recognizer.start()
+      } catch {
+        recognizerRef.current = null
+        recognitionIndexRef.current = null
+        pressingRef.current = false
+        activeIndexRef.current = null
+        setRecordingIndex(null)
+        setErrorIndices(indices => indices.includes(index) ? indices : [...indices, index])
+        setRowMessage(previous => ({ ...previous, [index]: 'Android 음성 인식을 시작하지 못했어요.' }))
+      }
+      return
+    }
     try {
       const session = await startRecordingSession({ keepStreamAlive: true })
       if (!pressingRef.current || activeIndexRef.current !== index) {
@@ -242,14 +363,27 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     if (!pressingRef.current || activeIndexRef.current !== index) return
     pressingRef.current = false
     activeIndexRef.current = null
+    const recognizer = recognizerRef.current
+    if (recognizer && recognitionIndexRef.current === index) {
+      setProcessingIndices(indices => indices.includes(index) ? indices : [...indices, index])
+      setRowMessage(previous => ({ ...previous, [index]: 'Android · 마지막 소리까지 듣는 중…' }))
+      window.setTimeout(() => {
+        if (recognizerRef.current !== recognizer) return
+        try { recognizer.stop() } catch { recognizer.abort() }
+      }, 300)
+      return
+    }
     const session = sessionRef.current
     sessionRef.current = null
-    setRecordingIndex(null)
-    if (!session) return
+    if (!session) {
+      setRecordingIndex(null)
+      return
+    }
     const duration = performance.now() - startedAtRef.current
     if (duration < 280) {
       session.stop()
       await session.blobPromise
+      setRecordingIndex(null)
       setRowMessage(previous => ({ ...previous, [index]: '조금 더 길게 누르고 말하세요.' }))
       return
     }
@@ -257,12 +391,14 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     setRowMessage(previous => ({ ...previous, [index]: '마지막 소리까지 듣는 중… 다음 단어를 녹음해도 돼요.' }))
     await new Promise(resolve => window.setTimeout(resolve, 500))
     session.stop()
+    setRecordingIndex(null)
     const blob = await session.blobPromise
     const job: RoyAudioJob = {
       id: crypto.randomUUID?.() || `${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
       itemIndex: index,
       createdAt: Date.now(),
       attempts: 0,
+      transcriptionMode: transcriptionMode === 'openai-full' ? 'openai-full' : 'openai-mini',
       blob,
     }
     try {
@@ -300,11 +436,14 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
     <header className="roy-top">
       <button onClick={onExit}>← Hub</button>
       <div><span>EXPERIMENT 03</span><strong>Roy</strong></div>
-      <div className="roy-count">{capturedCount}<small> / {items.length}</small></div>
+      <div className="roy-top-actions">
+        <button className="roy-settings-button" onClick={() => setSettingsOpen(true)} disabled={recordingIndex !== null} aria-label="Speech settings">⚙</button>
+        <div className="roy-count">{capturedCount}<small> / {items.length}</small></div>
+      </div>
     </header>
     <section className="roy-intro">
       <div><span>English → Korean</span><strong>{submitted ? `${correctCount} correct` : 'Hold. Say it. Release.'}</strong></div>
-      <p>{submitted ? 'Tap any answer to correct it, then check again.' : 'Hold the mic, say the Korean meaning, then let go.'}</p>
+      <p>{submitted ? 'Tap any answer to correct it, then check again.' : `${TRANSCRIPTION_LABELS[transcriptionMode]} · Hold the mic, say the Korean meaning, then let go.`}</p>
     </section>
     <section className="roy-list">
       {items.map((item, index) => {
@@ -334,5 +473,26 @@ export function RoyVocab({ onExit, pin }: RoyVocabProps) {
       {submitted && <button className="roy-reset" onClick={reset}>Reset</button>}
       <button className="roy-submit" onClick={submit} disabled={recordingIndex !== null || processingIndices.length > 0}>{processingIndices.length ? `${processingIndices.length} processing` : submitted ? 'Check again' : 'Submit'}</button>
     </footer>
+    {settingsOpen && <div className="roy-settings-overlay" onPointerDown={() => setSettingsOpen(false)}>
+      <section className="roy-settings-panel" role="dialog" aria-modal="true" aria-labelledby="roy-settings-title" onPointerDown={event => event.stopPropagation()}>
+        <header>
+          <div><small>Speech settings</small><strong id="roy-settings-title">Recognition method</strong></div>
+          <button onClick={() => setSettingsOpen(false)} aria-label="Close settings">×</button>
+        </header>
+        <div className="roy-mode-list">
+          <button className={transcriptionMode === 'android' ? 'active' : ''} onClick={() => setTranscriptionMode('android')} disabled={!androidAvailable} aria-pressed={transcriptionMode === 'android'}>
+            <span>Android</span><small>{androidAvailable ? 'Live recognition on this device' : 'Not available in this browser'}</small>
+          </button>
+          <button className={transcriptionMode === 'openai-mini' ? 'active' : ''} onClick={() => setTranscriptionMode('openai-mini')} aria-pressed={transcriptionMode === 'openai-mini'}>
+            <span>OpenAI Mini</span><small>Recorded audio · faster and cheaper</small>
+          </button>
+          <button className={transcriptionMode === 'openai-full' ? 'active' : ''} onClick={() => setTranscriptionMode('openai-full')} aria-pressed={transcriptionMode === 'openai-full'}>
+            <span>OpenAI Full</span><small>Recorded audio · highest accuracy</small>
+          </button>
+        </div>
+        <p>New recordings use this choice. Recordings already waiting keep their original model.</p>
+        <button className="roy-settings-done" onClick={() => setSettingsOpen(false)}>Done</button>
+      </section>
+    </div>}
   </main>
 }

@@ -3,6 +3,10 @@ import { transcribe } from 'ai'
 
 const ACCESS_PIN = '3476'
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024
+const KOREAN_TRANSCRIPTION_MODELS = {
+  'openai-mini': 'openai/gpt-4o-mini-transcribe',
+  'openai-full': 'openai/gpt-4o-transcribe',
+} as const
 
 function json(body: Record<string, unknown>, status = 200) {
   return Response.json(body, {
@@ -22,9 +26,11 @@ export default {
       if (!(audio instanceof File) || audio.size === 0) return json({ error: 'No audio was received.' }, 400)
       if (audio.size > MAX_AUDIO_BYTES) return json({ error: 'That recording is too long to transcribe.' }, 413)
       const koreanOnly = request.headers.get('x-transcription-language') === 'ko'
+      const requestedModel = request.headers.get('x-transcription-model')
+      const koreanModel = requestedModel === 'openai-full' ? 'openai-full' : 'openai-mini'
 
       const result = await transcribe({
-        model: gateway.transcriptionModel(koreanOnly ? 'openai/gpt-4o-mini-transcribe' : 'openai/whisper-1'),
+        model: gateway.transcriptionModel(koreanOnly ? KOREAN_TRANSCRIPTION_MODELS[koreanModel] : 'openai/whisper-1'),
         audio: new Uint8Array(await audio.arrayBuffer()),
         providerOptions: koreanOnly ? {
           openai: {
@@ -38,7 +44,7 @@ export default {
         ? result.text.replace(/[A-Za-z]+/g, '').replace(/\s+/g, ' ').trim()
         : result.text.trim()
       if (koreanOnly && !/[가-힣]/.test(text)) return json({ error: '한글을 듣지 못했어요. 다시 말해 보세요.' }, 422)
-      return json({ text })
+      return json({ text, model: koreanOnly ? koreanModel : 'whisper' })
     } catch (error) {
       console.error('Transcription failed', error)
       const detail = error instanceof Error ? error.message : String(error)
