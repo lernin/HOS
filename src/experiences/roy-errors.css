@@ -1,0 +1,14 @@
+.roy-word-card.has-error {
+  border-color: #efbd50;
+  background: linear-gradient(145deg, rgba(160, 105, 16, .2), rgba(255, 255, 255, .055));
+}
+
+.roy-word-card.has-error .roy-word-copy small {
+  color: #ffd474;
+  font-weight: 800;
+}
+
+.roy-word-card.has-error .roy-card-mic {
+  border-color: #ffd16c;
+  background: linear-gradient(155deg, #b97819, #8e5610);
+}
