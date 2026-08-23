@@ -1,5 +1,5 @@
-# Thekonym standalone
+# The Lab
 
-The Procedia Thekonym review tool, isolated as a root-level PWA so Android installs it as a standalone application.
+Ashley's private workspace for Procedia experiments (Thekonym, Ekpronym, 3D Environment, Roy, Library, ...), a root-level PWA so Android installs it as a standalone application.
 
 The original Hello World proof is preserved on the `baseline/hello-world` branch.

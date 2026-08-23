@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Thekonym",
-  "short_name": "Thekonym",
-  "description": "Procedia's standalone Greek -onym review tool.",
+  "name": "The Lab",
+  "short_name": "The Lab",
+  "description": "Ashley's private workspace for Procedia experiments.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

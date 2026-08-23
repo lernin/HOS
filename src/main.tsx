@@ -10,7 +10,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
-type View = 'hub' | 'thekonym' | 'world3d' | 'roy' | 'ekpronym'
+type View = 'hub' | 'thekonym' | 'world3d' | 'roy' | 'ekpronym' | 'library'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -59,6 +59,7 @@ const DEFAULT_FONTS: FontPrefs = { definition: 16, thoughts: 17, rail: 15, judgm
 const World3D = lazy(() => import('./experiences/World3D').then(module => ({ default: module.World3D })))
 const RoyVocab = lazy(() => import('./experiences/RoyVocab').then(module => ({ default: module.RoyVocab })))
 const EkpronymReview = lazy(() => import('./experiences/EkpronymReview').then(module => ({ default: module.EkpronymReview })))
+const Library = lazy(() => import('./experiences/Library').then(module => ({ default: module.Library })))
 
 function readCachedTerms(): Term[] {
   try { return JSON.parse(localStorage.getItem(TERMS_CACHE_KEY) || '[]') as Term[] } catch { return [] }
@@ -114,13 +115,13 @@ function App() {
 
   useEffect(() => {
     window.history.replaceState({}, '', '/')
-    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : 'hub')
+    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : 'hub')
     window.addEventListener('popstate', syncView)
     return () => window.removeEventListener('popstate', syncView)
   }, [])
 
   function navigate(next: View) {
-    const path = next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : '/'
+    const path = next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : '/'
     window.history.pushState({}, '', path)
     setView(next)
     window.scrollTo(0, 0)
@@ -420,7 +421,7 @@ function App() {
   if (!pin) return (
     <main className="shell pin-shell" data-theme={theme} style={styleVars}>
       <section className="pin-card">
-        <div className="eyebrow">Ashley’s private workspace</div><h1>Experiment Hub</h1>
+        <div className="eyebrow">Ashley’s private workspace</div><h1>The Lab</h1>
         <form onSubmit={unlock} className="pin-form">
           <input autoFocus inputMode="numeric" maxLength={4} value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))} placeholder="PIN" />
           <button disabled={loading || pinInput.length !== 4}>{loading ? 'Opening…' : 'Open'}</button>
@@ -435,7 +436,7 @@ function App() {
   if (view === 'hub') return (
     <main className="shell hub-shell" data-theme={theme} style={styleVars}>
       <header className="hub-top">
-        <div><div className="eyebrow">Ashley’s private workspace</div><h1>Experiment Hub</h1></div>
+        <div><div className="eyebrow">Ashley’s private workspace</div><h1>The Lab</h1></div>
       </header>
       <section className="hub-intro">
         <strong>Your experiments</strong>
@@ -462,6 +463,11 @@ function App() {
           <span className="experience-copy"><strong>Roy</strong><small>A hold-to-talk Korean vocabulary test.</small></span>
           <button className="experience-go" onClick={() => navigate('roy')}>Go</button>
         </article>
+        <article className="experience-card">
+          <span className="experience-icon">L</span>
+          <span className="experience-copy"><strong>Library</strong><small>Browse and read the 163-tab Procedia Documentation set.</small></span>
+          <button className="experience-go" onClick={() => navigate('library')}>Go</button>
+        </article>
       </section>
       <div className="hub-footer">One app · many experiments</div>
     </main>
@@ -470,6 +476,7 @@ function App() {
   if (view === 'world3d') return <Suspense fallback={<main className="shell"><div className="center">Opening 3D world…</div></main>}><World3D onExit={() => navigate('hub')} /></Suspense>
   if (view === 'roy') return <Suspense fallback={<main className="shell"><div className="center">Opening Roy…</div></main>}><RoyVocab onExit={() => navigate('hub')} pin={pin} /></Suspense>
   if (view === 'ekpronym') return <Suspense fallback={<main className="shell"><div className="center">Opening Ekpronym…</div></main>}><EkpronymReview onExit={() => navigate('hub')} pin={pin} /></Suspense>
+  if (view === 'library') return <Suspense fallback={<main className="shell"><div className="center">Opening Library…</div></main>}><Library onExit={() => navigate('hub')} /></Suspense>
 
   return (
     <main className={`shell app-shell${recording ? ' is-recording' : ''}`} data-theme={theme} style={styleVars}>
