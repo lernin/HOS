@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import './ekpronym-review.css'
 
 type EkpronymReviewProps = { onExit: () => void; pin: string }
@@ -43,6 +44,11 @@ export function EkpronymReview({ onExit, pin }: EkpronymReviewProps) {
   const [detailLoading, setDetailLoading] = useState(false)
   const [enriching, setEnriching] = useState(false)
   const [note, setNote] = useState('')
+  const [recording, setRecording] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
+  const recordingSessionRef = useRef<RecordingSession | null>(null)
+  const recordingDetailRef = useRef<Detail | null>(null)
+  const recordingBaseNoteRef = useRef('')
 
   useEffect(() => { void load() }, [])
 
@@ -64,6 +70,7 @@ export function EkpronymReview({ onExit, pin }: EkpronymReviewProps) {
   const current = visible[index]
 
   useEffect(() => {
+    if (recording || transcribing) return
     setDetail(null)
     setNote('')
     if (current?.id) void loadDetail(current.id, true)
@@ -116,7 +123,7 @@ export function EkpronymReview({ onExit, pin }: EkpronymReviewProps) {
       new_ai_note: next.ai_note || '',
     })
     if (error) { setMessage(error.message); return }
-    setDetail(next)
+    if (detail?.pleuronym_id === base.pleuronym_id) setDetail(next)
     if (toast) setMessage('Saved')
   }
 
@@ -142,7 +149,62 @@ export function EkpronymReview({ onExit, pin }: EkpronymReviewProps) {
     await saveCuration({ human_note: note })
   }
 
-  function go(delta: number) { setIndex(i => Math.max(0, Math.min(visible.length - 1, i + delta))) }
+  async function startRecording() {
+    if (!detail || recording || transcribing) return
+    try {
+      recordingSessionRef.current = await startRecordingSession()
+      recordingDetailRef.current = detail
+      recordingBaseNoteRef.current = note.trim()
+      setRecording(true)
+      setMessage('Recording — tap the mic again when you are done.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not start the microphone.')
+    }
+  }
+
+  async function stopRecording() {
+    const session = recordingSessionRef.current
+    const target = recordingDetailRef.current
+    if (!session || !target) return
+    const baseNote = recordingBaseNoteRef.current
+    recordingSessionRef.current = null
+    recordingDetailRef.current = null
+    recordingBaseNoteRef.current = ''
+    setRecording(false)
+    setTranscribing(true)
+    setMessage('Transcribing your note…')
+    session.stop()
+    try {
+      const blob = await session.blobPromise
+      const form = new FormData()
+      const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
+      form.append('audio', blob, `ekpronym-note.${extension}`)
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'x-review-pin': pin },
+        body: form,
+      })
+      const result = await response.json() as { text?: string; error?: string }
+      if (!response.ok) throw new Error(result.error || 'Transcription failed.')
+      const transcript = (result.text || '').replace(/\s+/g, ' ').trim()
+      if (!transcript) throw new Error('I did not hear any words in that recording.')
+      const text = [baseNote, transcript].filter(Boolean).join(' ')
+      if (detail?.pleuronym_id === target.pleuronym_id) setNote(text)
+      await saveCuration({ human_note: text }, target, false)
+      setMessage('Voice note transcribed and saved.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Transcription failed. Your existing note was not changed.')
+    } finally {
+      setTranscribing(false)
+    }
+  }
+
+  function toggleRecording() {
+    if (recording) void stopRecording()
+    else void startRecording()
+  }
+
+  function go(delta: number) { if (!recording && !transcribing) setIndex(i => Math.max(0, Math.min(visible.length - 1, i + delta))) }
 
   const candidates = detail?.candidates || current?.candidates || []
 
@@ -189,14 +251,17 @@ export function EkpronymReview({ onExit, pin }: EkpronymReviewProps) {
           <button className={`ek-investigate${detail?.ekpronym_review_status === 'investigate' ? ' active' : ''}`} onClick={() => void investigate()}>🤷 I’m not sure — investigate this</button>
 
           <div className="ek-notes">
-            <label>Your note</label>
-            <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="What feels wrong, confusing, archaic, or worth checking?" />
-            <button onClick={() => void saveNote()}>Save note</button>
+            <div className="ek-note-heading">
+              <label>Your note</label>
+              <button className={`ek-mic${recording ? ' recording' : ''}`} onClick={toggleRecording} disabled={transcribing} aria-label={recording ? 'Stop recording' : 'Record note'}>{transcribing ? '…' : recording ? '■ Stop' : '🎙 Record'}</button>
+            </div>
+            <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="What feels wrong, confusing, archaic, or worth checking?" disabled={recording || transcribing} />
+            <button onClick={() => void saveNote()} disabled={recording || transcribing}>Save note</button>
           </div>
 
           {detail?.ai_note && <div className="ek-ai-note"><strong>AI review · {detail.ai_status || 'note'}</strong><p>{detail.ai_note}</p></div>}
 
-          <div className="ek-nav"><button onClick={() => go(-1)} disabled={index === 0}>← Back</button><button onClick={() => go(1)} disabled={index >= visible.length - 1}>Next →</button></div>
+          <div className="ek-nav"><button onClick={() => go(-1)} disabled={index === 0 || recording || transcribing}>← Back</button><button onClick={() => go(1)} disabled={index >= visible.length - 1 || recording || transcribing}>Next →</button></div>
         </section>
       ) : <div className="ek-center">Nothing matches this filter.</div>}
     </main>
