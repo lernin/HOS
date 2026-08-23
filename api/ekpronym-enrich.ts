@@ -1,3 +1,4 @@
+import { gateway } from '@ai-sdk/gateway'
 import { generateText } from 'ai'
 
 const ACCESS_PIN = '3476'
@@ -9,10 +10,11 @@ function json(body: Record<string, unknown>, status = 200) {
 }
 
 function parseJson(text: string) {
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
+  const cleaned = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
+  const start = cleaned.indexOf('{')
+  const end = cleaned.lastIndexOf('}')
   if (start < 0 || end <= start) throw new Error('Model did not return JSON.')
-  return JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>
+  return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>
 }
 
 export default {
@@ -34,13 +36,7 @@ Candidate Atomonyms:
 ${candidates.map(c => `- ${c.atomonym_id}: ${c.nemonym}`).join('\n')}
 
 Return ONLY valid JSON in exactly this shape:
-{
-  "examples": [
-    {"atomonym_id":"UUID","sentences":["sentence 1","sentence 2"]}
-  ],
-  "ai_status":"good|unclear|problematic|archaic|needs_investigation",
-  "ai_note":"one or two short sentences"
-}
+{"examples":[{"atomonym_id":"UUID","sentences":["sentence 1","sentence 2"]}],"ai_status":"good|unclear|problematic|archaic|needs_investigation","ai_note":"one or two short sentences"}
 
 Rules:
 - Create exactly 2 short, natural example sentences for EACH candidate.
@@ -49,12 +45,12 @@ Rules:
 - If the WordNet definition is archaic, malformed, confusing, or does not fit the candidates, say so in ai_status/ai_note.
 - Do not invent a new candidate or alter an atomonym_id.`
 
-      const { text } = await generateText({ model: 'openai/gpt-5.6-sol', prompt })
-      const parsed = parseJson(text)
-      return json(parsed)
+      const { text } = await generateText({ model: gateway('openai/gpt-5.6-sol'), prompt })
+      return json(parseJson(text))
     } catch (error) {
       console.error('Ekpronym enrichment failed', error)
-      return json({ error: 'Could not generate examples right now.' }, 500)
+      const detail = error instanceof Error ? error.message : String(error)
+      return json({ error: /rate.?limit/i.test(detail) ? 'AI is busy. Try again in a moment.' : 'Could not generate examples right now.' }, /rate.?limit/i.test(detail) ? 429 : 500)
     }
   },
 }
