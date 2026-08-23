@@ -1,25 +1,29 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-type Hypernym = { depth: number; definition: string | null; pos: string | null; ekpronym: string | null; words: string[] }
+type Hypernym = { depth: number; definition: string | null; ekpronym: string | null; words: string[] }
 
 export function EkpronymContext({ pin, pleuronymId }: { pin: string; pleuronymId: string }) {
   const [rows, setRows] = useState<Hypernym[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     let alive = true
     setLoading(true)
-    void supabase.rpc('ekpronym_review_hypernyms', { pin, target_pleuronym_id: pleuronymId }).then(({ data, error }) => {
+    setError('')
+    void supabase.rpc('ekpronym_review_ancestry', { pin, target_pleuronym_id: pleuronymId }).then(({ data, error: rpcError }) => {
       if (!alive) return
-      setRows(error ? [] : ((data as Hypernym[]) || []))
+      if (rpcError) { setRows([]); setError(rpcError.message) }
+      else setRows((data as Hypernym[]) || [])
       setLoading(false)
     })
     return () => { alive = false }
   }, [pin, pleuronymId])
 
   if (loading) return <div className="ek-subtle">Loading semantic context…</div>
-  if (!rows.length) return null
+  if (error) return <div className="ek-subtle">Semantic context unavailable: {error}</div>
+  if (!rows.length) return <div className="ek-subtle">No hypernym ancestry is linked for this sense.</div>
 
   return <section className="ek-context">
     <div className="ek-context-title">Meaning ancestry · hypernyms</div>
