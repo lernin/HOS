@@ -4,24 +4,31 @@ import './ekpronym-review.css'
 
 type EkpronymReviewProps = { onExit: () => void; pin: string }
 type Confidence = 'unset' | 'weak' | 'scored'
+type DefinitionStatus = 'good' | 'unclear' | 'bad' | 'weird' | 'needs_investigation'
 type Candidate = { nemonym: string; commonality_score: number | null }
-type Item = {
-  id: string
+type Example = { ordinal: number; sentence: string; source: string; status: string }
+type DetailCandidate = Candidate & { atomonym_id: string; examples: Example[] }
+type Detail = {
+  pleuronym_id: string
   definition: string
   pos: string | null
   ekpronym: string | null
-  confidence: Confidence
-  candidates: Candidate[]
+  definition_status: DefinitionStatus | null
+  ekpronym_review_status: 'chosen' | 'unsure' | 'investigate' | null
+  human_note: string | null
+  ai_status: 'good' | 'unclear' | 'problematic' | 'archaic' | 'needs_investigation' | null
+  ai_note: string | null
+  candidates: DetailCandidate[]
 }
+type Item = { id: string; definition: string; pos: string | null; ekpronym: string | null; confidence: Confidence; candidates: Candidate[] }
 type Filter = 'all' | Confidence
 
 const filters: { value: Filter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'unset', label: 'No pick yet' },
-  { value: 'weak', label: 'Weak pick' },
-  { value: 'scored', label: 'Scored pick' },
+  { value: 'all', label: 'All' }, { value: 'unset', label: 'No pick yet' }, { value: 'weak', label: 'Weak pick' }, { value: 'scored', label: 'Scored pick' },
 ]
-
+const definitionOptions: { value: DefinitionStatus; label: string }[] = [
+  { value: 'good', label: '✓ Good' }, { value: 'unclear', label: '? Unclear' }, { value: 'bad', label: '✕ Bad' }, { value: 'weird', label: '⚠ Weird' },
+]
 const posLabels: Record<string, string> = { n: 'noun', v: 'verb', a: 'adjective', s: 'adjective', r: 'adverb' }
 
 export function EkpronymReview({ onExit, pin }: EkpronymReviewProps) {
@@ -32,114 +39,166 @@ export function EkpronymReview({ onExit, pin }: EkpronymReviewProps) {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [detail, setDetail] = useState<Detail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [enriching, setEnriching] = useState(false)
+  const [note, setNote] = useState('')
 
   useEffect(() => { void load() }, [])
 
   async function load() {
     setLoading(true)
     const { data, error } = await supabase.rpc('ekpronym_review_list', { pin })
-    if (error) {
-      setMessage(error.message)
-    } else {
-      setItems((data as Item[]) || [])
-      setMessage('')
-    }
+    if (error) setMessage(error.message)
+    else { setItems((data as Item[]) || []); setMessage('') }
     setLoading(false)
   }
 
   function filterItems(source: Item[]) {
     const q = search.trim().toLowerCase()
-    return source.filter(item => {
-      const matchesFilter = filter === 'all' || item.confidence === filter
-      const matchesSearch = !q || item.definition.toLowerCase().includes(q) || item.candidates.some(c => c.nemonym.toLowerCase().includes(q))
-      return matchesFilter && matchesSearch
-    })
+    return source.filter(item => (filter === 'all' || item.confidence === filter) && (!q || item.definition.toLowerCase().includes(q) || item.candidates.some(c => c.nemonym.toLowerCase().includes(q))))
   }
 
   const visible = useMemo(() => filterItems(items), [items, filter, search])
   useEffect(() => { if (index >= visible.length) setIndex(Math.max(0, visible.length - 1)) }, [visible.length, index])
   const current = visible[index]
 
+  useEffect(() => {
+    setDetail(null)
+    setNote('')
+    if (current?.id) void loadDetail(current.id, true)
+  }, [current?.id])
+
+  async function loadDetail(id: string, autoEnrich = false) {
+    setDetailLoading(true)
+    const { data, error } = await supabase.rpc('ekpronym_review_detail', { pin, target_pleuronym_id: id })
+    setDetailLoading(false)
+    if (error) { setMessage(error.message); return }
+    const next = data as Detail
+    setDetail(next)
+    setNote(next.human_note || '')
+    if (autoEnrich && next.candidates.some(c => !c.examples?.length)) void enrich(next)
+  }
+
+  async function enrich(target = detail) {
+    if (!target || enriching) return
+    const missing = target.candidates.filter(c => !c.examples?.length).slice(0, 12)
+    if (!missing.length && target.ai_note) return
+    setEnriching(true)
+    try {
+      const response = await fetch('/api/ekpronym-enrich', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-review-pin': pin },
+        body: JSON.stringify({ definition: target.definition, pos: target.pos, candidates: (missing.length ? missing : target.candidates.slice(0, 12)).map(c => ({ atomonym_id: c.atomonym_id, nemonym: c.nemonym })) }),
+      })
+      const result = await response.json() as { examples?: { atomonym_id: string; sentences: string[] }[]; ai_status?: Detail['ai_status']; ai_note?: string; error?: string }
+      if (!response.ok) throw new Error(result.error || 'AI review failed.')
+      const payload = (result.examples || []).flatMap(row => row.sentences.slice(0, 3).map((sentence, i) => ({ atomonym_id: row.atomonym_id, ordinal: i + 1, sentence })))
+      if (payload.length) {
+        const saved = await supabase.rpc('ekpronym_review_save_examples', { pin, target_pleuronym_id: target.pleuronym_id, payload })
+        if (saved.error) throw saved.error
+      }
+      await saveCuration({ ai_status: result.ai_status || target.ai_status, ai_note: result.ai_note || target.ai_note }, target, false)
+      await loadDetail(target.pleuronym_id, false)
+    } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not generate examples.') }
+    finally { setEnriching(false) }
+  }
+
+  async function saveCuration(patch: Partial<Detail>, base = detail, toast = true) {
+    if (!base) return
+    const next = { ...base, ...patch }
+    const { error } = await supabase.rpc('ekpronym_review_set_curation', {
+      pin,
+      target_pleuronym_id: base.pleuronym_id,
+      new_definition_status: next.definition_status,
+      new_ekpronym_review_status: next.ekpronym_review_status,
+      new_human_note: next.human_note || '',
+      new_ai_status: next.ai_status,
+      new_ai_note: next.ai_note || '',
+    })
+    if (error) { setMessage(error.message); return }
+    setDetail(next)
+    if (toast) setMessage('Saved')
+  }
+
   async function choose(nemonym: string) {
     if (!current) return
     setSavingId(current.id)
     const { error } = await supabase.rpc('ekpronym_review_set_choice', { pin, pleuronym_id: current.id, chosen_nemonym: nemonym })
     setSavingId(null)
-    if (error) {
-      setMessage(error.message)
-      return
-    }
+    if (error) { setMessage(error.message); return }
+    await saveCuration({ ekpronym_review_status: 'chosen' }, detail, false)
     setItems(all => all.map(item => item.id === current.id ? { ...item, ekpronym: nemonym, confidence: 'scored' } : item))
     setMessage(`Saved: ${nemonym}`)
-    // Auto-advance so scrolling through a list feels continuous.
-    window.setTimeout(() => {
-      setIndex(i => {
-        const stillHere = filterItems(items.map(item => item.id === current.id ? { ...item, ekpronym: nemonym, confidence: 'scored' } : item))
-        return Math.min(i, Math.max(0, stillHere.length - 1))
-      })
-    }, 120)
   }
 
-  function go(delta: number) {
-    setIndex(i => Math.max(0, Math.min(visible.length - 1, i + delta)))
+  async function investigate() {
+    if (!detail) return
+    await saveCuration({ ekpronym_review_status: 'investigate' })
+    go(1)
   }
+
+  async function saveNote() {
+    if (!detail) return
+    await saveCuration({ human_note: note })
+  }
+
+  function go(delta: number) { setIndex(i => Math.max(0, Math.min(visible.length - 1, i + delta))) }
+
+  const candidates = detail?.candidates || current?.candidates || []
 
   return (
     <main className="ek-shell">
       <header className="ek-top">
-        <div>
-          <div className="ek-eyebrow">Procedia · Ekpronym</div>
-          <h1>Pick the term</h1>
-        </div>
-        <div className="ek-top-actions">
-          <button className="ek-hub-button" onClick={onExit}>Hub</button>
-          <div className="ek-counter">{visible.length ? index + 1 : 0}<span>/</span>{visible.length}</div>
-        </div>
+        <div><div className="ek-eyebrow">Procedia · Ekpronym</div><h1>Pick the term</h1></div>
+        <div className="ek-top-actions"><button className="ek-hub-button" onClick={onExit}>Hub</button><div className="ek-counter">{visible.length ? index + 1 : 0}<span>/</span>{visible.length}</div></div>
       </header>
 
       <div className="ek-tools">
         <input value={search} onChange={e => { setSearch(e.target.value); setIndex(0) }} placeholder="Find a definition or word…" />
-        <select value={filter} onChange={e => { setFilter(e.target.value as Filter); setIndex(0) }}>
-          {filters.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-        </select>
+        <select value={filter} onChange={e => { setFilter(e.target.value as Filter); setIndex(0) }}>{filters.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}</select>
         <button className="ek-refresh" onClick={() => void load()} disabled={loading} aria-label="Refresh list">↻</button>
       </div>
 
       {message && <div className="ek-toast">{message}</div>}
 
-      {loading ? (
-        <div className="ek-center">Loading…</div>
-      ) : current ? (
+      {loading ? <div className="ek-center">Loading…</div> : current ? (
         <section className="ek-workspace">
           <div className="ek-definition-row">
             {current.pos && <span className="ek-pos">{posLabels[current.pos] || current.pos}</span>}
             <div className="ek-definition">{current.definition}</div>
             {current.ekpronym && <div className="ek-current">Current pick: <strong>{current.ekpronym}</strong></div>}
+            <div className="ek-definition-review">
+              <span>Definition:</span>
+              {definitionOptions.map(option => <button key={option.value} className={detail?.definition_status === option.value ? 'active' : ''} onClick={() => void saveCuration({ definition_status: option.value })}>{option.label}</button>)}
+            </div>
           </div>
 
           <div className="ek-question">Which word is the most common way to say this?</div>
+          {detailLoading && <div className="ek-subtle">Loading examples…</div>}
           <div className="ek-candidate-list">
-            {current.candidates.map(c => (
-              <button
-                key={c.nemonym}
-                className={`ek-candidate${current.ekpronym === c.nemonym ? ' selected' : ''}`}
-                disabled={savingId === current.id}
-                onClick={() => void choose(c.nemonym)}
-              >
-                <strong>{c.nemonym.replace(/_/g, ' ')}</strong>
-                {c.commonality_score != null && <span className="ek-score">score {c.commonality_score}</span>}
+            {candidates.map(c => {
+              const rich = c as DetailCandidate
+              return <button key={c.nemonym} className={`ek-candidate${current.ekpronym === c.nemonym ? ' selected' : ''}`} disabled={savingId === current.id} onClick={() => void choose(c.nemonym)}>
+                <div className="ek-candidate-main"><strong>{c.nemonym.replace(/_/g, ' ')}</strong>{c.commonality_score != null && <span className="ek-score">score {c.commonality_score}</span>}</div>
+                {!!rich.examples?.length && <div className="ek-examples">{rich.examples.map(example => <div key={example.ordinal}>“{example.sentence}”</div>)}</div>}
               </button>
-            ))}
+            })}
+          </div>
+          {enriching && <div className="ek-subtle">AI is creating sense-specific examples…</div>}
+          {!enriching && detail && <button className="ek-secondary" onClick={() => void enrich()}>↻ Generate / refresh examples</button>}
+          <button className={`ek-investigate${detail?.ekpronym_review_status === 'investigate' ? ' active' : ''}`} onClick={() => void investigate()}>🤷 I’m not sure — investigate this</button>
+
+          <div className="ek-notes">
+            <label>Your note</label>
+            <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="What feels wrong, confusing, archaic, or worth checking?" />
+            <button onClick={() => void saveNote()}>Save note</button>
           </div>
 
-          <div className="ek-nav">
-            <button onClick={() => go(-1)} disabled={index === 0}>← Back</button>
-            <button onClick={() => go(1)} disabled={index >= visible.length - 1}>Next →</button>
-          </div>
+          {detail?.ai_note && <div className="ek-ai-note"><strong>AI review · {detail.ai_status || 'note'}</strong><p>{detail.ai_note}</p></div>}
+
+          <div className="ek-nav"><button onClick={() => go(-1)} disabled={index === 0}>← Back</button><button onClick={() => go(1)} disabled={index >= visible.length - 1}>Next →</button></div>
         </section>
-      ) : (
-        <div className="ek-center">Nothing matches this filter.</div>
-      )}
+      ) : <div className="ek-center">Nothing matches this filter.</div>}
     </main>
   )
 }
