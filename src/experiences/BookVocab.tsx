@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import './book-vocab.css'
 
 type VocabWord = { word: string; korean: string }
+
 type Diagnostic = {
   scanId: string
   stage: string
@@ -9,9 +10,20 @@ type Diagnostic = {
   status?: number
   uploadKb?: number
   dimensions?: string
+  detail?: string
+  model?: string
+  elapsedMs?: number
+  endpointVersion?: string
+}
+
+type ScanReport = Diagnostic & {
+  message: string
+  createdAt: string
+  online: boolean
 }
 
 const STORAGE_KEY = 'book-vocab-latest-v1'
+const REPORTS_KEY = 'book-vocab-scan-reports-v2'
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 const TARGET_UPLOAD_BYTES = 1_700_000
 
@@ -22,6 +34,26 @@ function readSaved(): VocabWord[] {
   } catch {
     return []
   }
+}
+
+function saveReport(report: ScanReport) {
+  try {
+    const previous = JSON.parse(localStorage.getItem(REPORTS_KEY) || '[]') as ScanReport[]
+    const next = [report, ...(Array.isArray(previous) ? previous : [])].slice(0, 5)
+    localStorage.setItem(REPORTS_KEY, JSON.stringify(next))
+  } catch {
+    // Reporting must never block scanning.
+  }
+}
+
+function stageLabel(stage: string) {
+  if (stage === 'receive') return 'Image upload'
+  if (stage === 'ocr') return 'OpenAI vision'
+  if (stage === 'vocab') return 'Vocabulary translation'
+  if (stage === 'parse') return 'Result processing'
+  if (stage === 'response') return 'Server response'
+  if (stage === 'client') return 'Phone preparation'
+  return stage || 'Unknown'
 }
 
 async function prepareImage(file: File) {
@@ -59,11 +91,12 @@ async function prepareImage(file: File) {
 export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) {
   const cameraRef = useRef<HTMLInputElement | null>(null)
   const galleryRef = useRef<HTMLInputElement | null>(null)
+  const lastPhotoRef = useRef<File | null>(null)
   const [words, setWords] = useState<VocabWord[]>(readSaved)
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
-  const [error, setError] = useState('')
-  const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(null)
+  const [report, setReport] = useState<ScanReport | null>(null)
+  const [copyLabel, setCopyLabel] = useState('Copy report')
 
   const sorted = useMemo(() => [...words].sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' })), [words])
   const byLetter = useMemo(() => {
@@ -78,12 +111,15 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
 
   const visibleWords = selectedLetter ? byLetter.get(selectedLetter) || [] : []
 
-  async function scan(file?: File) {
+  async function scan(file?: File, preserveAsLast = true) {
     if (!file || processing) return
+    if (preserveAsLast) lastPhotoRef.current = file
+
     const scanId = crypto.randomUUID().slice(0, 8)
+    const startedAt = performance.now()
     setProcessing(true)
-    setError('')
-    setDiagnostic(null)
+    setReport(null)
+    setCopyLabel('Copy report')
     setSelectedLetter(null)
 
     let uploadKb: number | undefined
@@ -122,6 +158,7 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
             status: response.status,
             uploadKb,
             dimensions,
+            elapsedMs: Math.round(performance.now() - startedAt),
           } satisfies Diagnostic,
         })
       }
@@ -135,6 +172,10 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
             status: response.status,
             uploadKb,
             dimensions,
+            detail: body.diagnostic?.detail,
+            model: body.diagnostic?.model,
+            endpointVersion: body.diagnostic?.endpointVersion,
+            elapsedMs: body.diagnostic?.elapsedMs || Math.round(performance.now() - startedAt),
           } satisfies Diagnostic,
         })
       }
@@ -153,6 +194,7 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
             status: response.status,
             uploadKb,
             dimensions,
+            elapsedMs: Math.round(performance.now() - startedAt),
           } satisfies Diagnostic,
         })
       }
@@ -161,14 +203,22 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned))
     } catch (cause) {
       const maybe = cause as { message?: string; diagnostic?: Diagnostic }
-      setError(maybe.message || 'Could not scan that page.')
-      setDiagnostic(maybe.diagnostic || {
+      const diagnostic = maybe.diagnostic || {
         scanId,
         stage: 'client',
         code: 'CLIENT_ERROR',
         uploadKb,
         dimensions,
-      })
+        elapsedMs: Math.round(performance.now() - startedAt),
+      }
+      const nextReport: ScanReport = {
+        ...diagnostic,
+        message: maybe.message || 'Could not scan that page.',
+        createdAt: new Date().toISOString(),
+        online: navigator.onLine,
+      }
+      setReport(nextReport)
+      saveReport(nextReport)
     } finally {
       setProcessing(false)
       if (cameraRef.current) cameraRef.current.value = ''
@@ -176,11 +226,28 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
     }
   }
 
+  async function copyReport() {
+    if (!report) return
+    const payload = {
+      app: 'The Lab / Book Vocab',
+      ...report,
+      browser: navigator.userAgent,
+    }
+    const text = JSON.stringify(payload, null, 2)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyLabel('Copied')
+    } catch {
+      setCopyLabel('Copy failed')
+    }
+  }
+
   function clear() {
     setWords([])
     setSelectedLetter(null)
-    setError('')
-    setDiagnostic(null)
+    setReport(null)
+    setCopyLabel('Copy report')
+    lastPhotoRef.current = null
     localStorage.removeItem(STORAGE_KEY)
   }
 
@@ -189,16 +256,10 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
     window.setTimeout(() => cameraRef.current?.click(), 0)
   }
 
-  const diagnosticText = diagnostic
-    ? [
-        'Scan ' + diagnostic.scanId,
-        diagnostic.stage,
-        diagnostic.code,
-        diagnostic.status ? 'HTTP ' + diagnostic.status : '',
-        diagnostic.uploadKb ? diagnostic.uploadKb + ' KB' : '',
-        diagnostic.dimensions || '',
-      ].filter(Boolean).join(' · ')
-    : ''
+  function chooseAnother() {
+    setReport(null)
+    window.setTimeout(() => cameraRef.current?.click(), 0)
+  }
 
   return (
     <main className="book-vocab-shell">
@@ -224,6 +285,43 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
 
       <input ref={cameraRef} className="book-vocab-hidden" type="file" accept="image/*" capture="environment" onChange={e => void scan(e.target.files?.[0])} />
       <input ref={galleryRef} className="book-vocab-hidden" type="file" accept="image/*" onChange={e => void scan(e.target.files?.[0])} />
+
+      {report && !processing && (
+        <section className="scan-report" aria-live="polite">
+          <div className="scan-report-top">
+            <div>
+              <div className="scan-report-kicker">SCAN FAILED</div>
+              <h2>{stageLabel(report.stage)}</h2>
+            </div>
+            <span className="scan-report-code">{report.code}</span>
+          </div>
+
+          <p className="scan-report-message">{report.message}</p>
+
+          <div className="scan-report-grid">
+            <div><span>Scan</span><strong>{report.scanId}</strong></div>
+            <div><span>HTTP</span><strong>{report.status || '—'}</strong></div>
+            <div><span>Image</span><strong>{report.dimensions || '—'}</strong></div>
+            <div><span>Upload</span><strong>{report.uploadKb ? report.uploadKb + ' KB' : '—'}</strong></div>
+            <div><span>Duration</span><strong>{report.elapsedMs ? (report.elapsedMs / 1000).toFixed(1) + ' s' : '—'}</strong></div>
+            <div><span>Network</span><strong>{report.online ? 'Online' : 'Offline'}</strong></div>
+          </div>
+
+          {report.model && <div className="scan-report-model">{report.model}</div>}
+          {report.detail && (
+            <details className="scan-report-detail">
+              <summary>Technical detail</summary>
+              <pre>{report.detail}</pre>
+            </details>
+          )}
+
+          <div className="scan-report-actions">
+            <button className="report-primary" disabled={!lastPhotoRef.current} onClick={() => lastPhotoRef.current && void scan(lastPhotoRef.current, false)}>Retry same photo</button>
+            <button onClick={() => void copyReport()}>{copyLabel}</button>
+            <button onClick={chooseAnother}>New photo</button>
+          </div>
+        </section>
+      )}
 
       {processing ? (
         <section className="book-vocab-scanning">
@@ -294,20 +392,7 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
             </button>
             <button className="secondary-capture" onClick={() => galleryRef.current?.click()}>Choose existing photo</button>
           </div>
-          {error && (
-            <div className="book-vocab-error">
-              <strong>{error}</strong>
-              {diagnosticText && <code>{diagnosticText}</code>}
-            </div>
-          )}
         </section>
-      )}
-
-      {error && words.length > 0 && (
-        <div className="book-vocab-error floating-error">
-          <strong>{error}</strong>
-          {diagnosticText && <code>{diagnosticText}</code>}
-        </div>
       )}
     </main>
   )
