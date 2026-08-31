@@ -10,7 +10,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
-type View = 'hub' | 'thekonym' | 'world3d' | 'roy' | 'ekpronym' | 'library' | 'scroller'
+type View = 'hub' | 'thekonym' | 'world3d' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -61,6 +61,7 @@ const RoyVocab = lazy(() => import('./experiences/RoyVocab').then(module => ({ d
 const EkpronymReview = lazy(() => import('./experiences/EkpronymReview').then(module => ({ default: module.EkpronymReview })))
 const Library = lazy(() => import('./experiences/Library').then(module => ({ default: module.Library })))
 const Scroller = lazy(() => import('./experiences/Scroller').then(module => ({ default: module.Scroller })))
+const BookVocab = lazy(() => import('./experiences/BookVocab').then(module => ({ default: module.BookVocab })))
 
 function readCachedTerms(): Term[] {
   try { return JSON.parse(localStorage.getItem(TERMS_CACHE_KEY) || '[]') as Term[] } catch { return [] }
@@ -116,13 +117,13 @@ function App() {
 
   useEffect(() => {
     window.history.replaceState({}, '', '/')
-    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : 'hub')
+    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
     window.addEventListener('popstate', syncView)
     return () => window.removeEventListener('popstate', syncView)
   }, [])
 
   function navigate(next: View) {
-    const path = next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : '/'
+    const path = next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
     window.history.pushState({}, '', path)
     setView(next)
     window.scrollTo(0, 0)
@@ -474,6 +475,11 @@ function App() {
           <span className="experience-copy"><strong>Scroller</strong><small>Paste text, hear it read aloud, and loop it in a seamless continuous scroll.</small></span>
           <button className="experience-go" onClick={() => navigate('scroller')}>Go</button>
         </article>
+        <article className="experience-card">
+          <span className="experience-icon">Aa</span>
+          <span className="experience-copy"><strong>Book Vocab</strong><small>Photograph a book page, extract the words, and translate them into Korean A–Z.</small></span>
+          <button className="experience-go" onClick={() => navigate('bookvocab')}>Go</button>
+        </article>
       </section>
       <div className="hub-footer">One app · many experiments</div>
     </main>
@@ -484,6 +490,7 @@ function App() {
   if (view === 'ekpronym') return <Suspense fallback={<main className="shell"><div className="center">Opening Ekpronym…</div></main>}><EkpronymReview onExit={() => navigate('hub')} pin={pin} /></Suspense>
   if (view === 'library') return <Suspense fallback={<main className="shell"><div className="center">Opening Library…</div></main>}><Library onExit={() => navigate('hub')} /></Suspense>
   if (view === 'scroller') return <Suspense fallback={<main className="shell"><div className="center">Opening Scroller…</div></main>}><Scroller onExit={() => navigate('hub')} /></Suspense>
+  if (view === 'bookvocab') return <Suspense fallback={<main className="shell"><div className="center">Opening Book Vocab…</div></main>}><BookVocab onExit={() => navigate('hub')} pin={pin} /></Suspense>
 
   return (
     <main className={`shell app-shell${recording ? ' is-recording' : ''}`} data-theme={theme} style={styleVars}>
