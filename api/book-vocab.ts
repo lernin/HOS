@@ -3,6 +3,8 @@ import { generateText } from 'ai'
 
 const ACCESS_PIN = '3476'
 const MAX_IMAGE_BYTES = 2_500_000
+const MODEL = 'openai/gpt-5.6-sol'
+const ENDPOINT_VERSION = 'book-vocab-reporting-v2'
 
 type Word = { word: string; korean: string }
 type Stage = 'receive' | 'ocr' | 'vocab' | 'parse'
@@ -13,12 +15,18 @@ function json(body: Record<string, unknown>, status = 200) {
 
 function cleanDetail(error: unknown) {
   const detail = error instanceof Error ? error.message : String(error)
-  return detail.replace(/\s+/g, ' ').slice(0, 900)
+  return detail
+    .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [redacted]')
+    .replace(/\bsk-[A-Za-z0-9_-]{10,}\b/g, '[redacted-key]')
+    .replace(/(api[_-]?key["'=:\s]+)[^\s,;}]+/gi, '$1[redacted]')
+    .replace(/\s+/g, ' ')
+    .slice(0, 700)
 }
 
 function log(scanId: string, stage: Stage, event: string, detail?: Record<string, unknown>) {
   console.log(JSON.stringify({
     source: 'book-vocab',
+    version: ENDPOINT_VERSION,
     scanId,
     stage,
     event,
@@ -26,19 +34,42 @@ function log(scanId: string, stage: Stage, event: string, detail?: Record<string
   }))
 }
 
-function fail(scanId: string, stage: Stage, code: string, message: string, status: number, error?: unknown) {
+function fail(
+  scanId: string,
+  stage: Stage,
+  code: string,
+  message: string,
+  status: number,
+  startedAt: number,
+  error?: unknown,
+) {
   const detail = error ? cleanDetail(error) : undefined
+  const elapsedMs = Date.now() - startedAt
+
   console.error(JSON.stringify({
     source: 'book-vocab',
+    version: ENDPOINT_VERSION,
     scanId,
     stage,
     event: 'failed',
     code,
+    status,
+    model: MODEL,
+    elapsedMs,
     detail,
   }))
+
   return json({
     error: message,
-    diagnostic: { scanId, stage, code },
+    diagnostic: {
+      scanId,
+      stage,
+      code,
+      detail,
+      model: MODEL,
+      elapsedMs,
+      endpointVersion: ENDPOINT_VERSION,
+    },
   }, status)
 }
 
@@ -56,6 +87,7 @@ export default {
     if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405)
     if (request.headers.get('x-review-pin') !== ACCESS_PIN) return json({ error: 'Unauthorized.' }, 401)
 
+    const startedAt = Date.now()
     let scanId = crypto.randomUUID().slice(0, 8)
     let stage: Stage = 'receive'
 
@@ -66,13 +98,13 @@ export default {
       if (/^[a-zA-Z0-9-]{4,40}$/.test(submittedScanId)) scanId = submittedScanId
 
       if (!(image instanceof File) || image.size === 0) {
-        return fail(scanId, stage, 'NO_IMAGE', 'No image reached the scanner.', 400)
+        return fail(scanId, stage, 'NO_IMAGE', 'No image reached the scanner.', 400, startedAt)
       }
       if (!/^image\/(jpeg|png|webp)$/i.test(image.type)) {
-        return fail(scanId, stage, 'UNSUPPORTED_IMAGE', 'That image format is not supported.', 415)
+        return fail(scanId, stage, 'UNSUPPORTED_IMAGE', 'That image format is not supported.', 415, startedAt)
       }
       if (image.size > MAX_IMAGE_BYTES) {
-        return fail(scanId, stage, 'IMAGE_TOO_LARGE', 'The prepared photo is still too large to scan.', 413)
+        return fail(scanId, stage, 'IMAGE_TOO_LARGE', 'The prepared photo is still too large to scan.', 413, startedAt)
       }
 
       log(scanId, stage, 'received', {
@@ -83,11 +115,11 @@ export default {
       const imageBytes = new Uint8Array(await image.arrayBuffer())
 
       stage = 'ocr'
-      log(scanId, stage, 'started')
+      log(scanId, stage, 'started', { model: MODEL })
       let pageText = ''
       try {
         const ocrResult = await generateText({
-          model: gateway('openai/gpt-5.6-sol'),
+          model: gateway(MODEL),
           messages: [{
             role: 'user',
             content: [
@@ -120,25 +152,26 @@ export default {
           rateLimited ? 'VISION_RATE_LIMIT' : 'VISION_REQUEST_FAILED',
           rateLimited ? 'OpenAI vision is busy. Try the scan again in a moment.' : 'OpenAI could not process the photo.',
           rateLimited ? 429 : 502,
+          startedAt,
           error,
         )
       }
 
       if (!pageText || !/[A-Za-z]/.test(pageText)) {
-        return fail(scanId, stage, 'NO_ENGLISH_TEXT', 'OpenAI did not detect readable English text in that photo.', 422)
+        return fail(scanId, stage, 'NO_ENGLISH_TEXT', 'OpenAI did not detect readable English text in that photo.', 422, startedAt)
       }
 
       log(scanId, stage, 'completed', {
         characters: pageText.length,
-        preview: pageText.slice(0, 120),
+        elapsedMs: Date.now() - startedAt,
       })
 
       stage = 'vocab'
-      log(scanId, stage, 'started', { characters: pageText.length })
+      log(scanId, stage, 'started', { characters: pageText.length, model: MODEL })
       let vocabText = ''
       try {
         const vocabResult = await generateText({
-          model: gateway('openai/gpt-5.6-sol'),
+          model: gateway(MODEL),
           prompt: [
             'Turn this OCR transcription from an English book page into a complete vocabulary list with Korean translations.',
             '',
@@ -169,6 +202,7 @@ export default {
           rateLimited ? 'VOCAB_RATE_LIMIT' : 'VOCAB_REQUEST_FAILED',
           rateLimited ? 'OpenAI translation is busy. Try again in a moment.' : 'The page was read, but the vocabulary translation step failed.',
           rateLimited ? 429 : 502,
+          startedAt,
           error,
         )
       }
@@ -178,8 +212,8 @@ export default {
       try {
         rawWords = parseWords(vocabText)
       } catch (error) {
-        log(scanId, stage, 'parse_failed', { preview: vocabText.slice(0, 300) })
-        return fail(scanId, stage, 'INVALID_VOCAB_JSON', 'The page was read, but the vocabulary result was malformed.', 502, error)
+        log(scanId, stage, 'parse_failed', { preview: vocabText.slice(0, 220) })
+        return fail(scanId, stage, 'INVALID_VOCAB_JSON', 'The page was read, but the vocabulary result was malformed.', 502, startedAt, error)
       }
 
       const deduped = new Map<string, Word>()
@@ -193,12 +227,13 @@ export default {
 
       const words = [...deduped.values()].sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' }))
       if (!words.length) {
-        return fail(scanId, stage, 'EMPTY_VOCAB', 'The page was read, but no vocabulary entries were produced.', 422)
+        return fail(scanId, stage, 'EMPTY_VOCAB', 'The page was read, but no vocabulary entries were produced.', 422, startedAt)
       }
 
       log(scanId, stage, 'completed', {
         words: words.length,
         transcriptionCharacters: pageText.length,
+        elapsedMs: Date.now() - startedAt,
       })
 
       return json({
@@ -207,12 +242,15 @@ export default {
           scanId,
           stage: 'complete',
           code: 'OK',
+          model: MODEL,
+          elapsedMs: Date.now() - startedAt,
+          endpointVersion: ENDPOINT_VERSION,
           words: words.length,
           transcriptionCharacters: pageText.length,
         },
       })
     } catch (error) {
-      return fail(scanId, stage, 'UNEXPECTED_SERVER_ERROR', 'The scanner hit an unexpected server error.', 500, error)
+      return fail(scanId, stage, 'UNEXPECTED_SERVER_ERROR', 'The scanner hit an unexpected server error.', 500, startedAt, error)
     }
   },
 }
