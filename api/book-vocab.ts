@@ -2,28 +2,53 @@ import { gateway } from '@ai-sdk/gateway'
 import { generateText } from 'ai'
 
 const ACCESS_PIN = '3476'
-const MAX_DATA_URL_LENGTH = 5_500_000
+const MAX_IMAGE_BYTES = 2_500_000
 
 type Word = { word: string; korean: string }
+type Stage = 'receive' | 'ocr' | 'vocab' | 'parse'
 
 function json(body: Record<string, unknown>, status = 200) {
   return Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
 }
 
-function parseJson(text: string) {
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start < 0 || end <= start) throw new Error('Model did not return JSON.')
-  return JSON.parse(text.slice(start, end + 1)) as { words?: Word[] }
+function cleanDetail(error: unknown) {
+  const detail = error instanceof Error ? error.message : String(error)
+  return detail.replace(/\s+/g, ' ').slice(0, 900)
 }
 
-function decodeDataUrl(input: string) {
-  const match = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/i.exec(input)
-  if (!match) throw new Error('Unsupported image format.')
-  return {
-    mediaType: match[1] as 'image/jpeg' | 'image/png' | 'image/webp',
-    data: new Uint8Array(Buffer.from(match[2], 'base64')),
-  }
+function log(scanId: string, stage: Stage, event: string, detail?: Record<string, unknown>) {
+  console.log(JSON.stringify({
+    source: 'book-vocab',
+    scanId,
+    stage,
+    event,
+    ...detail,
+  }))
+}
+
+function fail(scanId: string, stage: Stage, code: string, message: string, status: number, error?: unknown) {
+  const detail = error ? cleanDetail(error) : undefined
+  console.error(JSON.stringify({
+    source: 'book-vocab',
+    scanId,
+    stage,
+    event: 'failed',
+    code,
+    detail,
+  }))
+  return json({
+    error: message,
+    diagnostic: { scanId, stage, code },
+  }, status)
+}
+
+function parseWords(text: string) {
+  const start = text.indexOf('{')
+  const end = text.lastIndexOf('}')
+  if (start < 0 || end <= start) throw new Error('Vocabulary model did not return a JSON object.')
+  const parsed = JSON.parse(text.slice(start, end + 1)) as { words?: Word[] }
+  if (!Array.isArray(parsed.words)) throw new Error('Vocabulary JSON did not contain a words array.')
+  return parsed.words
 }
 
 export default {
@@ -31,46 +56,134 @@ export default {
     if (request.method !== 'POST') return json({ error: 'Method not allowed.' }, 405)
     if (request.headers.get('x-review-pin') !== ACCESS_PIN) return json({ error: 'Unauthorized.' }, 401)
 
+    let scanId = crypto.randomUUID().slice(0, 8)
+    let stage: Stage = 'receive'
+
     try {
-      const body = await request.json() as { image?: string }
-      const image = String(body.image || '')
-      if (!image) return json({ error: 'No image was received.' }, 400)
-      if (image.length > MAX_DATA_URL_LENGTH) return json({ error: 'That image is too large. Try another photo.' }, 413)
+      const form = await request.formData()
+      const image = form.get('image')
+      const submittedScanId = String(form.get('scan_id') || '').trim()
+      if (/^[a-zA-Z0-9-]{4,40}$/.test(submittedScanId)) scanId = submittedScanId
 
-      const file = decodeDataUrl(image)
-      const instructions = [
-        'Read the English text visible in this photographed book page.',
-        'Create a complete vocabulary list from the readable English words on the page.',
-        '',
-        'Return ONLY valid JSON with exactly this shape:',
-        '{"words":[{"word":"example","korean":"예시"}]}',
-        '',
-        'Rules:',
-        '- Include every distinct readable English lexical word in the actual page text. Do not omit easy or common words.',
-        '- Ignore pure punctuation, page numbers, decorative marks, and obvious OCR garbage.',
-        '- Clean punctuation from around words and deduplicate case-insensitively.',
-        '- Keep contractions and meaningful hyphenated words intact.',
-        '- Use a clean dictionary-style English form when the inflected form is clearly just a grammatical variant, but do not change proper nouns.',
-        '- Translate each English entry into concise, natural Korean according to the sense used on this page.',
-        '- If the same spelling is used with two clearly different senses, combine the short Korean meanings with " / " rather than duplicating the English word.',
-        '- Sort the final entries alphabetically by English word.',
-        '- Do not invent text that is not visibly supported by the image.',
-      ].join('\n')
+      if (!(image instanceof File) || image.size === 0) {
+        return fail(scanId, stage, 'NO_IMAGE', 'No image reached the scanner.', 400)
+      }
+      if (!/^image\/(jpeg|png|webp)$/i.test(image.type)) {
+        return fail(scanId, stage, 'UNSUPPORTED_IMAGE', 'That image format is not supported.', 415)
+      }
+      if (image.size > MAX_IMAGE_BYTES) {
+        return fail(scanId, stage, 'IMAGE_TOO_LARGE', 'The prepared photo is still too large to scan.', 413)
+      }
 
-      const { text } = await generateText({
-        model: gateway('openai/gpt-5.6-sol'),
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'text', text: instructions },
-            { type: 'file', data: file.data, mediaType: file.mediaType },
-          ],
-        }],
+      log(scanId, stage, 'received', {
+        bytes: image.size,
+        mediaType: image.type,
       })
 
-      const parsed = parseJson(text)
+      const imageBytes = new Uint8Array(await image.arrayBuffer())
+
+      stage = 'ocr'
+      log(scanId, stage, 'started')
+      let pageText = ''
+      try {
+        const ocrResult = await generateText({
+          model: gateway('openai/gpt-5.6-sol'),
+          messages: [{
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: [
+                  'Act as a careful OCR reader for a photographed English book page.',
+                  'Transcribe all readable English text from the main page content as faithfully as possible.',
+                  'Preserve the words and sentence order. Do not translate, summarize, explain, or output JSON.',
+                  'Ignore only page numbers and purely decorative marks.',
+                  'If a word is genuinely unreadable, skip that word rather than inventing it.',
+                  'Return only the transcription.',
+                ].join('\n'),
+              },
+              {
+                type: 'file',
+                data: imageBytes,
+                mediaType: image.type as 'image/jpeg' | 'image/png' | 'image/webp',
+              },
+            ],
+          }],
+        })
+        pageText = ocrResult.text.trim()
+      } catch (error) {
+        const detail = cleanDetail(error)
+        const rateLimited = /rate.?limit|429/i.test(detail)
+        return fail(
+          scanId,
+          stage,
+          rateLimited ? 'VISION_RATE_LIMIT' : 'VISION_REQUEST_FAILED',
+          rateLimited ? 'OpenAI vision is busy. Try the scan again in a moment.' : 'OpenAI could not process the photo.',
+          rateLimited ? 429 : 502,
+          error,
+        )
+      }
+
+      if (!pageText || !/[A-Za-z]/.test(pageText)) {
+        return fail(scanId, stage, 'NO_ENGLISH_TEXT', 'OpenAI did not detect readable English text in that photo.', 422)
+      }
+
+      log(scanId, stage, 'completed', {
+        characters: pageText.length,
+        preview: pageText.slice(0, 120),
+      })
+
+      stage = 'vocab'
+      log(scanId, stage, 'started', { characters: pageText.length })
+      let vocabText = ''
+      try {
+        const vocabResult = await generateText({
+          model: gateway('openai/gpt-5.6-sol'),
+          prompt: [
+            'Turn this OCR transcription from an English book page into a complete vocabulary list with Korean translations.',
+            '',
+            'Return ONLY valid JSON in exactly this shape:',
+            '{"words":[{"word":"example","korean":"예시"}]}',
+            '',
+            'Rules:',
+            '- Include every distinct English lexical word found in the transcription, including common function words.',
+            '- Remove punctuation-only noise and deduplicate case-insensitively.',
+            '- Keep contractions and meaningful hyphenated words intact.',
+            '- Use a clean dictionary-style base form when an inflected form is clearly only grammatical, but do not alter proper nouns.',
+            '- Translate each entry into concise, natural Korean according to how it is used in this page context.',
+            '- If one spelling has two clearly different senses on the page, combine the Korean meanings with " / ".',
+            '- Sort alphabetically by English word.',
+            '- Never add a word that is not supported by the transcription.',
+            '',
+            'PAGE TRANSCRIPTION:',
+            pageText,
+          ].join('\n'),
+        })
+        vocabText = vocabResult.text
+      } catch (error) {
+        const detail = cleanDetail(error)
+        const rateLimited = /rate.?limit|429/i.test(detail)
+        return fail(
+          scanId,
+          stage,
+          rateLimited ? 'VOCAB_RATE_LIMIT' : 'VOCAB_REQUEST_FAILED',
+          rateLimited ? 'OpenAI translation is busy. Try again in a moment.' : 'The page was read, but the vocabulary translation step failed.',
+          rateLimited ? 429 : 502,
+          error,
+        )
+      }
+
+      stage = 'parse'
+      let rawWords: Word[]
+      try {
+        rawWords = parseWords(vocabText)
+      } catch (error) {
+        log(scanId, stage, 'parse_failed', { preview: vocabText.slice(0, 300) })
+        return fail(scanId, stage, 'INVALID_VOCAB_JSON', 'The page was read, but the vocabulary result was malformed.', 502, error)
+      }
+
       const deduped = new Map<string, Word>()
-      for (const entry of parsed.words || []) {
+      for (const entry of rawWords) {
         const word = String(entry?.word || '').trim()
         const korean = String(entry?.korean || '').trim()
         if (!word || !korean) continue
@@ -79,15 +192,27 @@ export default {
       }
 
       const words = [...deduped.values()].sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' }))
-      if (!words.length) return json({ error: 'No readable English vocabulary was found.' }, 422)
-      return json({ words })
-    } catch (error) {
-      console.error('Book vocab scan failed', error)
-      const detail = error instanceof Error ? error.message : String(error)
-      const rateLimited = /rate.?limit/i.test(detail)
+      if (!words.length) {
+        return fail(scanId, stage, 'EMPTY_VOCAB', 'The page was read, but no vocabulary entries were produced.', 422)
+      }
+
+      log(scanId, stage, 'completed', {
+        words: words.length,
+        transcriptionCharacters: pageText.length,
+      })
+
       return json({
-        error: rateLimited ? 'The vision model is busy. Try again in a moment.' : 'Could not read that page. Try a clearer photo.',
-      }, rateLimited ? 429 : 500)
+        words,
+        diagnostic: {
+          scanId,
+          stage: 'complete',
+          code: 'OK',
+          words: words.length,
+          transcriptionCharacters: pageText.length,
+        },
+      })
+    } catch (error) {
+      return fail(scanId, stage, 'UNEXPECTED_SERVER_ERROR', 'The scanner hit an unexpected server error.', 500, error)
     }
   },
 }

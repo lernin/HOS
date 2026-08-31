@@ -2,9 +2,18 @@ import { useMemo, useRef, useState } from 'react'
 import './book-vocab.css'
 
 type VocabWord = { word: string; korean: string }
+type Diagnostic = {
+  scanId: string
+  stage: string
+  code: string
+  status?: number
+  uploadKb?: number
+  dimensions?: string
+}
 
 const STORAGE_KEY = 'book-vocab-latest-v1'
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+const TARGET_UPLOAD_BYTES = 1_700_000
 
 function readSaved(): VocabWord[] {
   try {
@@ -15,31 +24,36 @@ function readSaved(): VocabWord[] {
   }
 }
 
-async function compressImage(file: File) {
+async function prepareImage(file: File) {
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
-  const maxSide = 1800
+  const maxSide = 1600
   const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(bitmap.width * scale))
   canvas.height = Math.max(1, Math.round(bitmap.height * scale))
   const ctx = canvas.getContext('2d')
-  if (!ctx) throw new Error('Could not prepare the photo.')
+  if (!ctx) {
+    bitmap.close()
+    throw new Error('Could not prepare the photo.')
+  }
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
   bitmap.close()
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(result => result ? resolve(result) : reject(new Error('Could not prepare the photo.')), 'image/jpeg', 0.82)
-  })
+  const qualities = [0.82, 0.72, 0.62, 0.52]
+  let blob: Blob | null = null
+  for (const quality of qualities) {
+    blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', quality))
+    if (blob && blob.size <= TARGET_UPLOAD_BYTES) break
+  }
 
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result || ''))
-    reader.onerror = () => reject(new Error('Could not read the photo.'))
-    reader.readAsDataURL(blob)
-  })
+  if (!blob) throw new Error('Could not prepare the photo.')
+  if (blob.size > 2_400_000) throw new Error('The photo is still too large after compression.')
 
-  if (dataUrl.length > 5_500_000) throw new Error('That photo is too large. Try taking it a little farther away.')
-  return dataUrl
+  return {
+    file: new File([blob], 'book-page.jpg', { type: 'image/jpeg' }),
+    uploadKb: Math.round(blob.size / 1024),
+    dimensions: canvas.width + '×' + canvas.height,
+  }
 }
 
 export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) {
@@ -49,6 +63,7 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
   const [selectedLetter, setSelectedLetter] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
   const [error, setError] = useState('')
+  const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(null)
 
   const sorted = useMemo(() => [...words].sort((a, b) => a.word.localeCompare(b.word, 'en', { sensitivity: 'base' })), [words])
   const byLetter = useMemo(() => {
@@ -65,33 +80,95 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
 
   async function scan(file?: File) {
     if (!file || processing) return
+    const scanId = crypto.randomUUID().slice(0, 8)
     setProcessing(true)
     setError('')
+    setDiagnostic(null)
     setSelectedLetter(null)
 
+    let uploadKb: number | undefined
+    let dimensions: string | undefined
+
     try {
-      const image = await compressImage(file)
+      const prepared = await prepareImage(file)
+      uploadKb = prepared.uploadKb
+      dimensions = prepared.dimensions
+
+      const form = new FormData()
+      form.append('image', prepared.file)
+      form.append('scan_id', scanId)
+
       const response = await fetch('/api/book-vocab', {
         method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-review-pin': pin,
-        },
-        body: JSON.stringify({ image }),
+        headers: { 'x-review-pin': pin },
+        body: form,
       })
-      const body = await response.json() as { words?: VocabWord[]; error?: string }
-      if (!response.ok) throw new Error(body.error || 'Could not read that page.')
+
+      const raw = await response.text()
+      let body: {
+        words?: VocabWord[]
+        error?: string
+        diagnostic?: Partial<Diagnostic>
+      } = {}
+
+      try {
+        body = raw ? JSON.parse(raw) : {}
+      } catch {
+        throw Object.assign(new Error('The server returned an unreadable response.'), {
+          diagnostic: {
+            scanId,
+            stage: 'response',
+            code: 'INVALID_SERVER_RESPONSE',
+            status: response.status,
+            uploadKb,
+            dimensions,
+          } satisfies Diagnostic,
+        })
+      }
+
+      if (!response.ok) {
+        throw Object.assign(new Error(body.error || 'The scan failed.'), {
+          diagnostic: {
+            scanId,
+            stage: body.diagnostic?.stage || 'server',
+            code: body.diagnostic?.code || 'SERVER_ERROR',
+            status: response.status,
+            uploadKb,
+            dimensions,
+          } satisfies Diagnostic,
+        })
+      }
 
       const cleaned = (body.words || [])
         .filter(item => item && typeof item.word === 'string' && typeof item.korean === 'string')
         .map(item => ({ word: item.word.trim(), korean: item.korean.trim() }))
         .filter(item => item.word && item.korean)
 
-      if (!cleaned.length) throw new Error('I could not find readable English vocabulary on that page.')
+      if (!cleaned.length) {
+        throw Object.assign(new Error('The scan finished, but no vocabulary came back.'), {
+          diagnostic: {
+            scanId,
+            stage: 'result',
+            code: 'EMPTY_RESULT',
+            status: response.status,
+            uploadKb,
+            dimensions,
+          } satisfies Diagnostic,
+        })
+      }
+
       setWords(cleaned)
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned))
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not read that page.')
+      const maybe = cause as { message?: string; diagnostic?: Diagnostic }
+      setError(maybe.message || 'Could not scan that page.')
+      setDiagnostic(maybe.diagnostic || {
+        scanId,
+        stage: 'client',
+        code: 'CLIENT_ERROR',
+        uploadKb,
+        dimensions,
+      })
     } finally {
       setProcessing(false)
       if (cameraRef.current) cameraRef.current.value = ''
@@ -103,6 +180,7 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
     setWords([])
     setSelectedLetter(null)
     setError('')
+    setDiagnostic(null)
     localStorage.removeItem(STORAGE_KEY)
   }
 
@@ -110,6 +188,17 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
     clear()
     window.setTimeout(() => cameraRef.current?.click(), 0)
   }
+
+  const diagnosticText = diagnostic
+    ? [
+        'Scan ' + diagnostic.scanId,
+        diagnostic.stage,
+        diagnostic.code,
+        diagnostic.status ? 'HTTP ' + diagnostic.status : '',
+        diagnostic.uploadKb ? diagnostic.uploadKb + ' KB' : '',
+        diagnostic.dimensions || '',
+      ].filter(Boolean).join(' · ')
+    : ''
 
   return (
     <main className="book-vocab-shell">
@@ -125,7 +214,7 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
           ←
         </button>
         <div>
-          <div className="book-vocab-kicker">THE LAB · VISION EXPERIMENT</div>
+          <div className="book-vocab-kicker">THE LAB · OPENAI VISION</div>
           <h1>{selectedLetter ? selectedLetter + ' vocabulary' : 'Book Vocab'}</h1>
         </div>
         {words.length > 0 && !processing
@@ -144,7 +233,7 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
             <div className="scanner-glyph">Aa</div>
           </div>
           <h2>Reading the page</h2>
-          <p>Extracting words, cleaning duplicates, and translating everything into Korean.</p>
+          <p>OpenAI is transcribing the page first, then cleaning and translating its vocabulary into Korean.</p>
         </section>
       ) : selectedLetter ? (
         <section className="book-vocab-letter-view">
@@ -196,20 +285,30 @@ export function BookVocab({ onExit, pin }: { onExit: () => void; pin: string }) 
               <span className="capture-lens" />
             </div>
             <div className="capture-copy">
-              <div className="capture-chip">AI OCR · EN → KO</div>
+              <div className="capture-chip">OPENAI VISION · EN → KO</div>
               <h2>Point. Shoot. Learn.</h2>
-              <p>Photograph a book page. Every readable English word is cleaned, deduplicated, translated into Korean, and filed A–Z.</p>
+              <p>Photograph a book page. OpenAI reads the page, then the app cleans, deduplicates, translates, and files the vocabulary A–Z.</p>
             </div>
             <button className="primary-capture" onClick={() => cameraRef.current?.click()}>
               <span>◎</span> Take a picture
             </button>
             <button className="secondary-capture" onClick={() => galleryRef.current?.click()}>Choose existing photo</button>
           </div>
-          {error && <div className="book-vocab-error">{error}</div>}
+          {error && (
+            <div className="book-vocab-error">
+              <strong>{error}</strong>
+              {diagnosticText && <code>{diagnosticText}</code>}
+            </div>
+          )}
         </section>
       )}
 
-      {error && words.length > 0 && <div className="book-vocab-error floating-error">{error}</div>}
+      {error && words.length > 0 && (
+        <div className="book-vocab-error floating-error">
+          <strong>{error}</strong>
+          {diagnosticText && <code>{diagnosticText}</code>}
+        </div>
+      )}
     </main>
   )
 }
