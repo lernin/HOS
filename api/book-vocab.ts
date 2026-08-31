@@ -3,8 +3,8 @@ import { generateText } from 'ai'
 
 const ACCESS_PIN = '3476'
 const MAX_IMAGE_BYTES = 2_500_000
-const MODEL = 'openai/gpt-5.6-sol'
-const ENDPOINT_VERSION = 'book-vocab-reporting-v2'
+const MODEL = 'openai/gpt-4o-mini'
+const ENDPOINT_VERSION = 'book-vocab-gpt4o-mini-v1'
 
 type Word = { word: string; korean: string }
 type Stage = 'receive' | 'ocr' | 'vocab' | 'parse'
@@ -146,12 +146,17 @@ export default {
       } catch (error) {
         const detail = cleanDetail(error)
         const rateLimited = /rate.?limit|429/i.test(detail)
+        const modelAccessDenied = /free tier users do not have access|upgrade to paid credits|model.*access/i.test(detail)
         return fail(
           scanId,
           stage,
-          rateLimited ? 'VISION_RATE_LIMIT' : 'VISION_REQUEST_FAILED',
-          rateLimited ? 'OpenAI vision is busy. Try the scan again in a moment.' : 'OpenAI could not process the photo.',
-          rateLimited ? 429 : 502,
+          rateLimited ? 'VISION_RATE_LIMIT' : modelAccessDenied ? 'VISION_MODEL_ACCESS_DENIED' : 'VISION_REQUEST_FAILED',
+          rateLimited
+            ? 'OpenAI vision is busy. Try the scan again in a moment.'
+            : modelAccessDenied
+              ? 'This OpenAI vision model is not available on the current Vercel AI Gateway tier.'
+              : 'OpenAI could not process the photo.',
+          rateLimited ? 429 : modelAccessDenied ? 403 : 502,
           startedAt,
           error,
         )
@@ -196,12 +201,17 @@ export default {
       } catch (error) {
         const detail = cleanDetail(error)
         const rateLimited = /rate.?limit|429/i.test(detail)
+        const modelAccessDenied = /free tier users do not have access|upgrade to paid credits|model.*access/i.test(detail)
         return fail(
           scanId,
           stage,
-          rateLimited ? 'VOCAB_RATE_LIMIT' : 'VOCAB_REQUEST_FAILED',
-          rateLimited ? 'OpenAI translation is busy. Try again in a moment.' : 'The page was read, but the vocabulary translation step failed.',
-          rateLimited ? 429 : 502,
+          rateLimited ? 'VOCAB_RATE_LIMIT' : modelAccessDenied ? 'VOCAB_MODEL_ACCESS_DENIED' : 'VOCAB_REQUEST_FAILED',
+          rateLimited
+            ? 'OpenAI translation is busy. Try again in a moment.'
+            : modelAccessDenied
+              ? 'This OpenAI model is not available on the current Vercel AI Gateway tier.'
+              : 'The page was read, but the vocabulary translation step failed.',
+          rateLimited ? 429 : modelAccessDenied ? 403 : 502,
           startedAt,
           error,
         )
