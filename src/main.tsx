@@ -2,6 +2,8 @@ import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from
 import { createRoot } from 'react-dom/client'
 import { supabase } from './lib/supabase'
 import { startRecordingSession, type RecordingSession } from './lib/voiceCapture'
+import { thekonymLiveSource } from './lib/thekonymLiveSource'
+import './experiences/thekonym-viewer.css'
 import './thekonym.css'
 import './thekonym-font-controls.css'
 import './thekonym-interactions.css'
@@ -10,7 +12,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
-type View = 'hub' | 'thekonym' | 'world3d' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab'
+type View = 'hub' | 'thekonym-viewer' | 'thekonym' | 'world3d' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -62,6 +64,7 @@ const EkpronymReview = lazy(() => import('./experiences/EkpronymReview').then(mo
 const Library = lazy(() => import('./experiences/Library').then(module => ({ default: module.Library })))
 const Scroller = lazy(() => import('./experiences/Scroller').then(module => ({ default: module.Scroller })))
 const BookVocab = lazy(() => import('./experiences/BookVocab').then(module => ({ default: module.BookVocab })))
+const ThekonymViewer = lazy(() => import('./experiences/ThekonymViewer').then(module => ({ default: module.ThekonymViewer })))
 
 function readCachedTerms(): Term[] {
   try { return JSON.parse(localStorage.getItem(TERMS_CACHE_KEY) || '[]') as Term[] } catch { return [] }
@@ -88,7 +91,7 @@ function applyPendingChanges(source: Term[], changes = readOutbox()) {
 }
 
 function App() {
-  const [view, setView] = useState<View>('hub')
+  const [view, setView] = useState<View>(() => window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : 'hub')
   const [pin, setPin] = useState('')
   const [pinInput, setPinInput] = useState('')
   const [terms, setTerms] = useState<Term[]>([])
@@ -116,14 +119,14 @@ function App() {
   const flushingRef = useRef(false)
 
   useEffect(() => {
-    window.history.replaceState({}, '', '/')
-    const syncView = () => setView(window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
+    if (window.location.pathname !== '/thekonym-viewer') window.history.replaceState({}, '', '/')
+    const syncView = () => setView(window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
     window.addEventListener('popstate', syncView)
     return () => window.removeEventListener('popstate', syncView)
   }, [])
 
   function navigate(next: View) {
-    const path = next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
+    const path = next === 'thekonym-viewer' ? '/thekonym-viewer' : next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
     window.history.pushState({}, '', path)
     setView(next)
     window.scrollTo(0, 0)
@@ -204,6 +207,7 @@ function App() {
   useEffect(() => { if (pin) void load(pin) }, [])
 
   useEffect(() => {
+    if (view === 'thekonym-viewer') return
     const sync = () => { if (pin) void load(pin, true) }
     const offline = () => setSyncState('offline')
     const visible = () => { if (document.visibilityState === 'visible' && pin && navigator.onLine) void load(pin, true) }
@@ -215,7 +219,7 @@ function App() {
       window.removeEventListener('offline', offline)
       document.removeEventListener('visibilitychange', visible)
     }
-  }, [pin])
+  }, [pin, view])
 
   async function unlock(e: React.FormEvent) {
     e.preventDefault()
@@ -420,10 +424,13 @@ function App() {
     '--judgment-size': `${fontPrefs.judgment}px`,
   } as React.CSSProperties
 
+  if (view === 'thekonym-viewer') return <Suspense fallback={<main className="shell"><div className="center">Opening Thekonym viewer…</div></main>}><ThekonymViewer source={thekonymLiveSource} onExit={() => navigate('hub')} /></Suspense>
+
   if (!pin) return (
     <main className="shell pin-shell" data-theme={theme} style={styleVars}>
       <section className="pin-card">
         <div className="eyebrow">Ashley’s private workspace</div><h1>The Lab</h1>
+        <button className="tv-lab-entry" onClick={() => navigate('thekonym-viewer')}>Thekonym viewer<small>Read the collection · search · copy for ChatGPT</small></button>
         <form onSubmit={unlock} className="pin-form">
           <input autoFocus inputMode="numeric" maxLength={4} value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))} placeholder="PIN" />
           <button disabled={loading || pinInput.length !== 4}>{loading ? 'Opening…' : 'Open'}</button>
@@ -445,6 +452,11 @@ function App() {
         <span>Choose an experience, then tap Go.</span>
       </section>
       <section className="experience-grid">
+        <article className="experience-card">
+          <span className="experience-icon">Th</span>
+          <span className="experience-copy"><strong>Thekonym viewer</strong><small>Read current definitions, confidence, fields, and notes. Copy a fresh record for ChatGPT.</small></span>
+          <button className="experience-go" onClick={() => navigate('thekonym-viewer')}>Go</button>
+        </article>
         <article className="experience-card">
           <span className="experience-icon">T</span>
           <span className="experience-copy"><strong>Thekonym</strong><small>Review and organize Procedia terminology.</small></span>

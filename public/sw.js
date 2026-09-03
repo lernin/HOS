@@ -1,4 +1,4 @@
-const CACHE = 'experiment-hub-v16'
+const CACHE = 'experiment-hub-v17'
 const SHELL = ['/', '/thekonym', '/world-3d', '/roy', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png']
 
 self.addEventListener('install', (event) => {
@@ -15,6 +15,8 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
+  // The viewer must report network failure, never a cached production record.
+  if (new URL(event.request.url).pathname === '/rest/v1/thekonyms') return
   event.respondWith(
     fetch(event.request)
       .then((response) => {

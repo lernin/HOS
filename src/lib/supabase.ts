@@ -16,7 +16,9 @@ const procediaHeaderFetch: typeof fetch = async (input, init) => {
   } catch {
     // Ignore localStorage failures and send the request without extra headers.
   }
-  return fetch(input, { ...init, headers })
+  const requestUrl = input instanceof Request ? input.url : String(input)
+  const isViewerRead = new URL(requestUrl).pathname === '/rest/v1/thekonyms'
+  return fetch(input, { ...init, headers, ...(isViewerRead ? { cache: 'no-store' as const } : {}) })
 }
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
@@ -24,4 +26,3 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
     fetch: procediaHeaderFetch,
   },
 })
-
