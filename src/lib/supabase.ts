@@ -16,7 +16,9 @@ const procediaHeaderFetch: typeof fetch = async (input, init) => {
   } catch {
     // Ignore localStorage failures and send the request without extra headers.
   }
-  return fetch(input, { ...init, headers })
+  const requestUrl = input instanceof Request ? input.url : String(input)
+  const isViewerRead = new URL(requestUrl).pathname === '/rest/v1/thekonyms'
+  return fetch(input, { ...init, headers, ...(isViewerRead ? { cache: 'no-store' as const } : {}) })
 }
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
@@ -25,3 +27,9 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   },
 })
 
+// The authoring reader has its own session; signing in must not replace a
+// learner's or another Lab tool's primary Supabase session.
+export const thekonymReader = createClient(supabaseUrl, supabasePublishableKey, {
+  auth: { storageKey: 'the-lab-thekonym-reader', detectSessionInUrl: false },
+  global: { fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }) },
+})
