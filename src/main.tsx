@@ -51,7 +51,6 @@ const themes: { value: Theme; label: string }[] = [
   { value: 'orbital', label: 'Orbital Neon' },
 ]
 
-const ACCESS_PIN = '3476'
 const THEME_KEY = 'thekonym-theme'
 const FONT_KEY = 'thekonym-font-prefs'
 const TERMS_CACHE_KEY = 'thekonym-terms-cache-v1'
@@ -179,7 +178,7 @@ function App() {
   async function load(reviewPin = pin, silent = false) {
     if (!reviewPin) return
     if (!silent) setLoading(true)
-    const { data, error } = await supabase.rpc('thekonym_review_list', { pin: reviewPin })
+    const { data, error } = await supabase.rpc('lab_thekonym_read', { pin: reviewPin })
     if (error) {
       const cached = readCachedTerms()
       if (cached.length) {
@@ -206,7 +205,7 @@ function App() {
   useEffect(() => { if (pin) void load(pin) }, [])
 
   useEffect(() => {
-    if (view === 'thekonym-viewer') return
+    if (view !== 'thekonym') return
     const sync = () => { if (pin) void load(pin, true) }
     const offline = () => setSyncState('offline')
     const visible = () => { if (document.visibilityState === 'visible' && pin && navigator.onLine) void load(pin, true) }
@@ -224,21 +223,11 @@ function App() {
     e.preventDefault()
     const candidate = pinInput.trim()
     if (!candidate) return
-    if (candidate !== ACCESS_PIN) {
-      setMessage('Wrong PIN.')
-      return
-    }
+    
     setLoading(true)
-    const { data, error } = await supabase.rpc('thekonym_review_list', { pin: candidate })
+    const { data, error } = await supabase.rpc('lab_thekonym_read', { pin: candidate })
     if (error) {
-      const cached = readCachedTerms()
-      if (cached.length) {
-        setPin(candidate)
-        setTerms(applyPendingChanges(cached))
-        setSyncState('offline')
-        setPinInput('')
-        setMessage('Offline — changes will sync automatically.')
-      } else setMessage('Could not open while offline.')
+      setMessage(error.code === '28000' ? 'Wrong PIN.' : 'Could not connect. Please try again.')
       setLoading(false)
       return
     }
@@ -423,13 +412,12 @@ function App() {
     '--judgment-size': `${fontPrefs.judgment}px`,
   } as React.CSSProperties
 
-  if (view === 'thekonym-viewer') return <Suspense fallback={<main className="shell"><div className="center">Opening Thekonym viewer…</div></main>}><ThekonymReader onExit={() => navigate('hub')} /></Suspense>
+  if (pin && view === 'thekonym-viewer') return <Suspense fallback={<main className="shell"><div className="center">Opening Thekonym viewer…</div></main>}><ThekonymReader pin={pin} onExit={() => navigate('hub')} /></Suspense>
 
   if (!pin) return (
     <main className="shell pin-shell" data-theme={theme} style={styleVars}>
       <section className="pin-card">
         <div className="eyebrow">Ashley’s private workspace</div><h1>The Lab</h1>
-        <button className="tv-lab-entry" onClick={() => navigate('thekonym-viewer')}>Thekonym viewer<small>Read the collection · search · copy for ChatGPT</small></button>
         <form onSubmit={unlock} className="pin-form">
           <input autoFocus inputMode="numeric" maxLength={4} value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))} placeholder="PIN" />
           <button disabled={loading || pinInput.length !== 4}>{loading ? 'Opening…' : 'Open'}</button>
