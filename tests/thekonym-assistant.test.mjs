@@ -57,3 +57,12 @@ test('concurrent change is returned as a conflict, never as saved', async () => 
   assert.equal(response.status, 409)
   assert.match((await response.json()).error, /changed elsewhere/)
 })
+test('unbundled Node ESM can load the deployed handler and its server helpers', async () => {
+  const runtimeDir = await mkdtemp(path.join(process.cwd(), '.thekonym-runtime-'))
+  try {
+    await build({ entryPoints: ['api/thekonym-assistant.ts', 'server/thekonym-data.ts', 'server/thekonym-github.ts'], outdir: runtimeDir, outbase: '.', bundle: false, platform: 'node', format: 'esm', logLevel: 'silent' })
+    const runtime = (await import(pathToFileURL(path.join(runtimeDir, 'api/thekonym-assistant.js')).href)).default
+    const response = await runtime.fetch(new Request('https://lab.test/api/thekonym-assistant', { method: 'POST' }))
+    assert.equal(response.status, 401)
+  } finally { await rm(runtimeDir, { recursive: true, force: true }) }
+})

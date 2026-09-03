@@ -1,4 +1,4 @@
-import { readerRpc } from './thekonym-data'
+import { readerRpc } from './thekonym-data.js'
 
 const repository = 'lernin/Procedia'
 const token = () => process.env.PROCEDIA_GITHUB_TOKEN || process.env.GITHUB_TOKEN
