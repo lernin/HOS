@@ -90,6 +90,16 @@ export function score(value: number | null | undefined): string {
   return value == null ? '—' : String(value)
 }
 
+export function confidencePresentation(value: Confidence | undefined, hasContent = true): { state: 'confirmed' | 'draft' | 'unassessed'; crosses: number; label: string } {
+  if (!hasContent || value == null || !Number.isInteger(value) || value < 0 || value > 3) return { state: 'unassessed', crosses: 0, label: hasContent ? 'Confidence unassessed' : 'Content not recorded' }
+  return { state: value === 3 ? 'confirmed' : 'draft', crosses: 3 - value, label: `Confidence: ${value} of 3, ${confidenceNames[value]}` }
+}
+
+export function alphabetLetter(term: string): string {
+  const first = term.trim().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').charAt(0).toUpperCase()
+  return /^[A-Z]$/.test(first) ? first : '#'
+}
+
 export function pronunciation(value: string | null): string {
   // Display normalization only: preserve the stored spelling and stress.
   return value?.replace(/\s*[•·]\s*|\s*[-–]\s*/g, ' • ').trim() || 'Pronunciation not recorded'

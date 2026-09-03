@@ -126,3 +126,19 @@ test('service worker never serves a cached Thekonym response', async () => {
   handlers.get('fetch')({ request: { method: 'GET', url: 'https://test.supabase.co/rest/v1/thekonyms?select=*' }, respondWith() { intercepted = true } })
   assert.equal(intercepted, false)
 })
+
+test('crosses count down to confirmed and never confirm missing or unassessed content', () => {
+  for (const [value, crosses, state] of [[0, 3, 'draft'], [1, 2, 'draft'], [2, 1, 'draft'], [3, 0, 'confirmed'], [null, 0, 'unassessed']]) {
+    assert.equal(viewer.confidencePresentation(value).crosses, crosses)
+    assert.equal(viewer.confidencePresentation(value).state, state)
+  }
+  assert.equal(viewer.confidencePresentation(3, false).state, 'unassessed')
+  assert.equal(viewer.confidencePresentation(undefined).state, 'unassessed')
+})
+
+test('alphabet browsing groups accents and handles nonalphabetic terms', () => {
+  assert.equal(viewer.alphabetLetter(' Techmonym '), 'T')
+  assert.equal(viewer.alphabetLetter('Évidence'), 'E')
+  assert.equal(viewer.alphabetLetter('3D evidence'), '#')
+  assert.equal(viewer.alphabetLetter(''), '#')
+})
