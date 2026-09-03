@@ -103,16 +103,16 @@ test('live requests bypass the HTTP cache and select the computed field', async 
   const calls = []
   globalThis.fetch = async (input, init) => {
     calls.push({ url: String(input), ...init })
-    return new Response(JSON.stringify(String(input).includes('limit=1000') ? [] : makeRecord({})), { status: 200, headers: { 'content-type': 'application/json' } })
+    return new Response(JSON.stringify(JSON.parse(init.body).term_id === null ? [] : makeRecord({})), { status: 200, headers: { 'content-type': 'application/json' } })
   }
   try {
-    await viewer.thekonymLiveSource.loadCatalogue(new AbortController().signal)
-    await viewer.thekonymLiveSource.loadRecord(makeRecord({}).id, new AbortController().signal)
+    await viewer.createThekonymLiveSource('test-password').loadCatalogue(new AbortController().signal)
+    await viewer.createThekonymLiveSource('test-password').loadRecord(makeRecord({}).id, new AbortController().signal)
     assert.equal(calls.length, 2)
     assert.ok(calls.every(c => c.cache === 'no-store'))
     const detailUrl = new URL(calls[1].url)
-    assert.equal(detailUrl.searchParams.get('select'), '*,has_fields')
-    assert.equal(detailUrl.searchParams.get('id'), `eq.${makeRecord({}).id}`)
+    assert.equal(detailUrl.pathname, '/rest/v1/rpc/lab_thekonym_read')
+    assert.deepEqual(JSON.parse(calls[1].body), { pin: 'test-password', term_id: makeRecord({}).id })
   } finally { globalThis.fetch = originalFetch }
 })
 

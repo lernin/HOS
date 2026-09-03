@@ -1,23 +1,16 @@
 import { thekonymReader as supabase } from './supabase'
 import type { CatalogueTerm, ThekonymRecord, ViewerSource } from './thekonymViewer'
-
-export const thekonymLiveSource: ViewerSource = {
-  mode: 'live',
-  async loadCatalogue(signal) {
-    const boundedSignal = AbortSignal.any([signal, AbortSignal.timeout(15000)])
-    const { data, error } = await supabase.from('thekonyms')
-      .select('id,term,definition,greek_root_meaning,former_names,status,is_child_of')
-      .order('term').limit(1000).abortSignal(boundedSignal)
-    if (error) throw new Error(`Could not read production Thekonyms: ${error.message}`)
-    return data as CatalogueTerm[]
-  },
-  async loadRecord(id, signal) {
-    const boundedSignal = AbortSignal.any([signal, AbortSignal.timeout(15000)])
-    const { data, error } = await supabase.from('thekonyms')
-      .select('*,has_fields').eq('id', id).abortSignal(boundedSignal).single()
-    if (error) throw new Error(error.code === 'PGRST116'
-      ? 'This record is unavailable, deleted, or not accessible to this account.'
-      : `Could not refresh this record: ${error.message}`)
-    return data as unknown as ThekonymRecord
-  },
+export function createThekonymLiveSource(pin: string): ViewerSource {
+  async function read(id: string | null, signal: AbortSignal) {
+    const bounded = AbortSignal.any([signal, AbortSignal.timeout(15000)])
+    const { data, error } = await supabase.rpc('lab_thekonym_read', { pin, term_id: id }).abortSignal(bounded)
+    if (error) throw new Error(error.message)
+    if (!data) throw new Error('This Thekonym is no longer available.')
+    return data
+  }
+  return {
+    mode: 'live',
+    async loadCatalogue(signal) { return await read(null, signal) as CatalogueTerm[] },
+    async loadRecord(id, signal) { return await read(id, signal) as ThekonymRecord },
+  }
 }

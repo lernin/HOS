@@ -27,9 +27,8 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   },
 })
 
-// The authoring reader has its own session; signing in must not replace a
-// learner's or another Lab tool's primary Supabase session.
+// Viewer reads use the Lab password, without an email session.
 export const thekonymReader = createClient(supabaseUrl, supabasePublishableKey, {
-  auth: { storageKey: 'the-lab-thekonym-reader', detectSessionInUrl: false },
+  auth: { storageKey: 'the-lab-thekonym-pin-reader', persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   global: { fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }) },
 })
