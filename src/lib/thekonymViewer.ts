@@ -106,10 +106,21 @@ export function searchCatalogue(terms: CatalogueTerm[], query: string): Catalogu
   })
 }
 
+export function calculatedPriority(t: ThekonymRecord): number {
+  if (t.target_phase == null || t.target_phase <= 0 || t.is_table == null || t.application_priority == null) return 0
+  return (((t.is_table ? 5 : 1) * (t.is_field_of?.length ? 2 : 1)) + t.application_priority) / t.target_phase
+}
+
+export function checkedAgo(value: string | null, now: number): string {
+  if (!value) return 'Not checked yet'
+  const minutes = Math.max(0, Math.floor((now - Date.parse(value)) / 60000))
+  return minutes < 1 ? 'Checked just now' : `Checked ${minutes} minute${minutes === 1 ? '' : 's'} ago`
+}
+
 export function priorityExplanation(t: ThekonymRecord): string {
   if (t.target_phase == null || t.is_table == null || t.application_priority == null) {
     const missing = [t.target_phase == null && 'target phase', t.is_table == null && 'table assessment', t.application_priority == null && 'application priority'].filter(Boolean)
-    return `Awaiting ${missing.join(', ')}.`
+    return `0 · Missing ${missing.join(', ')}.`
   }
   return `((${t.is_table ? 5 : 1} × ${t.is_field_of?.length ? 2 : 1}) + ${t.application_priority}) ÷ ${t.target_phase}`
 }
@@ -144,7 +155,7 @@ export function copyText(t: ThekonymRecord, capturedAt: string, mode: ViewerSour
     `Technical definition [${score(t.technical_definition_confidence)}]: ${t.technical_definition || 'Not recorded'}`,
     `Examples [${score(t.example_confidence)}]: ${t.example || 'Not recorded'}`,
     `Combined confidence: ${score(t.confidence_score)} / 27`,
-    `Priority: ${score(t.priority)}. ${priorityExplanation(t)}`,
+    `Priority: ${calculatedPriority(t)}. ${priorityExplanation(t)}`,
     '',
     'Complete record (stored values preserved; has_fields is derived):',
     JSON.stringify(t, null, 2),
