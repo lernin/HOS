@@ -31,23 +31,25 @@ function Fact({ label, children }: { label: string; children: ReactNode }) { ret
 function BooleanValue({ value }: { value: boolean | null }) { return <span className={value == null ? 'tv-missing' : ''}>{value == null ? 'Unassessed' : value ? 'Yes' : 'No'}</span> }
 function dateLabel(value: string | null | undefined): string { return value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'Not recorded' }
 
-export function ThekonymViewer({ source, onExit }: { source: ViewerSource; onExit: () => void }) {
-  const [catalogue, setCatalogue] = useState<CatalogueTerm[]>([])
-  const [selectedId, setSelectedId] = useState('')
-  const [record, setRecord] = useState<ThekonymRecord | null>(null)
-  const [checkedAt, setCheckedAt] = useState<string | null>(null)
+export type ViewerInitialData = { catalogue: CatalogueTerm[]; record: ThekonymRecord }
+
+export function ThekonymViewer({ source, onExit, initialData, onSignOut }: { source: ViewerSource; onExit: () => void; initialData?: ViewerInitialData; onSignOut?: () => void }) {
+  const [catalogue, setCatalogue] = useState<CatalogueTerm[]>(initialData?.catalogue || [])
+  const [selectedId, setSelectedId] = useState(initialData?.record.id || '')
+  const [record, setRecord] = useState<ThekonymRecord | null>(initialData?.record || null)
+  const [checkedAt, setCheckedAt] = useState<string | null>(initialData ? source.capturedAt || null : null)
   const [query, setQuery] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [activeResult, setActiveResult] = useState(0)
-  const [busy, setBusy] = useState(true)
+  const [busy, setBusy] = useState(!initialData)
   const [copying, setCopying] = useState(false)
   const [error, setError] = useState('')
   const [announcement, setAnnouncement] = useState('')
   const [fallbackCopy, setFallbackCopy] = useState('')
-  const [online, setOnline] = useState(navigator.onLine)
+  const [online, setOnline] = useState(typeof navigator === 'undefined' || navigator.onLine !== false)
   const requestRef = useRef<AbortController | null>(null)
   const generation = useRef(0)
-  const selectedRef = useRef('')
+  const selectedRef = useRef(initialData?.record.id || '')
   const alive = useRef(true)
   const searchRef = useRef<HTMLInputElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
@@ -79,7 +81,7 @@ export function ThekonymViewer({ source, onExit }: { source: ViewerSource; onExi
   const loadCatalogue = useCallback(async (signal: AbortSignal) => {
     const terms = await source.loadCatalogue(signal)
     if (signal.aborted || !alive.current) return
-    if (!terms.length) throw new Error('No Thekonyms are available to this account. Staff access must be connected before live viewing.')
+    if (!terms.length) throw new Error('This account does not have reading access. Sign out and use your authorized verified account.')
     terms.sort((a, b) => a.term.localeCompare(b.term))
     setCatalogue(terms)
     const requested = new URLSearchParams(window.location.search).get('term')
@@ -174,7 +176,7 @@ export function ThekonymViewer({ source, onExit }: { source: ViewerSource; onExi
   ].filter((entry): entry is [string, string] => Boolean(entry[1]?.trim())) : []
 
   return <div className="tv-shell">
-    <header className="tv-topbar"><button className="tv-back" onClick={onExit}><Icon name="back" /><span>The Lab</span></button><span className="tv-wordmark">PROCEDIA</span><button className="tv-copy" onClick={() => void copy()} disabled={!current || copying || (source.mode === 'live' && !online)}><Icon name="copy" /><span>{copying ? 'Checking…' : 'Copy for ChatGPT'}</span></button></header>
+    <header className="tv-topbar"><button className="tv-back" onClick={onExit}><Icon name="back" /><span>The Lab</span></button><span className="tv-wordmark">PROCEDIA</span>{onSignOut && <button className="tv-sign-out" onClick={onSignOut}>Sign out</button>}<button className="tv-copy" onClick={() => void copy()} disabled={!current || copying || (source.mode === 'live' && !online)}><Icon name="copy" /><span>{copying ? 'Checking…' : 'Copy for ChatGPT'}</span></button></header>
     <div className="tv-layout">
       <aside className="tv-catalogue">
         <div className="tv-catalogue-title"><Icon name="book" /><span>Thekonyms</span><span className="tv-count">{catalogue.length || '—'}</span></div>
@@ -195,7 +197,7 @@ export function ThekonymViewer({ source, onExit }: { source: ViewerSource; onExi
         {error && <div className="tv-alert" role="alert"><strong>{current ? 'The displayed record may be out of date.' : 'Live access needs to be connected.'}</strong><p>{error}</p>{current && <p>Copy will try a fresh read before putting anything on your clipboard.</p>}</div>}
         {announcement && <div className="tv-toast" role="status">{announcement}</div>}
         {fallbackCopy && <div className="tv-copy-fallback"><button onClick={e => { const area = e.currentTarget.nextElementSibling as HTMLTextAreaElement; area.focus(); area.select() }}>Select text</button><textarea aria-label="Record to copy for ChatGPT" readOnly value={fallbackCopy} /></div>}
-        {!current && <div className="tv-empty"><Icon name="book" /><h1>{busy ? 'Opening the collection…' : 'Your collection, clearly.'}</h1><p>{busy ? 'Reading the latest record.' : 'A connected staff session is required to read production records.'}</p></div>}
+        {!current && <div className="tv-empty"><Icon name="book" /><h1>{busy ? 'Opening the collection…' : 'Your collection, clearly.'}</h1><p>{busy ? 'Reading the latest record.' : 'Sign in with your authorized verified account to read the collection.'}</p></div>}
         {current && <article className="tv-page" aria-busy={busy}>
           <div className="tv-identity"><div className="tv-identity-line"><span>THEKONYM</span><span className="tv-lifecycle">{current.status || 'Status unassessed'}</span></div><h1 ref={recordHeading} tabIndex={-1}>{current.term}</h1><div className="tv-pronunciation" aria-label="Pronunciation">{pronunciation(current.term_pronunciation)}</div><div className="tv-greek" lang="el">{current.greek_root || '—'}</div><div className="tv-greek-meaning"><span>Greek meaning <ConfidenceMark value={current.greek_root_meaning_confidence} /></span><strong><Value>{current.greek_root_meaning}</Value></strong></div></div>
           <Section title="Definition" confidence={current.definition_confidence} className="tv-definition"><p><Value>{current.definition}</Value></p></Section>

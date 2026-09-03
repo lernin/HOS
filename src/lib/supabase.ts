@@ -26,3 +26,10 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
     fetch: procediaHeaderFetch,
   },
 })
+
+// The authoring reader has its own session; signing in must not replace a
+// learner's or another Lab tool's primary Supabase session.
+export const thekonymReader = createClient(supabaseUrl, supabasePublishableKey, {
+  auth: { storageKey: 'the-lab-thekonym-reader', detectSessionInUrl: false },
+  global: { fetch: (input, init) => fetch(input, { ...init, cache: 'no-store' }) },
+})

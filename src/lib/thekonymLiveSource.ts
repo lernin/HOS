@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { thekonymReader as supabase } from './supabase'
 import type { CatalogueTerm, ThekonymRecord, ViewerSource } from './thekonymViewer'
 
 export const thekonymLiveSource: ViewerSource = {

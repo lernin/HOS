@@ -2,7 +2,6 @@ import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from
 import { createRoot } from 'react-dom/client'
 import { supabase } from './lib/supabase'
 import { startRecordingSession, type RecordingSession } from './lib/voiceCapture'
-import { thekonymLiveSource } from './lib/thekonymLiveSource'
 import './experiences/thekonym-viewer.css'
 import './thekonym.css'
 import './thekonym-font-controls.css'
@@ -64,7 +63,7 @@ const EkpronymReview = lazy(() => import('./experiences/EkpronymReview').then(mo
 const Library = lazy(() => import('./experiences/Library').then(module => ({ default: module.Library })))
 const Scroller = lazy(() => import('./experiences/Scroller').then(module => ({ default: module.Scroller })))
 const BookVocab = lazy(() => import('./experiences/BookVocab').then(module => ({ default: module.BookVocab })))
-const ThekonymViewer = lazy(() => import('./experiences/ThekonymViewer').then(module => ({ default: module.ThekonymViewer })))
+const ThekonymReader = lazy(() => import('./experiences/ThekonymReader').then(module => ({ default: module.ThekonymReader })))
 
 function readCachedTerms(): Term[] {
   try { return JSON.parse(localStorage.getItem(TERMS_CACHE_KEY) || '[]') as Term[] } catch { return [] }
@@ -424,7 +423,7 @@ function App() {
     '--judgment-size': `${fontPrefs.judgment}px`,
   } as React.CSSProperties
 
-  if (view === 'thekonym-viewer') return <Suspense fallback={<main className="shell"><div className="center">Opening Thekonym viewer…</div></main>}><ThekonymViewer source={thekonymLiveSource} onExit={() => navigate('hub')} /></Suspense>
+  if (view === 'thekonym-viewer') return <Suspense fallback={<main className="shell"><div className="center">Opening Thekonym viewer…</div></main>}><ThekonymReader onExit={() => navigate('hub')} /></Suspense>
 
   if (!pin) return (
     <main className="shell pin-shell" data-theme={theme} style={styleVars}>
