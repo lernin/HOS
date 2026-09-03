@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { alphabetLetter, calculatedPriority, checkedAgo, confidencePresentation, examples, fluencyNames, freshCopy, maturityNames, paperUrl, priorityExplanation, pronunciation, score, searchCatalogue, writeClipboard } from '../lib/thekonymViewer'
-import type { CatalogueTerm, Confidence, ThekonymRecord, ViewerSource } from '../lib/thekonymViewer'
+import type { CatalogueTerm, Confidence, ConfidenceField, ContentField, EditResult, ThekonymRecord, ViewerSource } from '../lib/thekonymViewer'
+import { Crosses, DiscussionPanel, EditableConfidence, EditingContext, fieldConfidence, useDoubleTap } from './ThekonymInteraction'
 import './thekonym-viewer.css'
 
 function Icon({ name }: { name: 'back' | 'search' | 'copy' | 'refresh' | 'close' | 'book' | 'arrow' }) {
@@ -17,14 +18,19 @@ function Icon({ name }: { name: 'back' | 'search' | 'copy' | 'refresh' | 'close'
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>
 }
 
-function ConfidenceMark({ value }: { value: Confidence | undefined }) {
-  const mark = confidencePresentation(value)
-  return <span className={`tv-confidence tv-confidence-${mark.state}`} title={mark.label} aria-label={mark.label}>{mark.crosses ? <span aria-hidden="true">{Array.from({ length: mark.crosses }, (_, i) => <svg key={i} viewBox="0 0 16 20" fill="none"><path d="M3 3 12 17M13 2 2 18" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" /></svg>)}</span> : mark.state === 'unassessed' ? <span aria-hidden="true">?</span> : <span className="tv-sr-only">Confirmed</span>}</span>
+function ConfidenceMark({ value, field }: { value: Confidence | undefined; field?: ConfidenceField }) {
+  const context = useContext(EditingContext)
+  return field && context?.record ? <EditableConfidence key={`${context.record.id}:${field}`} value={value ?? null} field={field} /> : <Crosses value={value} />
 }
 
 function Section({ title, confidence, complete = true, children, className = '' }: { title: string; confidence?: Confidence; complete?: boolean; children: ReactNode; className?: string }) {
+  const context = useContext(EditingContext)
+  const fields: Record<string, ContentField> = { Definition: 'definition', 'Technical Definition': 'technical_definition', Examples: 'example' }
+  const field = fields[title]
+  const canDiscuss = field && context?.source.chat
+  const gestures = useDoubleTap(() => { if (canDiscuss) context.discuss(field) })
   const state = confidence === undefined ? '' : confidencePresentation(confidence, complete).state
-  return <section className={`tv-section ${['Definition', 'Technical Definition', 'Examples', 'Confidence & Readiness', 'Priority'].includes(title) ? 'tv-section-centered' : ''} ${state ? `tv-${state}` : ''} ${className}`}><h2>{title}{confidence !== undefined && <ConfidenceMark value={complete ? confidence : null} />}</h2>{children}</section>
+  return <section {...(canDiscuss ? gestures : {})} className={`tv-section ${canDiscuss ? 'tv-discussable' : ''} ${['Definition', 'Technical Definition', 'Examples', 'Confidence & Readiness', 'Priority'].includes(title) ? 'tv-section-centered' : ''} ${state ? `tv-${state}` : ''} ${className}`}><h2>{title}{confidence !== undefined && <ConfidenceMark value={complete ? confidence : null} field={field && complete ? fieldConfidence[field] : undefined} />}{canDiscuss && <button className="tv-discuss-button" aria-label={`Discuss ${title}`} title="Discuss this passage" onClick={() => context.discuss(field)}>↗</button>}</h2>{children}</section>
 }
 
 const readingMemoryKey = 'procedia-thekonym-reading-v1'
@@ -55,9 +61,14 @@ export function ThekonymViewer({ source, onExit, initialData, onSignOut }: { sou
   const [activeResult, setActiveResult] = useState(0)
   const [alphabetOpen, setAlphabetOpen] = useState(false)
   const [letter, setLetter] = useState('')
+  const indexDialog = useRef<HTMLDialogElement>(null)
+  const [discussion, setDiscussion] = useState<{ record: ThekonymRecord; field: ContentField } | null>(null)
+  useEffect(() => { if (alphabetOpen) indexDialog.current?.showModal() }, [alphabetOpen])
   const [initialMemory] = useState(readMemory)
   const [previousId, setPreviousId] = useState(initialMemory.previous || '')
   const memoryRef = useRef(initialMemory)
+  const [trail, setTrail] = useState(() => ({ ids: [initialMemory.previous, initialMemory.current].filter((id): id is string => Boolean(id)), index: initialMemory.current ? (initialMemory.previous ? 1 : 0) : -1 }))
+  const historyTarget = useRef<number | null>(null)
   const catalogueRef = useRef<HTMLElement>(null)
   const [busy, setBusy] = useState(!initialData)
   const [copying, setCopying] = useState(false)
@@ -88,6 +99,14 @@ export function ThekonymViewer({ source, onExit, initialData, onSignOut }: { sou
       const fresh = await source.loadRecord(id, controller.signal)
       if (controller.signal.aborted || version !== generation.current || !alive.current) return
       setRecord(fresh)
+      const target = historyTarget.current
+      historyTarget.current = null
+      setTrail(previous => {
+        if (target != null && previous.ids[target] === id) return { ...previous, index: target }
+        if (previous.ids[previous.index] === id) return previous
+        const ids = [...previous.ids.slice(0, previous.index + 1), id].slice(-60)
+        return { ids, index: ids.length - 1 }
+      })
       if (memoryRef.current.current !== id) {
         const previous = memoryRef.current.current || memoryRef.current.previous
         memoryRef.current = { current: id, previous }
@@ -161,7 +180,8 @@ export function ThekonymViewer({ source, onExit, initialData, onSignOut }: { sou
     return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', escape) }
   }, [searchOpen])
 
-  function choose(id: string) {
+  function choose(id: string, historyIndex: number | null = null) {
+    historyTarget.current = historyIndex
     if (selectedRef.current !== id) setCheckedAt(null)
     selectedRef.current = id
     setSelectedId(id)
@@ -201,16 +221,17 @@ export function ThekonymViewer({ source, onExit, initialData, onSignOut }: { sou
 
   const current = record?.id === selectedId ? record : null
   const children = catalogue.filter(t => t.is_child_of === current?.id)
-  const freshLabel = source.mode === 'snapshot' ? `Preview snapshot · ${dateLabel(source.capturedAt)}` : busy ? 'Checking…' : !online ? `Offline · ${checkedAgo(checkedAt, clock)}` : error ? `Refresh failed · ${checkedAgo(checkedAt, clock)}` : checkedAt && clock - Date.parse(checkedAt) < 60000 ? 'Active · Fresh' : checkedAgo(checkedAt, clock)
+  const freshLabel = source.mode === 'snapshot' ? `Snapshot · ${dateLabel(source.capturedAt)}` : checkedAt ? checkedAgo(checkedAt, clock) : busy ? 'Reading…' : 'Not read yet'
+  const stale = !online || Boolean(error) || !checkedAt || clock - Date.parse(checkedAt) >= 300000
   const resolveTerm = (value: string) => catalogue.find(t => t.id === value || t.term.toLowerCase() === value.toLowerCase())
-  const parents = [...new Set([current?.is_child_of, ...(current?.is_member_of || [])].filter((id): id is string => Boolean(id)))].filter(id => id !== current?.id)
-  const related = [...new Set(current?.is_related_to || [])].filter(id => id !== current?.id && !parents.includes(id))
+  const parents = current?.is_child_of ? [current.is_child_of] : []
   const termTag = (value: string) => {
     const term = resolveTerm(value)
     return term ? <button key={value} className={`tv-term-tag ${term.status === 'canonical' ? 'tv-tag-canonical' : ''}`} onClick={() => choose(term.id)}>{term.term}<Icon name="arrow" /></button> : <span key={value} className="tv-term-tag tv-unlinked">{names.get(value) || (/^[0-9a-f-]{36}$/i.test(value) ? 'Unresolved reference' : value)}</span>
   }
   const relation = (id: string) => names.has(id) ? <button className="tv-related" onClick={() => choose(id)}>{names.get(id)}<Icon name="arrow" /></button> : <span className="tv-missing">Unresolved reference</span>
   const linkedFields = current?.has_fields?.fields.filter(f => f.thekonyms.length) || []
+  const tableFields = linkedFields.map(f => ({ ...f, thekonyms: f.thekonyms.filter(t => catalogue.find(c => c.id === t.id)?.is_table === true) })).filter(f => f.thekonyms.length)
   const paper = paperUrl(current?.canonical_paper_path || null)
   const notes = current ? [
     ['Notes', current.notes], ['Review note', current.review_note], ['Concept rationale', current.concept_rationale],
@@ -218,9 +239,21 @@ export function ThekonymViewer({ source, onExit, initialData, onSignOut }: { sou
     ['GitHub review note', current.github_review_note], ['Google Docs review note', current.google_docs_review_note],
   ].filter((entry): entry is [string, string] => Boolean(entry[1]?.trim())) : []
 
-  return <div className="tv-shell">
+  function onSaved(result: EditResult) {
+    if (result.record.id === selectedRef.current) { setRecord(result.record); setCheckedAt(new Date().toISOString()); setError('') }
+    setCatalogue(terms => terms.map(t => t.id === result.record.id ? { ...t, ...result.record } : t))
+    setAnnouncement('Saved.')
+  }
+  function closeIndex() { setAlphabetOpen(false); setSearchOpen(false); setLetter('') }
+  const resultList = <div id="tv-search-results" role="listbox" aria-label="Thekonyms" className={`tv-results${searchOpen ? ' tv-results-open' : ''}`}>
+    <div className="tv-results-summary">{letter ? `${letter} · ${results.length} terms` : query ? `${results.length} matching terms` : 'THE COLLECTION'}</div>
+    {results.map((t, i) => <button type="button" key={t.id} id={`tv-result-${t.id}`} role="option" aria-selected={selectedId === t.id} className={`tv-result${selectedId === t.id ? ' selected' : ''}${searchOpen && activeResult === i ? ' active' : ''}`} onClick={() => choose(t.id)}><span>{t.term}</span><small>{t.greek_root_meaning || 'Meaning not recorded'}</small>{selectedId === t.id && <span className="tv-result-dot" />}</button>)}
+    {!results.length && <p className="tv-search-empty">No matching terms.</p>}
+  </div>
+
+  return <EditingContext.Provider value={{ record: current, source, online, onSaved, discuss: field => { if (current) setDiscussion({ record: current, field }) } }}><div className="tv-shell">
     <header className="tv-topbar"><button className="tv-back" onClick={onExit}><Icon name="back" /><span>The Lab</span></button><button className="tv-wordmark" onClick={() => { const target = catalogue.some(t => t.id === previousId) ? previousId : selectedId; if (target) choose(target) }} title={names.has(previousId) ? `Return to ${names.get(previousId)}` : 'Return to your reading'} aria-label={names.has(previousId) ? `PROCEDIA: return to ${names.get(previousId)}` : 'PROCEDIA: return to your reading'}>PROCEDIA</button>{onSignOut && <button className="tv-sign-out" onClick={onSignOut}>Sign out</button>}<button className="tv-copy" onClick={() => void copy()} disabled={!current || copying || (source.mode === 'live' && !online)}><Icon name="copy" /><span>{copying ? 'Checking…' : 'Copy'}</span></button></header>
-    <div className={`tv-freshness ${source.mode === 'snapshot' || error || !online ? 'tv-caution' : ''}`}><span className="tv-status-dot" /><span>{freshLabel}</span>{source.mode === 'live' && <button onClick={() => { const c = new AbortController(); void loadCatalogue(c.signal).catch(e => { setError(String(e)); setBusy(false) }) }} aria-label="Refresh from production" disabled={busy}><Icon name="refresh" /></button>}</div>
+    <div className="tv-reading-tools"><nav className="tv-history" aria-label="Reading history"><button disabled={trail.index <= 0 || busy} aria-label="Previous term" onClick={() => choose(trail.ids[trail.index - 1], trail.index - 1)}>←</button><button disabled={trail.index >= trail.ids.length - 1 || busy} aria-label="Next term" onClick={() => choose(trail.ids[trail.index + 1], trail.index + 1)}>→</button></nav><div className={`tv-freshness ${stale ? 'tv-caution' : ''}`} title={!online ? 'Offline. Showing the last successful read.' : error || 'Time since the last successful database read'}><span className="tv-status-dot" aria-label={stale ? 'Connection or freshness needs attention' : 'Connected and current'} /><span>{freshLabel}</span>{source.mode === 'live' && <button onClick={() => { const c = new AbortController(); void loadCatalogue(c.signal).catch(e => { setError(String(e)); setBusy(false) }) }} aria-label="Refresh from production" disabled={busy}><Icon name="refresh" /></button>}</div></div>
     <div className="tv-layout">
       <aside className="tv-catalogue" ref={catalogueRef}>
         <div className="tv-catalogue-title"><Icon name="book" /><span>Thekonyms</span><span className="tv-count">{catalogue.length || '—'}</span></div>
@@ -230,47 +263,39 @@ export function ThekonymViewer({ source, onExit, initialData, onSignOut }: { sou
           if (e.key === 'ArrowUp') { e.preventDefault(); setActiveResult(i => Math.max(0, i - 1)) }
           if (e.key === 'Enter' && searchOpen && results[activeResult]) { e.preventDefault(); choose(results[activeResult].id) }
         }} />{(query || searchOpen) && <button className="tv-search-dismiss" onClick={() => { setSearchOpen(false); setAlphabetOpen(false); setLetter(''); setQuery('') }} aria-label="Close search"><Icon name="close" /></button>}<button className="tv-az" aria-expanded={alphabetOpen} aria-controls="tv-alphabet" onClick={() => { const open = !alphabetOpen; setAlphabetOpen(open); setSearchOpen(open); setQuery(''); setLetter(''); setActiveResult(0) }}>A–Z</button></div>
-        <div className={`tv-browse${searchOpen ? ' tv-browse-open' : ''}`}>
-        {alphabetOpen && <div id="tv-alphabet" className="tv-alphabet" aria-label="Browse by initial letter">{'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(letters.has('#') ? ['#'] : []).map(l => <button key={l} disabled={!letters.has(l)} aria-pressed={letter === l} onClick={() => { setLetter(l); setActiveResult(0) }}>{l}</button>)}</div>}
-        <div id="tv-search-results" role="listbox" aria-label="Thekonyms" className={`tv-results${searchOpen ? ' tv-results-open' : ''}`}>
-          <div className="tv-results-summary">{letter ? `${letter} · ${results.length} terms` : query ? `${results.length} matching terms` : 'THE COLLECTION'}</div>
-          {results.map((t, i) => <button type="button" key={t.id} id={`tv-result-${t.id}`} role="option" aria-selected={selectedId === t.id} className={`tv-result${selectedId === t.id ? ' selected' : ''}${searchOpen && activeResult === i ? ' active' : ''}`} onClick={() => choose(t.id)}><span>{t.term}</span><small>{t.greek_root_meaning || 'Meaning not recorded'}</small>{selectedId === t.id && <span className="tv-result-dot" />}</button>)}
-          {!results.length && <p className="tv-search-empty">No matching terms.</p>}
-        </div>
-        </div>
+        {alphabetOpen ? <dialog ref={indexDialog} className="tv-index-dialog" aria-labelledby="tv-index-title" onCancel={closeIndex}>
+          <header><h2 id="tv-index-title">The collection <span>A–Z</span></h2><button onClick={closeIndex} aria-label="Close alphabet browser"><Icon name="close" /></button></header>
+          <div id="tv-alphabet" className="tv-alphabet" aria-label="Browse by initial letter">{'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').concat(letters.has('#') ? ['#'] : []).map(l => <button key={l} disabled={!letters.has(l)} aria-pressed={letter === l} onClick={() => { setLetter(l); setActiveResult(0) }}>{l}</button>)}</div>
+          {resultList}
+        </dialog> : <div className={`tv-browse${searchOpen ? ' tv-browse-open' : ''}`}>{resultList}</div>}
       </aside>
       <div className="tv-reading" ref={scroller}>
 
-        {error && <div className="tv-alert" role="alert"><strong>{current ? 'The displayed record may be out of date.' : 'Live access needs to be connected.'}</strong><p>{error}</p>{current && <p>Copy will try a fresh read before putting anything on your clipboard.</p>}</div>}
+        {error && !current && <div className="tv-alert" role="alert"><strong>{current ? 'The displayed record may be out of date.' : 'Live access needs to be connected.'}</strong><p>{error}</p>{current && <p>Copy will try a fresh read before putting anything on your clipboard.</p>}</div>}
         {announcement && <div className="tv-toast" role="status">{announcement}</div>}
         {fallbackCopy && <div className="tv-copy-fallback"><button onClick={e => { const area = e.currentTarget.nextElementSibling as HTMLTextAreaElement; area.focus(); area.select() }}>Select text</button><textarea aria-label="Record to copy for ChatGPT" readOnly value={fallbackCopy} /></div>}
         {!current && <div className="tv-empty"><Icon name="book" /><h1>{busy ? 'Opening the collection…' : 'Your collection, clearly.'}</h1><p>{busy ? 'Reading the latest record.' : 'Search or browse A–Z to open a term.'}</p></div>}
         {current && <article className="tv-page" aria-busy={busy}>
           <div className="tv-identity">
-            {(parents.length > 0 || related.length > 0) && <div className="tv-constellation-top">
-              <nav className="tv-parent-tags" aria-label="Parent and family">{parents.length > 0 && <span className="tv-tag-label">{current.is_child_of ? 'Parent / family' : 'Family'}</span>}{parents.map(termTag)}</nav>
-              <nav className="tv-related-tags" aria-label="Related terms">{related.length > 0 && <span className="tv-tag-label">Related</span>}{related.map(termTag)}</nav>
-            </div>}
+            {parents.length > 0 && <div className="tv-constellation-top"><nav className="tv-parent-tags" aria-label="Parent"><span className="tv-tag-label">Parent</span>{parents.map(termTag)}</nav></div>}
             <div className="tv-title-group"><h1 ref={recordHeading} tabIndex={-1} className={current.status === 'canonical' ? 'tv-canonical' : 'tv-draft'} title={current.status || 'Status unassessed'}>{current.term}<span className="tv-sr-only"> — {current.status || 'status unassessed'}</span></h1><div className="tv-pronunciation" aria-label="Pronunciation">{pronunciation(current.term_pronunciation)}</div>
-            <div className={`tv-greek-meaning tv-${confidencePresentation(current.greek_root_meaning_confidence, Boolean(current.greek_root_meaning?.trim())).state}`} aria-label="Root meaning"><span><Value>{current.greek_root_meaning}</Value><ConfidenceMark value={current.greek_root_meaning?.trim() ? current.greek_root_meaning_confidence : null} /></span></div></div>
-            {(children.length > 0 || Boolean(current.has_fields?.fields.length)) && <div className="tv-constellation-bottom">
-              {children.length > 0 && <nav className="tv-tag-row" aria-label="Child concepts"><span className="tv-tag-label">Children</span>{children.map(t => termTag(t.id))}</nav>}
-              {!!current.has_fields?.fields.length && <div className="tv-tag-row" aria-label="Fields"><span className="tv-tag-label">Fields</span>{current.has_fields.fields.map(f => <span className="tv-field-tag-group" key={f.path}>{f.thekonyms.length ? f.thekonyms.map(t => <button key={t.id} className="tv-term-tag" title={f.path} onClick={() => choose(t.id)}>{t.term}<Icon name="arrow" /></button>) : <span className="tv-term-tag tv-unlinked" title={f.path}>{f.name}</span>}</span>)}</div>}
-            </div>}
+            <div className={`tv-greek-meaning tv-${confidencePresentation(current.greek_root_meaning_confidence, Boolean(current.greek_root_meaning?.trim())).state}`} aria-label="Root meaning"><span><Value>{current.greek_root_meaning}</Value><ConfidenceMark value={current.greek_root_meaning?.trim() ? current.greek_root_meaning_confidence : null} field="greek_root_meaning_confidence" />{source.chat && <button className="tv-discuss-button" aria-label="Discuss root meaning" onClick={() => setDiscussion({ record: current, field: 'greek_root_meaning' })}>↗</button>}</span></div></div>
+            {tableFields.length > 0 && <div className="tv-constellation-bottom"><nav className="tv-tag-row" aria-label="Table-backed fields"><span className="tv-tag-label">Fields</span>{tableFields.flatMap(f => f.thekonyms.map(t => <button key={`${f.path}:${t.id}`} className="tv-term-tag" title={f.path} onClick={() => choose(t.id)}>{t.term}<Icon name="arrow" /></button>))}</nav></div>}
           </div>
           <Section title="Definition" confidence={current.definition_confidence} complete={Boolean(current.definition?.trim())} className="tv-definition"><p><Value>{current.definition}</Value></p></Section>
           <Section title="Technical Definition" confidence={current.technical_definition_confidence} complete={Boolean(current.technical_definition?.trim())}><p><Value>{current.technical_definition}</Value></p></Section>
           <Section title="Examples" confidence={current.example_confidence} complete={Boolean(current.example?.trim())}>{examples(current.example).length ? <ul className="tv-examples">{examples(current.example).map((e, i) => <li key={i}><p>{e}</p></li>)}</ul> : <p><Missing /></p>}</Section>
-          <Section title="Confidence & Readiness" className="tv-assessment"><div className="tv-assessment-grid"><div><span className="tv-mini-label">COMBINED CONFIDENCE</span><div className="tv-big-score">{score(current.confidence_score)}<small>/ 27</small></div><p>{score(current.definition_confidence)} × {score(current.technical_definition_confidence)} × {score(current.example_confidence)}</p></div><div><span className="tv-mini-label">ASHLEY’S FLUENCY</span><div className="tv-big-score">{score(current.ashleys_fluency)}<small>/ 3</small></div><p>{current.ashleys_fluency == null ? 'Unassessed' : fluencyNames[current.ashleys_fluency]}</p></div></div><details className="tv-details"><summary>How to read these scores</summary><p>Red crosses show what remains: three for confidence 0, two for 1, one for 2. At 3, the heading turns green and the crosses disappear. A question mark means unassessed. Missing content never appears confirmed. The main name is green only when its status is canonical.</p><p>Combined confidence multiplies the definition, technical definition, and examples scores. Greek meaning is assessed separately. This is a review score, not a probability.</p></details><dl className="tv-facts"><Fact label="Concept maturity">{current.maturity == null ? <Missing text="Unassessed" /> : `${current.maturity} / 5 · ${maturityNames[current.maturity] || ''}`}</Fact></dl></Section>
+          <Section title="Confidence & Readiness" className="tv-assessment"><div className="tv-assessment-grid"><div><span className="tv-mini-label">COMBINED CONFIDENCE</span><div className="tv-big-score">{score(current.confidence_score)}<small>/ 27</small></div><p>{score(current.definition_confidence)} × {score(current.technical_definition_confidence)} × {score(current.example_confidence)}</p></div><div><span className="tv-mini-label">ASHLEY’S FLUENCY</span><div className="tv-big-score"><ConfidenceMark value={current.ashleys_fluency} field="ashleys_fluency" /></div><p>{current.ashleys_fluency == null ? 'Unassessed' : fluencyNames[current.ashleys_fluency]}</p></div></div><details className="tv-details"><summary>How to read these scores</summary><p>Red crosses show what remains: three for confidence 0, two for 1, one for 2. At 3, the heading turns green and the crosses disappear. A question mark means unassessed. Missing content never appears confirmed. The main name is green only when its status is canonical.</p><p>Combined confidence multiplies the definition, technical definition, and examples scores. Greek meaning is assessed separately. This is a review score, not a probability.</p></details><dl className="tv-facts"><Fact label="Concept maturity">{current.maturity == null ? <Missing text="Unassessed" /> : `${current.maturity} / 5 · ${maturityNames[current.maturity] || ''}`}</Fact></dl></Section>
           <Section title="Priority"><dl className="tv-facts"><Fact label="Calculated priority"><strong>{Number(calculatedPriority(current).toFixed(2))}</strong></Fact><Fact label="Target phase"><Value>{current.target_phase}</Value></Fact><Fact label="Application priority"><Value>{current.application_priority}</Value></Fact></dl><div className="tv-formula">{priorityExplanation(current)}</div><details className="tv-details"><summary>How priority is calculated</summary><p>((table weight × field weight) + application priority) ÷ target phase.</p><p>Table weight: 5 if a table, otherwise 1. Field weight: 2 if “Field of” has a recorded entry, otherwise 1. Missing required inputs give a displayed priority of 0. Confidence does not enter this formula.</p></details></Section>
           <Section title="Implementation"><dl className="tv-facts"><Fact label="Is a table"><BooleanValue value={current.is_table} /></Fact><Fact label="Matching database table"><Value>{current.has_fields?.table}</Value></Fact><Fact label="Emergent"><BooleanValue value={current.is_emergent} /></Fact><Fact label="Derivable"><BooleanValue value={current.is_derivable} /></Fact><Fact label="Is a Physonym"><BooleanValue value={current.is_physonym} /></Fact><Fact label="Field of">{current.is_field_of?.length ? current.is_field_of.map(path => <span className="tv-path" key={path}>{path}{path.split('.').length !== 3 && <small>Table reference; no column specified.</small>}</span>) : <Missing text="No links recorded" />}</Fact></dl></Section>
           <Section title="Has fields"><p className="tv-section-note">{current.has_fields?.table ? `Current columns in ${current.has_fields.table}.` : 'No matching database table is recorded.'}</p>{linkedFields.length > 0 && <div className="tv-field-concepts">{linkedFields.map(f => <div key={f.path}>{f.thekonyms.map(t => <button className="tv-related" key={t.id} onClick={() => choose(t.id)}>{t.term}<Icon name="arrow" /></button>)}<code>{f.name}</code></div>)}</div>}{!!current.has_fields?.fields.length && <details className="tv-details tv-schema" open={current.has_fields.fields.length <= 6}><summary>All {current.has_fields.fields.length} fields</summary><div className="tv-field-list">{current.has_fields.fields.map(f => <div key={f.path}><code>{f.name}</code><span>{f.type}{f.generated ? ' · calculated' : ''}{f.nullable ? '' : ' · required'}</span></div>)}</div></details>}</Section>
           <Section title="Relationships"><dl className="tv-facts"><Fact label="Parent" confidence={current.anonym_confidence}>{current.is_child_of ? relation(current.is_child_of) : <Missing text="No parent recorded" />}</Fact><Fact label="Children">{children.length ? children.map(t => <span key={t.id}>{relation(t.id)}</span>) : <Missing text="No children recorded" />}</Fact><Fact label="Member of">{current.is_member_of?.length ? current.is_member_of.map(termTag) : <Missing text="No memberships recorded" />}</Fact><Fact label="Related terms">{current.is_related_to?.length ? current.is_related_to.map(id => <span key={id}>{relation(id)}</span>) : <Missing text="No links recorded" />}</Fact>{current.sibling_order != null && <Fact label="Sibling order" confidence={current.sibling_order_confidence}>{current.sibling_order}</Fact>}{(current.superseded_by_thekonym_id || current.superseded_by) && <Fact label="Superseded by" confidence={current.supersession_confidence}>{current.superseded_by_thekonym_id ? relation(current.superseded_by_thekonym_id) : current.superseded_by}</Fact>}{!!current.former_names?.length && <Fact label="Former names">{current.former_names.join(', ')}</Fact>}</dl></Section>
           <Section title="Reference & review"><dl className="tv-facts">{paper && <Fact label="Canonical paper"><a className="tv-paper-link" href={paper} target="_blank" rel="noreferrer">Read on GitHub ↗</a></Fact>}<Fact label="Status"><Value>{current.status}</Value></Fact><Fact label="Suggested status"><Value>{current.suggested_status}</Value></Fact><Fact label="GitHub quality" confidence={current.github_quality_score}>{current.github_quality?.replaceAll('_', ' ') || 'Unassessed'}</Fact><Fact label="Google Docs quality" confidence={current.google_docs_quality_score}>{current.google_docs_quality?.replaceAll('_', ' ') || 'Unassessed'}</Fact><Fact label="Docs migration">[{score(current.google_docs_migration_level)}] · {current.google_docs_migration_status?.replaceAll('_', ' ') || 'Unassessed'}</Fact></dl><details className="tv-details"><summary>Remaining assessments & record details</summary><dl className="tv-facts"><Fact label="Parent confidence">[{score(current.anonym_confidence)}]</Fact><Fact label="Sibling order confidence">[{score(current.sibling_order_confidence)}]</Fact><Fact label="Supersession confidence">[{score(current.supersession_confidence)}]</Fact><Fact label="Legacy significance"><Value>{current.significance}</Value></Fact><Fact label="Created">{dateLabel(current.created_at)}</Fact><Fact label="Recorded update time">{dateLabel(current.updated_at)}</Fact><Fact label="Record ID"><code>{current.id}</code></Fact></dl><p>The checked time above shows when this viewer retrieved the record. A stored update time is separate.</p></details></Section>
-          <Section title="Notes" className="tv-notes">{notes.length ? notes.map(([label, text]) => <div className="tv-note" key={label}>{label !== 'Notes' && <h3>{label}</h3>}<p>{text}</p></div>) : <p><Missing text="No notes recorded" /></p>}</Section>
-          <footer className="tv-page-footer"><Icon name="book" /><span>PROCEDIA · THEKONYM COLLECTION</span><span>{source.mode === 'snapshot' ? 'Preview snapshot' : 'Read only'}</span></footer>
+          <Section title="Notes" className="tv-notes">{source.chat && <button className="tv-discuss-notes" onClick={() => setDiscussion({ record: current, field: 'notes' })}>Discuss notes ↗</button>}{notes.length ? notes.map(([label, text]) => <div className="tv-note" key={label}>{label !== 'Notes' && <h3>{label}</h3>}<p>{text}</p></div>) : <p><Missing text="No notes recorded" /></p>}</Section>
+          <footer className="tv-page-footer"><Icon name="book" /><span>PROCEDIA · THEKONYM COLLECTION</span><span>{source.mode === 'snapshot' ? 'Preview snapshot' : 'Double-tap a passage to discuss'}</span></footer>
         </article>}
       </div>
     </div>
-  </div>
+    {discussion && <DiscussionPanel key={`${discussion.record.id}:${discussion.field}`} record={discussion.record} field={discussion.field} source={source} onSaved={onSaved} onClose={() => setDiscussion(null)} />}
+  </div></EditingContext.Provider>
 }
