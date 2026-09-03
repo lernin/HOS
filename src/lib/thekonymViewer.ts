@@ -22,6 +22,7 @@ export type CatalogueTerm = {
   greek_root_meaning: string | null
   former_names: string[] | null
   status: string | null
+  is_table?: boolean | null
   is_child_of: string | null
 }
 
@@ -75,11 +76,22 @@ export type ThekonymRecord = CatalogueTerm & {
   [key: string]: unknown
 }
 
+export type ContentField = 'definition' | 'technical_definition' | 'example' | 'greek_root_meaning' | 'notes' | 'term_pronunciation'
+export type ConfidenceField = 'definition_confidence' | 'technical_definition_confidence' | 'example_confidence' | 'greek_root_meaning_confidence' | 'ashleys_fluency'
+export type EditProposal = { changes: Record<string, string | number>; expected: Record<string, unknown>; summary: string }
+export type ChatMessage = { role: 'user' | 'assistant'; content: string }
+export type EditResult = { record: ThekonymRecord; auditId: string; log: { status: string; message?: string; url?: string } }
+export type ChatResult = { text: string; proposal: EditProposal | null; sources: { label: string; url?: string }[]; github: boolean }
+
 export type ViewerSource = {
   mode: 'live' | 'snapshot'
   capturedAt?: string
   loadCatalogue(signal: AbortSignal): Promise<CatalogueTerm[]>
   loadRecord(id: string, signal: AbortSignal): Promise<ThekonymRecord>
+  edit?(id: string, changes: Record<string, unknown>, expected: Record<string, unknown>, requestId: string, reason: string): Promise<EditResult>
+  chat?(id: string, field: ContentField, messages: ChatMessage[], signal: AbortSignal): Promise<ChatResult>
+  transcribe?(audio: Blob, signal: AbortSignal): Promise<string>
+  syncLogs?(id: string): Promise<{ results: { status: string }[]; remaining: number }>
 }
 
 export const confidenceNames = ['No confidence', 'Low', 'Medium', 'High']
@@ -124,7 +136,7 @@ export function calculatedPriority(t: ThekonymRecord): number {
 export function checkedAgo(value: string | null, now: number): string {
   if (!value) return 'Not checked yet'
   const minutes = Math.max(0, Math.floor((now - Date.parse(value)) / 60000))
-  return minutes < 1 ? 'Checked just now' : `Checked ${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  return minutes < 1 ? 'Read just now' : `Read ${minutes} minute${minutes === 1 ? '' : 's'} ago`
 }
 
 export function priorityExplanation(t: ThekonymRecord): string {
