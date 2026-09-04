@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { alphabetLetter, calculatedPriority, checkedAgo, confidencePresentation, examples, fluencyNames, freshCopy, maturityNames, paperUrl, priorityExplanation, pronunciation, score, searchCatalogue, writeClipboard } from '../lib/thekonymViewer'
 import type { CatalogueTerm, Confidence, ConfidenceField, ContentField, EditResult, ThekonymRecord, ViewerSource } from '../lib/thekonymViewer'
 import { Crosses, DiscussionPanel, EditableConfidence, EditingContext, fieldConfidence, useDoubleTap } from './ThekonymInteraction'
+import { KidExplanationChoice } from './KidExplanationChoice'
+import { parseKidProposals } from '../lib/kidExplanationProposals'
 import './thekonym-viewer.css'
 
 function Icon({ name }: { name: 'back' | 'search' | 'copy' | 'refresh' | 'close' | 'book' | 'arrow' }) {
@@ -25,7 +27,7 @@ function ConfidenceMark({ value, field }: { value: Confidence | undefined; field
 
 function Section({ title, confidence, complete = true, children, className = '' }: { title: string; confidence?: Confidence; complete?: boolean; children: ReactNode; className?: string }) {
   const context = useContext(EditingContext)
-  const fields: Record<string, ContentField> = { Definition: 'definition', 'Technical Definition': 'technical_definition', Examples: 'example' }
+  const fields: Record<string, ContentField> = { Definition: 'definition', 'Technical Definition': 'technical_definition', 'Kid explanation': 'kid_explanation', Examples: 'example' }
   const field = fields[title]
   const canDiscuss = field && context?.source.chat
   const gestures = useDoubleTap(() => { if (canDiscuss) context.discuss(field) })
@@ -281,6 +283,9 @@ export function ThekonymViewer({ source, onExit, initialData, onSignOut }: { sou
           </div>
           <Section title="Definition" confidence={current.definition_confidence} complete={Boolean(current.definition?.trim())} className="tv-definition"><p><Value>{current.definition}</Value></p></Section>
           <Section title="Technical Definition" confidence={current.technical_definition_confidence} complete={Boolean(current.technical_definition?.trim())}><p><Value>{current.technical_definition}</Value></p></Section>
+          <Section title="Kid explanation" confidence={parseKidProposals(current.kid_explanation) ? undefined : current.kid_explanation_confidence ?? null} complete={Boolean(current.kid_explanation?.trim())} className="tv-kid-section">
+            <KidExplanationChoice key={JSON.stringify([current.id, current.kid_explanation, current.kid_explanation_confidence])} record={current} source={source} online={online} onSaved={onSaved} />
+          </Section>
           <Section title="Examples" confidence={current.example_confidence} complete={Boolean(current.example?.trim())}>{examples(current.example).length ? <ul className="tv-examples">{examples(current.example).map((e, i) => <li key={i}><p>{e}</p></li>)}</ul> : <p><Missing /></p>}</Section>
           <Section title="Confidence & Readiness" className="tv-assessment"><div className="tv-assessment-grid"><div><span className="tv-mini-label">COMBINED CONFIDENCE</span><div className="tv-big-score">{score(current.confidence_score)}<small>/ 27</small></div><p>{score(current.definition_confidence)} × {score(current.technical_definition_confidence)} × {score(current.example_confidence)}</p></div><div><span className="tv-mini-label">ASHLEY’S FLUENCY</span><div className="tv-big-score"><ConfidenceMark value={current.ashleys_fluency} field="ashleys_fluency" /></div><p>{current.ashleys_fluency == null ? 'Unassessed' : fluencyNames[current.ashleys_fluency]}</p></div></div><details className="tv-details"><summary>How to read these scores</summary><p>Red crosses show what remains: three for confidence 0, two for 1, one for 2. At 3, the heading turns green and the crosses disappear. A question mark means unassessed. Missing content never appears confirmed. The main name is green only when its status is canonical.</p><p>Combined confidence multiplies the definition, technical definition, and examples scores. Greek meaning is assessed separately. This is a review score, not a probability.</p></details><dl className="tv-facts"><Fact label="Concept maturity">{current.maturity == null ? <Missing text="Unassessed" /> : `${current.maturity} / 5 · ${maturityNames[current.maturity] || ''}`}</Fact></dl></Section>
           <Section title="Priority"><dl className="tv-facts"><Fact label="Calculated priority"><strong>{Number(calculatedPriority(current).toFixed(2))}</strong></Fact><Fact label="Target phase"><Value>{current.target_phase}</Value></Fact><Fact label="Application priority"><Value>{current.application_priority}</Value></Fact></dl><div className="tv-formula">{priorityExplanation(current)}</div><details className="tv-details"><summary>How priority is calculated</summary><p>(table weight + application priority) ÷ target phase.</p><p>Table weight: 5 if a table, otherwise 1. Missing required inputs give a displayed priority of 0. Confidence does not enter this formula.</p></details></Section>

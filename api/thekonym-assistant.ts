@@ -3,8 +3,8 @@ import { generateText, tool, jsonSchema, stepCountIs } from 'ai'
 import { readerRpc, ReaderError } from '../server/thekonym-data.js'
 import { githubConfigured, readGithubDocument, searchGithubDocuments, syncEditLog } from '../server/thekonym-github.js'
 
-const contentFields = ['definition', 'technical_definition', 'example', 'greek_root_meaning', 'notes', 'term_pronunciation']
-const confidenceFields: Record<string, string> = { definition: 'definition_confidence', technical_definition: 'technical_definition_confidence', example: 'example_confidence', greek_root_meaning: 'greek_root_meaning_confidence' }
+const contentFields = ['definition', 'technical_definition', 'kid_explanation', 'example', 'greek_root_meaning', 'notes', 'term_pronunciation']
+const confidenceFields: Record<string, string> = { definition: 'definition_confidence', technical_definition: 'technical_definition_confidence', kid_explanation: 'kid_explanation_confidence', example: 'example_confidence', greek_root_meaning: 'greek_root_meaning_confidence' }
 const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } })
 const querySchema = jsonSchema<{ query: string }>({ type: 'object', properties: { query: { type: 'string', maxLength: 200 } }, required: ['query'], additionalProperties: false })
 
