@@ -1,57 +1,134 @@
 export type MusicRating = 0|1|2|3
-export type WoodlandProgression = {id:string;name:string;emojis:string;chords:number[][]}
+export type WoodlandInstrument = 'piano'|'synth'
+export type WoodlandVoicing = 'jazz'|'orchestral'
+export type WoodlandProgression = {
+  id:string
+  name:string
+  emojis:string
+  roman:string
+  chordNames:string[]
+  jazz:number[][]
+  orchestral:number[][]
+  melody:number[]
+}
 
 export const woodlandProgressions: WoodlandProgression[] = [
-  {id:'sunlit',name:'Sunlit trail',emojis:'🌤️🌿✨',chords:[[50,57,61,64,69],[47,54,57,62,66],[43,50,57,59,66],[45,52,57,59,64]]},
-  {id:'wide-sky',name:'Wide sky',emojis:'🌌🕊️💙',chords:[[50,57,61,64,69],[45,52,57,61,64],[47,54,57,62,66],[43,50,57,59,66]]},
-  {id:'moss',name:'Soft moss',emojis:'🌿🍃🤎',chords:[[47,54,57,62,66],[43,50,57,59,66],[50,57,61,64,69],[45,52,57,59,64]]},
-  {id:'river',name:'River bend',emojis:'💧🫧🌊',chords:[[43,50,57,59,66],[50,57,61,64,69],[45,52,57,61,64],[47,54,57,62,66]]},
-  {id:'homeward',name:'Homeward',emojis:'🏡🔥🌙',chords:[[43,50,57,59,66],[47,54,57,62,66],[45,52,57,59,64],[50,57,61,64,69]]},
-  {id:'dawn',name:'First light',emojis:'🌅🌱☀️',chords:[[50,57,61,66,69],[43,50,57,59,66],[50,57,61,64,69],[45,52,57,61,64]]},
-  {id:'mystery',name:'Hidden path',emojis:'🌫️🦉🔮',chords:[[52,59,62,67,71],[43,50,57,59,66],[50,57,61,64,69],[45,52,57,59,64]]},
-  {id:'campfire',name:'Afterglow',emojis:'🔥🌲🧡',chords:[[47,54,57,62,66],[45,52,57,61,64],[43,50,57,59,66],[50,57,61,64,69]]},
+  {
+    id:'two-five-one',name:'Clear arrival',emojis:'🌿✨🏡',roman:'ii–V–I',
+    chordNames:['Dm9','G13','Cmaj9','Cmaj9'],
+    jazz:[[38,48,52,57,64],[43,53,57,64,69],[36,47,52,59,62],[36,47,52,59,64]],
+    orchestral:[[38,45,52,57,64,69],[43,50,57,64,69,76],[36,43,52,59,64,71],[36,43,52,59,64,76]],
+    melody:[69,71,74,71,69,67,64,62]
+  },
+  {
+    id:'one-six-two-five',name:'Warm circle',emojis:'☀️🍂🕯️',roman:'I–vi–ii–V',
+    chordNames:['Cmaj9','Am9','Dm9','G13'],
+    jazz:[[36,47,52,59,62],[45,55,59,64,71],[38,48,52,57,64],[43,53,57,64,69]],
+    orchestral:[[36,43,52,59,64,71],[45,52,57,64,71,76],[38,45,52,57,64,69],[43,50,57,64,69,76]],
+    melody:[64,67,71,69,64,62,59,57]
+  },
+  {
+    id:'three-six-two-five-one',name:'Long homecoming',emojis:'🛤️🌅🏡',roman:'iii–VI–ii–V–I',
+    chordNames:['Em9','A13','Dm9','G13','Cmaj9'],
+    jazz:[[40,50,55,59,66],[45,55,61,64,71],[38,48,52,57,64],[43,53,57,64,69],[36,47,52,59,62]],
+    orchestral:[[40,47,55,59,66,71],[45,52,57,61,67,71],[38,45,52,57,64,69],[43,50,57,64,69,76],[36,43,52,59,64,71]],
+    melody:[71,69,67,66,64,62,59,60]
+  },
+  {
+    id:'minor-two-five-one',name:'Midnight resolve',emojis:'🌙🌫️🕯️',roman:'iiø–V–i',
+    chordNames:['Dm7♭5','G7alt','CmMaj9','CmMaj9'],
+    jazz:[[38,48,51,56,63],[43,53,56,59,63],[36,47,51,55,62],[36,47,51,55,62]],
+    orchestral:[[38,44,51,56,63,68],[43,50,56,59,63,68],[36,43,51,55,62,67],[36,43,51,55,62,71]],
+    melody:[63,62,59,56,55,59,62,63]
+  },
+  {
+    id:'backdoor',name:'Wistful return',emojis:'🍁💛🏠',roman:'ivm–♭VII–I',
+    chordNames:['Fm9','B♭13','Cmaj9','Cmaj9'],
+    jazz:[[41,51,56,60,67],[46,56,60,67,72],[36,47,52,59,62],[36,47,52,59,64]],
+    orchestral:[[41,48,56,60,67,72],[46,53,60,67,72,77],[36,43,52,59,64,71],[36,43,52,59,64,76]],
+    melody:[67,68,72,70,67,64,62,60]
+  },
+  {
+    id:'tritone-home',name:'Velvet turn',emojis:'🪩🌌✨',roman:'ii–♭II–I',
+    chordNames:['Dm9','D♭13','Cmaj9','Cmaj9'],
+    jazz:[[38,48,52,57,64],[37,47,53,56,63],[36,47,52,59,62],[36,47,52,59,64]],
+    orchestral:[[38,45,52,57,64,69],[37,44,53,56,63,68],[36,43,52,59,64,71],[36,43,52,59,64,76]],
+    melody:[69,68,65,63,62,60,59,60]
+  },
 ]
 
 const byId = new Map(woodlandProgressions.map(item=>[item.id,item]))
 
-/** Original synthesized woodland music expanded into a small user-curated palette. */
 export function forestAudio(){
   const context=new AudioContext(),music=context.createGain(),nature=context.createGain()
   music.connect(context.destination);nature.connect(context.destination)
   const birds=new Audio('/woodland/forest-birds.mp3');birds.loop=true;birds.preload='auto'
   context.createMediaElementSource(birds).connect(nature)
-  const reverb=context.createConvolver(),wet=context.createGain();wet.gain.value=.22
-  const impulse=context.createBuffer(2,context.sampleRate*3,context.sampleRate)
-  for(let ch=0;ch<2;ch++){const data=impulse.getChannelData(ch);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/data.length,3)*.35}
+
+  const reverb=context.createConvolver(),wet=context.createGain();wet.gain.value=.18
+  const impulse=context.createBuffer(2,context.sampleRate*2.8,context.sampleRate)
+  for(let ch=0;ch<2;ch++){const data=impulse.getChannelData(ch);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/data.length,3.2)*.28}
   reverb.buffer=impulse;reverb.connect(wet);wet.connect(music)
-  let chordStep=0,progressionStep=0,active=false,next=0,enabled=['sunlit']
+
+  let chordStep=0,progressionStep=0,active=false,next=0,enabled=['two-five-one']
+  let instrument:WoodlandInstrument='piano',voicing:WoodlandVoicing='jazz',melodyOn=false
   const auditionNodes=new Set<OscillatorNode>(),ambientNodes=new Set<OscillatorNode>()
-  function note(midi:number,time:number,duration:number,volume:number,tracking?:Set<OscillatorNode>){
-    const osc=context.createOscillator(),gain=context.createGain();osc.type='sine';osc.frequency.value=440*Math.pow(2,(midi-69)/12)
-    gain.gain.setValueAtTime(0,time);gain.gain.linearRampToValueAtTime(volume,time+.8);gain.gain.exponentialRampToValueAtTime(.0001,time+duration)
-    osc.connect(gain);gain.connect(music);gain.connect(reverb);tracking?.add(osc);osc.start(time);osc.stop(time+duration+.1);osc.onended=()=>{tracking?.delete(osc);osc.disconnect();gain.disconnect()}
+
+  function hz(midi:number){return 440*Math.pow(2,(midi-69)/12)}
+  function voice(midi:number,time:number,duration:number,volume:number,tracking?:Set<OscillatorNode>){
+    const gain=context.createGain()
+    const oscillators:OscillatorNode[]=[]
+    if(instrument==='piano'){
+      const fundamental=context.createOscillator(),upper=context.createOscillator()
+      fundamental.type='triangle';upper.type='sine'
+      fundamental.frequency.value=hz(midi);upper.frequency.value=hz(midi)*2.01
+      const attack=.012,release=Math.max(.3,duration*.72)
+      gain.gain.setValueAtTime(.0001,time)
+      gain.gain.exponentialRampToValueAtTime(volume,time+attack)
+      gain.gain.exponentialRampToValueAtTime(Math.max(.0002,volume*.16),time+Math.min(.8,duration*.28))
+      gain.gain.exponentialRampToValueAtTime(.0001,time+release)
+      fundamental.connect(gain);upper.connect(gain);upper.detune.value=4
+      oscillators.push(fundamental,upper)
+    }else{
+      const a=context.createOscillator(),b=context.createOscillator()
+      a.type='sine';b.type='triangle';a.frequency.value=hz(midi);b.frequency.value=hz(midi);b.detune.value=7
+      gain.gain.setValueAtTime(.0001,time);gain.gain.linearRampToValueAtTime(volume,time+.45);gain.gain.exponentialRampToValueAtTime(.0001,time+duration)
+      a.connect(gain);b.connect(gain);oscillators.push(a,b)
+    }
+    gain.connect(music);gain.connect(reverb)
+    for(const osc of oscillators){tracking?.add(osc);osc.start(time);osc.stop(time+duration+.12);osc.onended=()=>{tracking?.delete(osc);osc.disconnect()}}
   }
-  function playChord(chord:number[],start:number,duration=11,tracking?:Set<OscillatorNode>){
-    chord.slice(0,4).forEach((n,i)=>note(n,start+i*.09,duration,.055,tracking))
-    ;[chord[4],chord[2]+12,chord[3]+12].forEach((n,i)=>note(n,start+Math.min(2,duration*.25)+i*Math.max(.6,duration*.22),Math.max(1.4,duration*.45),.032,tracking))
+
+  function playChord(chord:number[],start:number,duration:number,tracking?:Set<OscillatorNode>){
+    chord.forEach((n,i)=>voice(n,start+i*(instrument==='piano'?.035:.08),duration,instrument==='piano'?.042:.035,tracking))
+  }
+  function playMelody(notes:number[],start:number,total:number,tracking?:Set<OscillatorNode>){
+    if(!melodyOn)return
+    const step=total/notes.length
+    notes.forEach((n,i)=>voice(n,start+i*step,Math.max(.45,step*.78),instrument==='piano'?.026:.019,tracking))
   }
   function stopNodes(nodes:Set<OscillatorNode>){for(const osc of nodes){try{osc.stop()}catch{}}nodes.clear()}
   function stopAudition(){stopNodes(auditionNodes)}
   function stopAmbient(){active=false;birds.pause();stopNodes(ambientNodes);next=0}
+  function selectedChords(p:WoodlandProgression){return voicing==='jazz'?p.jazz:p.orchestral}
+
   const timer=window.setInterval(()=>{if(!active||context.state!=='running'||context.currentTime<next-1)return
     const available=enabled.map(id=>byId.get(id)).filter((item):item is WoodlandProgression=>Boolean(item))
     if(!available.length){next=context.currentTime+1;return}
-    const progression=available[progressionStep%available.length]
-    const start=Math.max(context.currentTime+.1,next),chord=progression.chords[chordStep%progression.chords.length]
-    playChord(chord,start,11,ambientNodes)
+    const progression=available[progressionStep%available.length],chords=selectedChords(progression)
+    const start=Math.max(context.currentTime+.1,next),chord=chords[chordStep%chords.length]
+    playChord(chord,start,9.8,ambientNodes)
+    if(chordStep%chords.length===0)playMelody(progression.melody,start,Math.max(8,chords.length*9),ambientNodes)
     chordStep++
-    if(chordStep%progression.chords.length===0)progressionStep++
-    next=start+12
-  },400)
+    if(chordStep%chords.length===0)progressionStep++
+    next=start+10.5
+  },350)
+
   return {
     levels:(n:number,m:number)=>{nature.gain.setTargetAtTime(n,context.currentTime,.25);music.gain.setTargetAtTime(m,context.currentTime,.25)},
     setProgressions:(ids:string[])=>{enabled=ids.filter(id=>byId.has(id));chordStep=0;progressionStep=0;next=0},
-    audition:async(id:string)=>{const progression=byId.get(id);if(!progression)return;stopAudition();await context.resume();const start=context.currentTime+.08;progression.chords.forEach((chord,i)=>playChord(chord,start+i*1.55,2.2,auditionNodes))},
+    setSound:(nextInstrument:WoodlandInstrument,nextVoicing:WoodlandVoicing,nextMelody:boolean)=>{instrument=nextInstrument;voicing=nextVoicing;melodyOn=nextMelody},
+    audition:async(id:string)=>{const progression=byId.get(id);if(!progression)return;stopAudition();await context.resume();const chords=selectedChords(progression),step=1.8,start=context.currentTime+.06;chords.forEach((chord,i)=>playChord(chord,start+i*step,1.65,auditionNodes));playMelody(progression.melody,start,chords.length*step,auditionNodes)},
     stopAudition,
     start:async()=>{stopAudition();active=true;await Promise.all([context.resume(),birds.play()])},
     pause:()=>{stopAmbient();stopAudition();void context.suspend()},
