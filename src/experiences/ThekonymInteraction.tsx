@@ -3,13 +3,13 @@ import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent }
 import type { ChatMessage, ChatResult, Confidence, ConfidenceField, ContentField, EditResult, ThekonymRecord, ViewerSource } from '../lib/thekonymViewer'
 import { confidencePresentation } from '../lib/thekonymViewer'
 
-export const fieldLabels: Record<ContentField, string> = { definition: 'Definition', technical_definition: 'Technical Definition', example: 'Examples', greek_root_meaning: 'Root meaning', notes: 'Notes', term_pronunciation: 'Pronunciation' }
-export const fieldConfidence: Partial<Record<ContentField, ConfidenceField>> = { definition: 'definition_confidence', technical_definition: 'technical_definition_confidence', example: 'example_confidence', greek_root_meaning: 'greek_root_meaning_confidence' }
+export const fieldLabels: Record<ContentField, string> = { definition: 'Definition', technical_definition: 'Technical Definition', kid_explanation: 'Kid explanation', example: 'Examples', greek_root_meaning: 'Root meaning', notes: 'Notes', term_pronunciation: 'Pronunciation' }
+export const fieldConfidence: Partial<Record<ContentField, ConfidenceField>> = { definition: 'definition_confidence', technical_definition: 'technical_definition_confidence', kid_explanation: 'kid_explanation_confidence', example: 'example_confidence', greek_root_meaning: 'greek_root_meaning_confidence' }
 export const EditingContext = createContext<{ record: ThekonymRecord | null; source: ViewerSource; online: boolean; onSaved: (result: EditResult) => void; discuss: (field: ContentField) => void } | null>(null)
 
 export function useDoubleTap(action: () => void) {
   const last = useRef(0)
-  const permitted = (target: EventTarget) => !(target as HTMLElement).closest('button, a, input, textarea, summary')
+  const permitted = (target: EventTarget) => !(target as HTMLElement).closest('button, a, input, textarea, summary, form')
   return {
     onDoubleClick: (e: ReactMouseEvent) => { if (permitted(e.target)) action() },
     onPointerUp: (e: ReactPointerEvent) => {

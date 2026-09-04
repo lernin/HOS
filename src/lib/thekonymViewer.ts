@@ -19,6 +19,8 @@ export type ThekonymRecord = CatalogueTerm & {
   definition_confidence: Confidence
   technical_definition: string | null
   technical_definition_confidence: Confidence
+  kid_explanation?: string | null
+  kid_explanation_confidence?: Confidence
   example: string | null
   example_confidence: Confidence
   confidence_score: number | null
@@ -59,8 +61,8 @@ export type ThekonymRecord = CatalogueTerm & {
   [key: string]: unknown
 }
 
-export type ContentField = 'definition' | 'technical_definition' | 'example' | 'greek_root_meaning' | 'notes' | 'term_pronunciation'
-export type ConfidenceField = 'definition_confidence' | 'technical_definition_confidence' | 'example_confidence' | 'greek_root_meaning_confidence' | 'ashleys_fluency'
+export type ContentField = 'definition' | 'technical_definition' | 'kid_explanation' | 'example' | 'greek_root_meaning' | 'notes' | 'term_pronunciation'
+export type ConfidenceField = 'definition_confidence' | 'technical_definition_confidence' | 'kid_explanation_confidence' | 'example_confidence' | 'greek_root_meaning_confidence' | 'ashleys_fluency'
 export type EditProposal = { changes: Record<string, string | number>; expected: Record<string, unknown>; summary: string }
 export type ChatMessage = { role: 'user' | 'assistant'; content: string }
 export type EditResult = { record: ThekonymRecord; auditId: string; log: { status: string; message?: string; url?: string } }
@@ -158,6 +160,7 @@ export function copyText(t: ThekonymRecord, capturedAt: string, mode: ViewerSour
     `Greek meaning [${score(t.greek_root_meaning_confidence)}]: ${t.greek_root_meaning || 'Not recorded'}`,
     `Definition [${score(t.definition_confidence)}]: ${t.definition || 'Not recorded'}`,
     `Technical definition [${score(t.technical_definition_confidence)}]: ${t.technical_definition || 'Not recorded'}`,
+    `Kid explanation [${score(t.kid_explanation_confidence)}]: ${t.kid_explanation || 'Not recorded'}`,
     `Examples [${score(t.example_confidence)}]: ${t.example || 'Not recorded'}`,
     `Combined confidence: ${score(t.confidence_score)} / 27`,
     `Priority: ${calculatedPriority(t)}. ${priorityExplanation(t)}`,
