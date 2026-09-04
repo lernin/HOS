@@ -2,7 +2,7 @@
 
 Status: implemented; production build and automated tests pass. Visual playthrough remains unverified. Release status and the deployed commit are recorded in this branch's pull-request conversation.
 
-Branch: `experiment/water-garden-20260904`, based on `main` at `9263b9b6dd99d6ab0177b5715365a8e1fa38d793`.
+Branch: `experiment/water-garden-20260904`, based on `main` at `9263b9b6dd99d6ab0177b5715365a8e1fa38d793`. Pull request: [HOS #32](https://github.com/lernin/HOS/pull/32).
 
 ## Scope
 
@@ -22,7 +22,7 @@ Original Web Audio synthesis provides quiet water/wind, occasional bird-like chi
 - `tests/water-garden.test.mjs`: task, route, persistence and isolation regressions.
 - `tests/water-garden-preview.{html,tsx}`: development-only isolated playtest harness, not an entry point in the production build. It avoids loading the Lab's data clients and properly unmounts/reopens the scene.
 
-No database, schema, RLS, API, environment variable, dependency, lockfile, existing experiment, service worker, or unsynced-work changes. Existing main-only Vercel deployment restrictions are preserved. No microphone, recording, pupil account, or speech assessment is added. Fixed English phrases may be spoken by a device-supplied voice; voice availability and whether a voice uses a device vendor's service depend on the browser.
+No database, schema, RLS, API, environment variable, dependency, lockfile, existing experiment, service worker, or unsynced-work changes. Existing Vercel deployment configuration is preserved (apart from the new route rewrite). No microphone, recording, pupil account, or speech assessment is added. Fixed English phrases may be spoken by a device-supplied voice; voice availability and whether a voice uses a device vendor's service depend on the browser.
 
 Device-only keys: `water-garden-progress-v1` and `water-garden-sound-v1`. Storage failures fall back to in-memory play. This is not a guaranteed offline install; an initial asset load is required, and the existing Lab caching policy is unchanged.
 
@@ -32,7 +32,8 @@ Device-only keys: `water-garden-progress-v1` and `water-garden-sound-v1`. Storag
 - `npm run build`: passed (TypeScript + Vite).
 - `node --test tests/*.test.mjs`: all tests passed, including eight new garden tests.
 - There is no lint script in this repository; lint was not claimed or configured as part of this task.
-- Visual/browser playthrough is **unverified**: the browser could not reach the supervised preview. No screenshot, mobile rendering, audio quality, WebGL runtime, or real-device performance pass is claimed.
+- Vercel reported a successful build/deployment of the source commit and generated [a protected preview](https://hos-t7r8-git-experiment-water-gard-2ae934-ashley-taits-projects.vercel.app/water-garden).
+- Visual/browser playthrough is **unverified**: the local preview was unreachable, and the Vercel preview requires an authenticated Vercel session. No screenshot, mobile rendering, audio quality, WebGL runtime, or real-device performance pass is claimed.
 
 ## Required playthrough before release
 
@@ -50,7 +51,7 @@ Device-only keys: `water-garden-progress-v1` and `water-garden-sound-v1`. Storag
 
 Ashley explicitly approved publishing/deployment to Vercel and saving source in GitHub on 2026-09-04. GitHub's `Vercel` status confirms that the current main branch successfully deployed to the existing `ashley-taits-projects/hos-t7r8` project. The direct Vercel connector cannot resolve the project and the CLI session is logged out, so the authorized release uses the existing GitHub-to-Vercel integration, not a substitute project. No deployment restriction was changed.
 
-The existing repository deploys `main` to The Lab. Only this task's tested commit is intended for release through its focused PR; unrelated open PRs are excluded. After release, complete the visual/device playthrough above. A branch preview is unavailable under the unchanged main-only deployment policy. Intended production path after a successful authorized release is `https://hos-t7r8.vercel.app/water-garden`. The previous known-good commit is the baseline noted above; no data migration or repair is required for a code rollback.
+The existing repository deploys `main` to The Lab. Only this task's tested commit is intended for release through its focused PR; unrelated open PRs are excluded. After release, complete the visual/device playthrough above. Although the existing configuration sets wildcard branch deployments to false, live GitHub evidence shows that Vercel created a protected preview for this PR; that configuration was not changed or bypassed. Intended production path after a successful authorized release is `https://hos-t7r8.vercel.app/water-garden`. The previous known-good commit is the baseline noted above; no data migration or repair is required for a code rollback.
 
 Related shared-HUD work: HOS issue #2. Existing Thekonym viewer PR #31 was deliberately left untouched.
 
