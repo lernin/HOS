@@ -1,5 +1,5 @@
 import {useMemo} from 'react'
-import {woodlandProgressions,type MusicRating,type WoodlandInstrument,type WoodlandVoicing} from './audio'
+import {woodlandProgressions,type MusicRating,type WoodlandSoundMode} from './audio'
 
 export type MusicRatings=Record<string,MusicRating>
 
@@ -10,49 +10,26 @@ export function rankedMusic(ratings:MusicRatings){
 }
 
 export function WoodlandMusicPalette({
-  ratings,activeId,instrument,voicing,melody,onRate,onToggle,onInstrument,onVoicing,onMelody
+  ratings,activeId,mode,onRate,onToggle,onMode
 }:{
   ratings:MusicRatings
   activeId:string|null
-  instrument:WoodlandInstrument
-  voicing:WoodlandVoicing
-  melody:boolean
+  mode:WoodlandSoundMode
   onRate:(id:string,rating:MusicRating)=>void
   onToggle:(id:string)=>void
-  onInstrument:(value:WoodlandInstrument)=>void
-  onVoicing:(value:WoodlandVoicing)=>void
-  onMelody:(value:boolean)=>void
+  onMode:(value:WoodlandSoundMode)=>void
 }){
   const ranked=useMemo(()=>rankedMusic(ratings),[ratings])
   const playing=ranked.filter(entry=>entry.rating>0).length
   return <section className="woodland-music">
     <div className="woodland-music-heading">
-      <div><h3>Harmony lab</h3><p>Judge the harmony cleanly first. Melody is off by default.</p></div>
+      <div><h3>Harmony lab</h3><p>Piano mode plays the progression exactly like a teacher demonstrating the chords. Game mode brings back the atmospheric arrangement.</p></div>
       <span>{playing} enabled</span>
     </div>
 
-    <div className="woodland-sound-modes">
-      <div>
-        <small>Instrument</small>
-        <div className="woodland-segmented">
-          <button type="button" className={instrument==='piano'?'selected':''} onClick={()=>onInstrument('piano')}>Piano</button>
-          <button type="button" className={instrument==='synth'?'selected':''} onClick={()=>onInstrument('synth')}>Synth</button>
-        </div>
-      </div>
-      <div>
-        <small>Voicing</small>
-        <div className="woodland-segmented">
-          <button type="button" className={voicing==='jazz'?'selected':''} onClick={()=>onVoicing('jazz')}>Jazz</button>
-          <button type="button" className={voicing==='orchestral'?'selected':''} onClick={()=>onVoicing('orchestral')}>Wide</button>
-        </div>
-      </div>
-      <div>
-        <small>Melody</small>
-        <div className="woodland-segmented">
-          <button type="button" className={!melody?'selected':''} onClick={()=>onMelody(false)}>Off</button>
-          <button type="button" className={melody?'selected':''} onClick={()=>onMelody(true)}>On</button>
-        </div>
-      </div>
+    <div className="woodland-mode-toggle" role="group" aria-label="Harmony playback mode">
+      <button type="button" className={mode==='piano'?'selected':''} onClick={()=>onMode('piano')}>Piano mode</button>
+      <button type="button" className={mode==='game'?'selected':''} onClick={()=>onMode('game')}>Game mode</button>
     </div>
 
     <div className="woodland-progressions">
@@ -69,6 +46,7 @@ export function WoodlandMusicPalette({
           <div className="woodland-harmony-meta">
             <span>{item.roman}</span>
             <small>{item.chordNames.join(' → ')}</small>
+            {mode==='piano'&&<em>Teacher demo · chords only · no melody</em>}
           </div>
           <div className="woodland-rating" role="group" aria-label={'Rate '+item.name}>
             {([0,1,2,3] as MusicRating[]).map(value=><button type="button" key={value} className={rating===value?'selected':''} aria-pressed={rating===value} onClick={()=>onRate(item.id,value)}>{value===0?'0':'★'.repeat(value)}</button>)}
