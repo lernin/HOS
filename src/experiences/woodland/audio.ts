@@ -25,14 +25,19 @@ export function forestAudio(){
   for(let ch=0;ch<2;ch++){const data=impulse.getChannelData(ch);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/data.length,3)*.35}
   reverb.buffer=impulse;reverb.connect(wet);wet.connect(music)
   let chordStep=0,progressionStep=0,active=false,next=0,enabled=['sunlit']
-  function note(midi:number,time:number,duration:number,volume:number){
+  const auditionNodes=new Set<OscillatorNode>()
+  function note(midi:number,time:number,duration:number,volume:number,tracking?:Set<OscillatorNode>){
     const osc=context.createOscillator(),gain=context.createGain();osc.type='sine';osc.frequency.value=440*Math.pow(2,(midi-69)/12)
     gain.gain.setValueAtTime(0,time);gain.gain.linearRampToValueAtTime(volume,time+.8);gain.gain.exponentialRampToValueAtTime(.0001,time+duration)
-    osc.connect(gain);gain.connect(music);gain.connect(reverb);osc.start(time);osc.stop(time+duration+.1);osc.onended=()=>{osc.disconnect();gain.disconnect()}
+    osc.connect(gain);gain.connect(music);gain.connect(reverb);tracking?.add(osc);osc.start(time);osc.stop(time+duration+.1);osc.onended=()=>{tracking?.delete(osc);osc.disconnect();gain.disconnect()}
   }
-  function playChord(chord:number[],start:number,duration=11){
-    chord.slice(0,4).forEach((n,i)=>note(n,start+i*.09,duration,.055))
-    ;[chord[4],chord[2]+12,chord[3]+12].forEach((n,i)=>note(n,start+Math.min(2,duration*.25)+i*Math.max(.6,duration*.22),Math.max(1.4,duration*.45),.032))
+  function playChord(chord:number[],start:number,duration=11,tracking?:Set<OscillatorNode>){
+    chord.slice(0,4).forEach((n,i)=>note(n,start+i*.09,duration,.055,tracking))
+    ;[chord[4],chord[2]+12,chord[3]+12].forEach((n,i)=>note(n,start+Math.min(2,duration*.25)+i*Math.max(.6,duration*.22),Math.max(1.4,duration*.45),.032,tracking))
+  }
+  function stopAudition(){
+    for(const osc of auditionNodes){try{osc.stop()}catch{}}
+    auditionNodes.clear()
   }
   const timer=window.setInterval(()=>{if(!active||context.state!=='running'||context.currentTime<next-1)return
     const available=enabled.map(id=>byId.get(id)).filter((item):item is WoodlandProgression=>Boolean(item))
@@ -47,9 +52,11 @@ export function forestAudio(){
   return {
     levels:(n:number,m:number)=>{nature.gain.setTargetAtTime(n,context.currentTime,.25);music.gain.setTargetAtTime(m,context.currentTime,.25)},
     setProgressions:(ids:string[])=>{enabled=ids.filter(id=>byId.has(id));chordStep=0;progressionStep=0;next=0},
-    audition:async(id:string)=>{const progression=byId.get(id);if(!progression)return;await context.resume();const start=context.currentTime+.08;progression.chords.forEach((chord,i)=>playChord(chord,start+i*1.55,2.2))},
-    start:async()=>{active=true;await Promise.all([context.resume(),birds.play()])},
-    pause:()=>{active=false;birds.pause();void context.suspend()},
-    dispose:()=>{active=false;clearInterval(timer);birds.pause();birds.removeAttribute('src');birds.load();void context.close()},
+    audition:async(id:string)=>{const progression=byId.get(id);if(!progression)return;stopAudition();await context.resume();const start=context.currentTime+.08;progression.chords.forEach((chord,i)=>playChord(chord,start+i*1.55,2.2,auditionNodes))},
+    stopAudition,
+    start:async()=>{stopAudition();active=true;await Promise.all([context.resume(),birds.play()])},
+    pause:()=>{active=false;birds.pause();stopAudition();void context.suspend()},
+    pauseAmbient:()=>{active=false;birds.pause();next=0},
+    dispose:()=>{active=false;stopAudition();clearInterval(timer);birds.pause();birds.removeAttribute('src');birds.load();void context.close()},
   }
 }
