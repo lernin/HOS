@@ -25,7 +25,7 @@ export function forestAudio(){
   for(let ch=0;ch<2;ch++){const data=impulse.getChannelData(ch);for(let i=0;i<data.length;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/data.length,3)*.35}
   reverb.buffer=impulse;reverb.connect(wet);wet.connect(music)
   let chordStep=0,progressionStep=0,active=false,next=0,enabled=['sunlit']
-  const auditionNodes=new Set<OscillatorNode>()
+  const auditionNodes=new Set<OscillatorNode>(),ambientNodes=new Set<OscillatorNode>()
   function note(midi:number,time:number,duration:number,volume:number,tracking?:Set<OscillatorNode>){
     const osc=context.createOscillator(),gain=context.createGain();osc.type='sine';osc.frequency.value=440*Math.pow(2,(midi-69)/12)
     gain.gain.setValueAtTime(0,time);gain.gain.linearRampToValueAtTime(volume,time+.8);gain.gain.exponentialRampToValueAtTime(.0001,time+duration)
@@ -35,16 +35,15 @@ export function forestAudio(){
     chord.slice(0,4).forEach((n,i)=>note(n,start+i*.09,duration,.055,tracking))
     ;[chord[4],chord[2]+12,chord[3]+12].forEach((n,i)=>note(n,start+Math.min(2,duration*.25)+i*Math.max(.6,duration*.22),Math.max(1.4,duration*.45),.032,tracking))
   }
-  function stopAudition(){
-    for(const osc of auditionNodes){try{osc.stop()}catch{}}
-    auditionNodes.clear()
-  }
+  function stopNodes(nodes:Set<OscillatorNode>){for(const osc of nodes){try{osc.stop()}catch{}}nodes.clear()}
+  function stopAudition(){stopNodes(auditionNodes)}
+  function stopAmbient(){active=false;birds.pause();stopNodes(ambientNodes);next=0}
   const timer=window.setInterval(()=>{if(!active||context.state!=='running'||context.currentTime<next-1)return
     const available=enabled.map(id=>byId.get(id)).filter((item):item is WoodlandProgression=>Boolean(item))
     if(!available.length){next=context.currentTime+1;return}
     const progression=available[progressionStep%available.length]
     const start=Math.max(context.currentTime+.1,next),chord=progression.chords[chordStep%progression.chords.length]
-    playChord(chord,start)
+    playChord(chord,start,11,ambientNodes)
     chordStep++
     if(chordStep%progression.chords.length===0)progressionStep++
     next=start+12
@@ -55,8 +54,8 @@ export function forestAudio(){
     audition:async(id:string)=>{const progression=byId.get(id);if(!progression)return;stopAudition();await context.resume();const start=context.currentTime+.08;progression.chords.forEach((chord,i)=>playChord(chord,start+i*1.55,2.2,auditionNodes))},
     stopAudition,
     start:async()=>{stopAudition();active=true;await Promise.all([context.resume(),birds.play()])},
-    pause:()=>{active=false;birds.pause();stopAudition();void context.suspend()},
-    pauseAmbient:()=>{active=false;birds.pause();next=0},
-    dispose:()=>{active=false;stopAudition();clearInterval(timer);birds.pause();birds.removeAttribute('src');birds.load();void context.close()},
+    pause:()=>{stopAmbient();stopAudition();void context.suspend()},
+    pauseAmbient:stopAmbient,
+    dispose:()=>{stopAmbient();stopAudition();clearInterval(timer);birds.removeAttribute('src');birds.load();void context.close()},
   }
 }
