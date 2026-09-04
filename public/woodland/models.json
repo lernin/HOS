@@ -1,0 +1,66 @@
+[
+  {
+    "name": "tree",
+    "source": "https://poly.pizza/m/QVOop92WmG",
+    "url": "https://static.poly.pizza/2c5938cb-4005-4958-829b-e191be39b3b9.glb.br",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "bytes": 1105284
+  },
+  {
+    "name": "tree-b",
+    "source": "https://poly.pizza/m/YWjGDJ9F7g",
+    "url": "https://static.poly.pizza/856b5db4-21c1-406b-a800-d96843d1ec69.glb.br",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "bytes": 1059632
+  },
+  {
+    "name": "pine",
+    "source": "https://poly.pizza/m/igSu0cPoBz",
+    "url": "https://static.poly.pizza/712aaefa-ae7f-4cb3-8834-a1b8860df3b2.glb.br",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "bytes": 901764
+  },
+  {
+    "name": "bush",
+    "source": "https://poly.pizza/m/U1ymDy8tbY",
+    "url": "https://static.poly.pizza/af83abca-9b41-4229-9652-e336a5f5eaba.glb.br",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "bytes": 396428
+  },
+  {
+    "name": "fern",
+    "source": "https://poly.pizza/m/jqcanvH7D6",
+    "url": "https://static.poly.pizza/f94d836f-4eb4-4db0-aa53-3ecdddffa527.glb.br",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "bytes": 296328
+  },
+  {
+    "name": "grass",
+    "source": "https://poly.pizza/m/vUJjrRsFp4",
+    "url": "https://static.poly.pizza/0a84d74b-eb09-4794-ad58-dd10eed6b11e.glb.br",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "bytes": 54912
+  },
+  {
+    "name": "rock",
+    "source": "https://poly.pizza/m/KZdEP3uUpa",
+    "url": "https://static.poly.pizza/aaf0aaa7-c244-430a-908b-2ac57567d81c.glb.br",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "bytes": 502048
+  },
+  {
+    "name": "clover",
+    "source": "https://poly.pizza/m/IQ9NVyVpUw",
+    "url": "https://static.poly.pizza/b03d60f5-bcfa-487b-9064-65f3b0f8ad6b.glb.br",
+    "author": "Quaternius",
+    "license": "CC0-1.0",
+    "bytes": 298040
+  }
+]
