@@ -46,6 +46,6 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
       for(const b of batches){const p=b.boundingSphere!.center;b.visible=Math.hypot(p.x-position.x,p.z-position.z)<145+b.boundingSphere!.radius}
       renderer.render(scene,camera);frame=requestAnimationFrame(render)
     };frame=requestAnimationFrame(render)
-    return {dispose,getPosition:()=>({...position}),reset:()=>{position={x:spawn.x,z:spawn.z};input.yaw=spawn.yaw;input.pitch=0}}
+    return {dispose,getPosition:()=>({...position}),setPosition:(next:{x:number;z:number})=>{position={x:next.x,z:next.z}},reset:()=>{position={x:spawn.x,z:spawn.z};input.yaw=spawn.yaw;input.pitch=0}}
   }catch(error){dispose();throw error}
 }
