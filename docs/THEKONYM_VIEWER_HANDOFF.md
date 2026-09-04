@@ -6,7 +6,7 @@ The Lab password opens every Lab entry, including the first-entry Thekonym viewe
 
 Ashley approved immediate implementation and deployment after image review. The viewer now uses compact ivory/forest literary styling with no Greek wallpaper or visible Greek-meaning label. Canonical names are green, other names gray. Individual meaning/content headings use their own confidence: 0/1/2 show three/two/one fine red crosses; 3 removes crosses and turns the heading green. Missing or unassessed content stays distinct. Draft body text is muted; confirmed body text uses normal ink. Actual stored scores are unchanged.
 
-Parent/family tags sit upper left, related links upper right, and children/fields along the lower rule. Existing mapped field concepts are tappable; unmapped schema columns remain plain tags. Relationships are read from existing records and the computed `has_fields` inventory, never fabricated. Detailed implementation and notes remain below the reading content.
+Parent/family tags sit upper left and related links remain in their relationship sections. The viewer no longer stores or displays duplicate `has_fields` / `is_field_of` metadata. When schema inspection is needed, the assistant uses the existing read-only schema inspection RPC directly. Detailed implementation and notes remain below the reading content.
 
 A–Z opens an alphabet and filtered catalogue. Search still covers current/former names, meaning, and definition. PROCEDIA returns to the previous successfully read term. The last and previous term IDs are remembered on this device; reopening resumes the last term unless a specific term is linked. Small freshness status sits upper right, outside the reading content. Numeric scores and all raw fields remain in fresh copies.
 
@@ -20,7 +20,7 @@ Try: enter the normal Lab password; open the viewer; A–Z → T → Techmonym; 
 
 ## Interactive review — 2026-09-03
 
-A–Z now opens a full-screen native dialog. Back/forward buttons traverse successful reads. Parent stays upper-left; other relationships remain in the Relationships section. Only field concepts marked as tables appear along the identity's lower rule; raw columns remain in Has fields. Offline refresh failures no longer interrupt a displayed record: the dot changes color and the time since last successful read keeps increasing.
+A–Z now opens a full-screen native dialog. Back/forward buttons traverse successful reads. Parent stays upper-left; other relationships remain in the Relationships section. Obsolete `Has fields` / `Field of` display elements have been removed; schema details are inspected on demand through the read-only schema RPC instead of duplicated in Thekonym records. Offline refresh failures no longer interrupt a displayed record: the dot changes color and the time since last successful read keeps increasing.
 
 Double-tap a confidence box to unlock it, tap to cycle 3→2→1→0→3, then Lock & save (or Cancel). Double-tap Definition/Technical Definition/Examples, or use their small discussion button, to open a field-specific AI panel. Root meaning and notes have discussion buttons. Voice is transcribed into the composer for review before Send. AI proposals require Apply change; text changes do not implicitly change confidence.
 

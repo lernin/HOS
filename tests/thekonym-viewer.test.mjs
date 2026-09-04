@@ -44,10 +44,10 @@ test('search supports former names, meaning, and exact-term ranking', () => {
 
 test('priority leaves missing inputs visible and preserves recorded zero', () => {
   assert.equal(viewer.calculatedPriority(makeRecord({})), 0)
-  assert.equal(viewer.calculatedPriority(makeRecord({ target_phase: 2, is_table: true, is_field_of: ['public.example.field'], application_priority: 3 })), 6.5)
+  assert.equal(viewer.calculatedPriority(makeRecord({ target_phase: 2, is_table: true, application_priority: 3 })), 4)
   assert.match(viewer.priorityExplanation(makeRecord({})), /0 · Missing target phase, table assessment, application priority/)
-  assert.equal(viewer.priorityExplanation(makeRecord({ target_phase: 1, is_table: false, is_field_of: [], application_priority: 0 })), '((1 × 1) + 0) ÷ 1')
-  assert.equal(viewer.priorityExplanation(makeRecord({ target_phase: 2, is_table: true, is_field_of: ['public.example.field'], application_priority: 3 })), '((5 × 2) + 3) ÷ 2')
+  assert.equal(viewer.priorityExplanation(makeRecord({ target_phase: 1, is_table: false, application_priority: 0 })), '(1 + 0) ÷ 1')
+  assert.equal(viewer.priorityExplanation(makeRecord({ target_phase: 2, is_table: true, application_priority: 3 })), '(5 + 3) ÷ 2')
 })
 
 test('copy reads again and returns changed data, with the entire record', async () => {
@@ -100,7 +100,7 @@ test('numbered stored examples are separated without rewriting their content', (
   assert.deepEqual(viewer.examples('Examples: (1) a word; (2) a sentence; (3) an essay.'), ['a word', 'a sentence', 'an essay.'])
 })
 
-test('live requests bypass the HTTP cache and select the computed field', async () => {
+test('live requests bypass the HTTP cache', async () => {
   const originalFetch = globalThis.fetch
   const calls = []
   globalThis.fetch = async (input, init) => {
