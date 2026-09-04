@@ -1,20 +1,5 @@
 export type Confidence = 0 | 1 | 2 | 3 | null
 
-export type FieldDescription = {
-  name: string
-  type: string
-  nullable: boolean
-  generated: boolean
-  path: string
-  thekonyms: { id: string; term: string }[]
-}
-
-export type HasFields = {
-  table: string | null
-  matched_by: string | null
-  fields: FieldDescription[]
-}
-
 export type CatalogueTerm = {
   id: string
   term: string
@@ -43,7 +28,6 @@ export type ThekonymRecord = CatalogueTerm & {
   target_phase: number | null
   application_priority: number | null
   is_table: boolean | null
-  is_field_of: string[] | null
   is_emergent: boolean | null
   is_derivable: boolean | null
   is_physonym: boolean | null
@@ -72,7 +56,6 @@ export type ThekonymRecord = CatalogueTerm & {
   google_docs_review_note: string | null
   created_at: string | null
   updated_at: string | null
-  has_fields?: HasFields
   [key: string]: unknown
 }
 
@@ -130,7 +113,7 @@ export function searchCatalogue(terms: CatalogueTerm[], query: string): Catalogu
 
 export function calculatedPriority(t: ThekonymRecord): number {
   if (t.target_phase == null || t.target_phase <= 0 || t.is_table == null || t.application_priority == null) return 0
-  return (((t.is_table ? 5 : 1) * (t.is_field_of?.length ? 2 : 1)) + t.application_priority) / t.target_phase
+  return ((t.is_table ? 5 : 1) + t.application_priority) / t.target_phase
 }
 
 export function checkedAgo(value: string | null, now: number): string {
@@ -144,7 +127,7 @@ export function priorityExplanation(t: ThekonymRecord): string {
     const missing = [t.target_phase == null && 'target phase', t.is_table == null && 'table assessment', t.application_priority == null && 'application priority'].filter(Boolean)
     return `0 · Missing ${missing.join(', ')}.`
   }
-  return `((${t.is_table ? 5 : 1} × ${t.is_field_of?.length ? 2 : 1}) + ${t.application_priority}) ÷ ${t.target_phase}`
+  return `(${t.is_table ? 5 : 1} + ${t.application_priority}) ÷ ${t.target_phase}`
 }
 
 export function examples(value: string | null): string[] {
@@ -179,7 +162,7 @@ export function copyText(t: ThekonymRecord, capturedAt: string, mode: ViewerSour
     `Combined confidence: ${score(t.confidence_score)} / 27`,
     `Priority: ${calculatedPriority(t)}. ${priorityExplanation(t)}`,
     '',
-    'Complete record (stored values preserved; has_fields is derived):',
+    'Complete record (stored values preserved):',
     JSON.stringify(t, null, 2),
     '',
     'This is a timestamped readout. Re-read the database before applying changes; preserve existing values and do not infer missing confidence scores.',
