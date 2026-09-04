@@ -2,10 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
-const source=readFileSync(new URL('../src/experiences/woodland/world.ts',import.meta.url),'utf8')
-const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
-const w=await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
+
+async function importTs(path){
+ const source=readFileSync(new URL(path,import.meta.url),'utf8')
+ const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
+ return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
+}
+
+const w=await importTs('../src/experiences/woodland/world.ts')
+const music=await importTs('../src/experiences/woodland/audio.ts')
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z)
+
 test('large main circuit is closed, with three rejoining routes',()=>{
  assert.ok(distance(w.mainLoop[0],w.mainLoop.at(-1))<1e-9)
  const length=w.mainLoop.slice(1).reduce((n,p,i)=>n+distance(p,w.mainLoop[i]),0)
@@ -28,4 +35,17 @@ test('movement normalizes diagonal speed and respects collision and boundaries',
 test('all bundled GLBs have valid container headers and licensed provenance',()=>{
  const models=JSON.parse(readFileSync(new URL('../public/woodland/models.json',import.meta.url),'utf8'))
  for(const m of models){const b=readFileSync(new URL(`../public/woodland/${m.name}.glb`,import.meta.url));assert.equal(b.toString('ascii',0,4),'glTF');assert.equal(b.readUInt32LE(4),2);assert.equal(b.readUInt32LE(8),b.length);assert.match(m.license,/CC0/)}
+})
+test('harmony lab exposes complete jazz and wide voicings',()=>{
+ assert.ok(music.woodlandProgressions.length>=6)
+ assert.equal(new Set(music.woodlandProgressions.map(p=>p.id)).size,music.woodlandProgressions.length)
+ for(const progression of music.woodlandProgressions){
+   assert.ok(progression.roman.length>0)
+   assert.ok(progression.chordNames.length>=3)
+   assert.equal(progression.jazz.length,progression.chordNames.length)
+   assert.equal(progression.orchestral.length,progression.chordNames.length)
+   assert.ok(progression.emojis.length>0)
+   for(const chord of progression.jazz)assert.ok(chord.length>=5)
+   for(const chord of progression.orchestral)assert.ok(chord.length>=6)
+ }
 })
