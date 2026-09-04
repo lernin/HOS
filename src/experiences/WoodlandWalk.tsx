@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react'
 import {createWoodland,type Input} from './woodland/scene'
 import {spawn} from './woodland/world'
-import {forestAudio,woodlandProgressions,type MusicRating,type WoodlandInstrument,type WoodlandVoicing} from './woodland/audio'
+import {forestAudio,woodlandProgressions,type MusicRating,type WoodlandSoundMode} from './woodland/audio'
 import {WoodlandMusicPalette,rankedMusic,type MusicRatings} from './woodland/WoodlandMusicPalette'
 import './woodland/woodland.css'
 
@@ -41,7 +41,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
   const auditionTimer=useRef<number|null>(null)
   const [loaded,setLoaded]=useState(0),[error,setError]=useState(''),[started,setStarted]=useState(false),[attempt,setAttempt]=useState(0),[soundError,setSoundError]=useState(false)
   const [nature,setNature]=useState(.55),[music,setMusic]=useState(.35)
-  const [instrument,setInstrument]=useState<WoodlandInstrument>('piano'),[voicing,setVoicing]=useState<WoodlandVoicing>('jazz'),[melody,setMelody]=useState(false)
+  const [soundMode,setSoundMode]=useState<WoodlandSoundMode>('piano')
   const [lookGain,setLookGain]=useState(1),[cameraMass,setCameraMass]=useState(.28),[flickGlide,setFlickGlide]=useState(3)
   const [activeAudition,setActiveAudition]=useState<string|null>(null)
   const [musicRatings,setMusicRatings]=useState<MusicRatings>(readMusicRatings)
@@ -57,7 +57,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
   },[attempt])
   useEffect(()=>()=>{if(auditionTimer.current)window.clearTimeout(auditionTimer.current);audio.current?.dispose()},[])
   useEffect(()=>{audio.current?.levels(nature,music)},[nature,music])
-  useEffect(()=>{audio.current?.setSound(instrument,voicing,melody);clearAudition()},[instrument,voicing,melody])
+  useEffect(()=>{audio.current?.setMode(soundMode);clearAudition()},[soundMode])
   useEffect(()=>{localStorage.setItem(MUSIC_RATINGS_KEY,JSON.stringify(musicRatings));audio.current?.setProgressions(enabledProgressions)},[musicRatings,enabledProgressions])
 
   useEffect(()=>{
@@ -103,7 +103,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
   },[])
 
   function ensureAudio(){
-    if(!audio.current){audio.current=forestAudio();audio.current.levels(nature,music);audio.current.setProgressions(enabledProgressions);audio.current.setSound(instrument,voicing,melody)}
+    if(!audio.current){audio.current=forestAudio();audio.current.levels(nature,music);audio.current.setProgressions(enabledProgressions);audio.current.setMode(soundMode)}
     return audio.current
   }
   function clearAudition(){
@@ -144,7 +144,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
       <p className="woodland-settings-note">The walking soundscape pauses here so you can tune one thing at a time.</p>
       <label>Forest recording <input type="range" min="0" max="1" step=".01" value={nature} onChange={e=>setNature(Number(e.target.value))}/></label>
       <label>Gentle music <input type="range" min="0" max="1" step=".01" value={music} onChange={e=>setMusic(Number(e.target.value))}/></label>
-      <WoodlandMusicPalette ratings={musicRatings} activeId={activeAudition} instrument={instrument} voicing={voicing} melody={melody} onRate={rateMusic} onToggle={toggleAudition} onInstrument={setInstrument} onVoicing={setVoicing} onMelody={setMelody}/>
+      <WoodlandMusicPalette ratings={musicRatings} activeId={activeAudition} mode={soundMode} onRate={rateMusic} onToggle={toggleAudition} onMode={setSoundMode}/>
       <section className="woodland-camera">
         <h3>Look feel</h3>
         <p>Horizontal turning is free. Vertical looking gradually resists near the sky and ground so the useful horizon band gets most of your finger travel.</p>
