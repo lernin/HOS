@@ -1,6 +1,5 @@
 export type MusicRating = 0|1|2|3
-export type WoodlandInstrument = 'piano'|'synth'
-export type WoodlandVoicing = 'jazz'|'orchestral'
+export type WoodlandSoundMode = 'piano'|'game'
 export type WoodlandProgression = {
   id:string
   name:string
@@ -71,14 +70,14 @@ export function forestAudio(){
   reverb.buffer=impulse;reverb.connect(wet);wet.connect(music)
 
   let chordStep=0,progressionStep=0,active=false,next=0,enabled=['two-five-one']
-  let instrument:WoodlandInstrument='piano',voicing:WoodlandVoicing='jazz',melodyOn=false
+  let mode:WoodlandSoundMode='piano'
   const auditionNodes=new Set<OscillatorNode>(),ambientNodes=new Set<OscillatorNode>()
 
   function hz(midi:number){return 440*Math.pow(2,(midi-69)/12)}
-  function voice(midi:number,time:number,duration:number,volume:number,tracking?:Set<OscillatorNode>){
+  function voice(midi:number,time:number,duration:number,volume:number,tracking?:Set<OscillatorNode>,teacher=false){
     const gain=context.createGain()
     const oscillators:OscillatorNode[]=[]
-    if(instrument==='piano'){
+    if(teacher){
       const fundamental=context.createOscillator(),upper=context.createOscillator()
       fundamental.type='triangle';upper.type='sine'
       fundamental.frequency.value=hz(midi);upper.frequency.value=hz(midi)*2.01
@@ -95,29 +94,29 @@ export function forestAudio(){
       gain.gain.setValueAtTime(.0001,time);gain.gain.linearRampToValueAtTime(volume,time+.45);gain.gain.exponentialRampToValueAtTime(.0001,time+duration)
       a.connect(gain);b.connect(gain);oscillators.push(a,b)
     }
-    gain.connect(music);gain.connect(reverb)
+    gain.connect(music);if(!teacher)gain.connect(reverb)
     for(const osc of oscillators){tracking?.add(osc);osc.start(time);osc.stop(time+duration+.12);osc.onended=()=>{tracking?.delete(osc);osc.disconnect()}}
   }
 
-  function playChord(chord:number[],start:number,duration:number,tracking?:Set<OscillatorNode>){
-    chord.forEach((n,i)=>voice(n,start+i*(instrument==='piano'?.035:.08),duration,instrument==='piano'?.042:.035,tracking))
+  function playChord(chord:number[],start:number,duration:number,tracking?:Set<OscillatorNode>,teacher=false){
+    chord.forEach(n=>voice(n,start,duration,teacher?.05:.034,tracking,teacher))
   }
   function playMelody(notes:number[],start:number,total:number,tracking?:Set<OscillatorNode>){
-    if(!melodyOn)return
+    if(mode!=='game')return
     const step=total/notes.length
-    notes.forEach((n,i)=>voice(n,start+i*step,Math.max(.45,step*.78),instrument==='piano'?.026:.019,tracking))
+    notes.forEach((n,i)=>voice(n,start+i*step,Math.max(.45,step*.78),.018,tracking,false))
   }
   function stopNodes(nodes:Set<OscillatorNode>){for(const osc of nodes){try{osc.stop()}catch{}}nodes.clear()}
   function stopAudition(){stopNodes(auditionNodes)}
   function stopAmbient(){active=false;birds.pause();stopNodes(ambientNodes);next=0}
-  function selectedChords(p:WoodlandProgression){return voicing==='jazz'?p.jazz:p.orchestral}
+  function selectedChords(p:WoodlandProgression){return mode==='piano'?p.jazz:p.orchestral}
 
   const timer=window.setInterval(()=>{if(!active||context.state!=='running'||context.currentTime<next-1)return
     const available=enabled.map(id=>byId.get(id)).filter((item):item is WoodlandProgression=>Boolean(item))
     if(!available.length){next=context.currentTime+1;return}
     const progression=available[progressionStep%available.length],chords=selectedChords(progression)
     const start=Math.max(context.currentTime+.1,next),chord=chords[chordStep%chords.length]
-    playChord(chord,start,9.8,ambientNodes)
+    playChord(chord,start,9.8,ambientNodes,false)
     if(chordStep%chords.length===0)playMelody(progression.melody,start,Math.max(8,chords.length*9),ambientNodes)
     chordStep++
     if(chordStep%chords.length===0)progressionStep++
@@ -127,8 +126,8 @@ export function forestAudio(){
   return {
     levels:(n:number,m:number)=>{nature.gain.setTargetAtTime(n,context.currentTime,.25);music.gain.setTargetAtTime(m,context.currentTime,.25)},
     setProgressions:(ids:string[])=>{enabled=ids.filter(id=>byId.has(id));chordStep=0;progressionStep=0;next=0},
-    setSound:(nextInstrument:WoodlandInstrument,nextVoicing:WoodlandVoicing,nextMelody:boolean)=>{instrument=nextInstrument;voicing=nextVoicing;melodyOn=nextMelody},
-    audition:async(id:string)=>{const progression=byId.get(id);if(!progression)return;stopAudition();await context.resume();const chords=selectedChords(progression),step=1.8,start=context.currentTime+.06;chords.forEach((chord,i)=>playChord(chord,start+i*step,1.65,auditionNodes));playMelody(progression.melody,start,chords.length*step,auditionNodes)},
+    setMode:(nextMode:WoodlandSoundMode)=>{mode=nextMode},
+    audition:async(id:string)=>{const progression=byId.get(id);if(!progression)return;stopAudition();await context.resume();const chords=selectedChords(progression),teacher=mode==='piano',step=teacher?1.55:1.8,start=context.currentTime+.06;chords.forEach((chord,i)=>playChord(chord,start+i*step,teacher?1.3:1.65,auditionNodes,teacher));playMelody(progression.melody,start,chords.length*step,auditionNodes)},
     stopAudition,
     start:async()=>{stopAudition();active=true;await Promise.all([context.resume(),birds.play()])},
     pause:()=>{stopAmbient();stopAudition();void context.suspend()},
