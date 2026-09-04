@@ -36,12 +36,16 @@ test('all bundled GLBs have valid container headers and licensed provenance',()=
  const models=JSON.parse(readFileSync(new URL('../public/woodland/models.json',import.meta.url),'utf8'))
  for(const m of models){const b=readFileSync(new URL(`../public/woodland/${m.name}.glb`,import.meta.url));assert.equal(b.toString('ascii',0,4),'glTF');assert.equal(b.readUInt32LE(4),2);assert.equal(b.readUInt32LE(8),b.length);assert.match(m.license,/CC0/)}
 })
-test('music palette offers several complete, uniquely named progressions',()=>{
- assert.ok(music.woodlandProgressions.length>=8)
+test('harmony lab exposes complete jazz and wide voicings',()=>{
+ assert.ok(music.woodlandProgressions.length>=6)
  assert.equal(new Set(music.woodlandProgressions.map(p=>p.id)).size,music.woodlandProgressions.length)
  for(const progression of music.woodlandProgressions){
-   assert.equal(progression.chords.length,4)
+   assert.ok(progression.roman.length>0)
+   assert.ok(progression.chordNames.length>=3)
+   assert.equal(progression.jazz.length,progression.chordNames.length)
+   assert.equal(progression.orchestral.length,progression.chordNames.length)
    assert.ok(progression.emojis.length>0)
-   for(const chord of progression.chords)assert.ok(chord.length>=5)
+   for(const chord of progression.jazz)assert.ok(chord.length>=5)
+   for(const chord of progression.orchestral)assert.ok(chord.length>=6)
  }
 })
