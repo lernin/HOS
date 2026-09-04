@@ -9,6 +9,7 @@
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
+    { "source": "/water-garden", "destination": "/" },
     { "source": "/thekonym-viewer", "destination": "/" },
     { "source": "/thekonym", "destination": "/" },
     { "source": "/world-3d", "destination": "/" },

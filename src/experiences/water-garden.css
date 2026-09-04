@@ -1,0 +1,78 @@
+.wg { position: fixed; inset: 0; height: 100dvh; overflow: hidden; background: #84bcae; color: #183e36; font-family: 'Trebuchet MS', ui-sans-serif, system-ui, sans-serif; isolation: isolate; }
+.wg *, .wg *::before, .wg *::after { box-sizing: border-box; }
+.wg button, .wg input { font: inherit; }
+.wg button { cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.wg button:focus-visible, .wg input:focus-visible { outline: 3px solid #c86c32; outline-offset: 4px; }
+.wg button:disabled { cursor: default; opacity: .6; }
+.wg svg { width: 22px; height: 22px; flex-shrink: 0; }
+.wg-scene, .wg-scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.wg-vignette { pointer-events: none; position: absolute; inset: 0; background: linear-gradient(180deg, #163f3d25, transparent 22%, transparent 74%, #153c3730); box-shadow: inset 0 0 140px #123b3220; }
+.wg-header { position: absolute; top: max(18px, env(safe-area-inset-top)); left: max(22px, env(safe-area-inset-left)); right: max(22px, env(safe-area-inset-right)); display: flex; justify-content: space-between; gap: 20px; align-items: center; pointer-events: none; }
+.wg-brand { display: flex; gap: 13px; align-items: center; color: #143e35; text-shadow: 0 1px 10px #e6f3cb55; }
+.wg-brand span { font-size: 11px; font-weight: 700; letter-spacing: .15em; }
+.wg-brand h1 { font: 600 25px/1.1 Georgia, serif; margin: 3px 0 0; }
+.wg-icon { display: grid; place-items: center; width: 45px; height: 45px; background: #f4f5dded; border: 1px solid #fff7; border-radius: 50%; color: #295c4d; box-shadow: 0 3px 15px #163c2910; pointer-events: auto; }
+.wg-icon:hover { background: #fffbea; }
+.wg-tools { display: flex; gap: 8px; pointer-events: auto; }
+.wg-mission { position: absolute; top: 95px; left: max(24px, env(safe-area-inset-left)); width: 263px; border-radius: 18px; padding: 18px 19px 12px; background: #fcf9eaf0; border: 1px solid #fff8; box-shadow: 0 10px 35px #23402e16; }
+.wg-mission-heading { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; letter-spacing: .09em; color: #597166; }
+.wg-progress { display: flex; gap: 5px; margin: 11px 0 16px; }
+.wg-progress i { display: block; height: 4px; border-radius: 3px; background: #dce3cc; flex: 1; }
+.wg-progress i.complete { background: #448b65; }
+.wg-mission h2 { font: 600 22px/1.12 Georgia, serif; margin: 0 0 9px; }
+.wg-mission p { font-size: 16px; line-height: 1.45; margin: 0 0 10px; }
+.wg-mission-actions { display: flex; gap: 14px; margin-bottom: 10px; }
+.wg-mission-actions button, .wg-listen { display: flex; align-items: center; gap: 6px; border: 0; padding: 6px 0; background: transparent; color: #37634f; font-size: 14px; min-height: 34px; }
+.wg-mission-actions svg, .wg-listen svg { width: 18px; height: 18px; }
+.wg-mission-actions button[aria-pressed=true] { text-decoration: underline; }
+.wg-guide { display: flex; align-items: center; justify-content: space-between; width: 100%; border: 0; border-top: 1px solid #294c3024; padding: 11px 0 2px; color: #285d46; background: transparent; min-height: 39px; font-size: 14px; font-weight: 700; }
+.wg-guide span { font-size: 21px; }
+.wg-korean { color: #55786b; font-size: 14px !important; line-height: 1.55 !important; }
+.wg-bottom { position: absolute; bottom: max(22px, env(safe-area-inset-bottom)); left: max(24px, env(safe-area-inset-left)); right: max(24px, env(safe-area-inset-right)); display: flex; justify-content: space-between; align-items: end; gap: 16px; pointer-events: none; }
+.wg-direction { display: grid; grid-template-columns: repeat(3, 43px); grid-template-rows: repeat(2, 43px); gap: 3px; pointer-events: auto; }
+.wg-direction button { border: 1px solid #f8ffda55; border-radius: 13px; background: #f8f7e5db; color: #2c5b47; font-size: 23px; user-select: none; touch-action: none; }
+.wg-direction button:active { background: #c9d7aa; }
+.wg-direction .up { grid-column: 2; }.wg-direction .left { grid-column: 1; grid-row: 2; }.wg-direction .down { grid-column: 2; grid-row: 2; }.wg-direction .right { grid-column: 3; grid-row: 2; }
+.wg-walk-hint { padding: 9px 18px; border-radius: 30px; background: #f9f5e4bd; text-align: center; font-size: 14px; line-height: 1.5; margin: 0 0 5px; }
+.wg-walk-hint span { display: block; font-size: 11px; color: #526e60; }
+.wg-action-wrap { display: flex; align-items: end; flex-direction: column; gap: 10px; pointer-events: auto; }
+.wg-interact { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-width: 170px; min-height: 54px; border: 1px solid #f0ebc8; border-radius: 30px; background: #fff6db; color: #244d3d; padding: 13px 22px; font-size: 16px; font-weight: 700; box-shadow: 0 5px 20px #20382c20; }
+.wg-interact:disabled { opacity: .75; }
+.wg-inventory { display: flex; align-items: center; gap: 7px; border-radius: 20px; background: #f8f4dfd9; padding: 7px 13px; font-size: 13px; }
+.wg-inventory svg { width: 16px; height: 16px; }
+.wg-toast { position: absolute; bottom: 125px; left: 50%; transform: translateX(-50%) translateY(8px); max-width: min(460px, 70vw); padding: 12px 20px; background: #214f41f2; color: #fff8e6; border-radius: 12px; box-shadow: 0 5px 22px #214f4130; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; text-align: center; font-size: 15px; line-height: 1.45; }
+.wg-toast.visible { opacity: 1; transform: translateX(-50%); }
+.wg-dialog { width: min(450px, calc(100vw - 32px)); max-height: calc(100dvh - 30px); overflow-y: auto; overscroll-behavior: contain; margin: auto; border: 1px solid #fff9; padding: 30px; border-radius: 25px; background: #fffbed; color: #214c3f; box-shadow: 0 20px 90px #113a3b55; }
+.wg-dialog::backdrop { background: #173b3a45; backdrop-filter: blur(3px); }
+.wg-dialog h2 { font: 500 29px/1.2 Georgia, serif; margin: 12px 0 16px; }
+.wg-dialog p { font-size: 17px; line-height: 1.6; color: #527262; }
+.wg-dialog-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.wg-eyebrow { font: 700 11px/1.4 'Trebuchet MS', sans-serif; letter-spacing: .13em; color: #71856a; }
+.wg-close { border: 0; background: #e6ebd9; color: #315c46; border-radius: 50%; min-width: 36px; height: 36px; font-size: 23px; }
+.wg-primary { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 52px; width: 100%; border: 0; padding: 13px 20px; border-radius: 12px; background: #295f49; color: #fff6dc; font-weight: 700 !important; font-size: 16px !important; }
+.wg-primary:hover { background: #377557; }
+.wg-quiet { background: transparent; border: 0; color: #546d58; display: block; min-height: 42px; margin: 5px auto 0; font-size: 14px !important; }
+.wg-intro { text-align: center; width: min(408px, calc(100vw - 32px)); padding: 30px 32px 22px; }
+.wg-intro h2 { font-size: 42px; letter-spacing: -.045em; line-height: 1.05; margin: 17px 0; }
+.wg-intro p { margin: 0 0 22px; }
+.wg-intro small { display: block; font-size: 11px; color: #71856a; margin-top: 8px; }
+.wg-seal { width: 54px; height: 54px; display: grid; place-items: center; margin: 0 auto 17px; border: 1px solid #b9c4a6; border-radius: 50%; }
+.wg-seal svg { width: 27px; height: 27px; }
+.wg-intro-notes { border-top: 1px solid #d9dfc7; border-bottom: 1px solid #d9dfc7; padding: 13px 0; margin: 0 0 20px; display: flex; gap: 10px; justify-content: space-between; font-size: 12px; color: #698066; }
+.wg-intro-notes span { flex: 1; }
+.wg-setting { display: block; padding: 13px 0; font-size: 16px; }.wg-setting output { float: right; color: #667c65; font-size: 14px; }.wg-setting input { display: block; width: 100%; margin: 14px 0 0; accent-color: #3c7856; }
+.wg-check { display: flex; gap: 12px; align-items: center; min-height: 45px; font-size: 16px; }.wg-check input { accent-color: #3c7856; width: 19px; height: 19px; }
+.wg-dialog .wg-small { font-size: 14px; line-height: 1.5; }
+.wg-choices { display: flex; flex-direction: column; gap: 9px; }.wg-choices button { display: flex; justify-content: space-between; align-items: center; gap: 13px; text-align: left; padding: 15px; min-height: 54px; border: 1px solid #d5dec3; background: #eff2e3; color: #244f3b; border-radius: 12px; font-size: 17px; line-height: 1.4; }.wg-choices button:hover { background: #e1ebd1; border-color: #96b181; }
+.wg-dialog .wg-feedback { min-height: 20px; font-size: 14px; color: #876536; margin: 12px 0 0; }
+.wg-rotate { display: none; }
+@media (max-height: 600px) and (orientation: landscape) {
+  .wg-header { top: max(10px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left)); right: max(14px, env(safe-area-inset-right)); }.wg-brand h1 { font-size: 20px; }.wg-brand span { font-size: 9px; }.wg-icon { width: 38px; height: 38px; }.wg-mission { top: 67px; left: max(15px, env(safe-area-inset-left)); padding: 12px 14px 8px; width: 217px; }.wg-mission h2 { font-size: 19px; margin-bottom: 6px; }.wg-mission p { font-size: 14px; margin-bottom: 5px; }.wg-mission-heading { font-size: 9px; }.wg-progress { margin: 8px 0 9px; }.wg-mission-actions { margin: 0; }.wg-guide { padding-top: 6px; }.wg-bottom { bottom: max(12px, env(safe-area-inset-bottom)); left: max(16px, env(safe-area-inset-left)); right: max(16px, env(safe-area-inset-right)); }.wg-direction { grid-template-columns: repeat(3, 36px); grid-template-rows: repeat(2, 36px); }.wg-interact { min-height: 46px; }.wg-toast { bottom: 93px; }.wg-dialog { padding: 20px 25px; max-height: calc(100dvh - 20px); }.wg-intro { text-align: left; width: min(560px, calc(100vw - 40px)); }.wg-intro h2 { font-size: 32px; margin: 8px 0; }.wg-intro h2 br { display: none; }.wg-seal { float: right; width: 40px; height: 40px; margin: 0; }.wg-intro p { margin-bottom: 10px; font-size: 16px; }.wg-intro p br { display: none; }.wg-intro-notes { padding: 8px 0; margin-bottom: 12px; }.wg-intro small { text-align: center; margin-top: 0; }.wg-dialog h2 { font-size: 25px; }.wg-choices button { padding: 10px 13px; min-height: 45px; font-size: 16px; }.wg-dialog .wg-small { margin: 8px 0; }.wg-dialog .wg-feedback { margin: 8px 0 0; }
+}
+@media (orientation: portrait) {
+  .wg-header { top: max(13px, env(safe-area-inset-top)); left: 14px; right: 14px; }.wg-brand { gap: 8px; }.wg-brand h1 { font-size: 21px; }.wg-brand span { font-size: 9px; }.wg-icon { width: 38px; height: 38px; }.wg-fullscreen { display: none; }.wg-tools { gap: 6px; }.wg-mission { top: 75px; left: 14px; width: 225px; padding: 13px 16px 10px; }.wg-mission h2 { font-size: 20px; }.wg-mission p { font-size: 15px; }.wg-progress { margin: 9px 0 12px; }.wg-rotate { display: block; position: absolute; bottom: 137px; left: 50%; transform: translateX(-50%); white-space: nowrap; color: #214c3f; background: #fffbdfc9; padding: 7px 13px; border-radius: 20px; font-size: 12px; }.wg-walk-hint { display: none; }.wg-bottom { left: 14px; right: 14px; }.wg-direction { grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(2, 40px); }.wg-interact { min-width: 140px; max-width: 185px; padding: 11px 16px; font-size: 15px; }.wg-toast { bottom: 175px; max-width: 85vw; width: 320px; }
+}
+@media (max-height: 600px) and (orientation: landscape) {
+  .wg-mission { max-height: calc(100dvh - 182px); overflow-y: auto; overscroll-behavior: contain; }
+}
+@media (prefers-reduced-motion: reduce) { .wg * { transition: none !important; } }
