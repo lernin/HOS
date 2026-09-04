@@ -36,7 +36,8 @@ export function forestAudio(){
   }
   const timer=window.setInterval(()=>{if(!active||context.state!=='running'||context.currentTime<next-1)return
     const available=enabled.map(id=>byId.get(id)).filter((item):item is WoodlandProgression=>Boolean(item))
-    const progression=available[progressionStep%Math.max(1,available.length)]||woodlandProgressions[0]
+    if(!available.length){next=context.currentTime+1;return}
+    const progression=available[progressionStep%available.length]
     const start=Math.max(context.currentTime+.1,next),chord=progression.chords[chordStep%progression.chords.length]
     playChord(chord,start)
     chordStep++
@@ -45,7 +46,7 @@ export function forestAudio(){
   },400)
   return {
     levels:(n:number,m:number)=>{nature.gain.setTargetAtTime(n,context.currentTime,.25);music.gain.setTargetAtTime(m,context.currentTime,.25)},
-    setProgressions:(ids:string[])=>{enabled=ids.filter(id=>byId.has(id));if(!enabled.length)enabled=['sunlit'];chordStep=0;progressionStep=0;next=0},
+    setProgressions:(ids:string[])=>{enabled=ids.filter(id=>byId.has(id));chordStep=0;progressionStep=0;next=0},
     audition:async(id:string)=>{const progression=byId.get(id);if(!progression)return;await context.resume();const start=context.currentTime+.08;progression.chords.forEach((chord,i)=>playChord(chord,start+i*1.55,2.2))},
     start:async()=>{active=true;await Promise.all([context.resume(),birds.play()])},
     pause:()=>{active=false;birds.pause();void context.suspend()},
