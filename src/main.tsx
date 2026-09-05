@@ -11,7 +11,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
-type View = 'hub' | 'thekonym-viewer' | 'thekonym' | 'world3d' | 'water-garden' | 'woodland-walk' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab'
+type View = 'hub' | 'thekonym-viewer' | 'thekonym' | 'world3d' | 'water-garden' | 'woodland-walk' | 'backing-tracks' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -59,6 +59,7 @@ const DEFAULT_FONTS: FontPrefs = { definition: 16, thoughts: 17, rail: 15, judgm
 const World3D = lazy(() => import('./experiences/World3D').then(module => ({ default: module.World3D })))
 const WaterGarden = lazy(() => import('./experiences/WaterGarden').then(module => ({ default: module.WaterGarden })))
 const WoodlandWalk = lazy(() => import('./experiences/WoodlandWalk').then(module => ({ default: module.WoodlandWalk })))
+const BackingTracks = lazy(() => import('./experiences/BackingTracks').then(module => ({ default: module.BackingTracks })))
 const RoyVocab = lazy(() => import('./experiences/RoyVocab').then(module => ({ default: module.RoyVocab })))
 const EkpronymReview = lazy(() => import('./experiences/EkpronymReview').then(module => ({ default: module.EkpronymReview })))
 const Library = lazy(() => import('./experiences/Library').then(module => ({ default: module.Library })))
@@ -91,7 +92,7 @@ function applyPendingChanges(source: Term[], changes = readOutbox()) {
 }
 
 function App() {
-  const [view, setView] = useState<View>(() => window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : 'hub')
+  const [view, setView] = useState<View>(() => window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : 'hub')
   const [pin, setPin] = useState('')
   const [pinInput, setPinInput] = useState('')
   const [terms, setTerms] = useState<Term[]>([])
@@ -119,14 +120,14 @@ function App() {
   const flushingRef = useRef(false)
 
   useEffect(() => {
-    if (!['/thekonym-viewer', '/water-garden', '/woodland-walk'].includes(window.location.pathname)) window.history.replaceState({}, '', '/')
-    const syncView = () => setView(window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
+    if (!['/thekonym-viewer', '/water-garden', '/woodland-walk', '/backing-tracks'].includes(window.location.pathname)) window.history.replaceState({}, '', '/')
+    const syncView = () => setView(window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
     window.addEventListener('popstate', syncView)
     return () => window.removeEventListener('popstate', syncView)
   }, [])
 
   function navigate(next: View) {
-    const path = next === 'woodland-walk' ? '/woodland-walk' : next === 'water-garden' ? '/water-garden' : next === 'thekonym-viewer' ? '/thekonym-viewer' : next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
+    const path = next === 'woodland-walk' ? '/woodland-walk' : next === 'backing-tracks' ? '/backing-tracks' : next === 'water-garden' ? '/water-garden' : next === 'thekonym-viewer' ? '/thekonym-viewer' : next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
     window.history.pushState({}, '', path)
     setView(next)
     window.scrollTo(0, 0)
@@ -447,6 +448,11 @@ function App() {
           <button className="experience-go" onClick={() => navigate('woodland-walk')}>Go</button>
         </article>
         <article className="experience-card">
+          <span className="experience-icon">Bt</span>
+          <span className="experience-copy"><strong>Backing Tracks</strong><small>Preview jazz chord progressions on plain piano, then loop them with an original rhythm section and rate what feels beautiful.</small></span>
+          <button className="experience-go" onClick={() => navigate('backing-tracks')}>Go</button>
+        </article>
+        <article className="experience-card">
           <span className="experience-icon">Wg</span>
           <span className="experience-copy"><strong>Water Garden</strong><small>A tropical 3D garden. Walk, listen, and use English to help a flower bloom.</small></span>
           <button className="experience-go" onClick={() => navigate('water-garden')}>Go</button>
@@ -498,6 +504,7 @@ function App() {
 
   if (view === 'water-garden') return <Suspense fallback={<main className="shell"><div className="center">Opening Water Garden…</div></main>}><WaterGarden onExit={() => navigate('hub')} /></Suspense>
   if (view === 'woodland-walk') return <Suspense fallback={<main className="shell"><div className="center">Opening Woodland Walk…</div></main>}><WoodlandWalk onBack={() => navigate('hub')} /></Suspense>
+  if (view === 'backing-tracks') return <Suspense fallback={<main className="shell"><div className="center">Opening Backing Tracks…</div></main>}><BackingTracks onExit={() => navigate('hub')} /></Suspense>
   if (view === 'world3d') return <Suspense fallback={<main className="shell"><div className="center">Opening 3D world…</div></main>}><World3D onExit={() => navigate('hub')} /></Suspense>
   if (view === 'roy') return <Suspense fallback={<main className="shell"><div className="center">Opening Roy…</div></main>}><RoyVocab onExit={() => navigate('hub')} pin={pin} /></Suspense>
   if (view === 'ekpronym') return <Suspense fallback={<main className="shell"><div className="center">Opening Ekpronym…</div></main>}><EkpronymReview onExit={() => navigate('hub')} pin={pin} /></Suspense>
