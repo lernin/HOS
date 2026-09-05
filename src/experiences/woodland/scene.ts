@@ -65,12 +65,26 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     const legL=new T.Mesh(new T.CylinderGeometry(.09,.1,.52,8),pants),legR=legL.clone();legL.position.set(-.13,.34,0);legR.position.set(.13,.34,0)
     const marker=new T.Mesh(new T.ConeGeometry(.1,.28,8),shirt);marker.rotation.x=-Math.PI/2;marker.position.set(0,1.04,-.38)
     avatar.add(head,hairCap,body,legL,legR,marker);avatar.visible=false;scene.add(avatar);track(avatar)
+
+    // Distance LOD: readable person nearby, simple silhouette in the middle distance,
+    // then a map-like dot/ring when character detail would be visually meaningless.
+    const avatarMid=new T.Group()
+    const midMat=new T.MeshBasicMaterial({color:'#f2a06c',transparent:true,opacity:.92,depthTest:false,depthWrite:false})
+    const midBody=new T.Mesh(new T.CylinderGeometry(.3,.36,1.05,8),midMat);midBody.position.y=.72;midBody.renderOrder=18
+    const midHead=new T.Mesh(new T.SphereGeometry(.27,10,8),midMat);midHead.position.y=1.4;midHead.renderOrder=18
+    const midArrow=new T.Mesh(new T.ConeGeometry(.13,.34,8),midMat);midArrow.rotation.x=-Math.PI/2;midArrow.position.set(0,.86,-.48);midArrow.renderOrder=19
+    avatarMid.add(midBody,midHead,midArrow);avatarMid.visible=false;scene.add(avatarMid);track(avatarMid)
+
     const locator=new T.Group()
-    const locatorDiscMat=new T.MeshBasicMaterial({color:'#b9ffd0',transparent:true,opacity:.1,depthTest:false,depthWrite:false,side:T.DoubleSide})
+    const locatorHaloMat=new T.MeshBasicMaterial({color:'#b9ffd0',transparent:true,opacity:.1,depthTest:false,depthWrite:false,side:T.DoubleSide})
     const locatorRingMat=new T.MeshBasicMaterial({color:'#d9ffe5',transparent:true,opacity:.82,depthTest:false,depthWrite:false,side:T.DoubleSide})
-    const locatorDisc=new T.Mesh(new T.CircleGeometry(1,32),locatorDiscMat),locatorRing=new T.Mesh(new T.RingGeometry(.72,1,32),locatorRingMat)
-    locatorDisc.rotation.x=locatorRing.rotation.x=-Math.PI/2;locatorDisc.renderOrder=20;locatorRing.renderOrder=21
-    locator.add(locatorDisc,locatorRing);locator.visible=false;scene.add(locator);track(locator)
+    const locatorDotMat=new T.MeshBasicMaterial({color:'#f6fff8',transparent:true,opacity:.96,depthTest:false,depthWrite:false,side:T.DoubleSide})
+    const locatorHalo=new T.Mesh(new T.CircleGeometry(1,32),locatorHaloMat)
+    const locatorRing=new T.Mesh(new T.RingGeometry(.62,.92,32),locatorRingMat)
+    const locatorDot=new T.Mesh(new T.CircleGeometry(.24,24),locatorDotMat)
+    locatorHalo.rotation.x=locatorRing.rotation.x=locatorDot.rotation.x=-Math.PI/2
+    locatorHalo.renderOrder=20;locatorRing.renderOrder=21;locatorDot.renderOrder=22
+    locator.add(locatorHalo,locatorRing,locatorDot);locator.visible=false;scene.add(locator);track(locator)
 
     const bgNormal=new T.Color('#bbdce6'),bgCute=new T.Color('#cfe7d7'),fogNormal=new T.Color('#b7d4cf'),fogCute=new T.Color('#c7dfce')
     const fpPos=new T.Vector3(),overviewPos=new T.Vector3(),lookTarget=new T.Vector3(),up=new T.Vector3(0,1,0)
@@ -107,13 +121,18 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
       if(Math.hypot(movedX,movedZ)>.0005)avatarYaw=Math.atan2(-movedX,-movedZ)
 
       const view=Math.max(0,Math.min(1,input.viewMode/10)),pull=view*view*(3-2*view),groundY=heightAt(position.x,position.z)
-      avatar.visible=view>.035
+      avatar.visible=view>.035&&view<.56
       avatar.position.set(position.x,groundY+.02,position.z);avatar.rotation.y=avatarYaw;avatar.scale.setScalar(.82+.34*pull)
-      locator.visible=view>.38
-      locator.position.set(position.x,groundY+.12,position.z)
-      locator.scale.setScalar(.85+1.55*pull)
-      locatorDiscMat.opacity=.045+.105*pull
-      locatorRingMat.opacity=.55+.4*pull
+
+      avatarMid.visible=view>=.48&&view<.74
+      avatarMid.position.set(position.x,groundY+.03,position.z);avatarMid.rotation.y=avatarYaw
+      avatarMid.scale.setScalar(.92+1.1*T.MathUtils.smoothstep(view,.48,.74))
+
+      locator.visible=view>=.68
+      locator.position.set(position.x,groundY+.14,position.z)
+      locator.scale.setScalar(1.3+2.25*T.MathUtils.smoothstep(view,.68,1))
+      locatorHaloMat.opacity=.055+.075*pull
+      locatorRingMat.opacity=.68+.28*pull
 
       if(Math.abs(pull-lastStyle)>.025){restyle(pull);lastStyle=pull}
       ;(scene.background as T.Color).lerpColors(bgNormal,bgCute,pull)
