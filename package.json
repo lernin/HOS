@@ -15,7 +15,8 @@
     "ai": "^7.0.76",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "tone": "15.1.22"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
