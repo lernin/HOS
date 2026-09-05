@@ -518,7 +518,7 @@ function App() {
   if (view === 'woodland-walk') return <Suspense fallback={<main className="shell"><div className="center">Opening Woodland Walk…</div></main>}><WoodlandWalk onBack={() => navigate('hub')} /></Suspense>
   if (view === 'backing-tracks') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Lab…</div></main>}><BackingTracks onExit={() => navigate('hub')} /></Suspense>
   if (view === 'orchestration-lab') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Lab II…</div></main>}><OrchestrationLab onExit={() => navigate('hub')} /></Suspense>
-  if (view === 'music-discovery') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Discovery Lab…</div></main>}><MusicDiscoveryLab onExit={() => navigate('hub')} /></Suspense>
+  if (view === 'music-discovery') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Discovery Lab…</div></main>}><MusicDiscoveryLab onExit={() => navigate('hub')} pin={pin} /></Suspense>
   if (view === 'world3d') return <Suspense fallback={<main className="shell"><div className="center">Opening 3D world…</div></main>}><World3D onExit={() => navigate('hub')} /></Suspense>
   if (view === 'roy') return <Suspense fallback={<main className="shell"><div className="center">Opening Roy…</div></main>}><RoyVocab onExit={() => navigate('hub')} pin={pin} /></Suspense>
   if (view === 'ekpronym') return <Suspense fallback={<main className="shell"><div className="center">Opening Ekpronym…</div></main>}><EkpronymReview onExit={() => navigate('hub')} pin={pin} /></Suspense>
