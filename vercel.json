@@ -10,6 +10,7 @@
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
     { "source": "/woodland-walk", "destination": "/" },
+    { "source": "/backing-tracks", "destination": "/" },
     { "source": "/water-garden", "destination": "/" },
     { "source": "/thekonym-viewer", "destination": "/" },
     { "source": "/thekonym", "destination": "/" },
