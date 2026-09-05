@@ -18,6 +18,7 @@ type Track = {
 const RATING_KEY = 'hos-music-discovery-ratings-v3'
 const NOTE_KEY = 'hos-music-discovery-notes-v3'
 const QUALITY_KEY = 'hos-music-discovery-quality-v1'
+const PERFORMANCE_KEY = 'hos-music-discovery-performance-v1'
 const VARIANT_KEY = 'hos-music-discovery-variants-v1'
 const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
@@ -58,6 +59,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [ratings, setRatings] = useState<Record<string, Rating>>(() => loadObject(RATING_KEY, {}))
   const [notes, setNotes] = useState<Record<string, string>>(() => loadObject(NOTE_KEY, {}))
   const [qualityRatings, setQualityRatings] = useState<Record<string, Rating>>(() => loadObject(QUALITY_KEY, {}))
+  const [performanceRatings, setPerformanceRatings] = useState<Record<string, Rating>>(() => loadObject(PERFORMANCE_KEY, {}))
   const [wantedVariants, setWantedVariants] = useState<Record<string, string[]>>(() => loadObject(VARIANT_KEY, {}))
   const [interests, setInterests] = useState<string[]>(() => loadObject(INTEREST_KEY, ['Beautiful orchestral','Ambient game','Piano']))
   const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
@@ -140,6 +142,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function rateQuality(value: Rating) {
     const next = { ...qualityRatings, [selected.id]: value }
     setQualityRatings(next); localStorage.setItem(QUALITY_KEY, JSON.stringify(next))
+  }
+  function ratePerformance(value: Rating) {
+    const next = { ...performanceRatings, [selected.id]: value }
+    setPerformanceRatings(next); localStorage.setItem(PERFORMANCE_KEY, JSON.stringify(next))
   }
   function toggleVariant(value: string) {
     const current = wantedVariants[selected.id] || []
@@ -231,6 +237,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <div className="md-judgment-row">
           <small>SOUND QUALITY</small>
           <div className="md-rating">{[[0,'Awful'],[1,'Weak'],[2,'Good'],[3,'Great']].map(([value,label]) => <button key={value} className={qualityRatings[selected.id] === value ? 'selected' : ''} onClick={() => rateQuality(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
+        </div>
+        <div className="md-judgment-row">
+          <small>PERFORMANCE</small>
+          <div className="md-rating">{[[0,'Poor'],[1,'Weak'],[2,'Good'],[3,'Great']].map(([value,label]) => <button key={value} className={performanceRatings[selected.id] === value ? 'selected' : ''} onClick={() => ratePerformance(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
         </div>
         <div className="md-variants">
           <small>FIND ANOTHER VERSION</small>
