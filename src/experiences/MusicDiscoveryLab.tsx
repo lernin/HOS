@@ -245,7 +245,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
       <div className="md-bottom">
         <div className="md-queue">
-          {queue.slice(Math.max(0,index-2),Math.min(queue.length,index+3)).map(track =>
+          {queue.slice(Math.max(0,index-1),Math.min(queue.length,index+2)).map(track =>
             <button key={track.id} className={track.id === selected.id ? 'active' : ''} onClick={() => setIndex(queue.findIndex(x => x.id === track.id))}>{track.title}</button>
           )}
         </div>
