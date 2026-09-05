@@ -24,7 +24,21 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,heightAt(x,z));c.setHSL(.235+Math.sin(x*.04)*.015,.34,.26+.045*Math.sin(z*.03+x*.02));colors.push(c.r,c.g,c.b)}
     ground.setAttribute('color',new T.Float32BufferAttribute(colors,3));ground.computeVertexNormals()
     const earth=new T.Mesh(ground,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));earth.receiveShadow=true;scene.add(earth);track(earth)
-    for(const line of paths){const vertices=[],indices=[];for(let i=0;i<line.length;i++){const p=line[i],a=line[Math.max(0,i-1)],b=line[Math.min(line.length-1,i+1)],dx=b.x-a.x,dz=b.z-a.z,l=Math.hypot(dx,dz)||1;for(const side of [-1,1]){const x=p.x-dz/l*2.25*side,z=p.z+dx/l*2.25*side;vertices.push(x,heightAt(x,z)+.035,z)}if(i<line.length-1){const k=i*2;indices.push(k,k+2,k+1,k+1,k+2,k+3)}}const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setIndex(indices);geo.computeVertexNormals();const trail=new T.Mesh(geo,new T.MeshStandardMaterial({color:'#b6a276',roughness:1,side:T.DoubleSide}));trail.receiveShadow=true;scene.add(trail);track(trail)}
+    function trailMesh(line:{x:number;z:number}[],halfWidth:number,lift:number,color:string,roughness:number){
+      const vertices:number[]=[],indices:number[]=[]
+      for(let i=0;i<line.length;i++){
+        const p=line[i],a=line[Math.max(0,i-1)],b=line[Math.min(line.length-1,i+1)],dx=b.x-a.x,dz=b.z-a.z,l=Math.hypot(dx,dz)||1
+        for(const side of [-1,1]){
+          const x=p.x-dz/l*halfWidth*side,z=p.z+dx/l*halfWidth*side
+          vertices.push(x,heightAt(x,z)+lift,z)
+        }
+        if(i<line.length-1){const k=i*2;indices.push(k,k+2,k+1,k+1,k+2,k+3)}
+      }
+      const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setIndex(indices);geo.computeVertexNormals()
+      const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color,roughness,side:T.DoubleSide}));mesh.receiveShadow=true;scene.add(mesh);track(mesh)
+    }
+    // A darker compacted-earth shoulder under a lighter center gives the road a clean, readable edge.
+    for(const line of paths){trailMesh(line,3.05,.026,'#806f4d',1);trailMesh(line,2.48,.042,'#c8b485',.98)}
     const all=placements(),solids=all.filter(p=>p.solid),kinds=['tree','tree-b','pine','bush','fern','grass','rock','clover'],loader=new GLTFLoader(),batches:T.InstancedMesh[]=[]
     for(let n=0;n<kinds.length;n++){
       const kind=kinds[n],response=await fetch(`/woodland/${kind}.glb`,{signal});if(!response.ok)throw Error(`Could not load ${kind}`)
