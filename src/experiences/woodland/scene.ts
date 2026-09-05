@@ -8,7 +8,7 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
   renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap
   const scene=new T.Scene();scene.background=new T.Color('#bbdce6');scene.fog=new T.Fog('#b7d4cf',60,145)
-  const camera=new T.PerspectiveCamera(68,1,.1,170);camera.rotation.order='YXZ'
+  const camera=new T.PerspectiveCamera(68,1,.1,320);camera.rotation.order='YXZ'
   scene.add(new T.HemisphereLight('#e6f4ff','#587741',2.1))
   const sun=new T.DirectionalLight('#fff0c9',3);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:1,far:150});sun.shadow.bias=-.0003;sun.shadow.normalBias=.04;scene.add(sun,sun.target)
   const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>()
@@ -109,15 +109,15 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
       ;(scene.fog as T.Fog).color.lerpColors(fogNormal,fogCute,pull)
 
       fpPos.set(position.x,groundY+1.68,position.z)
-      overviewPos.set(position.x+Math.sin(input.yaw)*18,groundY+18.4,position.z+Math.cos(input.yaw)*18)
+      overviewPos.set(position.x+Math.sin(input.yaw)*54,groundY+88,position.z+Math.cos(input.yaw)*54)
       lookTarget.set(position.x,groundY+.85,position.z)
       fpQuat.setFromEuler(new T.Euler(input.pitch,input.yaw,0,'YXZ'))
       lookMatrix.lookAt(overviewPos,lookTarget,up);overviewQuat.setFromRotationMatrix(lookMatrix)
       camera.position.lerpVectors(fpPos,overviewPos,pull);camera.quaternion.copy(fpQuat).slerp(overviewQuat,pull)
-      const nextFov=68-12*pull;if(Math.abs(camera.fov-nextFov)>.05){camera.fov=nextFov;camera.updateProjectionMatrix()}
+      const nextFov=68-8*pull;if(Math.abs(camera.fov-nextFov)>.05){camera.fov=nextFov;camera.updateProjectionMatrix()}
 
       sun.position.set(position.x-35,70,position.z+25);sun.target.position.set(position.x,0,position.z);sun.target.updateMatrixWorld()
-      const sight=145+70*pull
+      const sight=145+150*pull
       for(const b of batches){const p=b.boundingSphere!.center;b.visible=Math.hypot(p.x-position.x,p.z-position.z)<sight+b.boundingSphere!.radius}
       renderer.render(scene,camera);frame=requestAnimationFrame(render)
     };frame=requestAnimationFrame(render)
