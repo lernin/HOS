@@ -1,6 +1,7 @@
 import * as T from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import { heightAt, paths, placements, move, spawn, type Placement } from './world'
+import { heightAt, loopAt, paths, placements, move, spawn, type Placement } from './world'
+import {journeySigns,moodDefinition} from './musicWorld'
 export type Input={x:number;z:number;yaw:number;pitch:number;paused:boolean;moveAcceleration:number;viewMode:number}
 export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal:AbortSignal,progress:(n:number)=>void){
   const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
@@ -39,6 +40,26 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     }
     // A darker compacted-earth shoulder under a lighter center gives the road a clean, readable edge.
     for(const line of paths){trailMesh(line,3.05,.026,'#806f4d',1);trailMesh(line,2.48,.042,'#c8b485',.98)}
+
+    // Temporary named signposts make the musical journey visible while the emotional score is tuned.
+    for(const sign of journeySigns){
+      const p=loopAt(sign.t),ahead=loopAt(sign.t+.018),dx=ahead.x-p.x,dz=ahead.z-p.z,l=Math.hypot(dx,dz)||1
+      const nx=-dz/l,nz=dx/l,sx=p.x+nx*4.7,sz=p.z+nz*4.7,info=moodDefinition(sign.mood)
+      const label=document.createElement('canvas');label.width=768;label.height=240
+      const ctx=label.getContext('2d')!
+      ctx.fillStyle='#e7ddbf';ctx.fillRect(0,0,label.width,label.height)
+      ctx.strokeStyle='#654f34';ctx.lineWidth=18;ctx.strokeRect(9,9,label.width-18,label.height-18)
+      ctx.fillStyle='#2d2b22';ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='700 74px Georgia, serif'
+      ctx.fillText(info.label.toUpperCase(),label.width/2,label.height/2+4)
+      const texture=new T.CanvasTexture(label);texture.colorSpace=T.SRGBColorSpace
+      const boardMat=new T.MeshStandardMaterial({map:texture,roughness:.92,side:T.DoubleSide})
+      const postMat=new T.MeshStandardMaterial({color:'#6e5236',roughness:1})
+      const group=new T.Group(),board=new T.Mesh(new T.PlaneGeometry(4.5,1.4),boardMat),post=new T.Mesh(new T.BoxGeometry(.18,2.45,.18),postMat)
+      board.position.y=2.45;post.position.y=1.22;group.add(board,post)
+      group.position.set(sx,heightAt(sx,sz),sz)
+      group.rotation.y=Math.atan2(dz,-dx)
+      scene.add(group);track(group)
+    }
     const all=placements(),solids=all.filter(p=>p.solid),kinds=['tree','tree-b','pine','bush','fern','grass','rock','clover'],loader=new GLTFLoader(),batches:T.InstancedMesh[]=[]
     for(let n=0;n<kinds.length;n++){
       const kind=kinds[n],response=await fetch(`/woodland/${kind}.glb`,{signal});if(!response.ok)throw Error(`Could not load ${kind}`)
