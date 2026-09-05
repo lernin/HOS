@@ -4,33 +4,83 @@
   "git": {
     "deploymentEnabled": {
       "*": false,
-      "main": true
+      "main": true,
+      "integration/woodland-complete-20260905": true,
+      "feature/woodland-musical-world-20260905": true
     }
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
-    { "source": "/woodland-walk", "destination": "/" },
-    { "source": "/water-garden", "destination": "/" },
-    { "source": "/thekonym-viewer", "destination": "/" },
-    { "source": "/thekonym", "destination": "/" },
-    { "source": "/world-3d", "destination": "/" },
-    { "source": "/roy", "destination": "/" },
-    { "source": "/book-vocab", "destination": "/" }
+    {
+      "source": "/woodland-walk",
+      "destination": "/"
+    },
+    {
+      "source": "/backing-tracks",
+      "destination": "/"
+    },
+    {
+      "source": "/orchestration-lab",
+      "destination": "/"
+    },
+    {
+      "source": "/melody-lab",
+      "destination": "/"
+    },
+    {
+      "source": "/water-garden",
+      "destination": "/"
+    },
+    {
+      "source": "/thekonym-viewer",
+      "destination": "/"
+    },
+    {
+      "source": "/thekonym",
+      "destination": "/"
+    },
+    {
+      "source": "/world-3d",
+      "destination": "/"
+    },
+    {
+      "source": "/roy",
+      "destination": "/"
+    },
+    {
+      "source": "/book-vocab",
+      "destination": "/"
+    }
   ],
   "headers": [
     {
       "source": "/manifest.webmanifest",
       "headers": [
-        { "key": "Content-Type", "value": "application/manifest+json" },
-        { "key": "Cache-Control", "value": "no-cache" }
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
       ]
     },
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" },
-        { "key": "Cache-Control", "value": "no-cache" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
       ]
     }
   ]

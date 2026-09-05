@@ -10,7 +10,7 @@ async function importTs(path){
 }
 
 const w=await importTs('../src/experiences/woodland/world.ts')
-const music=await importTs('../src/experiences/woodland/audio.ts')
+const score=await importTs('../src/experiences/woodland/musicWorld.ts')
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z)
 
 test('large main circuit is closed, with three rejoining routes',()=>{
@@ -36,16 +36,29 @@ test('all bundled GLBs have valid container headers and licensed provenance',()=
  const models=JSON.parse(readFileSync(new URL('../public/woodland/models.json',import.meta.url),'utf8'))
  for(const m of models){const b=readFileSync(new URL(`../public/woodland/${m.name}.glb`,import.meta.url));assert.equal(b.toString('ascii',0,4),'glTF');assert.equal(b.readUInt32LE(4),2);assert.equal(b.readUInt32LE(8),b.length);assert.match(m.license,/CC0/)}
 })
-test('harmony lab exposes complete jazz and wide voicings',()=>{
- assert.ok(music.woodlandProgressions.length>=6)
- assert.equal(new Set(music.woodlandProgressions.map(p=>p.id)).size,music.woodlandProgressions.length)
- for(const progression of music.woodlandProgressions){
-   assert.ok(progression.roman.length>0)
-   assert.ok(progression.chordNames.length>=3)
-   assert.equal(progression.jazz.length,progression.chordNames.length)
-   assert.equal(progression.orchestral.length,progression.chordNames.length)
-   assert.ok(progression.emojis.length>0)
-   for(const chord of progression.jazz)assert.ok(chord.length>=5)
-   for(const chord of progression.orchestral)assert.ok(chord.length>=6)
+test('musical world exposes ten ordered colors and compatible melody banks',()=>{
+ assert.equal(score.moods.length,10)
+ assert.equal(score.journeySigns.length,10)
+ assert.equal(score.journeySigns[0].mood,'hearth')
+ assert.equal(score.journeySigns.at(-1).mood,'triumph')
+ assert.equal(new Set(score.moods.map(m=>m.id)).size,10)
+ for(const mood of score.moods){
+   const candidates=score.melodyCandidates(mood.id)
+   assert.ok(candidates.length>=6)
+   assert.equal(new Set(candidates.map(x=>x.id)).size,candidates.length)
+   for(const candidate of candidates){
+     assert.equal(candidate.degrees.length,candidate.rhythm.length)
+     assert.equal(candidate.rhythm.reduce((a,b)=>a+b,0),16)
+     assert.equal(score.melodyNotes(mood.id,candidate.id).length,candidate.degrees.length)
+   }
+   assert.equal(score.chordNotes(mood.id,0).length,4)
  }
+})
+test('legacy Woodland synthesizer and harmony palette are gone from in-game audio',()=>{
+ const audio=readFileSync(new URL('../src/experiences/woodland/audio.ts',import.meta.url),'utf8')
+ assert.doesNotMatch(audio,/createOscillator|woodlandProgressions|setProgressions|audition/)
+ assert.match(audio,/forest-birds\.mp3/)
+ const walk=readFileSync(new URL('../src/experiences/WoodlandWalk.tsx',import.meta.url),'utf8')
+ assert.doesNotMatch(walk,/WoodlandMusicPalette|woodlandProgressions/)
+ assert.match(walk,/woodlandWorldScore/)
 })
