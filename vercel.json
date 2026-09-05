@@ -12,6 +12,7 @@
   "rewrites": [
     { "source": "/woodland-walk", "destination": "/" },
     { "source": "/backing-tracks", "destination": "/" },
+    { "source": "/orchestration-lab", "destination": "/" },
     { "source": "/water-garden", "destination": "/" },
     { "source": "/thekonym-viewer", "destination": "/" },
     { "source": "/thekonym", "destination": "/" },
