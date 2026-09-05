@@ -11,7 +11,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
-type View = 'hub' | 'thekonym-viewer' | 'thekonym' | 'world3d' | 'water-garden' | 'woodland-walk' | 'backing-tracks' | 'orchestration-lab' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab'
+type View = 'hub' | 'thekonym-viewer' | 'thekonym' | 'world3d' | 'water-garden' | 'woodland-walk' | 'backing-tracks' | 'orchestration-lab' | 'music-discovery' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -61,6 +61,7 @@ const WaterGarden = lazy(() => import('./experiences/WaterGarden').then(module =
 const WoodlandWalk = lazy(() => import('./experiences/WoodlandWalk').then(module => ({ default: module.WoodlandWalk })))
 const BackingTracks = lazy(() => import('./experiences/BackingTracks').then(module => ({ default: module.BackingTracks })))
 const OrchestrationLab = lazy(() => import('./experiences/OrchestrationLab').then(module => ({ default: module.OrchestrationLab })))
+const MusicDiscoveryLab = lazy(() => import('./experiences/MusicDiscoveryLab').then(module => ({ default: module.MusicDiscoveryLab })))
 const RoyVocab = lazy(() => import('./experiences/RoyVocab').then(module => ({ default: module.RoyVocab })))
 const EkpronymReview = lazy(() => import('./experiences/EkpronymReview').then(module => ({ default: module.EkpronymReview })))
 const Library = lazy(() => import('./experiences/Library').then(module => ({ default: module.Library })))
@@ -93,7 +94,7 @@ function applyPendingChanges(source: Term[], changes = readOutbox()) {
 }
 
 function App() {
-  const [view, setView] = useState<View>(() => window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/orchestration-lab' ? 'orchestration-lab' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : 'hub')
+  const [view, setView] = useState<View>(() => window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/orchestration-lab' ? 'orchestration-lab' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : 'hub')
   const [pin, setPin] = useState('')
   const [pinInput, setPinInput] = useState('')
   const [terms, setTerms] = useState<Term[]>([])
@@ -121,14 +122,14 @@ function App() {
   const flushingRef = useRef(false)
 
   useEffect(() => {
-    if (!['/thekonym-viewer', '/water-garden', '/woodland-walk', '/backing-tracks', '/orchestration-lab'].includes(window.location.pathname)) window.history.replaceState({}, '', '/')
-    const syncView = () => setView(window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/orchestration-lab' ? 'orchestration-lab' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
+    if (!['/thekonym-viewer', '/water-garden', '/woodland-walk', '/backing-tracks', '/orchestration-lab', '/music-discovery'].includes(window.location.pathname)) window.history.replaceState({}, '', '/')
+    const syncView = () => setView(window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/orchestration-lab' ? 'orchestration-lab' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
     window.addEventListener('popstate', syncView)
     return () => window.removeEventListener('popstate', syncView)
   }, [])
 
   function navigate(next: View) {
-    const path = next === 'woodland-walk' ? '/woodland-walk' : next === 'backing-tracks' ? '/backing-tracks' : next === 'orchestration-lab' ? '/orchestration-lab' : next === 'water-garden' ? '/water-garden' : next === 'thekonym-viewer' ? '/thekonym-viewer' : next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
+    const path = next === 'woodland-walk' ? '/woodland-walk' : next === 'backing-tracks' ? '/backing-tracks' : next === 'orchestration-lab' ? '/orchestration-lab' : next === 'music-discovery' ? '/music-discovery' : next === 'water-garden' ? '/water-garden' : next === 'thekonym-viewer' ? '/thekonym-viewer' : next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
     window.history.pushState({}, '', path)
     setView(next)
     window.scrollTo(0, 0)
@@ -459,6 +460,11 @@ function App() {
           <button className="experience-go" onClick={() => navigate('orchestration-lab')}>Go</button>
         </article>
         <article className="experience-card">
+          <span className="experience-icon">♪</span>
+          <span className="experience-copy"><strong>Music Discovery Lab</strong><small>Hunt public-domain and Creative Commons classical, orchestral, ambient, game, and jazz music. Listen at the source, rate it, and teach the Lab your taste.</small></span>
+          <button className="experience-go" onClick={() => navigate('music-discovery')}>Go</button>
+        </article>
+        <article className="experience-card">
           <span className="experience-icon">Wg</span>
           <span className="experience-copy"><strong>Water Garden</strong><small>A tropical 3D garden. Walk, listen, and use English to help a flower bloom.</small></span>
           <button className="experience-go" onClick={() => navigate('water-garden')}>Go</button>
@@ -512,6 +518,7 @@ function App() {
   if (view === 'woodland-walk') return <Suspense fallback={<main className="shell"><div className="center">Opening Woodland Walk…</div></main>}><WoodlandWalk onBack={() => navigate('hub')} /></Suspense>
   if (view === 'backing-tracks') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Lab…</div></main>}><BackingTracks onExit={() => navigate('hub')} /></Suspense>
   if (view === 'orchestration-lab') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Lab II…</div></main>}><OrchestrationLab onExit={() => navigate('hub')} /></Suspense>
+  if (view === 'music-discovery') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Discovery Lab…</div></main>}><MusicDiscoveryLab onExit={() => navigate('hub')} /></Suspense>
   if (view === 'world3d') return <Suspense fallback={<main className="shell"><div className="center">Opening 3D world…</div></main>}><World3D onExit={() => navigate('hub')} /></Suspense>
   if (view === 'roy') return <Suspense fallback={<main className="shell"><div className="center">Opening Roy…</div></main>}><RoyVocab onExit={() => navigate('hub')} pin={pin} /></Suspense>
   if (view === 'ekpronym') return <Suspense fallback={<main className="shell"><div className="center">Opening Ekpronym…</div></main>}><EkpronymReview onExit={() => navigate('hub')} pin={pin} /></Suspense>
