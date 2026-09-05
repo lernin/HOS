@@ -37,7 +37,7 @@ export function OrchestrationLab({onExit}:{onExit:()=>void}){
   const [current,setCurrent]=useState<string|null>(null)
   const [ratings,setRatings]=useState<Record<string,Rating>>(readRatings)
   const [error,setError]=useState('')
-  const [importVersion,setImportVersion]=useState(0)
+  const [,setImportVersion]=useState(0)
 
   const currentParts=useMemo(()=>{
     if(!current)return null
