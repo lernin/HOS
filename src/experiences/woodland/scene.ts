@@ -65,6 +65,12 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     const legL=new T.Mesh(new T.CylinderGeometry(.09,.1,.52,8),pants),legR=legL.clone();legL.position.set(-.13,.34,0);legR.position.set(.13,.34,0)
     const marker=new T.Mesh(new T.ConeGeometry(.1,.28,8),shirt);marker.rotation.x=-Math.PI/2;marker.position.set(0,1.04,-.38)
     avatar.add(head,hairCap,body,legL,legR,marker);avatar.visible=false;scene.add(avatar);track(avatar)
+    const locator=new T.Group()
+    const locatorDiscMat=new T.MeshBasicMaterial({color:'#b9ffd0',transparent:true,opacity:.1,depthTest:false,depthWrite:false,side:T.DoubleSide})
+    const locatorRingMat=new T.MeshBasicMaterial({color:'#d9ffe5',transparent:true,opacity:.82,depthTest:false,depthWrite:false,side:T.DoubleSide})
+    const locatorDisc=new T.Mesh(new T.CircleGeometry(1,32),locatorDiscMat),locatorRing=new T.Mesh(new T.RingGeometry(.72,1,32),locatorRingMat)
+    locatorDisc.rotation.x=locatorRing.rotation.x=-Math.PI/2;locatorDisc.renderOrder=20;locatorRing.renderOrder=21
+    locator.add(locatorDisc,locatorRing);locator.visible=false;scene.add(locator);track(locator)
 
     const bgNormal=new T.Color('#bbdce6'),bgCute=new T.Color('#cfe7d7'),fogNormal=new T.Color('#b7d4cf'),fogCute=new T.Color('#c7dfce')
     const fpPos=new T.Vector3(),overviewPos=new T.Vector3(),lookTarget=new T.Vector3(),up=new T.Vector3(0,1,0)
@@ -103,13 +109,19 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
       const view=Math.max(0,Math.min(1,input.viewMode/10)),pull=view*view*(3-2*view),groundY=heightAt(position.x,position.z)
       avatar.visible=view>.035
       avatar.position.set(position.x,groundY+.02,position.z);avatar.rotation.y=avatarYaw;avatar.scale.setScalar(.82+.34*pull)
+      locator.visible=view>.38
+      locator.position.set(position.x,groundY+.12,position.z)
+      locator.scale.setScalar(.85+1.55*pull)
+      locatorDiscMat.opacity=.045+.105*pull
+      locatorRingMat.opacity=.55+.4*pull
 
       if(Math.abs(pull-lastStyle)>.025){restyle(pull);lastStyle=pull}
       ;(scene.background as T.Color).lerpColors(bgNormal,bgCute,pull)
       ;(scene.fog as T.Fog).color.lerpColors(fogNormal,fogCute,pull)
 
       fpPos.set(position.x,groundY+1.68,position.z)
-      overviewPos.set(position.x+Math.sin(input.yaw)*54,groundY+88,position.z+Math.cos(input.yaw)*54)
+      const cameraBack=20+64*(1-pull)
+      overviewPos.set(position.x+Math.sin(input.yaw)*cameraBack,groundY+105,position.z+Math.cos(input.yaw)*cameraBack)
       lookTarget.set(position.x,groundY+.85,position.z)
       fpQuat.setFromEuler(new T.Euler(input.pitch,input.yaw,0,'YXZ'))
       lookMatrix.lookAt(overviewPos,lookTarget,up);overviewQuat.setFromRotationMatrix(lookMatrix)
