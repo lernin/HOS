@@ -1,5 +1,23 @@
+import * as Tone from 'tone'
+
 export type TrackRating = 0|1|2|3
 export type BackingFeel = 'swing'|'ballad'|'bossa'
+export type MusicVoice = 'piano'|'synth'|'orchestra'
+export type CompStyle = 'block'|'gentle'|'broken'|'pulse'
+export type SynthPreset = 'warm'|'glass'|'velvet'
+export type OrchestraPreset = 'strings'|'chamber'|'cinematic'
+
+export type MusicSettings = {
+  voice:MusicVoice
+  style:CompStyle
+  bpm:number
+  register:number
+  spread:number
+  reverb:number
+  bass:boolean
+  synthPreset:SynthPreset
+  orchestraPreset:OrchestraPreset
+}
 
 export type BackingTrack = {
   id:string
@@ -25,118 +43,153 @@ export const backingTracks:BackingTrack[] = [
 ]
 
 const trackById=new Map(backingTracks.map(track=>[track.id,track]))
+const SALAMANDER='https://tonejs.github.io/audio/salamander/'
+const ORCHESTRA='https://nbrosowsky.github.io/tonejs-instruments/samples/'
+
+const pianoUrls={
+  A0:'A0.mp3',C1:'C1.mp3','D#1':'Ds1.mp3','F#1':'Fs1.mp3',A1:'A1.mp3',C2:'C2.mp3','D#2':'Ds2.mp3','F#2':'Fs2.mp3',
+  A2:'A2.mp3',C3:'C3.mp3','D#3':'Ds3.mp3','F#3':'Fs3.mp3',A3:'A3.mp3',C4:'C4.mp3','D#4':'Ds4.mp3','F#4':'Fs4.mp3',
+  A4:'A4.mp3',C5:'C5.mp3','D#5':'Ds5.mp3','F#5':'Fs5.mp3',A5:'A5.mp3',C6:'C6.mp3','D#6':'Ds6.mp3','F#6':'Fs6.mp3',A6:'A6.mp3',C7:'C7.mp3'
+}
+const violinUrls={G3:'G3.mp3',A3:'A3.mp3',C4:'C4.mp3',E4:'E4.mp3',G4:'G4.mp3',A4:'A4.mp3',C5:'C5.mp3',E5:'E5.mp3',G5:'G5.mp3',A5:'A5.mp3',C6:'C6.mp3'}
+const celloUrls={C2:'C2.mp3',E2:'E2.mp3',G2:'G2.mp3',A2:'A2.mp3',C3:'C3.mp3',E3:'E3.mp3',G3:'G3.mp3',A3:'A3.mp3',C4:'C4.mp3',E4:'E4.mp3',G4:'G4.mp3'}
+const hornUrls={A1:'A1.mp3',C2:'C2.mp3','D#2':'Ds2.mp3',G2:'G2.mp3',D3:'D3.mp3',F3:'F3.mp3',A3:'A3.mp3',C4:'C4.mp3',D5:'D5.mp3',F5:'F5.mp3'}
+const fluteUrls={C4:'C4.mp3',E4:'E4.mp3',A4:'A4.mp3',C5:'C5.mp3',E5:'E5.mp3',A5:'A5.mp3',C6:'C6.mp3',E6:'E6.mp3',A6:'A6.mp3'}
+const bassUrls={'F#1':'Fs1.mp3',G1:'G1.mp3','A#1':'As1.mp3',C2:'C2.mp3',D2:'D2.mp3',E2:'E2.mp3','F#2':'Fs2.mp3',A2:'A2.mp3','C#3':'Cs3.mp3',E3:'E3.mp3','G#3':'Gs3.mp3',B3:'B3.mp3'}
+
+function note(midi:number){return Tone.Frequency(midi,'midi').toNote()}
+function clamp(n:number,a:number,b:number){return Math.max(a,Math.min(b,n))}
 
 export function backingTrackPlayer(){
-  const context=new AudioContext()
-  const master=context.createGain()
-  master.gain.value=.72
-  master.connect(context.destination)
-  const activeNodes=new Set<AudioScheduledSourceNode>()
-  let timer:number|null=null
+  const reverb=new Tone.Reverb({decay:2.8,preDelay:.025,wet:.2}).toDestination()
+  const master=new Tone.Gain(.82).connect(reverb)
+  const readyReverb=reverb.generate()
+  let piano:Tone.Sampler|null=null
+  let violin:Tone.Sampler|null=null,cello:Tone.Sampler|null=null,horn:Tone.Sampler|null=null,flute:Tone.Sampler|null=null,bassSampler:Tone.Sampler|null=null
+  let synth:Tone.PolySynth<Tone.Synth<Tone.SynthOptions>>|Tone.PolySynth<any>|null=null
+  let synthPreset:SynthPreset|null=null
+  let loop:Tone.Loop|null=null
+  let endTimer:number|null=null
   let playingId:string|null=null
-  let loopToken=0
 
-  function stopNodes(){
-    for(const node of activeNodes){try{node.stop()}catch{}}
-    activeNodes.clear()
-  }
+  function clearTimer(){if(endTimer!==null){window.clearTimeout(endTimer);endTimer=null}}
   function stop(){
-    loopToken++
-    if(timer!==null){window.clearInterval(timer);timer=null}
-    stopNodes()
+    clearTimer()
+    loop?.stop().dispose();loop=null
+    const transport=Tone.getTransport();transport.stop();transport.cancel(0);transport.position=0
+    piano?.releaseAll();violin?.releaseAll();cello?.releaseAll();horn?.releaseAll();flute?.releaseAll();bassSampler?.releaseAll()
+    synth?.releaseAll()
     playingId=null
   }
-  function hz(midi:number){return 440*Math.pow(2,(midi-69)/12)}
-  function connectTracked(node:AudioScheduledSourceNode){activeNodes.add(node);node.addEventListener('ended',()=>activeNodes.delete(node))}
 
-  function pianoNote(midi:number,time:number,duration:number,volume:number){
-    const gain=context.createGain()
-    const body=context.createOscillator(),spark=context.createOscillator(),air=context.createOscillator()
-    body.type='triangle';spark.type='sine';air.type='sine'
-    body.frequency.value=hz(midi);spark.frequency.value=hz(midi)*2.01;air.frequency.value=hz(midi)*3.98
-    spark.detune.value=2;air.detune.value=-3
-    gain.gain.setValueAtTime(.0001,time)
-    gain.gain.exponentialRampToValueAtTime(volume,time+.008)
-    gain.gain.exponentialRampToValueAtTime(volume*.24,time+.22)
-    gain.gain.exponentialRampToValueAtTime(.0001,time+duration)
-    body.connect(gain);spark.connect(gain);air.connect(gain);gain.connect(master)
-    for(const osc of [body,spark,air]){connectTracked(osc);osc.start(time);osc.stop(time+duration+.05)}
+  async function preparePiano(){
+    if(!piano){
+      piano=new Tone.Sampler({urls:pianoUrls,baseUrl:SALAMANDER,attack:.004,release:1.35}).connect(master)
+      await Tone.loaded()
+    }
   }
-  function pianoChord(chord:number[],time:number,duration=1.25,volume=.055,spread=false){
-    chord.forEach((note,i)=>pianoNote(note,time+(spread?i*.012:0),duration,volume*(i===0?1.05:.9)))
+
+  async function prepareOrchestra(){
+    if(!violin){
+      violin=new Tone.Sampler({urls:violinUrls,baseUrl:ORCHESTRA+'violin/',attack:.05,release:1.7}).connect(master)
+      cello=new Tone.Sampler({urls:celloUrls,baseUrl:ORCHESTRA+'cello/',attack:.06,release:1.8}).connect(master)
+      horn=new Tone.Sampler({urls:hornUrls,baseUrl:ORCHESTRA+'french-horn/',attack:.08,release:2}).connect(master)
+      flute=new Tone.Sampler({urls:fluteUrls,baseUrl:ORCHESTRA+'flute/',attack:.04,release:1.4}).connect(master)
+      bassSampler=new Tone.Sampler({urls:bassUrls,baseUrl:ORCHESTRA+'contrabass/',attack:.035,release:1.25}).connect(master)
+      await Tone.loaded()
+    }
   }
-  function bassNote(midi:number,time:number,duration:number,volume=.12){
-    const osc=context.createOscillator(),gain=context.createGain()
-    osc.type='triangle';osc.frequency.value=hz(midi)
-    gain.gain.setValueAtTime(.0001,time);gain.gain.exponentialRampToValueAtTime(volume,time+.01);gain.gain.exponentialRampToValueAtTime(.0001,time+duration)
-    osc.connect(gain);gain.connect(master);connectTracked(osc);osc.start(time);osc.stop(time+duration+.03)
-  }
-  function noiseHit(time:number,duration:number,volume:number,highpass:number){
-    const length=Math.max(1,Math.floor(context.sampleRate*duration))
-    const buffer=context.createBuffer(1,length,context.sampleRate),data=buffer.getChannelData(0)
-    for(let i=0;i<length;i++)data[i]=(Math.random()*2-1)*Math.pow(1-i/length,2)
-    const src=context.createBufferSource(),filter=context.createBiquadFilter(),gain=context.createGain()
-    src.buffer=buffer;filter.type='highpass';filter.frequency.value=highpass
-    gain.gain.setValueAtTime(volume,time);gain.gain.exponentialRampToValueAtTime(.0001,time+duration)
-    src.connect(filter);filter.connect(gain);gain.connect(master);connectTracked(src);src.start(time);src.stop(time+duration)
-  }
-  function kick(time:number){
-    const osc=context.createOscillator(),gain=context.createGain()
-    osc.type='sine';osc.frequency.setValueAtTime(110,time);osc.frequency.exponentialRampToValueAtTime(48,time+.12)
-    gain.gain.setValueAtTime(.12,time);gain.gain.exponentialRampToValueAtTime(.0001,time+.18)
-    osc.connect(gain);gain.connect(master);connectTracked(osc);osc.start(time);osc.stop(time+.2)
-  }
-  function scheduleBar(track:BackingTrack,index:number,start:number,bass:boolean,drums:boolean){
-    const beat=60/track.bpm,chord=track.chords[index%track.chords.length],root=track.roots[index%track.roots.length]
-    if(track.feel==='ballad'){
-      pianoChord(chord,start,beat*2.8,.05,true)
-      pianoChord(chord.slice(1),start+beat*2.45,beat*1.1,.032,true)
-      if(bass){bassNote(root,start,beat*1.8,.1);bassNote(root+7,start+beat*2,beat*1.6,.075)}
-      if(drums){kick(start);noiseHit(start+beat*2,beat*.16,.018,4200)}
-    }else if(track.feel==='bossa'){
-      pianoChord(chord,start,beat*.85,.047,true)
-      pianoChord(chord.slice(1),start+beat*1.5,beat*.7,.035,true)
-      pianoChord(chord,start+beat*2.5,beat*.75,.041,true)
-      if(bass){bassNote(root,start,beat*.9,.11);bassNote(root+7,start+beat*2,beat*.85,.09)}
-      if(drums){for(let b=0;b<4;b++)noiseHit(start+beat*b,beat*.09,.012,5000);kick(start);kick(start+beat*2)}
+
+  async function prepareBass(){if(!bassSampler){bassSampler=new Tone.Sampler({urls:bassUrls,baseUrl:ORCHESTRA+'contrabass/',attack:.035,release:1.25}).connect(master);await Tone.loaded()}}
+
+  function prepareSynth(preset:SynthPreset){
+    if(synth&&synthPreset===preset)return
+    synth?.dispose();synthPreset=preset
+    if(preset==='glass'){
+      synth=new Tone.PolySynth(Tone.FMSynth,{harmonicity:2.8,modulationIndex:8,envelope:{attack:.01,decay:.7,sustain:.25,release:1.6},modulationEnvelope:{attack:.02,decay:.5,sustain:.15,release:1.1}}).connect(master)
+    }else if(preset==='velvet'){
+      synth=new Tone.PolySynth(Tone.AMSynth,{harmonicity:1.5,envelope:{attack:.45,decay:1.2,sustain:.65,release:2.8},modulationEnvelope:{attack:.6,decay:1.1,sustain:.45,release:2.4}}).connect(master)
     }else{
-      pianoChord(chord,start,beat*.72,.05,true)
-      pianoChord(chord.slice(1),start+beat*1.62,beat*.55,.035,true)
-      pianoChord(chord,start+beat*2.72,beat*.58,.039,true)
-      if(bass){
-        const walk=[root,root+4,root+7,root+9]
-        walk.forEach((note,b)=>bassNote(note,start+beat*b,beat*.82,b===0?.115:.086))
-      }
-      if(drums){
-        kick(start);kick(start+beat*2)
-        for(let b=0;b<4;b++){noiseHit(start+beat*b,beat*.11,b===1||b===3?.022:.012,4800);noiseHit(start+beat*(b+.66),beat*.07,.008,6200)}
-      }
+      synth=new Tone.PolySynth(Tone.Synth,{oscillator:{type:'triangle8'},envelope:{attack:.025,decay:.55,sustain:.42,release:1.5}}).connect(master)
     }
   }
 
-  async function preview(id:string){
-    const track=trackById.get(id);if(!track)return
-    stop();playingId=id;await context.resume()
-    const step=1.45,start=context.currentTime+.06
-    track.chords.forEach((chord,i)=>pianoChord(chord,start+i*step,1.16,.062,false))
-    window.setTimeout(()=>{if(playingId===id)playingId=null},track.chords.length*step*1000+250)
+  function shifted(chord:number[],settings:MusicSettings){const shift=Math.round(settings.register)*12;return chord.map(n=>note(n+shift))}
+  function playPianoChord(chord:number[],time:number,duration:number,velocity:number,settings:MusicSettings){
+    if(!piano)return
+    const notes=shifted(chord,settings)
+    const spread=clamp(settings.spread,0,1)*.045
+    if(settings.style==='broken')notes.forEach((n,i)=>piano!.triggerAttackRelease(n,duration*.72,time+i*(.08+spread),velocity*(.94-i*.035)))
+    else if(settings.style==='gentle'){
+      piano.triggerAttackRelease(notes,duration,time,velocity)
+      piano.triggerAttackRelease(notes.slice(-2),duration*.42,time+duration*.53,velocity*.55)
+    }else if(settings.style==='pulse'){
+      piano.triggerAttackRelease(notes,duration*.42,time,velocity)
+      piano.triggerAttackRelease(notes,duration*.38,time+duration*.52,velocity*.72)
+    }else piano.triggerAttackRelease(notes,duration,time,velocity)
   }
 
-  async function loop(id:string,{bass=true,drums=true}:{bass?:boolean;drums?:boolean}={}){
-    const track=trackById.get(id);if(!track)return
-    stop();playingId=id;await context.resume()
-    const token=++loopToken,beat=60/track.bpm,bar=beat*4
-    let barIndex=0,next=context.currentTime+.08
-    const pump=()=>{
-      if(token!==loopToken)return
-      while(next<context.currentTime+1.2){
-        scheduleBar(track,barIndex,next,bass,drums)
-        barIndex=(barIndex+1)%track.chords.length
-        next+=bar
-      }
+  function playSynthChord(chord:number[],time:number,duration:number,velocity:number,settings:MusicSettings){
+    if(!synth)return
+    const notes=shifted(chord,settings)
+    if(settings.style==='broken')notes.forEach((n,i)=>synth!.triggerAttackRelease(n,duration*.72,time+i*(.075+settings.spread*.035),velocity))
+    else if(settings.style==='pulse'){
+      synth.triggerAttackRelease(notes,duration*.38,time,velocity)
+      synth.triggerAttackRelease(notes,duration*.34,time+duration*.5,velocity*.82)
+    }else synth.triggerAttackRelease(notes,duration,time,velocity)
+  }
+
+  function playOrchestraChord(chord:number[],time:number,duration:number,velocity:number,settings:MusicSettings){
+    if(!violin||!cello||!horn||!flute)return
+    const shift=Math.round(settings.register)*12
+    const notes=chord.map(n=>n+shift).sort((a,b)=>a-b)
+    const low=notes.slice(0,2).map(note),mid=notes.slice(1,Math.max(3,notes.length-1)).map(note),high=notes.slice(-2).map(note)
+    cello.triggerAttackRelease(low,duration,time,velocity*.78)
+    violin.triggerAttackRelease(high,duration,time+.025,velocity*.72)
+    if(settings.orchestraPreset!=='strings')horn.triggerAttackRelease(mid,duration*.95,time+.04,velocity*.48)
+    if(settings.orchestraPreset==='chamber')flute.triggerAttackRelease([note(notes[notes.length-1]+12)],duration*.72,time+.1,velocity*.32)
+    if(settings.orchestraPreset==='cinematic'){
+      violin.triggerAttackRelease(mid,duration*.92,time+.06,velocity*.45)
+      horn.triggerAttackRelease(low.map(n=>Tone.Frequency(n).transpose(-12).toNote()),duration,time+.02,velocity*.4)
     }
-    pump();timer=window.setInterval(pump,180)
   }
 
-  return {preview,loop,stop,getPlayingId:()=>playingId,dispose:()=>{stop();void context.close()}}
+  function schedulePass(track:BackingTrack,start:number,settings:MusicSettings){
+    const beat=60/clamp(settings.bpm,48,180),slot=beat*2
+    track.chords.forEach((chord,i)=>{
+      const time=start+i*slot+(i%2?settings.spread*.012:0),duration=slot*(settings.voice==='orchestra'?.94:.78)
+      if(settings.voice==='piano')playPianoChord(chord,time,duration,.72,settings)
+      else if(settings.voice==='orchestra')playOrchestraChord(chord,time,duration,.68,settings)
+      else playSynthChord(chord,time,duration,.58,settings)
+      if(settings.bass&&bassSampler){
+        const root=track.roots[i]+Math.round(settings.register)*12
+        bassSampler.triggerAttackRelease(note(root),slot*.72,time,.58)
+        if(track.feel==='swing')bassSampler.triggerAttackRelease(note(root+7),slot*.26,time+beat,.36)
+      }
+    })
+    return slot*track.chords.length
+  }
+
+  async function play(id:string,settings:MusicSettings,{repeat=false}:{repeat?:boolean}={}){
+    const track=trackById.get(id);if(!track)return
+    stop();playingId=id
+    await Tone.start();await readyReverb
+    reverb.wet.value=clamp(settings.reverb,0,.75)
+    if(settings.voice==='piano')await preparePiano()
+    if(settings.voice==='orchestra')await prepareOrchestra()
+    if(settings.voice==='synth')prepareSynth(settings.synthPreset)
+    if(settings.bass)await prepareBass()
+    const start=Tone.now()+.08
+    const cycle=schedulePass(track,start,settings)
+    if(repeat){
+      const transport=Tone.getTransport();transport.stop();transport.cancel(0);transport.position=0
+      loop=new Tone.Loop(time=>{schedulePass(track,time+.03,settings)},cycle).start(cycle)
+      transport.start()
+    }else endTimer=window.setTimeout(()=>{if(playingId===id)playingId=null},(cycle+.5)*1000)
+  }
+
+  return {
+    play,stop,getPlayingId:()=>playingId,
+    dispose:()=>{stop();piano?.dispose();violin?.dispose();cello?.dispose();horn?.dispose();flute?.dispose();bassSampler?.dispose();synth?.dispose();master.dispose();reverb.dispose()}
+  }
 }
