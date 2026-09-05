@@ -57,7 +57,7 @@ const vscoMaps={
   },
   horn:{
     C3:raw('Brass/F Horn/sus/MOHorn_sus_C3_v1_1.wav'),
-    A3:raw('Brass/F Horn/sus/MOHorn_sus_A2_v1_1.wav'),
+    A2:raw('Brass/F Horn/sus/MOHorn_sus_A2_v1_1.wav'),
     D4:raw('Brass/F Horn/sus/MOHorn_sus_D4_v1_1.wav'),
     F4:raw('Brass/F Horn/sus/MOHorn_sus_F4_v1_1.wav')
   },
