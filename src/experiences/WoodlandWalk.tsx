@@ -1,23 +1,12 @@
-import {useEffect,useMemo,useRef,useState} from 'react'
+import {useEffect,useRef,useState} from 'react'
 import {createWoodland,type Input} from './woodland/scene'
-import {spawn} from './woodland/world'
-import {forestAudio,woodlandProgressions,type MusicRating,type WoodlandSoundMode} from './woodland/audio'
-import {WoodlandMusicPalette,rankedMusic,type MusicRatings} from './woodland/WoodlandMusicPalette'
+import {loopAt,spawn} from './woodland/world'
+import {forestAudio} from './woodland/audio'
+import {journeySigns,moodDefinition,type MoodId} from './woodland/musicWorld'
+import {woodlandWorldScore} from './woodland/musicWorldAudio'
 import {WoodlandMiniMap} from './woodland/WoodlandMiniMap'
 import './woodland/woodland.css'
 
-const MUSIC_RATINGS_KEY='woodland-music-ratings-v1'
-function readMusicRatings():MusicRatings{
-  const defaults=Object.fromEntries(woodlandProgressions.map((item,index)=>[item.id,index===0?3:1])) as MusicRatings
-  try{
-    const saved=JSON.parse(localStorage.getItem(MUSIC_RATINGS_KEY)||'{}') as Record<string,number>
-    for(const item of woodlandProgressions){
-      const value=saved[item.id]
-      if(value===0||value===1||value===2||value===3)defaults[item.id]=value
-    }
-  }catch{}
-  return defaults
-}
 function smoothstep(a:number,b:number,x:number){const t=Math.max(0,Math.min(1,(x-a)/(b-a)));return t*t*(3-2*t)}
 function pitchDelta(current:number,delta:number){
   const limit=1.08
@@ -44,16 +33,13 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
   const canvas=useRef<HTMLCanvasElement>(null),dialog=useRef<HTMLDialogElement>(null)
   const input=useRef<Input>({x:0,z:0,yaw:spawn.yaw,pitch:0,paused:true,moveAcceleration:2,viewMode:0})
   const targetLook=useRef({yaw:spawn.yaw,pitch:0}),lookVelocity=useRef({yaw:0,pitch:0}),flickVelocity=useRef({yaw:0,pitch:0})
-  const world=useRef<Awaited<ReturnType<typeof createWoodland>>|null>(null),audio=useRef<ReturnType<typeof forestAudio>|null>(null)
-  const auditionTimer=useRef<number|null>(null)
+  const world=useRef<Awaited<ReturnType<typeof createWoodland>>|null>(null),audio=useRef<ReturnType<typeof forestAudio>|null>(null),score=useRef<ReturnType<typeof woodlandWorldScore>|null>(null)
+  const currentMoodRef=useRef<MoodId>('hearth')
   const [loaded,setLoaded]=useState(0),[error,setError]=useState(''),[started,setStarted]=useState(false),[attempt,setAttempt]=useState(0),[soundError,setSoundError]=useState(false)
-  const [nature,setNature]=useState(.42),[music,setMusic]=useState(.35)
-  const [soundMode,setSoundMode]=useState<WoodlandSoundMode>('piano')
+  const [nature,setNature]=useState(.42),[music,setMusic]=useState(.58)
+  const [currentMood,setCurrentMood]=useState<MoodId>('hearth')
   const [lookGain,setLookGain]=useState(1),[cameraMass,setCameraMass]=useState(.28),[flickGlide,setFlickGlide]=useState(3),[moveAcceleration,setMoveAcceleration]=useState(2),[viewMode,setViewMode]=useState(0),[hybridControls,setHybridControls]=useState(false),[showMap,setShowMap]=useState(false),[showViewRail,setShowViewRail]=useState(true)
-  const [activeAudition,setActiveAudition]=useState<string|null>(null)
   const [mapPosition,setMapPosition]=useState({x:spawn.x,z:spawn.z}),[mapYaw,setMapYaw]=useState(spawn.yaw)
-  const [musicRatings,setMusicRatings]=useState<MusicRatings>(readMusicRatings)
-  const enabledProgressions=useMemo(()=>rankedMusic(musicRatings).filter(entry=>entry.rating>0).map(entry=>entry.item.id),[musicRatings])
   const stick=useRef<{id:number;x:number;y:number}|null>(null),look=useRef<{id:number;x:number;y:number;ax:number;ay:number;t:number;vyaw:number;vpitch:number}|null>(null),nub=useRef<HTMLSpanElement>(null)
   const wander=useRef({turn:0,speed:0,x:0,z:0})
   const clearWander=()=>{wander.current={turn:0,speed:0,x:0,z:0}}
@@ -66,13 +52,28 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
     void createWoodland(canvas.current!,input.current,controller.signal,setLoaded).then(value=>{if(controller.signal.aborted)value.dispose();else world.current=value}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the woodland.')})
     return()=>{controller.abort();world.current=null}
   },[attempt])
-  useEffect(()=>()=>{if(auditionTimer.current)window.clearTimeout(auditionTimer.current);audio.current?.dispose()},[])
-  useEffect(()=>{audio.current?.levels(nature,music)},[nature,music])
-  useEffect(()=>{audio.current?.setMode(soundMode);clearAudition()},[soundMode])
-  useEffect(()=>{localStorage.setItem(MUSIC_RATINGS_KEY,JSON.stringify(musicRatings));audio.current?.setProgressions(enabledProgressions)},[musicRatings,enabledProgressions])
+  useEffect(()=>()=>{audio.current?.dispose();score.current?.dispose()},[])
+  useEffect(()=>{audio.current?.levels(nature)},[nature])
+  useEffect(()=>{score.current?.setVolume(music)},[music])
   useEffect(()=>{input.current.moveAcceleration=moveAcceleration},[moveAcceleration])
   useEffect(()=>{input.current.viewMode=viewMode;if(hybridControls){targetLook.current.pitch=0;flickVelocity.current.pitch=0}else if(viewMode>=7){flickVelocity.current={yaw:0,pitch:0};look.current=null}},[viewMode,hybridControls])
-  useEffect(()=>{const timer=window.setInterval(()=>{const p=world.current?.getPosition();if(p)setMapPosition(p);setMapYaw(input.current.viewMode>=5?(world.current?.getHeading()??input.current.yaw):input.current.yaw)},100);return()=>window.clearInterval(timer)},[])
+  useEffect(()=>{const timer=window.setInterval(()=>{
+    const p=world.current?.getPosition()
+    if(p){
+      setMapPosition(p)
+      let hit:{mood:MoodId;distance:number}|null=null
+      for(const sign of journeySigns){
+        const q=loopAt(sign.t),distance=Math.hypot(p.x-q.x,p.z-q.z)
+        if(distance<=12&&(!hit||distance<hit.distance))hit={mood:sign.mood,distance}
+      }
+      if(hit&&hit.mood!==currentMoodRef.current){
+        currentMoodRef.current=hit.mood
+        setCurrentMood(hit.mood)
+        score.current?.setMood(hit.mood)
+      }
+    }
+    setMapYaw(input.current.viewMode>=5?(world.current?.getHeading()??input.current.yaw):input.current.yaw)
+  },100);return()=>window.clearInterval(timer)},[])
 
   useEffect(()=>{
     let frame=0,last=performance.now()
@@ -122,32 +123,25 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
   useEffect(()=>{
     const keys=new Set<string>(),update=()=>{input.current.x=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));input.current.z=Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup'))}
     const key=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(input.current.paused){keys.clear();return}if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){e.preventDefault();if(e.type==='keydown')keys.add(k);else keys.delete(k);update()}}
-    const pause=()=>{keys.clear();stop();input.current.paused=true;audio.current?.pause();setStarted(false)}
+    const pause=()=>{keys.clear();stop();input.current.paused=true;audio.current?.pause();score.current?.pause();setStarted(false)}
     const visibility=()=>{if(document.hidden)pause()}
     window.addEventListener('keydown',key);window.addEventListener('keyup',key);window.addEventListener('blur',pause);document.addEventListener('visibilitychange',visibility)
     return()=>{window.removeEventListener('keydown',key);window.removeEventListener('keyup',key);window.removeEventListener('blur',pause);document.removeEventListener('visibilitychange',visibility)}
   },[])
 
   function ensureAudio(){
-    if(!audio.current){audio.current=forestAudio();audio.current.levels(nature,music);audio.current.setProgressions(enabledProgressions);audio.current.setMode(soundMode)}
-    return audio.current
+    if(!audio.current){audio.current=forestAudio();audio.current.levels(nature)}
+    if(!score.current){score.current=woodlandWorldScore();score.current.setVolume(music);score.current.setMood(currentMoodRef.current)}
+    return {naturePlayer:audio.current,scorePlayer:score.current}
   }
-  function clearAudition(){
-    if(auditionTimer.current){window.clearTimeout(auditionTimer.current);auditionTimer.current=null}
-    audio.current?.stopAudition();setActiveAudition(null)
+  function begin(){
+    input.current.paused=false;setStarted(true)
+    try{const players=ensureAudio();void Promise.all([players.naturePlayer.start(),players.scorePlayer.start()]).catch(()=>setSoundError(true))}catch{setSoundError(true)}
   }
-  function begin(){input.current.paused=false;setStarted(true);try{void ensureAudio().start().catch(()=>setSoundError(true))}catch{setSoundError(true)}}
-  function settings(){stop();input.current.paused=true;clearAudition();audio.current?.pauseAmbient();dialog.current?.showModal()}
-  function closeSettings(){clearAudition();input.current.paused=!started;if(started){try{void ensureAudio().start().catch(()=>setSoundError(true))}catch{setSoundError(true)}}}
-  function rateMusic(id:string,rating:MusicRating){setMusicRatings(current=>({...current,[id]:rating}))}
-  function toggleAudition(id:string){
-    if(activeAudition===id){clearAudition();return}
-    clearAudition()
-    try{
-      const player=ensureAudio();player.pauseAmbient();setActiveAudition(id)
-      void player.audition(id).catch(()=>{setSoundError(true);setActiveAudition(null)})
-      auditionTimer.current=window.setTimeout(()=>{player.stopAudition();setActiveAudition(null);auditionTimer.current=null},6900)
-    }catch{setSoundError(true);setActiveAudition(null)}
+  function settings(){stop();input.current.paused=true;audio.current?.pauseAmbient();score.current?.pause();dialog.current?.showModal()}
+  function closeSettings(){
+    input.current.paused=!started
+    if(started){try{const players=ensureAudio();void Promise.all([players.naturePlayer.start(),players.scorePlayer.start()]).catch(()=>setSoundError(true))}catch{setSoundError(true)}}
   }
   function endLook(){
     const p=look.current
@@ -162,18 +156,19 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
     }else flickVelocity.current={yaw:0,pitch:0}
     look.current=null
   }
+  const currentMoodInfo=moodDefinition(currentMood)
   return <main className="woodland">
     <canvas ref={canvas} aria-label="Immersive woodland with looping walking trails" onContextMenu={e=>e.preventDefault()}/>
     <div className="woodland-look" aria-label="Drag to look or wander" onPointerDown={e=>{if(input.current.paused||look.current||(!hybridControls&&viewMode>=7))return;e.currentTarget.setPointerCapture(e.pointerId);flickVelocity.current={yaw:0,pitch:0};look.current={id:e.pointerId,x:e.clientX,y:e.clientY,ax:e.clientX,ay:e.clientY,t:performance.now(),vyaw:0,vpitch:0};clearWander()}} onPointerMove={e=>{const p=look.current;if(!p||p.id!==e.pointerId||input.current.paused)return;const now=performance.now();if(hybridControls&&!stick.current){wander.current=wanderFromDrag(e.clientX-p.ax,e.clientY-p.ay);p.x=e.clientX;p.y=e.clientY;p.t=now;return}const dt=Math.max(.016,(now-p.t)/1000),rawDx=e.clientX-p.x,rawDy=e.clientY-p.y,dx=shapedPointerDelta(rawDx),dy=shapedPointerDelta(rawDy),lookMix=Math.max(0,1-viewMode/8),yawDelta=-dx*.003*lookGain*lookMix,pitchMove=hybridControls?0:-dy*.003*lookGain*lookMix;targetLook.current.yaw+=yawDelta;const before=targetLook.current.pitch;targetLook.current.pitch=pitchDelta(before,pitchMove);const appliedPitch=targetLook.current.pitch-before;const sampleYaw=yawDelta/dt,samplePitch=appliedPitch/dt;p.vyaw=p.vyaw*.72+sampleYaw*.28;p.vpitch=p.vpitch*.72+samplePitch*.28;p.x=e.clientX;p.y=e.clientY;p.t=now}} onPointerUp={endLook} onPointerCancel={()=>{clearWander();input.current.x=0;input.current.z=0;flickVelocity.current={yaw:0,pitch:0};look.current=null}}/>
-    {showMap&&<WoodlandMiniMap position={mapPosition} yaw={mapYaw} onTeleport={point=>{world.current?.setPosition(point);setMapPosition(point)}}/>}<header className="woodland-bar"><span>WOODLAND <small>A place to wander</small></span><button onClick={settings}>Sound & settings</button></header>
+    {showMap&&<WoodlandMiniMap position={mapPosition} yaw={mapYaw} onTeleport={point=>{world.current?.setPosition(point);setMapPosition(point)}}/>}<header className="woodland-bar"><span>WOODLAND <small>A place to wander</small></span><button onClick={settings}>Sound & settings</button></header><div style={{position:'absolute',zIndex:7,top:'max(64px, env(safe-area-inset-top))',left:'50%',transform:'translateX(-50%)',padding:'7px 12px',borderRadius:999,background:'#102b26b8',border:'1px solid #ffffff2b',backdropFilter:'blur(8px)',fontSize:11,letterSpacing:'.08em',pointerEvents:'none'}}>{currentMoodInfo.emoji} {currentMoodInfo.label.toUpperCase()}</div>
     {started&&<>{showViewRail&&<div className="woodland-view-rail" aria-label="View height"><span>SKY</span><input aria-label="First person to overhead view" type="range" min="0" max="10" step=".1" value={viewMode} onChange={e=>setViewMode(Number(e.target.value))}/><span>1P</span></div>}<div className="woodland-stick" role="application" aria-label="Movement joystick: drag your left thumb" onPointerDown={e=>{if(input.current.paused||stick.current)return;e.currentTarget.setPointerCapture(e.pointerId);const r=e.currentTarget.getBoundingClientRect();stick.current={id:e.pointerId,x:r.left+r.width/2,y:r.top+r.height/2};if(hybridControls){clearWander();input.current.x=0;input.current.z=0}}} onPointerMove={e=>{const p=stick.current;if(!p||p.id!==e.pointerId||input.current.paused)return;const dx=e.clientX-p.x,dy=e.clientY-p.y,d=Math.max(42,Math.hypot(dx,dy));input.current.x=dx/d;input.current.z=dy/d;if(nub.current)nub.current.style.transform=`translate(${dx/d*36}px,${dy/d*36}px)`}} onPointerUp={releaseMove} onPointerCancel={releaseMove} onLostPointerCapture={releaseMove}><span ref={nub}/><small>{hybridControls?'FEET':'MOVE'}</small></div><div className="woodland-look-hint">{hybridControls?'RIGHT: WANDER · BOTH: LOOK':'DRAG TO LOOK'}</div></>}
     {!started&&<section className="woodland-intro"><div className="woodland-panel"><span className="woodland-eyebrow">THE LAB · FIELD EXPERIMENT</span><h1>Take the long way.</h1><p>A spacious woodland, a winding circuit, and quieter paths that always find their way back.</p><p className="woodland-controls">Left thumb to walk · Right thumb to look<br/>On a computer: WASD or arrows · Drag to look</p>{error?<><p role="alert">{error}</p><button onClick={()=>setAttempt(x=>x+1)}>Try again</button></>:<button disabled={loaded<1} onClick={begin}>{loaded<1?`Growing your woodland… ${Math.round(loaded*100)}%`:'Enter the woodland'}</button>}<small>Best enjoyed sideways. Headphones optional.</small></div></section>}
     <dialog ref={dialog} className="woodland-dialog" onClose={closeSettings}>
       <h2>Make yourself at home.</h2>
       <p className="woodland-settings-note">The walking soundscape pauses here so you can tune one thing at a time.</p>
       <label>Forest recording <input type="range" min="0" max="1" step=".01" value={nature} onChange={e=>setNature(Number(e.target.value))}/></label>
-      <label>Gentle music <input type="range" min="0" max="1" step=".01" value={music} onChange={e=>setMusic(Number(e.target.value))}/></label>
-      <WoodlandMusicPalette ratings={musicRatings} activeId={activeAudition} mode={soundMode} onRate={rateMusic} onToggle={toggleAudition} onMode={setSoundMode}/>
+      <label>Orchestral score <input type="range" min="0" max="1" step=".01" value={music} onChange={e=>setMusic(Number(e.target.value))}/></label>
+      <section className="woodland-music"><div className="woodland-music-heading"><div><h3>Musical world</h3><p>Current color: <b>{currentMoodInfo.emoji} {currentMoodInfo.label}</b>. Temporary named signposts around the main trail trigger the ten Hero’s Journey colors. Melody Lab ratings choose the preferred theme inside each color.</p></div><span>V0</span></div></section>
       <section className="woodland-camera">
         <h3>Controls</h3>
         <p>Try the experimental contextual controls. Right thumb alone wanders; left alone moves the feet; both thumbs give independent movement and looking.</p>
@@ -195,7 +190,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
         <label>Flick glide <strong>{flickGlide.toFixed(1)}</strong><input type="range" min="0" max="10" step=".1" value={flickGlide} onChange={e=>setFlickGlide(Number(e.target.value))}/><small>0 = stops immediately. 10 = longest glide. Tiny release movements are ignored.</small></label>
       </section>
       {soundError&&<p>Audio could not start. Walking is still available.</p>}
-      <p>Recorded forest birds by Pierre SIBANARCO / BigSoundBank (CC0). Original synthesized ambient music. Nature models by Quaternius (CC0).</p>
+      <p>Recorded forest birds by Pierre SIBANARCO / BigSoundBank (CC0). Musical-world orchestra uses VSCO 2 Community Edition CC0 samples. Nature models by Quaternius (CC0).</p>
       <button onClick={onBack}>← Return to The Lab</button><button onClick={()=>{world.current?.reset();resetLook();dialog.current?.close()}}>Return to the trail entrance</button><button onClick={()=>dialog.current?.close()}>Done</button>
     </dialog>
   </main>
