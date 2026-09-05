@@ -22,12 +22,13 @@ export function placements(){
   }
   for(let i=0;i<5400;i++){
     const x=(r()-.5)*400,z=(r()-.5)*400,d=pathDistance(x,z)
-    if(Math.hypot(x,z)>200||d<2.5)continue
+    if(Math.hypot(x,z)>200||d<4.8)continue
     const n=r(),kind=n<.12?'rock':n<.32?'bush':n<.52?'fern':n<.75?'clover':'grass'
     out.push({x,z,kind,height:kind==='rock'?.6+r()*1.4:kind==='bush'?.8+r()*.8:.25+r()*.55,angle:r()*Math.PI*2,solid:kind==='rock'?.65:0})
   }
-  // Dense, low flowers and ferns frame the paths, leaving the walking surface clear.
-  for(const line of paths)for(let i=0;i<line.length;i+=2){const p=line[i],q=line[(i+1)%line.length],dx=q.x-p.x,dz=q.z-p.z,l=Math.hypot(dx,dz)||1;for(const side of [-1,1]){const off=3.2+r()*1.8;out.push({x:p.x-dz/l*off*side,z:p.z+dx/l*off*side,kind:r()<.5?'bush':'fern',height:.5+r()*.6,angle:r()*6.28,solid:0})}}
+  // Keep a generous plant-free shoulder around every trail so foliage never spills onto the road.
+  // A lighter, more distant edge planting still gives the paths a natural frame without visual clutter.
+  for(const line of paths)for(let i=0;i<line.length;i+=4){const p=line[i],q=line[Math.min(i+1,line.length-1)],dx=q.x-p.x,dz=q.z-p.z,l=Math.hypot(dx,dz)||1;for(const side of [-1,1]){const off=5.4+r()*2.2;out.push({x:p.x-dz/l*off*side,z:p.z+dx/l*off*side,kind:r()<.38?'bush':'fern',height:.38+r()*.48,angle:r()*6.28,solid:0})}}
   return out
 }
 export const normalizeMove=(x:number,z:number)=>{const d=Math.max(1,Math.hypot(x,z));return {x:x/d,z:z/d}}
