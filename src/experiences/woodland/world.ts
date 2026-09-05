@@ -31,8 +31,8 @@ export function placements(){
   return out
 }
 export const normalizeMove=(x:number,z:number)=>{const d=Math.max(1,Math.hypot(x,z));return {x:x/d,z:z/d}}
-export function move(pos:Point,x:number,z:number,yaw:number,dt:number,solids:Placement[]):Point{
-  const v=normalizeMove(x,z),step=Math.min(.05,Math.max(0,dt))*3.1,dx=(v.x*Math.cos(yaw)+v.z*Math.sin(yaw))*step,dz=(v.z*Math.cos(yaw)-v.x*Math.sin(yaw))*step
+export function move(pos:Point,x:number,z:number,yaw:number,dt:number,solids:Placement[],speed=3.1):Point{
+  const v=normalizeMove(x,z),step=Math.min(.05,Math.max(0,dt))*Math.max(0,speed),dx=(v.x*Math.cos(yaw)+v.z*Math.sin(yaw))*step,dz=(v.z*Math.cos(yaw)-v.x*Math.sin(yaw))*step
   const clear=(a:number,b:number)=>Math.hypot(a,b)<LIMIT&&!solids.some(p=>p.solid>0&&Math.hypot(p.x-a,p.z-b)<p.solid+.3)
   const nx=clear(pos.x+dx,pos.z)?pos.x+dx:pos.x
   return {x:nx,z:clear(nx,pos.z+dz)?pos.z+dz:pos.z}
