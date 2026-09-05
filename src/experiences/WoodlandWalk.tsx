@@ -36,14 +36,14 @@ function shapedPointerDelta(delta:number){
 
 export function WoodlandWalk({onBack}:{onBack:()=>void}){
   const canvas=useRef<HTMLCanvasElement>(null),dialog=useRef<HTMLDialogElement>(null)
-  const input=useRef<Input>({x:0,z:0,yaw:spawn.yaw,pitch:0,paused:true})
+  const input=useRef<Input>({x:0,z:0,yaw:spawn.yaw,pitch:0,paused:true,moveAcceleration:2})
   const targetLook=useRef({yaw:spawn.yaw,pitch:0}),lookVelocity=useRef({yaw:0,pitch:0}),flickVelocity=useRef({yaw:0,pitch:0})
   const world=useRef<Awaited<ReturnType<typeof createWoodland>>|null>(null),audio=useRef<ReturnType<typeof forestAudio>|null>(null)
   const auditionTimer=useRef<number|null>(null)
   const [loaded,setLoaded]=useState(0),[error,setError]=useState(''),[started,setStarted]=useState(false),[attempt,setAttempt]=useState(0),[soundError,setSoundError]=useState(false)
   const [nature,setNature]=useState(.55),[music,setMusic]=useState(.35)
   const [soundMode,setSoundMode]=useState<WoodlandSoundMode>('piano')
-  const [lookGain,setLookGain]=useState(1),[cameraMass,setCameraMass]=useState(.28),[flickGlide,setFlickGlide]=useState(3)
+  const [lookGain,setLookGain]=useState(1),[cameraMass,setCameraMass]=useState(.28),[flickGlide,setFlickGlide]=useState(3),[moveAcceleration,setMoveAcceleration]=useState(2)
   const [activeAudition,setActiveAudition]=useState<string|null>(null)
   const [mapPosition,setMapPosition]=useState({x:spawn.x,z:spawn.z}),[mapYaw,setMapYaw]=useState(spawn.yaw)
   const [musicRatings,setMusicRatings]=useState<MusicRatings>(readMusicRatings)
@@ -61,6 +61,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
   useEffect(()=>{audio.current?.levels(nature,music)},[nature,music])
   useEffect(()=>{audio.current?.setMode(soundMode);clearAudition()},[soundMode])
   useEffect(()=>{localStorage.setItem(MUSIC_RATINGS_KEY,JSON.stringify(musicRatings));audio.current?.setProgressions(enabledProgressions)},[musicRatings,enabledProgressions])
+  useEffect(()=>{input.current.moveAcceleration=moveAcceleration},[moveAcceleration])
   useEffect(()=>{const timer=window.setInterval(()=>{const p=world.current?.getPosition();if(p)setMapPosition(p);setMapYaw(input.current.yaw)},100);return()=>window.clearInterval(timer)},[])
 
   useEffect(()=>{
@@ -149,6 +150,9 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
       <label>Gentle music <input type="range" min="0" max="1" step=".01" value={music} onChange={e=>setMusic(Number(e.target.value))}/></label>
       <WoodlandMusicPalette ratings={musicRatings} activeId={activeAudition} mode={soundMode} onRate={rateMusic} onToggle={toggleAudition} onMode={setSoundMode}/>
       <section className="woodland-camera">
+        <h3>Movement feel</h3>
+        <p>Acceleration changes both how quickly you pick up speed and how fast your top walking speed can become.</p>
+        <label>Acceleration <strong>{moveAcceleration.toFixed(1)}</strong><input type="range" min="0" max="10" step=".1" value={moveAcceleration} onChange={e=>setMoveAcceleration(Number(e.target.value))}/><small>0 = gentle walking. 10 = very fast travel.</small></label>
         <h3>Look feel</h3>
         <p>Horizontal turning is free. Vertical looking gradually resists near the sky and ground so the useful horizon band gets most of your finger travel.</p>
         <label>Turn multiplier <strong>{lookGain.toFixed(2)}×</strong><input type="range" min=".25" max="22" step=".25" value={lookGain} onChange={e=>setLookGain(Number(e.target.value))}/><small>Low = precise. High = owl mode.</small></label>
