@@ -76,7 +76,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
         if(hybridControls&&look.current&&!stick.current){
           const w=wander.current
           if(viewMode<5){
-            targetLook.current.yaw-=w.turn*1.65*dt
+            targetLook.current.yaw+=w.turn*1.65*dt
             input.current.x=0
             input.current.z=-w.speed
           }else{
