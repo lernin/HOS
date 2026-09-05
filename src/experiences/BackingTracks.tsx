@@ -1,4 +1,4 @@
-import {useMemo,useRef,useState} from 'react'
+import {useEffect,useMemo,useRef,useState} from 'react'
 import {backingTrackPlayer,backingTracks,type TrackRating} from './backingTracks/audio'
 import './backing-tracks.css'
 
@@ -20,6 +20,7 @@ export function BackingTracks({onExit}:{onExit:()=>void}){
   const [mode,setMode]=useState<'preview'|'loop'|null>(null)
   const [bass,setBass]=useState(true),[drums,setDrums]=useState(true)
   const ranked=useMemo(()=>backingTracks.map((track,index)=>({track,index,rating:ratings[track.id]??0})).sort((a,b)=>b.rating-a.rating||a.index-b.index),[ratings])
+  useEffect(()=>()=>player.current?.dispose(),[])
 
   function ensure(){if(!player.current)player.current=backingTrackPlayer();return player.current}
   function stop(){player.current?.stop();setActive(null);setMode(null)}
