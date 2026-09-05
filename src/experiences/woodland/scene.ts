@@ -126,11 +126,11 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
 
       avatarMid.visible=view>=.48&&view<.74
       avatarMid.position.set(position.x,groundY+.03,position.z);avatarMid.rotation.y=avatarYaw
-      avatarMid.scale.setScalar(.92+1.1*smoothstep(.48,.74,view))
+      avatarMid.scale.setScalar(.92+1.1*T.MathUtils.smoothstep(view,.48,.74))
 
       locator.visible=view>=.68
       locator.position.set(position.x,groundY+.14,position.z)
-      locator.scale.setScalar(1.3+2.25*smoothstep(.68,1,view))
+      locator.scale.setScalar(1.3+2.25*T.MathUtils.smoothstep(view,.68,1))
       locatorHaloMat.opacity=.055+.075*pull
       locatorRingMat.opacity=.68+.28*pull
 
