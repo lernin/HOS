@@ -91,7 +91,20 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     const bgNormal=new T.Color('#bbdce6'),bgCute=new T.Color('#cfe7d7'),fogNormal=new T.Color('#b7d4cf'),fogCute=new T.Color('#c7dfce')
     const fpPos=new T.Vector3(),overviewPos=new T.Vector3(),lookTarget=new T.Vector3(),up=new T.Vector3(0,1,0)
     const fpQuat=new T.Quaternion(),overviewQuat=new T.Quaternion(),lookMatrix=new T.Matrix4(),styleDummy=new T.Object3D()
-    let position={x:spawn.x,z:spawn.z},previous=performance.now(),moveSpeed=0,avatarYaw=spawn.yaw,lastStyle=-1
+    let position={x:spawn.x,z:spawn.z},previous=performance.now(),moveSpeed=0,avatarYaw=spawn.yaw,lastStyle=-1,wasFlying=false
+
+    const groundClear=(x:number,z:number)=>Math.hypot(x,z)<193&&!solids.some(p=>p.solid>0&&Math.hypot(p.x-x,p.z-z)<p.solid+.35)
+    const safeLanding=(x:number,z:number)=>{
+      if(groundClear(x,z))return {x,z}
+      for(let radius=.45;radius<=4;radius+=.35){
+        const steps=Math.max(12,Math.ceil(radius*14))
+        for(let i=0;i<steps;i++){
+          const angle=i/steps*Math.PI*2,nx=x+Math.cos(angle)*radius,nz=z+Math.sin(angle)*radius
+          if(groundClear(nx,nz))return {x:nx,z:nz}
+        }
+      }
+      return {x,z}
+    }
 
     function restyle(cute:number){
       for(const mesh of batches){
@@ -105,7 +118,9 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     }
 
     const render=(now:number)=>{if(disposed)return;const dt=Math.min(.05,Math.max(0,(now-previous)/1000));previous=now
-      const view=Math.max(0,Math.min(1,input.viewMode/10)),pull=view*view*(3-2*view),skyBoost=T.MathUtils.smoothstep(view,.45,1)
+      const view=Math.max(0,Math.min(1,input.viewMode/10)),pull=view*view*(3-2*view),skyBoost=T.MathUtils.smoothstep(view,.45,1),flying=view>=.55
+      if(wasFlying&&!flying)position=safeLanding(position.x,position.z)
+      wasFlying=flying
       const beforeX=position.x,beforeZ=position.z
       if(!input.paused){
         const intent=Math.min(1,Math.hypot(input.x,input.z))
@@ -118,7 +133,8 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
         const step=rate*dt
         moveSpeed=Math.abs(target-moveSpeed)<=step?target:moveSpeed+Math.sign(target-moveSpeed)*step
         const substeps=Math.max(1,Math.ceil(moveSpeed*dt/.34))
-        for(let i=0;i<substeps;i++)position=move(position,input.x,input.z,input.yaw,dt/substeps,solids,moveSpeed)
+        const collisionSet=flying?[]:solids
+        for(let i=0;i<substeps;i++)position=move(position,input.x,input.z,input.yaw,dt/substeps,collisionSet,moveSpeed)
       }else moveSpeed=0
 
       const movedX=position.x-beforeX,movedZ=position.z-beforeZ
