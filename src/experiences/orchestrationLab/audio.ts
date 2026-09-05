@@ -131,23 +131,24 @@ export function orchestrationPlayer(){
   }
 
   function playPiano(character:OrchestrationCharacter,notes:number[],start:number,duration:number){
-    if(!piano)return
+    const instrument=piano
+    if(!instrument)return
     const n=notes.map(x=>fit(x,45,84))
     if(character==='air'){
-      n.forEach((m,i)=>hit(piano,m,start+i*.07,duration*(.88-i*.035),.5-i*.035))
+      n.forEach((m,i)=>hit(instrument,m,start+i*.07,duration*(.88-i*.035),.5-i*.035))
     }else if(character==='voices'){
-      n.forEach((m,i)=>hit(piano,m,start+i*.14,duration*.82,.5))
+      n.forEach((m,i)=>hit(instrument,m,start+i*.14,duration*.82,.5))
     }else if(character==='luminous'){
-      hit(piano,n[0],start,duration,.48);hit(piano,n[2],start+.03,duration,.43);hit(piano,n[n.length-1]+12,start+.06,duration*.9,.34)
+      hit(instrument,n[0],start,duration,.48);hit(instrument,n[2],start+.03,duration,.43);hit(instrument,n[n.length-1]+12,start+.06,duration*.9,.34)
     }else if(character==='color'){
-      n.forEach((m,i)=>hit(piano,m+(i===n.length-1?12:0),start+i*.035,duration*.9,.48-i*.025))
+      n.forEach((m,i)=>hit(instrument,m+(i===n.length-1?12:0),start+i*.035,duration*.9,.48-i*.025))
     }else if(character==='sacred'){
-      hit(piano,n[0],start,duration,.42);hit(piano,n[1],start+.12,duration*.92,.33);hit(piano,n[n.length-1]+12,start+.22,duration*.78,.28)
+      hit(instrument,n[0],start,duration,.42);hit(instrument,n[1],start+.12,duration*.92,.33);hit(instrument,n[n.length-1]+12,start+.22,duration*.78,.28)
     }else if(character==='pulse'){
-      for(let p=0;p<4;p++)n.slice(1).forEach((m,i)=>hit(piano,m,start+p*1.15+i*.025,.72,.32+p*.035))
-      hit(piano,n[0],start,duration,.34)
+      for(let p=0;p<4;p++)n.slice(1).forEach((m,i)=>hit(instrument,m,start+p*1.15+i*.025,.72,.32+p*.035))
+      hit(instrument,n[0],start,duration,.34)
     }else{
-      hit(piano,n[0]-12,start,duration,.4);n.forEach((m,i)=>hit(piano,m,start+.12+i*.03,duration*.92,.43));hit(piano,n[n.length-1]+12,start+.28,duration*.75,.27)
+      hit(instrument,n[0]-12,start,duration,.4);n.forEach((m,i)=>hit(instrument,m,start+.12+i*.03,duration*.92,.43));hit(instrument,n[n.length-1]+12,start+.28,duration*.75,.27)
     }
   }
 
