@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react'
 import {createWoodland,type Input} from './woodland/scene'
-import {loopAt,spawn} from './woodland/world'
+import {mainLoop,spawn} from './woodland/world'
 import {forestAudio} from './woodland/audio'
 import {journeySigns,moodDefinition,type MoodId} from './woodland/musicWorld'
 import {woodlandWorldScore} from './woodland/musicWorldAudio'
@@ -61,15 +61,20 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
     const p=world.current?.getPosition()
     if(p){
       setMapPosition(p)
-      let nearest:{mood:MoodId;distance:number}|null=null
-      for(const sign of journeySigns){
-        const q=loopAt(sign.t),distance=Math.hypot(p.x-q.x,p.z-q.z)
-        if(distance<=12&&(!nearest||distance<nearest.distance))nearest={mood:sign.mood,distance}
+      let nearestIndex=0,nearestDistance=Infinity
+      for(let i=0;i<mainLoop.length-1;i++){
+        const q=mainLoop[i],distance=Math.hypot(p.x-q.x,p.z-q.z)
+        if(distance<nearestDistance){nearestDistance=distance;nearestIndex=i}
       }
-      if(nearest&&nearest.mood!==currentMoodRef.current){
-        currentMoodRef.current=nearest.mood
-        setCurrentMood(nearest.mood)
-        score.current?.setMood(nearest.mood)
+      const tau=Math.PI*2,start=Math.PI/2
+      const t=nearestIndex/(mainLoop.length-1)*tau
+      const delta=(t-start+tau)%tau
+      const zone=Math.min(journeySigns.length-1,Math.floor(delta/(tau/journeySigns.length)))
+      const mood=journeySigns[zone].mood
+      if(mood!==currentMoodRef.current){
+        currentMoodRef.current=mood
+        setCurrentMood(mood)
+        score.current?.setMood(mood)
       }
     }
     setMapYaw(input.current.viewMode>=5?(world.current?.getHeading()??input.current.yaw):input.current.yaw)
