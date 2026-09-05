@@ -4,8 +4,7 @@
   "git": {
     "deploymentEnabled": {
       "*": false,
-      "main": true,
-      "integration/woodland-complete-20260905": true
+      "main": true
     }
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
