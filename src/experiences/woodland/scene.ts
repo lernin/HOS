@@ -76,15 +76,17 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     avatarMid.add(midBody,midHead,midArrow);avatarMid.visible=false;scene.add(avatarMid);track(avatarMid)
 
     const locator=new T.Group()
-    const locatorHaloMat=new T.MeshBasicMaterial({color:'#b9ffd0',transparent:true,opacity:.1,depthTest:false,depthWrite:false,side:T.DoubleSide})
-    const locatorRingMat=new T.MeshBasicMaterial({color:'#d9ffe5',transparent:true,opacity:.82,depthTest:false,depthWrite:false,side:T.DoubleSide})
-    const locatorDotMat=new T.MeshBasicMaterial({color:'#f6fff8',transparent:true,opacity:.96,depthTest:false,depthWrite:false,side:T.DoubleSide})
+    const locatorHaloMat=new T.MeshBasicMaterial({color:'#ff5b3a',transparent:true,opacity:.13,depthTest:false,depthWrite:false,side:T.DoubleSide})
+    const locatorOuterMat=new T.MeshBasicMaterial({color:'#341520',transparent:true,opacity:.86,depthTest:false,depthWrite:false,side:T.DoubleSide})
+    const locatorRingMat=new T.MeshBasicMaterial({color:'#ffb000',transparent:true,opacity:.98,depthTest:false,depthWrite:false,side:T.DoubleSide})
+    const locatorDotMat=new T.MeshBasicMaterial({color:'#ff3b30',transparent:true,opacity:1,depthTest:false,depthWrite:false,side:T.DoubleSide})
     const locatorHalo=new T.Mesh(new T.CircleGeometry(1,32),locatorHaloMat)
-    const locatorRing=new T.Mesh(new T.RingGeometry(.62,.92,32),locatorRingMat)
-    const locatorDot=new T.Mesh(new T.CircleGeometry(.24,24),locatorDotMat)
-    locatorHalo.rotation.x=locatorRing.rotation.x=locatorDot.rotation.x=-Math.PI/2
-    locatorHalo.renderOrder=20;locatorRing.renderOrder=21;locatorDot.renderOrder=22
-    locator.add(locatorHalo,locatorRing,locatorDot);locator.visible=false;scene.add(locator);track(locator)
+    const locatorOuter=new T.Mesh(new T.RingGeometry(.58,1.02,32),locatorOuterMat)
+    const locatorRing=new T.Mesh(new T.RingGeometry(.64,.9,32),locatorRingMat)
+    const locatorDot=new T.Mesh(new T.CircleGeometry(.27,24),locatorDotMat)
+    locatorHalo.rotation.x=locatorOuter.rotation.x=locatorRing.rotation.x=locatorDot.rotation.x=-Math.PI/2
+    locatorHalo.renderOrder=20;locatorOuter.renderOrder=21;locatorRing.renderOrder=22;locatorDot.renderOrder=23
+    locator.add(locatorHalo,locatorOuter,locatorRing,locatorDot);locator.visible=false;scene.add(locator);track(locator)
 
     const bgNormal=new T.Color('#bbdce6'),bgCute=new T.Color('#cfe7d7'),fogNormal=new T.Color('#b7d4cf'),fogCute=new T.Color('#c7dfce')
     const fpPos=new T.Vector3(),overviewPos=new T.Vector3(),lookTarget=new T.Vector3(),up=new T.Vector3(0,1,0)
@@ -103,24 +105,26 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     }
 
     const render=(now:number)=>{if(disposed)return;const dt=Math.min(.05,Math.max(0,(now-previous)/1000));previous=now
+      const view=Math.max(0,Math.min(1,input.viewMode/10)),pull=view*view*(3-2*view),skyBoost=T.MathUtils.smoothstep(view,.45,1)
       const beforeX=position.x,beforeZ=position.z
       if(!input.paused){
         const intent=Math.min(1,Math.hypot(input.x,input.z))
         const boost=Math.max(0,Math.min(10,input.moveAcceleration))
-        const cruise=3.1+boost*.9
+        const cruise=(3.1+boost*.9)*(1+2.5*skyBoost)
         const target=intent*cruise
-        const accel=5+boost*3.5
-        const decel=10+boost*2
+        const accel=(5+boost*3.5)*(1+4*skyBoost)
+        const decel=(10+boost*2)*(1+3*skyBoost)
         const rate=target>moveSpeed?accel:decel
         const step=rate*dt
         moveSpeed=Math.abs(target-moveSpeed)<=step?target:moveSpeed+Math.sign(target-moveSpeed)*step
-        position=move(position,input.x,input.z,input.yaw,dt,solids,moveSpeed)
+        const substeps=Math.max(1,Math.ceil(moveSpeed*dt/.34))
+        for(let i=0;i<substeps;i++)position=move(position,input.x,input.z,input.yaw,dt/substeps,solids,moveSpeed)
       }else moveSpeed=0
 
       const movedX=position.x-beforeX,movedZ=position.z-beforeZ
       if(Math.hypot(movedX,movedZ)>.0005)avatarYaw=Math.atan2(-movedX,-movedZ)
 
-      const view=Math.max(0,Math.min(1,input.viewMode/10)),pull=view*view*(3-2*view),groundY=heightAt(position.x,position.z)
+      const groundY=heightAt(position.x,position.z)
       avatar.visible=view>.035&&view<.56
       avatar.position.set(position.x,groundY+.02,position.z);avatar.rotation.y=avatarYaw;avatar.scale.setScalar(.82+.34*pull)
 
@@ -130,9 +134,10 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
 
       locator.visible=view>=.68
       locator.position.set(position.x,groundY+.14,position.z)
-      locator.scale.setScalar(1.3+2.25*T.MathUtils.smoothstep(view,.68,1))
-      locatorHaloMat.opacity=.055+.075*pull
-      locatorRingMat.opacity=.68+.28*pull
+      locator.scale.setScalar(1.45+2.95*T.MathUtils.smoothstep(view,.68,1))
+      locatorHaloMat.opacity=.08+.12*pull
+      locatorOuterMat.opacity=.78+.18*pull
+      locatorRingMat.opacity=.88+.12*pull
 
       if(Math.abs(pull-lastStyle)>.025){restyle(pull);lastStyle=pull}
       ;(scene.background as T.Color).lerpColors(bgNormal,bgCute,pull)
