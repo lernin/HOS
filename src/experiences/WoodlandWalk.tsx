@@ -84,7 +84,9 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
           flickVelocity.current.pitch=0
           if(look.current&&!stick.current){
             const w=wander.current,direct=smoothstep(3,7,viewMode)
-            targetLook.current.yaw+=w.turn*1.65*(1-direct)*dt
+            // Match the existing drag-to-look convention: rightward thumb travel means yaw right.
+            // In this scene's yaw convention, a right turn decreases yaw.
+            targetLook.current.yaw-=w.turn*1.65*(1-direct)*dt
             input.current.x=w.x*direct
             input.current.z=-w.speed*(1-direct)+w.z*direct
           }
