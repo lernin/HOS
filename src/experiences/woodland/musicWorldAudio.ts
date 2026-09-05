@@ -58,27 +58,28 @@ export function woodlandWorldScore(){
   }
 
   function schedule(moodId:MoodId,candidate:MelodyCandidate,loop:boolean){
-    if(!set)return 0
+    const instruments=set
+    if(!instruments)return 0
     const mood=moodDefinition(moodId),beat=60/mood.bpm,bar=beat*4,total=bar*4,start=Tone.now()+.12
     reverb.wet.rampTo(mood.room,.35)
     for(let b=0;b<4;b++){
       const chord=chordNotes(moodId,b),t=start+b*bar
-      hit(set.cello,fit(chord[0]-12,36,55),t,bar*.96,.26+.025*mood.density)
-      hit(set.viola,fit(chord[1],48,72),t+.05,bar*.88,.18+.022*mood.density)
-      hit(set.violin,fit(chord[2]+12,60,88),t+.11,bar*.8,.14+.018*mood.density)
-      if(mood.density>=3)hit(set.horn,fit(chord[0],43,67),t+.17,bar*.74,.11+.02*mood.density)
-      if(mood.density>=4&&b%2===1)hit(set.flute,fit(chord[3]+12,67,92),t+.28,bar*.5,.08+.012*mood.density)
+      hit(instruments.cello,fit(chord[0]-12,36,55),t,bar*.96,.26+.025*mood.density)
+      hit(instruments.viola,fit(chord[1],48,72),t+.05,bar*.88,.18+.022*mood.density)
+      hit(instruments.violin,fit(chord[2]+12,60,88),t+.11,bar*.8,.14+.018*mood.density)
+      if(mood.density>=3)hit(instruments.horn,fit(chord[0],43,67),t+.17,bar*.74,.11+.02*mood.density)
+      if(mood.density>=4&&b%2===1)hit(instruments.flute,fit(chord[3]+12,67,92),t+.28,bar*.5,.08+.012*mood.density)
       if((moodId==='adventure'||moodId==='peril')&&mood.density>=4){
-        for(let pulse=0;pulse<4;pulse++)hit(set.viola,fit(chord[1],48,72),t+pulse*beat,beat*.58,.12)
+        for(let pulse=0;pulse<4;pulse++)hit(instruments.viola,fit(chord[1],48,72),t+pulse*beat,beat*.58,.12)
       }
     }
     const notes=melodyNotes(moodId,candidate.id)
     let cursor=0
-    const lead=mood.lead==='flute'?set.flute:set.violin
+    const lead=mood.lead==='flute'?instruments.flute:instruments.violin
     candidate.rhythm.forEach((beats,index)=>{
       const t=start+cursor*beat,dur=Math.max(.28,beats*beat*.78),midi=fit(notes[index],mood.lead==='flute'?64:58,mood.lead==='flute'?96:91)
       hit(lead,midi,t,dur,.24+(moodId==='triumph'?.08:0))
-      if(moodId==='triumph'&&index>=4)hit(set.horn,fit(midi-12,48,72),t+.04,dur*.9,.15)
+      if(moodId==='triumph'&&index>=4)hit(instruments.horn,fit(midi-12,48,72),t+.04,dur*.9,.15)
       cursor+=beats
     })
     if(loop){
