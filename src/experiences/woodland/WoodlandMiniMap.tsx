@@ -11,7 +11,7 @@ function nearestTrailPoint(point:Point){
   return best
 }
 
-export function WoodlandMiniMap({position,yaw,onBack,onTeleport}:{position:Point;yaw:number;onBack:()=>void;onTeleport:(point:Point)=>void}){
+export function WoodlandMiniMap({position,yaw,onTeleport}:{position:Point;yaw:number;onTeleport:(point:Point)=>void}){
   const [expanded,setExpanded]=useState(false)
   function chooseDestination(event:React.PointerEvent<SVGSVGElement>){
     if(!expanded){setExpanded(true);return}
@@ -36,6 +36,5 @@ export function WoodlandMiniMap({position,yaw,onBack,onTeleport}:{position:Point
       <span>{expanded?'TAP A TRAIL TO GO THERE':'YOU ARE HERE · TAP MAP'}</span>
       {expanded&&<button type="button" className="woodland-map-close" onClick={()=>setExpanded(false)} aria-label="Close expanded map">×</button>}
     </div>
-    {!expanded&&<button className="woodland-back" onClick={onBack}>← The Lab</button>}
   </aside>
 }
