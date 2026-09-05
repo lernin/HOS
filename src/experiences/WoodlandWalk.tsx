@@ -117,7 +117,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
     }
     frame=requestAnimationFrame(tick)
     return()=>cancelAnimationFrame(frame)
-  },[cameraMass,flickGlide,hybridControls,viewMode])
+  },[cameraMass,flickGlide,hybridControls,viewMode,lookGain])
 
   useEffect(()=>{
     const keys=new Set<string>(),update=()=>{input.current.x=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));input.current.z=Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup'))}
