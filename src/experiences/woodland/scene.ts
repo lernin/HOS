@@ -1,7 +1,7 @@
 import * as T from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { heightAt, paths, placements, move, spawn, type Placement } from './world'
-export type Input={x:number;z:number;yaw:number;pitch:number;paused:boolean;moveAcceleration:number}
+export type Input={x:number;z:number;yaw:number;pitch:number;paused:boolean;moveAcceleration:number;viewMode:number}
 export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal:AbortSignal,progress:(n:number)=>void){
   const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=T.SRGBColorSpace
@@ -36,11 +36,40 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
         for(const list of cells.values()){
         const mesh=new T.InstancedMesh(geometry,obj.material,list.length),dummy=new T.Object3D()
         list.forEach((p,i)=>{dummy.position.set(p.x,heightAt(p.x,p.z)-.04,p.z);dummy.rotation.y=p.angle;dummy.scale.setScalar(p.height);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix)})
+        mesh.userData.kind=kind;mesh.userData.list=list
         mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();mesh.receiveShadow=true;mesh.castShadow=kind.startsWith('tree')||kind==='pine'||kind==='rock';scene.add(mesh);batches.push(mesh)}
       });progress((n+1)/kinds.length)
     }
-    let position={x:spawn.x,z:spawn.z},previous=performance.now(),moveSpeed=0
+    const avatar=new T.Group()
+    const skin=new T.MeshStandardMaterial({color:'#f0c7a4',roughness:.9})
+    const shirt=new T.MeshStandardMaterial({color:'#e08b62',roughness:.9})
+    const pants=new T.MeshStandardMaterial({color:'#496f70',roughness:.95})
+    const hair=new T.MeshStandardMaterial({color:'#4d392d',roughness:1})
+    const head=new T.Mesh(new T.SphereGeometry(.32,18,14),skin);head.position.y=1.48
+    const hairCap=new T.Mesh(new T.SphereGeometry(.325,16,10,0,Math.PI*2,0,Math.PI*.48),hair);hairCap.position.y=1.53
+    const body=new T.Mesh(new T.CylinderGeometry(.28,.34,.66,10),shirt);body.position.y=.92
+    const legL=new T.Mesh(new T.CylinderGeometry(.09,.1,.52,8),pants),legR=legL.clone();legL.position.set(-.13,.34,0);legR.position.set(.13,.34,0)
+    const marker=new T.Mesh(new T.ConeGeometry(.1,.28,8),shirt);marker.rotation.x=-Math.PI/2;marker.position.set(0,1.04,-.38)
+    avatar.add(head,hairCap,body,legL,legR,marker);avatar.visible=false;scene.add(avatar);track(avatar)
+
+    const bgNormal=new T.Color('#bbdce6'),bgCute=new T.Color('#cfe7d7'),fogNormal=new T.Color('#b7d4cf'),fogCute=new T.Color('#c7dfce')
+    const fpPos=new T.Vector3(),overviewPos=new T.Vector3(),lookTarget=new T.Vector3(),up=new T.Vector3(0,1,0)
+    const fpQuat=new T.Quaternion(),overviewQuat=new T.Quaternion(),lookMatrix=new T.Matrix4(),styleDummy=new T.Object3D()
+    let position={x:spawn.x,z:spawn.z},previous=performance.now(),moveSpeed=0,avatarYaw=spawn.yaw,lastStyle=-1
+
+    function restyle(cute:number){
+      for(const mesh of batches){
+        const kind=mesh.userData.kind as string,list=mesh.userData.list as Placement[]
+        const tree=kind==='tree'||kind==='tree-b'||kind==='pine',soft=kind==='bush'||kind==='fern'||kind==='grass'||kind==='clover'
+        const width=tree?1+.26*cute:soft?1+.38*cute:1+.15*cute
+        const height=tree?1-.14*cute:soft?1-.08*cute:1-.06*cute
+        list.forEach((p,i)=>{styleDummy.position.set(p.x,heightAt(p.x,p.z)-.04,p.z);styleDummy.rotation.set(0,p.angle,0);styleDummy.scale.set(p.height*width,p.height*height,p.height*width);styleDummy.updateMatrix();mesh.setMatrixAt(i,styleDummy.matrix)})
+        mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere()
+      }
+    }
+
     const render=(now:number)=>{if(disposed)return;const dt=Math.min(.05,Math.max(0,(now-previous)/1000));previous=now
+      const beforeX=position.x,beforeZ=position.z
       if(!input.paused){
         const intent=Math.min(1,Math.hypot(input.x,input.z))
         const boost=Math.max(0,Math.min(10,input.moveAcceleration))
@@ -53,11 +82,31 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
         moveSpeed=Math.abs(target-moveSpeed)<=step?target:moveSpeed+Math.sign(target-moveSpeed)*step
         position=move(position,input.x,input.z,input.yaw,dt,solids,moveSpeed)
       }else moveSpeed=0
-      camera.position.set(position.x,heightAt(position.x,position.z)+1.68,position.z);camera.rotation.set(input.pitch,input.yaw,0)
+
+      const movedX=position.x-beforeX,movedZ=position.z-beforeZ
+      if(Math.hypot(movedX,movedZ)>.0005)avatarYaw=Math.atan2(-movedX,-movedZ)
+
+      const view=Math.max(0,Math.min(1,input.viewMode/10)),pull=view*view*(3-2*view),groundY=heightAt(position.x,position.z)
+      avatar.visible=view>.035
+      avatar.position.set(position.x,groundY+.02,position.z);avatar.rotation.y=avatarYaw;avatar.scale.setScalar(.82+.34*pull)
+
+      if(Math.abs(pull-lastStyle)>.025){restyle(pull);lastStyle=pull}
+      ;(scene.background as T.Color).lerpColors(bgNormal,bgCute,pull)
+      ;(scene.fog as T.Fog).color.lerpColors(fogNormal,fogCute,pull)
+
+      fpPos.set(position.x,groundY+1.68,position.z)
+      overviewPos.set(position.x+Math.sin(input.yaw)*18,groundY+18.4,position.z+Math.cos(input.yaw)*18)
+      lookTarget.set(position.x,groundY+.85,position.z)
+      fpQuat.setFromEuler(new T.Euler(input.pitch,input.yaw,0,'YXZ'))
+      lookMatrix.lookAt(overviewPos,lookTarget,up);overviewQuat.setFromRotationMatrix(lookMatrix)
+      camera.position.lerpVectors(fpPos,overviewPos,pull);camera.quaternion.copy(fpQuat).slerp(overviewQuat,pull)
+      const nextFov=68-12*pull;if(Math.abs(camera.fov-nextFov)>.05){camera.fov=nextFov;camera.updateProjectionMatrix()}
+
       sun.position.set(position.x-35,70,position.z+25);sun.target.position.set(position.x,0,position.z);sun.target.updateMatrixWorld()
-      for(const b of batches){const p=b.boundingSphere!.center;b.visible=Math.hypot(p.x-position.x,p.z-position.z)<145+b.boundingSphere!.radius}
+      const sight=145+70*pull
+      for(const b of batches){const p=b.boundingSphere!.center;b.visible=Math.hypot(p.x-position.x,p.z-position.z)<sight+b.boundingSphere!.radius}
       renderer.render(scene,camera);frame=requestAnimationFrame(render)
     };frame=requestAnimationFrame(render)
-    return {dispose,getPosition:()=>({...position}),setPosition:(next:{x:number;z:number})=>{position={x:next.x,z:next.z};moveSpeed=0},reset:()=>{position={x:spawn.x,z:spawn.z};moveSpeed=0;input.yaw=spawn.yaw;input.pitch=0}}
+    return {dispose,getPosition:()=>({...position}),getHeading:()=>avatarYaw,setPosition:(next:{x:number;z:number})=>{position={x:next.x,z:next.z};moveSpeed=0},reset:()=>{position={x:spawn.x,z:spawn.z};moveSpeed=0;avatarYaw=spawn.yaw;input.yaw=spawn.yaw;input.pitch=0}}
   }catch(error){dispose();throw error}
 }
