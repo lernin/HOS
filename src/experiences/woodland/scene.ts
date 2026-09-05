@@ -1,7 +1,7 @@
 import * as T from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { heightAt, paths, placements, move, spawn, type Placement } from './world'
-export type Input={x:number;z:number;yaw:number;pitch:number;paused:boolean}
+export type Input={x:number;z:number;yaw:number;pitch:number;paused:boolean;moveAcceleration:number}
 export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal:AbortSignal,progress:(n:number)=>void){
   const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=T.SRGBColorSpace
@@ -39,13 +39,25 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
         mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();mesh.receiveShadow=true;mesh.castShadow=kind.startsWith('tree')||kind==='pine'||kind==='rock';scene.add(mesh);batches.push(mesh)}
       });progress((n+1)/kinds.length)
     }
-    let position={x:spawn.x,z:spawn.z},previous=performance.now()
-    const render=(now:number)=>{if(disposed)return;const dt=(now-previous)/1000;previous=now;if(!input.paused)position=move(position,input.x,input.z,input.yaw,dt,solids)
+    let position={x:spawn.x,z:spawn.z},previous=performance.now(),moveSpeed=0
+    const render=(now:number)=>{if(disposed)return;const dt=Math.min(.05,Math.max(0,(now-previous)/1000));previous=now
+      if(!input.paused){
+        const intent=Math.min(1,Math.hypot(input.x,input.z))
+        const boost=Math.max(0,Math.min(10,input.moveAcceleration))
+        const cruise=3.1+boost*.9
+        const target=intent*cruise
+        const accel=5+boost*3.5
+        const decel=10+boost*2
+        const rate=target>moveSpeed?accel:decel
+        const step=rate*dt
+        moveSpeed=Math.abs(target-moveSpeed)<=step?target:moveSpeed+Math.sign(target-moveSpeed)*step
+        position=move(position,input.x,input.z,input.yaw,dt,solids,moveSpeed)
+      }else moveSpeed=0
       camera.position.set(position.x,heightAt(position.x,position.z)+1.68,position.z);camera.rotation.set(input.pitch,input.yaw,0)
       sun.position.set(position.x-35,70,position.z+25);sun.target.position.set(position.x,0,position.z);sun.target.updateMatrixWorld()
       for(const b of batches){const p=b.boundingSphere!.center;b.visible=Math.hypot(p.x-position.x,p.z-position.z)<145+b.boundingSphere!.radius}
       renderer.render(scene,camera);frame=requestAnimationFrame(render)
     };frame=requestAnimationFrame(render)
-    return {dispose,getPosition:()=>({...position}),setPosition:(next:{x:number;z:number})=>{position={x:next.x,z:next.z}},reset:()=>{position={x:spawn.x,z:spawn.z};input.yaw=spawn.yaw;input.pitch=0}}
+    return {dispose,getPosition:()=>({...position}),setPosition:(next:{x:number;z:number})=>{position={x:next.x,z:next.z};moveSpeed=0},reset:()=>{position={x:spawn.x,z:spawn.z};moveSpeed=0;input.yaw=spawn.yaw;input.pitch=0}}
   }catch(error){dispose();throw error}
 }
