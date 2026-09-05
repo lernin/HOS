@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import './music-discovery-lab.css'
 
 type Rating = 0 | 1 | 2 | 3
@@ -11,87 +12,82 @@ type Track = {
   license: string
   file: string
   sourcePage: string
+  interests: string[]
 }
 
-const RATING_KEY = 'hos-music-discovery-ratings-v2'
-const NOTE_KEY = 'hos-music-discovery-notes-v2'
+const RATING_KEY = 'hos-music-discovery-ratings-v3'
+const NOTE_KEY = 'hos-music-discovery-notes-v3'
+const INTEREST_KEY = 'hos-music-discovery-interests-v1'
+const REQUEST_KEY = 'hos-music-discovery-request-v1'
 const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
 
-const tracks: Track[] = [
-  { id:'satie-gym1', composer:'Erik Satie', title:'Gymnopédie No. 1', family:'Piano', mood:'still · tender · strange', license:'CC0', file:'Gymnopedie No. 1..ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Gymnopedie_No._1..ogg' },
-  { id:'debussy-clair', composer:'Claude Debussy', title:'Clair de lune', family:'Piano', mood:'luminous · dreamlike · flowing', license:'CC BY 3.0', file:'Clair de lune (Claude Debussy) Suite bergamasque.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Clair_de_lune_(Claude_Debussy)_Suite_bergamasque.ogg' },
-  { id:'ravel-pavane', composer:'Maurice Ravel', title:'Pavane pour une infante défunte', family:'Piano', mood:'elegant · wistful · spacious', license:'Public domain', file:'Maurice Ravel - Pavane pour une infante défunte.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Maurice_Ravel_-_Pavane_pour_une_infante_défunte.ogg' },
-  { id:'grieg-morning', composer:'Edvard Grieg', title:'Peer Gynt — Morning Mood', family:'Orchestral', mood:'dawn · pastoral · open', license:'Public domain worldwide', file:'Musopen - Morning.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Musopen_-_Morning.ogg' },
-  { id:'grieg-aase', composer:'Edvard Grieg', title:"Peer Gynt — Aase's Death", family:'Orchestral', mood:'grief · dignity · stillness', license:'CC0', file:"Peer Gynt Suite No. 1, Op. 46 - II. Aase's Death.ogg", sourcePage:"https://commons.wikimedia.org/wiki/File:Peer_Gynt_Suite_No._1,_Op._46_-_II._Aase%27s_Death.ogg" },
-  { id:'grieg-anitra', composer:'Edvard Grieg', title:"Peer Gynt — Anitra's Dance", family:'Orchestral', mood:'light · poised · dancing', license:'Commons reusable recording', file:"Grieg, Peer Gynt Suite No. 1, Op. 46 - III. Anitra's Dance.ogg", sourcePage:"https://commons.wikimedia.org/wiki/File:Grieg,_Peer_Gynt_Suite_No._1,_Op._46_-_III._Anitra%27s_Dance.ogg" },
-  { id:'dvorak-largo', composer:'Antonín Dvořák', title:'New World Symphony — II. Largo', family:'Orchestral', mood:'vast · homesick · noble', license:'Musopen / Commons', file:"Antonin Dvorak - symphony no. 9 in e minor 'from the new world', op. 95 - ii. largo.ogg", sourcePage:"https://commons.wikimedia.org/wiki/File:Antonin_Dvorak_-_symphony_no._9_in_e_minor_%27from_the_new_world%27,_op._95_-_ii._largo.ogg" },
-  { id:'saint-aquarium', composer:'Camille Saint-Saëns', title:'Carnival of the Animals — Aquarium', family:'Orchestral', mood:'shimmering · magical · underwater', license:'CC BY-SA 2.0', file:'Saint-Saens - The Carnival of the Animals - 07 Aquarium.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Saint-Saens_-_The_Carnival_of_the_Animals_-_07_Aquarium.ogg' },
-  { id:'tchaik-swan', composer:'Pyotr Ilyich Tchaikovsky', title:'Swan Lake — Scène, Op. 20 No. 10', family:'Orchestral', mood:'tragic · romantic · iconic', license:'Public-domain historical recording', file:'Tchaikovsky Swan Lake Op.20 No.10. Scène.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Tchaikovsky_Swan_Lake_Op.20_No.10._Scène.ogg' },
-  { id:'bach-air', composer:'J. S. Bach', title:'Air on the G String', family:'Classical', mood:'serene · clear · timeless', license:'Public-domain historical recording', file:'Air (Bach).ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Air_(Bach).ogg' },
+const interestOptions = [
+  'Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads',
+  '8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental'
 ]
 
-function readRatings(): Record<string, Rating> {
-  try { return JSON.parse(localStorage.getItem(RATING_KEY) || '{}') as Record<string, Rating> } catch { return {} }
-}
-function readNotes(): Record<string, string> {
-  try { return JSON.parse(localStorage.getItem(NOTE_KEY) || '{}') as Record<string, string> } catch { return {} }
+const tracks: Track[] = [
+  { id:'satie-gym1', composer:'Erik Satie · Kevin MacLeod', title:'Gymnopédie No. 1', family:'Piano', mood:'still · tender · beautiful', license:'CC BY 3.0 · 320 kbps MP3', file:'Gymnopedie No. 1 (ISRC USUAN1100787).mp3', sourcePage:'https://commons.wikimedia.org/wiki/File:Gymnopedie_No._1_(ISRC_USUAN1100787).mp3', interests:['Piano','Beautiful orchestral'] },
+  { id:'debussy-clair', composer:'Claude Debussy', title:'Clair de lune', family:'Piano', mood:'luminous · dreamlike · flowing', license:'CC BY 3.0', file:'Clair de lune (Claude Debussy) Suite bergamasque.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Clair_de_lune_(Claude_Debussy)_Suite_bergamasque.ogg', interests:['Piano','Cinematic'] },
+  { id:'ravel-pavane', composer:'Maurice Ravel', title:'Pavane pour une infante défunte', family:'Piano', mood:'elegant · wistful · spacious', license:'Public domain', file:'Maurice Ravel - Pavane pour une infante défunte.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Maurice_Ravel_-_Pavane_pour_une_infante_défunte.ogg', interests:['Piano','Cinematic'] },
+  { id:'grieg-morning', composer:'Edvard Grieg', title:'Peer Gynt — Morning Mood', family:'Orchestral', mood:'dawn · pastoral · open', license:'Public domain worldwide', file:'Musopen - Morning.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Musopen_-_Morning.ogg', interests:['Beautiful orchestral','Ambient game','Cinematic'] },
+  { id:'grieg-aase', composer:'Edvard Grieg', title:"Peer Gynt — Aase's Death", family:'Orchestral', mood:'grief · dignity · stillness', license:'CC0', file:"Peer Gynt Suite No. 1, Op. 46 - II. Aase's Death.ogg", sourcePage:"https://commons.wikimedia.org/wiki/File:Peer_Gynt_Suite_No._1,_Op._46_-_II._Aase%27s_Death.ogg", interests:['Beautiful orchestral','Cinematic'] },
+  { id:'grieg-anitra', composer:'Edvard Grieg', title:"Peer Gynt — Anitra's Dance", family:'Orchestral', mood:'light · poised · dancing', license:'Commons reusable recording', file:"Grieg, Peer Gynt Suite No. 1, Op. 46 - III. Anitra's Dance.ogg", sourcePage:"https://commons.wikimedia.org/wiki/File:Grieg,_Peer_Gynt_Suite_No._1,_Op._46_-_III._Anitra%27s_Dance.ogg", interests:['Beautiful orchestral'] },
+  { id:'dvorak-largo', composer:'Antonín Dvořák', title:'New World Symphony — II. Largo', family:'Orchestral', mood:'vast · homesick · noble', license:'Musopen / Commons', file:"Antonin Dvorak - symphony no. 9 in e minor 'from the new world', op. 95 - ii. largo.ogg", sourcePage:"https://commons.wikimedia.org/wiki/File:Antonin_Dvorak_-_symphony_no._9_in_e_minor_%27from_the_new_world%27,_op._95_-_ii._largo.ogg", interests:['Beautiful orchestral','Cinematic','Ambient game'] },
+  { id:'saint-aquarium', composer:'Camille Saint-Saëns', title:'Carnival of the Animals — Aquarium', family:'Orchestral', mood:'shimmering · magical · underwater', license:'CC BY-SA 2.0', file:'Saint-Saens - The Carnival of the Animals - 07 Aquarium.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Saint-Saens_-_The_Carnival_of_the_Animals_-_07_Aquarium.ogg', interests:['Beautiful orchestral','Ambient game','Cinematic'] },
+  { id:'tchaik-swan', composer:'Pyotr Ilyich Tchaikovsky', title:'Swan Lake — Scène', family:'Orchestral', mood:'tragic · romantic · iconic', license:'Public-domain historical recording', file:'Tchaikovsky Swan Lake Op.20 No.10. Scène.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Tchaikovsky_Swan_Lake_Op.20_No.10._Scène.ogg', interests:['Beautiful orchestral','Cinematic'] },
+  { id:'bach-air', composer:'J. S. Bach', title:'Air on the G String', family:'Classical', mood:'serene · clear · timeless', license:'Public-domain historical recording', file:'Air (Bach).ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Air_(Bach).ogg', interests:['Beautiful orchestral','Ambient game'] },
+]
+
+function loadObject<T>(key: string, fallback: T): T {
+  try { return JSON.parse(localStorage.getItem(key) || '') as T } catch { return fallback }
 }
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
-  const minutes = Math.floor(seconds / 60)
-  const rest = Math.floor(seconds % 60).toString().padStart(2, '0')
-  return minutes + ':' + rest
+  return Math.floor(seconds / 60) + ':' + Math.floor(seconds % 60).toString().padStart(2, '0')
 }
 
-export function MusicDiscoveryLab({ onExit }: { onExit: () => void }) {
+export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const [ratings, setRatings] = useState<Record<string, Rating>>(readRatings)
-  const [notes, setNotes] = useState<Record<string, string>>(readNotes)
-  const [selectedId, setSelectedId] = useState(tracks[0].id)
+  const recordingRef = useRef<RecordingSession | null>(null)
+  const recordingTrackRef = useRef<string | null>(null)
+  const [ratings, setRatings] = useState<Record<string, Rating>>(() => loadObject(RATING_KEY, {}))
+  const [notes, setNotes] = useState<Record<string, string>>(() => loadObject(NOTE_KEY, {}))
+  const [interests, setInterests] = useState<string[]>(() => loadObject(INTEREST_KEY, ['Beautiful orchestral','Ambient game','Piano']))
+  const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
+  const [mode, setMode] = useState<'listen'|'hunt'>('listen')
+  const [index, setIndex] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const [query, setQuery] = useState('')
-  const [filter, setFilter] = useState<'All' | 'Orchestral' | 'Piano' | 'Classical' | 'Loved' | 'Unrated'>('All')
+  const [recording, setRecording] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
   const [message, setMessage] = useState('')
 
-  const selectedIndex = tracks.findIndex(track => track.id === selectedId)
-  const selected = tracks[selectedIndex] || tracks[0]
+  const queue = useMemo(() => {
+    if (!interests.length) return tracks
+    const matches = tracks.filter(track => track.interests.some(tag => interests.includes(tag)))
+    return matches.length ? matches : tracks
+  }, [interests])
+  const selected = queue[Math.min(index, queue.length - 1)] || tracks[0]
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return tracks
-      .filter(track => !q || [track.composer, track.title, track.mood, track.family].join(' ').toLowerCase().includes(q))
-      .filter(track => {
-        if (filter === 'All') return true
-        if (filter === 'Loved') return ratings[track.id] === 3
-        if (filter === 'Unrated') return ratings[track.id] === undefined
-        return track.family === filter
-      })
-      .sort((a, b) => (ratings[b.id] ?? -1) - (ratings[a.id] ?? -1))
-  }, [query, filter, ratings])
+  useEffect(() => { if (index >= queue.length) setIndex(0) }, [queue.length, index])
 
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
-    const update = () => setCurrentTime(audio.currentTime || 0)
-    const metadata = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
+    const time = () => setCurrentTime(audio.currentTime || 0)
+    const meta = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
     const ended = () => setPlaying(false)
-    const error = () => {
-      setPlaying(false)
-      setMessage('This recording did not load. Open Source / license and I can replace the stream if needed.')
-    }
-    audio.addEventListener('timeupdate', update)
-    audio.addEventListener('loadedmetadata', metadata)
-    audio.addEventListener('durationchange', metadata)
+    const error = () => { setPlaying(false); setMessage('That recording failed to load. I need to replace its stream.') }
+    audio.addEventListener('timeupdate', time)
+    audio.addEventListener('loadedmetadata', meta)
+    audio.addEventListener('durationchange', meta)
     audio.addEventListener('ended', ended)
     audio.addEventListener('error', error)
     return () => {
-      audio.removeEventListener('timeupdate', update)
-      audio.removeEventListener('loadedmetadata', metadata)
-      audio.removeEventListener('durationchange', metadata)
-      audio.removeEventListener('ended', ended)
-      audio.removeEventListener('error', error)
+      audio.removeEventListener('timeupdate', time); audio.removeEventListener('loadedmetadata', meta)
+      audio.removeEventListener('durationchange', meta); audio.removeEventListener('ended', ended); audio.removeEventListener('error', error)
     }
   }, [])
 
@@ -101,138 +97,154 @@ export function MusicDiscoveryLab({ onExit }: { onExit: () => void }) {
     audio.pause()
     audio.src = commonsAudio(selected.file)
     audio.load()
-    setPlaying(false)
-    setCurrentTime(0)
-    setDuration(0)
-    setMessage('')
+    setPlaying(false); setCurrentTime(0); setDuration(0); setMessage('')
   }, [selected.id])
 
+  function toggleInterest(value: string) {
+    const next = interests.includes(value) ? interests.filter(x => x !== value) : [...interests, value]
+    setInterests(next); localStorage.setItem(INTEREST_KEY, JSON.stringify(next)); setIndex(0)
+  }
+  function saveRequest(value: string) {
+    setRequest(value); localStorage.setItem(REQUEST_KEY, value)
+  }
   async function togglePlay() {
     const audio = audioRef.current
     if (!audio) return
     if (audio.paused) {
-      try {
-        await audio.play()
-        setPlaying(true)
-        setMessage('')
-      } catch {
-        setMessage('Playback was blocked. Tap Play again.')
-      }
-    } else {
-      audio.pause()
-      setPlaying(false)
-    }
+      try { await audio.play(); setPlaying(true); setMessage('') } catch { setMessage('Tap Play again to allow audio.') }
+    } else { audio.pause(); setPlaying(false) }
   }
-
   function stop() {
     const audio = audioRef.current
     if (!audio) return
-    audio.pause()
-    audio.currentTime = 0
-    setPlaying(false)
-    setCurrentTime(0)
+    audio.pause(); audio.currentTime = 0; setPlaying(false); setCurrentTime(0)
   }
-
   function seek(value: number) {
     const audio = audioRef.current
-    if (!audio || !Number.isFinite(value)) return
-    audio.currentTime = value
-    setCurrentTime(value)
+    if (!audio) return
+    audio.currentTime = value; setCurrentTime(value)
   }
-
   function step(delta: number) {
-    const next = Math.max(0, Math.min(tracks.length - 1, selectedIndex + delta))
-    setSelectedId(tracks[next].id)
+    setIndex(i => (i + delta + queue.length) % queue.length)
+  }
+  function rate(value: Rating) {
+    const next = { ...ratings, [selected.id]: value }
+    setRatings(next); localStorage.setItem(RATING_KEY, JSON.stringify(next))
+  }
+  function saveNote(value: string) {
+    const next = { ...notes, [selected.id]: value }
+    setNotes(next); localStorage.setItem(NOTE_KEY, JSON.stringify(next))
   }
 
-  function rate(id: string, value: Rating) {
-    const next = { ...ratings, [id]: value }
-    setRatings(next)
-    localStorage.setItem(RATING_KEY, JSON.stringify(next))
+  async function toggleRecording() {
+    if (transcribing) return
+    if (!recording) {
+      try {
+        recordingTrackRef.current = selected.id
+        recordingRef.current = await startRecordingSession()
+        setRecording(true); setMessage('Recording note… tap the mic again when finished.')
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Could not start microphone.')
+      }
+      return
+    }
+    const session = recordingRef.current
+    const trackId = recordingTrackRef.current
+    if (!session || !trackId) return
+    recordingRef.current = null; recordingTrackRef.current = null
+    setRecording(false); setTranscribing(true); setMessage('Transcribing…')
+    session.stop()
+    try {
+      const blob = await session.blobPromise
+      const form = new FormData()
+      const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
+      form.append('audio', blob, 'music-note.' + extension)
+      const response = await fetch('/api/transcribe', { method:'POST', headers:{ 'x-review-pin': pin }, body:form })
+      const result = await response.json() as { text?: string; error?: string }
+      if (!response.ok) throw new Error(result.error || 'Transcription failed.')
+      const transcript = (result.text || '').replace(/\s+/g,' ').trim()
+      if (!transcript) throw new Error('I did not hear any words.')
+      const existing = notes[trackId] || ''
+      const nextText = [existing, transcript].filter(Boolean).join(' ')
+      const next = { ...notes, [trackId]: nextText }
+      setNotes(next); localStorage.setItem(NOTE_KEY, JSON.stringify(next))
+      setMessage('Voice note added.')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Transcription failed.')
+    } finally { setTranscribing(false) }
   }
-
-  function saveNote(id: string, value: string) {
-    const next = { ...notes, [id]: value }
-    setNotes(next)
-    localStorage.setItem(NOTE_KEY, JSON.stringify(next))
-  }
-
-  const ratedCount = tracks.filter(track => ratings[track.id] !== undefined).length
-  const loveCount = tracks.filter(track => ratings[track.id] === 3).length
 
   return <main className="music-discovery">
     <audio ref={audioRef} preload="metadata" />
-
     <header className="md-top">
-      <button className="md-back" onClick={onExit}>← Lab</button>
-      <div><span>HOS · EXPERIMENT</span><strong>Music Discovery Lab</strong></div>
-      <div className="md-count">{ratedCount}/{tracks.length}</div>
+      <button onClick={onExit}>← Lab</button>
+      <strong>Music Discovery</strong>
+      <span>{index + 1}/{queue.length}</span>
     </header>
 
-    <section className="md-hero">
-      <div className="md-kicker">REAL RECORDINGS · RATE AS YOU LISTEN</div>
-      <h1>Play it here. Judge it here.</h1>
-      <p>No hunting around in another website. Choose a recording, play or pause it, scrub anywhere in the piece, then give it 0–3.</p>
-    </section>
+    <nav className="md-tabs">
+      <button className={mode === 'listen' ? 'active' : ''} onClick={() => setMode('listen')}>LISTEN</button>
+      <button className={mode === 'hunt' ? 'active' : ''} onClick={() => setMode('hunt')}>HUNT</button>
+    </nav>
 
-    <section className="md-player">
-      <div className="md-now">
-        <div>
-          <span>{selected.composer}</span>
-          <h2>{selected.title}</h2>
-          <p>{selected.mood}</p>
-        </div>
-        <a href={selected.sourcePage} target="_blank" rel="noreferrer">Source / license ↗</a>
+    {mode === 'listen' ? <section className="md-listen">
+      <div className="md-title">
+        <small>{selected.composer}</small>
+        <h1>{selected.title}</h1>
+        <p>{selected.mood}</p>
       </div>
 
       <div className="md-transport">
-        <button onClick={() => step(-1)} disabled={selectedIndex === 0}>‹</button>
-        <button className="md-play" onClick={togglePlay}>{playing ? '❚❚ Pause' : '▶ Play'}</button>
+        <button onClick={() => step(-1)}>‹</button>
+        <button className="primary" onClick={togglePlay}>{playing ? '❚❚ Pause' : '▶ Play'}</button>
         <button onClick={stop}>■ Stop</button>
-        <button onClick={() => step(1)} disabled={selectedIndex === tracks.length - 1}>›</button>
+        <button onClick={() => step(1)}>›</button>
       </div>
 
       <div className="md-scrub">
         <span>{formatTime(currentTime)}</span>
-        <input type="range" min="0" max={Math.max(duration, 0)} step="0.1" value={Math.min(currentTime, Math.max(duration, 0))} onChange={event => seek(Number(event.target.value))} />
+        <input type="range" min="0" max={Math.max(duration,0)} step="0.1" value={Math.min(currentTime,Math.max(duration,0))} onChange={e => seek(Number(e.target.value))}/>
         <span>{formatTime(duration)}</span>
       </div>
 
-      <div className="md-license">{selected.license}</div>
-
-      <div className="md-big-rating">
-        <button className={ratings[selected.id] === 0 ? 'selected' : ''} onClick={() => rate(selected.id, 0)}><b>0</b><span>Hate it</span></button>
-        <button className={ratings[selected.id] === 1 ? 'selected' : ''} onClick={() => rate(selected.id, 1)}><b>1</b><span>Mildly</span></button>
-        <button className={ratings[selected.id] === 2 ? 'selected' : ''} onClick={() => rate(selected.id, 2)}><b>2</b><span>Good</span></button>
-        <button className={ratings[selected.id] === 3 ? 'selected' : ''} onClick={() => rate(selected.id, 3)}><b>3</b><span>Love it</span></button>
+      <div className="md-rating">
+        {[
+          [0,'Hate it'],[1,'Mildly'],[2,'Good'],[3,'Love it']
+        ].map(([value,label]) => <button key={value} className={ratings[selected.id] === value ? 'selected' : ''} onClick={() => rate(value as Rating)}><b>{value}</b><span>{label}</span></button>)}
       </div>
 
-      <textarea value={notes[selected.id] || ''} onChange={event => saveNote(selected.id, event.target.value)} placeholder="What did you like or hate? Melody, strings, harmony, mood, pacing…" />
+      <div className="md-note">
+        <button className={recording ? 'recording' : ''} onClick={toggleRecording} disabled={transcribing}>{recording ? '■' : '🎙'}</button>
+        <textarea value={notes[selected.id] || ''} onChange={e => saveNote(e.target.value)} placeholder="Type or record what you think…"/>
+      </div>
+
+      <div className="md-bottom">
+        <div className="md-queue">
+          {queue.slice(Math.max(0,index-2),Math.min(queue.length,index+3)).map(track =>
+            <button key={track.id} className={track.id === selected.id ? 'active' : ''} onClick={() => setIndex(queue.findIndex(x => x.id === track.id))}>{track.title}</button>
+          )}
+        </div>
+        <a href={selected.sourcePage} target="_blank" rel="noreferrer">{selected.license} ↗</a>
+      </div>
       {message && <div className="md-message">{message}</div>}
-    </section>
-
-    <section className="md-toolbar">
-      <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search…" />
-      <select value={filter} onChange={event => setFilter(event.target.value as typeof filter)}>
-        {['All','Orchestral','Piano','Classical','Loved','Unrated'].map(item => <option key={item}>{item}</option>)}
-      </select>
-    </section>
-
-    <section className="md-list">
-      {visible.map(track => {
-        const rating = ratings[track.id]
-        return <button key={track.id} className={'md-track' + (selected.id === track.id ? ' active' : '') + (rating === 3 ? ' loved' : '')} onClick={() => setSelectedId(track.id)}>
-          <span className="md-track-index">{tracks.findIndex(item => item.id === track.id) + 1}</span>
-          <span className="md-track-copy"><small>{track.composer} · {track.family}</small><strong>{track.title}</strong><em>{track.mood}</em></span>
-          <span className="md-track-rating">{rating === undefined ? '—' : rating === 0 ? '0' : '★'.repeat(rating)}</span>
-        </button>
-      })}
-    </section>
-
-    <section className="md-about">
-      <strong>Current playable catalog</strong>
-      <p>{tracks.length} direct recordings streamed from Wikimedia Commons. I can keep adding verified classical, game-ambient, and jazz recordings to this queue.</p>
-      <div><b>{loveCount}</b> tracks currently marked Love it.</div>
-    </section>
+    </section> : <section className="md-hunt">
+      <div>
+        <small>WHAT SHOULD I HUNT FOR?</small>
+        <h1>Choose your interests.</h1>
+      </div>
+      <div className="md-chips">
+        {interestOptions.map(item => <button key={item} className={interests.includes(item) ? 'active' : ''} onClick={() => toggleInterest(item)}>{item}</button>)}
+      </div>
+      <label>
+        <span>Anything else?</span>
+        <textarea value={request} onChange={e => saveRequest(e.target.value)} placeholder="e.g. Beautiful high-quality game music, warm strings, no cheesy trailer drums…"/>
+      </label>
+      <div className="md-hunt-summary">
+        <b>{queue.length}</b>
+        <span>current nominations matching your interests</span>
+        <button onClick={() => { setIndex(0); setMode('listen') }}>Start nominations →</button>
+      </div>
+      <p className="md-hunt-note">This screen saves the hunt profile on your phone. I can use it to keep expanding the nomination catalog with verified reusable recordings.</p>
+    </section>}
   </main>
 }
