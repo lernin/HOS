@@ -86,7 +86,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
             const w=wander.current,direct=smoothstep(3,7,viewMode)
             // Match the existing drag-to-look convention: rightward thumb travel means yaw right.
             // In this scene's yaw convention, a right turn decreases yaw.
-            targetLook.current.yaw-=w.turn*1.65*(1-direct)*dt
+            targetLook.current.yaw-=w.turn*1.65*lookGain*(1-direct)*dt
             input.current.x=w.x*direct
             input.current.z=-w.speed*(1-direct)+w.z*direct
           }
@@ -190,7 +190,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
         <label>Acceleration <strong>{moveAcceleration.toFixed(1)}</strong><input type="range" min="0" max="10" step=".1" value={moveAcceleration} onChange={e=>setMoveAcceleration(Number(e.target.value))}/><small>0 = gentle walking. 10 = very fast travel.</small></label>
         <h3>Look feel</h3>
         <p>Horizontal turning is free. Vertical looking gradually resists near the sky and ground so the useful horizon band gets most of your finger travel.</p>
-        <label>Turn multiplier <strong>{lookGain.toFixed(2)}×</strong><input type="range" min=".25" max="22" step=".25" value={lookGain} onChange={e=>setLookGain(Number(e.target.value))}/><small>Low = precise. High = owl mode.</small></label>
+        <label>Turn multiplier <strong>{lookGain.toFixed(2)}×</strong><input type="range" min=".05" max="22" step=".05" value={lookGain} onChange={e=>setLookGain(Number(e.target.value))}/><small>Very low = slow, precise turning. High = owl mode.</small></label>
         <label>Camera weight <strong>{Math.round(cameraMass*100)}</strong><input type="range" min="0" max="1" step=".01" value={cameraMass} onChange={e=>setCameraMass(Number(e.target.value))}/><small>Higher = heavier following, without spring-back.</small></label>
         <label>Flick glide <strong>{flickGlide.toFixed(1)}</strong><input type="range" min="0" max="10" step=".1" value={flickGlide} onChange={e=>setFlickGlide(Number(e.target.value))}/><small>0 = stops immediately. 10 = longest glide. Tiny release movements are ignored.</small></label>
       </section>
