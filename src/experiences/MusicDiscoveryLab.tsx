@@ -1,94 +1,149 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './music-discovery-lab.css'
 
 type Rating = 0 | 1 | 2 | 3
-type Family = 'Classical' | 'Orchestral' | 'Ambient' | 'Jazz' | 'Piano' | 'Game'
-type License = 'PD/CC0' | 'CC' | 'Verify track'
-type Track = { id:string; composer:string; title:string; family:Family; mood:string; source:string; url:string; license:License; note?:string }
-type Shelf = { name:string; best:string; license:string; url:string; tone:string }
+type Track = {
+  id: string
+  composer: string
+  title: string
+  family: 'Classical' | 'Orchestral' | 'Piano'
+  mood: string
+  license: string
+  file: string
+  sourcePage: string
+}
 
-const RATING_KEY = 'hos-music-discovery-ratings-v1'
-const NOTE_KEY = 'hos-music-discovery-notes-v1'
-
-const shelves: Shelf[] = [
-  { name:'Musopen', best:'Classical performances', license:'Public domain / CC; verify exact recording', url:'https://musopen.org/music/', tone:'Large classical catalog' },
-  { name:'Musopen Player', best:'Fast classical browsing', license:'Recording-specific', url:'https://player.musopen.org/', tone:'Top 100, playlists, composers' },
-  { name:'Wikimedia Commons Music', best:'Reusable recordings', license:'Public domain / free license shown per file', url:'https://commons.wikimedia.org/wiki/Commons:Free_media_resources/Music', tone:'Strong licensing trail' },
-  { name:'OpenGameArt — CC0 Fantasy', best:'Game ambience + orchestral', license:'CC0 collection', url:'https://opengameart.org/content/cc0-fantasy-music-sounds', tone:'Fantasy, forest, battle, atmospheric' },
-  { name:'OpenGameArt — Orchestral & World', best:'Game-ready orchestral', license:'CC0', url:'https://opengameart.org/content/orchestral-and-world-music-pack', tone:'World/orchestral pack' },
-  { name:'ccMixter', best:'Jazz, ambient, cinematic', license:'Creative Commons; check exact track', url:'https://ccmixter.org/', tone:'Large creator community' },
-  { name:'dig.ccMixter', best:'Music for apps and games', license:'Creative Commons; attribution often required', url:'https://dig.ccmixter.org/', tone:'Search by style, BPM, instrument' },
-  { name:'Free Music Archive', best:'Jazz, ambient, experimental', license:'Track-specific', url:'https://freemusicarchive.org/', tone:'Broad non-classical discovery' },
-  { name:'Mutopia', best:'Scores + MIDI references', license:'Public-domain compositions / free editions', url:'https://www.mutopiaproject.org/', tone:'Useful later for structure' },
-  { name:'Internet Archive Open Audio', best:'Deep digging', license:'Mixed — verify carefully', url:'https://archive.org/details/opensource_audio', tone:'Enormous but messy' },
-]
-
-const musopen = (q:string) => 'https://musopen.org/music/?q=' + encodeURIComponent(q)
+const RATING_KEY = 'hos-music-discovery-ratings-v2'
+const NOTE_KEY = 'hos-music-discovery-notes-v2'
+const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
 
 const tracks: Track[] = [
-  { id:'satie-gym1', composer:'Erik Satie', title:'Gymnopédie No. 1', family:'Piano', mood:'still · tender · strange', source:'Musopen', url:musopen('Erik Satie Gymnopedie No. 1'), license:'Verify track' },
-  { id:'satie-gym3', composer:'Erik Satie', title:'Gymnopédie No. 3', family:'Piano', mood:'quiet · suspended · solemn', source:'Musopen', url:musopen('Erik Satie Gymnopedie No. 3'), license:'Verify track' },
-  { id:'satie-gn1', composer:'Erik Satie', title:'Gnossienne No. 1', family:'Piano', mood:'mysterious · ancient · suspended', source:'Musopen', url:musopen('Erik Satie Gnossienne No. 1'), license:'Verify track' },
-  { id:'debussy-clair', composer:'Claude Debussy', title:'Clair de lune', family:'Piano', mood:'luminous · dreamlike · flowing', source:'Musopen', url:musopen('Debussy Clair de lune'), license:'Verify track' },
-  { id:'debussy-faun', composer:'Claude Debussy', title:"Prélude à l'après-midi d'un faune", family:'Orchestral', mood:'woodland · sensual · suspended', source:'Musopen', url:musopen('Debussy Prelude Faun'), license:'Verify track' },
-  { id:'ravel-fairy', composer:'Maurice Ravel', title:"Ma mère l'Oye — Le jardin féerique", family:'Orchestral', mood:'wonder · radiance · enchanted', source:'Musopen', url:musopen('Ravel Mother Goose Fairy Garden'), license:'Verify track' },
-  { id:'ravel-pavane', composer:'Maurice Ravel', title:'Pavane pour une infante défunte', family:'Orchestral', mood:'elegant · wistful · spacious', source:'Musopen', url:musopen('Ravel Pavane'), license:'Verify track' },
-  { id:'faure-pavane', composer:'Gabriel Fauré', title:'Pavane, Op. 50', family:'Orchestral', mood:'poised · melancholic · elegant', source:'Musopen', url:musopen('Faure Pavane'), license:'Verify track' },
-  { id:'faure-sicilienne', composer:'Gabriel Fauré', title:'Sicilienne, Op. 78', family:'Classical', mood:'gentle · nostalgic · flowing', source:'Musopen', url:musopen('Faure Sicilienne'), license:'Verify track' },
-  { id:'grieg-morning', composer:'Edvard Grieg', title:'Peer Gynt — Morning Mood', family:'Orchestral', mood:'dawn · pastoral · open', source:'Musopen', url:musopen('Grieg Morning Mood'), license:'Verify track' },
-  { id:'grieg-aase', composer:'Edvard Grieg', title:"Peer Gynt — Aase's Death", family:'Orchestral', mood:'grief · dignity · stillness', source:'Musopen', url:musopen('Grieg Aase Death'), license:'Verify track' },
-  { id:'dvorak-largo', composer:'Antonín Dvořák', title:'New World Symphony — Largo', family:'Orchestral', mood:'vast · homesick · noble', source:'Musopen', url:musopen('Dvorak New World Largo'), license:'Verify track' },
-  { id:'dvorak-serenade', composer:'Antonín Dvořák', title:'Serenade for Strings — Larghetto', family:'Orchestral', mood:'warm · affectionate · flowing', source:'Musopen', url:musopen('Dvorak Serenade Strings Larghetto'), license:'Verify track' },
-  { id:'tchaik-nutcracker', composer:'Pyotr Ilyich Tchaikovsky', title:'The Nutcracker — Pas de deux', family:'Orchestral', mood:'grandeur · yearning · release', source:'Musopen', url:musopen('Tchaikovsky Nutcracker Pas de deux'), license:'Verify track' },
-  { id:'tchaik-swan', composer:'Pyotr Ilyich Tchaikovsky', title:'Swan Lake — Scène', family:'Orchestral', mood:'tragic · romantic · iconic', source:'Musopen', url:musopen('Tchaikovsky Swan Lake Scene'), license:'Verify track' },
-  { id:'saint-aquarium', composer:'Camille Saint-Saëns', title:'Carnival of the Animals — Aquarium', family:'Orchestral', mood:'shimmering · magical · underwater', source:'Musopen', url:musopen('Saint-Saens Aquarium'), license:'Verify track' },
-  { id:'saint-swan', composer:'Camille Saint-Saëns', title:'Carnival of the Animals — The Swan', family:'Classical', mood:'grace · longing · lyrical', source:'Musopen', url:musopen('Saint-Saens Swan'), license:'Verify track' },
-  { id:'bach-air', composer:'J. S. Bach', title:'Air on the G String', family:'Classical', mood:'serene · clear · timeless', source:'Musopen', url:musopen('Bach Air G String'), license:'Verify track' },
-  { id:'bach-sheep', composer:'J. S. Bach', title:'Sheep May Safely Graze', family:'Classical', mood:'pastoral · safe · warm', source:'Musopen', url:musopen('Bach Sheep May Safely Graze'), license:'Verify track' },
-  { id:'vivaldi-winter', composer:'Antonio Vivaldi', title:'Winter — II. Largo', family:'Classical', mood:'shelter · stillness · warmth', source:'Musopen', url:musopen('Vivaldi Winter Largo'), license:'Verify track' },
-  { id:'mozart-clarinet', composer:'W. A. Mozart', title:'Clarinet Concerto — II. Adagio', family:'Orchestral', mood:'human · tender · clear', source:'Musopen', url:musopen('Mozart Clarinet Concerto Adagio'), license:'Verify track' },
-  { id:'beethoven-pastoral', composer:'L. van Beethoven', title:'Symphony No. 6 — Scene by the Brook', family:'Orchestral', mood:'nature · ease · flowing', source:'Musopen', url:musopen('Beethoven Pastoral Scene Brook'), license:'Verify track' },
-  { id:'mendelssohn-nocturne', composer:'Felix Mendelssohn', title:"A Midsummer Night's Dream — Nocturne", family:'Orchestral', mood:'night · horn · enchanted', source:'Musopen', url:musopen('Mendelssohn Midsummer Nocturne'), license:'Verify track' },
-  { id:'brahms-s3', composer:'Johannes Brahms', title:'Symphony No. 3 — III. Poco allegretto', family:'Orchestral', mood:'autumn · longing · restraint', source:'Musopen', url:musopen('Brahms Symphony 3 Poco allegretto'), license:'Verify track' },
-  { id:'smetana-moldau', composer:'Bedřich Smetana', title:'Má vlast — Vltava (The Moldau)', family:'Orchestral', mood:'river · journey · homeland', source:'Musopen', url:musopen('Smetana Moldau'), license:'Verify track' },
-  { id:'rimsky-sea', composer:'Nikolai Rimsky-Korsakov', title:"Scheherazade — The Sea and Sinbad's Ship", family:'Orchestral', mood:'ocean · adventure · scale', source:'Musopen', url:musopen('Rimsky Korsakov Scheherazade Sea'), license:'Verify track' },
-  { id:'sibelius-valse', composer:'Jean Sibelius', title:'Valse triste', family:'Orchestral', mood:'ghostly · elegant · fading', source:'Musopen', url:musopen('Sibelius Valse Triste'), license:'Verify track' },
-  { id:'mahler-adagietto', composer:'Gustav Mahler', title:'Symphony No. 5 — Adagietto', family:'Orchestral', mood:'love · suspension · vastness', source:'Musopen', url:musopen('Mahler Adagietto'), license:'Verify track' },
-  { id:'elgar-nimrod', composer:'Edward Elgar', title:'Enigma Variations — Nimrod', family:'Orchestral', mood:'dignity · friendship · ascent', source:'Musopen', url:musopen('Elgar Nimrod'), license:'Verify track' },
-  { id:'oga-fantasy', composer:'OpenGameArt collection', title:'CC0 Fantasy Music & Sounds', family:'Game', mood:'forest · fantasy · battle · ambience', source:'OpenGameArt', url:'https://opengameart.org/content/cc0-fantasy-music-sounds', license:'PD/CC0', note:'Whole CC0 collection with fantasy and forest material.' },
-  { id:'oga-world', composer:'Ragnar Random', title:'Orchestral and World Music Pack', family:'Game', mood:'orchestral · world · exploration', source:'OpenGameArt', url:'https://opengameart.org/content/orchestral-and-world-music-pack', license:'PD/CC0', note:'CC0 pack explicitly offered for reuse.' },
-  { id:'ccmixter-ambient', composer:'ccMixter', title:'Ambient / cinematic hunt', family:'Ambient', mood:'atmosphere · texture · cinematic', source:'ccMixter', url:'https://dig.ccmixter.org/', license:'CC', note:'Search by style, BPM, and instrument. Check exact license.' },
-  { id:'ccmixter-jazz', composer:'ccMixter', title:'Jazz / instrumental hunt', family:'Jazz', mood:'cool · human · groove', source:'ccMixter', url:'https://dig.ccmixter.org/', license:'CC', note:'Creative Commons hunting shelf for non-classical music.' },
-  { id:'fma-jazz', composer:'Free Music Archive', title:'Jazz discovery shelf', family:'Jazz', mood:'jazz · lounge · acoustic · experimental', source:'FMA', url:'https://freemusicarchive.org/genre/Jazz/', license:'Verify track', note:'Large catalog. License varies by track.' },
-  { id:'fma-ambient', composer:'Free Music Archive', title:'Ambient discovery shelf', family:'Ambient', mood:'ambient · drone · calm · cinematic', source:'FMA', url:'https://freemusicarchive.org/genre/Ambient_Electronic/', license:'Verify track', note:'Useful background textures; verify exact track before reuse.' },
+  { id:'satie-gym1', composer:'Erik Satie', title:'Gymnopédie No. 1', family:'Piano', mood:'still · tender · strange', license:'CC0', file:'Gymnopedie No. 1..ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Gymnopedie_No._1..ogg' },
+  { id:'debussy-clair', composer:'Claude Debussy', title:'Clair de lune', family:'Piano', mood:'luminous · dreamlike · flowing', license:'CC BY 3.0', file:'Clair de lune (Claude Debussy) Suite bergamasque.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Clair_de_lune_(Claude_Debussy)_Suite_bergamasque.ogg' },
+  { id:'ravel-pavane', composer:'Maurice Ravel', title:'Pavane pour une infante défunte', family:'Piano', mood:'elegant · wistful · spacious', license:'Public domain', file:'Maurice Ravel - Pavane pour une infante défunte.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Maurice_Ravel_-_Pavane_pour_une_infante_défunte.ogg' },
+  { id:'grieg-morning', composer:'Edvard Grieg', title:'Peer Gynt — Morning Mood', family:'Orchestral', mood:'dawn · pastoral · open', license:'Public domain worldwide', file:'Musopen - Morning.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Musopen_-_Morning.ogg' },
+  { id:'grieg-aase', composer:'Edvard Grieg', title:"Peer Gynt — Aase's Death", family:'Orchestral', mood:'grief · dignity · stillness', license:'CC0', file:"Peer Gynt Suite No. 1, Op. 46 - II. Aase's Death.ogg", sourcePage:"https://commons.wikimedia.org/wiki/File:Peer_Gynt_Suite_No._1,_Op._46_-_II._Aase%27s_Death.ogg" },
+  { id:'grieg-anitra', composer:'Edvard Grieg', title:"Peer Gynt — Anitra's Dance", family:'Orchestral', mood:'light · poised · dancing', license:'Commons reusable recording', file:"Grieg, Peer Gynt Suite No. 1, Op. 46 - III. Anitra's Dance.ogg", sourcePage:"https://commons.wikimedia.org/wiki/File:Grieg,_Peer_Gynt_Suite_No._1,_Op._46_-_III._Anitra%27s_Dance.ogg" },
+  { id:'dvorak-largo', composer:'Antonín Dvořák', title:'New World Symphony — II. Largo', family:'Orchestral', mood:'vast · homesick · noble', license:'Musopen / Commons', file:"Antonin Dvorak - symphony no. 9 in e minor 'from the new world', op. 95 - ii. largo.ogg", sourcePage:"https://commons.wikimedia.org/wiki/File:Antonin_Dvorak_-_symphony_no._9_in_e_minor_%27from_the_new_world%27,_op._95_-_ii._largo.ogg" },
+  { id:'saint-aquarium', composer:'Camille Saint-Saëns', title:'Carnival of the Animals — Aquarium', family:'Orchestral', mood:'shimmering · magical · underwater', license:'CC BY-SA 2.0', file:'Saint-Saens - The Carnival of the Animals - 07 Aquarium.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Saint-Saens_-_The_Carnival_of_the_Animals_-_07_Aquarium.ogg' },
+  { id:'tchaik-swan', composer:'Pyotr Ilyich Tchaikovsky', title:'Swan Lake — Scène, Op. 20 No. 10', family:'Orchestral', mood:'tragic · romantic · iconic', license:'Public-domain historical recording', file:'Tchaikovsky Swan Lake Op.20 No.10. Scène.ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Tchaikovsky_Swan_Lake_Op.20_No.10._Scène.ogg' },
+  { id:'bach-air', composer:'J. S. Bach', title:'Air on the G String', family:'Classical', mood:'serene · clear · timeless', license:'Public-domain historical recording', file:'Air (Bach).ogg', sourcePage:'https://commons.wikimedia.org/wiki/File:Air_(Bach).ogg' },
 ]
 
-function loadRatings(): Record<string, Rating> {
+function readRatings(): Record<string, Rating> {
   try { return JSON.parse(localStorage.getItem(RATING_KEY) || '{}') as Record<string, Rating> } catch { return {} }
 }
-function loadNotes(): Record<string, string> {
+function readNotes(): Record<string, string> {
   try { return JSON.parse(localStorage.getItem(NOTE_KEY) || '{}') as Record<string, string> } catch { return {} }
+}
+function formatTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
+  const minutes = Math.floor(seconds / 60)
+  const rest = Math.floor(seconds % 60).toString().padStart(2, '0')
+  return minutes + ':' + rest
 }
 
 export function MusicDiscoveryLab({ onExit }: { onExit: () => void }) {
-  const [ratings, setRatings] = useState<Record<string, Rating>>(loadRatings)
-  const [notes, setNotes] = useState<Record<string, string>>(loadNotes)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [ratings, setRatings] = useState<Record<string, Rating>>(readRatings)
+  const [notes, setNotes] = useState<Record<string, string>>(readNotes)
+  const [selectedId, setSelectedId] = useState(tracks[0].id)
+  const [playing, setPlaying] = useState(false)
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
   const [query, setQuery] = useState('')
-  const [family, setFamily] = useState('All')
-  const [license, setLicense] = useState('All')
-  const [sort, setSort] = useState<'taste' | 'composer'>('taste')
-  const [showSources, setShowSources] = useState(true)
+  const [filter, setFilter] = useState<'All' | 'Orchestral' | 'Piano' | 'Classical' | 'Loved' | 'Unrated'>('All')
+  const [message, setMessage] = useState('')
+
+  const selectedIndex = tracks.findIndex(track => track.id === selectedId)
+  const selected = tracks[selectedIndex] || tracks[0]
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
     return tracks
-      .filter(track => !q || [track.composer, track.title, track.family, track.mood, track.source].join(' ').toLowerCase().includes(q))
-      .filter(track => family === 'All' || track.family === family)
-      .filter(track => license === 'All' || track.license === license)
-      .sort((a, b) => sort === 'composer'
-        ? a.composer.localeCompare(b.composer) || a.title.localeCompare(b.title)
-        : (ratings[b.id] ?? -1) - (ratings[a.id] ?? -1) || a.composer.localeCompare(b.composer))
-  }, [query, family, license, sort, ratings])
+      .filter(track => !q || [track.composer, track.title, track.mood, track.family].join(' ').toLowerCase().includes(q))
+      .filter(track => {
+        if (filter === 'All') return true
+        if (filter === 'Loved') return ratings[track.id] === 3
+        if (filter === 'Unrated') return ratings[track.id] === undefined
+        return track.family === filter
+      })
+      .sort((a, b) => (ratings[b.id] ?? -1) - (ratings[a.id] ?? -1))
+  }, [query, filter, ratings])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    const update = () => setCurrentTime(audio.currentTime || 0)
+    const metadata = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
+    const ended = () => setPlaying(false)
+    const error = () => {
+      setPlaying(false)
+      setMessage('This recording did not load. Open Source / license and I can replace the stream if needed.')
+    }
+    audio.addEventListener('timeupdate', update)
+    audio.addEventListener('loadedmetadata', metadata)
+    audio.addEventListener('durationchange', metadata)
+    audio.addEventListener('ended', ended)
+    audio.addEventListener('error', error)
+    return () => {
+      audio.removeEventListener('timeupdate', update)
+      audio.removeEventListener('loadedmetadata', metadata)
+      audio.removeEventListener('durationchange', metadata)
+      audio.removeEventListener('ended', ended)
+      audio.removeEventListener('error', error)
+    }
+  }, [])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.pause()
+    audio.src = commonsAudio(selected.file)
+    audio.load()
+    setPlaying(false)
+    setCurrentTime(0)
+    setDuration(0)
+    setMessage('')
+  }, [selected.id])
+
+  async function togglePlay() {
+    const audio = audioRef.current
+    if (!audio) return
+    if (audio.paused) {
+      try {
+        await audio.play()
+        setPlaying(true)
+        setMessage('')
+      } catch {
+        setMessage('Playback was blocked. Tap Play again.')
+      }
+    } else {
+      audio.pause()
+      setPlaying(false)
+    }
+  }
+
+  function stop() {
+    const audio = audioRef.current
+    if (!audio) return
+    audio.pause()
+    audio.currentTime = 0
+    setPlaying(false)
+    setCurrentTime(0)
+  }
+
+  function seek(value: number) {
+    const audio = audioRef.current
+    if (!audio || !Number.isFinite(value)) return
+    audio.currentTime = value
+    setCurrentTime(value)
+  }
+
+  function step(delta: number) {
+    const next = Math.max(0, Math.min(tracks.length - 1, selectedIndex + delta))
+    setSelectedId(tracks[next].id)
+  }
 
   function rate(id: string, value: Rating) {
     const next = { ...ratings, [id]: value }
@@ -102,73 +157,82 @@ export function MusicDiscoveryLab({ onExit }: { onExit: () => void }) {
     localStorage.setItem(NOTE_KEY, JSON.stringify(next))
   }
 
-  function exportTaste() {
-    const payload = tracks
-      .filter(track => ratings[track.id] !== undefined || notes[track.id])
-      .map(track => ({ ...track, rating: ratings[track.id] ?? null, note: notes[track.id] ?? '' }))
-    const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), tracks: payload }, null, 2)], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'hos-music-taste.json'
-    link.click()
-    setTimeout(() => URL.revokeObjectURL(url), 1000)
-  }
-
-  const rated = tracks.filter(track => ratings[track.id] !== undefined).length
-  const loved = tracks.filter(track => ratings[track.id] === 3).length
+  const ratedCount = tracks.filter(track => ratings[track.id] !== undefined).length
+  const loveCount = tracks.filter(track => ratings[track.id] === 3).length
 
   return <main className="music-discovery">
+    <audio ref={audioRef} preload="metadata" />
+
     <header className="md-top">
       <button className="md-back" onClick={onExit}>← Lab</button>
       <div><span>HOS · EXPERIMENT</span><strong>Music Discovery Lab</strong></div>
-      <button className="md-export" onClick={exportTaste}>Export</button>
+      <div className="md-count">{ratedCount}/{tracks.length}</div>
     </header>
 
     <section className="md-hero">
-      <div className="md-kicker">REAL MUSIC · GLOBAL HUNT</div>
-      <h1>Find music worth keeping.</h1>
-      <p>Listen on the original source, then tell me what you hate, tolerate, like, or love. We are learning your ear before composing anything.</p>
-      <div className="md-stats"><span><b>{tracks.length}</b> hunt cards</span><span><b>{rated}</b> rated</span><span><b>{loved}</b> ★★★ loves</span></div>
+      <div className="md-kicker">REAL RECORDINGS · RATE AS YOU LISTEN</div>
+      <h1>Play it here. Judge it here.</h1>
+      <p>No hunting around in another website. Choose a recording, play or pause it, scrub anywhere in the piece, then give it 0–3.</p>
     </section>
 
-    <section className="md-license-note"><strong>License rule:</strong> PD/CC0 is easiest for a game. CC can be usable with attribution or other conditions. Verify track means we inspect that exact recording before putting it into HOS.</section>
+    <section className="md-player">
+      <div className="md-now">
+        <div>
+          <span>{selected.composer}</span>
+          <h2>{selected.title}</h2>
+          <p>{selected.mood}</p>
+        </div>
+        <a href={selected.sourcePage} target="_blank" rel="noreferrer">Source / license ↗</a>
+      </div>
 
-    <section className="md-controls">
-      <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Satie, forest, jazz, wonder…" />
-      <select value={family} onChange={e => setFamily(e.target.value)}>{['All','Classical','Orchestral','Ambient','Jazz','Piano','Game'].map(x => <option key={x}>{x}</option>)}</select>
-      <select value={license} onChange={e => setLicense(e.target.value)}>{['All','PD/CC0','CC','Verify track'].map(x => <option key={x}>{x}</option>)}</select>
-      <button onClick={() => setSort(sort === 'taste' ? 'composer' : 'taste')}>{sort === 'taste' ? 'Best first' : 'A–Z'}</button>
+      <div className="md-transport">
+        <button onClick={() => step(-1)} disabled={selectedIndex === 0}>‹</button>
+        <button className="md-play" onClick={togglePlay}>{playing ? '❚❚ Pause' : '▶ Play'}</button>
+        <button onClick={stop}>■ Stop</button>
+        <button onClick={() => step(1)} disabled={selectedIndex === tracks.length - 1}>›</button>
+      </div>
+
+      <div className="md-scrub">
+        <span>{formatTime(currentTime)}</span>
+        <input type="range" min="0" max={Math.max(duration, 0)} step="0.1" value={Math.min(currentTime, Math.max(duration, 0))} onChange={event => seek(Number(event.target.value))} />
+        <span>{formatTime(duration)}</span>
+      </div>
+
+      <div className="md-license">{selected.license}</div>
+
+      <div className="md-big-rating">
+        <button className={ratings[selected.id] === 0 ? 'selected' : ''} onClick={() => rate(selected.id, 0)}><b>0</b><span>Hate it</span></button>
+        <button className={ratings[selected.id] === 1 ? 'selected' : ''} onClick={() => rate(selected.id, 1)}><b>1</b><span>Mildly</span></button>
+        <button className={ratings[selected.id] === 2 ? 'selected' : ''} onClick={() => rate(selected.id, 2)}><b>2</b><span>Good</span></button>
+        <button className={ratings[selected.id] === 3 ? 'selected' : ''} onClick={() => rate(selected.id, 3)}><b>3</b><span>Love it</span></button>
+      </div>
+
+      <textarea value={notes[selected.id] || ''} onChange={event => saveNote(selected.id, event.target.value)} placeholder="What did you like or hate? Melody, strings, harmony, mood, pacing…" />
+      {message && <div className="md-message">{message}</div>}
     </section>
 
-    <section className="md-source-section">
-      <button className="md-section-toggle" onClick={() => setShowSources(!showSources)}>
-        <span><small>PLACES TO HUNT</small><strong>Open music repositories</strong></span><b>{showSources ? '−' : '+'}</b>
-      </button>
-      {showSources && <div className="md-source-grid">{shelves.map(source =>
-        <a key={source.name} href={source.url} target="_blank" rel="noreferrer" className="md-source-card">
-          <span>{source.best}</span><strong>{source.name}</strong><p>{source.tone}</p><small>{source.license}</small>
-        </a>
-      )}</div>}
+    <section className="md-toolbar">
+      <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search…" />
+      <select value={filter} onChange={event => setFilter(event.target.value as typeof filter)}>
+        {['All','Orchestral','Piano','Classical','Loved','Unrated'].map(item => <option key={item}>{item}</option>)}
+      </select>
     </section>
 
     <section className="md-list">
       {visible.map(track => {
-        const current = ratings[track.id]
-        return <article className={'md-track' + (current === 3 ? ' is-loved' : '')} key={track.id}>
-          <div className="md-track-head">
-            <div><span>{track.composer}</span><h2>{track.title}</h2></div>
-            <a href={track.url} target="_blank" rel="noreferrer" className="md-listen">Listen ↗</a>
-          </div>
-          <div className="md-tags"><span>{track.family}</span><span>{track.mood}</span><span>{track.license}</span><span>{track.source}</span></div>
-          {track.note && <p className="md-track-note">{track.note}</p>}
-          <div className="md-rating"><small>YOUR VERDICT</small>{[0,1,2,3].map(value =>
-            <button key={value} className={current === value ? 'selected' : ''} onClick={() => rate(track.id, value as Rating)}>{value === 0 ? 'No' : '★'.repeat(value)}</button>
-          )}</div>
-          <textarea value={notes[track.id] || ''} onChange={e => saveNote(track.id, e.target.value)} placeholder="Why? Beautiful strings, too cheesy, love the melody…" />
-        </article>
+        const rating = ratings[track.id]
+        return <button key={track.id} className={'md-track' + (selected.id === track.id ? ' active' : '') + (rating === 3 ? ' loved' : '')} onClick={() => setSelectedId(track.id)}>
+          <span className="md-track-index">{tracks.findIndex(item => item.id === track.id) + 1}</span>
+          <span className="md-track-copy"><small>{track.composer} · {track.family}</small><strong>{track.title}</strong><em>{track.mood}</em></span>
+          <span className="md-track-rating">{rating === undefined ? '—' : rating === 0 ? '0' : '★'.repeat(rating)}</span>
+        </button>
       })}
-      {!visible.length && <div className="md-empty">No matching music.</div>}
+    </section>
+
+    <section className="md-about">
+      <strong>Current playable catalog</strong>
+      <p>{tracks.length} direct recordings streamed from Wikimedia Commons. I can keep adding verified classical, game-ambient, and jazz recordings to this queue.</p>
+      <div><b>{loveCount}</b> tracks currently marked Love it.</div>
     </section>
   </main>
 }
