@@ -43,14 +43,17 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
   const [loaded,setLoaded]=useState(0),[error,setError]=useState(''),[started,setStarted]=useState(false),[attempt,setAttempt]=useState(0),[soundError,setSoundError]=useState(false)
   const [nature,setNature]=useState(.55),[music,setMusic]=useState(.35)
   const [soundMode,setSoundMode]=useState<WoodlandSoundMode>('piano')
-  const [lookGain,setLookGain]=useState(1),[cameraMass,setCameraMass]=useState(.28),[flickGlide,setFlickGlide]=useState(3),[moveAcceleration,setMoveAcceleration]=useState(2),[viewMode,setViewMode]=useState(0)
+  const [lookGain,setLookGain]=useState(1),[cameraMass,setCameraMass]=useState(.28),[flickGlide,setFlickGlide]=useState(3),[moveAcceleration,setMoveAcceleration]=useState(2),[viewMode,setViewMode]=useState(0),[hybridControls,setHybridControls]=useState(false)
   const [activeAudition,setActiveAudition]=useState<string|null>(null)
   const [mapPosition,setMapPosition]=useState({x:spawn.x,z:spawn.z}),[mapYaw,setMapYaw]=useState(spawn.yaw)
   const [musicRatings,setMusicRatings]=useState<MusicRatings>(readMusicRatings)
   const enabledProgressions=useMemo(()=>rankedMusic(musicRatings).filter(entry=>entry.rating>0).map(entry=>entry.item.id),[musicRatings])
-  const stick=useRef<{id:number;x:number;y:number}|null>(null),look=useRef<{id:number;x:number;y:number;t:number;vyaw:number;vpitch:number}|null>(null),nub=useRef<HTMLSpanElement>(null)
-  const stopMove=()=>{input.current.x=0;input.current.z=0;stick.current=null;if(nub.current)nub.current.style.transform='translate(0,0)'}
-  const stop=()=>{stopMove();look.current=null}
+  const stick=useRef<{id:number;x:number;y:number}|null>(null),look=useRef<{id:number;x:number;y:number;ax:number;ay:number;t:number;vyaw:number;vpitch:number}|null>(null),nub=useRef<HTMLSpanElement>(null)
+  const wander=useRef({turn:0,speed:0,x:0,z:0})
+  const clearWander=()=>{wander.current={turn:0,speed:0,x:0,z:0}}
+  const clearMove=()=>{input.current.x=0;input.current.z=0;stick.current=null;if(nub.current)nub.current.style.transform='translate(0,0)'}
+  const releaseMove=()=>{clearMove();if(hybridControls&&look.current){look.current.ax=look.current.x;look.current.ay=look.current.y;look.current.vyaw=0;look.current.vpitch=0;clearWander()}}
+  const stop=()=>{clearMove();clearWander();look.current=null}
   const resetLook=()=>{targetLook.current={yaw:spawn.yaw,pitch:0};lookVelocity.current={yaw:0,pitch:0};flickVelocity.current={yaw:0,pitch:0};input.current.yaw=spawn.yaw;input.current.pitch=0}
 
   useEffect(()=>{const controller=new AbortController();setError('');setLoaded(0)
@@ -70,6 +73,17 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
     const tick=(now:number)=>{
       const dt=Math.min(.033,Math.max(.001,(now-last)/1000));last=now
       if(!input.current.paused){
+        if(hybridControls&&look.current&&!stick.current){
+          const w=wander.current
+          if(viewMode<5){
+            targetLook.current.yaw+=w.turn*1.65*dt
+            input.current.x=0
+            input.current.z=-w.speed
+          }else{
+            input.current.x=w.x
+            input.current.z=w.z
+          }
+        }
         if(!look.current){
           if(flickGlide===0)flickVelocity.current={yaw:0,pitch:0}
           else{
@@ -96,7 +110,7 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
     }
     frame=requestAnimationFrame(tick)
     return()=>cancelAnimationFrame(frame)
-  },[cameraMass,flickGlide])
+  },[cameraMass,flickGlide,hybridControls,viewMode])
 
   useEffect(()=>{
     const keys=new Set<string>(),update=()=>{input.current.x=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));input.current.z=Number(keys.has('s')||keys.has('arrowdown'))-Number(keys.has('w')||keys.has('arrowup'))}
@@ -130,6 +144,9 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
   }
   function endLook(){
     const p=look.current
+    if(hybridControls&&p&&!stick.current){
+      clearWander();input.current.x=0;input.current.z=0;flickVelocity.current={yaw:0,pitch:0};look.current=null;return
+    }
     if(p&&flickGlide>0){
       const threshold=.22,maxSpeed=2.6
       const yaw=Math.abs(p.vyaw)>=threshold?Math.max(-maxSpeed,Math.min(maxSpeed,p.vyaw)):0
@@ -140,9 +157,9 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
   }
   return <main className="woodland">
     <canvas ref={canvas} aria-label="Immersive woodland with looping walking trails" onContextMenu={e=>e.preventDefault()}/>
-    <div className="woodland-look" aria-label="Drag to look around" onPointerDown={e=>{if(input.current.paused||look.current||viewMode>=7)return;e.currentTarget.setPointerCapture(e.pointerId);flickVelocity.current={yaw:0,pitch:0};look.current={id:e.pointerId,x:e.clientX,y:e.clientY,t:performance.now(),vyaw:0,vpitch:0}}} onPointerMove={e=>{const p=look.current;if(!p||p.id!==e.pointerId||input.current.paused)return;const now=performance.now(),dt=Math.max(.016,(now-p.t)/1000),rawDx=e.clientX-p.x,rawDy=e.clientY-p.y,dx=shapedPointerDelta(rawDx),dy=shapedPointerDelta(rawDy),lookMix=Math.max(0,1-viewMode/8),yawDelta=-dx*.003*lookGain*lookMix,pitchMove=-dy*.003*lookGain*lookMix;targetLook.current.yaw+=yawDelta;const before=targetLook.current.pitch;targetLook.current.pitch=pitchDelta(before,pitchMove);const appliedPitch=targetLook.current.pitch-before;const sampleYaw=yawDelta/dt,samplePitch=appliedPitch/dt;p.vyaw=p.vyaw*.72+sampleYaw*.28;p.vpitch=p.vpitch*.72+samplePitch*.28;p.x=e.clientX;p.y=e.clientY;p.t=now}} onPointerUp={endLook} onPointerCancel={()=>{flickVelocity.current={yaw:0,pitch:0};look.current=null}}/>
+    <div className="woodland-look" aria-label="Drag to look or wander" onPointerDown={e=>{if(input.current.paused||look.current||(!hybridControls&&viewMode>=7))return;e.currentTarget.setPointerCapture(e.pointerId);flickVelocity.current={yaw:0,pitch:0};look.current={id:e.pointerId,x:e.clientX,y:e.clientY,ax:e.clientX,ay:e.clientY,t:performance.now(),vyaw:0,vpitch:0};clearWander()}} onPointerMove={e=>{const p=look.current;if(!p||p.id!==e.pointerId||input.current.paused)return;const now=performance.now();if(hybridControls&&!stick.current){const rx=(e.clientX-p.ax)/74,rz=(e.clientY-p.ay)/74,d=Math.min(1,Math.hypot(rx,rz));if(d<.12)clearWander();else{const scale=(d-.12)/(.88*d),x=Math.max(-1,Math.min(1,rx*scale)),z=Math.max(-1,Math.min(1,rz*scale));wander.current={turn:Math.max(-1,Math.min(1,x)),speed:Math.min(1,Math.hypot(x,z)),x,z}}p.x=e.clientX;p.y=e.clientY;p.t=now;return}const dt=Math.max(.016,(now-p.t)/1000),rawDx=e.clientX-p.x,rawDy=e.clientY-p.y,dx=shapedPointerDelta(rawDx),dy=shapedPointerDelta(rawDy),lookMix=Math.max(0,1-viewMode/8),yawDelta=-dx*.003*lookGain*lookMix,pitchMove=-dy*.003*lookGain*lookMix;targetLook.current.yaw+=yawDelta;const before=targetLook.current.pitch;targetLook.current.pitch=pitchDelta(before,pitchMove);const appliedPitch=targetLook.current.pitch-before;const sampleYaw=yawDelta/dt,samplePitch=appliedPitch/dt;p.vyaw=p.vyaw*.72+sampleYaw*.28;p.vpitch=p.vpitch*.72+samplePitch*.28;p.x=e.clientX;p.y=e.clientY;p.t=now}} onPointerUp={endLook} onPointerCancel={()=>{clearWander();input.current.x=0;input.current.z=0;flickVelocity.current={yaw:0,pitch:0};look.current=null}}/>
     <WoodlandMiniMap position={mapPosition} yaw={mapYaw} onBack={onBack} onTeleport={point=>{world.current?.setPosition(point);setMapPosition(point)}}/><header className="woodland-bar"><span>WOODLAND <small>A place to wander</small></span><button onClick={settings}>Sound & settings</button></header>
-    {started&&<><div className="woodland-stick" role="application" aria-label="Movement joystick: drag your left thumb" onPointerDown={e=>{if(input.current.paused||stick.current)return;e.currentTarget.setPointerCapture(e.pointerId);const r=e.currentTarget.getBoundingClientRect();stick.current={id:e.pointerId,x:r.left+r.width/2,y:r.top+r.height/2}}} onPointerMove={e=>{const p=stick.current;if(!p||p.id!==e.pointerId||input.current.paused)return;const dx=e.clientX-p.x,dy=e.clientY-p.y,d=Math.max(42,Math.hypot(dx,dy));input.current.x=dx/d;input.current.z=dy/d;if(nub.current)nub.current.style.transform=`translate(${dx/d*36}px,${dy/d*36}px)`}} onPointerUp={stopMove} onPointerCancel={stopMove} onLostPointerCapture={stopMove}><span ref={nub}/><small>MOVE</small></div>{viewMode<7&&<div className="woodland-look-hint">DRAG TO LOOK</div>}{viewMode>=7&&<div className="woodland-look-hint">MOVE TO TURN</div>}</>}
+    {started&&<><div className="woodland-stick" role="application" aria-label="Movement joystick: drag your left thumb" onPointerDown={e=>{if(input.current.paused||stick.current)return;e.currentTarget.setPointerCapture(e.pointerId);const r=e.currentTarget.getBoundingClientRect();stick.current={id:e.pointerId,x:r.left+r.width/2,y:r.top+r.height/2};if(hybridControls){clearWander();input.current.x=0;input.current.z=0}}} onPointerMove={e=>{const p=stick.current;if(!p||p.id!==e.pointerId||input.current.paused)return;const dx=e.clientX-p.x,dy=e.clientY-p.y,d=Math.max(42,Math.hypot(dx,dy));input.current.x=dx/d;input.current.z=dy/d;if(nub.current)nub.current.style.transform=`translate(${dx/d*36}px,${dy/d*36}px)`}} onPointerUp={releaseMove} onPointerCancel={releaseMove} onLostPointerCapture={releaseMove}><span ref={nub}/><small>{hybridControls?'FEET':'MOVE'}</small></div><div className="woodland-look-hint">{hybridControls?'RIGHT: WANDER · BOTH: LOOK':'DRAG TO LOOK'}</div></>}
     {!started&&<section className="woodland-intro"><div className="woodland-panel"><span className="woodland-eyebrow">THE LAB · FIELD EXPERIMENT</span><h1>Take the long way.</h1><p>A spacious woodland, a winding circuit, and quieter paths that always find their way back.</p><p className="woodland-controls">Left thumb to walk · Right thumb to look<br/>On a computer: WASD or arrows · Drag to look</p>{error?<><p role="alert">{error}</p><button onClick={()=>setAttempt(x=>x+1)}>Try again</button></>:<button disabled={loaded<1} onClick={begin}>{loaded<1?`Growing your woodland… ${Math.round(loaded*100)}%`:'Enter the woodland'}</button>}<small>Best enjoyed sideways. Headphones optional.</small></div></section>}
     <dialog ref={dialog} className="woodland-dialog" onClose={closeSettings}>
       <h2>Make yourself at home.</h2>
@@ -151,6 +168,12 @@ export function WoodlandWalk({onBack}:{onBack:()=>void}){
       <label>Gentle music <input type="range" min="0" max="1" step=".01" value={music} onChange={e=>setMusic(Number(e.target.value))}/></label>
       <WoodlandMusicPalette ratings={musicRatings} activeId={activeAudition} mode={soundMode} onRate={rateMusic} onToggle={toggleAudition} onMode={setSoundMode}/>
       <section className="woodland-camera">
+        <h3>Controls</h3>
+        <p>Try the experimental contextual controls. Right thumb alone wanders; left alone moves the feet; both thumbs give independent movement and looking.</p>
+        <div className="woodland-mode-toggle" role="group" aria-label="Control style">
+          <button className={!hybridControls?'selected':''} onClick={()=>{stop();setHybridControls(false)}}>Classic dual-stick</button>
+          <button className={hybridControls?'selected':''} onClick={()=>{stop();setHybridControls(true)}}>Hybrid wander</button>
+        </div>
         <h3>View</h3>
         <p>Slide continuously from immersive first person to a pulled-back three-quarter game view. As you pull out, the character appears, faces the direction of travel, and the forest becomes chunkier and friendlier from above.</p>
         <label>View <strong>{viewMode<1?'First person':viewMode<4?'Pulled back':viewMode<7?'High third person':'Three-quarter'}</strong><input type="range" min="0" max="10" step=".1" value={viewMode} onChange={e=>setViewMode(Number(e.target.value))}/><span className="woodland-view-scale"><b>FIRST PERSON</b><b>THREE-QUARTER</b></span><small>At the far end, looking is automatic: the character faces wherever they move.</small></label>
