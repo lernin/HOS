@@ -17,9 +17,13 @@ type Track = {
 
 const RATING_KEY = 'hos-music-discovery-ratings-v3'
 const NOTE_KEY = 'hos-music-discovery-notes-v3'
+const QUALITY_KEY = 'hos-music-discovery-quality-v1'
+const VARIANT_KEY = 'hos-music-discovery-variants-v1'
 const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
 const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
+
+const variantOptions = ['Orchestral','Guitar','Jazz','Ambient','Synth pads','8-bit / chiptune','Electronic / dubstep','Chamber','Piano']
 
 const interestOptions = [
   'Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads',
@@ -53,6 +57,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const recordingTrackRef = useRef<string | null>(null)
   const [ratings, setRatings] = useState<Record<string, Rating>>(() => loadObject(RATING_KEY, {}))
   const [notes, setNotes] = useState<Record<string, string>>(() => loadObject(NOTE_KEY, {}))
+  const [qualityRatings, setQualityRatings] = useState<Record<string, Rating>>(() => loadObject(QUALITY_KEY, {}))
+  const [wantedVariants, setWantedVariants] = useState<Record<string, string[]>>(() => loadObject(VARIANT_KEY, {}))
   const [interests, setInterests] = useState<string[]>(() => loadObject(INTEREST_KEY, ['Beautiful orchestral','Ambient game','Piano']))
   const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
   const [mode, setMode] = useState<'listen'|'hunt'>('listen')
@@ -127,9 +133,19 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function step(delta: number) {
     setIndex(i => (i + delta + queue.length) % queue.length)
   }
-  function rate(value: Rating) {
+  function ratePiece(value: Rating) {
     const next = { ...ratings, [selected.id]: value }
     setRatings(next); localStorage.setItem(RATING_KEY, JSON.stringify(next))
+  }
+  function rateQuality(value: Rating) {
+    const next = { ...qualityRatings, [selected.id]: value }
+    setQualityRatings(next); localStorage.setItem(QUALITY_KEY, JSON.stringify(next))
+  }
+  function toggleVariant(value: string) {
+    const current = wantedVariants[selected.id] || []
+    const list = current.includes(value) ? current.filter(item => item !== value) : [...current, value]
+    const next = { ...wantedVariants, [selected.id]: list }
+    setWantedVariants(next); localStorage.setItem(VARIANT_KEY, JSON.stringify(next))
   }
   function saveNote(value: string) {
     const next = { ...notes, [selected.id]: value }
@@ -207,10 +223,19 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <span>{formatTime(duration)}</span>
       </div>
 
-      <div className="md-rating">
-        {[
-          [0,'Hate it'],[1,'Mildly'],[2,'Good'],[3,'Love it']
-        ].map(([value,label]) => <button key={value} className={ratings[selected.id] === value ? 'selected' : ''} onClick={() => rate(value as Rating)}><b>{value}</b><span>{label}</span></button>)}
+      <div className="md-judgments">
+        <div className="md-judgment-row">
+          <small>PIECE</small>
+          <div className="md-rating">{[[0,'Hate'],[1,'Mild'],[2,'Good'],[3,'Love']].map(([value,label]) => <button key={value} className={ratings[selected.id] === value ? 'selected' : ''} onClick={() => ratePiece(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
+        </div>
+        <div className="md-judgment-row">
+          <small>SOUND QUALITY</small>
+          <div className="md-rating">{[[0,'Awful'],[1,'Weak'],[2,'Good'],[3,'Great']].map(([value,label]) => <button key={value} className={qualityRatings[selected.id] === value ? 'selected' : ''} onClick={() => rateQuality(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
+        </div>
+        <div className="md-variants">
+          <small>FIND ANOTHER VERSION</small>
+          <div>{variantOptions.map(item => <button key={item} className={(wantedVariants[selected.id] || []).includes(item) ? 'active' : ''} onClick={() => toggleVariant(item)}>{item}</button>)}</div>
+        </div>
       </div>
 
       <div className="md-note">
