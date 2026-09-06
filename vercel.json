@@ -9,6 +9,7 @@
       "fix/music-library-inapp-playback-20260906": true,
       "fix/music-review-durable-sync-20260906": true,
       "feature/music-playability-and-official-streams-20260906": true,
+      "fix/music-optimistic-play-card-swipe-20260907": true,
       "feature/music-new-swipe-20260906": true
     }
   },
