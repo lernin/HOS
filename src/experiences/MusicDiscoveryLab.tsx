@@ -49,6 +49,7 @@ type CatalogItem = {
 }
 type ReviewSyncEntry = {
   sourcePage: string
+  musicId?: string
   pieceRating: Rating | null
   soundRating: Rating | null
   performanceRating: Rating | null
@@ -289,7 +290,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function queueReviewSync(pieceId: string, candidateId: string, sourcePage: string, overrides: ReviewOverrides = {}, delayMs = 0) {
     if (!sourcePage) return
     const queue = reviewQueue()
-    const existing = queue[sourcePage]
+    const musicId = catalogIdForPiece(pieceId) || undefined
+    const queueKey = musicId ? 'catalog:' + musicId : sourcePage
+    const existing = queue[queueKey]
     const overrideFields = Object.keys(overrides) as ReviewField[]
     const dirtyFields = Array.from(new Set<ReviewField>([
       ...(existing?.dirtyFields || []),
@@ -297,8 +300,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     ]))
     const snapshot = reviewSnapshot(pieceId, candidateId, sourcePage, overrides)
     const hasOverride = (field: ReviewField) => overrideFields.includes(field)
-    queue[sourcePage] = {
+    queue[queueKey] = {
       ...snapshot,
+      musicId,
       pieceRating:existing?.dirtyFields?.includes('pieceRating') && !hasOverride('pieceRating') ? existing.pieceRating : snapshot.pieceRating,
       soundRating:existing?.dirtyFields?.includes('soundRating') && !hasOverride('soundRating') ? existing.soundRating : snapshot.soundRating,
       performanceRating:existing?.dirtyFields?.includes('performanceRating') && !hasOverride('performanceRating') ? existing.performanceRating : snapshot.performanceRating,
@@ -318,8 +322,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!Object.keys(queued).length) return
     reviewSyncingRef.current = true
     try {
-      for (const [sourcePage, entry] of Object.entries(queued)) {
-        const item = items.find(candidate => candidate.sourcePage === sourcePage)
+      for (const [queueKey, entry] of Object.entries(queued)) {
+        const item = entry.musicId
+          ? items.find(candidate => candidate.id === entry.musicId)
+          : items.find(candidate => candidate.sourcePage === entry.sourcePage)
         if (!item) continue
         const dirty = new Set<ReviewField>(entry.dirtyFields || ['pieceRating','soundRating','performanceRating','note','confirmedEmotions','rejected'])
         const synced = {
@@ -342,8 +348,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         })
         if (error) throw error
         const latest = reviewQueue()
-        if (latest[sourcePage]?.updatedAt === entry.updatedAt) {
-          delete latest[sourcePage]
+        if (latest[queueKey]?.updatedAt === entry.updatedAt) {
+          delete latest[queueKey]
           saveLocal(REVIEW_SYNC_QUEUE_KEY, latest)
         }
         setCatalog(currentItems => currentItems.map(currentItem => currentItem.id === item.id ? {
@@ -384,7 +390,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       const catalogCandidateKey = 'catalog-candidate:' + item.id
       const legacyPiece = pieces.find(candidatePiece => candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage))
       const legacyCandidate = legacyPiece?.candidates.find(candidate => candidate.sourcePage === item.sourcePage)
-      const hasPending = Boolean(pending[item.sourcePage])
+      const hasPending = Boolean(pending['catalog:' + item.id] || pending[item.sourcePage])
 
       if (hasPending) continue
 
@@ -477,8 +483,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         if (!item.reviewRejected && localRejected) dirtyFields.push('rejected')
         if (dirtyFields.length) {
           const queue = reviewQueue()
-          queue[item.sourcePage] = {
+          queue['catalog:' + item.id] = {
             sourcePage:item.sourcePage,
+            musicId:item.id,
             pieceRating:item.rating ?? localPieceRating ?? null,
             soundRating:item.soundRating ?? localSoundRating ?? null,
             performanceRating:item.performanceRating ?? localPerformanceRating ?? null,
