@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import { supabase } from '../lib/supabase'
 import './music-discovery-lab.css'
@@ -37,7 +37,9 @@ type CatalogItem = {
   source: string
   description?: string
   rightsVerified?: boolean
+  rating: Rating | null
 }
+type CatalogFilter = 'New' | 'All' | Modality
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
 
@@ -143,6 +145,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const recordingRef = useRef<RecordingSession | null>(null)
   const recordingCandidateRef = useRef<string | null>(null)
+  const resolvingCatalogRef = useRef<Set<string>>(new Set())
+  const swipeStartRef = useRef<{ x: number; y: number; interactive: boolean } | null>(null)
 
   const [pieceIndex, setPieceIndex] = useState(0)
   const [catalogPieces, setCatalogPieces] = useState<Piece[]>([])
@@ -161,7 +165,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
-  const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
+  const [catalogModality, setCatalogModality] = useState<CatalogFilter>('New')
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -207,14 +211,21 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   useEffect(() => {
     const audio = audioRef.current
     if (!audio || !current) return
+    const source = candidateAudio(current)
     audio.pause()
-    audio.src = candidateAudio(current)
-    audio.load()
     setPlaying(false)
     setCurrentTime(0)
     setDuration(0)
+    if (!source && piece.id.startsWith('catalog:')) {
+      audio.removeAttribute('src')
+      audio.load()
+      void resolveCatalogAudio(piece.id.slice('catalog:'.length))
+      return
+    }
+    audio.src = source
+    audio.load()
     setMessage('')
-  }, [current.id])
+  }, [current.id, current.audioUrl, piece.id])
 
   function saveLocal<T>(key: string, value: T) {
     localStorage.setItem(key, JSON.stringify(value))
@@ -250,7 +261,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       const rows = (Array.isArray(data) ? data : []) as Array<{
         id:string; composer:string; work_title:string; movement_title?:string | null; performer?:string | null;
         source_name?:string | null; source_url:string; recording_url?:string | null; license?:string | null;
-        rights_verified?:boolean; taste_notes?:string | null
+        rights_verified?:boolean; rating?:number | null; taste_notes?:string | null
       }>
       const incoming: CatalogItem[] = rows.map(row => ({
         id:row.id,
@@ -263,8 +274,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         source:row.source_name || 'Curated library',
         description:row.taste_notes || '',
         rightsVerified:Boolean(row.rights_verified),
+        rating:typeof row.rating === 'number' && row.rating >= 0 && row.rating <= 3 ? row.rating as Rating : null,
       }))
       setCatalog(incoming)
+      setPieceRatings(currentRatings => {
+        const next = { ...currentRatings }
+        for (const item of incoming) {
+          if (item.rating !== null) next['catalog:' + item.id] = item.rating
+        }
+        return next
+      })
       setMessage(incoming.length ? 'Loaded ' + incoming.length + ' curated tracks from the production library.' : 'The curated library is empty.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load curated music library.')
@@ -275,61 +294,72 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   async function searchNow() {
     setCatalogSearch('')
-    setCatalogModality('All')
+    setCatalogModality('New')
     await loadCatalog(true, true)
     setMode('browse')
   }
 
-  async function adoptCatalogItem(item: CatalogItem) {
-    let playable = item
-    if (!playable.audioUrl) {
-      setMessage('Loading recording…')
-      try {
-        const response = await fetch('/api/music-resolve', {
-          method:'POST',
-          headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
-          body:JSON.stringify({ sourceUrl:playable.sourcePage, sourceName:playable.source, title:playable.title }),
-        })
-        const result = await response.json() as { audioUrl?:string; error?:string }
-        if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
-        playable = { ...item, audioUrl:result.audioUrl }
-        setCatalog(currentItems => currentItems.map(row => row.id === playable.id ? playable : row))
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
-        return
-      }
+  function catalogPieceFor(item: CatalogItem): Piece {
+    return {
+      id:'catalog:' + item.id,
+      composer:item.creator || 'Unknown artist',
+      title:item.title,
+      mood:item.modality + ' · ' + item.source,
+      aiEmotions:inferredEmotions(item.modality),
+      candidates:[{
+        id:'catalog-candidate:' + item.id,
+        performer:item.creator || 'Unknown artist',
+        modality:item.modality,
+        license:item.license,
+        audioUrl:item.audioUrl,
+        sourcePage:item.sourcePage,
+        source:item.source,
+        matchConfidence:'confirmed',
+      }],
     }
+  }
 
-    const pieceId = 'catalog:' + playable.id
-    const existingIndex = pieceList.findIndex(candidatePiece => candidatePiece.id === pieceId)
-    const candidate: Candidate = {
-      id:'catalog-candidate:' + playable.id,
-      performer:playable.creator || 'Unknown artist',
-      modality:playable.modality,
-      license:playable.license,
-      audioUrl:playable.audioUrl,
-      sourcePage:playable.sourcePage,
-      source:playable.source,
-      matchConfidence:'confirmed',
+  async function resolveCatalogAudio(catalogId: string) {
+    if (resolvingCatalogRef.current.has(catalogId)) return
+    const item = catalog.find(row => row.id === catalogId)
+    if (!item || item.audioUrl) return
+    resolvingCatalogRef.current.add(catalogId)
+    setMessage('Loading recording…')
+    try {
+      const response = await fetch('/api/music-resolve', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
+        body:JSON.stringify({ sourceUrl:item.sourcePage, sourceName:item.source, title:item.title }),
+      })
+      const result = await response.json() as { audioUrl?:string; error?:string }
+      if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
+      const audioUrl = result.audioUrl
+      setCatalog(currentItems => currentItems.map(row => row.id === catalogId ? { ...row, audioUrl } : row))
+      setCatalogPieces(currentPieces => currentPieces.map(currentPiece => {
+        if (currentPiece.id !== 'catalog:' + catalogId) return currentPiece
+        return {
+          ...currentPiece,
+          candidates:currentPiece.candidates.map(candidate =>
+            candidate.id === 'catalog-candidate:' + catalogId ? { ...candidate, audioUrl } : candidate
+          ),
+        }
+      }))
+      setMessage('')
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
+    } finally {
+      resolvingCatalogRef.current.delete(catalogId)
     }
-    if (existingIndex >= 0) {
-      setPieceIndex(existingIndex)
-      setCandidateId(candidate.id)
-      setMode('listen')
-      return
-    }
-    const newPiece: Piece = {
-      id:pieceId,
-      composer:playable.creator || 'Unknown artist',
-      title:playable.title,
-      mood:playable.modality + ' · ' + playable.source,
-      aiEmotions:inferredEmotions(playable.modality),
-      candidates:[candidate],
-    }
-    const newIndex = pieces.length + catalogPieces.length
-    setCatalogPieces(currentPieces => [...currentPieces, newPiece])
-    setPieceIndex(newIndex)
-    setCandidateId(candidate.id)
+  }
+
+  function adoptCatalogItem(item: CatalogItem) {
+    const queue = (filteredCatalog.length ? filteredCatalog : catalog)
+    const queueItems = queue.some(row => row.id === item.id) ? queue : [item, ...queue]
+    const queuePieces = queueItems.map(catalogPieceFor)
+    const selectedIndex = Math.max(0, queueItems.findIndex(row => row.id === item.id))
+    setCatalogPieces(queuePieces)
+    setPieceIndex(pieces.length + selectedIndex)
+    setCandidateId('catalog-candidate:' + item.id)
     setMode('listen')
   }
 
@@ -439,13 +469,64 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   function stepPiece(delta: number) {
+    if (catalogPieces.length && piece.id.startsWith('catalog:')) {
+      setPieceIndex(index => {
+        const currentOffset = Math.max(0, index - pieces.length)
+        const nextOffset = (currentOffset + delta + catalogPieces.length) % catalogPieces.length
+        return pieces.length + nextOffset
+      })
+      return
+    }
     setPieceIndex(index => (index + delta + pieceList.length) % pieceList.length)
+  }
+
+  function catalogIdForPiece(pieceId: string) {
+    return pieceId.startsWith('catalog:') ? pieceId.slice('catalog:'.length) : null
+  }
+
+  async function persistCatalogRating(catalogId: string, value: Rating) {
+    try {
+      const { error } = await supabase.rpc('lab_music_library_rate', { pin, music_id: catalogId, rating_value:value })
+      if (error) throw error
+      setMessage('Rating saved.')
+    } catch {
+      setMessage('Rating saved on this device for the preview. Database sync will activate with the rating-writer migration.')
+    }
   }
 
   function ratePiece(value: Rating) {
     const next = { ...pieceRatings, [piece.id]: value }
     setPieceRatings(next)
     saveLocal(PIECE_RATING_KEY, next)
+
+    const catalogId = catalogIdForPiece(piece.id)
+    if (catalogId) {
+      setCatalog(items => items.map(item => item.id === catalogId ? { ...item, rating:value } : item))
+      void persistCatalogRating(catalogId, value)
+    }
+  }
+
+  function onListenTouchStart(event: TouchEvent<HTMLElement>) {
+    const touch = event.touches[0]
+    if (!touch) return
+    const target = event.target as HTMLElement
+    swipeStartRef.current = {
+      x:touch.clientX,
+      y:touch.clientY,
+      interactive:Boolean(target.closest('button,input,textarea,a')),
+    }
+  }
+
+  function onListenTouchEnd(event: TouchEvent<HTMLElement>) {
+    const start = swipeStartRef.current
+    swipeStartRef.current = null
+    if (!start || start.interactive) return
+    const touch = event.changedTouches[0]
+    if (!touch) return
+    const dx = touch.clientX - start.x
+    const dy = touch.clientY - start.y
+    if (Math.abs(dx) < 52 || Math.abs(dx) < Math.abs(dy) * 1.25) return
+    stepPiece(dx < 0 ? 1 : -1)
   }
 
   function rateQuality(value: Rating) {
@@ -549,10 +630,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
+  function isCatalogRated(item: CatalogItem) {
+    return item.rating !== null || pieceRatings['catalog:' + item.id] !== undefined
+  }
+
   const filteredCatalog = catalog.filter(item => {
     const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
-    const matchesModality = catalogModality === 'All' || item.modality === catalogModality
+    const matchesModality = catalogModality === 'New'
+      ? !isCatalogRated(item)
+      : catalogModality === 'All' || item.modality === catalogModality
     return matchesSearch && matchesModality
   })
 
@@ -581,7 +668,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <button className={mode === 'hunt' ? 'active' : ''} onClick={() => setMode('hunt')}>HUNT</button>
     </nav>
 
-    {mode === 'listen' ? <section className="md-listen">
+    {mode === 'listen' ? <section className="md-listen" onTouchStart={onListenTouchStart} onTouchEnd={onListenTouchEnd}>
       <div className="md-modalities">
         {modalities.map(modality => {
           const list = candidateListFor(modality)
@@ -623,6 +710,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <button onClick={stop}>■ Stop</button>
         <button onClick={() => stepPiece(1)}>›</button>
       </div>
+      <small className="md-swipe-hint">Swipe left or right outside the controls to move between tracks.</small>
 
       <div className="md-scrub">
         <span>{formatTime(currentTime)}</span>
@@ -670,7 +758,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <div className="md-browse-head">
         <div>
           <small>CURATED PRODUCTION LIBRARY</small>
-          <h1>{catalogLoading ? 'Gathering music…' : (filteredCatalog.length || catalog.length) + ' to try'}</h1>
+          <h1>{catalogLoading ? 'Gathering music…' : filteredCatalog.length + (catalogModality === 'New' ? ' new' : ' to try')}</h1>
         </div>
         <button onClick={() => void loadCatalog(true, true)} disabled={catalogLoading}>{catalogLoading ? '…' : '↻'}</button>
       </div>
@@ -678,7 +766,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <input value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} placeholder="Search title, artist, source…"/>
       </div>
       <div className="md-browse-filters">
-        {(['All', ...modalities] as Array<'All' | Modality>).map(value => <button key={value} className={catalogModality === value ? 'active' : ''} onClick={() => setCatalogModality(value)}>{value}</button>)}
+        {(['New','All', ...modalities] as CatalogFilter[]).map(value => <button key={value} className={(catalogModality === value ? 'active ' : '') + (value === 'New' ? 'new-filter' : '')} onClick={() => setCatalogModality(value)}>{value === 'New' || value === 'All' ? value.toUpperCase() : value}</button>)}
       </div>
       <div className="md-catalog-list">
         {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => void adoptCatalogItem(item)}>
