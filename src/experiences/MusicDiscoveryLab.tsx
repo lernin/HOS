@@ -5,6 +5,7 @@ import './music-discovery-lab.css'
 type Rating = 0 | 1 | 2 | 3
 type Modality = 'Piano' | 'Orchestral' | 'Jazz' | 'Guitar' | 'Synth' | 'Ambient' | 'Game' | '8-bit'
 type Emotion = 'Hearth' | 'Wonder' | 'Calling' | 'Adventure' | 'Guide' | 'Mystery' | 'Vastness' | 'Peril' | 'Homeward' | 'Triumph'
+type DiscoveryStyle = 'Orchestral / Cinematic' | 'Piano / Minimal' | 'Jazz / Swing' | 'Guitar / Acoustic' | 'Ambient / Atmospheric' | 'Synth / Electronic' | 'Techno / Driving' | 'Dubstep / Heavy' | '8-bit / Chiptune' | 'Retro Game' | 'Funky / Groovy' | 'Playful / Whimsical' | 'Dark / Suspense' | 'Epic / Heroic' | 'World / Folk' | 'Soundscape / Texture'
 type ModalityStatus = 'unsearched' | 'requested' | 'notfound'
 type Candidate = {
   id: string
@@ -44,6 +45,7 @@ type Repository = {
 
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
+const discoveryStyles: DiscoveryStyle[] = ['Orchestral / Cinematic','Piano / Minimal','Jazz / Swing','Guitar / Acoustic','Ambient / Atmospheric','Synth / Electronic','Techno / Driving','Dubstep / Heavy','8-bit / Chiptune','Retro Game','Funky / Groovy','Playful / Whimsical','Dark / Suspense','Epic / Heroic','World / Folk','Soundscape / Texture']
 
 const PIECE_RATING_KEY = 'hos-music-piece-ratings-v1'
 const QUALITY_KEY = 'hos-music-quality-ratings-v2'
@@ -55,6 +57,8 @@ const CONFIRMED_EMOTION_KEY = 'hos-music-confirmed-emotions-v1'
 const DISCOVERED_KEY = 'hos-music-discovered-candidates-v1'
 const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
+const SEARCH_STYLE_KEY = 'hos-music-search-styles-v1'
+const SEARCH_EMOTION_KEY = 'hos-music-search-emotions-v1'
 
 const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
 const candidateAudio = (candidate: Candidate) => candidate.audioUrl || (candidate.file ? commonsAudio(candidate.file) : '')
@@ -160,6 +164,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [confirmedEmotions, setConfirmedEmotions] = useState<Record<string, Emotion[]>>(() => loadObject(CONFIRMED_EMOTION_KEY, {}))
   const [discovered, setDiscovered] = useState<Record<string, Candidate[]>>(() => loadObject(DISCOVERED_KEY, {}))
   const [interests, setInterests] = useState<string[]>(() => loadObject(INTEREST_KEY, ['Beautiful orchestral','Ambient game','Piano']))
+  const [searchStyles, setSearchStyles] = useState<DiscoveryStyle[]>(() => loadObject(SEARCH_STYLE_KEY, ['Orchestral / Cinematic','Ambient / Atmospheric','Piano / Minimal']))
+  const [searchEmotions, setSearchEmotions] = useState<Emotion[]>(() => loadObject(SEARCH_EMOTION_KEY, ['Wonder','Hearth','Adventure']))
   const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
   const [mode, setMode] = useState<'listen'|'browse'|'hunt'>('listen')
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
@@ -235,7 +241,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return ['Wonder','Calling']
   }
 
-  async function loadCatalog(force = false, reset = false) {
+  async function loadCatalog(force = false, reset = false, surprise = false) {
     if (catalogLoading || (catalog.length && !force && !reset)) return
     const nextPage = reset ? 1 : Math.max(1, catalogBatch + (catalog.length ? 1 : 0))
     setCatalogLoading(true)
@@ -243,9 +249,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       const response = await fetch('/api/music-catalog', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
-        body:JSON.stringify({ interests, request, page:nextPage }),
+        body:JSON.stringify({ styles:searchStyles, emotions:searchEmotions, request, page:nextPage, surprise }),
       })
-      const result = await response.json() as { items?: CatalogItem[]; repositories?: Repository[]; error?: string }
+      const result = await response.json() as { items?: CatalogItem[]; repositories?: Repository[]; queryPlan?: string[]; error?: string }
       if (!response.ok) throw new Error(result.error || 'Could not load music catalog.')
       const incoming = result.items || []
       if (reset) {
@@ -258,7 +264,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       }
       setRepositories(result.repositories || [])
       setCatalogBatch(nextPage)
-      setMessage(incoming.length ? 'Loaded ' + incoming.length + ' fresh nominations.' : 'No new nominations in this batch.')
+      const plan = (result.queryPlan || []).slice(0, 2).join(' · ')
+      setMessage(incoming.length ? 'Found ' + incoming.length + ' nominations' + (plan ? ' from: ' + plan : '') : 'No new nominations in this batch.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load music catalog.')
     } finally {
@@ -269,7 +276,14 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   async function searchNow() {
     setCatalogSearch('')
     setCatalogModality('All')
-    await loadCatalog(true, true)
+    await loadCatalog(true, true, false)
+    setMode('browse')
+  }
+
+  async function surpriseMe() {
+    setCatalogSearch('')
+    setCatalogModality('All')
+    await loadCatalog(true, true, true)
     setMode('browse')
   }
 
@@ -522,6 +536,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
+  void interestOptions
+  void toggleInterest
+  void interests
   const currentVersions = candidateListFor(currentModality)
   const filteredCatalog = catalog.filter(item => {
     const text = (item.title + ' ' + item.creator + ' ' + item.source).toLowerCase()
@@ -538,6 +555,18 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const next = interests.includes(value) ? interests.filter(item => item !== value) : [...interests, value]
     setInterests(next)
     saveLocal(INTEREST_KEY, next)
+  }
+
+  function toggleSearchStyle(value: DiscoveryStyle) {
+    const next = searchStyles.includes(value) ? searchStyles.filter(item => item !== value) : [...searchStyles, value]
+    setSearchStyles(next)
+    saveLocal(SEARCH_STYLE_KEY, next)
+  }
+
+  function toggleSearchEmotion(value: Emotion) {
+    const next = searchEmotions.includes(value) ? searchEmotions.filter(item => item !== value) : [...searchEmotions, value]
+    setSearchEmotions(next)
+    saveLocal(SEARCH_EMOTION_KEY, next)
   }
 
   return <main className="music-discovery">
@@ -667,24 +696,33 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <div>{repositories.map(repository => <a key={repository.name} href={repository.url} target="_blank" rel="noreferrer" className={'mode-' + repository.mode} title={repository.note}>{repository.name}</a>)}</div>
       </div>
     </section> : <section className="md-hunt">
-      <div>
-        <small>WHAT SHOULD I HUNT FOR?</small>
-        <h1>Choose your interests.</h1>
+      <div className="md-hunt-head">
+        <div><small>AI MUSIC MAP</small><h1>What world should this music create?</h1></div>
+        <button className="md-surprise" onClick={() => void surpriseMe()} disabled={catalogLoading}>{catalogLoading ? '…' : 'SURPRISE ME'}</button>
       </div>
-      <div className="md-chips">
-        {interestOptions.map(item => <button key={item} className={interests.includes(item) ? 'active' : ''} onClick={() => toggleInterest(item)}>{item}</button>)}
+      <div className="md-hunt-group">
+        <small>STYLE</small>
+        <div className="md-hunt-chip-scroll">
+          {discoveryStyles.map(item => <button key={item} className={searchStyles.includes(item) ? 'active' : ''} onClick={() => toggleSearchStyle(item)}>{item}</button>)}
+        </div>
+      </div>
+      <div className="md-hunt-group">
+        <small>EMOTIONAL PURPOSE</small>
+        <div className="md-hunt-chip-scroll">
+          {emotions.map(item => <button key={item} className={searchEmotions.includes(item) ? 'active' : ''} onClick={() => toggleSearchEmotion(item)}>{item}</button>)}
+        </div>
       </div>
       <label>
-        <span>Anything else?</span>
-        <textarea value={request} onChange={event => { setRequest(event.target.value); localStorage.setItem(REQUEST_KEY, event.target.value) }} placeholder="e.g. Beautiful high-quality game music, warm strings, no cheesy trailer drums…"/>
+        <span>Optional direction</span>
+        <textarea value={request} onChange={event => { setRequest(event.target.value); localStorage.setItem(REQUEST_KEY, event.target.value) }} placeholder="e.g. beautiful exploration music, gentle at first, then a little mysterious…"/>
       </label>
       <div className="md-hunt-summary">
-        <b>{interests.length}</b>
-        <span>active discovery interests</span>
-        <button className="md-search-now" onClick={() => void searchNow()} disabled={catalogLoading}>{catalogLoading ? 'SEARCHING…' : 'SEARCH NOW →'}</button>
+        <b>{searchStyles.length}×{searchEmotions.length}</b>
+        <span>AI-curated style × emotion search space</span>
+        <button className="md-search-now" onClick={() => void searchNow()} disabled={catalogLoading || (!searchStyles.length && !searchEmotions.length)}>{catalogLoading ? 'SEARCHING…' : 'SEARCH NOW →'}</button>
       </div>
       {message && <div className="md-message">{message}</div>}
-      <p className="md-hunt-note">Search Now gathers a fresh playable batch from Openverse using these interests. Exact-piece modality hunts still happen from the top row on Listen.</p>
+      <p className="md-hunt-note">The backend turns your style + emotional purpose into several Openverse searches. Surprise Me deliberately spreads results across very different musical worlds.</p>
     </section>}
   </main>
 }
