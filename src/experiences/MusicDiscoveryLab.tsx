@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import { supabase } from '../lib/supabase'
+import { captureLegacyMusicBrowserState, refreshLegacyMusicCapture } from './musicLegacyImport'
 import './music-discovery-lab.css'
 
 type Rating = 0 | 1 | 2 | 3
@@ -199,6 +200,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const swipeMotionBusyRef = useRef(false)
   const playIntentRef = useRef(false)
   const playRequestRef = useRef(0)
+  const [legacyCapture] = useState(() => captureLegacyMusicBrowserState())
 
   const [pieceIndex, setPieceIndex] = useState(0)
   const [catalogPieces, setCatalogPieces] = useState<Piece[]>([])
@@ -318,6 +320,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   function saveLocal<T>(key: string, value: T) {
     localStorage.setItem(key, JSON.stringify(value))
+    refreshLegacyMusicCapture()
   }
 
   function reviewQueue() {
@@ -1482,7 +1485,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       </div>
       <div className="md-repositories">
         <span>CURATED</span>
-        <div><span className="md-library-note">Curated production library · ▶ plays reusable/direct audio in-app · ↗ opens copyrighted music at its official source</span></div>
+        <div>
+          <span className="md-library-note">Curated production library · ▶ plays reusable/direct audio in-app · ↗ opens copyrighted music at its official source</span>
+          {legacyCapture.latest && legacyCapture.latest.summary.keyCount > 0 && <span className="md-legacy-status">Browser backup ✓ · {legacyCapture.latest.summary.pieceRatings + legacyCapture.latest.summary.soundRatings + legacyCapture.latest.summary.performanceRatings} ratings · {legacyCapture.latest.summary.discoveredRecordings} discovered recordings preserved</span>}
+        </div>
       </div>
     </section> : <section className="md-hunt">
       <div>
