@@ -1243,6 +1243,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
+  const activeCatalogId = current.id.startsWith('catalog-candidate:') ? current.id.slice('catalog-candidate:'.length) : null
+  const activeCatalogItem = activeCatalogId ? catalog.find(item => item.id === activeCatalogId) || null : null
+  const catalogVersions = activeCatalogItem
+    ? catalog.filter(item => sameCatalogComposition(item, activeCatalogItem) && !trashedCatalogIds[item.id])
+    : []
 
   function normalizeVersionText(value: string) {
     return value.trim().toLowerCase().replace(/\s+/g, ' ')
