@@ -69,17 +69,6 @@ type ReviewOverrides = {
 }
 type ReviewField = keyof ReviewOverrides
 type CatalogReviewFilter = 'All' | 'New' | 'Loved'
-type SuppressionSyncEntry = {
-  musicId: string
-  sourcePage: string
-  suppressedEmotions: Emotion[]
-  updatedAt: number
-}
-type TrashSyncEntry = {
-  musicId: string
-  sourcePage: string
-  updatedAt: number
-}
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
 
@@ -94,8 +83,7 @@ const DISCOVERED_KEY = 'hos-music-discovered-candidates-v1'
 const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
 const REVIEW_SYNC_QUEUE_KEY = 'hos-music-review-sync-queue-v1'
-const SUPPRESSION_SYNC_QUEUE_KEY = 'hos-music-emotion-suppression-sync-v1'
-const TRASH_SYNC_QUEUE_KEY = 'hos-music-trash-sync-v1'
+const TRASHED_CATALOG_KEY = 'hos-music-trashed-catalog-v1'
 
 const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
 const candidateAudio = (candidate: Candidate) => candidate.audioUrl || (candidate.file ? commonsAudio(candidate.file) : '')
@@ -216,9 +204,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogReviewFilter, setCatalogReviewFilter] = useState<CatalogReviewFilter>('New')
   const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
-  const [trashedCatalogIds, setTrashedCatalogIds] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(Object.keys(loadObject<Record<string, TrashSyncEntry>>(TRASH_SYNC_QUEUE_KEY, {})).map(id => [id, true]))
-  )
+  const [trashedCatalogIds, setTrashedCatalogIds] = useState<Record<string, boolean>>(() => loadObject(TRASHED_CATALOG_KEY, {}))
   const [playing, setPlaying] = useState(false)
   const [playPending, setPlayPending] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -320,65 +306,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function reviewQueue() {
     return loadObject<Record<string, ReviewSyncEntry>>(REVIEW_SYNC_QUEUE_KEY, {})
   }
-  function suppressionQueue() {
-    return loadObject<Record<string, SuppressionSyncEntry>>(SUPPRESSION_SYNC_QUEUE_KEY, {})
-  }
-
-  function trashQueue() {
-    return loadObject<Record<string, TrashSyncEntry>>(TRASH_SYNC_QUEUE_KEY, {})
-  }
-
   function catalogIdForReview(pieceId: string, sourcePage: string) {
     return catalogIdForPiece(pieceId) || catalog.find(item => item.sourcePage === sourcePage)?.id || null
   }
-
-  function queueSuppressionSync(pieceId: string, sourcePage: string, values: Emotion[]) {
-    const musicId = catalogIdForReview(pieceId, sourcePage)
-    if (!musicId) return
-    const queue = suppressionQueue()
-    queue[musicId] = { musicId, sourcePage, suppressedEmotions:values, updatedAt:Date.now() }
-    saveLocal(SUPPRESSION_SYNC_QUEUE_KEY, queue)
-    void flushSuppressionQueue()
-  }
-
-  async function flushSuppressionQueue() {
-    const queued = suppressionQueue()
-    for (const [musicId, entry] of Object.entries(queued)) {
-      const { error } = await supabase.rpc('lab_music_library_emotion_suppression_write', {
-        pin,
-        music_id:musicId,
-        suppressed_emotions_value:entry.suppressedEmotions,
-      })
-      if (error) return
-      const latest = suppressionQueue()
-      if (latest[musicId]?.updatedAt === entry.updatedAt) {
-        delete latest[musicId]
-        saveLocal(SUPPRESSION_SYNC_QUEUE_KEY, latest)
-      }
-    }
-  }
-
-  function queueTrashSync(musicId: string, sourcePage: string) {
-    const queue = trashQueue()
-    queue[musicId] = { musicId, sourcePage, updatedAt:Date.now() }
-    saveLocal(TRASH_SYNC_QUEUE_KEY, queue)
-    setTrashedCatalogIds(current => ({ ...current, [musicId]:true }))
-    void flushTrashQueue()
-  }
-
-  async function flushTrashQueue() {
-    const queued = trashQueue()
-    for (const [musicId, entry] of Object.entries(queued)) {
-      const { error } = await supabase.rpc('lab_music_library_trash', { pin, music_id:musicId })
-      if (error) return
-      const latest = trashQueue()
-      if (latest[musicId]?.updatedAt === entry.updatedAt) {
-        delete latest[musicId]
-        saveLocal(TRASH_SYNC_QUEUE_KEY, latest)
-      }
-    }
-  }
-
 
   function reviewSnapshot(pieceId: string, candidateId: string, sourcePage: string, overrides: ReviewOverrides = {}): ReviewSyncEntry {
     const has = (key: keyof ReviewOverrides) => Object.prototype.hasOwnProperty.call(overrides, key)
@@ -469,8 +399,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
           reviewRejected:synced.rejected,
           reviewUpdatedAt:new Date().toISOString(),
         } : currentItem))
+        if (synced.rejected) {
+          setTrashedCatalogIds(current => {
+            if (!current[item.id]) return current
+            const next = { ...current }
+            delete next[item.id]
+            saveLocal(TRASHED_CATALOG_KEY, next)
+            return next
+          })
+        }
       }
-      void flushTrashQueue()
     } catch {
       setMessage('Saved locally · database sync pending.')
     } finally {
@@ -625,47 +563,6 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     }
   }
 
-  function hydrateSuppressedEmotions(incoming: CatalogItem[]) {
-    const pending = suppressionQueue()
-    const queued = suppressionQueue()
-    const next = { ...suppressedEmotions }
-    let changed = false
-    let queueChanged = false
-
-    for (const item of incoming) {
-      if (pending[item.id]) continue
-      const catalogPieceKey = 'catalog:' + item.id
-      const legacyPiece = pieces.find(candidatePiece => candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage))
-      const localValues = legacyPiece ? suppressedEmotions[legacyPiece.id] : suppressedEmotions[catalogPieceKey]
-
-      if (item.suppressedEmotions.length) {
-        next[catalogPieceKey] = item.suppressedEmotions
-        if (legacyPiece) next[legacyPiece.id] = item.suppressedEmotions
-        changed = true
-        continue
-      }
-
-      if ((localValues || []).length) {
-        next[catalogPieceKey] = localValues || []
-        if (legacyPiece) next[legacyPiece.id] = localValues || []
-        queued[item.id] = {
-          musicId:item.id,
-          sourcePage:item.sourcePage,
-          suppressedEmotions:localValues || [],
-          updatedAt:Date.now(),
-        }
-        changed = true
-        queueChanged = true
-      }
-    }
-
-    if (changed) {
-      setSuppressedEmotions(next)
-      saveLocal(SUPPRESSED_EMOTION_KEY, next)
-    }
-    if (queueChanged) saveLocal(SUPPRESSION_SYNC_QUEUE_KEY, queued)
-  }
-
   function inferredEmotions(modality: Modality): Emotion[] {
     if (modality === 'Ambient') return ['Wonder','Mystery','Vastness']
     if (modality === 'Game' || modality === '8-bit') return ['Calling','Adventure','Triumph']
@@ -697,7 +594,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         id:string; composer:string; work_title:string; movement_title?:string | null; performer?:string | null;
         source_name?:string | null; source_url:string; recording_url?:string | null; license?:string | null;
         rights_verified?:boolean; rating?:number | null; sound_rating?:number | null; performance_rating?:number | null;
-        review_note?:string | null; confirmed_emotions?:string[] | null; suppressed_emotions?:string[] | null; review_rejected?:boolean | null;
+        review_note?:string | null; confirmed_emotions?:string[] | null; review_rejected?:boolean | null;
         review_updated_at?:string | null; taste_notes?:string | null
       }>
       const incoming: CatalogItem[] = rows.map(row => ({
@@ -717,16 +614,13 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         performanceRating:typeof row.performance_rating === 'number' && row.performance_rating >= 0 && row.performance_rating <= 3 ? row.performance_rating as Rating : null,
         reviewNote:row.review_note || '',
         confirmedEmotions:Array.isArray(row.confirmed_emotions) ? row.confirmed_emotions.filter((emotion): emotion is Emotion => emotions.includes(emotion as Emotion)) : [],
-        suppressedEmotions:Array.isArray(row.suppressed_emotions) ? row.suppressed_emotions.filter((emotion): emotion is Emotion => emotions.includes(emotion as Emotion)) : [],
+        suppressedEmotions:[],
         reviewRejected:Boolean(row.review_rejected),
         reviewUpdatedAt:row.review_updated_at || null,
       }))
       setCatalog(incoming)
       hydrateAndBackfillReviews(incoming)
-      hydrateSuppressedEmotions(incoming)
       void flushReviewSyncQueue(incoming)
-      void flushSuppressionQueue()
-      void flushTrashQueue()
       setMessage(incoming.length ? 'Loaded ' + incoming.length + ' curated tracks from the production library.' : 'The curated library is empty.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load curated music library.')
@@ -1144,7 +1038,6 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       saveLocal(CONFIRMED_EMOTION_KEY, nextConfirmed)
       saveLocal(SUPPRESSED_EMOTION_KEY, nextSuppressed)
       queueReviewSync(piece.id, current.id, current.sourcePage, { confirmedEmotions:nextConfirmedList })
-      queueSuppressionSync(piece.id, current.sourcePage, nextSuppressedList)
       return
     }
 
@@ -1153,7 +1046,6 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       const nextSuppressed = { ...suppressedEmotions, [piece.id]:nextSuppressedList }
       setSuppressedEmotions(nextSuppressed)
       saveLocal(SUPPRESSED_EMOTION_KEY, nextSuppressed)
-      queueSuppressionSync(piece.id, current.sourcePage, nextSuppressedList)
       return
     }
 
@@ -1168,8 +1060,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const musicId = catalogIdForPiece(piece.id)
     const hasZero = pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0
     if (!musicId || !hasZero) return
-    queueTrashSync(musicId, current.sourcePage)
-    setCatalog(items => items.filter(item => item.id !== musicId))
+    const nextTrashed = { ...trashedCatalogIds, [musicId]:true }
+    setTrashedCatalogIds(nextTrashed)
+    saveLocal(TRASHED_CATALOG_KEY, nextTrashed)
+    queueReviewSync(piece.id, current.id, current.sourcePage, { rejected:true })
+    setCatalog(items => items.map(item => item.id === musicId ? { ...item, reviewRejected:true } : item))
     setCatalogPieces(items => items.filter(item => item.id !== piece.id))
     setMessage('Moved to recoverable trash.')
     setMode('browse')
@@ -1261,7 +1156,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   const filteredCatalog = catalog.filter(item => {
-    if (trashedCatalogIds[item.id]) return false
+    if (item.reviewRejected || trashedCatalogIds[item.id]) return false
     const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
     const matchesModality = catalogModality === 'All' || item.modality === catalogModality
@@ -1280,8 +1175,6 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     void loadCatalog()
     const syncWhenOnline = () => {
       void flushReviewSyncQueue()
-      void flushSuppressionQueue()
-      void flushTrashQueue()
     }
     window.addEventListener('online', syncWhenOnline)
     return () => {
