@@ -78,7 +78,7 @@ async function pickCommons(seed,chosen){
 async function pickOpenverse(seed,chosen){
  const [q,style,emotion]=seed
  const u=new URL('https://api.openverse.org/v1/audio/')
- u.searchParams.set('q',q);u.searchParams.set('page_size','50')
+ u.searchParams.set('q',q);u.searchParams.set('page_size','20')
  const data=await fetchJson(u,{headers:{'User-Agent':'HOS-Curation/1.0'}})
  for(const x of data?.results||[]){
   if(!x?.url||!x?.foreign_landing_url||!openLic(x.license))continue
