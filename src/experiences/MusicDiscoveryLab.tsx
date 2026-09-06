@@ -6,7 +6,6 @@ import './music-discovery-lab.css'
 type Rating = 0 | 1 | 2 | 3
 type Modality = 'Piano' | 'Orchestral' | 'Jazz' | 'Guitar' | 'Synth' | 'Ambient' | 'Game' | '8-bit'
 type Emotion = 'Hearth' | 'Wonder' | 'Calling' | 'Adventure' | 'Guide' | 'Mystery' | 'Vastness' | 'Peril' | 'Homeward' | 'Triumph'
-type ModalityStatus = 'unsearched' | 'requested' | 'notfound'
 type Candidate = {
   id: string
   performer: string
@@ -44,6 +43,7 @@ type CatalogItem = {
   performanceRating: Rating | null
   reviewNote: string
   confirmedEmotions: Emotion[]
+  suppressedEmotions: Emotion[]
   reviewRejected: boolean
   reviewUpdatedAt: string | null
 }
@@ -68,7 +68,7 @@ type ReviewOverrides = {
   rejected?: boolean
 }
 type ReviewField = keyof ReviewOverrides
-type CatalogFilter = 'New' | 'All' | Modality
+type CatalogReviewFilter = 'All' | 'New' | 'Loved'
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
 
@@ -77,12 +77,14 @@ const QUALITY_KEY = 'hos-music-quality-ratings-v2'
 const PERFORMANCE_KEY = 'hos-music-performance-ratings-v2'
 const NOTE_KEY = 'hos-music-notes-v4'
 const REJECTED_KEY = 'hos-music-rejected-candidates-v1'
-const MODALITY_STATUS_KEY = 'hos-music-modality-status-v1'
 const CONFIRMED_EMOTION_KEY = 'hos-music-confirmed-emotions-v1'
+const SUPPRESSED_EMOTION_KEY = 'hos-music-suppressed-emotions-v1'
 const DISCOVERED_KEY = 'hos-music-discovered-candidates-v1'
 const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
 const REVIEW_SYNC_QUEUE_KEY = 'hos-music-review-sync-queue-v1'
+const TRASHED_CATALOG_KEY = 'hos-music-trashed-catalog-v1'
+const TRASHED_PIECE_KEY = 'hos-music-trashed-piece-v1'
 
 const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
 const candidateAudio = (candidate: Candidate) => candidate.audioUrl || (candidate.file ? commonsAudio(candidate.file) : '')
@@ -167,20 +169,22 @@ function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
   return Math.floor(seconds / 60) + ':' + Math.floor(seconds % 60).toString().padStart(2, '0')
 }
-function modalityKey(pieceId: string, modality: Modality) {
-  return pieceId + '::' + modality
-}
-
 export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const recordingRef = useRef<RecordingSession | null>(null)
   const recordingCandidateRef = useRef<string | null>(null)
   const recordingPieceRef = useRef<string | null>(null)
   const recordingSourcePageRef = useRef<string | null>(null)
-  const resolvingCatalogRef = useRef<Set<string>>(new Set())
+  const resolvingCatalogRef = useRef<Map<string, Promise<string | null>>>(new Map())
+  const alternateSearchRef = useRef<Set<string>>(new Set())
   const reviewSyncingRef = useRef(false)
   const reviewSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const listenCardRef = useRef<HTMLElement | null>(null)
   const swipeStartRef = useRef<{ x: number; y: number; interactive: boolean } | null>(null)
+  const swipeDxRef = useRef(0)
+  const swipeMotionBusyRef = useRef(false)
+  const playIntentRef = useRef(false)
+  const playRequestRef = useRef(0)
 
   const [pieceIndex, setPieceIndex] = useState(0)
   const [catalogPieces, setCatalogPieces] = useState<Piece[]>([])
@@ -190,8 +194,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [performanceRatings, setPerformanceRatings] = useState<Record<string, Rating>>(() => loadObject(PERFORMANCE_KEY, {}))
   const [notes, setNotes] = useState<Record<string, string>>(() => loadObject(NOTE_KEY, {}))
   const [rejected, setRejected] = useState<Record<string, boolean>>(() => loadObject(REJECTED_KEY, {}))
-  const [modalityStatus, setModalityStatus] = useState<Record<string, ModalityStatus>>(() => loadObject(MODALITY_STATUS_KEY, {}))
   const [confirmedEmotions, setConfirmedEmotions] = useState<Record<string, Emotion[]>>(() => loadObject(CONFIRMED_EMOTION_KEY, {}))
+  const [suppressedEmotions, setSuppressedEmotions] = useState<Record<string, Emotion[]>>(() => loadObject(SUPPRESSED_EMOTION_KEY, {}))
   const [discovered, setDiscovered] = useState<Record<string, Candidate[]>>(() => loadObject(DISCOVERED_KEY, {}))
   const [interests, setInterests] = useState<string[]>(() => loadObject(INTEREST_KEY, ['Beautiful orchestral','Ambient game','Piano']))
   const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
@@ -199,45 +203,78 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
-  const [catalogModality, setCatalogModality] = useState<CatalogFilter>('New')
+  const [catalogReviewFilter, setCatalogReviewFilter] = useState<CatalogReviewFilter>('New')
+  const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
+  const [trashedCatalogIds, setTrashedCatalogIds] = useState<Record<string, boolean>>(() => loadObject(TRASHED_CATALOG_KEY, {}))
+  const [trashedPieceIds, setTrashedPieceIds] = useState<Record<string, boolean>>(() => loadObject(TRASHED_PIECE_KEY, {}))
   const [playing, setPlaying] = useState(false)
+  const [playPending, setPlayPending] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [recording, setRecording] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [message, setMessage] = useState('')
 
-  const pieceList = useMemo(() => [...pieces, ...catalogPieces], [catalogPieces])
-  const piece = pieceList[Math.min(pieceIndex, pieceList.length - 1)] || pieces[0]
+  const basePieces = useMemo(() => pieces.filter(candidatePiece => {
+    if (trashedPieceIds[candidatePiece.id]) return false
+    const durableMatch = catalog.find(item => candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage))
+    return !durableMatch || (!durableMatch.reviewRejected && !trashedCatalogIds[durableMatch.id])
+  }), [catalog, trashedCatalogIds, trashedPieceIds])
+  const pieceList = useMemo(() => [...basePieces, ...catalogPieces], [basePieces, catalogPieces])
+  const piece = pieceList[Math.min(pieceIndex, pieceList.length - 1)] || basePieces[0] || catalogPieces[0] || pieces[0]
   const allCandidates = useMemo(() => [...piece.candidates, ...(discovered[piece.id] || [])], [piece, discovered])
   const viableCandidates = useMemo(() => allCandidates.filter(candidate => !rejected[candidate.id]), [allCandidates, rejected])
   const current = viableCandidates.find(candidate => candidate.id === candidateId) || viableCandidates[0] || allCandidates[0]
   const currentModality = current.modality
 
   useEffect(() => {
-    const nextPiece = pieceList[Math.min(pieceIndex, pieceList.length - 1)] || pieces[0]
+    const nextPiece = pieceList[Math.min(pieceIndex, pieceList.length - 1)] || basePieces[0] || catalogPieces[0] || pieces[0]
     const candidates = [...nextPiece.candidates, ...(discovered[nextPiece.id] || [])]
     const next = candidates.find(candidate => !rejected[candidate.id]) || candidates[0]
     if (next) setCandidateId(next.id)
-  }, [pieceIndex, pieceList, discovered, rejected])
+  }, [pieceIndex, pieceList, basePieces, catalogPieces, discovered, rejected])
 
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
     const time = () => setCurrentTime(audio.currentTime || 0)
     const meta = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
-    const ended = () => setPlaying(false)
-    const error = () => { setPlaying(false); setMessage('That recording failed to load.') }
+    const ended = () => {
+      playIntentRef.current = false
+      setPlaying(false)
+      setPlayPending(false)
+    }
+    const playingNow = () => {
+      if (!playIntentRef.current) return
+      setPlaying(true)
+      setPlayPending(false)
+      setMessage('')
+    }
+    const waiting = () => {
+      if (!playIntentRef.current) return
+      setPlayPending(true)
+      setMessage('Buffering…')
+    }
+    const error = () => {
+      playIntentRef.current = false
+      setPlaying(false)
+      setPlayPending(false)
+      setMessage('That recording failed to load.')
+    }
     audio.addEventListener('timeupdate', time)
     audio.addEventListener('loadedmetadata', meta)
     audio.addEventListener('durationchange', meta)
     audio.addEventListener('ended', ended)
+    audio.addEventListener('playing', playingNow)
+    audio.addEventListener('waiting', waiting)
     audio.addEventListener('error', error)
     return () => {
       audio.removeEventListener('timeupdate', time)
       audio.removeEventListener('loadedmetadata', meta)
       audio.removeEventListener('durationchange', meta)
       audio.removeEventListener('ended', ended)
+      audio.removeEventListener('playing', playingNow)
+      audio.removeEventListener('waiting', waiting)
       audio.removeEventListener('error', error)
     }
   }, [])
@@ -246,8 +283,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const audio = audioRef.current
     if (!audio || !current) return
     const source = candidateAudio(current)
+    playRequestRef.current += 1
+    playIntentRef.current = false
     audio.pause()
     setPlaying(false)
+    setPlayPending(false)
     setCurrentTime(0)
     setDuration(0)
     if (!source && piece.id.startsWith('catalog:')) {
@@ -257,13 +297,14 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         setMessage('This copyrighted recording is available from its official source.')
         return
       }
+      setMessage('Preparing recording…')
       void resolveCatalogAudio(piece.id.slice('catalog:'.length))
       return
     }
     audio.src = source
     audio.load()
     setMessage('')
-  }, [current.id, current.audioUrl, piece.id])
+  }, [current.id, piece.id])
 
   function saveLocal<T>(key: string, value: T) {
     localStorage.setItem(key, JSON.stringify(value))
@@ -272,7 +313,6 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function reviewQueue() {
     return loadObject<Record<string, ReviewSyncEntry>>(REVIEW_SYNC_QUEUE_KEY, {})
   }
-
   function reviewSnapshot(pieceId: string, candidateId: string, sourcePage: string, overrides: ReviewOverrides = {}): ReviewSyncEntry {
     const has = (key: keyof ReviewOverrides) => Object.prototype.hasOwnProperty.call(overrides, key)
     return {
@@ -362,6 +402,33 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
           reviewRejected:synced.rejected,
           reviewUpdatedAt:new Date().toISOString(),
         } : currentItem))
+        if (synced.rejected) {
+          setTrashedCatalogIds(current => {
+            if (!current[item.id]) return current
+            const next = { ...current }
+            delete next[item.id]
+            saveLocal(TRASHED_CATALOG_KEY, next)
+            return next
+          })
+          setTrashedPieceIds(current => {
+            const next = { ...current }
+            let changed = false
+            for (const candidatePiece of pieces) {
+              if (current[candidatePiece.id] && candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage)) {
+                delete next[candidatePiece.id]
+                changed = true
+              }
+            }
+            const catalogPieceId = 'catalog:' + item.id
+            if (current[catalogPieceId]) {
+              delete next[catalogPieceId]
+              changed = true
+            }
+            if (!changed) return current
+            saveLocal(TRASHED_PIECE_KEY, next)
+            return next
+          })
+        }
       }
     } catch {
       setMessage('Saved locally · database sync pending.')
@@ -568,6 +635,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         performanceRating:typeof row.performance_rating === 'number' && row.performance_rating >= 0 && row.performance_rating <= 3 ? row.performance_rating as Rating : null,
         reviewNote:row.review_note || '',
         confirmedEmotions:Array.isArray(row.confirmed_emotions) ? row.confirmed_emotions.filter((emotion): emotion is Emotion => emotions.includes(emotion as Emotion)) : [],
+        suppressedEmotions:[],
         reviewRejected:Boolean(row.review_rejected),
         reviewUpdatedAt:row.review_updated_at || null,
       }))
@@ -584,7 +652,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   async function searchNow() {
     setCatalogSearch('')
-    setCatalogModality('New')
+    setCatalogReviewFilter('New')
+    setCatalogModality('All')
     await loadCatalog(true, true)
     setMode('browse')
   }
@@ -610,37 +679,46 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     }
   }
 
-  async function resolveCatalogAudio(catalogId: string) {
-    if (resolvingCatalogRef.current.has(catalogId)) return
+  async function resolveCatalogAudio(catalogId: string): Promise<string | null> {
+    const inFlight = resolvingCatalogRef.current.get(catalogId)
+    if (inFlight) return inFlight
+
     const item = catalog.find(row => row.id === catalogId)
-    if (!item || item.audioUrl || item.externalOnly) return
-    resolvingCatalogRef.current.add(catalogId)
-    setMessage('Loading recording…')
-    try {
-      const response = await fetch('/api/music-resolve', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
-        body:JSON.stringify({ sourceUrl:item.sourcePage, sourceName:item.source, title:item.title }),
-      })
-      const result = await response.json() as { audioUrl?:string; error?:string }
-      if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
-      const audioUrl = result.audioUrl
-      setCatalog(currentItems => currentItems.map(row => row.id === catalogId ? { ...row, audioUrl } : row))
-      setCatalogPieces(currentPieces => currentPieces.map(currentPiece => {
-        if (currentPiece.id !== 'catalog:' + catalogId) return currentPiece
-        return {
-          ...currentPiece,
-          candidates:currentPiece.candidates.map(candidate =>
-            candidate.id === 'catalog-candidate:' + catalogId ? { ...candidate, audioUrl } : candidate
-          ),
-        }
-      }))
-      setMessage('')
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
-    } finally {
-      resolvingCatalogRef.current.delete(catalogId)
-    }
+    if (!item || item.externalOnly) return null
+    if (item.audioUrl) return item.audioUrl
+
+    const request = (async () => {
+      setMessage('Preparing recording…')
+      try {
+        const response = await fetch('/api/music-resolve', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
+          body:JSON.stringify({ sourceUrl:item.sourcePage, sourceName:item.source, title:item.title }),
+        })
+        const result = await response.json() as { audioUrl?:string; error?:string }
+        if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
+        const audioUrl = result.audioUrl
+        setCatalog(currentItems => currentItems.map(row => row.id === catalogId ? { ...row, audioUrl } : row))
+        setCatalogPieces(currentPieces => currentPieces.map(currentPiece => {
+          if (currentPiece.id !== 'catalog:' + catalogId) return currentPiece
+          return {
+            ...currentPiece,
+            candidates:currentPiece.candidates.map(candidate =>
+              candidate.id === 'catalog-candidate:' + catalogId ? { ...candidate, audioUrl } : candidate
+            ),
+          }
+        }))
+        return audioUrl
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
+        return null
+      } finally {
+        resolvingCatalogRef.current.delete(catalogId)
+      }
+    })()
+
+    resolvingCatalogRef.current.set(catalogId, request)
+    return request
   }
 
   function adoptCatalogItem(item: CatalogItem) {
@@ -649,7 +727,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const queuePieces = queueItems.map(catalogPieceFor)
     const selectedIndex = Math.max(0, queueItems.findIndex(row => row.id === item.id))
     setCatalogPieces(queuePieces)
-    setPieceIndex(pieces.length + selectedIndex)
+    setPieceIndex(basePieces.length + selectedIndex)
     setCandidateId('catalog-candidate:' + item.id)
     setMode('listen')
   }
@@ -658,85 +736,78 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return allCandidates.filter(candidate => candidate.modality === modality && !rejected[candidate.id])
   }
 
-  function modalityVisualStatus(modality: Modality) {
-    const available = candidateListFor(modality)
-    if (available.length) return 'available'
-    return modalityStatus[modalityKey(piece.id, modality)] || 'unsearched'
-  }
-
-  function bestCandidate(list: Candidate[]) {
-    return [...list].sort((a, b) => (performanceRatings[b.id] ?? -1) - (performanceRatings[a.id] ?? -1) || (qualityRatings[b.id] ?? -1) - (qualityRatings[a.id] ?? -1))[0]
-  }
-
-  async function runHunt(modality: Modality) {
-    const key = modalityKey(piece.id, modality)
-    if (modalityStatus[key] === 'requested') return
-    const requestedStatus = { ...modalityStatus, [key]: 'requested' as ModalityStatus }
-    setModalityStatus(requestedStatus)
-    saveLocal(MODALITY_STATUS_KEY, requestedStatus)
-    setMessage('Hunting for a reusable ' + modality.toLowerCase() + ' version…')
+  async function findAlternateVersion() {
+    const modality = current.modality
+    const key = piece.id + '::' + modality
+    if (alternateSearchRef.current.has(key)) return
+    alternateSearchRef.current.add(key)
+    setMessage('Loved piece · finding another ' + modality.toLowerCase() + ' version…')
 
     try {
       const response = await fetch('/api/music-hunt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-review-pin': pin },
-        body: JSON.stringify({
-          title: piece.title,
-          composer: piece.composer,
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
+        body:JSON.stringify({
+          title:piece.title,
+          composer:piece.composer,
           modality,
-          exclude: allCandidates.map(candidate => candidate.sourcePage),
+          exclude:allCandidates.map(candidate => candidate.sourcePage),
         }),
       })
-      const result = await response.json() as { candidates?: Array<{ id: string; performer: string; license: string; audioUrl: string; sourcePage: string; source: string; confidence?: 'confirmed' | 'possible' }>; error?: string }
+      const result = await response.json() as {
+        candidates?: Array<{
+          id:string
+          performer:string
+          license:string
+          audioUrl:string
+          sourcePage:string
+          source:string
+          confidence?:'confirmed' | 'possible'
+        }>
+        error?:string
+      }
       if (!response.ok) throw new Error(result.error || 'Music search failed.')
 
       const known = new Set(allCandidates.map(candidate => candidate.sourcePage))
-      const fresh = (result.candidates || []).filter(candidate => candidate.audioUrl && candidate.sourcePage && !known.has(candidate.sourcePage))
+      const fresh = (result.candidates || []).filter(candidate =>
+        candidate.audioUrl && candidate.sourcePage && !known.has(candidate.sourcePage)
+      )
       if (!fresh.length) {
-        const notFound = { ...requestedStatus, [key]: 'notfound' as ModalityStatus }
-        setModalityStatus(notFound)
-        saveLocal(MODALITY_STATUS_KEY, notFound)
-        setMessage('No suitable reusable ' + modality.toLowerCase() + ' version found this time.')
+        setMessage('No better reusable ' + modality.toLowerCase() + ' version found this time.')
         return
       }
 
-      const newCandidates: Candidate[] = fresh.slice(0, 5).map(candidate => ({
-        id: candidate.id,
-        performer: candidate.performer || 'Unknown performer',
+      const newCandidates: Candidate[] = fresh.slice(0,5).map(candidate => ({
+        id:candidate.id,
+        performer:candidate.performer || 'Unknown performer',
         modality,
-        license: candidate.license,
-        audioUrl: candidate.audioUrl,
-        sourcePage: candidate.sourcePage,
-        source: candidate.source,
-        matchConfidence: candidate.confidence || 'confirmed',
+        license:candidate.license,
+        audioUrl:candidate.audioUrl,
+        sourcePage:candidate.sourcePage,
+        source:candidate.source,
+        matchConfidence:candidate.confidence || 'confirmed',
       }))
-      const nextDiscovered = { ...discovered, [piece.id]: [...(discovered[piece.id] || []), ...newCandidates] }
+      const nextDiscovered = {
+        ...discovered,
+        [piece.id]:[...(discovered[piece.id] || []), ...newCandidates],
+      }
       setDiscovered(nextDiscovered)
       saveLocal(DISCOVERED_KEY, nextDiscovered)
-      const cleared = { ...requestedStatus }
-      delete cleared[key]
-      setModalityStatus(cleared)
-      saveLocal(MODALITY_STATUS_KEY, cleared)
-      setCandidateId(newCandidates[0].id)
-      setMessage('Found ' + newCandidates.length + ' new ' + modality.toLowerCase() + (newCandidates.length === 1 ? ' candidate.' : ' candidates.'))
+      setMessage('Found ' + newCandidates.length + ' alternate ' + modality.toLowerCase() + (newCandidates.length === 1 ? ' version.' : ' versions.') + ' Choose one above.')
     } catch (error) {
-      const reset = { ...requestedStatus }
-      delete reset[key]
-      setModalityStatus(reset)
-      saveLocal(MODALITY_STATUS_KEY, reset)
       setMessage(error instanceof Error ? error.message : 'Music search failed.')
+    } finally {
+      alternateSearchRef.current.delete(key)
     }
   }
 
-  function chooseModality(modality: Modality) {
-    const list = candidateListFor(modality)
-    if (!list.length) {
-      void runHunt(modality)
-      return
+  function maybeFindLovedAlternate(pieceScore: Rating | undefined, soundScore: Rating | undefined, performanceScore: Rating | undefined) {
+    if (pieceScore !== 3) return false
+    if ((soundScore !== undefined && soundScore <= 1) || (performanceScore !== undefined && performanceScore <= 1)) {
+      void findAlternateVersion()
+      return true
     }
-    const best = bestCandidate(list)
-    if (best) setCandidateId(best.id)
-    setMessage(list.length > 1 ? 'Choose a numbered ' + modality.toLowerCase() + ' version below.' : '')
+    return false
   }
 
   async function togglePlay() {
@@ -745,35 +816,141 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       setMessage('Opened the official source in a new tab.')
       return
     }
+
     const audio = audioRef.current
     if (!audio) return
-    if (audio.paused) {
-      try { await audio.play(); setPlaying(true); setMessage('') } catch { setMessage('Tap Play again to allow audio.') }
-    } else {
+
+    if (playing || playPending || playIntentRef.current) {
+      playRequestRef.current += 1
+      playIntentRef.current = false
       audio.pause()
       setPlaying(false)
+      setPlayPending(false)
+      setMessage(playPending ? 'Playback cancelled.' : 'Paused.')
+      return
+    }
+
+    const requestId = ++playRequestRef.current
+    playIntentRef.current = true
+    setPlayPending(true)
+    setMessage('Loading…')
+
+    try {
+      let source = candidateAudio(current)
+      if (!source && piece.id.startsWith('catalog:')) {
+        source = await resolveCatalogAudio(piece.id.slice('catalog:'.length)) || ''
+      }
+      if (!source) throw new Error('Could not load this recording.')
+      if (!playIntentRef.current || requestId !== playRequestRef.current) return
+
+      if (audio.src !== source) {
+        audio.src = source
+        audio.load()
+      }
+      await audio.play()
+      if (!playIntentRef.current || requestId !== playRequestRef.current) {
+        audio.pause()
+        return
+      }
+      setPlaying(true)
+      setPlayPending(false)
+      setMessage('')
+    } catch (error) {
+      if (requestId !== playRequestRef.current) return
+      playIntentRef.current = false
+      setPlaying(false)
+      setPlayPending(false)
+      setMessage(error instanceof Error ? error.message : 'Could not start playback.')
     }
   }
 
   function stop() {
     const audio = audioRef.current
     if (!audio) return
+    playRequestRef.current += 1
+    playIntentRef.current = false
     audio.pause()
     audio.currentTime = 0
     setPlaying(false)
+    setPlayPending(false)
     setCurrentTime(0)
+    setMessage('')
   }
 
-  function stepPiece(delta: number) {
+  function nextSwipeFrame() {
+    return new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  }
+
+  function changePiece(delta: number) {
     if (catalogPieces.length && piece.id.startsWith('catalog:')) {
       setPieceIndex(index => {
-        const currentOffset = Math.max(0, index - pieces.length)
+        const currentOffset = Math.max(0, index - basePieces.length)
         const nextOffset = (currentOffset + delta + catalogPieces.length) % catalogPieces.length
-        return pieces.length + nextOffset
+        return basePieces.length + nextOffset
       })
       return
     }
     setPieceIndex(index => (index + delta + pieceList.length) % pieceList.length)
+  }
+
+  async function animatePieceCard(delta: number, startX = 0) {
+    if (swipeMotionBusyRef.current) return
+    const card = listenCardRef.current
+    if (!card || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      changePiece(delta)
+      return
+    }
+
+    swipeMotionBusyRef.current = true
+    card.style.pointerEvents = 'none'
+    const edge = delta > 0 ? '-112%' : '112%'
+    const start = `translateX(${startX}px) scale(${1 - Math.min(Math.abs(startX) / 2400, .02)})`
+    const outgoing = card.animate(
+      [{ transform:start, opacity:1 }, { transform:`translateX(${edge}) scale(.97)`, opacity:.28 }],
+      { duration:startX ? 150 : 190, easing:'cubic-bezier(.4,0,.2,1)', fill:'forwards' }
+    )
+
+    try {
+      await outgoing.finished
+      changePiece(delta)
+      await nextSwipeFrame()
+      const incoming = listenCardRef.current
+      if (incoming) {
+        const from = delta > 0 ? '112%' : '-112%'
+        const entering = incoming.animate(
+          [{ transform:`translateX(${from}) scale(.97)`, opacity:.28 }, { transform:'translateX(0) scale(1)', opacity:1 }],
+          { duration:230, easing:'cubic-bezier(.2,.75,.2,1)', fill:'forwards' }
+        )
+        outgoing.cancel()
+        await entering.finished
+        entering.cancel()
+      }
+    } finally {
+      swipeMotionBusyRef.current = false
+      const active = listenCardRef.current
+      if (active) {
+        active.style.transform = ''
+        active.style.opacity = ''
+        active.style.pointerEvents = ''
+      }
+    }
+  }
+
+  function stepPiece(delta: number, startX = 0) {
+    void animatePieceCard(delta, startX)
+  }
+
+  function snapPieceCardBack(startX: number) {
+    const card = listenCardRef.current
+    if (!card) return
+    const snap = card.animate(
+      [{ transform:`translateX(${startX}px)`, opacity:card.style.opacity || '1' }, { transform:'translateX(0)', opacity:1 }],
+      { duration:150, easing:'ease-out' }
+    )
+    void snap.finished.finally(() => {
+      card.style.transform = ''
+      card.style.opacity = ''
+    })
   }
 
   function catalogIdForPiece(pieceId: string) {
@@ -788,6 +965,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const catalogId = catalogIdForPiece(piece.id)
     if (catalogId) setCatalog(items => items.map(item => item.id === catalogId ? { ...item, rating:value } : item))
     queueReviewSync(piece.id, current.id, current.sourcePage, { pieceRating:value })
+    if (!maybeFindLovedAlternate(value, qualityRatings[current.id], performanceRatings[current.id])) {
+      setMessage('Piece rating saved.')
+    }
   }
 
   function onListenTouchStart(event: TouchEvent<HTMLElement>) {
@@ -799,6 +979,23 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       y:touch.clientY,
       interactive:Boolean(target.closest('button,input,textarea,a')),
     }
+    swipeDxRef.current = 0
+  }
+
+  function onListenTouchMove(event: TouchEvent<HTMLElement>) {
+    const start = swipeStartRef.current
+    if (!start || start.interactive || swipeMotionBusyRef.current) return
+    const touch = event.touches[0]
+    if (!touch) return
+    const dx = touch.clientX - start.x
+    const dy = touch.clientY - start.y
+    if (Math.abs(dx) < Math.abs(dy) * 1.1) return
+    swipeDxRef.current = dx
+    const card = listenCardRef.current
+    if (card) {
+      card.style.transform = `translateX(${dx}px) rotate(${dx * .012}deg)`
+      card.style.opacity = String(Math.max(.72, 1 - Math.abs(dx) / 700))
+    }
   }
 
   function onListenTouchEnd(event: TouchEvent<HTMLElement>) {
@@ -807,10 +1004,21 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!start || start.interactive) return
     const touch = event.changedTouches[0]
     if (!touch) return
-    const dx = touch.clientX - start.x
+    const dx = swipeDxRef.current || touch.clientX - start.x
     const dy = touch.clientY - start.y
-    if (Math.abs(dx) < 52 || Math.abs(dx) < Math.abs(dy) * 1.25) return
-    stepPiece(dx < 0 ? 1 : -1)
+    swipeDxRef.current = 0
+    if (Math.abs(dx) >= 52 && Math.abs(dx) >= Math.abs(dy) * 1.25) {
+      stepPiece(dx < 0 ? 1 : -1, dx)
+      return
+    }
+    snapPieceCardBack(dx)
+  }
+
+  function onListenTouchCancel() {
+    const dx = swipeDxRef.current
+    swipeStartRef.current = null
+    swipeDxRef.current = 0
+    snapPieceCardBack(dx)
   }
 
   function rateQuality(value: Rating) {
@@ -818,52 +1026,77 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     setQualityRatings(next)
     saveLocal(QUALITY_KEY, next)
     queueReviewSync(piece.id, current.id, current.sourcePage, { soundRating:value })
+    if (!maybeFindLovedAlternate(pieceRatings[piece.id], value, performanceRatings[current.id])) {
+      setMessage('Sound rating saved.')
+    }
   }
 
   function ratePerformance(value: Rating) {
     const nextRatings = { ...performanceRatings, [current.id]: value }
     setPerformanceRatings(nextRatings)
     saveLocal(PERFORMANCE_KEY, nextRatings)
+    queueReviewSync(piece.id, current.id, current.sourcePage, { performanceRating:value })
 
-    const shouldReject = value <= 1
-    const nextRejected = { ...rejected }
-    if (shouldReject) nextRejected[current.id] = true
-    else delete nextRejected[current.id]
-    setRejected(nextRejected)
-    saveLocal(REJECTED_KEY, nextRejected)
-    queueReviewSync(piece.id, current.id, current.sourcePage, { performanceRating:value, rejected:shouldReject })
-
-    if (shouldReject) {
-      const remaining = allCandidates.filter(candidate =>
-        candidate.modality === current.modality &&
-        candidate.id !== current.id &&
-        !nextRejected[candidate.id]
-      )
-      const replacement = bestCandidate(remaining)
-      if (replacement) setCandidateId(replacement.id)
-      setMessage('Rejected this performance. Hunting for another ' + current.modality.toLowerCase() + ' version…')
-      void runHunt(current.modality)
-      return
+    if (!maybeFindLovedAlternate(pieceRatings[piece.id], qualityRatings[current.id], value)) {
+      setMessage(value === 3 ? 'Preferred performance saved.' : 'Performance rating saved.')
     }
-
-    if (value === 2) {
-      setMessage('Kept this version. Hunting for another ' + current.modality.toLowerCase() + ' version to compare…')
-      void runHunt(current.modality)
-      return
-    }
-
-    setMessage('Preferred version saved.')
   }
 
   function toggleEmotion(emotion: Emotion) {
     const currentConfirmed = confirmedEmotions[piece.id] || []
-    const nextList = currentConfirmed.includes(emotion)
-      ? currentConfirmed.filter(item => item !== emotion)
-      : [...currentConfirmed, emotion]
-    const next = { ...confirmedEmotions, [piece.id]: nextList }
-    setConfirmedEmotions(next)
-    saveLocal(CONFIRMED_EMOTION_KEY, next)
-    queueReviewSync(piece.id, current.id, current.sourcePage, { confirmedEmotions:nextList })
+    const currentSuppressed = suppressedEmotions[piece.id] || []
+    const aiSuggested = piece.aiEmotions.includes(emotion)
+
+    if (currentConfirmed.includes(emotion)) {
+      const nextConfirmedList = currentConfirmed.filter(item => item !== emotion)
+      const nextSuppressedList = aiSuggested
+        ? [...new Set([...currentSuppressed, emotion])]
+        : currentSuppressed
+      const nextConfirmed = { ...confirmedEmotions, [piece.id]:nextConfirmedList }
+      const nextSuppressed = { ...suppressedEmotions, [piece.id]:nextSuppressedList }
+      setConfirmedEmotions(nextConfirmed)
+      setSuppressedEmotions(nextSuppressed)
+      saveLocal(CONFIRMED_EMOTION_KEY, nextConfirmed)
+      saveLocal(SUPPRESSED_EMOTION_KEY, nextSuppressed)
+      queueReviewSync(piece.id, current.id, current.sourcePage, { confirmedEmotions:nextConfirmedList })
+      return
+    }
+
+    if (currentSuppressed.includes(emotion)) {
+      const nextSuppressedList = currentSuppressed.filter(item => item !== emotion)
+      const nextSuppressed = { ...suppressedEmotions, [piece.id]:nextSuppressedList }
+      setSuppressedEmotions(nextSuppressed)
+      saveLocal(SUPPRESSED_EMOTION_KEY, nextSuppressed)
+      return
+    }
+
+    const nextConfirmedList = [...currentConfirmed, emotion]
+    const nextConfirmed = { ...confirmedEmotions, [piece.id]:nextConfirmedList }
+    setConfirmedEmotions(nextConfirmed)
+    saveLocal(CONFIRMED_EMOTION_KEY, nextConfirmed)
+    queueReviewSync(piece.id, current.id, current.sourcePage, { confirmedEmotions:nextConfirmedList })
+  }
+
+  function trashCurrent() {
+    const hasZero = pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0
+    if (!hasZero) return
+
+    const nextPieces = { ...trashedPieceIds, [piece.id]:true }
+    setTrashedPieceIds(nextPieces)
+    saveLocal(TRASHED_PIECE_KEY, nextPieces)
+
+    const musicId = catalogIdForPiece(piece.id) || catalog.find(item => item.sourcePage === current.sourcePage)?.id || null
+    if (musicId) {
+      const nextTrashed = { ...trashedCatalogIds, [musicId]:true }
+      setTrashedCatalogIds(nextTrashed)
+      saveLocal(TRASHED_CATALOG_KEY, nextTrashed)
+      queueReviewSync(piece.id, current.id, current.sourcePage, { rejected:true })
+      setCatalog(items => items.map(item => item.id === musicId ? { ...item, reviewRejected:true } : item))
+    }
+
+    setCatalogPieces(items => items.filter(item => item.id !== piece.id))
+    setMessage(musicId ? 'Moved to recoverable trash.' : 'Moved to local recoverable trash.')
+    setMode('browse')
   }
 
   function saveNote(value: string) {
@@ -928,20 +1161,40 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
-  function isCatalogRated(item: CatalogItem) {
+  const currentHasZero = pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0
+
+  function catalogReviewValues(item: CatalogItem) {
+    const pieceKey = 'catalog:' + item.id
+    const candidateKey = 'catalog-candidate:' + item.id
     const legacyPiece = pieces.find(candidatePiece => candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage))
-    return item.rating !== null
-      || pieceRatings['catalog:' + item.id] !== undefined
-      || Boolean(legacyPiece && pieceRatings[legacyPiece.id] !== undefined)
+    const legacyCandidate = legacyPiece?.candidates.find(candidate => candidate.sourcePage === item.sourcePage)
+    return {
+      piece:pieceRatings[pieceKey] ?? (legacyPiece ? pieceRatings[legacyPiece.id] : undefined) ?? item.rating ?? undefined,
+      sound:qualityRatings[candidateKey] ?? (legacyCandidate ? qualityRatings[legacyCandidate.id] : undefined) ?? item.soundRating ?? undefined,
+      performance:performanceRatings[candidateKey] ?? (legacyCandidate ? performanceRatings[legacyCandidate.id] : undefined) ?? item.performanceRating ?? undefined,
+    }
+  }
+
+  function catalogTouched(item: CatalogItem) {
+    const values = catalogReviewValues(item)
+    return values.piece !== undefined || values.sound !== undefined || values.performance !== undefined
+  }
+
+  function catalogLoved(item: CatalogItem) {
+    const values = catalogReviewValues(item)
+    return values.piece === 3 && values.sound === 3 && values.performance === 3
   }
 
   const filteredCatalog = catalog.filter(item => {
+    if (item.reviewRejected || trashedCatalogIds[item.id]) return false
     const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
-    const matchesModality = catalogModality === 'New'
-      ? !isCatalogRated(item)
-      : catalogModality === 'All' || item.modality === catalogModality
-    return matchesSearch && matchesModality
+    const matchesModality = catalogModality === 'All' || item.modality === catalogModality
+    const touched = catalogTouched(item)
+    const matchesReview = catalogReviewFilter === 'All'
+      || (catalogReviewFilter === 'New' && !touched)
+      || (catalogReviewFilter === 'Loved' && catalogLoved(item))
+    return matchesSearch && matchesModality && matchesReview
   })
 
   useEffect(() => {
@@ -950,7 +1203,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   useEffect(() => {
     void loadCatalog()
-    const syncWhenOnline = () => void flushReviewSyncQueue()
+    const syncWhenOnline = () => {
+      void flushReviewSyncQueue()
+    }
     window.addEventListener('online', syncWhenOnline)
     return () => {
       window.removeEventListener('online', syncWhenOnline)
@@ -979,22 +1234,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <button className={mode === 'hunt' ? 'active' : ''} onClick={() => setMode('hunt')}>HUNT</button>
     </nav>
 
-    {mode === 'listen' ? <section className="md-listen" onTouchStart={onListenTouchStart} onTouchEnd={onListenTouchEnd}>
-      <div className="md-modalities">
-        {modalities.map(modality => {
-          const list = candidateListFor(modality)
-          const status = modalityVisualStatus(modality)
-          const active = currentModality === modality && list.some(candidate => candidate.id === current.id)
-          return <div key={modality} className={'md-modality-cell status-' + status + (active ? ' active' : '')}>
-            <button className="md-modality-main" onClick={() => chooseModality(modality)} disabled={status === 'requested'}>
-              <strong>{modality}</strong>
-              <span>{status === 'available' ? (list.length > 1 ? list.length + ' versions' : 'ready') : status === 'requested' ? 'hunting…' : status === 'notfound' ? 'not found' : 'tap to hunt'}</span>
-            </button>
-            {status === 'available' && <button className="md-modality-hunt" onClick={() => void runHunt(modality)} aria-label={'Find another ' + modality + ' version'} title={'Find another ' + modality + ' version'}>＋</button>}
-          </div>
-        })}
-      </div>
-
+    {mode === 'listen' ? <section ref={listenCardRef} className="md-listen" onTouchStart={onListenTouchStart} onTouchMove={onListenTouchMove} onTouchEnd={onListenTouchEnd} onTouchCancel={onListenTouchCancel}>
       {currentVersions.length > 1 && <div className="md-version-picker">
         <small>{currentModality} versions</small>
         <div>
@@ -1017,11 +1257,12 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
       <div className="md-transport">
         <button onClick={() => stepPiece(-1)}>‹</button>
-        <button className="primary" onClick={togglePlay}>{current.externalOnly ? '↗ Official' : playing ? '❚❚ Pause' : '▶ Play'}</button>
+        <button className={'primary' + (playing || playPending ? ' active-play' : '') + (playPending ? ' pending-play' : '')} onClick={togglePlay} aria-pressed={playing || playPending}>{current.externalOnly ? '↗ Official' : playPending ? '❚❚ Loading…' : playing ? '❚❚ Pause' : '▶ Play'}</button>
         <button onClick={stop}>■ Stop</button>
         <button onClick={() => stepPiece(1)}>›</button>
       </div>
-      <small className="md-swipe-hint">Swipe left or right outside the controls to move between tracks.</small>
+      <small className="md-swipe-hint">Swipe the card left or right outside the controls to move between tracks.</small>
+      <div className="md-message" aria-live="polite">{message || '\u00a0'}</div>
 
       <div className="md-scrub">
         <span>{formatTime(currentTime)}</span>
@@ -1048,9 +1289,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <small>EMOTIONAL QUALITY</small>
         <div>
           {emotions.map(emotion => {
-            const suggested = piece.aiEmotions.includes(emotion)
+            const suppressed = (suppressedEmotions[piece.id] || []).includes(emotion)
+            const suggested = piece.aiEmotions.includes(emotion) && !suppressed
             const confirmed = (confirmedEmotions[piece.id] || []).includes(emotion)
-            return <button key={emotion} className={(suggested ? 'suggested ' : '') + (confirmed ? 'confirmed' : '')} onClick={() => toggleEmotion(emotion)}>{emotion}</button>
+            return <button key={emotion} className={(suggested ? 'suggested ' : '') + (confirmed ? 'confirmed' : '')} onClick={() => toggleEmotion(emotion)} aria-pressed={confirmed}>{emotion}</button>
           })}
         </div>
       </div>
@@ -1062,29 +1304,38 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
       <div className="md-footer-row">
         <span>{current.license}</span>
-        <a href={current.sourcePage} target="_blank" rel="noreferrer">Source ↗</a>
+        <div>
+          {currentHasZero && <button className="md-trash" onClick={trashCurrent}>🗑 Trash</button>}
+          <a href={current.sourcePage} target="_blank" rel="noreferrer">Source ↗</a>
+        </div>
       </div>
-      {message && <div className="md-message">{message}</div>}
     </section> : mode === 'browse' ? <section className="md-browse">
       <div className="md-browse-head">
         <div>
           <small>CURATED PRODUCTION LIBRARY</small>
-          <h1>{catalogLoading ? 'Gathering music…' : filteredCatalog.length + (catalogModality === 'New' ? ' new' : ' to try')}</h1>
+          <h1>{catalogLoading ? 'Gathering music…' : filteredCatalog.length + (catalogReviewFilter === 'Loved' ? ' loved' : catalogReviewFilter === 'New' ? ' new' : ' to try')}</h1>
         </div>
         <button onClick={() => void loadCatalog(true, true)} disabled={catalogLoading}>{catalogLoading ? '…' : '↻'}</button>
       </div>
       <div className="md-browse-search">
         <input value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} placeholder="Search title, artist, source…"/>
       </div>
+      <div className="md-review-filters">
+        {(['All','New','Loved'] as CatalogReviewFilter[]).map(value => <button key={value} className={(catalogReviewFilter === value ? 'active ' : '') + (value === 'New' ? 'new-filter ' : '') + (value === 'Loved' ? 'loved-filter' : '')} onClick={() => setCatalogReviewFilter(value)}>{value === 'Loved' ? '♥ LOVED' : value.toUpperCase()}</button>)}
+      </div>
       <div className="md-browse-filters">
-        {(['New','All', ...modalities] as CatalogFilter[]).map(value => <button key={value} className={(catalogModality === value ? 'active ' : '') + (value === 'New' ? 'new-filter' : '')} onClick={() => setCatalogModality(value)}>{value === 'New' || value === 'All' ? value.toUpperCase() : value}</button>)}
+        {(['All', ...modalities] as Array<'All' | Modality>).map(value => <button key={value} className={catalogModality === value ? 'active' : ''} onClick={() => setCatalogModality(value)}>{value === 'All' ? 'ALL TYPES' : value}</button>)}
       </div>
       <div className="md-catalog-list">
-        {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => void adoptCatalogItem(item)}>
-          <span className="md-catalog-play">{item.externalOnly ? '↗' : '▶'}</span>
-          <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.externalOnly ? ' · official stream' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
-          <span className="md-catalog-source">{item.source}</span>
-        </button>)}
+        {filteredCatalog.map(item => {
+          const touched = catalogTouched(item)
+          const loved = catalogLoved(item)
+          return <button key={item.id} className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => void adoptCatalogItem(item)}>
+            <span className="md-catalog-play">{item.externalOnly ? '↗' : '▶'}</span>
+            <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.externalOnly ? ' · official stream' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
+            <span className="md-catalog-source">{loved ? '♥ loved' : item.source}</span>
+          </button>
+        })}
         {!catalogLoading && !filteredCatalog.length && <p className="md-empty">No matches in this batch. Change the filter or refresh.</p>}
       </div>
       <div className="md-repositories">
