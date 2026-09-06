@@ -5,7 +5,8 @@
     "deploymentEnabled": {
       "*": false,
       "main": true,
-      "feature/music-library-browser-20260906": true
+      "feature/music-library-browser-20260906": true,
+      "fix/music-in-app-playback-title-stability-20260906": true
     }
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
