@@ -28,6 +28,9 @@ type Piece = {
 }
 type CatalogItem = {
   id: string
+  composer: string
+  workTitle: string
+  movementTitle: string
   title: string
   creator: string
   modality: Modality
@@ -702,6 +705,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       }>
       const incoming: CatalogItem[] = rows.map(row => ({
         id:row.id,
+        composer:row.composer || 'Unknown composer',
+        workTitle:row.work_title || 'Untitled',
+        movementTitle:row.movement_title || '',
         title:[row.work_title, row.movement_title].filter(Boolean).join(' — '),
         creator:row.performer || row.composer || 'Unknown artist',
         modality:inferCatalogModality(row.taste_notes || ''),
