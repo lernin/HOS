@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
+import { supabase } from '../lib/supabase'
 import './music-discovery-lab.css'
 
 type Rating = 0 | 1 | 2 | 3
@@ -34,14 +35,9 @@ type CatalogItem = {
   audioUrl: string
   sourcePage: string
   source: string
+  description?: string
+  rightsVerified?: boolean
 }
-type Repository = {
-  name: string
-  url: string
-  mode: 'live' | 'indexed' | 'portal'
-  note: string
-}
-
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
 
@@ -163,11 +159,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
   const [mode, setMode] = useState<'listen'|'browse'|'hunt'>('listen')
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
-  const [repositories, setRepositories] = useState<Repository[]>([])
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
-  const [catalogBatch, setCatalogBatch] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -235,32 +229,45 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return ['Wonder','Calling']
   }
 
+  function inferCatalogModality(notes = ''): Modality {
+    const text = notes.toLowerCase()
+    if (text.includes('8-bit') || text.includes('chiptune')) return '8-bit'
+    if (text.includes('piano')) return 'Piano'
+    if (text.includes('orchestral') || text.includes('cinematic') || text.includes('epic')) return 'Orchestral'
+    if (text.includes('jazz') || text.includes('swing') || text.includes('funky') || text.includes('groovy')) return 'Jazz'
+    if (text.includes('guitar') || text.includes('acoustic') || text.includes('folk')) return 'Guitar'
+    if (text.includes('ambient') || text.includes('atmospheric') || text.includes('soundscape')) return 'Ambient'
+    if (text.includes('synth') || text.includes('electronic') || text.includes('techno') || text.includes('dubstep')) return 'Synth'
+    return 'Game'
+  }
+
   async function loadCatalog(force = false, reset = false) {
     if (catalogLoading || (catalog.length && !force && !reset)) return
-    const nextPage = reset ? 1 : Math.max(1, catalogBatch + (catalog.length ? 1 : 0))
     setCatalogLoading(true)
     try {
-      const response = await fetch('/api/music-catalog', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
-        body:JSON.stringify({ interests, request, page:nextPage }),
-      })
-      const result = await response.json() as { items?: CatalogItem[]; repositories?: Repository[]; error?: string }
-      if (!response.ok) throw new Error(result.error || 'Could not load music catalog.')
-      const incoming = result.items || []
-      if (reset) {
-        setCatalog(incoming)
-      } else {
-        setCatalog(currentItems => {
-          const seen = new Set(currentItems.map(item => item.sourcePage))
-          return [...currentItems, ...incoming.filter(item => !seen.has(item.sourcePage))]
-        })
-      }
-      setRepositories(result.repositories || [])
-      setCatalogBatch(nextPage)
-      setMessage(incoming.length ? 'Loaded ' + incoming.length + ' fresh nominations.' : 'No new nominations in this batch.')
+      const { data, error } = await supabase.rpc('lab_music_library_read', { pin })
+      if (error) throw error
+      const rows = (Array.isArray(data) ? data : []) as Array<{
+        id:string; composer:string; work_title:string; movement_title?:string | null; performer?:string | null;
+        source_name?:string | null; source_url:string; recording_url?:string | null; license?:string | null;
+        rights_verified?:boolean; taste_notes?:string | null
+      }>
+      const incoming: CatalogItem[] = rows.map(row => ({
+        id:row.id,
+        title:[row.work_title, row.movement_title].filter(Boolean).join(' — '),
+        creator:row.performer || row.composer || 'Unknown artist',
+        modality:inferCatalogModality(row.taste_notes || ''),
+        license:row.license || (row.rights_verified ? 'Rights verified' : 'Rights review pending'),
+        audioUrl:row.recording_url || '',
+        sourcePage:row.source_url,
+        source:row.source_name || 'Curated library',
+        description:row.taste_notes || '',
+        rightsVerified:Boolean(row.rights_verified),
+      }))
+      setCatalog(incoming)
+      setMessage(incoming.length ? 'Loaded ' + incoming.length + ' curated tracks from the production library.' : 'The curated library is empty.')
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not load music catalog.')
+      setMessage(error instanceof Error ? error.message : 'Could not load curated music library.')
     } finally {
       setCatalogLoading(false)
     }
@@ -274,6 +281,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   function adoptCatalogItem(item: CatalogItem) {
+    if (!item.audioUrl) {
+      window.open(item.sourcePage, '_blank', 'noopener,noreferrer')
+      setMessage('Opened the official track page. Direct in-app audio has not been pinned for this track yet.')
+      return
+    }
     const pieceId = 'catalog:' + item.id
     const existingIndex = pieceList.findIndex(candidatePiece => candidatePiece.id === pieceId)
     const candidate: Candidate = {
@@ -524,7 +536,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
   const filteredCatalog = catalog.filter(item => {
-    const text = (item.title + ' ' + item.creator + ' ' + item.source).toLowerCase()
+    const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
     const matchesModality = catalogModality === 'All' || item.modality === catalogModality
     return matchesSearch && matchesModality
@@ -643,10 +655,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     </section> : mode === 'browse' ? <section className="md-browse">
       <div className="md-browse-head">
         <div>
-          <small>PLAYABLE NOMINATIONS</small>
+          <small>CURATED PRODUCTION LIBRARY</small>
           <h1>{catalogLoading ? 'Gathering music…' : (filteredCatalog.length || catalog.length) + ' to try'}</h1>
         </div>
-        <button onClick={() => void loadCatalog(true)} disabled={catalogLoading}>{catalogLoading ? '…' : '↻'}</button>
+        <button onClick={() => void loadCatalog(true, true)} disabled={catalogLoading}>{catalogLoading ? '…' : '↻'}</button>
       </div>
       <div className="md-browse-search">
         <input value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} placeholder="Search title, artist, source…"/>
@@ -656,15 +668,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       </div>
       <div className="md-catalog-list">
         {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => adoptCatalogItem(item)}>
-          <span className="md-catalog-play">▶</span>
-          <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}</small></span>
+          <span className="md-catalog-play">{item.audioUrl ? '▶' : '↗'}</span>
+          <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
           <span className="md-catalog-source">{item.source}</span>
         </button>)}
         {!catalogLoading && !filteredCatalog.length && <p className="md-empty">No matches in this batch. Change the filter or refresh.</p>}
       </div>
       <div className="md-repositories">
-        <span>SEARCH POOL</span>
-        <div>{repositories.map(repository => <a key={repository.name} href={repository.url} target="_blank" rel="noreferrer" className={'mode-' + repository.mode} title={repository.note}>{repository.name}</a>)}</div>
+        <span>CURATED</span>
+        <div><span className="md-library-note">ChatGPT-curated production library · tap ▶ to listen in-app · ↗ opens official source</span></div>
       </div>
     </section> : <section className="md-hunt">
       <div>
@@ -684,7 +696,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <button className="md-search-now" onClick={() => void searchNow()} disabled={catalogLoading}>{catalogLoading ? 'SEARCHING…' : 'SEARCH NOW →'}</button>
       </div>
       {message && <div className="md-message">{message}</div>}
-      <p className="md-hunt-note">Search Now gathers a fresh playable batch from Openverse using these interests. Exact-piece modality hunts still happen from the top row on Listen.</p>
+      <p className="md-hunt-note">Search Now now opens the curated production library. Tell ChatGPT what you want and it can add new researched candidates there for you.</p>
     </section>}
   </main>
 }
