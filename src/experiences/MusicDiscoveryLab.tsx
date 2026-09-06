@@ -177,10 +177,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const recordingCandidateRef = useRef<string | null>(null)
   const recordingPieceRef = useRef<string | null>(null)
   const recordingSourcePageRef = useRef<string | null>(null)
-  const resolvingCatalogRef = useRef<Set<string>>(new Set())
+  const resolvingCatalogRef = useRef<Map<string, Promise<string | null>>>(new Map())
   const reviewSyncingRef = useRef(false)
   const reviewSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const listenCardRef = useRef<HTMLElement | null>(null)
   const swipeStartRef = useRef<{ x: number; y: number; interactive: boolean } | null>(null)
+  const swipeDxRef = useRef(0)
+  const swipeMotionBusyRef = useRef(false)
+  const playIntentRef = useRef(false)
+  const playRequestRef = useRef(0)
 
   const [pieceIndex, setPieceIndex] = useState(0)
   const [catalogPieces, setCatalogPieces] = useState<Piece[]>([])
@@ -201,6 +206,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogModality, setCatalogModality] = useState<CatalogFilter>('New')
   const [playing, setPlaying] = useState(false)
+  const [playPending, setPlayPending] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [recording, setRecording] = useState(false)
@@ -226,18 +232,42 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!audio) return
     const time = () => setCurrentTime(audio.currentTime || 0)
     const meta = () => setDuration(Number.isFinite(audio.duration) ? audio.duration : 0)
-    const ended = () => setPlaying(false)
-    const error = () => { setPlaying(false); setMessage('That recording failed to load.') }
+    const ended = () => {
+      playIntentRef.current = false
+      setPlaying(false)
+      setPlayPending(false)
+    }
+    const playingNow = () => {
+      if (!playIntentRef.current) return
+      setPlaying(true)
+      setPlayPending(false)
+      setMessage('')
+    }
+    const waiting = () => {
+      if (!playIntentRef.current) return
+      setPlayPending(true)
+      setMessage('Buffering…')
+    }
+    const error = () => {
+      playIntentRef.current = false
+      setPlaying(false)
+      setPlayPending(false)
+      setMessage('That recording failed to load.')
+    }
     audio.addEventListener('timeupdate', time)
     audio.addEventListener('loadedmetadata', meta)
     audio.addEventListener('durationchange', meta)
     audio.addEventListener('ended', ended)
+    audio.addEventListener('playing', playingNow)
+    audio.addEventListener('waiting', waiting)
     audio.addEventListener('error', error)
     return () => {
       audio.removeEventListener('timeupdate', time)
       audio.removeEventListener('loadedmetadata', meta)
       audio.removeEventListener('durationchange', meta)
       audio.removeEventListener('ended', ended)
+      audio.removeEventListener('playing', playingNow)
+      audio.removeEventListener('waiting', waiting)
       audio.removeEventListener('error', error)
     }
   }, [])
@@ -246,8 +276,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const audio = audioRef.current
     if (!audio || !current) return
     const source = candidateAudio(current)
+    playRequestRef.current += 1
+    playIntentRef.current = false
     audio.pause()
     setPlaying(false)
+    setPlayPending(false)
     setCurrentTime(0)
     setDuration(0)
     if (!source && piece.id.startsWith('catalog:')) {
@@ -257,13 +290,14 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         setMessage('This copyrighted recording is available from its official source.')
         return
       }
+      setMessage('Preparing recording…')
       void resolveCatalogAudio(piece.id.slice('catalog:'.length))
       return
     }
     audio.src = source
     audio.load()
     setMessage('')
-  }, [current.id, current.audioUrl, piece.id])
+  }, [current.id, piece.id])
 
   function saveLocal<T>(key: string, value: T) {
     localStorage.setItem(key, JSON.stringify(value))
@@ -610,37 +644,46 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     }
   }
 
-  async function resolveCatalogAudio(catalogId: string) {
-    if (resolvingCatalogRef.current.has(catalogId)) return
+  async function resolveCatalogAudio(catalogId: string): Promise<string | null> {
+    const inFlight = resolvingCatalogRef.current.get(catalogId)
+    if (inFlight) return inFlight
+
     const item = catalog.find(row => row.id === catalogId)
-    if (!item || item.audioUrl || item.externalOnly) return
-    resolvingCatalogRef.current.add(catalogId)
-    setMessage('Loading recording…')
-    try {
-      const response = await fetch('/api/music-resolve', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
-        body:JSON.stringify({ sourceUrl:item.sourcePage, sourceName:item.source, title:item.title }),
-      })
-      const result = await response.json() as { audioUrl?:string; error?:string }
-      if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
-      const audioUrl = result.audioUrl
-      setCatalog(currentItems => currentItems.map(row => row.id === catalogId ? { ...row, audioUrl } : row))
-      setCatalogPieces(currentPieces => currentPieces.map(currentPiece => {
-        if (currentPiece.id !== 'catalog:' + catalogId) return currentPiece
-        return {
-          ...currentPiece,
-          candidates:currentPiece.candidates.map(candidate =>
-            candidate.id === 'catalog-candidate:' + catalogId ? { ...candidate, audioUrl } : candidate
-          ),
-        }
-      }))
-      setMessage('')
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
-    } finally {
-      resolvingCatalogRef.current.delete(catalogId)
-    }
+    if (!item || item.externalOnly) return null
+    if (item.audioUrl) return item.audioUrl
+
+    const request = (async () => {
+      setMessage('Preparing recording…')
+      try {
+        const response = await fetch('/api/music-resolve', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
+          body:JSON.stringify({ sourceUrl:item.sourcePage, sourceName:item.source, title:item.title }),
+        })
+        const result = await response.json() as { audioUrl?:string; error?:string }
+        if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
+        const audioUrl = result.audioUrl
+        setCatalog(currentItems => currentItems.map(row => row.id === catalogId ? { ...row, audioUrl } : row))
+        setCatalogPieces(currentPieces => currentPieces.map(currentPiece => {
+          if (currentPiece.id !== 'catalog:' + catalogId) return currentPiece
+          return {
+            ...currentPiece,
+            candidates:currentPiece.candidates.map(candidate =>
+              candidate.id === 'catalog-candidate:' + catalogId ? { ...candidate, audioUrl } : candidate
+            ),
+          }
+        }))
+        return audioUrl
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
+        return null
+      } finally {
+        resolvingCatalogRef.current.delete(catalogId)
+      }
+    })()
+
+    resolvingCatalogRef.current.set(catalogId, request)
+    return request
   }
 
   function adoptCatalogItem(item: CatalogItem) {
@@ -745,26 +788,72 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       setMessage('Opened the official source in a new tab.')
       return
     }
+
     const audio = audioRef.current
     if (!audio) return
-    if (audio.paused) {
-      try { await audio.play(); setPlaying(true); setMessage('') } catch { setMessage('Tap Play again to allow audio.') }
-    } else {
+
+    if (playing || playPending || playIntentRef.current) {
+      playRequestRef.current += 1
+      playIntentRef.current = false
       audio.pause()
       setPlaying(false)
+      setPlayPending(false)
+      setMessage(playPending ? 'Playback cancelled.' : 'Paused.')
+      return
+    }
+
+    const requestId = ++playRequestRef.current
+    playIntentRef.current = true
+    setPlayPending(true)
+    setMessage('Loading…')
+
+    try {
+      let source = candidateAudio(current)
+      if (!source && piece.id.startsWith('catalog:')) {
+        source = await resolveCatalogAudio(piece.id.slice('catalog:'.length)) || ''
+      }
+      if (!source) throw new Error('Could not load this recording.')
+      if (!playIntentRef.current || requestId !== playRequestRef.current) return
+
+      if (audio.src !== source) {
+        audio.src = source
+        audio.load()
+      }
+      await audio.play()
+      if (!playIntentRef.current || requestId !== playRequestRef.current) {
+        audio.pause()
+        return
+      }
+      setPlaying(true)
+      setPlayPending(false)
+      setMessage('')
+    } catch (error) {
+      if (requestId !== playRequestRef.current) return
+      playIntentRef.current = false
+      setPlaying(false)
+      setPlayPending(false)
+      setMessage(error instanceof Error ? error.message : 'Could not start playback.')
     }
   }
 
   function stop() {
     const audio = audioRef.current
     if (!audio) return
+    playRequestRef.current += 1
+    playIntentRef.current = false
     audio.pause()
     audio.currentTime = 0
     setPlaying(false)
+    setPlayPending(false)
     setCurrentTime(0)
+    setMessage('')
   }
 
-  function stepPiece(delta: number) {
+  function nextSwipeFrame() {
+    return new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  }
+
+  function changePiece(delta: number) {
     if (catalogPieces.length && piece.id.startsWith('catalog:')) {
       setPieceIndex(index => {
         const currentOffset = Math.max(0, index - pieces.length)
@@ -774,6 +863,66 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       return
     }
     setPieceIndex(index => (index + delta + pieceList.length) % pieceList.length)
+  }
+
+  async function animatePieceCard(delta: number, startX = 0) {
+    if (swipeMotionBusyRef.current) return
+    const card = listenCardRef.current
+    if (!card || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      changePiece(delta)
+      return
+    }
+
+    swipeMotionBusyRef.current = true
+    card.style.pointerEvents = 'none'
+    const edge = delta > 0 ? '-112%' : '112%'
+    const start = `translateX(${startX}px) scale(${1 - Math.min(Math.abs(startX) / 2400, .02)})`
+    const outgoing = card.animate(
+      [{ transform:start, opacity:1 }, { transform:`translateX(${edge}) scale(.97)`, opacity:.28 }],
+      { duration:startX ? 150 : 190, easing:'cubic-bezier(.4,0,.2,1)', fill:'forwards' }
+    )
+
+    try {
+      await outgoing.finished
+      changePiece(delta)
+      await nextSwipeFrame()
+      const incoming = listenCardRef.current
+      if (incoming) {
+        const from = delta > 0 ? '112%' : '-112%'
+        const entering = incoming.animate(
+          [{ transform:`translateX(${from}) scale(.97)`, opacity:.28 }, { transform:'translateX(0) scale(1)', opacity:1 }],
+          { duration:230, easing:'cubic-bezier(.2,.75,.2,1)', fill:'forwards' }
+        )
+        outgoing.cancel()
+        await entering.finished
+        entering.cancel()
+      }
+    } finally {
+      swipeMotionBusyRef.current = false
+      const active = listenCardRef.current
+      if (active) {
+        active.style.transform = ''
+        active.style.opacity = ''
+        active.style.pointerEvents = ''
+      }
+    }
+  }
+
+  function stepPiece(delta: number, startX = 0) {
+    void animatePieceCard(delta, startX)
+  }
+
+  function snapPieceCardBack(startX: number) {
+    const card = listenCardRef.current
+    if (!card) return
+    const snap = card.animate(
+      [{ transform:`translateX(${startX}px)`, opacity:card.style.opacity || '1' }, { transform:'translateX(0)', opacity:1 }],
+      { duration:150, easing:'ease-out' }
+    )
+    void snap.finished.finally(() => {
+      card.style.transform = ''
+      card.style.opacity = ''
+    })
   }
 
   function catalogIdForPiece(pieceId: string) {
@@ -799,6 +948,23 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       y:touch.clientY,
       interactive:Boolean(target.closest('button,input,textarea,a')),
     }
+    swipeDxRef.current = 0
+  }
+
+  function onListenTouchMove(event: TouchEvent<HTMLElement>) {
+    const start = swipeStartRef.current
+    if (!start || start.interactive || swipeMotionBusyRef.current) return
+    const touch = event.touches[0]
+    if (!touch) return
+    const dx = touch.clientX - start.x
+    const dy = touch.clientY - start.y
+    if (Math.abs(dx) < Math.abs(dy) * 1.1) return
+    swipeDxRef.current = dx
+    const card = listenCardRef.current
+    if (card) {
+      card.style.transform = `translateX(${dx}px) rotate(${dx * .012}deg)`
+      card.style.opacity = String(Math.max(.72, 1 - Math.abs(dx) / 700))
+    }
   }
 
   function onListenTouchEnd(event: TouchEvent<HTMLElement>) {
@@ -807,10 +973,21 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!start || start.interactive) return
     const touch = event.changedTouches[0]
     if (!touch) return
-    const dx = touch.clientX - start.x
+    const dx = swipeDxRef.current || touch.clientX - start.x
     const dy = touch.clientY - start.y
-    if (Math.abs(dx) < 52 || Math.abs(dx) < Math.abs(dy) * 1.25) return
-    stepPiece(dx < 0 ? 1 : -1)
+    swipeDxRef.current = 0
+    if (Math.abs(dx) >= 52 && Math.abs(dx) >= Math.abs(dy) * 1.25) {
+      stepPiece(dx < 0 ? 1 : -1, dx)
+      return
+    }
+    snapPieceCardBack(dx)
+  }
+
+  function onListenTouchCancel() {
+    const dx = swipeDxRef.current
+    swipeStartRef.current = null
+    swipeDxRef.current = 0
+    snapPieceCardBack(dx)
   }
 
   function rateQuality(value: Rating) {
@@ -979,7 +1156,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <button className={mode === 'hunt' ? 'active' : ''} onClick={() => setMode('hunt')}>HUNT</button>
     </nav>
 
-    {mode === 'listen' ? <section className="md-listen" onTouchStart={onListenTouchStart} onTouchEnd={onListenTouchEnd}>
+    {mode === 'listen' ? <section ref={listenCardRef} className="md-listen" onTouchStart={onListenTouchStart} onTouchMove={onListenTouchMove} onTouchEnd={onListenTouchEnd} onTouchCancel={onListenTouchCancel}>
       <div className="md-modalities">
         {modalities.map(modality => {
           const list = candidateListFor(modality)
@@ -1017,11 +1194,12 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
       <div className="md-transport">
         <button onClick={() => stepPiece(-1)}>‹</button>
-        <button className="primary" onClick={togglePlay}>{current.externalOnly ? '↗ Official' : playing ? '❚❚ Pause' : '▶ Play'}</button>
+        <button className={'primary' + (playing || playPending ? ' active-play' : '') + (playPending ? ' pending-play' : '')} onClick={togglePlay} aria-pressed={playing || playPending}>{current.externalOnly ? '↗ Official' : playPending ? '❚❚ Loading…' : playing ? '❚❚ Pause' : '▶ Play'}</button>
         <button onClick={stop}>■ Stop</button>
         <button onClick={() => stepPiece(1)}>›</button>
       </div>
-      <small className="md-swipe-hint">Swipe left or right outside the controls to move between tracks.</small>
+      <small className="md-swipe-hint">Swipe the card left or right outside the controls to move between tracks.</small>
+      <div className="md-message" aria-live="polite">{message || '\u00a0'}</div>
 
       <div className="md-scrub">
         <span>{formatTime(currentTime)}</span>
@@ -1064,7 +1242,6 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <span>{current.license}</span>
         <a href={current.sourcePage} target="_blank" rel="noreferrer">Source ↗</a>
       </div>
-      {message && <div className="md-message">{message}</div>}
     </section> : mode === 'browse' ? <section className="md-browse">
       <div className="md-browse-head">
         <div>
