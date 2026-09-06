@@ -288,17 +288,18 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         const response = await fetch('/api/music-resolve', {
           method:'POST',
           headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
-          body:JSON.stringify({ sourceUrl:playable.sourcePage, sourceName:playable.source, title:item.title }),
+          body:JSON.stringify({ sourceUrl:item.sourcePage, sourceName:item.source, title:item.title }),
         })
         const result = await response.json() as { audioUrl?:string; error?:string }
         if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
         playable = { ...item, audioUrl:result.audioUrl }
-        setCatalog(currentItems => currentItems.map(row => row.id === playable.id ? playable : row))
+        setCatalog(currentItems => currentItems.map(row => row.id === item.id ? playable : row))
       } catch (error) {
         setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
         return
       }
     }
+
     const pieceId = 'catalog:' + playable.id
     const existingIndex = pieceList.findIndex(candidatePiece => candidatePiece.id === pieceId)
     const candidate: Candidate = {
@@ -320,7 +321,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const newPiece: Piece = {
       id:pieceId,
       composer:playable.creator || 'Unknown artist',
-      title:item.title,
+      title:playable.title,
       mood:playable.modality + ' · ' + playable.source,
       aiEmotions:inferredEmotions(playable.modality),
       candidates:[candidate],
@@ -549,9 +550,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
   const filteredCatalog = catalog.filter(item => {
-    const text = (item.title + ' ' + playable.creator + ' ' + playable.source + ' ' + (item.description || '')).toLowerCase()
+    const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
-    const matchesModality = catalogModality === 'All' || playable.modality === catalogModality
+    const matchesModality = catalogModality === 'All' || item.modality === catalogModality
     return matchesSearch && matchesModality
   })
 
@@ -680,10 +681,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         {(['All', ...modalities] as Array<'All' | Modality>).map(value => <button key={value} className={catalogModality === value ? 'active' : ''} onClick={() => setCatalogModality(value)}>{value}</button>)}
       </div>
       <div className="md-catalog-list">
-        {filteredCatalog.map(item => <button key={playable.id} className="md-catalog-item" onClick={() => adoptCatalogItem(item)}>
-          <span className="md-catalog-play">{playable.audioUrl ? '▶' : '↗'}</span>
-          <span className="md-catalog-copy"><strong>{item.title}</strong><small>{playable.creator || 'Unknown artist'} · {playable.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
-          <span className="md-catalog-source">{playable.source}</span>
+        {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => adoptCatalogItem(item)}>
+          <span className="md-catalog-play">{item.audioUrl ? '▶' : '↗'}</span>
+          <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
+          <span className="md-catalog-source">{item.source}</span>
         </button>)}
         {!catalogLoading && !filteredCatalog.length && <p className="md-empty">No matches in this batch. Change the filter or refresh.</p>}
       </div>
