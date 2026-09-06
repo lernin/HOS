@@ -306,10 +306,6 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function reviewQueue() {
     return loadObject<Record<string, ReviewSyncEntry>>(REVIEW_SYNC_QUEUE_KEY, {})
   }
-  function catalogIdForReview(pieceId: string, sourcePage: string) {
-    return catalogIdForPiece(pieceId) || catalog.find(item => item.sourcePage === sourcePage)?.id || null
-  }
-
   function reviewSnapshot(pieceId: string, candidateId: string, sourcePage: string, overrides: ReviewOverrides = {}): ReviewSyncEntry {
     const has = (key: keyof ReviewOverrides) => Object.prototype.hasOwnProperty.call(overrides, key)
     return {
