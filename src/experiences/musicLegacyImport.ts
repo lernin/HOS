@@ -39,7 +39,7 @@ function objectCount(raw: string | null) {
 
 function discoveredCount(raw: string | null) {
   const value = safeObject(raw)
-  return Object.values(value).reduce((total, candidates) => total + (Array.isArray(candidates) ? candidates.length : 0), 0)
+  return Object.values(value).reduce<number>((total, candidates) => total + (Array.isArray(candidates) ? candidates.length : 0), 0)
 }
 
 function collectMusicKeys(storage: Storage) {
