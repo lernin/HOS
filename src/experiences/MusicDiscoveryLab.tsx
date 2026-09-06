@@ -819,85 +819,78 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return allCandidates.filter(candidate => candidate.modality === modality && !rejected[candidate.id])
   }
 
-  function modalityVisualStatus(modality: Modality) {
-    const available = candidateListFor(modality)
-    if (available.length) return 'available'
-    return modalityStatus[modalityKey(piece.id, modality)] || 'unsearched'
-  }
-
-  function bestCandidate(list: Candidate[]) {
-    return [...list].sort((a, b) => (performanceRatings[b.id] ?? -1) - (performanceRatings[a.id] ?? -1) || (qualityRatings[b.id] ?? -1) - (qualityRatings[a.id] ?? -1))[0]
-  }
-
-  async function runHunt(modality: Modality) {
-    const key = modalityKey(piece.id, modality)
-    if (modalityStatus[key] === 'requested') return
-    const requestedStatus = { ...modalityStatus, [key]: 'requested' as ModalityStatus }
-    setModalityStatus(requestedStatus)
-    saveLocal(MODALITY_STATUS_KEY, requestedStatus)
-    setMessage('Hunting for a reusable ' + modality.toLowerCase() + ' version…')
+  async function findAlternateVersion() {
+    const modality = current.modality
+    const key = piece.id + '::' + modality
+    if (alternateSearchRef.current.has(key)) return
+    alternateSearchRef.current.add(key)
+    setMessage('Loved piece · finding another ' + modality.toLowerCase() + ' version…')
 
     try {
       const response = await fetch('/api/music-hunt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-review-pin': pin },
-        body: JSON.stringify({
-          title: piece.title,
-          composer: piece.composer,
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
+        body:JSON.stringify({
+          title:piece.title,
+          composer:piece.composer,
           modality,
-          exclude: allCandidates.map(candidate => candidate.sourcePage),
+          exclude:allCandidates.map(candidate => candidate.sourcePage),
         }),
       })
-      const result = await response.json() as { candidates?: Array<{ id: string; performer: string; license: string; audioUrl: string; sourcePage: string; source: string; confidence?: 'confirmed' | 'possible' }>; error?: string }
+      const result = await response.json() as {
+        candidates?: Array<{
+          id:string
+          performer:string
+          license:string
+          audioUrl:string
+          sourcePage:string
+          source:string
+          confidence?:'confirmed' | 'possible'
+        }>
+        error?:string
+      }
       if (!response.ok) throw new Error(result.error || 'Music search failed.')
 
       const known = new Set(allCandidates.map(candidate => candidate.sourcePage))
-      const fresh = (result.candidates || []).filter(candidate => candidate.audioUrl && candidate.sourcePage && !known.has(candidate.sourcePage))
+      const fresh = (result.candidates || []).filter(candidate =>
+        candidate.audioUrl && candidate.sourcePage && !known.has(candidate.sourcePage)
+      )
       if (!fresh.length) {
-        const notFound = { ...requestedStatus, [key]: 'notfound' as ModalityStatus }
-        setModalityStatus(notFound)
-        saveLocal(MODALITY_STATUS_KEY, notFound)
-        setMessage('No suitable reusable ' + modality.toLowerCase() + ' version found this time.')
+        setMessage('No better reusable ' + modality.toLowerCase() + ' version found this time.')
         return
       }
 
-      const newCandidates: Candidate[] = fresh.slice(0, 5).map(candidate => ({
-        id: candidate.id,
-        performer: candidate.performer || 'Unknown performer',
+      const newCandidates: Candidate[] = fresh.slice(0,5).map(candidate => ({
+        id:candidate.id,
+        performer:candidate.performer || 'Unknown performer',
         modality,
-        license: candidate.license,
-        audioUrl: candidate.audioUrl,
-        sourcePage: candidate.sourcePage,
-        source: candidate.source,
-        matchConfidence: candidate.confidence || 'confirmed',
+        license:candidate.license,
+        audioUrl:candidate.audioUrl,
+        sourcePage:candidate.sourcePage,
+        source:candidate.source,
+        matchConfidence:candidate.confidence || 'confirmed',
       }))
-      const nextDiscovered = { ...discovered, [piece.id]: [...(discovered[piece.id] || []), ...newCandidates] }
+      const nextDiscovered = {
+        ...discovered,
+        [piece.id]:[...(discovered[piece.id] || []), ...newCandidates],
+      }
       setDiscovered(nextDiscovered)
       saveLocal(DISCOVERED_KEY, nextDiscovered)
-      const cleared = { ...requestedStatus }
-      delete cleared[key]
-      setModalityStatus(cleared)
-      saveLocal(MODALITY_STATUS_KEY, cleared)
-      setCandidateId(newCandidates[0].id)
-      setMessage('Found ' + newCandidates.length + ' new ' + modality.toLowerCase() + (newCandidates.length === 1 ? ' candidate.' : ' candidates.'))
+      setMessage('Found ' + newCandidates.length + ' alternate ' + modality.toLowerCase() + (newCandidates.length === 1 ? ' version.' : ' versions.') + ' Choose one above.')
     } catch (error) {
-      const reset = { ...requestedStatus }
-      delete reset[key]
-      setModalityStatus(reset)
-      saveLocal(MODALITY_STATUS_KEY, reset)
       setMessage(error instanceof Error ? error.message : 'Music search failed.')
+    } finally {
+      alternateSearchRef.current.delete(key)
     }
   }
 
-  function chooseModality(modality: Modality) {
-    const list = candidateListFor(modality)
-    if (!list.length) {
-      void runHunt(modality)
-      return
+  function maybeFindLovedAlternate(pieceScore: Rating | undefined, soundScore: Rating | undefined, performanceScore: Rating | undefined) {
+    if (pieceScore !== 3) return false
+    if ((soundScore !== undefined && soundScore <= 1) || (performanceScore !== undefined && performanceScore <= 1)) {
+      void findAlternateVersion()
+      return true
     }
-    const best = bestCandidate(list)
-    if (best) setCandidateId(best.id)
-    setMessage(list.length > 1 ? 'Choose a numbered ' + modality.toLowerCase() + ' version below.' : '')
+    return false
   }
 
   async function togglePlay() {
