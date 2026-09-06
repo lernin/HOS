@@ -9,9 +9,15 @@ function decodeHtml(value: string) {
 }
 
 function firstMp3(html: string, base: string) {
-  const matches = [...html.matchAll(/(?:href|src)=["']([^"']+\.mp3(?:\?[^"']*)?)["']/gi)]
+  const decoded = decodeHtml(html).replace(/\\\//g,'/')
+  const matches = [
+    ...decoded.matchAll(/(?:href|src)=["']([^"']+\.mp3(?:\?[^"']*)?)["']/gi),
+    ...decoded.matchAll(/(https?:\/\/[^"'\s<>]+\.mp3(?:\?[^"'\s<>]*)?)/gi),
+  ]
   for (const match of matches) {
-    try { return new URL(decodeHtml(match[1]), base).toString() } catch {}
+    const value = match[1]
+    if (!value) continue
+    try { return new URL(value, base).toString() } catch {}
   }
   return ''
 }
@@ -20,6 +26,15 @@ async function resolveScott(sourceUrl: string) {
   const response = await fetch(sourceUrl, { headers:{ 'User-Agent':'HOS-MusicDiscovery/1.0' } })
   if (!response.ok) return ''
   return firstMp3(await response.text(), sourceUrl)
+}
+
+async function resolveFreesound(sourceUrl: string) {
+  try {
+    const response = await fetch(sourceUrl, { headers:{ 'User-Agent':'HOS-MusicDiscovery/1.0' } })
+    if (!response.ok) return ''
+    const audioUrl = firstMp3(await response.text(), sourceUrl)
+    return /cdn\.freesound\.org\/previews\//i.test(audioUrl) ? audioUrl : ''
+  } catch { return '' }
 }
 
 async function resolveIncompetech(title: string, sourceUrl: string) {
@@ -52,6 +67,8 @@ export default {
         audioUrl = await resolveScott(sourceUrl)
       } else if (/incompetech/i.test(sourceName) || /incompetech\.com/i.test(sourceUrl)) {
         audioUrl = await resolveIncompetech(title, sourceUrl)
+      } else if (/freesound/i.test(sourceName) || /freesound\.org/i.test(sourceUrl)) {
+        audioUrl = await resolveFreesound(sourceUrl)
       }
 
       if (!audioUrl) return json({ error:'Could not find a playable file for this track yet.' }, 404)
