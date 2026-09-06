@@ -16,6 +16,7 @@ type Candidate = {
   audioUrl?: string
   sourcePage: string
   source?: string
+  externalOnly?: boolean
   matchConfidence?: 'confirmed' | 'possible'
 }
 type Piece = {
@@ -37,6 +38,7 @@ type CatalogItem = {
   source: string
   description?: string
   rightsVerified?: boolean
+  externalOnly: boolean
   rating: Rating | null
   soundRating: Rating | null
   performanceRating: Rating | null
@@ -250,6 +252,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!source && piece.id.startsWith('catalog:')) {
       audio.removeAttribute('src')
       audio.load()
+      if (current.externalOnly) {
+        setMessage('This copyrighted recording is available from its official source.')
+        return
+      }
       void resolveCatalogAudio(piece.id.slice('catalog:'.length))
       return
     }
@@ -549,6 +555,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         source:row.source_name || 'Curated library',
         description:row.taste_notes || '',
         rightsVerified:Boolean(row.rights_verified),
+        externalOnly:!row.recording_url && /official stream|official source/i.test(row.license || ''),
         rating:typeof row.rating === 'number' && row.rating >= 0 && row.rating <= 3 ? row.rating as Rating : null,
         soundRating:typeof row.sound_rating === 'number' && row.sound_rating >= 0 && row.sound_rating <= 3 ? row.sound_rating as Rating : null,
         performanceRating:typeof row.performance_rating === 'number' && row.performance_rating >= 0 && row.performance_rating <= 3 ? row.performance_rating as Rating : null,
@@ -590,6 +597,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         audioUrl:item.audioUrl,
         sourcePage:item.sourcePage,
         source:item.source,
+        externalOnly:item.externalOnly,
         matchConfidence:'confirmed',
       }],
     }
@@ -598,7 +606,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   async function resolveCatalogAudio(catalogId: string) {
     if (resolvingCatalogRef.current.has(catalogId)) return
     const item = catalog.find(row => row.id === catalogId)
-    if (!item || item.audioUrl) return
+    if (!item || item.audioUrl || item.externalOnly) return
     resolvingCatalogRef.current.add(catalogId)
     setMessage('Loading recording…')
     try {
@@ -725,6 +733,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   async function togglePlay() {
+    if (current.externalOnly) {
+      window.open(current.sourcePage, '_blank', 'noopener,noreferrer')
+      setMessage('Opened the official source in a new tab.')
+      return
+    }
     const audio = audioRef.current
     if (!audio) return
     if (audio.paused) {
@@ -997,7 +1010,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
       <div className="md-transport">
         <button onClick={() => stepPiece(-1)}>‹</button>
-        <button className="primary" onClick={togglePlay}>{playing ? '❚❚ Pause' : '▶ Play'}</button>
+        <button className="primary" onClick={togglePlay}>{current.externalOnly ? '↗ Official' : playing ? '❚❚ Pause' : '▶ Play'}</button>
         <button onClick={stop}>■ Stop</button>
         <button onClick={() => stepPiece(1)}>›</button>
       </div>
@@ -1061,15 +1074,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       </div>
       <div className="md-catalog-list">
         {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => void adoptCatalogItem(item)}>
-          <span className="md-catalog-play">{item.audioUrl ? '▶' : '▶'}</span>
-          <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
+          <span className="md-catalog-play">{item.externalOnly ? '↗' : '▶'}</span>
+          <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.externalOnly ? ' · official stream' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
           <span className="md-catalog-source">{item.source}</span>
         </button>)}
         {!catalogLoading && !filteredCatalog.length && <p className="md-empty">No matches in this batch. Change the filter or refresh.</p>}
       </div>
       <div className="md-repositories">
         <span>CURATED</span>
-        <div><span className="md-library-note">ChatGPT-curated production library · tap ▶ to listen in-app · ↗ opens official source</span></div>
+        <div><span className="md-library-note">Curated production library · ▶ plays reusable/direct audio in-app · ↗ opens copyrighted music at its official source</span></div>
       </div>
     </section> : <section className="md-hunt">
       <div>
