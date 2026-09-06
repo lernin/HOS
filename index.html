@@ -26,18 +26,6 @@
             .catch((error) => console.warn('Thekonym service worker registration failed', error));
         });
       }
-      const addConceptInteractionsToHub = () => {
-        const grid = document.querySelector('.experience-grid');
-        if (!grid || grid.querySelector('[data-concept-interactions]')) return;
-        const card = document.createElement('article');
-        card.className = 'experience-card';
-        card.dataset.conceptInteractions = 'true';
-        card.innerHTML = '<span class="experience-icon">CI</span><span class="experience-copy"><strong>Concept Interactions</strong><small>Review the 49 input-output interactions, examples, prompts, confidence, and notes.</small></span><button class="experience-go">Go</button>';
-        card.querySelector('button').addEventListener('click', () => { window.location.href = '/concept-interactions.html'; });
-        grid.appendChild(card);
-      };
-      new MutationObserver(addConceptInteractionsToHub).observe(document.getElementById('root'), { childList: true, subtree: true });
-      addConceptInteractionsToHub();
     </script>
   </body>
 </html>
