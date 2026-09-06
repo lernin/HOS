@@ -38,7 +38,24 @@ type CatalogItem = {
   description?: string
   rightsVerified?: boolean
   rating: Rating | null
+  soundRating: Rating | null
+  performanceRating: Rating | null
+  reviewNote: string
+  confirmedEmotions: Emotion[]
+  reviewRejected: boolean
+  reviewUpdatedAt: string | null
 }
+type ReviewSyncEntry = {
+  sourcePage: string
+  pieceRating: Rating | null
+  soundRating: Rating | null
+  performanceRating: Rating | null
+  note: string
+  confirmedEmotions: Emotion[]
+  rejected: boolean
+  updatedAt: number
+}
+type ReviewOverrides = Partial<Omit<ReviewSyncEntry, 'sourcePage' | 'updatedAt'>>
 type CatalogFilter = 'New' | 'All' | Modality
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
@@ -53,6 +70,7 @@ const CONFIRMED_EMOTION_KEY = 'hos-music-confirmed-emotions-v1'
 const DISCOVERED_KEY = 'hos-music-discovered-candidates-v1'
 const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
+const REVIEW_SYNC_QUEUE_KEY = 'hos-music-review-sync-queue-v1'
 
 const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
 const candidateAudio = (candidate: Candidate) => candidate.audioUrl || (candidate.file ? commonsAudio(candidate.file) : '')
@@ -145,7 +163,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const recordingRef = useRef<RecordingSession | null>(null)
   const recordingCandidateRef = useRef<string | null>(null)
+  const recordingPieceRef = useRef<string | null>(null)
+  const recordingSourcePageRef = useRef<string | null>(null)
   const resolvingCatalogRef = useRef<Set<string>>(new Set())
+  const reviewSyncingRef = useRef(false)
+  const reviewSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const swipeStartRef = useRef<{ x: number; y: number; interactive: boolean } | null>(null)
 
   const [pieceIndex, setPieceIndex] = useState(0)
@@ -231,6 +253,212 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     localStorage.setItem(key, JSON.stringify(value))
   }
 
+  function reviewQueue() {
+    return loadObject<Record<string, ReviewSyncEntry>>(REVIEW_SYNC_QUEUE_KEY, {})
+  }
+
+  function reviewSnapshot(pieceId: string, candidateId: string, sourcePage: string, overrides: ReviewOverrides = {}): ReviewSyncEntry {
+    const has = (key: keyof ReviewOverrides) => Object.prototype.hasOwnProperty.call(overrides, key)
+    return {
+      sourcePage,
+      pieceRating:has('pieceRating') ? overrides.pieceRating ?? null : pieceRatings[pieceId] ?? null,
+      soundRating:has('soundRating') ? overrides.soundRating ?? null : qualityRatings[candidateId] ?? null,
+      performanceRating:has('performanceRating') ? overrides.performanceRating ?? null : performanceRatings[candidateId] ?? null,
+      note:has('note') ? overrides.note ?? '' : notes[candidateId] || '',
+      confirmedEmotions:has('confirmedEmotions') ? overrides.confirmedEmotions || [] : confirmedEmotions[pieceId] || [],
+      rejected:has('rejected') ? Boolean(overrides.rejected) : Boolean(rejected[candidateId]),
+      updatedAt:Date.now(),
+    }
+  }
+
+  function queueReviewSync(pieceId: string, candidateId: string, sourcePage: string, overrides: ReviewOverrides = {}, delayMs = 0) {
+    if (!sourcePage) return
+    const queue = reviewQueue()
+    queue[sourcePage] = reviewSnapshot(pieceId, candidateId, sourcePage, overrides)
+    saveLocal(REVIEW_SYNC_QUEUE_KEY, queue)
+    if (reviewSyncTimerRef.current) clearTimeout(reviewSyncTimerRef.current)
+    reviewSyncTimerRef.current = setTimeout(() => void flushReviewSyncQueue(), delayMs)
+  }
+
+  async function flushReviewSyncQueue(items: CatalogItem[] = catalog) {
+    if (reviewSyncingRef.current) return
+    const queued = reviewQueue()
+    if (!Object.keys(queued).length) return
+    reviewSyncingRef.current = true
+    try {
+      for (const [sourcePage, entry] of Object.entries(queued)) {
+        const item = items.find(candidate => candidate.sourcePage === sourcePage)
+        if (!item) continue
+        const { error } = await supabase.rpc('lab_music_library_review_write', {
+          pin,
+          music_id:item.id,
+          piece_rating:entry.pieceRating,
+          sound_rating_value:entry.soundRating,
+          performance_rating_value:entry.performanceRating,
+          note_value:entry.note,
+          confirmed_emotions_value:entry.confirmedEmotions,
+          rejected_value:entry.rejected,
+        })
+        if (error) throw error
+        const latest = reviewQueue()
+        if (latest[sourcePage]?.updatedAt === entry.updatedAt) {
+          delete latest[sourcePage]
+          saveLocal(REVIEW_SYNC_QUEUE_KEY, latest)
+        }
+        setCatalog(currentItems => currentItems.map(currentItem => currentItem.id === item.id ? {
+          ...currentItem,
+          rating:entry.pieceRating,
+          soundRating:entry.soundRating,
+          performanceRating:entry.performanceRating,
+          reviewNote:entry.note,
+          confirmedEmotions:entry.confirmedEmotions,
+          reviewRejected:entry.rejected,
+          reviewUpdatedAt:new Date().toISOString(),
+        } : currentItem))
+      }
+    } catch {
+      setMessage('Saved locally · database sync pending.')
+    } finally {
+      reviewSyncingRef.current = false
+      const remaining = reviewQueue()
+      if (Object.keys(remaining).length) {
+        if (reviewSyncTimerRef.current) clearTimeout(reviewSyncTimerRef.current)
+        reviewSyncTimerRef.current = setTimeout(() => void flushReviewSyncQueue(), 5000)
+      }
+    }
+  }
+
+  function hydrateAndBackfillReviews(incoming: CatalogItem[]) {
+    const pending = reviewQueue()
+    const nextPieceRatings = { ...pieceRatings }
+    const nextQualityRatings = { ...qualityRatings }
+    const nextPerformanceRatings = { ...performanceRatings }
+    const nextNotes = { ...notes }
+    const nextEmotions = { ...confirmedEmotions }
+    const nextRejected = { ...rejected }
+    let changed = false
+
+    for (const item of incoming) {
+      const catalogPieceKey = 'catalog:' + item.id
+      const catalogCandidateKey = 'catalog-candidate:' + item.id
+      const legacyPiece = pieces.find(candidatePiece => candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage))
+      const legacyCandidate = legacyPiece?.candidates.find(candidate => candidate.sourcePage === item.sourcePage)
+      const hasPending = Boolean(pending[item.sourcePage])
+
+      if (hasPending) continue
+
+      if (item.reviewUpdatedAt) {
+        if (item.rating !== null) {
+          nextPieceRatings[catalogPieceKey] = item.rating
+          if (legacyPiece) nextPieceRatings[legacyPiece.id] = item.rating
+        }
+        if (item.soundRating !== null) {
+          nextQualityRatings[catalogCandidateKey] = item.soundRating
+          if (legacyCandidate) nextQualityRatings[legacyCandidate.id] = item.soundRating
+        }
+        if (item.performanceRating !== null) {
+          nextPerformanceRatings[catalogCandidateKey] = item.performanceRating
+          if (legacyCandidate) nextPerformanceRatings[legacyCandidate.id] = item.performanceRating
+        }
+        nextNotes[catalogCandidateKey] = item.reviewNote
+        if (legacyCandidate) nextNotes[legacyCandidate.id] = item.reviewNote
+        nextEmotions[catalogPieceKey] = item.confirmedEmotions
+        if (legacyPiece) nextEmotions[legacyPiece.id] = item.confirmedEmotions
+        if (item.reviewRejected) {
+          nextRejected[catalogCandidateKey] = true
+          if (legacyCandidate) nextRejected[legacyCandidate.id] = true
+        } else {
+          delete nextRejected[catalogCandidateKey]
+          if (legacyCandidate) delete nextRejected[legacyCandidate.id]
+        }
+        changed = true
+        continue
+      }
+
+      const localPieceRating = legacyPiece ? pieceRatings[legacyPiece.id] : pieceRatings[catalogPieceKey]
+      const localSoundRating = legacyCandidate ? qualityRatings[legacyCandidate.id] : qualityRatings[catalogCandidateKey]
+      const localPerformanceRating = legacyCandidate ? performanceRatings[legacyCandidate.id] : performanceRatings[catalogCandidateKey]
+      const localNote = legacyCandidate ? notes[legacyCandidate.id] : notes[catalogCandidateKey]
+      const localEmotions = legacyPiece ? confirmedEmotions[legacyPiece.id] : confirmedEmotions[catalogPieceKey]
+      const localRejected = legacyCandidate ? rejected[legacyCandidate.id] : rejected[catalogCandidateKey]
+
+      if (item.rating !== null) {
+        nextPieceRatings[catalogPieceKey] = item.rating
+        if (legacyPiece && localPieceRating === undefined) nextPieceRatings[legacyPiece.id] = item.rating
+      } else if (localPieceRating !== undefined) {
+        nextPieceRatings[catalogPieceKey] = localPieceRating
+      }
+      if (item.soundRating !== null) {
+        nextQualityRatings[catalogCandidateKey] = item.soundRating
+        if (legacyCandidate && localSoundRating === undefined) nextQualityRatings[legacyCandidate.id] = item.soundRating
+      } else if (localSoundRating !== undefined) {
+        nextQualityRatings[catalogCandidateKey] = localSoundRating
+      }
+      if (item.performanceRating !== null) {
+        nextPerformanceRatings[catalogCandidateKey] = item.performanceRating
+        if (legacyCandidate && localPerformanceRating === undefined) nextPerformanceRatings[legacyCandidate.id] = item.performanceRating
+      } else if (localPerformanceRating !== undefined) {
+        nextPerformanceRatings[catalogCandidateKey] = localPerformanceRating
+      }
+      if (item.reviewNote) {
+        nextNotes[catalogCandidateKey] = item.reviewNote
+        if (legacyCandidate && !localNote) nextNotes[legacyCandidate.id] = item.reviewNote
+      } else if (localNote) {
+        nextNotes[catalogCandidateKey] = localNote
+      }
+      if (item.confirmedEmotions.length) {
+        nextEmotions[catalogPieceKey] = item.confirmedEmotions
+        if (legacyPiece && !(localEmotions || []).length) nextEmotions[legacyPiece.id] = item.confirmedEmotions
+      } else if ((localEmotions || []).length) {
+        nextEmotions[catalogPieceKey] = localEmotions || []
+      }
+      if (item.reviewRejected) {
+        nextRejected[catalogCandidateKey] = true
+        if (legacyCandidate && !localRejected) nextRejected[legacyCandidate.id] = true
+      } else if (localRejected) {
+        nextRejected[catalogCandidateKey] = true
+      }
+
+      const hasLegacyReview = localPieceRating !== undefined
+        || localSoundRating !== undefined
+        || localPerformanceRating !== undefined
+        || Boolean(localNote)
+        || Boolean((localEmotions || []).length)
+        || Boolean(localRejected)
+
+      if (hasLegacyReview && legacyPiece && legacyCandidate) {
+        const queue = reviewQueue()
+        queue[item.sourcePage] = {
+          sourcePage:item.sourcePage,
+          pieceRating:item.rating ?? localPieceRating ?? null,
+          soundRating:item.soundRating ?? localSoundRating ?? null,
+          performanceRating:item.performanceRating ?? localPerformanceRating ?? null,
+          note:item.reviewNote || localNote || '',
+          confirmedEmotions:item.confirmedEmotions.length ? item.confirmedEmotions : localEmotions || [],
+          rejected:item.reviewRejected || Boolean(localRejected),
+          updatedAt:Date.now(),
+        }
+        saveLocal(REVIEW_SYNC_QUEUE_KEY, queue)
+      }
+      changed = true
+    }
+
+    if (changed) {
+      setPieceRatings(nextPieceRatings)
+      setQualityRatings(nextQualityRatings)
+      setPerformanceRatings(nextPerformanceRatings)
+      setNotes(nextNotes)
+      setConfirmedEmotions(nextEmotions)
+      setRejected(nextRejected)
+      saveLocal(PIECE_RATING_KEY, nextPieceRatings)
+      saveLocal(QUALITY_KEY, nextQualityRatings)
+      saveLocal(PERFORMANCE_KEY, nextPerformanceRatings)
+      saveLocal(NOTE_KEY, nextNotes)
+      saveLocal(CONFIRMED_EMOTION_KEY, nextEmotions)
+      saveLocal(REJECTED_KEY, nextRejected)
+    }
+  }
+
   function inferredEmotions(modality: Modality): Emotion[] {
     if (modality === 'Ambient') return ['Wonder','Mystery','Vastness']
     if (modality === 'Game' || modality === '8-bit') return ['Calling','Adventure','Triumph']
@@ -261,7 +489,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       const rows = (Array.isArray(data) ? data : []) as Array<{
         id:string; composer:string; work_title:string; movement_title?:string | null; performer?:string | null;
         source_name?:string | null; source_url:string; recording_url?:string | null; license?:string | null;
-        rights_verified?:boolean; rating?:number | null; taste_notes?:string | null
+        rights_verified?:boolean; rating?:number | null; sound_rating?:number | null; performance_rating?:number | null;
+        review_note?:string | null; confirmed_emotions?:string[] | null; review_rejected?:boolean | null;
+        review_updated_at?:string | null; taste_notes?:string | null
       }>
       const incoming: CatalogItem[] = rows.map(row => ({
         id:row.id,
@@ -275,15 +505,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         description:row.taste_notes || '',
         rightsVerified:Boolean(row.rights_verified),
         rating:typeof row.rating === 'number' && row.rating >= 0 && row.rating <= 3 ? row.rating as Rating : null,
+        soundRating:typeof row.sound_rating === 'number' && row.sound_rating >= 0 && row.sound_rating <= 3 ? row.sound_rating as Rating : null,
+        performanceRating:typeof row.performance_rating === 'number' && row.performance_rating >= 0 && row.performance_rating <= 3 ? row.performance_rating as Rating : null,
+        reviewNote:row.review_note || '',
+        confirmedEmotions:Array.isArray(row.confirmed_emotions) ? row.confirmed_emotions.filter((emotion): emotion is Emotion => emotions.includes(emotion as Emotion)) : [],
+        reviewRejected:Boolean(row.review_rejected),
+        reviewUpdatedAt:row.review_updated_at || null,
       }))
       setCatalog(incoming)
-      setPieceRatings(currentRatings => {
-        const next = { ...currentRatings }
-        for (const item of incoming) {
-          if (item.rating !== null) next['catalog:' + item.id] = item.rating
-        }
-        return next
-      })
+      hydrateAndBackfillReviews(incoming)
+      void flushReviewSyncQueue(incoming)
       setMessage(incoming.length ? 'Loaded ' + incoming.length + ' curated tracks from the production library.' : 'The curated library is empty.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load curated music library.')
@@ -484,26 +715,14 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return pieceId.startsWith('catalog:') ? pieceId.slice('catalog:'.length) : null
   }
 
-  async function persistCatalogRating(catalogId: string, value: Rating) {
-    try {
-      const { error } = await supabase.rpc('lab_music_library_rate', { pin, music_id: catalogId, rating_value:value })
-      if (error) throw error
-      setMessage('Rating saved.')
-    } catch {
-      setMessage('Rating saved on this device for the preview. Database sync will activate with the rating-writer migration.')
-    }
-  }
-
   function ratePiece(value: Rating) {
     const next = { ...pieceRatings, [piece.id]: value }
     setPieceRatings(next)
     saveLocal(PIECE_RATING_KEY, next)
 
     const catalogId = catalogIdForPiece(piece.id)
-    if (catalogId) {
-      setCatalog(items => items.map(item => item.id === catalogId ? { ...item, rating:value } : item))
-      void persistCatalogRating(catalogId, value)
-    }
+    if (catalogId) setCatalog(items => items.map(item => item.id === catalogId ? { ...item, rating:value } : item))
+    queueReviewSync(piece.id, current.id, current.sourcePage, { pieceRating:value })
   }
 
   function onListenTouchStart(event: TouchEvent<HTMLElement>) {
@@ -533,6 +752,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const next = { ...qualityRatings, [current.id]: value }
     setQualityRatings(next)
     saveLocal(QUALITY_KEY, next)
+    queueReviewSync(piece.id, current.id, current.sourcePage, { soundRating:value })
   }
 
   function ratePerformance(value: Rating) {
@@ -540,11 +760,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     setPerformanceRatings(nextRatings)
     saveLocal(PERFORMANCE_KEY, nextRatings)
 
-    if (value <= 1) {
-      const nextRejected = { ...rejected, [current.id]: true }
-      setRejected(nextRejected)
-      saveLocal(REJECTED_KEY, nextRejected)
+    const shouldReject = value <= 1
+    const nextRejected = { ...rejected }
+    if (shouldReject) nextRejected[current.id] = true
+    else delete nextRejected[current.id]
+    setRejected(nextRejected)
+    saveLocal(REJECTED_KEY, nextRejected)
+    queueReviewSync(piece.id, current.id, current.sourcePage, { performanceRating:value, rejected:shouldReject })
 
+    if (shouldReject) {
       const remaining = allCandidates.filter(candidate =>
         candidate.modality === current.modality &&
         candidate.id !== current.id &&
@@ -574,12 +798,14 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const next = { ...confirmedEmotions, [piece.id]: nextList }
     setConfirmedEmotions(next)
     saveLocal(CONFIRMED_EMOTION_KEY, next)
+    queueReviewSync(piece.id, current.id, current.sourcePage, { confirmedEmotions:nextList })
   }
 
   function saveNote(value: string) {
     const next = { ...notes, [current.id]: value }
     setNotes(next)
     saveLocal(NOTE_KEY, next)
+    queueReviewSync(piece.id, current.id, current.sourcePage, { note:value }, 700)
   }
 
   async function toggleRecording() {
@@ -587,6 +813,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!recording) {
       try {
         recordingCandidateRef.current = current.id
+        recordingPieceRef.current = piece.id
+        recordingSourcePageRef.current = current.sourcePage
         recordingRef.current = await startRecordingSession()
         setRecording(true)
         setMessage('Recording note… tap again when finished.')
@@ -598,9 +826,13 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
     const session = recordingRef.current
     const targetId = recordingCandidateRef.current
-    if (!session || !targetId) return
+    const targetPieceId = recordingPieceRef.current
+    const targetSourcePage = recordingSourcePageRef.current
+    if (!session || !targetId || !targetPieceId || !targetSourcePage) return
     recordingRef.current = null
     recordingCandidateRef.current = null
+    recordingPieceRef.current = null
+    recordingSourcePageRef.current = null
     setRecording(false)
     setTranscribing(true)
     setMessage('Transcribing…')
@@ -620,6 +852,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       const next = { ...notes, [targetId]: nextText }
       setNotes(next)
       saveLocal(NOTE_KEY, next)
+      queueReviewSync(targetPieceId, targetId, targetSourcePage, { note:nextText })
       setMessage('Voice note added.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Transcription failed.')
@@ -646,6 +879,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   useEffect(() => {
     if (mode === 'browse' && !catalog.length && !catalogLoading) void loadCatalog()
   }, [mode])
+
+  useEffect(() => {
+    void loadCatalog()
+    const syncWhenOnline = () => void flushReviewSyncQueue()
+    window.addEventListener('online', syncWhenOnline)
+    return () => {
+      window.removeEventListener('online', syncWhenOnline)
+      if (reviewSyncTimerRef.current) clearTimeout(reviewSyncTimerRef.current)
+    }
+  }, [])
 
   function toggleInterest(value: string) {
     const next = interests.includes(value) ? interests.filter(item => item !== value) : [...interests, value]
