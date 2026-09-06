@@ -1,0 +1,177 @@
+/* Ashley's Fluency — the tap-through grid of every Thekonym. */
+
+.fluency-shell {
+  display: block;
+  padding: 1rem 1rem 3rem;
+  max-width: 78rem;
+  margin: 0 auto;
+}
+
+.fluency-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.fluency-top h1 {
+  margin: 0.1rem 0 0;
+}
+
+.fluency-exit {
+  flex: none;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fluency-intro {
+  margin: 0 0 0.9rem;
+  opacity: 0.85;
+  line-height: 1.4;
+}
+
+.fluency-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 1rem;
+  font-size: 0.8rem;
+  margin-bottom: 0.7rem;
+}
+
+.fluency-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.fluency-swatch {
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 0.22rem;
+  flex: none;
+  display: inline-block;
+}
+
+.fluency-progress {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin-bottom: 0.85rem;
+}
+
+.fluency-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.fluency-search {
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(128, 128, 128, 0.45);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.fluency-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.fluency-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 0.5rem;
+}
+
+.fluency-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-height: 5.6rem;
+  padding: 0.5rem 0.6rem 0.55rem;
+  border: none;
+  border-radius: 0.55rem;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.08s ease, filter 0.08s ease;
+}
+
+.fluency-tile:active {
+  transform: scale(0.97);
+}
+
+.fluency-tile:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.fluency-tile.is-saving {
+  filter: brightness(0.85);
+}
+
+.fluency-tile.is-failed {
+  box-shadow: inset 0 0 0 3px #111;
+}
+
+.fluency-score {
+  position: absolute;
+  top: 0.28rem;
+  right: 0.45rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.fluency-term {
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  padding-right: 1.1rem;
+}
+
+.fluency-def {
+  font-size: 0.72rem;
+  line-height: 1.25;
+  opacity: 0.92;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.fluency-failed {
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Red → orange → yellow → green, with grey for anything untouched. */
+.fluency-unrated { background: #6b7280; color: #ffffff; }
+.fluency-0 { background: #dc2626; color: #ffffff; }
+.fluency-1 { background: #ea580c; color: #ffffff; }
+.fluency-2 { background: #eab308; color: #1f2937; }
+.fluency-3 { background: #16a34a; color: #ffffff; }
+
+@media (max-width: 430px) {
+  .fluency-grid { grid-template-columns: repeat(auto-fill, minmax(7.4rem, 1fr)); }
+  .fluency-tile { min-height: 5.1rem; }
+  .fluency-def { -webkit-line-clamp: 2; line-clamp: 2; }
+}
