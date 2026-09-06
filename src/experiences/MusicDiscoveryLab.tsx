@@ -288,12 +288,12 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         const response = await fetch('/api/music-resolve', {
           method:'POST',
           headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
-          body:JSON.stringify({ sourceUrl:item.sourcePage, sourceName:item.source, title:item.title }),
+          body:JSON.stringify({ sourceUrl:playableItem.sourcePage, sourceName:playableItem.source, title:playableItem.title }),
         })
         const result = await response.json() as { audioUrl?:string; error?:string }
         if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
         playable = { ...item, audioUrl:result.audioUrl }
-        setCatalog(currentItems => currentItems.map(row => row.id === item.id ? playable : row))
+        setCatalog(currentItems => currentItems.map(row => row.id === playableItem.id ? playable : row))
       } catch (error) {
         setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
         return
@@ -552,7 +552,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const filteredCatalog = catalog.filter(item => {
     const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
-    const matchesModality = catalogModality === 'All' || item.modality === catalogModality
+    const matchesModality = catalogModality === 'All' || playableItem.modality === catalogModality
     return matchesSearch && matchesModality
   })
 
@@ -682,7 +682,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       </div>
       <div className="md-catalog-list">
         {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => adoptCatalogItem(item)}>
-          <span className="md-catalog-play">{item.audioUrl ? '▶' : '↗'}</span>
+          <span className="md-catalog-play">{item.audioUrl ? '▶' : '▶'}</span>
           <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
           <span className="md-catalog-source">{item.source}</span>
         </button>)}
