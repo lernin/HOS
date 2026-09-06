@@ -58,8 +58,8 @@ export function ConceptInteractionReview({pin,onExit}:Props){
   const row=visible[idx]
   useEffect(()=>setNote(row?.review_note||''),[row?.id])
 
-  async function save(conf?:number,newNote?:string){
-    if(!row)return false
+  async function save(conf?:number,newNote?:string,applyLocal=true){
+    if(!row)return null
     const {data,error}=await supabase.rpc('lab_concept_interaction_review',{
       pin,
       interaction_id:row.id,
@@ -67,9 +67,10 @@ export function ConceptInteractionReview({pin,onExit}:Props){
       new_note:newNote??null,
       set_note:newNote!==undefined
     })
-    if(error){setMsg(error.message);return false}
-    setRows(rs=>rs.map(r=>r.id===row.id?data as Row:r))
-    return true
+    if(error){setMsg(error.message);return null}
+    const saved=data as Row
+    if(applyLocal)setRows(rs=>rs.map(r=>r.id===row.id?saved:r))
+    return saved
   }
 
   function go(delta:number){
@@ -79,13 +80,16 @@ export function ConceptInteractionReview({pin,onExit}:Props){
   async function choose(n:number){
     if(!row)return
     const code=row.interaction_code
-    if(!(await save(n)))return
+    const saved=await save(n,undefined,false)
+    if(!saved)return
     setToast(`${code} · confidence ${n} saved`)
     if(advanceTimer.current) window.clearTimeout(advanceTimer.current)
     advanceTimer.current=window.setTimeout(()=>{
+      const remainsVisible=filter==='all'||(filter==='2+'?n>=2:String(n)===filter)
+      if(remainsVisible)setIdx(i=>i+1)
+      setRows(rs=>rs.map(r=>r.id===saved.id?saved:r))
       setToast('')
-      go(1)
-    },850)
+    },900)
   }
 
   async function mic(){
