@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import { supabase } from '../lib/supabase'
-import { captureLegacyMusicBrowserState, refreshLegacyMusicCapture } from './musicLegacyImport'
+import { captureLegacyMusicBrowserState, readLegacyMusicCloudReceipt, refreshLegacyMusicCapture, uploadLegacyMusicInitialCapture } from './musicLegacyImport'
 import './music-discovery-lab.css'
 
 type Rating = 0 | 1 | 2 | 3
@@ -201,6 +201,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const playIntentRef = useRef(false)
   const playRequestRef = useRef(0)
   const [legacyCapture] = useState(() => captureLegacyMusicBrowserState())
+  const [legacyCloudSaved, setLegacyCloudSaved] = useState(() =>
+    readLegacyMusicCloudReceipt()?.capturedAt === legacyCapture.initial?.capturedAt
+  )
 
   const [pieceIndex, setPieceIndex] = useState(0)
   const [catalogPieces, setCatalogPieces] = useState<Piece[]>([])
@@ -238,6 +241,29 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const viableCandidates = useMemo(() => allCandidates.filter(candidate => !rejected[candidate.id]), [allCandidates, rejected])
   const current = viableCandidates.find(candidate => candidate.id === candidateId) || viableCandidates[0] || allCandidates[0]
   const currentModality = current.modality
+
+  useEffect(() => {
+    const initial = legacyCapture.initial
+    if (!initial || initial.summary.keyCount <= 0 || legacyCloudSaved) return
+
+    let cancelled = false
+    const upload = async () => {
+      try {
+        const receipt = await uploadLegacyMusicInitialCapture(pin, initial)
+        if (receipt && !cancelled) setLegacyCloudSaved(true)
+      } catch {
+        // Keep the immutable local copy and retry on the next load or reconnect.
+      }
+    }
+
+    void upload()
+    const onOnline = () => void upload()
+    window.addEventListener('online', onOnline)
+    return () => {
+      cancelled = true
+      window.removeEventListener('online', onOnline)
+    }
+  }, [legacyCapture.initial, legacyCloudSaved, pin])
 
   useEffect(() => {
     const nextPiece = pieceList[Math.min(pieceIndex, pieceList.length - 1)] || pieces[0]
@@ -1487,7 +1513,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <span>CURATED</span>
         <div>
           <span className="md-library-note">Curated production library · ▶ plays reusable/direct audio in-app · ↗ opens copyrighted music at its official source</span>
-          {legacyCapture.latest && legacyCapture.latest.summary.keyCount > 0 && <span className="md-legacy-status">Browser backup ✓ · {legacyCapture.latest.summary.pieceRatings + legacyCapture.latest.summary.soundRatings + legacyCapture.latest.summary.performanceRatings} ratings · {legacyCapture.latest.summary.discoveredRecordings} discovered recordings preserved</span>}
+          {legacyCapture.latest && legacyCapture.latest.summary.keyCount > 0 && <span className="md-legacy-status">Browser backup ✓ · {legacyCloudSaved ? 'Cloud copy ✓' : 'Cloud copy pending…'} · {legacyCapture.latest.summary.pieceRatings + legacyCapture.latest.summary.soundRatings + legacyCapture.latest.summary.performanceRatings} ratings · {legacyCapture.latest.summary.discoveredRecordings} discovered recordings preserved</span>}
         </div>
       </div>
     </section> : <section className="md-hunt">
