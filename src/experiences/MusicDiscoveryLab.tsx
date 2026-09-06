@@ -552,7 +552,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const filteredCatalog = catalog.filter(item => {
     const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
-    const matchesModality = catalogModality === 'All' || playableItem.modality === catalogModality
+    const matchesModality = catalogModality === 'All' || item.modality === catalogModality
     return matchesSearch && matchesModality
   })
 
