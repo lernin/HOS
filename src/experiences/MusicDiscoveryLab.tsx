@@ -11,8 +11,10 @@ type Candidate = {
   performer: string
   modality: Modality
   license: string
-  file: string
+  file?: string
+  audioUrl?: string
   sourcePage: string
+  source?: string
 }
 type Piece = {
   id: string
@@ -33,10 +35,12 @@ const NOTE_KEY = 'hos-music-notes-v4'
 const REJECTED_KEY = 'hos-music-rejected-candidates-v1'
 const MODALITY_STATUS_KEY = 'hos-music-modality-status-v1'
 const CONFIRMED_EMOTION_KEY = 'hos-music-confirmed-emotions-v1'
+const DISCOVERED_KEY = 'hos-music-discovered-candidates-v1'
 const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
 
 const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
+const candidateAudio = (candidate: Candidate) => candidate.audioUrl || (candidate.file ? commonsAudio(candidate.file) : '')
 
 const pieces: Piece[] = [
   {
@@ -136,6 +140,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [rejected, setRejected] = useState<Record<string, boolean>>(() => loadObject(REJECTED_KEY, {}))
   const [modalityStatus, setModalityStatus] = useState<Record<string, ModalityStatus>>(() => loadObject(MODALITY_STATUS_KEY, {}))
   const [confirmedEmotions, setConfirmedEmotions] = useState<Record<string, Emotion[]>>(() => loadObject(CONFIRMED_EMOTION_KEY, {}))
+  const [discovered, setDiscovered] = useState<Record<string, Candidate[]>>(() => loadObject(DISCOVERED_KEY, {}))
   const [interests, setInterests] = useState<string[]>(() => loadObject(INTEREST_KEY, ['Beautiful orchestral','Ambient game','Piano']))
   const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
   const [mode, setMode] = useState<'listen'|'hunt'>('listen')
@@ -147,14 +152,17 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [message, setMessage] = useState('')
 
   const piece = pieces[pieceIndex]
-  const viableCandidates = useMemo(() => piece.candidates.filter(candidate => !rejected[candidate.id]), [piece, rejected])
-  const current = viableCandidates.find(candidate => candidate.id === candidateId) || viableCandidates[0] || piece.candidates[0]
+  const allCandidates = useMemo(() => [...piece.candidates, ...(discovered[piece.id] || [])], [piece, discovered])
+  const viableCandidates = useMemo(() => allCandidates.filter(candidate => !rejected[candidate.id]), [allCandidates, rejected])
+  const current = viableCandidates.find(candidate => candidate.id === candidateId) || viableCandidates[0] || allCandidates[0]
   const currentModality = current.modality
 
   useEffect(() => {
-    const next = pieces[pieceIndex].candidates.find(candidate => !rejected[candidate.id]) || pieces[pieceIndex].candidates[0]
-    setCandidateId(next.id)
-  }, [pieceIndex])
+    const nextPiece = pieces[pieceIndex]
+    const candidates = [...nextPiece.candidates, ...(discovered[nextPiece.id] || [])]
+    const next = candidates.find(candidate => !rejected[candidate.id]) || candidates[0]
+    if (next) setCandidateId(next.id)
+  }, [pieceIndex, discovered, rejected])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -181,7 +189,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const audio = audioRef.current
     if (!audio || !current) return
     audio.pause()
-    audio.src = commonsAudio(current.file)
+    audio.src = candidateAudio(current)
     audio.load()
     setPlaying(false)
     setCurrentTime(0)
@@ -194,7 +202,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   function candidateListFor(modality: Modality) {
-    return piece.candidates.filter(candidate => candidate.modality === modality && !rejected[candidate.id])
+    return allCandidates.filter(candidate => candidate.modality === modality && !rejected[candidate.id])
   }
 
   function modalityVisualStatus(modality: Modality) {
@@ -203,20 +211,85 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return modalityStatus[modalityKey(piece.id, modality)] || 'unsearched'
   }
 
+  function bestCandidate(list: Candidate[]) {
+    return [...list].sort((a, b) => (performanceRatings[b.id] ?? -1) - (performanceRatings[a.id] ?? -1) || (qualityRatings[b.id] ?? -1) - (qualityRatings[a.id] ?? -1))[0]
+  }
+
+  async function runHunt(modality: Modality) {
+    const key = modalityKey(piece.id, modality)
+    if (modalityStatus[key] === 'requested') return
+    const requestedStatus = { ...modalityStatus, [key]: 'requested' as ModalityStatus }
+    setModalityStatus(requestedStatus)
+    saveLocal(MODALITY_STATUS_KEY, requestedStatus)
+    setMessage('Hunting for a reusable ' + modality.toLowerCase() + ' version…')
+
+    try {
+      const response = await fetch('/api/music-hunt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-review-pin': pin },
+        body: JSON.stringify({
+          title: piece.title,
+          composer: piece.composer,
+          modality,
+          exclude: allCandidates.map(candidate => candidate.sourcePage),
+        }),
+      })
+      const result = await response.json() as { candidates?: Array<{ id: string; performer: string; license: string; audioUrl: string; sourcePage: string; source: string }>; error?: string }
+      if (!response.ok) throw new Error(result.error || 'Music search failed.')
+
+      const known = new Set(allCandidates.map(candidate => candidate.sourcePage))
+      const fresh = (result.candidates || []).filter(candidate => candidate.audioUrl && candidate.sourcePage && !known.has(candidate.sourcePage))
+      if (!fresh.length) {
+        const notFound = { ...requestedStatus, [key]: 'notfound' as ModalityStatus }
+        setModalityStatus(notFound)
+        saveLocal(MODALITY_STATUS_KEY, notFound)
+        setMessage('No suitable reusable ' + modality.toLowerCase() + ' version found this time.')
+        return
+      }
+
+      const newCandidates: Candidate[] = fresh.slice(0, 5).map(candidate => ({
+        id: candidate.id,
+        performer: candidate.performer || 'Unknown performer',
+        modality,
+        license: candidate.license,
+        audioUrl: candidate.audioUrl,
+        sourcePage: candidate.sourcePage,
+        source: candidate.source,
+      }))
+      const nextDiscovered = { ...discovered, [piece.id]: [...(discovered[piece.id] || []), ...newCandidates] }
+      setDiscovered(nextDiscovered)
+      saveLocal(DISCOVERED_KEY, nextDiscovered)
+      const cleared = { ...requestedStatus }
+      delete cleared[key]
+      setModalityStatus(cleared)
+      saveLocal(MODALITY_STATUS_KEY, cleared)
+      setCandidateId(newCandidates[0].id)
+      setMessage('Found ' + newCandidates.length + ' new ' + modality.toLowerCase() + (newCandidates.length === 1 ? ' candidate.' : ' candidates.'))
+    } catch (error) {
+      const reset = { ...requestedStatus }
+      delete reset[key]
+      setModalityStatus(reset)
+      saveLocal(MODALITY_STATUS_KEY, reset)
+      setMessage(error instanceof Error ? error.message : 'Music search failed.')
+    }
+  }
+
   function chooseModality(modality: Modality) {
     const list = candidateListFor(modality)
-    if (list.length) {
-      const currentIndex = list.findIndex(candidate => candidate.id === current.id)
-      const next = list[(currentIndex + 1 + list.length) % list.length]
-      setCandidateId(next.id)
-      setMessage(list.length > 1 ? 'Switched to another retained ' + modality.toLowerCase() + ' version.' : '')
+    if (!list.length) {
+      void runHunt(modality)
       return
     }
-    const key = modalityKey(piece.id, modality)
-    const next = { ...modalityStatus, [key]: 'requested' as ModalityStatus }
-    setModalityStatus(next)
-    saveLocal(MODALITY_STATUS_KEY, next)
-    setMessage(modality + ' hunt requested. No result will be shown until a real candidate is found.')
+    if (current.modality !== modality) {
+      const best = bestCandidate(list)
+      if (best) setCandidateId(best.id)
+      setMessage('')
+      return
+    }
+    const currentIndex = list.findIndex(candidate => candidate.id === current.id)
+    const next = list[(currentIndex + 1 + list.length) % list.length]
+    setCandidateId(next.id)
+    setMessage(list.length > 1 ? 'Switched to another retained ' + modality.toLowerCase() + ' version.' : '')
   }
 
   async function togglePlay() {
@@ -265,7 +338,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       setRejected(nextRejected)
       saveLocal(REJECTED_KEY, nextRejected)
 
-      const remaining = piece.candidates.filter(candidate =>
+      const remaining = allCandidates.filter(candidate =>
         candidate.modality === current.modality &&
         candidate.id !== current.id &&
         !nextRejected[candidate.id]
@@ -275,11 +348,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         setMessage('Rejected this performance. Showing another retained ' + current.modality.toLowerCase() + ' version.')
       } else {
         if (pieceRatings[piece.id] === 3) {
-          const key = modalityKey(piece.id, current.modality)
-          const nextStatus = { ...modalityStatus, [key]: 'requested' as ModalityStatus }
-          setModalityStatus(nextStatus)
-          saveLocal(MODALITY_STATUS_KEY, nextStatus)
-          setMessage('Rejected this performance. Replacement ' + current.modality.toLowerCase() + ' hunt requested.')
+          setMessage('Rejected this performance. Searching for a replacement ' + current.modality.toLowerCase() + ' version…')
+          void runHunt(current.modality)
         } else {
           setMessage('Rejected this performance. Tap ' + current.modality + ' to request a replacement.')
         }
@@ -377,19 +447,18 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
           const list = candidateListFor(modality)
           const status = modalityVisualStatus(modality)
           const active = currentModality === modality && list.some(candidate => candidate.id === current.id)
-          return <button
-            key={modality}
-            className={'status-' + status + (active ? ' active' : '')}
-            onClick={() => chooseModality(modality)}
-          >
-            <strong>{modality}</strong>
-            <span>{status === 'available' ? (list.length > 1 ? list.length + ' versions' : 'ready') : status === 'requested' ? 'queued' : status === 'notfound' ? 'not found' : 'tap to hunt'}</span>
-          </button>
+          return <div key={modality} className={'md-modality-cell status-' + status + (active ? ' active' : '')}>
+            <button className="md-modality-main" onClick={() => chooseModality(modality)} disabled={status === 'requested'}>
+              <strong>{modality}</strong>
+              <span>{status === 'available' ? (list.length > 1 ? list.length + ' versions' : 'ready') : status === 'requested' ? 'hunting…' : status === 'notfound' ? 'not found' : 'tap to hunt'}</span>
+            </button>
+            {status === 'available' && <button className="md-modality-hunt" onClick={() => void runHunt(modality)} aria-label={'Find another ' + modality + ' version'} title={'Find another ' + modality + ' version'}>＋</button>}
+          </div>
         })}
       </div>
 
       <div className="md-title">
-        <small>{piece.composer} · {current.modality} · {current.performer}</small>
+        <small>{piece.composer} · {current.modality} · {current.performer}{current.source ? ' · ' + current.source : ''}</small>
         <h1>{piece.title}</h1>
         <p>{piece.mood}</p>
       </div>
