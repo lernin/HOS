@@ -1,3 +1,4 @@
+import { supabase } from '../lib/supabase'
 export type LegacyMusicCaptureSummary = {
   keyCount: number
   pieceRatings: number
@@ -123,4 +124,54 @@ export function readLegacyMusicCapture() {
 
 export function refreshLegacyMusicCapture() {
   return captureLegacyMusicBrowserState().latest
+}
+
+
+export const LEGACY_MUSIC_CLOUD_RECEIPT_KEY = IMPORT_PREFIX + 'cloud-receipt-v1'
+
+export type LegacyMusicCloudReceipt = {
+  snapshotId: string
+  payloadHash: string
+  capturedAt: string
+  uploadedAt: string
+}
+
+export function readLegacyMusicCloudReceipt(): LegacyMusicCloudReceipt | null {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(LEGACY_MUSIC_CLOUD_RECEIPT_KEY)
+    if (!raw) return null
+    const value = JSON.parse(raw) as LegacyMusicCloudReceipt
+    return value?.snapshotId && value?.payloadHash && value?.capturedAt ? value : null
+  } catch {
+    return null
+  }
+}
+
+export async function uploadLegacyMusicInitialCapture(pin: string, capture: LegacyMusicCapture) {
+  if (capture.summary.keyCount <= 0) return null
+
+  const existing = readLegacyMusicCloudReceipt()
+  if (existing?.capturedAt === capture.capturedAt) return existing
+
+  const { data, error } = await supabase.rpc('lab_music_legacy_snapshot_write', {
+    pin,
+    captured_at_value:capture.capturedAt,
+    origin_value:capture.origin,
+    payload_value:capture.keys,
+    summary_value:capture.summary,
+  })
+  if (error) throw error
+
+  const result = data as { id?: string; payload_hash?: string } | null
+  if (!result?.id || !result?.payload_hash) throw new Error('Legacy music backup did not return a receipt.')
+
+  const receipt: LegacyMusicCloudReceipt = {
+    snapshotId:result.id,
+    payloadHash:result.payload_hash,
+    capturedAt:capture.capturedAt,
+    uploadedAt:new Date().toISOString(),
+  }
+  window.localStorage.setItem(LEGACY_MUSIC_CLOUD_RECEIPT_KEY, JSON.stringify(receipt))
+  return receipt
 }
