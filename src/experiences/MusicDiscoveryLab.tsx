@@ -399,6 +399,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
           reviewRejected:synced.rejected,
           reviewUpdatedAt:new Date().toISOString(),
         } : currentItem))
+        if (synced.rejected) {
+          setTrashedCatalogIds(current => {
+            if (!current[item.id]) return current
+            const next = { ...current }
+            delete next[item.id]
+            saveLocal(TRASHED_CATALOG_KEY, next)
+            return next
+          })
+        }
       }
     } catch {
       setMessage('Saved locally · database sync pending.')
