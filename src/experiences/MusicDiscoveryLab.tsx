@@ -3,7 +3,7 @@ import { startRecordingSession, type RecordingSession } from '../lib/voiceCaptur
 import { supabase } from '../lib/supabase'
 import './music-discovery-lab.css'
 
-type Rating = 0 | 1 | 2 | 3
+type Rating = 1 | 2 | 3 | 4 | 5
 type Modality = 'Piano' | 'Orchestral' | 'Jazz' | 'Guitar' | 'Synth' | 'Ambient' | 'Game' | '8-bit'
 type Emotion = 'Hearth' | 'Wonder' | 'Calling' | 'Adventure' | 'Guide' | 'Mystery' | 'Vastness' | 'Peril' | 'Homeward' | 'Triumph'
 type ModalityStatus = 'unsearched' | 'requested' | 'notfound'
@@ -41,13 +41,17 @@ type CatalogItem = {
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
 
-const PIECE_RATING_KEY = 'hos-music-piece-ratings-v1'
-const QUALITY_KEY = 'hos-music-quality-ratings-v2'
-const PERFORMANCE_KEY = 'hos-music-performance-ratings-v2'
+const LEGACY_PIECE_RATING_KEY = 'hos-music-piece-ratings-v1'
+const LEGACY_QUALITY_KEY = 'hos-music-quality-ratings-v2'
+const LEGACY_PERFORMANCE_KEY = 'hos-music-performance-ratings-v2'
+const PIECE_RATING_KEY = 'hos-music-piece-ratings-v2'
+const QUALITY_KEY = 'hos-music-quality-ratings-v3'
+const PERFORMANCE_KEY = 'hos-music-performance-ratings-v3'
 const NOTE_KEY = 'hos-music-notes-v4'
 const REJECTED_KEY = 'hos-music-rejected-candidates-v1'
 const MODALITY_STATUS_KEY = 'hos-music-modality-status-v1'
 const CONFIRMED_EMOTION_KEY = 'hos-music-confirmed-emotions-v1'
+const SUPPRESSED_EMOTION_KEY = 'hos-music-suppressed-emotions-v1'
 const DISCOVERED_KEY = 'hos-music-discovered-candidates-v1'
 const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
@@ -131,6 +135,17 @@ const pieces: Piece[] = [
 function loadObject<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || '') as T } catch { return fallback }
 }
+function loadMigratedRatings(newKey: string, legacyKey: string): Record<string, Rating> {
+  const current = loadObject<Record<string, Rating>>(newKey, {})
+  if (Object.keys(current).length) return current
+  const legacy = loadObject<Record<string, number>>(legacyKey, {})
+  const migrated = Object.fromEntries(Object.entries(legacy).map(([key, value]) => {
+    const mapped: Rating = value <= 0 ? 1 : value === 1 ? 2 : value === 2 ? 4 : 5
+    return [key, mapped]
+  })) as Record<string, Rating>
+  if (Object.keys(migrated).length) localStorage.setItem(newKey, JSON.stringify(migrated))
+  return migrated
+}
 function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
   return Math.floor(seconds / 60) + ':' + Math.floor(seconds % 60).toString().padStart(2, '0')
@@ -147,13 +162,14 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [pieceIndex, setPieceIndex] = useState(0)
   const [catalogPieces, setCatalogPieces] = useState<Piece[]>([])
   const [candidateId, setCandidateId] = useState(pieces[0].candidates[0].id)
-  const [pieceRatings, setPieceRatings] = useState<Record<string, Rating>>(() => loadObject(PIECE_RATING_KEY, {}))
-  const [qualityRatings, setQualityRatings] = useState<Record<string, Rating>>(() => loadObject(QUALITY_KEY, {}))
-  const [performanceRatings, setPerformanceRatings] = useState<Record<string, Rating>>(() => loadObject(PERFORMANCE_KEY, {}))
+  const [pieceRatings, setPieceRatings] = useState<Record<string, Rating>>(() => loadMigratedRatings(PIECE_RATING_KEY, LEGACY_PIECE_RATING_KEY))
+  const [qualityRatings, setQualityRatings] = useState<Record<string, Rating>>(() => loadMigratedRatings(QUALITY_KEY, LEGACY_QUALITY_KEY))
+  const [performanceRatings, setPerformanceRatings] = useState<Record<string, Rating>>(() => loadMigratedRatings(PERFORMANCE_KEY, LEGACY_PERFORMANCE_KEY))
   const [notes, setNotes] = useState<Record<string, string>>(() => loadObject(NOTE_KEY, {}))
   const [rejected, setRejected] = useState<Record<string, boolean>>(() => loadObject(REJECTED_KEY, {}))
   const [modalityStatus, setModalityStatus] = useState<Record<string, ModalityStatus>>(() => loadObject(MODALITY_STATUS_KEY, {}))
   const [confirmedEmotions, setConfirmedEmotions] = useState<Record<string, Emotion[]>>(() => loadObject(CONFIRMED_EMOTION_KEY, {}))
+  const [suppressedEmotions, setSuppressedEmotions] = useState<Record<string, Emotion[]>>(() => loadObject(SUPPRESSED_EMOTION_KEY, {}))
   const [discovered, setDiscovered] = useState<Record<string, Candidate[]>>(() => loadObject(DISCOVERED_KEY, {}))
   const [interests, setInterests] = useState<string[]>(() => loadObject(INTEREST_KEY, ['Beautiful orchestral','Ambient game','Piano']))
   const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
@@ -162,6 +178,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
+  const [catalogGradeFilter, setCatalogGradeFilter] = useState<'All' | 'Ungraded' | 'Graded'>('All')
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -459,11 +476,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     setPerformanceRatings(nextRatings)
     saveLocal(PERFORMANCE_KEY, nextRatings)
 
-    if (value <= 1) {
+    if (value === 1) {
       const nextRejected = { ...rejected, [current.id]: true }
       setRejected(nextRejected)
       saveLocal(REJECTED_KEY, nextRejected)
-
       const remaining = allCandidates.filter(candidate =>
         candidate.modality === current.modality &&
         candidate.id !== current.id &&
@@ -476,23 +492,36 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       return
     }
 
-    if (value === 2) {
-      setMessage('Kept this version. Hunting for another ' + current.modality.toLowerCase() + ' version to compare…')
+    if (value <= 4) {
+      setMessage(value === 4 ? 'Good version saved. Hunting for another to compare…' : 'Rating saved. Hunting for a stronger version…')
       void runHunt(current.modality)
       return
     }
 
-    setMessage('Preferred version saved.')
+    setMessage('Favorite performance saved.')
   }
 
   function toggleEmotion(emotion: Emotion) {
     const currentConfirmed = confirmedEmotions[piece.id] || []
-    const nextList = currentConfirmed.includes(emotion)
-      ? currentConfirmed.filter(item => item !== emotion)
-      : [...currentConfirmed, emotion]
-    const next = { ...confirmedEmotions, [piece.id]: nextList }
-    setConfirmedEmotions(next)
-    saveLocal(CONFIRMED_EMOTION_KEY, next)
+    const currentSuppressed = suppressedEmotions[piece.id] || []
+    if (currentConfirmed.includes(emotion)) {
+      const nextConfirmed = { ...confirmedEmotions, [piece.id]: currentConfirmed.filter(item => item !== emotion) }
+      const nextSuppressed = { ...suppressedEmotions, [piece.id]: [...new Set([...currentSuppressed, emotion])] }
+      setConfirmedEmotions(nextConfirmed)
+      setSuppressedEmotions(nextSuppressed)
+      saveLocal(CONFIRMED_EMOTION_KEY, nextConfirmed)
+      saveLocal(SUPPRESSED_EMOTION_KEY, nextSuppressed)
+      return
+    }
+    if (currentSuppressed.includes(emotion)) {
+      const nextSuppressed = { ...suppressedEmotions, [piece.id]: currentSuppressed.filter(item => item !== emotion) }
+      setSuppressedEmotions(nextSuppressed)
+      saveLocal(SUPPRESSED_EMOTION_KEY, nextSuppressed)
+      return
+    }
+    const nextConfirmed = { ...confirmedEmotions, [piece.id]: [...currentConfirmed, emotion] }
+    setConfirmedEmotions(nextConfirmed)
+    saveLocal(CONFIRMED_EMOTION_KEY, nextConfirmed)
   }
 
   function saveNote(value: string) {
@@ -549,11 +578,18 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
+  function catalogFullyGraded(item: CatalogItem) {
+    const pieceId = 'catalog:' + item.id
+    const candidateId = 'catalog-candidate:' + item.id
+    return Boolean(pieceRatings[pieceId] && qualityRatings[candidateId] && performanceRatings[candidateId])
+  }
   const filteredCatalog = catalog.filter(item => {
     const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
     const matchesModality = catalogModality === 'All' || item.modality === catalogModality
-    return matchesSearch && matchesModality
+    const graded = catalogFullyGraded(item)
+    const matchesGrade = catalogGradeFilter === 'All' || (catalogGradeFilter === 'Graded' ? graded : !graded)
+    return matchesSearch && matchesModality && matchesGrade
   })
 
   useEffect(() => {
@@ -602,10 +638,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <div>
           {currentVersions.map((candidate, versionIndex) => {
             const score = performanceRatings[candidate.id]
-            const state = score === 3 ? 'best' : score === 2 ? 'keep' : 'unrated'
+            const state = score === 5 ? 'best' : score === 4 ? 'keep' : 'unrated'
             return <button key={candidate.id} className={'version-' + state + (candidate.id === current.id ? ' active' : '')} onClick={() => setCandidateId(candidate.id)}>
               <b>{versionIndex + 1}</b>
-              <span>{score === 3 ? 'Best' : score === 2 ? 'Keep' : 'Unrated'}</span>
+              <span>{score === 5 ? 'Best' : score === 4 ? 'Keep' : score ? String(score) + '/5' : 'Unrated'}</span>
             </button>
           })}
         </div>
@@ -633,15 +669,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <div className="md-judgments">
         <div className="md-judgment-row">
           <small>PIECE</small>
-          <div className="md-rating">{[[0,'Hate'],[1,'Mild'],[2,'Good'],[3,'Love']].map(([value,label]) => <button key={value} className={pieceRatings[piece.id] === value ? 'selected' : ''} onClick={() => ratePiece(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
+          <div className="md-rating five">{[[1,'Reject'],[2,'Weak'],[3,'Okay'],[4,'Good'],[5,'Love']].map(([value,label]) => <button key={value} className={pieceRatings[piece.id] === value ? 'selected' : ''} onClick={() => ratePiece(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
         </div>
         <div className="md-judgment-row">
           <small>SOUND</small>
-          <div className="md-rating">{[[0,'Awful'],[1,'Weak'],[2,'Good'],[3,'Great']].map(([value,label]) => <button key={value} className={qualityRatings[current.id] === value ? 'selected' : ''} onClick={() => rateQuality(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
+          <div className="md-rating five">{[[1,'Awful'],[2,'Poor'],[3,'Okay'],[4,'Good'],[5,'Great']].map(([value,label]) => <button key={value} className={qualityRatings[current.id] === value ? 'selected' : ''} onClick={() => rateQuality(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
         </div>
         <div className="md-judgment-row">
           <small>PERFORMANCE</small>
-          <div className="md-rating">{[[0,'Reject'],[1,'Reject'],[2,'Keep'],[3,'Best']].map(([value,label]) => <button key={value} className={performanceRatings[current.id] === value ? 'selected' : ''} onClick={() => ratePerformance(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
+          <div className="md-rating five">{[[1,'Reject'],[2,'Weak'],[3,'Okay'],[4,'Keep'],[5,'Best']].map(([value,label]) => <button key={value} className={performanceRatings[current.id] === value ? 'selected' : ''} onClick={() => ratePerformance(value as Rating)}><b>{value}</b><span>{label}</span></button>)}</div>
         </div>
       </div>
 
@@ -649,9 +685,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <small>EMOTIONAL QUALITY</small>
         <div>
           {emotions.map(emotion => {
-            const suggested = piece.aiEmotions.includes(emotion)
+            const suppressed = (suppressedEmotions[piece.id] || []).includes(emotion)
+            const suggested = piece.aiEmotions.includes(emotion) && !suppressed
             const confirmed = (confirmedEmotions[piece.id] || []).includes(emotion)
-            return <button key={emotion} className={(suggested ? 'suggested ' : '') + (confirmed ? 'confirmed' : '')} onClick={() => toggleEmotion(emotion)}>{emotion}</button>
+            return <button key={emotion} className={(suggested ? 'suggested ' : '') + (confirmed ? 'confirmed ' : '') + (suppressed ? 'suppressed' : '')} onClick={() => toggleEmotion(emotion)}>{emotion}</button>
           })}
         </div>
       </div>
@@ -680,12 +717,18 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <div className="md-browse-filters">
         {(['All', ...modalities] as Array<'All' | Modality>).map(value => <button key={value} className={catalogModality === value ? 'active' : ''} onClick={() => setCatalogModality(value)}>{value}</button>)}
       </div>
+      <div className="md-grade-filters">
+        {(['All','Ungraded','Graded'] as const).map(value => <button key={value} className={catalogGradeFilter === value ? 'active' : ''} onClick={() => setCatalogGradeFilter(value)}>{value}</button>)}
+      </div>
       <div className="md-catalog-list">
-        {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => void adoptCatalogItem(item)}>
-          <span className="md-catalog-play">{item.audioUrl ? '▶' : '▶'}</span>
-          <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
-          <span className="md-catalog-source">{item.source}</span>
-        </button>)}
+        {filteredCatalog.map(item => {
+          const graded = catalogFullyGraded(item)
+          return <button key={item.id} className={'md-catalog-item ' + (graded ? 'graded' : 'ungraded')} onClick={() => void adoptCatalogItem(item)}>
+            <span className="md-catalog-play">▶</span>
+            <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
+            <span className={'md-catalog-source ' + (graded ? 'graded' : '')}>{graded ? '✓ graded' : item.source}</span>
+          </button>
+        })}
         {!catalogLoading && !filteredCatalog.length && <p className="md-empty">No matches in this batch. Change the filter or refresh.</p>}
       </div>
       <div className="md-repositories">

@@ -31,3 +31,8 @@
 
 /* Keep player geometry stable while stepping quickly through one- and two-line titles. */
 .md-title h1{min-height:2em;max-height:2em;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+
+.md-rating.five{grid-template-columns:repeat(5,1fr);gap:4px}.md-rating.five button{min-width:0}
+.md-grade-filters{display:flex;gap:5px}.md-grade-filters button{min-height:30px;border:1px solid #ffffff18;border-radius:999px;background:#ffffff05;color:#b9c4bd;padding:5px 9px;font-size:9px}.md-grade-filters button.active{background:#eee8d8;color:#263028;border-color:#eee8d8;font-weight:700}
+.md-catalog-play{background:#f4f1e7!important;color:#263028!important}.md-catalog-item.graded{border-color:#5d9f78}.md-catalog-source.graded{color:#7fc899;font-weight:800}
+.md-emotions button.suppressed{background:transparent;color:#718077;border-color:#ffffff0f;opacity:.6;text-decoration:line-through}
