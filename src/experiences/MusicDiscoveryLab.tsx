@@ -281,11 +281,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   function adoptCatalogItem(item: CatalogItem) {
-    if (!item.audioUrl) {
-      window.open(item.sourcePage, '_blank', 'noopener,noreferrer')
-      setMessage('Opened the official track page. Direct in-app audio has not been pinned for this track yet.')
-      return
-    }
+    const resolvedAudioUrl = item.audioUrl || '/api/music-play?source=' + encodeURIComponent(item.sourcePage)
     const pieceId = 'catalog:' + item.id
     const existingIndex = pieceList.findIndex(candidatePiece => candidatePiece.id === pieceId)
     const candidate: Candidate = {
@@ -293,7 +289,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       performer:item.creator || 'Unknown artist',
       modality:item.modality,
       license:item.license,
-      audioUrl:item.audioUrl,
+      audioUrl:resolvedAudioUrl,
       sourcePage:item.sourcePage,
       source:item.source,
       matchConfidence:'confirmed',
@@ -668,7 +664,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       </div>
       <div className="md-catalog-list">
         {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => adoptCatalogItem(item)}>
-          <span className="md-catalog-play">{item.audioUrl ? '▶' : '↗'}</span>
+          <span className="md-catalog-play">▶</span>
           <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
           <span className="md-catalog-source">{item.source}</span>
         </button>)}
@@ -676,7 +672,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       </div>
       <div className="md-repositories">
         <span>CURATED</span>
-        <div><span className="md-library-note">ChatGPT-curated production library · tap ▶ to listen in-app · ↗ opens official source</span></div>
+        <div><span className="md-library-note">ChatGPT-curated production library · tap any track to listen in HOS · Source ↗ is available from Listen</span></div>
       </div>
     </section> : <section className="md-hunt">
       <div>
