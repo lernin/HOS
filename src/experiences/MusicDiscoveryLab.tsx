@@ -1048,6 +1048,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const catalogId = catalogIdForPiece(piece.id)
     if (catalogId) setCatalog(items => items.map(item => item.id === catalogId ? { ...item, rating:value } : item))
     queueReviewSync(piece.id, current.id, current.sourcePage, { pieceRating:value })
+    if (!maybeFindLovedAlternate(value, qualityRatings[current.id], performanceRatings[current.id])) {
+      setMessage('Piece rating saved.')
+    }
   }
 
   function onListenTouchStart(event: TouchEvent<HTMLElement>) {
@@ -1106,52 +1109,68 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     setQualityRatings(next)
     saveLocal(QUALITY_KEY, next)
     queueReviewSync(piece.id, current.id, current.sourcePage, { soundRating:value })
+    if (!maybeFindLovedAlternate(pieceRatings[piece.id], value, performanceRatings[current.id])) {
+      setMessage('Sound rating saved.')
+    }
   }
 
   function ratePerformance(value: Rating) {
     const nextRatings = { ...performanceRatings, [current.id]: value }
     setPerformanceRatings(nextRatings)
     saveLocal(PERFORMANCE_KEY, nextRatings)
+    queueReviewSync(piece.id, current.id, current.sourcePage, { performanceRating:value })
 
-    const shouldReject = value <= 1
-    const nextRejected = { ...rejected }
-    if (shouldReject) nextRejected[current.id] = true
-    else delete nextRejected[current.id]
-    setRejected(nextRejected)
-    saveLocal(REJECTED_KEY, nextRejected)
-    queueReviewSync(piece.id, current.id, current.sourcePage, { performanceRating:value, rejected:shouldReject })
-
-    if (shouldReject) {
-      const remaining = allCandidates.filter(candidate =>
-        candidate.modality === current.modality &&
-        candidate.id !== current.id &&
-        !nextRejected[candidate.id]
-      )
-      const replacement = bestCandidate(remaining)
-      if (replacement) setCandidateId(replacement.id)
-      setMessage('Rejected this performance. Hunting for another ' + current.modality.toLowerCase() + ' version…')
-      void runHunt(current.modality)
-      return
+    if (!maybeFindLovedAlternate(pieceRatings[piece.id], qualityRatings[current.id], value)) {
+      setMessage(value === 3 ? 'Preferred performance saved.' : 'Performance rating saved.')
     }
-
-    if (value === 2) {
-      setMessage('Kept this version. Hunting for another ' + current.modality.toLowerCase() + ' version to compare…')
-      void runHunt(current.modality)
-      return
-    }
-
-    setMessage('Preferred version saved.')
   }
 
   function toggleEmotion(emotion: Emotion) {
     const currentConfirmed = confirmedEmotions[piece.id] || []
-    const nextList = currentConfirmed.includes(emotion)
-      ? currentConfirmed.filter(item => item !== emotion)
-      : [...currentConfirmed, emotion]
-    const next = { ...confirmedEmotions, [piece.id]: nextList }
-    setConfirmedEmotions(next)
-    saveLocal(CONFIRMED_EMOTION_KEY, next)
-    queueReviewSync(piece.id, current.id, current.sourcePage, { confirmedEmotions:nextList })
+    const currentSuppressed = suppressedEmotions[piece.id] || []
+    const aiSuggested = piece.aiEmotions.includes(emotion)
+
+    if (currentConfirmed.includes(emotion)) {
+      const nextConfirmedList = currentConfirmed.filter(item => item !== emotion)
+      const nextSuppressedList = aiSuggested
+        ? [...new Set([...currentSuppressed, emotion])]
+        : currentSuppressed
+      const nextConfirmed = { ...confirmedEmotions, [piece.id]:nextConfirmedList }
+      const nextSuppressed = { ...suppressedEmotions, [piece.id]:nextSuppressedList }
+      setConfirmedEmotions(nextConfirmed)
+      setSuppressedEmotions(nextSuppressed)
+      saveLocal(CONFIRMED_EMOTION_KEY, nextConfirmed)
+      saveLocal(SUPPRESSED_EMOTION_KEY, nextSuppressed)
+      queueReviewSync(piece.id, current.id, current.sourcePage, { confirmedEmotions:nextConfirmedList })
+      queueSuppressionSync(piece.id, current.sourcePage, nextSuppressedList)
+      return
+    }
+
+    if (currentSuppressed.includes(emotion)) {
+      const nextSuppressedList = currentSuppressed.filter(item => item !== emotion)
+      const nextSuppressed = { ...suppressedEmotions, [piece.id]:nextSuppressedList }
+      setSuppressedEmotions(nextSuppressed)
+      saveLocal(SUPPRESSED_EMOTION_KEY, nextSuppressed)
+      queueSuppressionSync(piece.id, current.sourcePage, nextSuppressedList)
+      return
+    }
+
+    const nextConfirmedList = [...currentConfirmed, emotion]
+    const nextConfirmed = { ...confirmedEmotions, [piece.id]:nextConfirmedList }
+    setConfirmedEmotions(nextConfirmed)
+    saveLocal(CONFIRMED_EMOTION_KEY, nextConfirmed)
+    queueReviewSync(piece.id, current.id, current.sourcePage, { confirmedEmotions:nextConfirmedList })
+  }
+
+  function trashCurrent() {
+    const musicId = catalogIdForPiece(piece.id)
+    const hasZero = pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0
+    if (!musicId || !hasZero) return
+    queueTrashSync(musicId, current.sourcePage)
+    setCatalog(items => items.filter(item => item.id !== musicId))
+    setCatalogPieces(items => items.filter(item => item.id !== piece.id))
+    setMessage('Moved to recoverable trash.')
+    setMode('browse')
   }
 
   function saveNote(value: string) {
