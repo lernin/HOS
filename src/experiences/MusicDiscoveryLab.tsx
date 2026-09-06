@@ -53,9 +53,18 @@ type ReviewSyncEntry = {
   note: string
   confirmedEmotions: Emotion[]
   rejected: boolean
+  dirtyFields?: ReviewField[]
   updatedAt: number
 }
-type ReviewOverrides = Partial<Omit<ReviewSyncEntry, 'sourcePage' | 'updatedAt'>>
+type ReviewOverrides = {
+  pieceRating?: Rating | null
+  soundRating?: Rating | null
+  performanceRating?: Rating | null
+  note?: string
+  confirmedEmotions?: Emotion[]
+  rejected?: boolean
+}
+type ReviewField = keyof ReviewOverrides
 type CatalogFilter = 'New' | 'All' | Modality
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
@@ -274,7 +283,12 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function queueReviewSync(pieceId: string, candidateId: string, sourcePage: string, overrides: ReviewOverrides = {}, delayMs = 0) {
     if (!sourcePage) return
     const queue = reviewQueue()
-    queue[sourcePage] = reviewSnapshot(pieceId, candidateId, sourcePage, overrides)
+    const existing = queue[sourcePage]
+    const dirtyFields = Array.from(new Set<ReviewField>([
+      ...(existing?.dirtyFields || []),
+      ...(Object.keys(overrides) as ReviewField[]),
+    ]))
+    queue[sourcePage] = { ...reviewSnapshot(pieceId, candidateId, sourcePage, overrides), dirtyFields }
     saveLocal(REVIEW_SYNC_QUEUE_KEY, queue)
     if (reviewSyncTimerRef.current) clearTimeout(reviewSyncTimerRef.current)
     reviewSyncTimerRef.current = setTimeout(() => void flushReviewSyncQueue(), delayMs)
@@ -289,15 +303,24 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       for (const [sourcePage, entry] of Object.entries(queued)) {
         const item = items.find(candidate => candidate.sourcePage === sourcePage)
         if (!item) continue
+        const dirty = new Set<ReviewField>(entry.dirtyFields || ['pieceRating','soundRating','performanceRating','note','confirmedEmotions','rejected'])
+        const synced = {
+          pieceRating:dirty.has('pieceRating') ? entry.pieceRating : item.rating,
+          soundRating:dirty.has('soundRating') ? entry.soundRating : item.soundRating,
+          performanceRating:dirty.has('performanceRating') ? entry.performanceRating : item.performanceRating,
+          note:dirty.has('note') ? entry.note : item.reviewNote,
+          confirmedEmotions:dirty.has('confirmedEmotions') ? entry.confirmedEmotions : item.confirmedEmotions,
+          rejected:dirty.has('rejected') ? entry.rejected : item.reviewRejected,
+        }
         const { error } = await supabase.rpc('lab_music_library_review_write', {
           pin,
           music_id:item.id,
-          piece_rating:entry.pieceRating,
-          sound_rating_value:entry.soundRating,
-          performance_rating_value:entry.performanceRating,
-          note_value:entry.note,
-          confirmed_emotions_value:entry.confirmedEmotions,
-          rejected_value:entry.rejected,
+          piece_rating:synced.pieceRating,
+          sound_rating_value:synced.soundRating,
+          performance_rating_value:synced.performanceRating,
+          note_value:synced.note,
+          confirmed_emotions_value:synced.confirmedEmotions,
+          rejected_value:synced.rejected,
         })
         if (error) throw error
         const latest = reviewQueue()
@@ -307,12 +330,12 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         }
         setCatalog(currentItems => currentItems.map(currentItem => currentItem.id === item.id ? {
           ...currentItem,
-          rating:entry.pieceRating,
-          soundRating:entry.soundRating,
-          performanceRating:entry.performanceRating,
-          reviewNote:entry.note,
-          confirmedEmotions:entry.confirmedEmotions,
-          reviewRejected:entry.rejected,
+          rating:synced.pieceRating,
+          soundRating:synced.soundRating,
+          performanceRating:synced.performanceRating,
+          reviewNote:synced.note,
+          confirmedEmotions:synced.confirmedEmotions,
+          reviewRejected:synced.rejected,
           reviewUpdatedAt:new Date().toISOString(),
         } : currentItem))
       }
@@ -426,19 +449,29 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         || Boolean((localEmotions || []).length)
         || Boolean(localRejected)
 
-      if (hasLegacyReview && legacyPiece && legacyCandidate) {
-        const queue = reviewQueue()
-        queue[item.sourcePage] = {
-          sourcePage:item.sourcePage,
-          pieceRating:item.rating ?? localPieceRating ?? null,
-          soundRating:item.soundRating ?? localSoundRating ?? null,
-          performanceRating:item.performanceRating ?? localPerformanceRating ?? null,
-          note:item.reviewNote || localNote || '',
-          confirmedEmotions:item.confirmedEmotions.length ? item.confirmedEmotions : localEmotions || [],
-          rejected:item.reviewRejected || Boolean(localRejected),
-          updatedAt:Date.now(),
+      if (hasLegacyReview) {
+        const dirtyFields: ReviewField[] = []
+        if (item.rating === null && localPieceRating !== undefined) dirtyFields.push('pieceRating')
+        if (item.soundRating === null && localSoundRating !== undefined) dirtyFields.push('soundRating')
+        if (item.performanceRating === null && localPerformanceRating !== undefined) dirtyFields.push('performanceRating')
+        if (!item.reviewNote && localNote) dirtyFields.push('note')
+        if (!item.confirmedEmotions.length && (localEmotions || []).length) dirtyFields.push('confirmedEmotions')
+        if (!item.reviewRejected && localRejected) dirtyFields.push('rejected')
+        if (dirtyFields.length) {
+          const queue = reviewQueue()
+          queue[item.sourcePage] = {
+            sourcePage:item.sourcePage,
+            pieceRating:item.rating ?? localPieceRating ?? null,
+            soundRating:item.soundRating ?? localSoundRating ?? null,
+            performanceRating:item.performanceRating ?? localPerformanceRating ?? null,
+            note:item.reviewNote || localNote || '',
+            confirmedEmotions:item.confirmedEmotions.length ? item.confirmedEmotions : localEmotions || [],
+            rejected:item.reviewRejected || Boolean(localRejected),
+            dirtyFields,
+            updatedAt:Date.now(),
+          }
+          saveLocal(REVIEW_SYNC_QUEUE_KEY, queue)
         }
-        saveLocal(REVIEW_SYNC_QUEUE_KEY, queue)
       }
       changed = true
     }
@@ -864,7 +897,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
   function isCatalogRated(item: CatalogItem) {
-    return item.rating !== null || pieceRatings['catalog:' + item.id] !== undefined
+    const legacyPiece = pieces.find(candidatePiece => candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage))
+    return item.rating !== null
+      || pieceRatings['catalog:' + item.id] !== undefined
+      || Boolean(legacyPiece && pieceRatings[legacyPiece.id] !== undefined)
   }
 
   const filteredCatalog = catalog.filter(item => {
