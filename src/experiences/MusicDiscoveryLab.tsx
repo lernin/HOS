@@ -470,6 +470,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
           reviewUpdatedAt:new Date().toISOString(),
         } : currentItem))
       }
+      void flushTrashQueue()
     } catch {
       setMessage('Saved locally · database sync pending.')
     } finally {
