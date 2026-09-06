@@ -36,7 +36,7 @@ function pieceMatch(itemTitle, evidence, workTitle, movementTitle='') {
 async function fetchJson(url, init={}, tries=3) {
   for (let i=0;i<tries;i++) {
     try {
-      const r = await fetch(url, init)
+      const r = await fetch(url, { ...init, signal: AbortSignal.timeout(8000) })
       if (r.status === 429) { await sleep(1200*(i+1)); continue }
       if (!r.ok) return null
       return await r.json()
@@ -50,7 +50,8 @@ async function getLibrary() {
   const r = await fetch(SUPABASE_URL + '/rest/v1/rpc/lab_music_library_read', {
     method:'POST',
     headers:{ apikey:ANON_KEY, Authorization:'Bearer '+ANON_KEY, 'Content-Type':'application/json' },
-    body:JSON.stringify({pin:PIN})
+    body:JSON.stringify({pin:PIN}),
+    signal:AbortSignal.timeout(10000)
   })
   if (!r.ok) throw new Error('library read failed '+r.status+' '+await r.text())
   return await r.json()
