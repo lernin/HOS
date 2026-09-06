@@ -36,6 +36,10 @@
       "destination": "/"
     },
     {
+      "source": "/fluency",
+      "destination": "/"
+    },
+    {
       "source": "/concept-interactions",
       "destination": "/"
     },
