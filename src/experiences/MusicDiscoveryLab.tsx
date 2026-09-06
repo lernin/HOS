@@ -624,6 +624,47 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     }
   }
 
+  function hydrateSuppressedEmotions(incoming: CatalogItem[]) {
+    const pending = suppressionQueue()
+    const queued = suppressionQueue()
+    const next = { ...suppressedEmotions }
+    let changed = false
+    let queueChanged = false
+
+    for (const item of incoming) {
+      if (pending[item.id]) continue
+      const catalogPieceKey = 'catalog:' + item.id
+      const legacyPiece = pieces.find(candidatePiece => candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage))
+      const localValues = legacyPiece ? suppressedEmotions[legacyPiece.id] : suppressedEmotions[catalogPieceKey]
+
+      if (item.suppressedEmotions.length) {
+        next[catalogPieceKey] = item.suppressedEmotions
+        if (legacyPiece) next[legacyPiece.id] = item.suppressedEmotions
+        changed = true
+        continue
+      }
+
+      if ((localValues || []).length) {
+        next[catalogPieceKey] = localValues || []
+        if (legacyPiece) next[legacyPiece.id] = localValues || []
+        queued[item.id] = {
+          musicId:item.id,
+          sourcePage:item.sourcePage,
+          suppressedEmotions:localValues || [],
+          updatedAt:Date.now(),
+        }
+        changed = true
+        queueChanged = true
+      }
+    }
+
+    if (changed) {
+      setSuppressedEmotions(next)
+      saveLocal(SUPPRESSED_EMOTION_KEY, next)
+    }
+    if (queueChanged) saveLocal(SUPPRESSION_SYNC_QUEUE_KEY, queued)
+  }
+
   function inferredEmotions(modality: Modality): Emotion[] {
     if (modality === 'Ambient') return ['Wonder','Mystery','Vastness']
     if (modality === 'Game' || modality === '8-bit') return ['Calling','Adventure','Triumph']
@@ -655,7 +696,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         id:string; composer:string; work_title:string; movement_title?:string | null; performer?:string | null;
         source_name?:string | null; source_url:string; recording_url?:string | null; license?:string | null;
         rights_verified?:boolean; rating?:number | null; sound_rating?:number | null; performance_rating?:number | null;
-        review_note?:string | null; confirmed_emotions?:string[] | null; review_rejected?:boolean | null;
+        review_note?:string | null; confirmed_emotions?:string[] | null; suppressed_emotions?:string[] | null; review_rejected?:boolean | null;
         review_updated_at?:string | null; taste_notes?:string | null
       }>
       const incoming: CatalogItem[] = rows.map(row => ({
@@ -675,12 +716,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         performanceRating:typeof row.performance_rating === 'number' && row.performance_rating >= 0 && row.performance_rating <= 3 ? row.performance_rating as Rating : null,
         reviewNote:row.review_note || '',
         confirmedEmotions:Array.isArray(row.confirmed_emotions) ? row.confirmed_emotions.filter((emotion): emotion is Emotion => emotions.includes(emotion as Emotion)) : [],
+        suppressedEmotions:Array.isArray(row.suppressed_emotions) ? row.suppressed_emotions.filter((emotion): emotion is Emotion => emotions.includes(emotion as Emotion)) : [],
         reviewRejected:Boolean(row.review_rejected),
         reviewUpdatedAt:row.review_updated_at || null,
       }))
       setCatalog(incoming)
       hydrateAndBackfillReviews(incoming)
+      hydrateSuppressedEmotions(incoming)
       void flushReviewSyncQueue(incoming)
+      void flushSuppressionQueue()
+      void flushTrashQueue()
       setMessage(incoming.length ? 'Loaded ' + incoming.length + ' curated tracks from the production library.' : 'The curated library is empty.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load curated music library.')
