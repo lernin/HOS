@@ -280,22 +280,36 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     setMode('browse')
   }
 
-  function adoptCatalogItem(item: CatalogItem) {
-    if (!item.audioUrl) {
-      window.open(item.sourcePage, '_blank', 'noopener,noreferrer')
-      setMessage('Opened the official track page. Direct in-app audio has not been pinned for this track yet.')
-      return
+  async function adoptCatalogItem(item: CatalogItem) {
+    let playable = item
+    if (!playable.audioUrl) {
+      setMessage('Loading recording…')
+      try {
+        const response = await fetch('/api/music-resolve', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
+          body:JSON.stringify({ sourceUrl:playable.sourcePage, sourceName:playable.source, title:playable.title }),
+        })
+        const result = await response.json() as { audioUrl?:string; error?:string }
+        if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
+        playable = { ...item, audioUrl:result.audioUrl }
+        setCatalog(currentItems => currentItems.map(row => row.id === playable.id ? playable : row))
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
+        return
+      }
     }
-    const pieceId = 'catalog:' + item.id
+
+    const pieceId = 'catalog:' + playable.id
     const existingIndex = pieceList.findIndex(candidatePiece => candidatePiece.id === pieceId)
     const candidate: Candidate = {
-      id:'catalog-candidate:' + item.id,
-      performer:item.creator || 'Unknown artist',
-      modality:item.modality,
-      license:item.license,
-      audioUrl:item.audioUrl,
-      sourcePage:item.sourcePage,
-      source:item.source,
+      id:'catalog-candidate:' + playable.id,
+      performer:playable.creator || 'Unknown artist',
+      modality:playable.modality,
+      license:playable.license,
+      audioUrl:playable.audioUrl,
+      sourcePage:playable.sourcePage,
+      source:playable.source,
       matchConfidence:'confirmed',
     }
     if (existingIndex >= 0) {
@@ -306,10 +320,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     }
     const newPiece: Piece = {
       id:pieceId,
-      composer:item.creator || 'Unknown artist',
-      title:item.title,
-      mood:item.modality + ' · ' + item.source,
-      aiEmotions:inferredEmotions(item.modality),
+      composer:playable.creator || 'Unknown artist',
+      title:playable.title,
+      mood:playable.modality + ' · ' + playable.source,
+      aiEmotions:inferredEmotions(playable.modality),
       candidates:[candidate],
     }
     const newIndex = pieces.length + catalogPieces.length
@@ -667,8 +681,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         {(['All', ...modalities] as Array<'All' | Modality>).map(value => <button key={value} className={catalogModality === value ? 'active' : ''} onClick={() => setCatalogModality(value)}>{value}</button>)}
       </div>
       <div className="md-catalog-list">
-        {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => adoptCatalogItem(item)}>
-          <span className="md-catalog-play">{item.audioUrl ? '▶' : '↗'}</span>
+        {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => void adoptCatalogItem(item)}>
+          <span className="md-catalog-play">{item.audioUrl ? '▶' : '▶'}</span>
           <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
           <span className="md-catalog-source">{item.source}</span>
         </button>)}
