@@ -1362,7 +1362,21 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     </nav>
 
     {mode === 'listen' ? <section ref={listenCardRef} className="md-listen" onTouchStart={onListenTouchStart} onTouchMove={onListenTouchMove} onTouchEnd={onListenTouchEnd} onTouchCancel={onListenTouchCancel}>
-      {currentVersions.length > 1 && <div className="md-version-picker">
+      {catalogVersions.length > 1 ? <div className="md-version-picker">
+        <small>{catalogVersions.length} versions</small>
+        <div>
+          {catalogVersions.map((item, versionIndex) => {
+            const values = catalogReviewValues(item)
+            const loved = values.piece === 3 && values.sound === 3 && values.performance === 3
+            const touched = values.piece !== undefined || values.sound !== undefined || values.performance !== undefined
+            const active = item.id === activeCatalogId
+            return <button key={item.id} className={(loved ? 'version-best' : touched ? 'version-keep' : 'version-unrated') + (active ? ' active' : '')} onClick={() => switchCatalogVersion(item)}>
+              <b>{versionIndex + 1}</b>
+              <span>{catalogVersionScore(item)}</span>
+            </button>
+          })}
+        </div>
+      </div> : currentVersions.length > 1 && <div className="md-version-picker">
         <small>{currentModality} versions</small>
         <div>
           {currentVersions.map((candidate, versionIndex) => {
