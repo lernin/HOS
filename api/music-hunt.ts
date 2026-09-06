@@ -10,6 +10,7 @@ type HuntCandidate = {
   sourcePage: string
   source: string
   evidence: string
+  confidence: 'confirmed' | 'possible'
 }
 
 const modalityTerms: Record<Modality, string[]> = {
@@ -102,7 +103,8 @@ async function searchCommons(query: string, pieceTitle: string, modality: Modali
     const categories = (page.categories || []).map(category => category.title || '').join(' ')
     const artist = stripHtml(info.extmetadata?.Artist?.value || info.extmetadata?.Credit?.value || '')
     const evidence = [page.title || '', categories, artist, stripHtml(info.extmetadata?.ObjectName?.value || '')].join(' ')
-    if (!isPieceMatch(page.title || '', evidence, pieceTitle) || !hasModalityEvidence(evidence + ' ' + query, modality)) return []
+    if (!isPieceMatch(page.title || '', evidence, pieceTitle)) return []
+    const confidence = hasModalityEvidence(evidence, modality) ? 'confirmed' as const : 'possible' as const
     return [{
       id: 'commons:' + String(page.pageid || normalize(page.title || info.url)),
       performer: artist || 'Wikimedia Commons contributor',
@@ -111,6 +113,7 @@ async function searchCommons(query: string, pieceTitle: string, modality: Modali
       sourcePage: info.descriptionurl || 'https://commons.wikimedia.org/wiki/' + encodeURIComponent(page.title || ''),
       source: 'Wikimedia Commons',
       evidence,
+      confidence,
     }]
   })
 }
@@ -141,7 +144,8 @@ async function searchOpenverse(query: string, pieceTitle: string, modality: Moda
   return (data.results || []).flatMap(item => {
     if (!item.url || !item.foreign_landing_url || !item.license || !openverseLicense(item.license)) return []
     const evidence = [item.title || '', item.creator || '', ...(item.genres || []), ...(item.tags || []).map(tag => tag.name || '')].join(' ')
-    if (!isPieceMatch(item.title || '', evidence, pieceTitle) || !hasModalityEvidence(evidence + ' ' + query, modality)) return []
+    if (!isPieceMatch(item.title || '', evidence, pieceTitle)) return []
+    const confidence = hasModalityEvidence(evidence, modality) ? 'confirmed' as const : 'possible' as const
     const license = item.license.toUpperCase() + (item.license_version && item.license_version !== 'N/A' ? ' ' + item.license_version : '')
     return [{
       id: 'openverse:' + String(item.id || normalize(item.foreign_landing_url)),
@@ -151,6 +155,7 @@ async function searchOpenverse(query: string, pieceTitle: string, modality: Moda
       sourcePage: item.foreign_landing_url,
       source: item.provider || item.source || 'Openverse',
       evidence,
+      confidence,
     }]
   })
 }
@@ -168,7 +173,8 @@ export default {
       if (!title || !modality || !modalityTerms[modality]) return json({ error: 'Missing piece title or modality.' }, 400)
 
       const terms = modalityTerms[modality].slice(0, 2)
-      const queries = terms.map(term => '"' + title + '" ' + (composer ? composer + ' ' : '') + term)
+      const base = '"' + title + '" ' + (composer ? composer : '')
+      const queries = [base, ...terms.map(term => base + ' ' + term)]
       const searches = await Promise.all(queries.flatMap(query => [
         searchCommons(query, title, modality),
         searchOpenverse(query, title, modality),
@@ -181,7 +187,7 @@ export default {
         if (seen.has(key)) return false
         seen.add(key)
         return true
-      }).slice(0, 8)
+      }).sort((a, b) => (a.confidence === 'confirmed' ? -1 : 1) - (b.confidence === 'confirmed' ? -1 : 1)).slice(0, 12)
 
       return json({
         candidates,
