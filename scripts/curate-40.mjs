@@ -46,9 +46,9 @@ const openverseSeeds=[
 ['lofi instrumental background','Background / Lo-fi','Guide, Hearth']
 ]
 async function fetchJson(url,init={}){
- for(let i=0;i<3;i++){
+ for(let i=0;i<2;i++){
   try{
-   const r=await fetch(url,{...init,signal:AbortSignal.timeout(10000)})
+   const r=await fetch(url,{...init,signal:AbortSignal.timeout(6000)})
    if(r.status===429){await sleep(1200*(i+1));continue}
    if(!r.ok)return null
    return await r.json()
@@ -92,9 +92,18 @@ async function pickOpenverse(seed,chosen){
  }
  return null
 }
-const commons=[],openverse=[],chosen=new Set()
-for(const s of commonsSeeds){const x=await pickCommons(s,chosen);if(x)commons.push(x);await sleep(150)}
-for(const s of openverseSeeds){const x=await pickOpenverse(s,chosen);if(x)openverse.push(x);await sleep(200)}
+async function mapLimit(items,limit,fn){
+  const out=new Array(items.length);let next=0
+  async function worker(){
+    while(true){const i=next++;if(i>=items.length)return;out[i]=await fn(items[i])}
+  }
+  await Promise.all(Array.from({length:limit},worker))
+  return out
+}
+const chosen=new Set()
+const commons=(await mapLimit(commonsSeeds,5,s=>pickCommons(s,chosen))).filter(Boolean)
+await sleep(800)
+const openverse=(await mapLimit(openverseSeeds,5,s=>pickOpenverse(s,chosen))).filter(Boolean)
 console.log('CURATION_RESULT='+JSON.stringify({commons,openverse}))
 console.log('COUNTS commons='+commons.length+' openverse='+openverse.length)
 if(commons.length<20||openverse.length<20)process.exitCode=2
