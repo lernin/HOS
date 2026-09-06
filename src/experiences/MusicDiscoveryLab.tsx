@@ -320,6 +320,65 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function reviewQueue() {
     return loadObject<Record<string, ReviewSyncEntry>>(REVIEW_SYNC_QUEUE_KEY, {})
   }
+  function suppressionQueue() {
+    return loadObject<Record<string, SuppressionSyncEntry>>(SUPPRESSION_SYNC_QUEUE_KEY, {})
+  }
+
+  function trashQueue() {
+    return loadObject<Record<string, TrashSyncEntry>>(TRASH_SYNC_QUEUE_KEY, {})
+  }
+
+  function catalogIdForReview(pieceId: string, sourcePage: string) {
+    return catalogIdForPiece(pieceId) || catalog.find(item => item.sourcePage === sourcePage)?.id || null
+  }
+
+  function queueSuppressionSync(pieceId: string, sourcePage: string, values: Emotion[]) {
+    const musicId = catalogIdForReview(pieceId, sourcePage)
+    if (!musicId) return
+    const queue = suppressionQueue()
+    queue[musicId] = { musicId, sourcePage, suppressedEmotions:values, updatedAt:Date.now() }
+    saveLocal(SUPPRESSION_SYNC_QUEUE_KEY, queue)
+    void flushSuppressionQueue()
+  }
+
+  async function flushSuppressionQueue() {
+    const queued = suppressionQueue()
+    for (const [musicId, entry] of Object.entries(queued)) {
+      const { error } = await supabase.rpc('lab_music_library_emotion_suppression_write', {
+        pin,
+        music_id:musicId,
+        suppressed_emotions_value:entry.suppressedEmotions,
+      })
+      if (error) return
+      const latest = suppressionQueue()
+      if (latest[musicId]?.updatedAt === entry.updatedAt) {
+        delete latest[musicId]
+        saveLocal(SUPPRESSION_SYNC_QUEUE_KEY, latest)
+      }
+    }
+  }
+
+  function queueTrashSync(musicId: string, sourcePage: string) {
+    const queue = trashQueue()
+    queue[musicId] = { musicId, sourcePage, updatedAt:Date.now() }
+    saveLocal(TRASH_SYNC_QUEUE_KEY, queue)
+    setTrashedCatalogIds(current => ({ ...current, [musicId]:true }))
+    void flushTrashQueue()
+  }
+
+  async function flushTrashQueue() {
+    const queued = trashQueue()
+    for (const [musicId, entry] of Object.entries(queued)) {
+      const { error } = await supabase.rpc('lab_music_library_trash', { pin, music_id:musicId })
+      if (error) return
+      const latest = trashQueue()
+      if (latest[musicId]?.updatedAt === entry.updatedAt) {
+        delete latest[musicId]
+        saveLocal(TRASH_SYNC_QUEUE_KEY, latest)
+      }
+    }
+  }
+
 
   function reviewSnapshot(pieceId: string, candidateId: string, sourcePage: string, overrides: ReviewOverrides = {}): ReviewSyncEntry {
     const has = (key: keyof ReviewOverrides) => Object.prototype.hasOwnProperty.call(overrides, key)
