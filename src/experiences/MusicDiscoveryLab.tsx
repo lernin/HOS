@@ -288,12 +288,12 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         const response = await fetch('/api/music-resolve', {
           method:'POST',
           headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
-          body:JSON.stringify({ sourceUrl:playableItem.sourcePage, sourceName:playableItem.source, title:playableItem.title }),
+          body:JSON.stringify({ sourceUrl:playable.sourcePage, sourceName:playable.source, title:playable.title }),
         })
         const result = await response.json() as { audioUrl?:string; error?:string }
         if (!response.ok || !result.audioUrl) throw new Error(result.error || 'Could not load this recording.')
         playable = { ...item, audioUrl:result.audioUrl }
-        setCatalog(currentItems => currentItems.map(row => row.id === playableItem.id ? playable : row))
+        setCatalog(currentItems => currentItems.map(row => row.id === playable.id ? playable : row))
       } catch (error) {
         setMessage(error instanceof Error ? error.message : 'Could not load this recording.')
         return
@@ -681,7 +681,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         {(['All', ...modalities] as Array<'All' | Modality>).map(value => <button key={value} className={catalogModality === value ? 'active' : ''} onClick={() => setCatalogModality(value)}>{value}</button>)}
       </div>
       <div className="md-catalog-list">
-        {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => adoptCatalogItem(item)}>
+        {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => void adoptCatalogItem(item)}>
           <span className="md-catalog-play">{item.audioUrl ? '▶' : '▶'}</span>
           <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
           <span className="md-catalog-source">{item.source}</span>
