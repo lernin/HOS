@@ -38,13 +38,6 @@ type CatalogItem = {
   description?: string
   rightsVerified?: boolean
 }
-type Repository = {
-  name: string
-  url: string
-  mode: 'live' | 'indexed' | 'portal'
-  note: string
-}
-
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
 
@@ -166,11 +159,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
   const [mode, setMode] = useState<'listen'|'browse'|'hunt'>('listen')
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
-  const [repositories, setRepositories] = useState<Repository[]>([])
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
-  const [catalogBatch, setCatalogBatch] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -274,8 +265,6 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         rightsVerified:Boolean(row.rights_verified),
       }))
       setCatalog(incoming)
-      setRepositories([])
-      setCatalogBatch(1)
       setMessage(incoming.length ? 'Loaded ' + incoming.length + ' curated tracks from the production library.' : 'The curated library is empty.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load curated music library.')
