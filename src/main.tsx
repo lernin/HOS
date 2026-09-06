@@ -11,7 +11,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
-type View = 'hub' | 'thekonym-viewer' | 'thekonym' | 'world3d' | 'water-garden' | 'woodland-walk' | 'backing-tracks' | 'orchestration-lab' | 'music-discovery' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab'
+type View = 'hub' | 'thekonym-viewer' | 'thekonym' | 'concept-interactions' | 'world3d' | 'water-garden' | 'woodland-walk' | 'backing-tracks' | 'orchestration-lab' | 'music-discovery' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -68,6 +68,7 @@ const Library = lazy(() => import('./experiences/Library').then(module => ({ def
 const Scroller = lazy(() => import('./experiences/Scroller').then(module => ({ default: module.Scroller })))
 const BookVocab = lazy(() => import('./experiences/BookVocab').then(module => ({ default: module.BookVocab })))
 const ThekonymReader = lazy(() => import('./experiences/ThekonymReader').then(module => ({ default: module.ThekonymReader })))
+const ConceptInteractionReview = lazy(() => import('./experiences/ConceptInteractionReview').then(module => ({ default: module.ConceptInteractionReview })))
 
 function readCachedTerms(): Term[] {
   try { return JSON.parse(localStorage.getItem(TERMS_CACHE_KEY) || '[]') as Term[] } catch { return [] }
@@ -94,7 +95,7 @@ function applyPendingChanges(source: Term[], changes = readOutbox()) {
 }
 
 function App() {
-  const [view, setView] = useState<View>(() => window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/orchestration-lab' ? 'orchestration-lab' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : 'hub')
+  const [view, setView] = useState<View>(() => window.location.pathname === '/concept-interactions' ? 'concept-interactions' : window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/orchestration-lab' ? 'orchestration-lab' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : 'hub')
   const [pin, setPin] = useState('')
   const [pinInput, setPinInput] = useState('')
   const [terms, setTerms] = useState<Term[]>([])
@@ -122,14 +123,14 @@ function App() {
   const flushingRef = useRef(false)
 
   useEffect(() => {
-    if (!['/thekonym-viewer', '/water-garden', '/woodland-walk', '/backing-tracks', '/orchestration-lab', '/music-discovery'].includes(window.location.pathname)) window.history.replaceState({}, '', '/')
-    const syncView = () => setView(window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/orchestration-lab' ? 'orchestration-lab' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
+    if (!['/thekonym-viewer', '/concept-interactions', '/water-garden', '/woodland-walk', '/backing-tracks', '/orchestration-lab', '/music-discovery'].includes(window.location.pathname)) window.history.replaceState({}, '', '/')
+    const syncView = () => setView(window.location.pathname === '/concept-interactions' ? 'concept-interactions' : window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/orchestration-lab' ? 'orchestration-lab' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
     window.addEventListener('popstate', syncView)
     return () => window.removeEventListener('popstate', syncView)
   }, [])
 
   function navigate(next: View) {
-    const path = next === 'woodland-walk' ? '/woodland-walk' : next === 'backing-tracks' ? '/backing-tracks' : next === 'orchestration-lab' ? '/orchestration-lab' : next === 'music-discovery' ? '/music-discovery' : next === 'water-garden' ? '/water-garden' : next === 'thekonym-viewer' ? '/thekonym-viewer' : next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
+    const path = next === 'concept-interactions' ? '/concept-interactions' : next === 'woodland-walk' ? '/woodland-walk' : next === 'backing-tracks' ? '/backing-tracks' : next === 'orchestration-lab' ? '/orchestration-lab' : next === 'music-discovery' ? '/music-discovery' : next === 'water-garden' ? '/water-garden' : next === 'thekonym-viewer' ? '/thekonym-viewer' : next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
     window.history.pushState({}, '', path)
     setView(next)
     window.scrollTo(0, 0)
@@ -461,7 +462,7 @@ function App() {
         </article>
         <article className="experience-card">
           <span className="experience-icon">♪</span>
-          <span className="experience-copy"><strong>Music Discovery Lab</strong><small>Hunt public-domain and Creative Commons classical, orchestral, ambient, game, and jazz music. Listen at the source, rate it, and teach the Lab your taste.</small></span>
+          <span className="experience-copy"><strong>Music Discovery Lab</strong><small>Search, audition, compare, and rate reusable music and alternate performances.</small></span>
           <button className="experience-go" onClick={() => navigate('music-discovery')}>Go</button>
         </article>
         <article className="experience-card">
@@ -473,6 +474,11 @@ function App() {
           <span className="experience-icon">Th</span>
           <span className="experience-copy"><strong>Thekonym viewer</strong><small>Read current definitions, confidence, fields, and notes. Copy a fresh record for ChatGPT.</small></span>
           <button className="experience-go" onClick={() => navigate('thekonym-viewer')}>Go</button>
+        </article>
+        <article className="experience-card">
+          <span className="experience-icon">CI</span>
+          <span className="experience-copy"><strong>Concept Interactions</strong><small>Review the 49 input-output interactions, examples, prompts, confidence, and notes.</small></span>
+          <button className="experience-go" onClick={() => navigate('concept-interactions')}>Go</button>
         </article>
         <article className="experience-card">
           <span className="experience-icon">T</span>
@@ -514,6 +520,7 @@ function App() {
     </main>
   )
 
+  if (view === 'concept-interactions') return <Suspense fallback={<main className="shell"><div className="center">Opening Concept Interactions…</div></main>}><ConceptInteractionReview pin={pin} onExit={() => navigate('hub')} /></Suspense>
   if (view === 'water-garden') return <Suspense fallback={<main className="shell"><div className="center">Opening Water Garden…</div></main>}><WaterGarden onExit={() => navigate('hub')} /></Suspense>
   if (view === 'woodland-walk') return <Suspense fallback={<main className="shell"><div className="center">Opening Woodland Walk…</div></main>}><WoodlandWalk onBack={() => navigate('hub')} /></Suspense>
   if (view === 'backing-tracks') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Lab…</div></main>}><BackingTracks onExit={() => navigate('hub')} /></Suspense>
