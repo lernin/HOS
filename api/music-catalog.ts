@@ -48,10 +48,11 @@ function licenseLabel(value: string, version?: string) {
   return value.toUpperCase() + (version && version !== 'N/A' ? ' ' + version : '')
 }
 
-async function openverseSearch(query: string, modality: Modality): Promise<CatalogItem[]> {
+async function openverseSearch(query: string, modality: Modality, page: number): Promise<CatalogItem[]> {
   const url = new URL('https://api.openverse.org/v1/audio/')
   url.searchParams.set('q', query)
-  url.searchParams.set('page_size', '40')
+  url.searchParams.set('page_size', '50')
+  url.searchParams.set('page', String(page))
   const response = await fetch(url, { headers:{ 'User-Agent':'HOS-MusicDiscovery/1.0' } })
   if (!response.ok) return []
 
@@ -94,25 +95,42 @@ export default {
     if (request.headers.get('x-review-pin') !== ACCESS_PIN) return json({ error:'Unauthorized.' }, 401)
 
     try {
-      const body = await request.json().catch(() => ({})) as { interests?: string[]; request?: string }
+      const body = await request.json().catch(() => ({})) as { interests?: string[]; request?: string; page?: number }
       const custom = String(body.request || '').trim()
-      const searchSeeds = custom
-        ? [{ query:custom + ' instrumental', modality:'Game' as Modality }, ...seeds]
-        : seeds
+      const page = Math.max(1, Math.min(8, Number(body.page) || 1))
+      const interestList = (body.interests || []).filter(Boolean).slice(0, 4)
 
-      const batches = await Promise.all(searchSeeds.map(seed => openverseSearch(seed.query, seed.modality)))
+      const inferModality = (value: string): Modality => {
+        const text = value.toLowerCase()
+        if (text.includes('orchestr')) return 'Orchestral'
+        if (text.includes('ambient')) return 'Ambient'
+        if (text.includes('jazz')) return 'Jazz'
+        if (text.includes('guitar')) return 'Guitar'
+        if (text.includes('synth') || text.includes('electronic')) return 'Synth'
+        if (text.includes('8-bit') || text.includes('chiptune')) return '8-bit'
+        if (text.includes('piano')) return 'Piano'
+        return 'Game'
+      }
+
+      const personalized = interestList.map(interest => ({ query:interest + ' instrumental music', modality:inferModality(interest) }))
+      if (custom) personalized.unshift({ query:custom + ' instrumental music', modality:inferModality(custom) })
+
+      const allSeeds = [...personalized, ...seeds]
+      const dedupedSeeds = allSeeds.filter((seed, index, list) => list.findIndex(other => other.query.toLowerCase() === seed.query.toLowerCase()) === index).slice(0, 10)
+      const batches = await Promise.all(dedupedSeeds.map(seed => openverseSearch(seed.query, seed.modality, page)))
       const seen = new Set<string>()
       const items = batches.flat().filter(item => {
         const key = item.sourcePage || item.audioUrl
         if (seen.has(key)) return false
         seen.add(key)
         return true
-      }).slice(0, 140)
+      }).slice(0, 220)
 
       return json({
         items,
         repositories,
-        target:100,
+        target:200,
+        page,
         note:'Catalog results are for auditioning. Verify the exact source-page license before bundling a keeper into HOS.',
       })
     } catch (error) {

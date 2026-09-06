@@ -167,6 +167,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
+  const [catalogBatch, setCatalogBatch] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -234,24 +235,42 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return ['Wonder','Calling']
   }
 
-  async function loadCatalog(force = false) {
-    if (catalogLoading || (catalog.length && !force)) return
+  async function loadCatalog(force = false, reset = false) {
+    if (catalogLoading || (catalog.length && !force && !reset)) return
+    const nextPage = reset ? 1 : Math.max(1, catalogBatch + (catalog.length ? 1 : 0))
     setCatalogLoading(true)
     try {
       const response = await fetch('/api/music-catalog', {
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'x-review-pin':pin },
-        body:JSON.stringify({ interests, request }),
+        body:JSON.stringify({ interests, request, page:nextPage }),
       })
       const result = await response.json() as { items?: CatalogItem[]; repositories?: Repository[]; error?: string }
       if (!response.ok) throw new Error(result.error || 'Could not load music catalog.')
-      setCatalog(result.items || [])
+      const incoming = result.items || []
+      if (reset) {
+        setCatalog(incoming)
+      } else {
+        setCatalog(currentItems => {
+          const seen = new Set(currentItems.map(item => item.sourcePage))
+          return [...currentItems, ...incoming.filter(item => !seen.has(item.sourcePage))]
+        })
+      }
       setRepositories(result.repositories || [])
+      setCatalogBatch(nextPage)
+      setMessage(incoming.length ? 'Loaded ' + incoming.length + ' fresh nominations.' : 'No new nominations in this batch.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load music catalog.')
     } finally {
       setCatalogLoading(false)
     }
+  }
+
+  async function searchNow() {
+    setCatalogSearch('')
+    setCatalogModality('All')
+    await loadCatalog(true, true)
+    setMode('browse')
   }
 
   function adoptCatalogItem(item: CatalogItem) {
@@ -368,16 +387,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       void runHunt(modality)
       return
     }
-    if (current.modality !== modality) {
-      const best = bestCandidate(list)
-      if (best) setCandidateId(best.id)
-      setMessage('')
-      return
-    }
-    const currentIndex = list.findIndex(candidate => candidate.id === current.id)
-    const next = list[(currentIndex + 1 + list.length) % list.length]
-    setCandidateId(next.id)
-    setMessage(list.length > 1 ? 'Switched to another retained ' + modality.toLowerCase() + ' version.' : '')
+    const best = bestCandidate(list)
+    if (best) setCandidateId(best.id)
+    setMessage(list.length > 1 ? 'Choose a numbered ' + modality.toLowerCase() + ' version below.' : '')
   }
 
   async function togglePlay() {
@@ -431,18 +443,20 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         candidate.id !== current.id &&
         !nextRejected[candidate.id]
       )
-      if (remaining.length) {
-        setCandidateId(remaining[0].id)
-        setMessage('Rejected this performance. Showing another retained ' + current.modality.toLowerCase() + ' version.')
-      } else {
-        if (pieceRatings[piece.id] === 3) {
-          setMessage('Rejected this performance. Searching for a replacement ' + current.modality.toLowerCase() + ' version…')
-          void runHunt(current.modality)
-        } else {
-          setMessage('Rejected this performance. Tap ' + current.modality + ' to request a replacement.')
-        }
-      }
+      const replacement = bestCandidate(remaining)
+      if (replacement) setCandidateId(replacement.id)
+      setMessage('Rejected this performance. Hunting for another ' + current.modality.toLowerCase() + ' version…')
+      void runHunt(current.modality)
+      return
     }
+
+    if (value === 2) {
+      setMessage('Kept this version. Hunting for another ' + current.modality.toLowerCase() + ' version to compare…')
+      void runHunt(current.modality)
+      return
+    }
+
+    setMessage('Preferred version saved.')
   }
 
   function toggleEmotion(emotion: Emotion) {
@@ -508,6 +522,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
+  const currentVersions = candidateListFor(currentModality)
   const filteredCatalog = catalog.filter(item => {
     const text = (item.title + ' ' + item.creator + ' ' + item.source).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
@@ -555,6 +570,20 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
           </div>
         })}
       </div>
+
+      {currentVersions.length > 1 && <div className="md-version-picker">
+        <small>{currentModality} versions</small>
+        <div>
+          {currentVersions.map((candidate, versionIndex) => {
+            const score = performanceRatings[candidate.id]
+            const state = score === 3 ? 'best' : score === 2 ? 'keep' : 'unrated'
+            return <button key={candidate.id} className={'version-' + state + (candidate.id === current.id ? ' active' : '')} onClick={() => setCandidateId(candidate.id)}>
+              <b>{versionIndex + 1}</b>
+              <span>{score === 3 ? 'Best' : score === 2 ? 'Keep' : 'Unrated'}</span>
+            </button>
+          })}
+        </div>
+      </div>}
 
       <div className="md-title">
         <small>{piece.composer} · {current.modality}{current.matchConfidence === 'possible' ? '?' : ''} · {current.performer}{current.source ? ' · ' + current.source : ''}</small>
@@ -652,9 +681,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <div className="md-hunt-summary">
         <b>{interests.length}</b>
         <span>active discovery interests</span>
-        <button onClick={() => setMode('listen')}>Back to nominations →</button>
+        <button className="md-search-now" onClick={() => void searchNow()} disabled={catalogLoading}>{catalogLoading ? 'SEARCHING…' : 'SEARCH NOW →'}</button>
       </div>
-      <p className="md-hunt-note">These preferences guide future nominations. Modality-specific hunts are requested directly from the top row on the Listen screen.</p>
+      {message && <div className="md-message">{message}</div>}
+      <p className="md-hunt-note">Search Now gathers a fresh playable batch from Openverse using these interests. Exact-piece modality hunts still happen from the top row on Listen.</p>
     </section>}
   </main>
 }
