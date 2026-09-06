@@ -284,11 +284,23 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!sourcePage) return
     const queue = reviewQueue()
     const existing = queue[sourcePage]
+    const overrideFields = Object.keys(overrides) as ReviewField[]
     const dirtyFields = Array.from(new Set<ReviewField>([
       ...(existing?.dirtyFields || []),
-      ...(Object.keys(overrides) as ReviewField[]),
+      ...overrideFields,
     ]))
-    queue[sourcePage] = { ...reviewSnapshot(pieceId, candidateId, sourcePage, overrides), dirtyFields }
+    const snapshot = reviewSnapshot(pieceId, candidateId, sourcePage, overrides)
+    const hasOverride = (field: ReviewField) => overrideFields.includes(field)
+    queue[sourcePage] = {
+      ...snapshot,
+      pieceRating:existing?.dirtyFields?.includes('pieceRating') && !hasOverride('pieceRating') ? existing.pieceRating : snapshot.pieceRating,
+      soundRating:existing?.dirtyFields?.includes('soundRating') && !hasOverride('soundRating') ? existing.soundRating : snapshot.soundRating,
+      performanceRating:existing?.dirtyFields?.includes('performanceRating') && !hasOverride('performanceRating') ? existing.performanceRating : snapshot.performanceRating,
+      note:existing?.dirtyFields?.includes('note') && !hasOverride('note') ? existing.note : snapshot.note,
+      confirmedEmotions:existing?.dirtyFields?.includes('confirmedEmotions') && !hasOverride('confirmedEmotions') ? existing.confirmedEmotions : snapshot.confirmedEmotions,
+      rejected:existing?.dirtyFields?.includes('rejected') && !hasOverride('rejected') ? existing.rejected : snapshot.rejected,
+      dirtyFields,
+    }
     saveLocal(REVIEW_SYNC_QUEUE_KEY, queue)
     if (reviewSyncTimerRef.current) clearTimeout(reviewSyncTimerRef.current)
     reviewSyncTimerRef.current = setTimeout(() => void flushReviewSyncQueue(), delayMs)
