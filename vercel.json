@@ -14,6 +14,7 @@
     { "source": "/orchestration-lab", "destination": "/" },
     { "source": "/water-garden", "destination": "/" },
     { "source": "/thekonym-viewer", "destination": "/" },
+    { "source": "/concept-interactions", "destination": "/" },
     { "source": "/thekonym", "destination": "/" },
     { "source": "/world-3d", "destination": "/" },
     { "source": "/roy", "destination": "/" },
