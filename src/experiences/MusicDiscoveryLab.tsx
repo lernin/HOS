@@ -736,7 +736,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   async function searchNow() {
     setCatalogSearch('')
-    setCatalogModality('New')
+    setCatalogReviewFilter('New')
+    setCatalogModality('All')
     await loadCatalog(true, true)
     setMode('browse')
   }
@@ -1235,20 +1236,39 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
-  function isCatalogRated(item: CatalogItem) {
+
+  function catalogReviewValues(item: CatalogItem) {
+    const pieceKey = 'catalog:' + item.id
+    const candidateKey = 'catalog-candidate:' + item.id
     const legacyPiece = pieces.find(candidatePiece => candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage))
-    return item.rating !== null
-      || pieceRatings['catalog:' + item.id] !== undefined
-      || Boolean(legacyPiece && pieceRatings[legacyPiece.id] !== undefined)
+    const legacyCandidate = legacyPiece?.candidates.find(candidate => candidate.sourcePage === item.sourcePage)
+    return {
+      piece:pieceRatings[pieceKey] ?? (legacyPiece ? pieceRatings[legacyPiece.id] : undefined) ?? item.rating ?? undefined,
+      sound:qualityRatings[candidateKey] ?? (legacyCandidate ? qualityRatings[legacyCandidate.id] : undefined) ?? item.soundRating ?? undefined,
+      performance:performanceRatings[candidateKey] ?? (legacyCandidate ? performanceRatings[legacyCandidate.id] : undefined) ?? item.performanceRating ?? undefined,
+    }
+  }
+
+  function catalogTouched(item: CatalogItem) {
+    const values = catalogReviewValues(item)
+    return values.piece !== undefined || values.sound !== undefined || values.performance !== undefined
+  }
+
+  function catalogLoved(item: CatalogItem) {
+    const values = catalogReviewValues(item)
+    return values.piece === 3 && values.sound === 3 && values.performance === 3
   }
 
   const filteredCatalog = catalog.filter(item => {
+    if (trashedCatalogIds[item.id]) return false
     const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
-    const matchesModality = catalogModality === 'New'
-      ? !isCatalogRated(item)
-      : catalogModality === 'All' || item.modality === catalogModality
-    return matchesSearch && matchesModality
+    const matchesModality = catalogModality === 'All' || item.modality === catalogModality
+    const touched = catalogTouched(item)
+    const matchesReview = catalogReviewFilter === 'All'
+      || (catalogReviewFilter === 'New' && !touched)
+      || (catalogReviewFilter === 'Loved' && catalogLoved(item))
+    return matchesSearch && matchesModality && matchesReview
   })
 
   useEffect(() => {
@@ -1257,7 +1277,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   useEffect(() => {
     void loadCatalog()
-    const syncWhenOnline = () => void flushReviewSyncQueue()
+    const syncWhenOnline = () => {
+      void flushReviewSyncQueue()
+      void flushSuppressionQueue()
+      void flushTrashQueue()
+    }
     window.addEventListener('online', syncWhenOnline)
     return () => {
       window.removeEventListener('online', syncWhenOnline)
