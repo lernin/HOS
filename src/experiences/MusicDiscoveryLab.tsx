@@ -84,6 +84,7 @@ const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
 const REVIEW_SYNC_QUEUE_KEY = 'hos-music-review-sync-queue-v1'
 const TRASHED_CATALOG_KEY = 'hos-music-trashed-catalog-v1'
+const TRASHED_PIECE_KEY = 'hos-music-trashed-piece-v1'
 
 const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
 const candidateAudio = (candidate: Candidate) => candidate.audioUrl || (candidate.file ? commonsAudio(candidate.file) : '')
@@ -205,6 +206,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalogReviewFilter, setCatalogReviewFilter] = useState<CatalogReviewFilter>('New')
   const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
   const [trashedCatalogIds, setTrashedCatalogIds] = useState<Record<string, boolean>>(() => loadObject(TRASHED_CATALOG_KEY, {}))
+  const [trashedPieceIds, setTrashedPieceIds] = useState<Record<string, boolean>>(() => loadObject(TRASHED_PIECE_KEY, {}))
   const [playing, setPlaying] = useState(false)
   const [playPending, setPlayPending] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -213,19 +215,24 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [transcribing, setTranscribing] = useState(false)
   const [message, setMessage] = useState('')
 
-  const pieceList = useMemo(() => [...pieces, ...catalogPieces], [catalogPieces])
-  const piece = pieceList[Math.min(pieceIndex, pieceList.length - 1)] || pieces[0]
+  const basePieces = useMemo(() => pieces.filter(candidatePiece => {
+    if (trashedPieceIds[candidatePiece.id]) return false
+    const durableMatch = catalog.find(item => candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage))
+    return !durableMatch || (!durableMatch.reviewRejected && !trashedCatalogIds[durableMatch.id])
+  }), [catalog, trashedCatalogIds, trashedPieceIds])
+  const pieceList = useMemo(() => [...basePieces, ...catalogPieces], [basePieces, catalogPieces])
+  const piece = pieceList[Math.min(pieceIndex, pieceList.length - 1)] || basePieces[0] || catalogPieces[0] || pieces[0]
   const allCandidates = useMemo(() => [...piece.candidates, ...(discovered[piece.id] || [])], [piece, discovered])
   const viableCandidates = useMemo(() => allCandidates.filter(candidate => !rejected[candidate.id]), [allCandidates, rejected])
   const current = viableCandidates.find(candidate => candidate.id === candidateId) || viableCandidates[0] || allCandidates[0]
   const currentModality = current.modality
 
   useEffect(() => {
-    const nextPiece = pieceList[Math.min(pieceIndex, pieceList.length - 1)] || pieces[0]
+    const nextPiece = pieceList[Math.min(pieceIndex, pieceList.length - 1)] || basePieces[0] || catalogPieces[0] || pieces[0]
     const candidates = [...nextPiece.candidates, ...(discovered[nextPiece.id] || [])]
     const next = candidates.find(candidate => !rejected[candidate.id]) || candidates[0]
     if (next) setCandidateId(next.id)
-  }, [pieceIndex, pieceList, discovered, rejected])
+  }, [pieceIndex, pieceList, basePieces, catalogPieces, discovered, rejected])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -401,6 +408,24 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
             const next = { ...current }
             delete next[item.id]
             saveLocal(TRASHED_CATALOG_KEY, next)
+            return next
+          })
+          setTrashedPieceIds(current => {
+            const next = { ...current }
+            let changed = false
+            for (const candidatePiece of pieces) {
+              if (current[candidatePiece.id] && candidatePiece.candidates.some(candidate => candidate.sourcePage === item.sourcePage)) {
+                delete next[candidatePiece.id]
+                changed = true
+              }
+            }
+            const catalogPieceId = 'catalog:' + item.id
+            if (current[catalogPieceId]) {
+              delete next[catalogPieceId]
+              changed = true
+            }
+            if (!changed) return current
+            saveLocal(TRASHED_PIECE_KEY, next)
             return next
           })
         }
@@ -702,7 +727,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const queuePieces = queueItems.map(catalogPieceFor)
     const selectedIndex = Math.max(0, queueItems.findIndex(row => row.id === item.id))
     setCatalogPieces(queuePieces)
-    setPieceIndex(pieces.length + selectedIndex)
+    setPieceIndex(basePieces.length + selectedIndex)
     setCandidateId('catalog-candidate:' + item.id)
     setMode('listen')
   }
@@ -859,9 +884,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function changePiece(delta: number) {
     if (catalogPieces.length && piece.id.startsWith('catalog:')) {
       setPieceIndex(index => {
-        const currentOffset = Math.max(0, index - pieces.length)
+        const currentOffset = Math.max(0, index - basePieces.length)
         const nextOffset = (currentOffset + delta + catalogPieces.length) % catalogPieces.length
-        return pieces.length + nextOffset
+        return basePieces.length + nextOffset
       })
       return
     }
@@ -1053,16 +1078,24 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   function trashCurrent() {
-    const musicId = catalogIdForPiece(piece.id)
     const hasZero = pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0
-    if (!musicId || !hasZero) return
-    const nextTrashed = { ...trashedCatalogIds, [musicId]:true }
-    setTrashedCatalogIds(nextTrashed)
-    saveLocal(TRASHED_CATALOG_KEY, nextTrashed)
-    queueReviewSync(piece.id, current.id, current.sourcePage, { rejected:true })
-    setCatalog(items => items.map(item => item.id === musicId ? { ...item, reviewRejected:true } : item))
+    if (!hasZero) return
+
+    const nextPieces = { ...trashedPieceIds, [piece.id]:true }
+    setTrashedPieceIds(nextPieces)
+    saveLocal(TRASHED_PIECE_KEY, nextPieces)
+
+    const musicId = catalogIdForPiece(piece.id) || catalog.find(item => item.sourcePage === current.sourcePage)?.id || null
+    if (musicId) {
+      const nextTrashed = { ...trashedCatalogIds, [musicId]:true }
+      setTrashedCatalogIds(nextTrashed)
+      saveLocal(TRASHED_CATALOG_KEY, nextTrashed)
+      queueReviewSync(piece.id, current.id, current.sourcePage, { rejected:true })
+      setCatalog(items => items.map(item => item.id === musicId ? { ...item, reviewRejected:true } : item))
+    }
+
     setCatalogPieces(items => items.filter(item => item.id !== piece.id))
-    setMessage('Moved to recoverable trash.')
+    setMessage(musicId ? 'Moved to recoverable trash.' : 'Moved to local recoverable trash.')
     setMode('browse')
   }
 
@@ -1128,6 +1161,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
+  const currentHasZero = pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0
 
   function catalogReviewValues(item: CatalogItem) {
     const pieceKey = 'catalog:' + item.id
@@ -1271,8 +1305,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <div className="md-footer-row">
         <span>{current.license}</span>
         <div>
-          {catalogIdForPiece(piece.id) && (pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0)
-            && <button className="md-trash" onClick={trashCurrent}>🗑 Trash</button>}
+          {currentHasZero && <button className="md-trash" onClick={trashCurrent}>🗑 Trash</button>}
           <a href={current.sourcePage} target="_blank" rel="noreferrer">Source ↗</a>
         </div>
       </div>
