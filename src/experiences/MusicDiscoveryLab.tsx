@@ -6,7 +6,6 @@ import './music-discovery-lab.css'
 type Rating = 0 | 1 | 2 | 3
 type Modality = 'Piano' | 'Orchestral' | 'Jazz' | 'Guitar' | 'Synth' | 'Ambient' | 'Game' | '8-bit'
 type Emotion = 'Hearth' | 'Wonder' | 'Calling' | 'Adventure' | 'Guide' | 'Mystery' | 'Vastness' | 'Peril' | 'Homeward' | 'Triumph'
-type ModalityStatus = 'unsearched' | 'requested' | 'notfound'
 type Candidate = {
   id: string
   performer: string
@@ -44,6 +43,7 @@ type CatalogItem = {
   performanceRating: Rating | null
   reviewNote: string
   confirmedEmotions: Emotion[]
+  suppressedEmotions: Emotion[]
   reviewRejected: boolean
   reviewUpdatedAt: string | null
 }
@@ -68,7 +68,18 @@ type ReviewOverrides = {
   rejected?: boolean
 }
 type ReviewField = keyof ReviewOverrides
-type CatalogFilter = 'New' | 'All' | Modality
+type CatalogReviewFilter = 'All' | 'New' | 'Loved'
+type SuppressionSyncEntry = {
+  musicId: string
+  sourcePage: string
+  suppressedEmotions: Emotion[]
+  updatedAt: number
+}
+type TrashSyncEntry = {
+  musicId: string
+  sourcePage: string
+  updatedAt: number
+}
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
 const emotions: Emotion[] = ['Hearth','Wonder','Calling','Adventure','Guide','Mystery','Vastness','Peril','Homeward','Triumph']
 
@@ -77,12 +88,14 @@ const QUALITY_KEY = 'hos-music-quality-ratings-v2'
 const PERFORMANCE_KEY = 'hos-music-performance-ratings-v2'
 const NOTE_KEY = 'hos-music-notes-v4'
 const REJECTED_KEY = 'hos-music-rejected-candidates-v1'
-const MODALITY_STATUS_KEY = 'hos-music-modality-status-v1'
 const CONFIRMED_EMOTION_KEY = 'hos-music-confirmed-emotions-v1'
+const SUPPRESSED_EMOTION_KEY = 'hos-music-suppressed-emotions-v1'
 const DISCOVERED_KEY = 'hos-music-discovered-candidates-v1'
 const INTEREST_KEY = 'hos-music-discovery-interests-v1'
 const REQUEST_KEY = 'hos-music-discovery-request-v1'
 const REVIEW_SYNC_QUEUE_KEY = 'hos-music-review-sync-queue-v1'
+const SUPPRESSION_SYNC_QUEUE_KEY = 'hos-music-emotion-suppression-sync-v1'
+const TRASH_SYNC_QUEUE_KEY = 'hos-music-trash-sync-v1'
 
 const commonsAudio = (file: string) => 'https://commons.wikimedia.org/wiki/Special:Redirect/file/' + encodeURIComponent(file)
 const candidateAudio = (candidate: Candidate) => candidate.audioUrl || (candidate.file ? commonsAudio(candidate.file) : '')
@@ -167,10 +180,6 @@ function formatTime(seconds: number) {
   if (!Number.isFinite(seconds) || seconds < 0) return '0:00'
   return Math.floor(seconds / 60) + ':' + Math.floor(seconds % 60).toString().padStart(2, '0')
 }
-function modalityKey(pieceId: string, modality: Modality) {
-  return pieceId + '::' + modality
-}
-
 export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: string }) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const recordingRef = useRef<RecordingSession | null>(null)
@@ -178,6 +187,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const recordingPieceRef = useRef<string | null>(null)
   const recordingSourcePageRef = useRef<string | null>(null)
   const resolvingCatalogRef = useRef<Map<string, Promise<string | null>>>(new Map())
+  const alternateSearchRef = useRef<Set<string>>(new Set())
   const reviewSyncingRef = useRef(false)
   const reviewSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const listenCardRef = useRef<HTMLElement | null>(null)
@@ -195,8 +205,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [performanceRatings, setPerformanceRatings] = useState<Record<string, Rating>>(() => loadObject(PERFORMANCE_KEY, {}))
   const [notes, setNotes] = useState<Record<string, string>>(() => loadObject(NOTE_KEY, {}))
   const [rejected, setRejected] = useState<Record<string, boolean>>(() => loadObject(REJECTED_KEY, {}))
-  const [modalityStatus, setModalityStatus] = useState<Record<string, ModalityStatus>>(() => loadObject(MODALITY_STATUS_KEY, {}))
   const [confirmedEmotions, setConfirmedEmotions] = useState<Record<string, Emotion[]>>(() => loadObject(CONFIRMED_EMOTION_KEY, {}))
+  const [suppressedEmotions, setSuppressedEmotions] = useState<Record<string, Emotion[]>>(() => loadObject(SUPPRESSED_EMOTION_KEY, {}))
   const [discovered, setDiscovered] = useState<Record<string, Candidate[]>>(() => loadObject(DISCOVERED_KEY, {}))
   const [interests, setInterests] = useState<string[]>(() => loadObject(INTEREST_KEY, ['Beautiful orchestral','Ambient game','Piano']))
   const [request, setRequest] = useState(() => localStorage.getItem(REQUEST_KEY) || 'Beautiful, high-quality music for games')
@@ -204,7 +214,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
   const [catalogLoading, setCatalogLoading] = useState(false)
   const [catalogSearch, setCatalogSearch] = useState('')
-  const [catalogModality, setCatalogModality] = useState<CatalogFilter>('New')
+  const [catalogReviewFilter, setCatalogReviewFilter] = useState<CatalogReviewFilter>('New')
+  const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
+  const [trashedCatalogIds, setTrashedCatalogIds] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(Object.keys(loadObject<Record<string, TrashSyncEntry>>(TRASH_SYNC_QUEUE_KEY, {})).map(id => [id, true]))
+  )
   const [playing, setPlaying] = useState(false)
   const [playPending, setPlayPending] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
