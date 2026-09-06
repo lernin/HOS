@@ -486,7 +486,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   async function persistCatalogRating(catalogId: string, value: Rating) {
     try {
-      const { error } = await supabase.rpc('lab_music_library_rate', { pin, music_id: catalogId, value })
+      const { error } = await supabase.rpc('lab_music_library_rate', { pin, music_id: catalogId, rating_value:value })
       if (error) throw error
       setMessage('Rating saved.')
     } catch {
