@@ -1311,21 +1311,6 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     </nav>
 
     {mode === 'listen' ? <section ref={listenCardRef} className="md-listen" onTouchStart={onListenTouchStart} onTouchMove={onListenTouchMove} onTouchEnd={onListenTouchEnd} onTouchCancel={onListenTouchCancel}>
-      <div className="md-modalities">
-        {modalities.map(modality => {
-          const list = candidateListFor(modality)
-          const status = modalityVisualStatus(modality)
-          const active = currentModality === modality && list.some(candidate => candidate.id === current.id)
-          return <div key={modality} className={'md-modality-cell status-' + status + (active ? ' active' : '')}>
-            <button className="md-modality-main" onClick={() => chooseModality(modality)} disabled={status === 'requested'}>
-              <strong>{modality}</strong>
-              <span>{status === 'available' ? (list.length > 1 ? list.length + ' versions' : 'ready') : status === 'requested' ? 'hunting…' : status === 'notfound' ? 'not found' : 'tap to hunt'}</span>
-            </button>
-            {status === 'available' && <button className="md-modality-hunt" onClick={() => void runHunt(modality)} aria-label={'Find another ' + modality + ' version'} title={'Find another ' + modality + ' version'}>＋</button>}
-          </div>
-        })}
-      </div>
-
       {currentVersions.length > 1 && <div className="md-version-picker">
         <small>{currentModality} versions</small>
         <div>
@@ -1380,9 +1365,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <small>EMOTIONAL QUALITY</small>
         <div>
           {emotions.map(emotion => {
-            const suggested = piece.aiEmotions.includes(emotion)
+            const suppressed = (suppressedEmotions[piece.id] || []).includes(emotion)
+            const suggested = piece.aiEmotions.includes(emotion) && !suppressed
             const confirmed = (confirmedEmotions[piece.id] || []).includes(emotion)
-            return <button key={emotion} className={(suggested ? 'suggested ' : '') + (confirmed ? 'confirmed' : '')} onClick={() => toggleEmotion(emotion)}>{emotion}</button>
+            return <button key={emotion} className={(suggested ? 'suggested ' : '') + (confirmed ? 'confirmed' : '')} onClick={() => toggleEmotion(emotion)} aria-pressed={confirmed}>{emotion}</button>
           })}
         </div>
       </div>
@@ -1394,28 +1380,39 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
       <div className="md-footer-row">
         <span>{current.license}</span>
-        <a href={current.sourcePage} target="_blank" rel="noreferrer">Source ↗</a>
+        <div>
+          {catalogIdForPiece(piece.id) && (pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0)
+            && <button className="md-trash" onClick={trashCurrent}>🗑 Trash</button>}
+          <a href={current.sourcePage} target="_blank" rel="noreferrer">Source ↗</a>
+        </div>
       </div>
     </section> : mode === 'browse' ? <section className="md-browse">
       <div className="md-browse-head">
         <div>
           <small>CURATED PRODUCTION LIBRARY</small>
-          <h1>{catalogLoading ? 'Gathering music…' : filteredCatalog.length + (catalogModality === 'New' ? ' new' : ' to try')}</h1>
+          <h1>{catalogLoading ? 'Gathering music…' : filteredCatalog.length + (catalogReviewFilter === 'Loved' ? ' loved' : catalogReviewFilter === 'New' ? ' new' : ' to try')}</h1>
         </div>
         <button onClick={() => void loadCatalog(true, true)} disabled={catalogLoading}>{catalogLoading ? '…' : '↻'}</button>
       </div>
       <div className="md-browse-search">
         <input value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} placeholder="Search title, artist, source…"/>
       </div>
+      <div className="md-review-filters">
+        {(['All','New','Loved'] as CatalogReviewFilter[]).map(value => <button key={value} className={(catalogReviewFilter === value ? 'active ' : '') + (value === 'New' ? 'new-filter ' : '') + (value === 'Loved' ? 'loved-filter' : '')} onClick={() => setCatalogReviewFilter(value)}>{value === 'Loved' ? '♥ LOVED' : value.toUpperCase()}</button>)}
+      </div>
       <div className="md-browse-filters">
-        {(['New','All', ...modalities] as CatalogFilter[]).map(value => <button key={value} className={(catalogModality === value ? 'active ' : '') + (value === 'New' ? 'new-filter' : '')} onClick={() => setCatalogModality(value)}>{value === 'New' || value === 'All' ? value.toUpperCase() : value}</button>)}
+        {(['All', ...modalities] as Array<'All' | Modality>).map(value => <button key={value} className={catalogModality === value ? 'active' : ''} onClick={() => setCatalogModality(value)}>{value === 'All' ? 'ALL TYPES' : value}</button>)}
       </div>
       <div className="md-catalog-list">
-        {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => void adoptCatalogItem(item)}>
-          <span className="md-catalog-play">{item.externalOnly ? '↗' : '▶'}</span>
-          <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.externalOnly ? ' · official stream' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
-          <span className="md-catalog-source">{item.source}</span>
-        </button>)}
+        {filteredCatalog.map(item => {
+          const touched = catalogTouched(item)
+          const loved = catalogLoved(item)
+          return <button key={item.id} className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => void adoptCatalogItem(item)}>
+            <span className="md-catalog-play">{item.externalOnly ? '↗' : '▶'}</span>
+            <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.externalOnly ? ' · official stream' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
+            <span className="md-catalog-source">{loved ? '♥ loved' : item.source}</span>
+          </button>
+        })}
         {!catalogLoading && !filteredCatalog.length && <p className="md-empty">No matches in this batch. Change the filter or refresh.</p>}
       </div>
       <div className="md-repositories">
