@@ -469,6 +469,14 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   function stepPiece(delta: number) {
+    if (catalogPieces.length && piece.id.startsWith('catalog:')) {
+      setPieceIndex(index => {
+        const currentOffset = Math.max(0, index - pieces.length)
+        const nextOffset = (currentOffset + delta + catalogPieces.length) % catalogPieces.length
+        return pieces.length + nextOffset
+      })
+      return
+    }
     setPieceIndex(index => (index + delta + pieceList.length) % pieceList.length)
   }
 
@@ -758,7 +766,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <input value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} placeholder="Search title, artist, source…"/>
       </div>
       <div className="md-browse-filters">
-        {(['New','All', ...modalities] as CatalogFilter[]).map(value => <button key={value} className={(catalogModality === value ? 'active ' : '') + (value === 'New' ? 'new-filter' : '')} onClick={() => setCatalogModality(value)}>{value.toUpperCase()}</button>)}
+        {(['New','All', ...modalities] as CatalogFilter[]).map(value => <button key={value} className={(catalogModality === value ? 'active ' : '') + (value === 'New' ? 'new-filter' : '')} onClick={() => setCatalogModality(value)}>{value === 'New' || value === 'All' ? value.toUpperCase() : value}</button>)}
       </div>
       <div className="md-catalog-list">
         {filteredCatalog.map(item => <button key={item.id} className="md-catalog-item" onClick={() => void adoptCatalogItem(item)}>
