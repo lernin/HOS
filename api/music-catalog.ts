@@ -1,6 +1,9 @@
 const ACCESS_PIN = '3476'
 
 type Modality = 'Piano' | 'Orchestral' | 'Jazz' | 'Guitar' | 'Synth' | 'Ambient' | 'Game' | '8-bit'
+type Emotion = 'Hearth' | 'Wonder' | 'Calling' | 'Adventure' | 'Guide' | 'Mystery' | 'Vastness' | 'Peril' | 'Homeward' | 'Triumph'
+type DiscoveryStyle = 'Orchestral / Cinematic' | 'Piano / Minimal' | 'Jazz / Swing' | 'Guitar / Acoustic' | 'Ambient / Atmospheric' | 'Synth / Electronic' | 'Techno / Driving' | 'Dubstep / Heavy' | '8-bit / Chiptune' | 'Retro Game' | 'Funky / Groovy' | 'Playful / Whimsical' | 'Dark / Suspense' | 'Epic / Heroic' | 'World / Folk' | 'Soundscape / Texture'
+
 type CatalogItem = {
   id: string
   title: string
@@ -12,28 +15,72 @@ type CatalogItem = {
   source: string
 }
 
-const seeds: Array<{ query: string; modality: Modality }> = [
-  { query:'ambient game music instrumental', modality:'Ambient' },
-  { query:'cinematic orchestral instrumental', modality:'Orchestral' },
-  { query:'synth electronic instrumental', modality:'Synth' },
-  { query:'chiptune 8 bit game music', modality:'8-bit' },
-  { query:'video game soundtrack instrumental', modality:'Game' },
-  { query:'jazz instrumental', modality:'Jazz' },
-  { query:'guitar instrumental', modality:'Guitar' },
-  { query:'piano instrumental', modality:'Piano' },
+type SearchRecipe = {
+  style: DiscoveryStyle
+  modality: Modality
+  phrases: string[]
+}
+
+const styleRecipes: SearchRecipe[] = [
+  { style:'Orchestral / Cinematic', modality:'Orchestral', phrases:['cinematic orchestral instrumental','beautiful symphonic film score','emotional orchestral soundtrack'] },
+  { style:'Piano / Minimal', modality:'Piano', phrases:['minimal piano instrumental','gentle solo piano','modern neoclassical piano'] },
+  { style:'Jazz / Swing', modality:'Jazz', phrases:['instrumental jazz','light swing jazz','atmospheric jazz instrumental'] },
+  { style:'Guitar / Acoustic', modality:'Guitar', phrases:['acoustic guitar instrumental','fingerstyle guitar','warm guitar soundtrack'] },
+  { style:'Ambient / Atmospheric', modality:'Ambient', phrases:['ambient atmospheric instrumental','cinematic ambient soundscape','dreamy background music'] },
+  { style:'Synth / Electronic', modality:'Synth', phrases:['synth electronic instrumental','emotional synthesizer soundtrack','electronic ambient instrumental'] },
+  { style:'Techno / Driving', modality:'Synth', phrases:['driving techno instrumental','melodic techno','energetic electronic game music'] },
+  { style:'Dubstep / Heavy', modality:'Synth', phrases:['dubstep instrumental','cinematic bass electronic','heavy electronic game music'] },
+  { style:'8-bit / Chiptune', modality:'8-bit', phrases:['8 bit chiptune game music','chiptune instrumental','retro pixel game soundtrack'] },
+  { style:'Retro Game', modality:'Game', phrases:['retro video game music','arcade game soundtrack','classic game style instrumental'] },
+  { style:'Funky / Groovy', modality:'Jazz', phrases:['funky groove instrumental','funk instrumental','groovy game music'] },
+  { style:'Playful / Whimsical', modality:'Game', phrases:['playful whimsical instrumental','quirky game music','lighthearted adventure soundtrack'] },
+  { style:'Dark / Suspense', modality:'Game', phrases:['dark suspense instrumental','mysterious tension soundtrack','stealth game ambient'] },
+  { style:'Epic / Heroic', modality:'Orchestral', phrases:['epic heroic instrumental','victory orchestral soundtrack','cinematic adventure music'] },
+  { style:'World / Folk', modality:'Game', phrases:['world folk instrumental','traditional acoustic adventure music','folk game soundtrack'] },
+  { style:'Soundscape / Texture', modality:'Ambient', phrases:['cinematic soundscape texture','ambient drone atmosphere','environmental texture audio'] },
+]
+
+const emotionTerms: Record<Emotion, string[]> = {
+  Hearth:['warm','intimate','gentle','home'],
+  Wonder:['magical','luminous','awe','curious'],
+  Calling:['awakening','anticipation','destiny','invitation'],
+  Adventure:['exploration','journey','bold','moving'],
+  Guide:['wise','calm','supportive','steady'],
+  Mystery:['enigmatic','shadowy','curious','atmospheric'],
+  Vastness:['spacious','cosmic','oceanic','expansive'],
+  Peril:['tension','danger','urgent','suspense'],
+  Homeward:['nostalgic','tender','returning','comforting'],
+  Triumph:['victorious','uplifting','heroic','celebration'],
+}
+
+const classicalSeeds: Array<{ title:string; composer:string; styles:DiscoveryStyle[]; emotions:Emotion[] }> = [
+  { title:'Gymnopédie No. 1', composer:'Erik Satie', styles:['Piano / Minimal','Ambient / Atmospheric'], emotions:['Hearth','Wonder','Homeward'] },
+  { title:'Clair de lune', composer:'Claude Debussy', styles:['Piano / Minimal','Orchestral / Cinematic'], emotions:['Wonder','Mystery','Homeward'] },
+  { title:'Pavane pour une infante défunte', composer:'Maurice Ravel', styles:['Piano / Minimal','Orchestral / Cinematic'], emotions:['Hearth','Mystery','Homeward'] },
+  { title:'Morning Mood', composer:'Edvard Grieg', styles:['Orchestral / Cinematic'], emotions:['Hearth','Wonder','Calling'] },
+  { title:'New World Symphony Largo', composer:'Antonín Dvořák', styles:['Orchestral / Cinematic'], emotions:['Vastness','Homeward','Adventure'] },
+  { title:'Aquarium', composer:'Camille Saint-Saëns', styles:['Orchestral / Cinematic','Ambient / Atmospheric'], emotions:['Wonder','Mystery','Vastness'] },
+  { title:'Air on the G String', composer:'J. S. Bach', styles:['Orchestral / Cinematic'], emotions:['Hearth','Guide','Homeward'] },
+  { title:'Moonlight Sonata', composer:'Ludwig van Beethoven', styles:['Piano / Minimal'], emotions:['Mystery','Homeward','Peril'] },
+  { title:'Nocturne Op. 9 No. 2', composer:'Frédéric Chopin', styles:['Piano / Minimal'], emotions:['Hearth','Wonder','Homeward'] },
+  { title:'Liebestraum No. 3', composer:'Franz Liszt', styles:['Piano / Minimal'], emotions:['Wonder','Homeward','Triumph'] },
+  { title:'Pavane', composer:'Gabriel Fauré', styles:['Orchestral / Cinematic'], emotions:['Hearth','Mystery','Homeward'] },
+  { title:'Jupiter', composer:'Gustav Holst', styles:['Orchestral / Cinematic','Epic / Heroic'], emotions:['Vastness','Triumph','Adventure'] },
+  { title:'Night on Bald Mountain', composer:'Modest Mussorgsky', styles:['Orchestral / Cinematic','Dark / Suspense'], emotions:['Peril','Mystery','Adventure'] },
+  { title:'Scheherazade', composer:'Nikolai Rimsky-Korsakov', styles:['Orchestral / Cinematic'], emotions:['Adventure','Wonder','Mystery'] },
+  { title:'Winter Largo', composer:'Antonio Vivaldi', styles:['Orchestral / Cinematic'], emotions:['Hearth','Homeward','Wonder'] },
+  { title:'The Hebrides Overture', composer:'Felix Mendelssohn', styles:['Orchestral / Cinematic'], emotions:['Vastness','Adventure','Mystery'] },
+  { title:'Canon in D', composer:'Johann Pachelbel', styles:['Orchestral / Cinematic'], emotions:['Hearth','Homeward','Triumph'] },
+  { title:'Carmen Intermezzo', composer:'Georges Bizet', styles:['Orchestral / Cinematic'], emotions:['Hearth','Wonder','Homeward'] },
+  { title:'Danse Macabre', composer:'Camille Saint-Saëns', styles:['Orchestral / Cinematic','Dark / Suspense'], emotions:['Mystery','Peril','Adventure'] },
+  { title:'Peer Gynt Anitra’s Dance', composer:'Edvard Grieg', styles:['Orchestral / Cinematic','Playful / Whimsical'], emotions:['Adventure','Wonder','Calling'] },
 ]
 
 const repositories = [
   { name:'Openverse', url:'https://openverse.org/', mode:'live', note:'Live API metasearch for openly licensed audio.' },
-  { name:'Wikimedia', url:'https://commons.wikimedia.org/wiki/Category:Audio_files', mode:'live', note:'Live Commons API search with file/license metadata.' },
-  { name:'Jamendo', url:'https://www.jamendo.com/', mode:'indexed', note:'Indexed in Openverse audio search.' },
-  { name:'Freesound', url:'https://freesound.org/', mode:'indexed', note:'Indexed in Openverse; filtered toward longer music-like audio.' },
-  { name:'ccMixter', url:'https://ccmixter.org/', mode:'portal', note:'Public Creative Commons music library with its own query API.' },
-  { name:'Internet Archive', url:'https://archive.org/details/audio', mode:'portal', note:'Large audio archive; licensing varies by item.' },
-  { name:'OpenGameArt', url:'https://opengameart.org/art-search-advanced?field_art_type_tid%5B%5D=12', mode:'portal', note:'Game-focused music with per-item licenses.' },
-  { name:'Musopen', url:'https://musopen.org/music/', mode:'portal', note:'Classical composition/performance discovery; verify exact recording rights.' },
-  { name:'Incompetech', url:'https://incompetech.com/music/royalty-free/music.html', mode:'portal', note:'Kevin MacLeod library; Creative Commons options available.' },
-  { name:'Scott Buckley', url:'https://www.scottbuckley.com.au/library/', mode:'portal', note:'Cinematic/game-friendly CC BY 4.0 library.' },
+  { name:'Wikimedia', url:'https://commons.wikimedia.org/wiki/Category:Audio_files', mode:'indexed', note:'Openverse indexes Wikimedia Commons audio.' },
+  { name:'Jamendo', url:'https://www.jamendo.com/', mode:'indexed', note:'Openverse indexes Jamendo audio.' },
+  { name:'Freesound', url:'https://freesound.org/', mode:'indexed', note:'Openverse indexes Freesound audio.' },
 ] as const
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -51,9 +98,9 @@ function licenseLabel(value: string, version?: string) {
 async function openverseSearch(query: string, modality: Modality, page: number): Promise<CatalogItem[]> {
   const url = new URL('https://api.openverse.org/v1/audio/')
   url.searchParams.set('q', query)
-  url.searchParams.set('page_size', '50')
+  url.searchParams.set('page_size', '40')
   url.searchParams.set('page', String(page))
-  const response = await fetch(url, { headers:{ 'User-Agent':'HOS-MusicDiscovery/1.0' } })
+  const response = await fetch(url, { headers:{ 'User-Agent':'HOS-MusicDiscovery/1.1' } })
   if (!response.ok) return []
 
   const data = await response.json() as {
@@ -89,49 +136,85 @@ async function openverseSearch(query: string, modality: Modality, page: number):
   })
 }
 
+function pickSurprise(page: number) {
+  const start = ((page - 1) * 5) % styleRecipes.length
+  return Array.from({ length:8 }, (_, offset) => styleRecipes[(start + offset * 3) % styleRecipes.length])
+}
+
+function buildSearchPlan(styles: DiscoveryStyle[], emotions: Emotion[], custom: string, surprise: boolean, page: number) {
+  const chosenRecipes = surprise || !styles.length
+    ? pickSurprise(page)
+    : styleRecipes.filter(recipe => styles.includes(recipe.style))
+  const chosenEmotions = surprise || !emotions.length
+    ? (['Hearth','Wonder','Adventure','Mystery','Vastness','Peril','Homeward','Triumph'] as Emotion[])
+    : emotions
+
+  const plan: Array<{ query:string; modality:Modality }> = []
+  for (let index = 0; index < chosenRecipes.length; index++) {
+    const recipe = chosenRecipes[index]
+    const emotion = chosenEmotions[index % chosenEmotions.length]
+    const phrase = recipe.phrases[(page + index) % recipe.phrases.length]
+    const emotionalWord = emotionTerms[emotion][(page + index) % emotionTerms[emotion].length]
+    plan.push({ query:[emotionalWord, phrase, 'instrumental'].join(' '), modality:recipe.modality })
+  }
+
+  const classicalMatches = classicalSeeds.filter(seed =>
+    (surprise || !styles.length || seed.styles.some(style => styles.includes(style))) &&
+    (surprise || !emotions.length || seed.emotions.some(emotion => emotions.includes(emotion)))
+  ).slice(0, 4)
+  for (const seed of classicalMatches) {
+    const style = seed.styles.find(value => styles.includes(value)) || seed.styles[0]
+    const recipe = styleRecipes.find(item => item.style === style) || styleRecipes[0]
+    plan.push({ query:'"' + seed.title + '" ' + seed.composer, modality:recipe.modality })
+  }
+
+  if (custom) {
+    const recipe = chosenRecipes[0] || styleRecipes[0]
+    plan.unshift({ query:custom + ' instrumental music', modality:recipe.modality })
+  }
+
+  const seen = new Set<string>()
+  return plan.filter(item => {
+    const key = item.query.toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  }).slice(0, 12)
+}
+
 export default {
   async fetch(request: Request) {
     if (request.method !== 'POST') return json({ error:'Method not allowed.' }, 405)
     if (request.headers.get('x-review-pin') !== ACCESS_PIN) return json({ error:'Unauthorized.' }, 401)
 
     try {
-      const body = await request.json().catch(() => ({})) as { interests?: string[]; request?: string; page?: number }
+      const body = await request.json().catch(() => ({})) as { styles?: DiscoveryStyle[]; emotions?: Emotion[]; request?: string; page?: number; surprise?: boolean }
+      const styles = (body.styles || []).filter(style => styleRecipes.some(recipe => recipe.style === style)).slice(0, 8)
+      const emotions = (body.emotions || []).filter(emotion => emotion in emotionTerms).slice(0, 8)
       const custom = String(body.request || '').trim()
       const page = Math.max(1, Math.min(8, Number(body.page) || 1))
-      const interestList = (body.interests || []).filter(Boolean).slice(0, 4)
+      const surprise = Boolean(body.surprise)
 
-      const inferModality = (value: string): Modality => {
-        const text = value.toLowerCase()
-        if (text.includes('orchestr')) return 'Orchestral'
-        if (text.includes('ambient')) return 'Ambient'
-        if (text.includes('jazz')) return 'Jazz'
-        if (text.includes('guitar')) return 'Guitar'
-        if (text.includes('synth') || text.includes('electronic')) return 'Synth'
-        if (text.includes('8-bit') || text.includes('chiptune')) return '8-bit'
-        if (text.includes('piano')) return 'Piano'
-        return 'Game'
-      }
-
-      const personalized = interestList.map(interest => ({ query:interest + ' instrumental music', modality:inferModality(interest) }))
-      if (custom) personalized.unshift({ query:custom + ' instrumental music', modality:inferModality(custom) })
-
-      const allSeeds = [...personalized, ...seeds]
-      const dedupedSeeds = allSeeds.filter((seed, index, list) => list.findIndex(other => other.query.toLowerCase() === seed.query.toLowerCase()) === index).slice(0, 10)
-      const batches = await Promise.all(dedupedSeeds.map(seed => openverseSearch(seed.query, seed.modality, page)))
+      const searchPlan = buildSearchPlan(styles, emotions, custom, surprise, page)
+      const batches = await Promise.all(searchPlan.map(item => openverseSearch(item.query, item.modality, page)))
       const seen = new Set<string>()
       const items = batches.flat().filter(item => {
         const key = item.sourcePage || item.audioUrl
         if (seen.has(key)) return false
         seen.add(key)
         return true
-      }).slice(0, 220)
+      }).slice(0, 240)
 
       return json({
         items,
         repositories,
-        target:200,
+        queryPlan:searchPlan.map(item => item.query),
+        styles,
+        emotions,
+        surprise,
         page,
-        note:'Catalog results are for auditioning. Verify the exact source-page license before bundling a keeper into HOS.',
+        target:200,
+        note:'The HOS search map is curated in code; Openverse supplies fresh playable candidates. Verify exact license metadata before bundling a keeper.',
       })
     } catch (error) {
       console.error('Music catalog failed', error)
