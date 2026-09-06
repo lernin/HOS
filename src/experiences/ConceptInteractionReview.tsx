@@ -37,9 +37,13 @@ export function ConceptInteractionReview({pin,onExit}:Props){
   const [note,setNote]=useState('')
   const [msg,setMsg]=useState('')
   const [toast,setToast]=useState('')
+  const [pendingConfidence,setPendingConfidence]=useState<{id:string;value:number}|null>(null)
   const [recording,setRecording]=useState(false)
   const rec=useRef<RecordingSession|null>(null)
+  const cardRef=useRef<HTMLElement|null>(null)
   const touchX=useRef<number|null>(null)
+  const touchDx=useRef(0)
+  const motionBusy=useRef(false)
   const advanceTimer=useRef<number|null>(null)
 
   useEffect(()=>{
@@ -73,23 +77,78 @@ export function ConceptInteractionReview({pin,onExit}:Props){
     return saved
   }
 
-  function go(delta:number){
-    setIdx(i=>Math.max(0,Math.min(visible.length-1,i+delta)))
+  function nextFrame(){
+    return new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))
+  }
+
+  async function animateCard(delta:number,midpoint:()=>void,startX=0){
+    if(motionBusy.current)return
+    const card=cardRef.current
+    if(!card){midpoint();return}
+    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){midpoint();return}
+    motionBusy.current=true
+    card.style.pointerEvents='none'
+    const edge=delta>0?'-112%':'112%'
+    const start=`translateX(${startX}px) scale(${1-Math.min(Math.abs(startX)/2400,.02)})`
+    const out=card.animate(
+      [{transform:start,opacity:1},{transform:`translateX(${edge}) scale(.97)`,opacity:.28}],
+      {duration:startX?150:190,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'}
+    )
+    try{
+      await out.finished
+      midpoint()
+      await nextFrame()
+      const incoming=cardRef.current
+      if(incoming){
+        const from=delta>0?'112%':'-112%'
+        const enter=incoming.animate(
+          [{transform:`translateX(${from}) scale(.97)`,opacity:.28},{transform:'translateX(0) scale(1)',opacity:1}],
+          {duration:230,easing:'cubic-bezier(.2,.75,.2,1)',fill:'forwards'}
+        )
+        out.cancel()
+        await enter.finished
+        enter.cancel()
+        incoming.style.transform=''
+        incoming.style.opacity=''
+        incoming.style.pointerEvents=''
+      }
+    }finally{
+      motionBusy.current=false
+      const active=cardRef.current
+      if(active){active.style.transform='';active.style.opacity='';active.style.pointerEvents=''}
+    }
+  }
+
+  function go(delta:number,startX=0){
+    const target=Math.max(0,Math.min(visible.length-1,idx+delta))
+    if(target===idx){
+      const card=cardRef.current
+      if(card&&startX){
+        const snap=card.animate([{transform:`translateX(${startX}px)`},{transform:'translateX(0)'}],{duration:150,easing:'ease-out'})
+        void snap.finished.finally(()=>{card.style.transform='';card.style.opacity=''})
+      }
+      return
+    }
+    void animateCard(delta,()=>setIdx(target),startX)
   }
 
   async function choose(n:number){
     if(!row)return
-    const code=row.interaction_code
+    const current=row
+    setPendingConfidence({id:current.id,value:n})
     const saved=await save(n,undefined,false)
-    if(!saved)return
-    setToast(`${code} · confidence ${n} saved`)
+    if(!saved){setPendingConfidence(null);return}
+    setToast(`${current.interaction_code} · confidence ${n} saved`)
     if(advanceTimer.current) window.clearTimeout(advanceTimer.current)
     advanceTimer.current=window.setTimeout(()=>{
       const remainsVisible=filter==='all'||(filter==='2+'?n>=2:String(n)===filter)
-      if(remainsVisible)setIdx(i=>i+1)
-      setRows(rs=>rs.map(r=>r.id===saved.id?saved:r))
       setToast('')
-    },900)
+      void animateCard(1,()=>{
+        setRows(rs=>rs.map(r=>r.id===saved.id?saved:r))
+        setPendingConfidence(null)
+        if(remainsVisible)setIdx(i=>i+1)
+      })
+    },950)
   }
 
   async function mic(){
@@ -128,13 +187,36 @@ export function ConceptInteractionReview({pin,onExit}:Props){
     <header><button onClick={onExit}>‹ Lab</button><b>Concept Interactions</b><span>{idx+1}/{visible.length}</span></header>
     <nav>{filters.map(([v,l])=><button className={filter===v?'on':''} onClick={()=>{setFilter(v);setIdx(0)}} key={v}>{l}</button>)}</nav>
     <section
+      ref={cardRef}
       className="ci-card"
-      onTouchStart={e=>{touchX.current=e.changedTouches[0].clientX}}
-      onTouchEnd={e=>{
-        if(touchX.current===null)return
+      onTouchStart={e=>{
+        if((e.target as HTMLElement).closest('button,textarea,input,select')){touchX.current=null;return}
+        touchX.current=e.changedTouches[0].clientX
+        touchDx.current=0
+      }}
+      onTouchMove={e=>{
+        if(touchX.current===null||motionBusy.current)return
         const d=e.changedTouches[0].clientX-touchX.current
+        touchDx.current=d
+        const card=cardRef.current
+        if(card){
+          card.style.transform=`translateX(${d}px) rotate(${d*.012}deg)`
+          card.style.opacity=String(Math.max(.72,1-Math.abs(d)/700))
+        }
+      }}
+      onTouchEnd={()=>{
+        if(touchX.current===null)return
+        const d=touchDx.current
         touchX.current=null
-        if(Math.abs(d)>55)go(d<0?1:-1)
+        touchDx.current=0
+        if(Math.abs(d)>55)go(d<0?1:-1,d)
+        else{
+          const card=cardRef.current
+          if(card){
+            const snap=card.animate([{transform:`translateX(${d}px)`,opacity:card.style.opacity||'1'},{transform:'translateX(0)',opacity:1}],{duration:150,easing:'ease-out'})
+            void snap.finished.finally(()=>{card.style.transform='';card.style.opacity=''})
+          }
+        }
       }}
     >
       <div className="ci-title"><strong>{row.interaction_code}</strong><span>{row.derived_command}</span></div>
@@ -165,7 +247,7 @@ export function ConceptInteractionReview({pin,onExit}:Props){
         <button className={recording?'ci-mic rec':'ci-mic'} onClick={mic}>{recording?'■ Stop':'● Mic'}</button>
         <div className="ci-confidence">
           <div className="ci-ai"><span>AI confidence</span><b>{row.ai_confidence??'—'}</b><span>Use {row.usefulness??'—'} · Diff {row.difficulty??'—'}</span></div>
-          <div className="ci-ashley"><small>Your confidence</small>{[0,1,2,3].map(n=><button className={row.ashley_confidence===n?'selected':''} onClick={()=>void choose(n)} key={n}>{n}</button>)}</div>
+          <div className="ci-ashley"><small>Your confidence</small>{[0,1,2,3].map(n=>{const shown=pendingConfidence?.id===row.id?pendingConfidence.value:row.ashley_confidence;return <button className={shown===n?'selected':''} onClick={()=>void choose(n)} key={n}>{n}</button>})}</div>
         </div>
       </div>
     </section>
