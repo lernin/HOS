@@ -1244,6 +1244,45 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const interestOptions = ['Beautiful orchestral','Ambient game','Jazz','Guitar','Synth pads','8-bit / chiptune','Electronic / dubstep','Cinematic','Piano','Strange / experimental']
   const currentVersions = candidateListFor(currentModality)
 
+  function normalizeVersionText(value: string) {
+    return value.trim().toLowerCase().replace(/\s+/g, ' ')
+  }
+
+  function sameCatalogComposition(a: CatalogItem, b: CatalogItem) {
+    return normalizeVersionText(a.composer) === normalizeVersionText(b.composer)
+      && normalizeVersionText(a.workTitle) === normalizeVersionText(b.workTitle)
+      && normalizeVersionText(a.movementTitle) === normalizeVersionText(b.movementTitle)
+  }
+
+  function catalogVersionScore(item: CatalogItem) {
+    const values = catalogReviewValues(item)
+    const parts = [values.piece, values.sound, values.performance]
+    return parts.every(value => value !== undefined)
+      ? parts.join('/')
+      : parts.some(value => value !== undefined)
+        ? parts.map(value => value ?? '–').join('/')
+        : 'Unrated'
+  }
+
+  function switchCatalogVersion(item: CatalogItem) {
+    const pieceId = 'catalog:' + item.id
+    const existingIndex = catalogPieces.findIndex(candidatePiece => candidatePiece.id === pieceId)
+    if (existingIndex >= 0) {
+      setPieceIndex(pieces.length + existingIndex)
+      setCandidateId('catalog-candidate:' + item.id)
+      setMessage('Switched version.')
+      return
+    }
+
+    setCatalogPieces(currentPieces => {
+      const nextPieces = [...currentPieces, catalogPieceFor(item)]
+      setPieceIndex(pieces.length + nextPieces.length - 1)
+      return nextPieces
+    })
+    setCandidateId('catalog-candidate:' + item.id)
+    setMessage('Added this version to the listening queue.')
+  }
+
   function catalogReviewValues(item: CatalogItem) {
     const pieceKey = 'catalog:' + item.id
     const candidateKey = 'catalog-candidate:' + item.id
