@@ -421,7 +421,7 @@ function App() {
     '--judgment-size': `${fontPrefs.judgment}px`,
   } as React.CSSProperties
 
-  if (pin && view === 'fluency') return <Suspense fallback={<main className="shell"><div className="center">Opening Ashley’s Fluency…</div></main>}><ThekonymFluency pin={pin} onExit={() => navigate('hub')} /></Suspense>
+  if (pin && view === 'fluency') return <Suspense fallback={<main className="shell"><div className="center">Opening Ashley’s Fluency…</div></main>}><ThekonymFluency pin={pin} onExit={() => navigate('hub')} onInspect={(termId) => { window.history.pushState({}, '', `/thekonym-viewer?term=${encodeURIComponent(termId)}`); setView('thekonym-viewer'); window.scrollTo(0, 0) }} /></Suspense>
 
   if (pin && view === 'thekonym-viewer') return <Suspense fallback={<main className="shell"><div className="center">Opening Thekonym viewer…</div></main>}><ThekonymReader pin={pin} onExit={() => navigate('hub')} /></Suspense>
 
