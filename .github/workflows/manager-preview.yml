@@ -1,11 +1,7 @@
 name: Manager Visual Preview
 
 on:
-  push:
-    branches:
-      - feature/manager-v1-20260908
-    paths-ignore:
-      - 'docs/previews/manager-v1.png'
+  workflow_dispatch:
 
 permissions:
   contents: write
