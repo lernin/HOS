@@ -70,7 +70,7 @@ function columnKind(column: string, rows: Record<string, unknown>[]) {
   if (isTechnicalColumn(column)) return 'technical'
   const values = rows.slice(0, 12).map(row => row[column]).filter(value => value !== null && value !== undefined)
   if (values.length && values.every(value => typeof value === 'boolean')) return 'boolean'
-  const longest = values.reduce((max, value) => Math.max(max, fullValue(value).length), 0)
+  const longest = values.reduce<number>((max, value) => Math.max(max, fullValue(value).length), 0)
   return longest > 60 ? 'prose' : 'normal'
 }
 
