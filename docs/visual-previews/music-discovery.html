@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Music Discovery Preview</title>
+<style>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f5f4ef;background:#101315}
+*{box-sizing:border-box}
+body{margin:0;background:#101315;color:#f5f4ef}
+.app{max-width:430px;margin:0 auto;min-height:100vh;padding:14px}
+.top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.top button,.tab,.chip,.toggle,.rating button,.play,.filter{border:1px solid #394248;background:#171b1e;color:#f5f4ef;border-radius:12px;min-height:42px;padding:0 12px;font:inherit;font-weight:700}
+.top strong{font-size:18px}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.tab.active{background:#f0f3f5;color:#121416}
+.card{border:1px solid #2e373c;border-radius:16px;background:#151a1d;padding:14px}
+.eyebrow{color:#98a3aa;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+h1{font-size:25px;margin:7px 0 3px}
+.sub{color:#aab3b8;margin:0 0 14px}
+.transport{display:grid;grid-template-columns:48px 1fr 48px;gap:8px;margin:12px 0}
+.play{background:#f0f3f5;color:#121416}
+.flags{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.toggle{padding:10px 8px;min-height:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.toggle.active{background:#27322d;border-color:#678a78}
+.toggle small{font-size:11px;color:#aab3b8}
+.judgment{margin-top:16px}
+.judgment>small{display:block;color:#98a3aa;font-weight:800;margin-bottom:6px}
+.rating{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.rating button{min-height:52px;padding:6px}
+.rating b{display:block;font-size:18px}.rating span{font-size:11px;color:#b4bdc2}
+.emotions{display:flex;flex-wrap:wrap;gap:7px}
+.chip{min-height:36px;padding:0 10px;font-size:13px}
+.chip.selected{background:#27322d;border-color:#678a78}
+.note{margin-top:14px;border:1px solid #30393e;border-radius:12px;padding:11px;color:#99a4aa;background:#121619}
+.browse-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:12px}
+.browse-head h1{margin:2px 0 0}
+.search{width:100%;min-height:44px;border:1px solid #394248;border-radius:12px;background:#171b1e;color:#fff;padding:0 12px;font-size:16px;margin-bottom:10px}
+.row{display:flex;gap:7px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px}
+.filter{white-space:nowrap;min-height:38px;font-size:12px}
+.filter.active{background:#f0f3f5;color:#121416}
+.filter.love.active{background:#3a2631;color:#fff;border-color:#8f6477}
+.list{display:grid;gap:8px}
+.item{border:1px solid #2e373c;border-radius:14px;background:#171b1e;padding:12px;display:grid;grid-template-columns:34px 1fr auto;gap:10px;align-items:center}
+.item .playicon{font-size:15px}.item strong{display:block}.item small{display:block;color:#98a3aa;margin-top:3px}.tag{font-size:11px;color:#cbd2d6}
+.badges{display:flex;gap:5px;margin-top:6px}.badge{border:1px solid #3b464c;border-radius:999px;padding:2px 7px;font-size:10px;color:#cbd2d6}
+.badge.love{border-color:#8f6477}.badge.mature{border-color:#8a7d67}.badge.broken{border-color:#875f5f}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top"><button>← Lab</button><strong>Music Discovery</strong><span>127/379</span></div>
+  <div class="tabs"><button class="tab active">LISTEN</button><button class="tab">BROWSE</button><button class="tab">HUNT</button></div>
+
+  <section id="listen" class="card">
+    <div class="eyebrow">Erik Satie · Piano · Commons recording</div>
+    <h1>Gymnopédie No. 1</h1>
+    <p class="sub">still · tender · beautiful</p>
+
+    <div class="transport"><button class="topbtn">‹</button><button class="play">▶ Play</button><button class="topbtn">›</button></div>
+
+    <div class="flags">
+      <button class="toggle active"><span>♥ Love</span><small>personal</small></button>
+      <button class="toggle"><span>Mature</span><small>child suitability</small></button>
+      <button class="toggle"><span>Broken</span><small>playback</small></button>
+    </div>
+
+    <div class="judgment"><small>PIECE</small><div class="rating">
+      <button><b>0</b><span>Hate</span></button><button><b>1</b><span>Mild</span></button><button><b>2</b><span>Good</span></button><button><b>3</b><span>Love</span></button>
+    </div></div>
+    <div class="judgment"><small>SOUND</small><div class="rating">
+      <button><b>0</b><span>Awful</span></button><button><b>1</b><span>Weak</span></button><button><b>2</b><span>Good</span></button><button><b>3</b><span>Great</span></button>
+    </div></div>
+    <div class="judgment"><small>PERFORMANCE</small><div class="rating">
+      <button><b>0</b><span>Reject</span></button><button><b>1</b><span>Reject</span></button><button><b>2</b><span>Keep</span></button><button><b>3</b><span>Best</span></button>
+    </div></div>
+
+    <div class="judgment"><small>EMOTIONAL QUALITY</small><div class="emotions">
+      <button class="chip selected">Hearth</button><button class="chip selected">Wonder</button><button class="chip">Calling</button><button class="chip">Adventure</button><button class="chip">Guide</button><button class="chip">Mystery</button><button class="chip">Vastness</button><button class="chip">Peril</button><button class="chip selected">Homeward</button><button class="chip">Triumph</button>
+    </div></div>
+    <div class="note">Type or record anything else you think…</div>
+  </section>
+
+  <section id="browse" class="hidden">
+    <div class="browse-head"><div><div class="eyebrow">Curated production library</div><h1>Browse music</h1></div><button class="topbtn">↻</button></div>
+    <input class="search" placeholder="Search title, artist, source…">
+
+    <div class="row">
+      <button class="filter">ALL</button><button class="filter">NEW</button><button class="filter love active">♥ LOVED</button><button class="filter">MATURE</button><button class="filter">BROKEN</button>
+    </div>
+    <div class="row">
+      <button class="filter">ALL TYPES</button><button class="filter active">PIANO</button><button class="filter">ORCHESTRAL</button><button class="filter">JAZZ</button><button class="filter">GUITAR</button><button class="filter">SYNTH</button><button class="filter">AMBIENT</button><button class="filter">GAME</button><button class="filter">8-BIT</button>
+    </div>
+    <div class="row">
+      <button class="filter">ALL EMOTIONS</button><button class="filter">HEARTH</button><button class="filter">WONDER</button><button class="filter">CALLING</button><button class="filter">ADVENTURE</button><button class="filter">GUIDE</button><button class="filter active">MYSTERY</button><button class="filter">VASTNESS</button><button class="filter">PERIL</button><button class="filter">HOMEWARD</button><button class="filter">TRIUMPH</button>
+    </div>
+
+    <div class="list">
+      <div class="item"><div class="playicon">▶</div><div><strong>Clair de lune</strong><small>Claude Debussy · Piano</small><div class="badges"><span class="badge love">♥ Love</span><span class="badge">Mystery</span></div></div><div class="tag">Commons</div></div>
+      <div class="item"><div class="playicon">▶</div><div><strong>Gymnopédie No. 1</strong><small>Erik Satie · Piano</small><div class="badges"><span class="badge love">♥ Love</span><span class="badge">Mystery</span><span class="badge">Hearth</span></div></div><div class="tag">Commons</div></div>
+      <div class="item"><div class="playicon">—</div><div><strong>Gnossienne No. 1</strong><small>Erik Satie · Piano</small><div class="badges"><span class="badge mature">Mature</span><span class="badge broken">Broken</span></div></div><div class="tag">Source only</div></div>
+    </div>
+  </section>
+</div>
+<script>
+const params=new URLSearchParams(location.search);
+if(params.get('view')==='browse'){
+  document.getElementById('listen').classList.add('hidden');
+  document.getElementById('browse').classList.remove('hidden');
+  const tabs=document.querySelectorAll('.tab');
+  tabs[0].classList.remove('active'); tabs[1].classList.add('active');
+}
+</script>
+</body>
+</html>
