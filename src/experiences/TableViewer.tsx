@@ -16,6 +16,27 @@ type Props = {
 
 const PAGE_SIZE = 50
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+const VISUAL_PREVIEW = import.meta.env.VITE_TABLE_VIEWER_VISUAL_PREVIEW === '1'
+const PREVIEW_TABLE: CatalogEntry = {
+  table_name: 'word_inputs_brainstorm',
+  columns: ['id', 'input_name', 'code', 'category', 'supports', 'example', 'notes'],
+  rls_enabled: true,
+  anon_select: false,
+}
+const PREVIEW_CATALOG: CatalogEntry[] = [
+  PREVIEW_TABLE,
+  { table_name: 'thekonyms', columns: ['id', 'term', 'definition', 'status'], rls_enabled: true, anon_select: false },
+  { table_name: 'schemonyms', columns: ['id', 'name', 'description', 'type'], rls_enabled: true, anon_select: false },
+  { table_name: 'semonyms', columns: ['id', 'semonym', 'schemonym_id'], rls_enabled: true, anon_select: false },
+  { table_name: 'concept_interactions', columns: ['id', 'interaction_code', 'source_coordinate', 'target_coordinate'], rls_enabled: true, anon_select: false },
+]
+const PREVIEW_ROWS: Record<string, unknown>[] = [
+  { id: 1, input_name: 'Real object directly perceived', code: 'C', category: 'Concept / nonverbal', supports: 'MEANING', example: 'A real cat in front of the learner', notes: 'Reality itself is the input.' },
+  { id: 2, input_name: 'Picture / visual representation', code: 'C', category: 'Concept / nonverbal', supports: 'MEANING', example: 'A photo or drawing of a cat', notes: 'A representation of the concept.' },
+  { id: 3, input_name: 'Written base-language term', code: 'W1', category: 'Bare form', supports: 'WRITING', example: '고양이', notes: null },
+  { id: 4, input_name: 'Written target-language term', code: 'W2', category: 'Bare form', supports: 'WRITING', example: 'cat', notes: null },
+  { id: 5, input_name: 'Spoken target-language term', code: 'S2', category: 'Pronunciation / sound', supports: 'SAYING', example: 'Audio of cat', notes: 'Auditory linguistic form.' },
+]
 
 function displayValue(value: unknown) {
   if (value === null || value === undefined) return 'NULL'
@@ -27,8 +48,9 @@ export function TableViewer({ pin, onExit }: Props) {
   const [catalog, setCatalog] = useState<CatalogEntry[]>([])
   const [letter, setLetter] = useState('ALL')
   const [search, setSearch] = useState('')
-  const [selected, setSelected] = useState<CatalogEntry | null>(null)
-  const [rows, setRows] = useState<Record<string, unknown>[]>([])
+  const previewTableOpen = VISUAL_PREVIEW && new URLSearchParams(window.location.search).get('visual') === 'table'
+  const [selected, setSelected] = useState<CatalogEntry | null>(previewTableOpen ? PREVIEW_TABLE : null)
+  const [rows, setRows] = useState<Record<string, unknown>[]>(previewTableOpen ? PREVIEW_ROWS : [])
   const [loadingCatalog, setLoadingCatalog] = useState(true)
   const [loadingRows, setLoadingRows] = useState(false)
   const [rowError, setRowError] = useState('')
@@ -39,6 +61,11 @@ export function TableViewer({ pin, onExit }: Props) {
     let cancelled = false
     async function loadCatalog() {
       setLoadingCatalog(true)
+      if (VISUAL_PREVIEW) {
+        setCatalog(PREVIEW_CATALOG)
+        setLoadingCatalog(false)
+        return
+      }
       const { data, error } = await supabase.rpc('lab_table_viewer_catalog', { pin })
       if (cancelled) return
       if (error) {
@@ -65,6 +92,13 @@ export function TableViewer({ pin, onExit }: Props) {
   async function loadRows(entry: CatalogEntry, reset = true) {
     setSelected(entry)
     setLoadingRows(true)
+    if (VISUAL_PREVIEW) {
+      setRows(PREVIEW_ROWS)
+      setHasMore(false)
+      setRowError('')
+      setLoadingRows(false)
+      return
+    }
     setRowError('')
     const start = reset ? 0 : rows.length
     const end = start + PAGE_SIZE - 1
