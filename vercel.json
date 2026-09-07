@@ -2,12 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "git": {
-    "deploymentEnabled": {
-      "*": false,
-      "main": true,
-      "integration/woodland-complete-20260905": true,
-      "feature/woodland-musical-world-20260905": true
-    }
+    "deploymentEnabled": false
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
