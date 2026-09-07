@@ -1,12 +1,6 @@
 name: Table Viewer Visual Preview
 
 on:
-  push:
-    branches:
-      - feature/table-viewer-20260908
-    paths-ignore:
-      - 'docs/previews/table-viewer-*.png'
-      - 'docs/previews/TABLE_VIEWER_PREVIEW.md'
   workflow_dispatch:
 
 permissions:
@@ -70,7 +64,7 @@ jobs:
           cat > docs/previews/TABLE_VIEWER_PREVIEW.md <<'EOF'
           # Table Viewer — GitHub Actions visual preview
 
-          Generated automatically from `feature/table-viewer-20260908` without a Vercel preview.
+          Generated on demand from `feature/table-viewer-20260908` without a Vercel preview.
 
           ## Table list
 
