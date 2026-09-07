@@ -45,6 +45,8 @@ type CatalogItem = {
   externalOnly: boolean
   playbackUnavailable: boolean
   playbackUnavailableUpdatedAt: string | null
+  personalLove: boolean
+  mature: boolean
   rating: Rating | null
   soundRating: Rating | null
   performanceRating: Rating | null
@@ -75,7 +77,7 @@ type ReviewOverrides = {
   rejected?: boolean
 }
 type ReviewField = keyof ReviewOverrides
-type CatalogReviewFilter = 'All' | 'New' | 'Loved'
+type CatalogReviewFilter = 'All' | 'New' | 'Loved' | 'Mature' | 'Broken'
 type SuppressionSyncEntry = {
   musicId: string
   sourcePage: string
@@ -227,6 +229,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalogReviewFilter, setCatalogReviewFilter] = useState<CatalogReviewFilter>('New')
   const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
+  const [catalogEmotion, setCatalogEmotion] = useState<'All' | Emotion>('All')
   const [trashedCatalogIds, setTrashedCatalogIds] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(Object.keys(loadObject<Record<string, TrashSyncEntry>>(TRASH_SYNC_QUEUE_KEY, {})).map(id => [id, true]))
   )
@@ -733,7 +736,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         source_name?:string | null; source_url:string; recording_url?:string | null; license?:string | null;
         rights_verified?:boolean; rating?:number | null; sound_rating?:number | null; performance_rating?:number | null;
         review_note?:string | null; confirmed_emotions?:string[] | null; suppressed_emotions?:string[] | null; review_rejected?:boolean | null;
-        review_updated_at?:string | null; playback_unavailable?:boolean | null; playback_unavailable_updated_at?:string | null; taste_notes?:string | null
+        review_updated_at?:string | null; playback_unavailable?:boolean | null; playback_unavailable_updated_at?:string | null;
+        personal_love?:boolean | null; mature?:boolean | null; taste_notes?:string | null
       }>
       const incoming: CatalogItem[] = rows.map(row => ({
         id:row.id,
@@ -752,6 +756,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         externalOnly:!row.recording_url && /official stream|official source/i.test(row.license || ''),
         playbackUnavailable:Boolean(row.playback_unavailable),
         playbackUnavailableUpdatedAt:row.playback_unavailable_updated_at || null,
+        personalLove:Boolean(row.personal_love),
+        mature:Boolean(row.mature),
         rating:typeof row.rating === 'number' && row.rating >= 0 && row.rating <= 3 ? row.rating as Rating : null,
         soundRating:typeof row.sound_rating === 'number' && row.sound_rating >= 0 && row.sound_rating <= 3 ? row.sound_rating as Rating : null,
         performanceRating:typeof row.performance_rating === 'number' && row.performance_rating >= 0 && row.performance_rating <= 3 ? row.performance_rating as Rating : null,
@@ -1131,6 +1137,42 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     setMessage('Could not save playability status. Nothing changed in the database.')
   }
 
+  async function toggleCatalogFlag(field: 'personalLove' | 'mature') {
+    const musicId = catalogIdForPiece(piece.id)
+    if (!musicId) return
+    const item = catalog.find(row => row.id === musicId)
+    if (!item) return
+
+    const nextPersonalLove = field === 'personalLove' ? !item.personalLove : item.personalLove
+    const nextMature = field === 'mature' ? !item.mature : item.mature
+    const previousPersonalLove = item.personalLove
+    const previousMature = item.mature
+
+    setCatalog(items => items.map(row => row.id === musicId
+      ? { ...row, personalLove:nextPersonalLove, mature:nextMature }
+      : row
+    ))
+    setMessage(field === 'personalLove'
+      ? (nextPersonalLove ? 'Marked as a personal favorite.' : 'Personal favorite removed.')
+      : (nextMature ? 'Marked mature for child suitability.' : 'Mature flag removed.')
+    )
+
+    const { error } = await supabase.rpc('lab_music_library_judgment_flags_write', {
+      pin,
+      music_id:musicId,
+      personal_love_value:nextPersonalLove,
+      mature_value:nextMature,
+    })
+
+    if (!error) return
+
+    setCatalog(items => items.map(row => row.id === musicId
+      ? { ...row, personalLove:previousPersonalLove, mature:previousMature }
+      : row
+    ))
+    setMessage('Could not save that judgment. Nothing changed in the database.')
+  }
+
   function ratePiece(value: Rating) {
     const next = { ...pieceRatings, [piece.id]: value }
     setPieceRatings(next)
@@ -1389,8 +1431,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   function catalogLoved(item: CatalogItem) {
-    const values = catalogReviewValues(item)
-    return values.piece === 3 && values.sound === 3 && values.performance === 3
+    return item.personalLove
   }
 
   const filteredCatalog = catalog.filter(item => {
@@ -1401,8 +1442,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const touched = catalogTouched(item)
     const matchesReview = catalogReviewFilter === 'All'
       || (catalogReviewFilter === 'New' && !touched)
-      || (catalogReviewFilter === 'Loved' && catalogLoved(item))
-    return matchesSearch && matchesModality && matchesReview
+      || (catalogReviewFilter === 'Loved' && item.personalLove)
+      || (catalogReviewFilter === 'Mature' && item.mature)
+      || (catalogReviewFilter === 'Broken' && item.playbackUnavailable)
+    const matchesEmotion = catalogEmotion === 'All' || item.confirmedEmotions.includes(catalogEmotion)
+    return matchesSearch && matchesModality && matchesReview && matchesEmotion
   })
 
   useEffect(() => {
@@ -1485,11 +1529,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <button onClick={stop}>■ Stop</button>
         <button onClick={() => stepPiece(1)}>›</button>
       </div>
-      {catalogIdForPiece(piece.id) && <div className="md-playability-row">
-        <button className={activeCatalogItem?.playbackUnavailable ? 'active' : ''} onClick={() => void togglePlaybackUnavailable()}>
-          {activeCatalogItem?.playbackUnavailable ? '✓ Not playable' : 'Not playable'}
-        </button>
-        <span>{activeCatalogItem?.playbackUnavailable ? 'This recording will be skipped as unusable.' : 'Use this when the link or audio does not actually play.'}</span>
+      {catalogIdForPiece(piece.id) && <div className="md-review-flags" aria-label="Quick music judgments">
+        <button className={activeCatalogItem?.personalLove ? 'active love' : ''} onClick={() => void toggleCatalogFlag('personalLove')} aria-pressed={Boolean(activeCatalogItem?.personalLove)}>♥ Love</button>
+        <button className={activeCatalogItem?.mature ? 'active mature' : ''} onClick={() => void toggleCatalogFlag('mature')} aria-pressed={Boolean(activeCatalogItem?.mature)}>Mature</button>
+        <button className={activeCatalogItem?.playbackUnavailable ? 'active broken' : ''} onClick={() => void togglePlaybackUnavailable()} aria-pressed={Boolean(activeCatalogItem?.playbackUnavailable)}>Broken</button>
       </div>}
       <small className="md-swipe-hint">Swipe the card left or right outside the controls to move between tracks.</small>
       <div className="md-message" aria-live="polite">{message || '\u00a0'}</div>
@@ -1552,10 +1595,13 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         <input value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} placeholder="Search title, artist, source…"/>
       </div>
       <div className="md-review-filters">
-        {(['All','New','Loved'] as CatalogReviewFilter[]).map(value => <button key={value} className={(catalogReviewFilter === value ? 'active ' : '') + (value === 'New' ? 'new-filter ' : '') + (value === 'Loved' ? 'loved-filter' : '')} onClick={() => setCatalogReviewFilter(value)}>{value === 'Loved' ? '♥ LOVED' : value.toUpperCase()}</button>)}
+        {(['All','New','Loved','Mature','Broken'] as CatalogReviewFilter[]).map(value => <button key={value} className={(catalogReviewFilter === value ? 'active ' : '') + (value === 'New' ? 'new-filter ' : '') + (value === 'Loved' ? 'loved-filter' : '')} onClick={() => setCatalogReviewFilter(value)}>{value === 'Loved' ? '♥ LOVED' : value.toUpperCase()}</button>)}
       </div>
       <div className="md-browse-filters">
         {(['All', ...modalities] as Array<'All' | Modality>).map(value => <button key={value} className={catalogModality === value ? 'active' : ''} onClick={() => setCatalogModality(value)}>{value === 'All' ? 'ALL TYPES' : value}</button>)}
+      </div>
+      <div className="md-emotion-filters">
+        {(['All', ...emotions] as Array<'All' | Emotion>).map(value => <button key={value} className={catalogEmotion === value ? 'active' : ''} onClick={() => setCatalogEmotion(value)}>{value === 'All' ? 'ALL EMOTIONS' : value}</button>)}
       </div>
       <div className="md-catalog-list">
         {filteredCatalog.map(item => {
@@ -1564,7 +1610,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
           return <button key={item.id} className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => void adoptCatalogItem(item)}>
             <span className={'md-catalog-play' + (item.externalOnly || item.playbackUnavailable ? ' unavailable' : '')}>{item.externalOnly || item.playbackUnavailable ? '—' : '▶'}</span>
             <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.playbackUnavailable ? ' · not playable' : item.externalOnly ? ' · no in-app audio' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
-            <span className="md-catalog-source">{loved ? '♥ loved' : item.source}</span>
+            <span className="md-catalog-source">{item.personalLove ? '♥ loved' : item.mature ? 'mature' : item.playbackUnavailable ? 'broken' : item.source}</span>
           </button>
         })}
         {!catalogLoading && !filteredCatalog.length && <p className="md-empty">No matches in this batch. Change the filter or refresh.</p>}
