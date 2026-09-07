@@ -44,8 +44,8 @@ jobs:
       - name: Capture phone previews
         run: |
           mkdir -p docs/previews
-          npx --yes playwright@1.55.0 screenshot --device="Pixel 5" --full-page "http://127.0.0.1:4173/table-viewer?visual=index" docs/previews/table-viewer-index.png
-          npx --yes playwright@1.55.0 screenshot --device="Pixel 5" --full-page "http://127.0.0.1:4173/table-viewer?visual=table" docs/previews/table-viewer-table.png
+          npx --yes playwright@1.55.0 screenshot --device="Pixel 5" --full-page --wait-for-timeout=1200 "http://127.0.0.1:4173/table-viewer?visual=index" docs/previews/table-viewer-index.png
+          npx --yes playwright@1.55.0 screenshot --device="Pixel 5" --full-page --wait-for-timeout=1200 "http://127.0.0.1:4173/table-viewer?visual=table" docs/previews/table-viewer-table.png
       - name: Commit visual previews
         run: |
           git config user.name "github-actions[bot]"
