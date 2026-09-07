@@ -17,6 +17,7 @@ type Candidate = {
   sourcePage: string
   source?: string
   externalOnly?: boolean
+  playbackUnavailable?: boolean
   matchConfidence?: 'confirmed' | 'possible'
 }
 type Piece = {
@@ -42,6 +43,8 @@ type CatalogItem = {
   description?: string
   rightsVerified?: boolean
   externalOnly: boolean
+  playbackUnavailable: boolean
+  playbackUnavailableUpdatedAt: string | null
   rating: Rating | null
   soundRating: Rating | null
   performanceRating: Rating | null
@@ -331,8 +334,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!source && piece.id.startsWith('catalog:')) {
       audio.removeAttribute('src')
       audio.load()
-      if (current.externalOnly) {
-        setMessage('This copyrighted recording is available from its official source.')
+      if (current.externalOnly || current.playbackUnavailable) {
+        setMessage(current.playbackUnavailable ? 'You marked this recording as not playable.' : 'No playable in-app recording is available.')
         return
       }
       setMessage('Preparing recording…')
@@ -730,7 +733,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         source_name?:string | null; source_url:string; recording_url?:string | null; license?:string | null;
         rights_verified?:boolean; rating?:number | null; sound_rating?:number | null; performance_rating?:number | null;
         review_note?:string | null; confirmed_emotions?:string[] | null; suppressed_emotions?:string[] | null; review_rejected?:boolean | null;
-        review_updated_at?:string | null; taste_notes?:string | null
+        review_updated_at?:string | null; playback_unavailable?:boolean | null; playback_unavailable_updated_at?:string | null; taste_notes?:string | null
       }>
       const incoming: CatalogItem[] = rows.map(row => ({
         id:row.id,
@@ -747,6 +750,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         description:row.taste_notes || '',
         rightsVerified:Boolean(row.rights_verified),
         externalOnly:!row.recording_url && /official stream|official source/i.test(row.license || ''),
+        playbackUnavailable:Boolean(row.playback_unavailable),
+        playbackUnavailableUpdatedAt:row.playback_unavailable_updated_at || null,
         rating:typeof row.rating === 'number' && row.rating >= 0 && row.rating <= 3 ? row.rating as Rating : null,
         soundRating:typeof row.sound_rating === 'number' && row.sound_rating >= 0 && row.sound_rating <= 3 ? row.sound_rating as Rating : null,
         performanceRating:typeof row.performance_rating === 'number' && row.performance_rating >= 0 && row.performance_rating <= 3 ? row.performance_rating as Rating : null,
@@ -794,6 +799,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         sourcePage:item.sourcePage,
         source:item.source,
         externalOnly:item.externalOnly,
+        playbackUnavailable:item.playbackUnavailable,
         matchConfidence:'confirmed',
       }],
     }
@@ -804,7 +810,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (inFlight) return inFlight
 
     const item = catalog.find(row => row.id === catalogId)
-    if (!item || item.externalOnly) return null
+    if (!item || item.externalOnly || item.playbackUnavailable) return null
     if (item.audioUrl) return item.audioUrl
 
     const request = (async () => {
@@ -931,9 +937,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   async function togglePlay() {
-    if (current.externalOnly) {
-      window.open(current.sourcePage, '_blank', 'noopener,noreferrer')
-      setMessage('Opened the official source in a new tab.')
+    if (current.externalOnly || current.playbackUnavailable) {
+      setMessage(current.playbackUnavailable ? 'You marked this recording as not playable.' : 'No playable in-app recording is available.')
       return
     }
 
@@ -1075,6 +1080,55 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   function catalogIdForPiece(pieceId: string) {
     return pieceId.startsWith('catalog:') ? pieceId.slice('catalog:'.length) : null
+  }
+
+  async function togglePlaybackUnavailable() {
+    const musicId = catalogIdForPiece(piece.id)
+    if (!musicId) return
+    const item = catalog.find(row => row.id === musicId)
+    if (!item) return
+
+    const next = !item.playbackUnavailable
+    const previous = item.playbackUnavailable
+
+    if (next) stop()
+    setCatalog(items => items.map(row => row.id === musicId
+      ? { ...row, playbackUnavailable:next, playbackUnavailableUpdatedAt:new Date().toISOString() }
+      : row
+    ))
+    setCatalogPieces(items => items.map(catalogPiece => {
+      if (catalogPiece.id !== piece.id) return catalogPiece
+      return {
+        ...catalogPiece,
+        candidates:catalogPiece.candidates.map(candidate =>
+          candidate.id === current.id ? { ...candidate, playbackUnavailable:next } : candidate
+        ),
+      }
+    }))
+    setMessage(next ? 'Marked not playable.' : 'Marked playable again.')
+
+    const { error } = await supabase.rpc('lab_music_library_playability_write', {
+      pin,
+      music_id:musicId,
+      unavailable_value:next,
+    })
+
+    if (!error) return
+
+    setCatalog(items => items.map(row => row.id === musicId
+      ? { ...row, playbackUnavailable:previous }
+      : row
+    ))
+    setCatalogPieces(items => items.map(catalogPiece => {
+      if (catalogPiece.id !== piece.id) return catalogPiece
+      return {
+        ...catalogPiece,
+        candidates:catalogPiece.candidates.map(candidate =>
+          candidate.id === current.id ? { ...candidate, playbackUnavailable:previous } : candidate
+        ),
+      }
+    }))
+    setMessage('Could not save playability status. Nothing changed in the database.')
   }
 
   function ratePiece(value: Rating) {
@@ -1427,10 +1481,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
       <div className="md-transport">
         <button onClick={() => stepPiece(-1)}>‹</button>
-        <button className={'primary' + (playing || playPending ? ' active-play' : '') + (playPending ? ' pending-play' : '')} onClick={togglePlay} aria-pressed={playing || playPending}>{current.externalOnly ? '↗ Official' : playPending ? '❚❚ Loading…' : playing ? '❚❚ Pause' : '▶ Play'}</button>
+        <button className={'primary' + (playing || playPending ? ' active-play' : '') + (playPending ? ' pending-play' : '')} onClick={togglePlay} aria-pressed={playing || playPending} disabled={current.externalOnly || current.playbackUnavailable}>{current.externalOnly || current.playbackUnavailable ? 'No audio' : playPending ? '❚❚ Loading…' : playing ? '❚❚ Pause' : '▶ Play'}</button>
         <button onClick={stop}>■ Stop</button>
         <button onClick={() => stepPiece(1)}>›</button>
       </div>
+      {catalogIdForPiece(piece.id) && <div className="md-playability-row">
+        <button className={activeCatalogItem?.playbackUnavailable ? 'active' : ''} onClick={() => void togglePlaybackUnavailable()}>
+          {activeCatalogItem?.playbackUnavailable ? '✓ Not playable' : 'Not playable'}
+        </button>
+        <span>{activeCatalogItem?.playbackUnavailable ? 'This recording will be skipped as unusable.' : 'Use this when the link or audio does not actually play.'}</span>
+      </div>}
       <small className="md-swipe-hint">Swipe the card left or right outside the controls to move between tracks.</small>
       <div className="md-message" aria-live="polite">{message || '\u00a0'}</div>
 
@@ -1502,8 +1562,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
           const touched = catalogTouched(item)
           const loved = catalogLoved(item)
           return <button key={item.id} className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => void adoptCatalogItem(item)}>
-            <span className="md-catalog-play">{item.externalOnly ? '↗' : '▶'}</span>
-            <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.externalOnly ? ' · official stream' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
+            <span className={'md-catalog-play' + (item.externalOnly || item.playbackUnavailable ? ' unavailable' : '')}>{item.externalOnly || item.playbackUnavailable ? '—' : '▶'}</span>
+            <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.playbackUnavailable ? ' · not playable' : item.externalOnly ? ' · no in-app audio' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
             <span className="md-catalog-source">{loved ? '♥ loved' : item.source}</span>
           </button>
         })}
@@ -1512,7 +1572,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <div className="md-repositories">
         <span>CURATED</span>
         <div>
-          <span className="md-library-note">Curated production library · ▶ plays reusable/direct audio in-app · ↗ opens copyrighted music at its official source</span>
+          <span className="md-library-note">Curated production library · ▶ playable in-app · — no usable in-app audio</span>
           {legacyCapture.latest && legacyCapture.latest.summary.keyCount > 0 && <span className="md-legacy-status">Browser backup ✓ · {legacyCloudSaved ? 'Cloud copy ✓' : 'Cloud copy pending…'} · {legacyCapture.latest.summary.pieceRatings + legacyCapture.latest.summary.soundRatings + legacyCapture.latest.summary.performanceRatings} ratings · {legacyCapture.latest.summary.discoveredRecordings} discovered recordings preserved</span>}
         </div>
       </div>
