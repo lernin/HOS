@@ -2,16 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "git": {
-    "deploymentEnabled": {
-      "*": false,
-      "main": true,
-      "feature/music-library-browser-20260906": true,
-      "fix/music-library-inapp-playback-20260906": true,
-      "fix/music-review-durable-sync-20260906": true,
-      "feature/music-playability-and-official-streams-20260906": true,
-      "fix/music-optimistic-play-card-swipe-20260907": true,
-      "feature/music-new-swipe-20260906": true
-    }
+    "deploymentEnabled": false
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
