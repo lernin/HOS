@@ -1,0 +1,58 @@
+name: Manager Visual Preview
+
+on:
+  push:
+    branches:
+      - feature/manager-v1-20260908
+    paths-ignore:
+      - 'docs/previews/manager-v1.png'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Verify normal build
+        run: npm run build
+      - name: Build visual-preview variant
+        run: npm run build
+        env:
+          VITE_MANAGER_VISUAL_PREVIEW: '1'
+      - name: Install screenshot browser
+        run: npx --yes playwright@1.55.0 install --with-deps chromium
+      - name: Start preview server
+        run: |
+          npm run preview -- --port 4173 > /tmp/manager-preview.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/manager.html >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/manager-preview.log
+          exit 1
+      - name: Capture phone preview
+        run: |
+          mkdir -p docs/previews
+          npx --yes playwright@1.55.0 screenshot --device="Pixel 5" --full-page --wait-for-timeout=1200 "http://127.0.0.1:4173/manager.html" docs/previews/manager-v1.png
+      - name: Commit visual preview
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/previews/manager-v1.png
+          if git diff --cached --quiet; then
+            echo "Preview image unchanged."
+          else
+            git commit -m "chore: refresh Manager V1 visual preview"
+            git push
+          fi
