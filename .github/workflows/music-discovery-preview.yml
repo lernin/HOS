@@ -1,15 +1,17 @@
-name: Music Discovery Lab Check
+name: Music Discovery Visual Preview
 
 on:
   push:
     branches:
-      - preview/music-discovery-lab-20260906
-  pull_request:
-    branches:
-      - main
+      - preview/music-discovery-flags-20260908
+    paths-ignore:
+      - 'docs/previews/music-discovery-*.png'
+
+permissions:
+  contents: write
 
 jobs:
-  build:
+  screenshot:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -17,6 +19,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm install --no-audit --no-fund
-      - run: npm run build
+      - name: Install screenshot browser
+        run: npx --yes playwright@1.55.0 install --with-deps chromium
+      - name: Start static preview server
+        run: |
+          python3 -m http.server 4173 --directory docs/visual-previews > /tmp/music-preview.log 2>&1 &
+          for i in {1..20}; do
+            if curl -fsS http://127.0.0.1:4173/music-discovery.html >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/music-preview.log
+          exit 1
+      - name: Capture phone previews
+        run: |
+          mkdir -p docs/previews
+          npx --yes playwright@1.55.0 screenshot --device="Pixel 5" --full-page --wait-for-timeout=400 "http://127.0.0.1:4173/music-discovery.html?view=listen" docs/previews/music-discovery-listen.png
+          npx --yes playwright@1.55.0 screenshot --device="Pixel 5" --full-page --wait-for-timeout=400 "http://127.0.0.1:4173/music-discovery.html?view=browse" docs/previews/music-discovery-browse.png
+      - name: Commit visual previews
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/previews/music-discovery-listen.png docs/previews/music-discovery-browse.png
+          if git diff --cached --quiet; then
+            echo "Preview images unchanged."
+          else
+            git commit -m "chore: refresh Music Discovery visual previews"
+            git push
+          fi
