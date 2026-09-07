@@ -1,5 +1,9 @@
 .tv-shell {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
   background: #101315;
   color: #f5f4ef;
   padding: 18px;
@@ -154,10 +158,13 @@
 
 .tv-grid-wrap {
   max-width: 1400px;
-  height: calc(100vh - 190px);
+  height: calc(100dvh - 190px);
   min-height: 360px;
   margin: 0 auto;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
   border: 1px solid #30383d;
   border-radius: 14px;
   background: #121619;
@@ -251,6 +258,6 @@
   .tv-shell { padding: 12px; }
   .tv-topbar { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
   .tv-topbar .tv-freeze-toggle { grid-column: 1 / -1; justify-self: start; min-height: 38px; }
-  .tv-grid-wrap { height: calc(100vh - 220px); border-radius: 10px; }
+  .tv-grid-wrap { height: calc(100dvh - 220px); border-radius: 10px; }
   .tv-grid th, .tv-grid td { min-width: 110px; max-width: 260px; padding: 8px; }
 }
