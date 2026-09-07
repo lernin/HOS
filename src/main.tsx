@@ -57,6 +57,7 @@ const FONT_KEY = 'thekonym-font-prefs'
 const TERMS_CACHE_KEY = 'thekonym-terms-cache-v1'
 const OUTBOX_KEY = 'thekonym-sync-outbox-v1'
 const DEFAULT_FONTS: FontPrefs = { definition: 16, thoughts: 17, rail: 15, judgment: 15 }
+const TABLE_VIEWER_VISUAL_PREVIEW = import.meta.env.VITE_TABLE_VIEWER_VISUAL_PREVIEW === '1'
 const World3D = lazy(() => import('./experiences/World3D').then(module => ({ default: module.World3D })))
 const WaterGarden = lazy(() => import('./experiences/WaterGarden').then(module => ({ default: module.WaterGarden })))
 const WoodlandWalk = lazy(() => import('./experiences/WoodlandWalk').then(module => ({ default: module.WoodlandWalk })))
@@ -100,7 +101,7 @@ function applyPendingChanges(source: Term[], changes = readOutbox()) {
 
 function App() {
   const [view, setView] = useState<View>(() => window.location.pathname === '/table-viewer' ? 'table-viewer' : window.location.pathname === '/concept-interactions' ? 'concept-interactions' : window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/backing-tracks' ? 'backing-tracks' : window.location.pathname === '/orchestration-lab' ? 'orchestration-lab' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/knock-knock' ? 'knock-knock' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/fluency' ? 'fluency' : 'hub')
-  const [pin, setPin] = useState('')
+  const [pin, setPin] = useState(TABLE_VIEWER_VISUAL_PREVIEW ? 'preview' : '')
   const [pinInput, setPinInput] = useState('')
   const [terms, setTerms] = useState<Term[]>([])
   const [index, setIndex] = useState(0)
