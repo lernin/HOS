@@ -3,6 +3,7 @@ import { startRecordingSession, type RecordingSession } from '../lib/voiceCaptur
 import { supabase } from '../lib/supabase'
 import { captureLegacyMusicBrowserState, readLegacyMusicCloudReceipt, refreshLegacyMusicCapture, uploadLegacyMusicInitialCapture } from './musicLegacyImport'
 import { filterCatalogForBrowse, hasZeroRating, hydrateTrashedIds, isDurablyDumped, leaveDecision, nextIndexAfterRemoving, persistTrashToggle, ratingChangeDecision, trashToggleVisible, type TrashAction } from './musicDiscoveryTrash'
+import { commonsRedirectForSourcePage, deleteLocalAudioForItem, rememberLocalAudio } from './musicLocalAudioCache'
 import './music-discovery-lab.css'
 
 type Rating = 0 | 1 | 2 | 3
@@ -234,6 +235,8 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
   const [catalogEmotion, setCatalogEmotion] = useState<'All' | Emotion>('All')
   const [browseDumpster, setBrowseDumpster] = useState(false)
+  const [deleteAudioMode, setDeleteAudioMode] = useState(false)
+  const [localAudioDeleteStatus, setLocalAudioDeleteStatus] = useState<Record<string, 'deleted' | 'missing'>>({})
   const [listenScope, setListenScope] = useState<'library' | 'dumpster'>('library')
   const [trashedCatalogIds, setTrashedCatalogIds] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(Object.entries(loadObject<Record<string, TrashSyncEntry>>(TRASH_SYNC_QUEUE_KEY, {})).flatMap(([id, entry]) => entry.action === 'untrash' ? [] : [[id, true]]))
@@ -1009,6 +1012,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         source = await resolveCatalogAudio(piece.id.slice('catalog:'.length)) || ''
       }
       if (!source) throw new Error('Could not load this recording.')
+      const musicId = catalogIdForPiece(piece.id)
+      if (musicId) {
+        rememberLocalAudio(musicId, source)
+        setLocalAudioDeleteStatus(current => {
+          if (!current[musicId]) return current
+          const next = { ...current }
+          delete next[musicId]
+          return next
+        })
+      }
       if (!playIntentRef.current || requestId !== playRequestRef.current) return
 
       if (audio.src !== source) {
@@ -1539,6 +1552,18 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return item.personalLove
   }
 
+  function catalogTopThree(item: CatalogItem) {
+    const values = catalogReviewValues(item)
+    return values.piece === 3 && values.sound === 3 && values.performance === 3
+  }
+
+  async function deleteCatalogLocalAudio(item: CatalogItem) {
+    if (catalogTopThree(item)) return
+    const knownUrls = [item.audioUrl, commonsRedirectForSourcePage(item.sourcePage)].filter(Boolean)
+    const deleted = await deleteLocalAudioForItem(item.id, knownUrls)
+    setLocalAudioDeleteStatus(current => ({ ...current, [item.id]:deleted ? 'deleted' : 'missing' }))
+  }
+
   const filteredCatalog = filterCatalogForBrowse(catalog, trashedCatalogIds, browseDumpster).filter(item => {
     const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
@@ -1564,6 +1589,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   useEffect(() => {
     if (mode === 'browse' && !catalog.length && !catalogLoading) void loadCatalog()
+    if (mode !== 'browse') setDeleteAudioMode(false)
   }, [mode])
 
   useEffect(() => {
@@ -1706,7 +1732,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
             ? filteredCatalog.length + ' dumped'
             : filteredCatalog.length + (catalogReviewFilter === 'Loved' ? ' loved' : catalogReviewFilter === 'New' ? ' new' : ' to try')}</h1>
         </div>
-        <button onClick={() => void loadCatalog(true, true)} disabled={catalogLoading}>{catalogLoading ? '…' : '↻'}</button>
+        <div className="md-browse-actions">
+          <button className={deleteAudioMode ? 'delete-mode active' : 'delete-mode'} onClick={() => setDeleteAudioMode(value => !value)} aria-pressed={deleteAudioMode} aria-label={deleteAudioMode ? 'Turn off local audio delete mode' : 'Turn on local audio delete mode'} title="Delete local audio mode">🗑</button>
+          <button onClick={() => void loadCatalog(true, true)} disabled={catalogLoading} aria-label="Refresh music library">{catalogLoading ? '…' : '↻'}</button>
+        </div>
       </div>
       <div className="md-browse-search">
         <input value={catalogSearch} onChange={event => setCatalogSearch(event.target.value)} placeholder="Search title, artist, source…"/>
@@ -1724,11 +1753,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         {filteredCatalog.map(item => {
           const touched = catalogTouched(item)
           const loved = catalogLoved(item)
-          return <button key={item.id} type="button" className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => adoptCatalogItem(item, browseDumpster ? 'dumpster' : 'library')}>
-            <span className={'md-catalog-play' + (item.externalOnly || item.playbackUnavailable ? ' unavailable' : '')}>{item.externalOnly || item.playbackUnavailable ? '—' : '▶'}</span>
-            <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.playbackUnavailable ? ' · not playable' : item.externalOnly ? ' · no in-app audio' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
-            <span className="md-catalog-source">{browseDumpster ? 'dumped' : item.personalLove ? '♥ loved' : item.mature ? 'mature' : item.playbackUnavailable ? 'broken' : item.source}</span>
-          </button>
+          const protectedTopThree = catalogTopThree(item)
+          return <div key={item.id} className={'md-catalog-row' + (deleteAudioMode && !protectedTopThree ? ' delete-mode' : '')}>
+            <button type="button" className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => adoptCatalogItem(item, browseDumpster ? 'dumpster' : 'library')}>
+              <span className={'md-catalog-play' + (item.externalOnly || item.playbackUnavailable ? ' unavailable' : '')}>{item.externalOnly || item.playbackUnavailable ? '—' : '▶'}</span>
+              <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.playbackUnavailable ? ' · not playable' : item.externalOnly ? ' · no in-app audio' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
+              <span className="md-catalog-source">{browseDumpster ? 'dumped' : item.personalLove ? '♥ loved' : item.mature ? 'mature' : item.playbackUnavailable ? 'broken' : item.source}</span>
+            </button>
+            {deleteAudioMode && !protectedTopThree && <button type="button" className={'md-local-audio-delete ' + (localAudioDeleteStatus[item.id] || '')} onClick={() => void deleteCatalogLocalAudio(item)} disabled={Boolean(localAudioDeleteStatus[item.id])} aria-label={'Delete local audio for ' + item.title} title={localAudioDeleteStatus[item.id] === 'deleted' ? 'Local audio deleted; database record kept' : localAudioDeleteStatus[item.id] === 'missing' ? 'No cached audio found' : 'Delete local audio only'}>{localAudioDeleteStatus[item.id] === 'deleted' ? '✓' : localAudioDeleteStatus[item.id] === 'missing' ? '–' : '🗑'}</button>}
+          </div>
         })}
         {!catalogLoading && !filteredCatalog.length && <p className="md-empty">{browseDumpster ? 'Nothing in Trash. Change the filter or go back to the library.' : 'No matches in this batch. Change the filter or refresh.'}</p>}
       </div>
