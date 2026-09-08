@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import { supabase } from '../lib/supabase'
 import { captureLegacyMusicBrowserState, readLegacyMusicCloudReceipt, refreshLegacyMusicCapture, uploadLegacyMusicInitialCapture } from './musicLegacyImport'
-import { filterCatalogForBrowse, hasZeroRating, hydrateTrashedIds, leaveDecision, nextIndexAfterRemoving, ratingChangeDecision, trashToggleVisible, type TrashAction } from './musicDiscoveryTrash'
+import { filterCatalogForBrowse, hasZeroRating, hydrateTrashedIds, isDurablyDumped, leaveDecision, nextIndexAfterRemoving, ratingChangeDecision, trashToggleVisible, type TrashAction } from './musicDiscoveryTrash'
 import './music-discovery-lab.css'
 
 type Rating = 0 | 1 | 2 | 3
@@ -424,6 +424,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   function queueUntrashSync(musicId: string, sourcePage: string) {
     queueTrashAction(musicId, sourcePage, 'untrash')
+  }
+
+  function durablyDumped(musicId: string) {
+    return isDurablyDumped(catalog.find(item => item.id === musicId)?.status, trashQueue()[musicId]?.action)
   }
 
   async function flushTrashQueue() {
@@ -1050,7 +1054,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!musicId) return 'stay' as const
     const hasZero = hasZeroRating(pieceRatings[piece.id], qualityRatings[current.id], performanceRatings[current.id])
     const isTrashed = Boolean(trashedCatalogIds[musicId])
-    const decision = leaveDecision(hasZero, isTrashed)
+    const decision = leaveDecision(hasZero, isTrashed, durablyDumped(musicId))
     if (decision === 'trash') {
       queueTrashSync(musicId, current.sourcePage)
       setMessage('Moved to recoverable trash.')
@@ -1376,7 +1380,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function releaseTrashIfCleared(pieceId: string, sourcePage: string, pieceValue: Rating | undefined, soundValue: Rating | undefined, performanceValue: Rating | undefined) {
     const musicId = catalogIdForReview(pieceId, sourcePage)
     if (!musicId) return false
-    if (ratingChangeDecision(hasZeroRating(pieceValue, soundValue, performanceValue), Boolean(trashedCatalogIds[musicId])) !== 'untrash') return false
+    if (ratingChangeDecision(hasZeroRating(pieceValue, soundValue, performanceValue), Boolean(trashedCatalogIds[musicId]), durablyDumped(musicId)) !== 'untrash') return false
     queueUntrashSync(musicId, sourcePage)
     setMessage('Pulled out of the dumpster.')
     return true
@@ -1493,6 +1497,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       const decision = leaveDecision(
         hasZeroRating(pieceRatings[piece.id], qualityRatings[current.id], performanceRatings[current.id]),
         Boolean(trashedCatalogIds[musicId]),
+        durablyDumped(musicId),
       )
       if (decision === 'trash') queueTrashSync(musicId, current.sourcePage)
       if (decision === 'untrash') queueUntrashSync(musicId, current.sourcePage)

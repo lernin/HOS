@@ -10,14 +10,20 @@ export function trashToggleVisible(piece: RatingValue, sound: RatingValue, perfo
   return hasZeroRating(piece, sound, performance)
 }
 
-export function leaveDecision(hasZero: boolean, isTrashed: boolean): LeaveDecision {
+export function isDurablyDumped(status?: string | null, pendingAction?: TrashAction) {
+  if (pendingAction === 'untrash') return false
+  if (pendingAction === 'trash') return true
+  return status === 'rejected'
+}
+
+export function leaveDecision(hasZero: boolean, isTrashed: boolean, durablyDumped = false): LeaveDecision {
   if (hasZero) return 'trash'
-  if (isTrashed) return 'untrash'
+  if (isTrashed || durablyDumped) return 'untrash'
   return 'keep'
 }
 
-export function ratingChangeDecision(hasZero: boolean, isTrashed: boolean): 'untrash' | 'keep' {
-  if (!hasZero && isTrashed) return 'untrash'
+export function ratingChangeDecision(hasZero: boolean, isTrashed: boolean, durablyDumped = false): 'untrash' | 'keep' {
+  if (!hasZero && (isTrashed || durablyDumped)) return 'untrash'
   return 'keep'
 }
 

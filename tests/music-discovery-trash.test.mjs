@@ -13,6 +13,7 @@ const {
   nextIndexAfterRemoving,
   filterCatalogForBrowse,
   hydrateTrashedIds,
+  isDurablyDumped,
 } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 
 test('unset ratings are not zeros; only explicit 0 counts as trash bait', () => {
@@ -47,6 +48,18 @@ test('clearing every zero immediately releases trash; setting a zero does not du
   assert.equal(ratingChangeDecision(true, false), 'keep')
   assert.equal(ratingChangeDecision(true, true), 'keep')
   assert.equal(ratingChangeDecision(false, false), 'keep')
+})
+
+test('dumped then toggle trash off then clearing zeros still queues server untrash', () => {
+  const status = 'rejected'
+  const pending = {}
+  const localTrashed = false
+  assert.equal(isDurablyDumped(status, pending.action), true)
+  assert.equal(ratingChangeDecision(true, localTrashed, true), 'keep')
+  assert.equal(ratingChangeDecision(false, localTrashed, isDurablyDumped(status, pending.action)), 'untrash')
+  assert.equal(leaveDecision(false, localTrashed, isDurablyDumped(status, pending.action)), 'untrash')
+  const queued = { x:{ action:'untrash' } }
+  assert.equal(hydrateTrashedIds([{ id:'x', status }], queued).x, undefined)
 })
 
 test('removing a dumped card keeps the neighbor that swipe was heading toward', () => {
