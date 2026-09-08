@@ -27,45 +27,6 @@
         });
       }
 
-      // Trash keeps the catalog/database record. This control removes only the
-      // currently opened rejected recording from browser Cache Storage.
-      if ('caches' in window) {
-        const syncTrashAudioControl = () => {
-          const trash = document.querySelector('.md-trash.on');
-          const existing = document.querySelector('[data-delete-local-audio]');
-          if (!trash) {
-            existing?.remove();
-            return;
-          }
-          if (existing) return;
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'md-trash';
-          button.dataset.deleteLocalAudio = 'true';
-          button.textContent = 'Delete local audio';
-          button.addEventListener('click', async () => {
-            const audio = document.querySelector('.music-discovery audio');
-            const source = audio?.currentSrc || audio?.src || '';
-            if (!source) {
-              button.textContent = 'No local audio loaded';
-              return;
-            }
-            let removed = false;
-            for (const cacheName of await caches.keys()) {
-              const cache = await caches.open(cacheName);
-              const requests = await cache.keys();
-              for (const request of requests) {
-                if (request.url === source) removed = (await cache.delete(request, { ignoreVary: true })) || removed;
-              }
-            }
-            button.textContent = removed ? 'Local audio deleted' : 'No cached audio found';
-            button.disabled = true;
-          });
-          trash.insertAdjacentElement('afterend', button);
-        };
-        new MutationObserver(syncTrashAudioControl).observe(document.getElementById('root'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-        window.addEventListener('load', syncTrashAudioControl);
-      }
     </script>
   </body>
 </html>
