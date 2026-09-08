@@ -14,6 +14,7 @@ const {
   filterCatalogForBrowse,
   hydrateTrashedIds,
   isDurablyDumped,
+  persistTrashToggle,
 } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 
 test('unset ratings are not zeros; only explicit 0 counts as trash bait', () => {
@@ -60,6 +61,16 @@ test('dumped then toggle trash off then clearing zeros still queues server untra
   assert.equal(leaveDecision(false, localTrashed, isDurablyDumped(status, pending.action)), 'untrash')
   const queued = { x:{ action:'untrash' } }
   assert.equal(hydrateTrashedIds([{ id:'x', status }], queued).x, undefined)
+})
+
+test('trash icon persists rejected state on and off', () => {
+  assert.equal(persistTrashToggle(true, true), 'trash')
+  assert.equal(persistTrashToggle(false, true), 'untrash')
+  assert.equal(persistTrashToggle(true, false), null)
+  assert.equal(persistTrashToggle(false, false), null)
+  assert.equal(hydrateTrashedIds([{ id:'on', status:'candidate' }], { on:{ action:'trash' } }).on, true)
+  assert.equal(hydrateTrashedIds([{ id:'off', status:'rejected' }], { off:{ action:'untrash' } }).off, undefined)
+  assert.equal(leaveDecision(true, false, false), 'trash')
 })
 
 test('removing a dumped card keeps the neighbor that swipe was heading toward', () => {

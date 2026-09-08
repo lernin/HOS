@@ -10,6 +10,11 @@ export function trashToggleVisible(piece: RatingValue, sound: RatingValue, perfo
   return hasZeroRating(piece, sound, performance)
 }
 
+export function persistTrashToggle(nextOn: boolean, hasZero: boolean): TrashAction | null {
+  if (!hasZero) return null
+  return nextOn ? 'trash' : 'untrash'
+}
+
 export function isDurablyDumped(status?: string | null, pendingAction?: TrashAction) {
   if (pendingAction === 'untrash') return false
   if (pendingAction === 'trash') return true

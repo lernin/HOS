@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import { supabase } from '../lib/supabase'
 import { captureLegacyMusicBrowserState, readLegacyMusicCloudReceipt, refreshLegacyMusicCapture, uploadLegacyMusicInitialCapture } from './musicLegacyImport'
-import { filterCatalogForBrowse, hasZeroRating, hydrateTrashedIds, isDurablyDumped, leaveDecision, nextIndexAfterRemoving, ratingChangeDecision, trashToggleVisible, type TrashAction } from './musicDiscoveryTrash'
+import { filterCatalogForBrowse, hasZeroRating, hydrateTrashedIds, isDurablyDumped, leaveDecision, nextIndexAfterRemoving, persistTrashToggle, ratingChangeDecision, trashToggleVisible, type TrashAction } from './musicDiscoveryTrash'
 import './music-discovery-lab.css'
 
 type Rating = 0 | 1 | 2 | 3
@@ -1389,18 +1389,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   function toggleTrash() {
     const musicId = catalogIdForReview(piece.id, current.sourcePage)
     const hasZero = hasZeroRating(pieceRatings[piece.id], qualityRatings[current.id], performanceRatings[current.id])
-    if (!musicId || !hasZero) return
-    if (trashedCatalogIds[musicId]) {
-      setTrashedCatalogIds(currentIds => {
-        const next = { ...currentIds }
-        delete next[musicId]
-        return next
-      })
-      setMessage('Trash released here. A leftover zero still dumps it when you leave.')
+    if (!musicId) return
+    const action = persistTrashToggle(!trashedCatalogIds[musicId], hasZero)
+    if (!action) return
+    if (action === 'trash') {
+      queueTrashSync(musicId, current.sourcePage)
+      setMessage('Moved to recoverable trash.')
       return
     }
-    queueTrashSync(musicId, current.sourcePage)
-    setMessage('Marked for the dumpster. Swiping away keeps it there.')
+    queueUntrashSync(musicId, current.sourcePage)
+    setMessage('Pulled out of the dumpster.')
   }
 
   function saveNote(value: string) {
