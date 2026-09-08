@@ -1,6 +1,5 @@
-const CACHE = 'experiment-hub-v22'
+const CACHE = 'experiment-hub-v21'
 const SHELL = ['/', '/thekonym', '/world-3d', '/roy', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png']
-const SHELL_PATHS = new Set(SHELL)
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)))
@@ -9,29 +8,20 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE && key !== 'hos-music-audio-v1').map((key) => caches.delete(key)))),
+    caches.keys().then((keys) => Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))),
   )
   self.clients.claim()
 })
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
-  const url = new URL(event.request.url)
-
-  // Media, APIs, Supabase, range requests, and all cross-origin resources stream from the network.
-  // They must never accumulate in persistent HOS Cache Storage.
-  if (url.origin !== self.location.origin || event.request.headers.has('range') || event.request.destination === 'audio' || event.request.destination === 'video' || url.pathname.startsWith('/api/') || url.pathname.startsWith('/rest/')) return
-
-  // Only the explicit same-origin application shell is cached for offline fallback.
-  if (!SHELL_PATHS.has(url.pathname)) return
-
+  // The viewer must report network failure, never a cached production record.
+  if (new URL(event.request.url).pathname === '/rest/v1/thekonyms') return
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        if (response.ok) {
-          const copy = response.clone()
-          event.waitUntil(caches.open(CACHE).then((cache) => cache.put(event.request, copy)))
-        }
+        const copy = response.clone()
+        caches.open(CACHE).then((cache) => cache.put(event.request, copy))
         return response
       })
       .catch(() => caches.match(event.request).then((response) => response || caches.match('/'))),
