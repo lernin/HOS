@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type TouchEvent } from 'react'
 import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import { supabase } from '../lib/supabase'
 import { captureLegacyMusicBrowserState, readLegacyMusicCloudReceipt, refreshLegacyMusicCapture, uploadLegacyMusicInitialCapture } from './musicLegacyImport'
+import { filterCatalogForBrowse, hasZeroRating, hydrateTrashedIds, isDurablyDumped, leaveDecision, nextIndexAfterRemoving, persistTrashToggle, ratingChangeDecision, trashToggleVisible, type TrashAction } from './musicDiscoveryTrash'
 import './music-discovery-lab.css'
 
 type Rating = 0 | 1 | 2 | 3
@@ -55,6 +56,7 @@ type CatalogItem = {
   suppressedEmotions: Emotion[]
   reviewRejected: boolean
   reviewUpdatedAt: string | null
+  status: string
 }
 type ReviewSyncEntry = {
   sourcePage: string
@@ -87,6 +89,7 @@ type SuppressionSyncEntry = {
 type TrashSyncEntry = {
   musicId: string
   sourcePage: string
+  action?: TrashAction
   updatedAt: number
 }
 const modalities: Modality[] = ['Piano','Orchestral','Jazz','Guitar','Synth','Ambient','Game','8-bit']
@@ -230,8 +233,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const [catalogReviewFilter, setCatalogReviewFilter] = useState<CatalogReviewFilter>('New')
   const [catalogModality, setCatalogModality] = useState<'All' | Modality>('All')
   const [catalogEmotion, setCatalogEmotion] = useState<'All' | Emotion>('All')
+  const [browseDumpster, setBrowseDumpster] = useState(false)
+  const [listenScope, setListenScope] = useState<'library' | 'dumpster'>('library')
   const [trashedCatalogIds, setTrashedCatalogIds] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(Object.keys(loadObject<Record<string, TrashSyncEntry>>(TRASH_SYNC_QUEUE_KEY, {})).map(id => [id, true]))
+    Object.fromEntries(Object.entries(loadObject<Record<string, TrashSyncEntry>>(TRASH_SYNC_QUEUE_KEY, {})).flatMap(([id, entry]) => entry.action === 'untrash' ? [] : [[id, true]]))
   )
   const [playing, setPlaying] = useState(false)
   const [playPending, setPlayPending] = useState(false)
@@ -396,18 +401,44 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     }
   }
 
-  function queueTrashSync(musicId: string, sourcePage: string) {
+  function queueTrashAction(musicId: string, sourcePage: string, action: TrashAction) {
     const queue = trashQueue()
-    queue[musicId] = { musicId, sourcePage, updatedAt:Date.now() }
+    queue[musicId] = { musicId, sourcePage, action, updatedAt:Date.now() }
     saveLocal(TRASH_SYNC_QUEUE_KEY, queue)
-    setTrashedCatalogIds(current => ({ ...current, [musicId]:true }))
+    setTrashedCatalogIds(current => {
+      if (action === 'trash') return { ...current, [musicId]:true }
+      const next = { ...current }
+      delete next[musicId]
+      return next
+    })
+    setCatalog(items => items.map(item => item.id === musicId
+      ? { ...item, status:action === 'trash' ? 'rejected' : (item.status === 'rejected' ? 'candidate' : item.status) }
+      : item
+    ))
     void flushTrashQueue()
+  }
+
+  function queueTrashSync(musicId: string, sourcePage: string) {
+    queueTrashAction(musicId, sourcePage, 'trash')
+  }
+
+  function queueUntrashSync(musicId: string, sourcePage: string) {
+    queueTrashAction(musicId, sourcePage, 'untrash')
+  }
+
+  function durablyDumped(musicId: string) {
+    return isDurablyDumped(catalog.find(item => item.id === musicId)?.status, trashQueue()[musicId]?.action)
   }
 
   async function flushTrashQueue() {
     const queued = trashQueue()
+    const pendingReviews = reviewQueue()
     for (const [musicId, entry] of Object.entries(queued)) {
-      const { error } = await supabase.rpc('lab_music_library_trash', { pin, music_id:musicId })
+      if (Object.values(pendingReviews).some(review => review.musicId === musicId || review.sourcePage === entry.sourcePage)) continue
+      const { error } = await supabase.rpc(entry.action === 'untrash' ? 'lab_music_library_untrash' : 'lab_music_library_trash', {
+        pin,
+        music_id:musicId,
+      })
       if (error) return
       const latest = trashQueue()
       if (latest[musicId]?.updatedAt === entry.updatedAt) {
@@ -729,7 +760,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (catalogLoading || (catalog.length && !force && !reset)) return
     setCatalogLoading(true)
     try {
-      const { data, error } = await supabase.rpc('lab_music_library_read', { pin })
+      const { data, error } = await supabase.rpc('lab_music_library_read', { pin, include_trashed:true })
       if (error) throw error
       const rows = (Array.isArray(data) ? data : []) as Array<{
         id:string; composer:string; work_title:string; movement_title?:string | null; performer?:string | null;
@@ -737,7 +768,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         rights_verified?:boolean; rating?:number | null; sound_rating?:number | null; performance_rating?:number | null;
         review_note?:string | null; confirmed_emotions?:string[] | null; suppressed_emotions?:string[] | null; review_rejected?:boolean | null;
         review_updated_at?:string | null; playback_unavailable?:boolean | null; playback_unavailable_updated_at?:string | null;
-        personal_love?:boolean | null; mature?:boolean | null; taste_notes?:string | null
+        personal_love?:boolean | null; mature?:boolean | null; taste_notes?:string | null; status?:string | null
       }>
       const incoming: CatalogItem[] = rows.map(row => ({
         id:row.id,
@@ -766,14 +797,17 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         suppressedEmotions:Array.isArray(row.suppressed_emotions) ? row.suppressed_emotions.filter((emotion): emotion is Emotion => emotions.includes(emotion as Emotion)) : [],
         reviewRejected:Boolean(row.review_rejected),
         reviewUpdatedAt:row.review_updated_at || null,
+        status:row.status || 'candidate',
       }))
       setCatalog(incoming)
       hydrateAndBackfillReviews(incoming)
       hydrateSuppressedEmotions(incoming)
+      setTrashedCatalogIds(hydrateTrashedIds(incoming, trashQueue()))
       void flushReviewSyncQueue(incoming)
       void flushSuppressionQueue()
       void flushTrashQueue()
-      setMessage(incoming.length ? 'Loaded ' + incoming.length + ' curated tracks from the production library.' : 'The curated library is empty.')
+      const liveCount = incoming.filter(item => item.status !== 'rejected').length
+      setMessage(liveCount ? 'Loaded ' + liveCount + ' curated tracks from the production library.' : 'The curated library is empty.')
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not load curated music library.')
     } finally {
@@ -785,6 +819,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     setCatalogSearch('')
     setCatalogReviewFilter('New')
     setCatalogModality('All')
+    setBrowseDumpster(false)
     await loadCatalog(true, true)
     setMode('browse')
   }
@@ -853,11 +888,13 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return request
   }
 
-  function adoptCatalogItem(item: CatalogItem) {
-    const queue = (filteredCatalog.length ? filteredCatalog : catalog)
-    const queueItems = queue.some(row => row.id === item.id) ? queue : [item, ...queue]
-    const queuePieces = queueItems.map(catalogPieceFor)
+  function adoptCatalogItem(item: CatalogItem, scope: 'library' | 'dumpster' = browseDumpster ? 'dumpster' : 'library') {
+    if (mode === 'listen') settleCurrentCard(null)
+    const queueItems = filteredCatalog.some(row => row.id === item.id) ? filteredCatalog : [item, ...filteredCatalog]
+    const queuePieces = (queueItems.length ? queueItems : [item]).map(catalogPieceFor)
     const selectedIndex = Math.max(0, queueItems.findIndex(row => row.id === item.id))
+    setListenScope(scope)
+    setBrowseDumpster(scope === 'dumpster')
     setCatalogPieces(queuePieces)
     setPieceIndex(pieces.length + selectedIndex)
     setCandidateId('catalog-candidate:' + item.id)
@@ -1012,7 +1049,44 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
   }
 
-  function changePiece(delta: number) {
+  function settleCurrentCard(advanceDelta: number | null) {
+    const musicId = catalogIdForReview(piece.id, current.sourcePage)
+    if (!musicId) return 'stay' as const
+    const hasZero = hasZeroRating(pieceRatings[piece.id], qualityRatings[current.id], performanceRatings[current.id])
+    const isTrashed = Boolean(trashedCatalogIds[musicId])
+    const decision = leaveDecision(hasZero, isTrashed, durablyDumped(musicId))
+    if (decision === 'trash') {
+      queueTrashSync(musicId, current.sourcePage)
+      setMessage('Moved to recoverable trash.')
+    }
+    if (decision === 'untrash') {
+      queueUntrashSync(musicId, current.sourcePage)
+      setMessage('Restored to the library.')
+    }
+
+    const hideFromQueue = listenScope === 'dumpster' ? decision === 'untrash' : decision === 'trash'
+    if (!hideFromQueue || !catalogPieces.length || !piece.id.startsWith('catalog:')) return 'stay' as const
+
+    const currentOffset = Math.max(0, catalogPieces.findIndex(item => item.id === piece.id))
+    const nextPieces = catalogPieces.filter(item => item.id !== piece.id)
+    if (!nextPieces.length) {
+      setCatalogPieces(nextPieces)
+      setPieceIndex(0)
+      setBrowseDumpster(listenScope === 'dumpster')
+      setMode('browse')
+      return 'emptied' as const
+    }
+
+    const nextOffset = advanceDelta === null
+      ? Math.min(currentOffset, nextPieces.length - 1)
+      : nextIndexAfterRemoving(currentOffset, catalogPieces.length, advanceDelta)
+    setCatalogPieces(nextPieces)
+    setPieceIndex(pieces.length + nextOffset)
+    return 'queue' as const
+  }
+
+  function changePiece(delta: number, alreadySettled = false) {
+    if (!alreadySettled && settleCurrentCard(delta) !== 'stay') return
     if (catalogPieces.length && piece.id.startsWith('catalog:')) {
       setPieceIndex(index => {
         const currentOffset = Math.max(0, index - pieces.length)
@@ -1026,9 +1100,10 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   async function animatePieceCard(delta: number, startX = 0) {
     if (swipeMotionBusyRef.current) return
+    const settled = settleCurrentCard(delta)
     const card = listenCardRef.current
     if (!card || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      changePiece(delta)
+      if (settled === 'stay') changePiece(delta, true)
       return
     }
 
@@ -1043,7 +1118,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
     try {
       await outgoing.finished
-      changePiece(delta)
+      if (settled === 'stay') changePiece(delta, true)
+      if (settled === 'emptied') {
+        outgoing.cancel()
+        return
+      }
       await nextSwipeFrame()
       const incoming = listenCardRef.current
       if (incoming) {
@@ -1181,6 +1260,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const catalogId = catalogIdForPiece(piece.id)
     if (catalogId) setCatalog(items => items.map(item => item.id === catalogId ? { ...item, rating:value } : item))
     queueReviewSync(piece.id, current.id, current.sourcePage, { pieceRating:value })
+    if (releaseTrashIfCleared(piece.id, current.sourcePage, value, qualityRatings[current.id], performanceRatings[current.id])) return
     if (!maybeFindLovedAlternate(value, qualityRatings[current.id], performanceRatings[current.id])) {
       setMessage('Piece rating saved.')
     }
@@ -1242,6 +1322,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     setQualityRatings(next)
     saveLocal(QUALITY_KEY, next)
     queueReviewSync(piece.id, current.id, current.sourcePage, { soundRating:value })
+    if (releaseTrashIfCleared(piece.id, current.sourcePage, pieceRatings[piece.id], value, performanceRatings[current.id])) return
     if (!maybeFindLovedAlternate(pieceRatings[piece.id], value, performanceRatings[current.id])) {
       setMessage('Sound rating saved.')
     }
@@ -1252,6 +1333,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     setPerformanceRatings(nextRatings)
     saveLocal(PERFORMANCE_KEY, nextRatings)
     queueReviewSync(piece.id, current.id, current.sourcePage, { performanceRating:value })
+    if (releaseTrashIfCleared(piece.id, current.sourcePage, pieceRatings[piece.id], qualityRatings[current.id], value)) return
 
     if (!maybeFindLovedAlternate(pieceRatings[piece.id], qualityRatings[current.id], value)) {
       setMessage(value === 3 ? 'Preferred performance saved.' : 'Performance rating saved.')
@@ -1295,15 +1377,28 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     queueReviewSync(piece.id, current.id, current.sourcePage, { confirmedEmotions:nextConfirmedList })
   }
 
-  function trashCurrent() {
-    const musicId = catalogIdForPiece(piece.id)
-    const hasZero = pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0
-    if (!musicId || !hasZero) return
-    queueTrashSync(musicId, current.sourcePage)
-    setCatalog(items => items.filter(item => item.id !== musicId))
-    setCatalogPieces(items => items.filter(item => item.id !== piece.id))
-    setMessage('Moved to recoverable trash.')
-    setMode('browse')
+  function releaseTrashIfCleared(pieceId: string, sourcePage: string, pieceValue: Rating | undefined, soundValue: Rating | undefined, performanceValue: Rating | undefined) {
+    const musicId = catalogIdForReview(pieceId, sourcePage)
+    if (!musicId) return false
+    if (ratingChangeDecision(hasZeroRating(pieceValue, soundValue, performanceValue), Boolean(trashedCatalogIds[musicId]), durablyDumped(musicId)) !== 'untrash') return false
+    queueUntrashSync(musicId, sourcePage)
+    setMessage('Restored to the library.')
+    return true
+  }
+
+  function toggleTrash() {
+    const musicId = catalogIdForReview(piece.id, current.sourcePage)
+    const hasZero = hasZeroRating(pieceRatings[piece.id], qualityRatings[current.id], performanceRatings[current.id])
+    if (!musicId) return
+    const action = persistTrashToggle(!trashedCatalogIds[musicId], hasZero)
+    if (!action) return
+    if (action === 'trash') {
+      queueTrashSync(musicId, current.sourcePage)
+      setMessage('Moved to recoverable trash.')
+      return
+    }
+    queueUntrashSync(musicId, current.sourcePage)
+    setMessage('Restored to the library.')
   }
 
   function saveNote(value: string) {
@@ -1371,7 +1466,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   const activeCatalogId = current.id.startsWith('catalog-candidate:') ? current.id.slice('catalog-candidate:'.length) : null
   const activeCatalogItem = activeCatalogId ? catalog.find(item => item.id === activeCatalogId) || null : null
   const catalogVersions = activeCatalogItem
-    ? catalog.filter(item => sameCatalogComposition(item, activeCatalogItem) && !trashedCatalogIds[item.id])
+    ? catalog.filter(item => sameCatalogComposition(item, activeCatalogItem) && Boolean(trashedCatalogIds[item.id]) === (listenScope === 'dumpster'))
     : []
 
   function normalizeVersionText(value: string) {
@@ -1395,6 +1490,16 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
   }
 
   function switchCatalogVersion(item: CatalogItem) {
+    const musicId = catalogIdForReview(piece.id, current.sourcePage)
+    if (musicId) {
+      const decision = leaveDecision(
+        hasZeroRating(pieceRatings[piece.id], qualityRatings[current.id], performanceRatings[current.id]),
+        Boolean(trashedCatalogIds[musicId]),
+        durablyDumped(musicId),
+      )
+      if (decision === 'trash') queueTrashSync(musicId, current.sourcePage)
+      if (decision === 'untrash') queueUntrashSync(musicId, current.sourcePage)
+    }
     const pieceId = 'catalog:' + item.id
     const existingIndex = catalogPieces.findIndex(candidatePiece => candidatePiece.id === pieceId)
     if (existingIndex >= 0) {
@@ -1434,8 +1539,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     return item.personalLove
   }
 
-  const filteredCatalog = catalog.filter(item => {
-    if (trashedCatalogIds[item.id]) return false
+  const filteredCatalog = filterCatalogForBrowse(catalog, trashedCatalogIds, browseDumpster).filter(item => {
     const text = (item.title + ' ' + item.creator + ' ' + item.source + ' ' + (item.description || '')).toLowerCase()
     const matchesSearch = !catalogSearch.trim() || text.includes(catalogSearch.trim().toLowerCase())
     const matchesModality = catalogModality === 'All' || item.modality === catalogModality
@@ -1448,6 +1552,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const matchesEmotion = catalogEmotion === 'All' || item.confirmedEmotions.includes(catalogEmotion)
     return matchesSearch && matchesModality && matchesReview && matchesEmotion
   })
+  const dumpedCount = catalog.filter(item => trashedCatalogIds[item.id]).length
+  const showTrashToggle = trashToggleVisible(pieceRatings[piece.id], qualityRatings[current.id], performanceRatings[current.id])
+    && Boolean(catalogIdForReview(piece.id, current.sourcePage))
+  const trashOn = Boolean(activeCatalogId && trashedCatalogIds[activeCatalogId])
+
+  useEffect(() => {
+    if (mode !== 'listen') return
+    releaseTrashIfCleared(piece.id, current.sourcePage, pieceRatings[piece.id], qualityRatings[current.id], performanceRatings[current.id])
+  }, [mode, piece.id, current.sourcePage, pieceRatings[piece.id], qualityRatings[current.id], performanceRatings[current.id], trashedCatalogIds])
 
   useEffect(() => {
     if (mode === 'browse' && !catalog.length && !catalogLoading) void loadCatalog()
@@ -1479,13 +1592,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     <header className="md-top">
       <button onClick={onExit}>← Lab</button>
       <strong>Music Discovery</strong>
-      <span>{pieceIndex + 1}/{pieceList.length}</span>
+      <span>{catalogPieces.length && piece.id.startsWith('catalog:')
+        ? (Math.max(0, pieceIndex - pieces.length) + 1) + '/' + catalogPieces.length
+        : (pieceIndex + 1) + '/' + pieceList.length}</span>
     </header>
 
     <nav className="md-tabs">
       <button className={mode === 'listen' ? 'active' : ''} onClick={() => setMode('listen')}>LISTEN</button>
-      <button className={mode === 'browse' ? 'active' : ''} onClick={() => setMode('browse')}>BROWSE</button>
-      <button className={mode === 'hunt' ? 'active' : ''} onClick={() => setMode('hunt')}>HUNT</button>
+      <button className={mode === 'browse' ? 'active' : ''} onClick={() => { if (mode === 'listen') settleCurrentCard(null); setMode('browse') }}>BROWSE</button>
+      <button className={mode === 'hunt' ? 'active' : ''} onClick={() => { if (mode === 'listen') settleCurrentCard(null); setMode('hunt') }}>HUNT</button>
     </nav>
 
     {mode === 'listen' ? <section ref={listenCardRef} className="md-listen" onTouchStart={onListenTouchStart} onTouchMove={onListenTouchMove} onTouchEnd={onListenTouchEnd} onTouchCancel={onListenTouchCancel}>
@@ -1578,16 +1693,18 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <div className="md-footer-row">
         <span>{current.license}</span>
         <div>
-          {catalogIdForPiece(piece.id) && (pieceRatings[piece.id] === 0 || qualityRatings[current.id] === 0 || performanceRatings[current.id] === 0)
-            && <button className="md-trash" onClick={trashCurrent}>🗑 Trash</button>}
+          {showTrashToggle && <button className={'md-trash' + (trashOn ? ' on' : '')} onClick={toggleTrash} aria-pressed={trashOn}>🗑 {trashOn ? 'In trash' : 'Trash'}</button>}
           <a href={current.sourcePage} target="_blank" rel="noreferrer">Source ↗</a>
         </div>
       </div>
-    </section> : mode === 'browse' ? <section className="md-browse">
-      <div className="md-browse-head">
+    </section> : mode === 'browse' ? <section className={'md-browse' + (browseDumpster ? ' dumpster' : '')}>
+      <div className={'md-browse-head' + (browseDumpster ? ' with-back' : '')}>
+        {browseDumpster && <button onClick={() => setBrowseDumpster(false)} aria-label="Leave dumpster">←</button>}
         <div>
-          <small>CURATED PRODUCTION LIBRARY</small>
-          <h1>{catalogLoading ? 'Gathering music…' : filteredCatalog.length + (catalogReviewFilter === 'Loved' ? ' loved' : catalogReviewFilter === 'New' ? ' new' : ' to try')}</h1>
+          <small>{browseDumpster ? 'TRASH' : 'CURATED PRODUCTION LIBRARY'}</small>
+          <h1>{catalogLoading ? 'Gathering music…' : browseDumpster
+            ? filteredCatalog.length + ' dumped'
+            : filteredCatalog.length + (catalogReviewFilter === 'Loved' ? ' loved' : catalogReviewFilter === 'New' ? ' new' : ' to try')}</h1>
         </div>
         <button onClick={() => void loadCatalog(true, true)} disabled={catalogLoading}>{catalogLoading ? '…' : '↻'}</button>
       </div>
@@ -1607,14 +1724,19 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         {filteredCatalog.map(item => {
           const touched = catalogTouched(item)
           const loved = catalogLoved(item)
-          return <button key={item.id} className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => void adoptCatalogItem(item)}>
+          return <button key={item.id} type="button" className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => adoptCatalogItem(item, browseDumpster ? 'dumpster' : 'library')}>
             <span className={'md-catalog-play' + (item.externalOnly || item.playbackUnavailable ? ' unavailable' : '')}>{item.externalOnly || item.playbackUnavailable ? '—' : '▶'}</span>
             <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.playbackUnavailable ? ' · not playable' : item.externalOnly ? ' · no in-app audio' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
-            <span className="md-catalog-source">{item.personalLove ? '♥ loved' : item.mature ? 'mature' : item.playbackUnavailable ? 'broken' : item.source}</span>
+            <span className="md-catalog-source">{browseDumpster ? 'dumped' : item.personalLove ? '♥ loved' : item.mature ? 'mature' : item.playbackUnavailable ? 'broken' : item.source}</span>
           </button>
         })}
-        {!catalogLoading && !filteredCatalog.length && <p className="md-empty">No matches in this batch. Change the filter or refresh.</p>}
+        {!catalogLoading && !filteredCatalog.length && <p className="md-empty">{browseDumpster ? 'Nothing in Trash. Change the filter or go back to the library.' : 'No matches in this batch. Change the filter or refresh.'}</p>}
       </div>
+      {!browseDumpster && <button type="button" className="md-catalog-item md-dumpster-entry" onClick={() => { setBrowseDumpster(true); setCatalogReviewFilter('All') }}>
+        <span className="md-catalog-play">🗑</span>
+        <span className="md-catalog-copy"><strong>Trash</strong><small>Rejected recordings{dumpedCount ? ' · ' + dumpedCount + (dumpedCount === 1 ? ' item' : ' items') : ''}</small></span>
+        <span className="md-catalog-source">trash</span>
+      </button>}
       <div className="md-repositories">
         <span>CURATED</span>
         <div>
