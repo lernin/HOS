@@ -11,14 +11,6 @@
       "destination": "/"
     },
     {
-      "source": "/backing-tracks",
-      "destination": "/"
-    },
-    {
-      "source": "/orchestration-lab",
-      "destination": "/"
-    },
-    {
       "source": "/music-discovery",
       "destination": "/"
     },
