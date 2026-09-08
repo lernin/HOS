@@ -886,11 +886,11 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
 
   function adoptCatalogItem(item: CatalogItem, scope: 'library' | 'dumpster' = browseDumpster ? 'dumpster' : 'library') {
     if (mode === 'listen') settleCurrentCard(null)
-    const queue = (filteredCatalog.length ? filteredCatalog : catalog.filter(row => Boolean(trashedCatalogIds[row.id]) === (scope === 'dumpster')))
-    const queueItems = queue.some(row => row.id === item.id) ? queue : [item, ...queue]
-    const queuePieces = queueItems.map(catalogPieceFor)
+    const queueItems = filteredCatalog.some(row => row.id === item.id) ? filteredCatalog : [item, ...filteredCatalog]
+    const queuePieces = (queueItems.length ? queueItems : [item]).map(catalogPieceFor)
     const selectedIndex = Math.max(0, queueItems.findIndex(row => row.id === item.id))
     setListenScope(scope)
+    setBrowseDumpster(scope === 'dumpster')
     setCatalogPieces(queuePieces)
     setPieceIndex(pieces.length + selectedIndex)
     setCandidateId('catalog-candidate:' + item.id)
@@ -1067,6 +1067,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     const nextPieces = catalogPieces.filter(item => item.id !== piece.id)
     if (!nextPieces.length) {
       setCatalogPieces(nextPieces)
+      setPieceIndex(0)
       setBrowseDumpster(listenScope === 'dumpster')
       setMode('browse')
       return 'emptied' as const
@@ -1588,7 +1589,9 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     <header className="md-top">
       <button onClick={onExit}>← Lab</button>
       <strong>Music Discovery</strong>
-      <span>{pieceIndex + 1}/{pieceList.length}</span>
+      <span>{catalogPieces.length && piece.id.startsWith('catalog:')
+        ? (Math.max(0, pieceIndex - pieces.length) + 1) + '/' + catalogPieces.length
+        : (pieceIndex + 1) + '/' + pieceList.length}</span>
     </header>
 
     <nav className="md-tabs">
@@ -1718,19 +1721,19 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
         {filteredCatalog.map(item => {
           const touched = catalogTouched(item)
           const loved = catalogLoved(item)
-          return <button key={item.id} className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => void adoptCatalogItem(item)}>
+          return <button key={item.id} type="button" className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => adoptCatalogItem(item, browseDumpster ? 'dumpster' : 'library')}>
             <span className={'md-catalog-play' + (item.externalOnly || item.playbackUnavailable ? ' unavailable' : '')}>{item.externalOnly || item.playbackUnavailable ? '—' : '▶'}</span>
             <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.playbackUnavailable ? ' · not playable' : item.externalOnly ? ' · no in-app audio' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
             <span className="md-catalog-source">{browseDumpster ? 'dumped' : item.personalLove ? '♥ loved' : item.mature ? 'mature' : item.playbackUnavailable ? 'broken' : item.source}</span>
           </button>
         })}
-        {!browseDumpster && <button className="md-catalog-item md-dumpster-entry" onClick={() => { setBrowseDumpster(true); setCatalogReviewFilter('All') }}>
-          <span className="md-catalog-play">🗑</span>
-          <span className="md-catalog-copy"><strong>Go see the trash can</strong><small>if you want to dig through the dumpster fire{dumpedCount ? ' · ' + dumpedCount + (dumpedCount === 1 ? ' dumped piece' : ' dumped pieces') : ''}</small></span>
-          <span className="md-catalog-source">dumpster</span>
-        </button>}
         {!catalogLoading && !filteredCatalog.length && <p className="md-empty">{browseDumpster ? 'Nothing in the dumpster fire. Change the filter or go back to the library.' : 'No matches in this batch. Change the filter or refresh.'}</p>}
       </div>
+      {!browseDumpster && <button type="button" className="md-catalog-item md-dumpster-entry" onClick={() => { setBrowseDumpster(true); setCatalogReviewFilter('All') }}>
+        <span className="md-catalog-play">🗑</span>
+        <span className="md-catalog-copy"><strong>Go see the trash can</strong><small>if you want to dig through the dumpster fire{dumpedCount ? ' · ' + dumpedCount + (dumpedCount === 1 ? ' dumped piece' : ' dumped pieces') : ''}</small></span>
+        <span className="md-catalog-source">dumpster</span>
+      </button>}
       <div className="md-repositories">
         <span>CURATED</span>
         <div>
