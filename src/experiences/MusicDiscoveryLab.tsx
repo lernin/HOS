@@ -1013,7 +1013,15 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       }
       if (!source) throw new Error('Could not load this recording.')
       const musicId = catalogIdForPiece(piece.id)
-      if (musicId) rememberLocalAudio(musicId, source)
+      if (musicId) {
+        rememberLocalAudio(musicId, source)
+        setLocalAudioDeleteStatus(current => {
+          if (!current[musicId]) return current
+          const next = { ...current }
+          delete next[musicId]
+          return next
+        })
+      }
       if (!playIntentRef.current || requestId !== playRequestRef.current) return
 
       if (audio.src !== source) {
@@ -1746,7 +1754,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
           const touched = catalogTouched(item)
           const loved = catalogLoved(item)
           const protectedTopThree = catalogTopThree(item)
-          return <div key={item.id} className={'md-catalog-row' + (deleteAudioMode ? ' delete-mode' : '')}>
+          return <div key={item.id} className={'md-catalog-row' + (deleteAudioMode && !protectedTopThree ? ' delete-mode' : '')}>
             <button type="button" className={'md-catalog-item' + (touched ? ' touched' : '') + (loved ? ' loved' : '')} onClick={() => adoptCatalogItem(item, browseDumpster ? 'dumpster' : 'library')}>
               <span className={'md-catalog-play' + (item.externalOnly || item.playbackUnavailable ? ' unavailable' : '')}>{item.externalOnly || item.playbackUnavailable ? '—' : '▶'}</span>
               <span className="md-catalog-copy"><strong>{item.title}</strong><small>{item.creator || 'Unknown artist'} · {item.modality}{item.playbackUnavailable ? ' · not playable' : item.externalOnly ? ' · no in-app audio' : item.rightsVerified ? ' · ✓ rights' : ' · rights review'}</small></span>
