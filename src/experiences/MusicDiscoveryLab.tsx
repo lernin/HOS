@@ -1061,7 +1061,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     }
     if (decision === 'untrash') {
       queueUntrashSync(musicId, current.sourcePage)
-      setMessage('Pulled out of the dumpster.')
+      setMessage('Restored to the library.')
     }
 
     const hideFromQueue = listenScope === 'dumpster' ? decision === 'untrash' : decision === 'trash'
@@ -1382,7 +1382,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
     if (!musicId) return false
     if (ratingChangeDecision(hasZeroRating(pieceValue, soundValue, performanceValue), Boolean(trashedCatalogIds[musicId]), durablyDumped(musicId)) !== 'untrash') return false
     queueUntrashSync(musicId, sourcePage)
-    setMessage('Pulled out of the dumpster.')
+    setMessage('Restored to the library.')
     return true
   }
 
@@ -1398,7 +1398,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       return
     }
     queueUntrashSync(musicId, current.sourcePage)
-    setMessage('Pulled out of the dumpster.')
+    setMessage('Restored to the library.')
   }
 
   function saveNote(value: string) {
@@ -1701,7 +1701,7 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
       <div className={'md-browse-head' + (browseDumpster ? ' with-back' : '')}>
         {browseDumpster && <button onClick={() => setBrowseDumpster(false)} aria-label="Leave dumpster">←</button>}
         <div>
-          <small>{browseDumpster ? 'DUMPSTER FIRE' : 'CURATED PRODUCTION LIBRARY'}</small>
+          <small>{browseDumpster ? 'TRASH' : 'CURATED PRODUCTION LIBRARY'}</small>
           <h1>{catalogLoading ? 'Gathering music…' : browseDumpster
             ? filteredCatalog.length + ' dumped'
             : filteredCatalog.length + (catalogReviewFilter === 'Loved' ? ' loved' : catalogReviewFilter === 'New' ? ' new' : ' to try')}</h1>
@@ -1730,12 +1730,12 @@ export function MusicDiscoveryLab({ onExit, pin }: { onExit: () => void; pin: st
             <span className="md-catalog-source">{browseDumpster ? 'dumped' : item.personalLove ? '♥ loved' : item.mature ? 'mature' : item.playbackUnavailable ? 'broken' : item.source}</span>
           </button>
         })}
-        {!catalogLoading && !filteredCatalog.length && <p className="md-empty">{browseDumpster ? 'Nothing in the dumpster fire. Change the filter or go back to the library.' : 'No matches in this batch. Change the filter or refresh.'}</p>}
+        {!catalogLoading && !filteredCatalog.length && <p className="md-empty">{browseDumpster ? 'Nothing in Trash. Change the filter or go back to the library.' : 'No matches in this batch. Change the filter or refresh.'}</p>}
       </div>
       {!browseDumpster && <button type="button" className="md-catalog-item md-dumpster-entry" onClick={() => { setBrowseDumpster(true); setCatalogReviewFilter('All') }}>
         <span className="md-catalog-play">🗑</span>
-        <span className="md-catalog-copy"><strong>Go see the trash can</strong><small>if you want to dig through the dumpster fire{dumpedCount ? ' · ' + dumpedCount + (dumpedCount === 1 ? ' dumped piece' : ' dumped pieces') : ''}</small></span>
-        <span className="md-catalog-source">dumpster</span>
+        <span className="md-catalog-copy"><strong>Trash</strong><small>Rejected recordings{dumpedCount ? ' · ' + dumpedCount + (dumpedCount === 1 ? ' item' : ' items') : ''}</small></span>
+        <span className="md-catalog-source">trash</span>
       </button>}
       <div className="md-repositories">
         <span>CURATED</span>
