@@ -455,7 +455,7 @@ function App() {
         </article>
         <article className="experience-card">
           <span className="experience-icon">♪</span>
-          <span className="experience-copy"><strong>Music Discovery Lab</strong><small>Search, audition, compare, and rate reusable music and alternate performances.</small></span>
+          <span className="experience-copy"><strong>Music Discovery</strong><small>Search, audition, compare, and rate reusable music and alternate performances.</small></span>
           <button className="experience-go" onClick={() => navigate('music-discovery')}>Go</button>
         </article>
         <article className="experience-card">
@@ -526,7 +526,7 @@ function App() {
   if (view === 'concept-interactions') return <Suspense fallback={<main className="shell"><div className="center">Opening Concept Interactions…</div></main>}><ConceptInteractionReview pin={pin} onExit={() => navigate('hub')} /></Suspense>
   if (view === 'water-garden') return <Suspense fallback={<main className="shell"><div className="center">Opening Water Garden…</div></main>}><WaterGarden onExit={() => navigate('hub')} /></Suspense>
   if (view === 'woodland-walk') return <Suspense fallback={<main className="shell"><div className="center">Opening Woodland Walk…</div></main>}><WoodlandWalk onBack={() => navigate('hub')} /></Suspense>
-  if (view === 'music-discovery') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Discovery Lab…</div></main>}><MusicDiscoveryLab onExit={() => navigate('hub')} pin={pin} /></Suspense>
+  if (view === 'music-discovery') return <Suspense fallback={<main className="shell"><div className="center">Opening Music Discovery…</div></main>}><MusicDiscoveryLab onExit={() => navigate('hub')} pin={pin} /></Suspense>
   if (view === 'knock-knock') return <Suspense fallback={<main className="shell"><div className="center">Opening Knock Knock…</div></main>}><KnockKnock onExit={() => navigate('hub')} pin={pin} /></Suspense>
   if (view === 'world3d') return <Suspense fallback={<main className="shell"><div className="center">Opening 3D world…</div></main>}><World3D onExit={() => navigate('hub')} /></Suspense>
   if (view === 'roy') return <Suspense fallback={<main className="shell"><div className="center">Opening Roy…</div></main>}><RoyVocab onExit={() => navigate('hub')} pin={pin} /></Suspense>
