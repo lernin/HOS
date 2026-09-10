@@ -52,32 +52,63 @@ export function addLandscape(scene:T.Scene,k:Kit) {
     }
     const m=new T.Mesh(geometry(verts,inds,undefined,cols),new T.MeshStandardMaterial({vertexColors:true,roughness:1,side:T.DoubleSide}));scene.add(m)
   }
-  // Great tree: tapered, twisting trunk and real sweeping roots support the library.
-  function branch(points:T.Vector3[],radius:number,end:number) {
-    const curve=new T.CatmullRomCurve3(points),frames=curve.computeFrenetFrames(24,false),verts:number[]=[],idx:number[]=[]
-    for(let i=0;i<=24;i++) {
-      const q=curve.getPoint(i/24),r=radius+(end-radius)*i/24
-      for(let j=0;j<12;j++) {
-        const a=j/12*Math.PI*2,rr=r*(1+.09*Math.sin(j*2.5+i*.3))
+  // Great tree: deeply ridged, multi-toned bark replaces the former smooth brown surface.
+  const bark=['#5a3c29','#67452d','#765038','#4c3425']
+  function branch(points:T.Vector3[],radius:number,end:number,tone=c.timber) {
+    const rings=32,sides=16,curve=new T.CatmullRomCurve3(points),frames=curve.computeFrenetFrames(rings,false),verts:number[]=[],idx:number[]=[]
+    for(let i=0;i<=rings;i++) {
+      const t=i/rings,q=curve.getPoint(t),r=radius+(end-radius)*t
+      for(let j=0;j<sides;j++) {
+        const a=j/sides*Math.PI*2
+        const grain=.052*Math.sin(a*5+t*11)+.032*Math.sin(a*13-t*23)+.018*Math.sin(a*29+t*41)
+        const swell=.025*Math.sin(t*8.5+a*2.2)
+        const rr=r*(1+grain+swell)
         const off=frames.normals[i].clone().multiplyScalar(Math.cos(a)*rr).addScaledVector(frames.binormals[i],Math.sin(a)*rr)
         verts.push(q.x+off.x,q.y+off.y,q.z+off.z)
-        if(i<24){const a=i*12+j,b=i*12+(j+1)%12;idx.push(a,b,a+12,b,b+12,a+12)}
+        if(i<rings){const p=i*sides+j,n=i*sides+(j+1)%sides;idx.push(p,n,p+sides,n,n+sides,p+sides)}
       }
     }
-    k.add(geometry(verts,idx),c.timber)
+    k.add(geometry(verts,idx),tone)
   }
-  branch([vec(tree.x,tree.y-.3,tree.z),vec(tree.x-.4,tree.y+5,tree.z),vec(tree.x+.4,tree.y+10,tree.z-.4),vec(tree.x-.6,tree.y+14,tree.z)],1.65,.55)
+  branch([vec(tree.x,tree.y-.3,tree.z),vec(tree.x-.4,tree.y+5,tree.z),vec(tree.x+.4,tree.y+10,tree.z-.4),vec(tree.x-.6,tree.y+14,tree.z)],1.65,.55,bark[1])
   for(let i=0;i<9;i++) {
     const a=i*2.4,r=3.2+k.rand()*.4
     const x=tree.x+Math.cos(a)*r,z=tree.z+Math.sin(a)*r
-    branch([vec(tree.x,tree.y+1.1,tree.z),vec(tree.x+Math.cos(a)*1.7,tree.y+.5,tree.z+Math.sin(a)*1.7),vec(x,groundHeight(x,z)+.05,z)],.36,.08)
-    branch([vec(tree.x,tree.y+8+i*.5,tree.z),vec(tree.x+Math.cos(a)*3,tree.y+12,tree.z+Math.sin(a)*3),vec(tree.x+Math.cos(a)*6.4,tree.y+14+k.rand()*3,tree.z+Math.sin(a)*6.4)],.52,.085)
+    branch([vec(tree.x,tree.y+1.1,tree.z),vec(tree.x+Math.cos(a)*1.7,tree.y+.5,tree.z+Math.sin(a)*1.7),vec(x,groundHeight(x,z)+.05,z)],.36,.08,bark[(i+2)%bark.length])
+    branch([vec(tree.x,tree.y+8+i*.5,tree.z),vec(tree.x+Math.cos(a)*3,tree.y+12,tree.z+Math.sin(a)*3),vec(tree.x+Math.cos(a)*6.4,tree.y+14+k.rand()*3,tree.z+Math.sin(a)*6.4)],.52,.085,bark[i%bark.length])
   }
-  // Fine longitudinal bark folds soften the large trunk without texture downloads.
-  for(let i=0;i<16;i++) {
-    const a=i/16*Math.PI*2,pts=[]
-    for(let j=0;j<7;j++){const t=j/6,r=1.64-t;pts.push(vec(tree.x+Math.cos(a+t*.23)*r,tree.y+t*11,tree.z+Math.sin(a+t*.23)*r))}
-    k.beam(pts,.035,i%2?'#846040':'#765036')
+  // Layered, broken longitudinal folds create bark depth at eye level instead of painted-on stripes.
+  for(let i=0;i<30;i++) {
+    const a=i/30*Math.PI*2,pts:T.Vector3[]=[]
+    const start=(i%5)*.08,end=.72+(i%4)*.045
+    for(let j=0;j<9;j++) {
+      const t=start+(end-start)*j/8,trunkT=Math.min(1,t),r=1.67+(0.57-1.67)*trunkT+.035
+      const twist=a+trunkT*.24+.035*Math.sin(j*1.7+i)
+      pts.push(vec(tree.x+Math.cos(twist)*r,tree.y+trunkT*13.6,tree.z+Math.sin(twist)*r))
+    }
+    k.beam(pts,.022+(i%4)*.006,i%3===0?bark[3]:i%2?bark[2]:bark[0])
+  }
+  // Short cross-grain fissures interrupt the vertical grain and keep the trunk from reading as tubing.
+  for(let i=0;i<22;i++) {
+    const t=.08+(i%11)/12,base=i*2.37,rr=1.67+(0.57-1.67)*t+.045,pts:T.Vector3[]=[]
+    for(let j=-2;j<=2;j++) {
+      const a=base+j*.045
+      pts.push(vec(tree.x+Math.cos(a)*rr,tree.y+t*13.6+j*.012,tree.z+Math.sin(a)*rr))
+    }
+    k.beam(pts,.014,i%3?bark[3]:'#3f2a1f')
+  }
+  // A few recessed knots and low moss patches give close-up landmarks without adding texture downloads.
+  const knots=[[.3,2.1,.17],[2.4,3.9,.14],[4.5,5.8,.2],[1.45,7.1,.13],[3.55,8.8,.16]] as const
+  const zAxis=new T.Vector3(0,0,1)
+  for(const [a,h,s] of knots) {
+    const t=h/13.6,rr=1.67+(0.57-1.67)*t+.055,normal=new T.Vector3(Math.cos(a),0,Math.sin(a)),x=tree.x+normal.x*rr,z=tree.z+normal.z*rr
+    const core=k.add(new T.CircleGeometry(s*.72,12),'#2f211a',x,tree.y+h,z);core.quaternion.setFromUnitVectors(zAxis,normal)
+    const ring=k.add(new T.TorusGeometry(s,s*.22,6,14),bark[0],x+normal.x*.018,tree.y+h,z+normal.z*.018);ring.quaternion.setFromUnitVectors(zAxis,normal)
+  }
+  for(let i=0;i<12;i++) {
+    const a=i*.83,h=.25+(i%4)*.55,t=h/13.6,rr=1.67+(0.57-1.67)*t+.09
+    const moss=k.add(new T.SphereGeometry(.2+(i%3)*.045,7,5),i%2?'#657c44':'#7e914e',tree.x+Math.cos(a)*rr,tree.y+h,tree.z+Math.sin(a)*rr)
+    moss.scale.set(1,.55,.32)
   }
   // Lanterns mark decisions, while unlit paths remain visually clear.
   for(const name of ['entrance-to-willow','willow-to-tree','bridge-to-fern']) {
