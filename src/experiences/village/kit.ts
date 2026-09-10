@@ -42,7 +42,7 @@ function surfaceKind(color:string):SurfaceKind {
 }
 function textureMaterial(m:T.MeshStandardMaterial,kind:SurfaceKind) {
   if(kind==='plain')return
-  m.customProgramCacheKey=()=>`procedia-surface-v1-${kind}`
+  m.customProgramCacheKey=()=>`procedia-surface-v2-${kind}`
   m.onBeforeCompile=shader=>{
     shader.vertexShader=shader.vertexShader
       .replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;')
@@ -57,15 +57,15 @@ float surfaceNoise(vec3 p){
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>${functions}`)
     const p='vSurfacePosition'
     const expression=kind==='wood'
-      ? `float sn=surfaceNoise(${p}*2.7);float grain=.5+.5*sin((${p}.x+${p}.z)*24.0+${p}.y*3.5+sn*5.0);float surfaceTone=.86+.14*sn+.06*grain;`
+      ? `float sn=surfaceNoise(${p}*2.4);float fine=surfaceNoise(${p}*10.0);float grain=.5+.5*sin((${p}.x+${p}.z)*28.0+${p}.y*4.0+sn*6.0);float surfaceTone=.78+.16*sn+.075*fine+.09*grain;`
       : kind==='plaster'
-        ? `float sn=surfaceNoise(${p}*1.65);float fine=surfaceNoise(${p}*7.5);float surfaceTone=.93+.09*sn+.035*fine;`
+        ? `float sn=surfaceNoise(${p}*1.45);float fine=surfaceNoise(${p}*8.5);float speck=surfaceNoise(${p}*20.0);float surfaceTone=.87+.12*sn+.065*fine+.035*speck;`
         : kind==='stone'
-          ? `float sn=surfaceNoise(${p}*4.6);float fine=surfaceNoise(${p}*13.0);float surfaceTone=.86+.18*sn+.055*fine;`
-          : `float sn=surfaceNoise(${p}*5.2);float fleck=surfaceNoise(${p}*15.0);float rib=.5+.5*sin((${p}.x-${p}.z)*34.0);float surfaceTone=.89+.12*sn+.04*fleck+.025*rib;`
+          ? `float sn=surfaceNoise(${p}*4.1);float fine=surfaceNoise(${p}*12.0);float grit=surfaceNoise(${p}*24.0);float surfaceTone=.78+.20*sn+.09*fine+.045*grit;`
+          : `float sn=surfaceNoise(${p}*4.8);float fleck=surfaceNoise(${p}*14.0);float rib=.5+.5*sin((${p}.x-${p}.z)*38.0);float surfaceTone=.79+.17*sn+.07*fleck+.055*rib;`
     shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>\n${expression}\ndiffuseColor.rgb*=surfaceTone;`)
-    const roughness=kind==='plaster'?'.035':kind==='stone'?'.055':kind==='shingle'?'.045':'.035'
-    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor+(surfaceNoise(vSurfacePosition*8.0)-.5)*${roughness},.58,1.0);`)
+    const roughness=kind==='plaster'?'.06':kind==='stone'?'.09':kind==='shingle'?'.075':'.065'
+    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor+(surfaceNoise(vSurfacePosition*9.0)-.5)*${roughness},.54,1.0);`)
   }
 }
 export type Kit=ReturnType<typeof createKit>
