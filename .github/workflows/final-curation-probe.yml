@@ -1,0 +1,16 @@
+name: Final Music Curation Probe
+on:
+  pull_request:
+    branches:
+      - main
+jobs:
+  probe:
+    if: github.head_ref == 'research/music-modality-hunt-20260906'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/final-curation-probe.mjs
