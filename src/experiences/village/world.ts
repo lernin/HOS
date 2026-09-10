@@ -97,7 +97,7 @@ export function floorCandidates(x:number,z:number) {
   hits.sort((a,b)=>a.distance-b.distance)
   const heights=hits.map(v=>v.y)
   // Cottage floors and porches are physical surfaces, including the elevated library.
-  for(const h of houses) if(Math.abs(x-h.x)<3.55 && z>h.z-3.55 && z<h.z+4.6)heights.push(h.y)
+  for(const h of houses) if((Math.abs(x-h.x)<3.5 && Math.abs(z-h.z)<3.5)||(Math.abs(x-h.x)<1.6 && z>=h.z+3.4 && z<h.z+4.72))heights.push(h.y)
   for(const d of docks) if(Math.abs(x-d.x)<1.6 && Math.abs(z-d.z)<2)heights.push(d.y)
   const border=23+1.1*Math.sin(z*.24)+.7*Math.cos(z*.57)
   if(Math.abs(x)<border && z>-26 && z<27 && !isWater(x,z,-.3)) heights.push(groundHeight(x,z))

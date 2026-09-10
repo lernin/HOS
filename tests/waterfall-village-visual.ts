@@ -2,7 +2,7 @@
 import { createVillage } from '../src/experiences/village/scene'
 import { spawn, pathNamed, houses } from '../src/experiences/village/world'
 if(import.meta.env.DEV) {
-  const input={x:0,z:0,yaw:spawn.yaw,pitch:.02,paused:false,quality:1}
+  const input={x:0,z:0,yaw:spawn.yaw,pitch:.02,paused:true,quality:1}
   const controller=new AbortController()
   const api=await createVillage(document.querySelector('canvas')!,input,controller.signal,()=>{})
   const views={

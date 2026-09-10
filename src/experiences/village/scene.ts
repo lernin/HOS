@@ -12,7 +12,7 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
   const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.35));renderer.outputColorSpace=T.SRGBColorSpace
   renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05
-  renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap
+  renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true
   const scene=new T.Scene();scene.background=new T.Color('#b4dbe8');scene.fog=new T.Fog('#bad9dd',43,170)
   const camera=new T.PerspectiveCamera(62,1,.08,300);camera.rotation.order='YXZ'
   const sun=new T.DirectionalLight('#ffedcb',2.9);sun.position.set(-30,60,32);sun.castShadow=true
@@ -20,7 +20,7 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
   sun.shadow.bias=-.00016;sun.shadow.normalBias=.035
   scene.add(sun,new T.HemisphereLight('#d9eeff','#7b8250',1.55))
   const kit=createKit(scene),resources=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>()
-  let disposed=false,frame=0,observer:ResizeObserver|undefined
+  let disposed=false,frame=0,renderDirty=true,observer:ResizeObserver|undefined
   function track(root:T.Object3D){root.traverse(o=>{if(!(o instanceof T.Mesh))return;resources.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);for(const val of Object.values(m))if(val instanceof T.Texture)textures.add(val)}})}
   const dispose=()=>{if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();track(scene);resources.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());kit.dispose();sun.shadow.map?.dispose();renderer.dispose()}
   signal.addEventListener('abort',dispose,{once:true})
@@ -41,7 +41,7 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
     kit.finish()
     for(const h of houses){const glow=new T.PointLight('#ffcd83',3.5,6.2,2);glow.position.set(h.x,h.y+2.65,h.z);scene.add(glow)}
     const v=vec
-    const resize = () => { const w = canvas.clientWidth, h = canvas.clientHeight; if (w && h) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix() } }
+    const resize = () => { const w = canvas.clientWidth, h = canvas.clientHeight; if (w && h) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); renderDirty=true } }
     observer = new ResizeObserver(resize); observer.observe(canvas); resize()
 
     let position: Point = { ...spawn }, boating = false, boatYaw = 0, velocity = 0, last = performance.now(), lastReport = 0, frames = 0, frameTime = 0, quality = -1
@@ -61,7 +61,7 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
     const tick = (now: number) => {
       if (disposed) return
       const dt = Math.min(.04, (now - last) / 1000); last = now
-      if (quality !== input.quality) { quality = input.quality; renderer.setPixelRatio(Math.min(devicePixelRatio, quality === 0 ? 1 : 1.45)); renderer.shadowMap.enabled = quality !== 0; resize() }
+      if (quality !== input.quality) { quality = input.quality; renderer.setPixelRatio(Math.min(devicePixelRatio, quality === 0 ? 1 : 1.45)); renderer.shadowMap.enabled = quality !== 0; renderer.shadowMap.needsUpdate=true; resize() }
       if (!input.paused) {
         const norm = Math.max(1, Math.hypot(input.x, input.z)), x = input.x / norm, z = input.z / norm
         if (boating) {
@@ -82,7 +82,7 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
       cameraPosition.lerp(v(position.x, position.y + eye, position.z), 1 - Math.exp(-dt * 14))
       camera.position.copy(cameraPosition); camera.rotation.set(input.pitch, input.yaw, 0, 'YXZ')
       if(inspection){camera.position.set(inspection.position.x,inspection.position.y,inspection.position.z);camera.lookAt(inspection.target.x,inspection.target.y,inspection.target.z)}
-      renderer.render(scene, camera)
+      if(renderDirty || (!input.paused && !inspection)){renderer.render(scene, camera);renderDirty=false}
       frames++; frameTime = Math.max(.001, (now - (lastReport || now - 16)) / 1000)
       if (now - lastReport > 180) {
         const location = placeName(position, boating)
@@ -94,6 +94,6 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
       frame = requestAnimationFrame(tick)
     }
     frame = requestAnimationFrame(tick)
-    return { dispose, interact, reset, getPosition: () => ({ ...position }), inspect: (view: VillageView | null) => { inspection=view }, diagnostics: () => ({ calls: renderer.info.render.calls, triangles:renderer.info.render.triangles, geometries:renderer.info.memory.geometries, textures:renderer.info.memory.textures }), advance: (dx:number,dz:number) => { position=walkStep(position,dx,dz);return {...position} } }
+    return { dispose, interact, reset, getPosition: () => ({ ...position }), inspect: (view: VillageView | null) => { inspection=view;renderDirty=true }, diagnostics: () => ({ calls: renderer.info.render.calls, triangles:renderer.info.render.triangles, geometries:renderer.info.memory.geometries, textures:renderer.info.memory.textures }), advance: (dx:number,dz:number) => { position=walkStep(position,dx,dz);return {...position} } }
   } catch (e) { dispose(); throw e }
 }
