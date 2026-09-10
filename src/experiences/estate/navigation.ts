@@ -3,13 +3,14 @@ export const RADIUS=.31
 export const CELL=.4
 const MINX=-42,MINZ=-38,COLS=221,ROWS=226
 export function walkable(p:Point,r=RADIUS){return floorAt(p)!==null&&!obstacles.some(o=>contains(o,p,r))&&[[-r,0],[r,0],[0,-r],[0,r]].every(([x,z])=>floorAt({x:p.x+x,z:p.z+z})!==null)}
-export function clearLine(a:Point,b:Point){const n=Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/.12);for(let i=0;i<=n;i++){const t=i/Math.max(1,n);if(!walkable({x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t}))return false}return true}
+function safeGrade(a:Point,b:Point){const ya=floorAt(a),yb=floorAt(b);return ya!==null&&yb!==null&&Math.abs(yb-ya)<=Math.max(.045,Math.hypot(b.x-a.x,b.z-a.z)*.65)}
+export function clearLine(a:Point,b:Point){const n=Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/.12);let prev=a;for(let i=0;i<=n;i++){const t=i/Math.max(1,n),p={x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t};if(!walkable(p)||!safeGrade(prev,p))return false;prev=p}return true}
 export function moveSafely(p:Point,dx:number,dz:number):Point {
   const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/.12));let q={...p}
   for(let i=0;i<steps;i++) { const x=dx/steps,z=dz/steps,next={x:q.x+x,z:q.z+z}
-    if(walkable(next))q=next
-    else if(walkable({x:q.x+x,z:q.z}))q.x+=x
-    else if(walkable({x:q.x,z:q.z+z}))q.z+=z
+    if(walkable(next)&&safeGrade(q,next))q=next
+    else if(walkable({x:q.x+x,z:q.z})&&safeGrade(q,{x:q.x+x,z:q.z}))q.x+=x
+    else if(walkable({x:q.x,z:q.z+z})&&safeGrade(q,{x:q.x,z:q.z+z}))q.z+=z
   } return q
 }
 // A* over a clearance-eroded grid, followed by visibility smoothing. The same
@@ -33,6 +34,7 @@ export function createNavigator(){
     while(heap.length){const i=pop();if(closed[i])continue;if(i===b){const route:Point[]=[end];let p=i;while(p!==a){route.push(point(p));p=parents[p]}route.push(point(a));route.reverse();const smooth:Point[]=[];let current=start,k=0;while(k<route.length){let far=k;while(far+1<route.length&&clearLine(current,route[far+1]))far++;smooth.push(route[far]);current=route[far];k=far+1}return smooth}closed[i]=1
       const col=i%COLS,row=Math.floor(i/COLS)
       for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){const x=col+dx,z=row+dz,j=z*COLS+x;if(x<0||x>=COLS||z<0||z>=ROWS||!grid[j]||closed[j])continue;if(dx&&dz&&(!grid[i+dx]||!grid[i+dz*COLS]))continue
+        if(!safeGrade(point(i),point(j)))continue
         const cost=costs[i]+(dx&&dz?Math.SQRT2:1);if(cost<costs[j]){costs[j]=cost;parents[j]=i;push(j,cost+heuristic(j))}}
     } return null
   }return {path}

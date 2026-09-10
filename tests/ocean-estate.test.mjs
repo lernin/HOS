@@ -21,4 +21,5 @@ test('entrance elevation changes continuously and tap targets do not snap throug
  assert.equal(plan.floorAt({x:1,z:24}),6);assert.equal(plan.floorAt({x:1,z:31}),4.8)
  let previous=plan.floorAt({x:1,z:24});for(let z=24.1;z<=31;z+=.1){const y=plan.floorAt({x:1,z});assert.ok(Math.abs(y-previous)<.03);previous=y}
  assert.equal(navigator.path(plan.spawn,{x:1,z:41}),null)
+ const garden={x:-10,z:32.7};const stopped=nav.moveSafely(garden,0,2);assert.ok(stopped.z<=33,'no drop from the raised garden into the arrival court')
 })

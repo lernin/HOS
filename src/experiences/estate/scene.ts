@@ -1,7 +1,7 @@
 import * as T from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { createEstateKit } from './kit'
-import { architecture, landscape, waters, type LightPreset } from './environment'
+import { architecture, landscape, waters, atmosphere, contactShadows, type LightPreset } from './environment'
 import { furnish } from './furniture'
 import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, spawn, type Point } from './plan'
@@ -12,18 +12,18 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.shadowMap.autoUpdate=false
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(69,1,.07,3200);camera.rotation.order='YXZ'
   const sky=new T.Color('#a6c0c5');scene.background=sky;scene.fog=new T.FogExp2(sky,.0018)
-  const hemi=new T.HemisphereLight('#dce9ed','#ad9878',1.65);scene.add(hemi)
-  const sun=new T.DirectionalLight('#ffe0ad',3.1);sun.position.set(-45,38,-60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:1,far:180});sun.shadow.bias=-.00015;sun.shadow.normalBias=.045;scene.add(sun,sun.target)
+  const hemi=new T.HemisphereLight('#c1d7eb','#8f7052',.75);scene.add(hemi)
+  const sun=new T.DirectionalLight('#ffe0ad',3.1);sun.position.set(-45,38,-60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-60,right:60,top:60,bottom:-60,near:1,far:180});sun.shadow.bias=-.00015;sun.shadow.normalBias=.045;scene.add(sun,sun.target)
   const fills=Array.from({length:3},()=>{const l=new T.PointLight('#ffd395',12,18,2);scene.add(l);return l})
-  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,env:T.WebGLRenderTarget|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
+  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
   const raycaster=new T.Raycaster(),plane=new T.Plane(new T.Vector3(0,1,0),-FLOOR),hit=new T.Vector3()
   const marker=new T.Mesh(new T.RingGeometry(.17,.24,36),new T.MeshBasicMaterial({color:'#e7d3a6',side:T.DoubleSide,transparent:true,opacity:.85,depthWrite:false}));marker.rotation.x=-Math.PI/2;marker.visible=false;scene.add(marker)
-  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();kit.dispose();water?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
+  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
   signal.addEventListener('abort',dispose,{once:true})
   try{
     progress('Opening the house…');architecture(kit);furnish(kit)
     await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));if(signal.aborted)throw new DOMException('Aborted','AbortError')
-    progress('Planting the coast…');landscape(kit);kit.finish();water=waters(scene)
+    progress('Planting the coast…');landscape(kit);kit.finish();water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
     let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
@@ -43,7 +43,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     }
     const resize=()=>{const w=canvas.clientWidth,h=canvas.clientHeight;if(w&&h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();dirty=true}}
     observer=new ResizeObserver(resize);observer.observe(canvas);resize()
-    function lighting(){const evening=input.lighting==='evening',day=input.lighting==='daylight';sky.set(evening?'#293c51':day?'#b1ccd8':'#b7c5c4');(scene.fog as T.FogExp2).color.copy(sky);hemi.intensity=evening?.6:1.65;sun.intensity=evening?.15:day?3:3.1;sun.color.set(day?'#fff1db':'#ffe0ad');renderer.toneMappingExposure=evening?1.12:1.06;scene.environmentIntensity=evening?.22:.42;renderer.shadowMap.needsUpdate=true;dirty=true}
+    function lighting(){const evening=input.lighting==='evening',day=input.lighting==='daylight';sky.set(evening?'#293c51':day?'#b1ccd8':'#b7c5c4');(scene.fog as T.FogExp2).color.copy(sky);hemi.intensity=evening?.22:day?1:.75;sun.intensity=evening?.07:day?3:3.6;sun.color.set(day?'#fff1db':'#ffe0ad');renderer.toneMappingExposure=evening?1.12:1.06;scene.environmentIntensity=evening?.12:.3;skyDome?.preset(input.lighting);lastShadow={x:999,z:999};renderer.shadowMap.needsUpdate=true;dirty=true}
     function tick(now:number){if(disposed)return;frame=requestAnimationFrame(tick);const dt=Math.min(.04,(now-last)/1000);last=now
       if(quality!==input.quality){quality=input.quality;renderer.setPixelRatio(Math.min(devicePixelRatio,quality===0?1:quality===2?1.65:1.25));renderer.shadowMap.enabled=true;renderer.shadowMap.needsUpdate=true;resize()}
       if(preset!==input.lighting){preset=input.lighting;lighting()}
@@ -61,10 +61,10 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
         const y=(floorAt(position)??FLOOR)+EYE;camera.position.set(position.x,T.MathUtils.damp(camera.position.y,y,10,dt),position.z);camera.rotation.set(pitch,yaw,0,'YXZ')
         dirty=true
       }else{vx=0;vz=0}
-      if(Math.hypot(position.x-lastShadow.x,position.z-lastShadow.z)>12){lastShadow={...position};sun.position.set(position.x-45,44,position.z-60);sun.target.position.set(position.x,6,position.z);renderer.shadowMap.needsUpdate=true}
+      if(Math.hypot(position.x-lastShadow.x,position.z-lastShadow.z)>12){lastShadow={...position};sun.position.set(-55,input.lighting==='daylight'?70:30,-80);sun.target.position.set(0,6,0);renderer.shadowMap.needsUpdate=true}
       const locations=[[-2,-2,4.7],[-17,7,3.1],[32,-4,3.2],[-32,30,2.8],[14,22,3.1],[-32,4,2.7],[27,22,2.8],[36,22,2.8]]
       locations.sort((a,b)=>Math.hypot(a[0]-position.x,a[1]-position.z)-Math.hypot(b[0]-position.x,b[1]-position.z))
-      fills.forEach((l,i)=>{const p=locations[i];l.position.set(p[0],FLOOR+p[2],p[1]);l.intensity=input.lighting==='evening'?45:8})
+      fills.forEach((l,i)=>{const p=locations[i];l.position.set(p[0],FLOOR+p[2],p[1]);l.intensity=input.lighting==='evening'?75:10})
       if(inspectView){camera.position.copy(inspectView.position);camera.lookAt(inspectView.target)}
       if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}
       if(now-lastReport>500){report({location:locationAt(position),moving:path.length>0||Math.hypot(vx,vz)>.1,destination:path.length?destination:'',fps:Math.round(frameCount/((now-lastReport)/1000)),position:{...position},touring:tour});frameCount=0;lastReport=now}

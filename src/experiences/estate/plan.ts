@@ -38,15 +38,16 @@ export const floors: Floor[] = [
   { name: 'Garden path', x1: -31, x2: -22, z1: 33, z2: 43, material: 'travertine' },
 ]
 export const walls: Wall[] = []
+export const lintels: (Wall & {base:number})[] = []
 const wall = (x1:number,x2:number,z1:number,z2:number,height=3.5,material='plaster') => walls.push({x1,x2,z1,z2,height,material})
 // Openings are part of the floor plan, not holes patched into collision later.
 export function partition(axis:'x'|'z',at:number,from:number,to:number,gaps:number[][]=[],height=3.5,material='plaster') {
   let edge=from
-  for(const [a,b] of [...gaps,[to,to]]) { if(a>edge) axis==='x'?wall(at-.18,at+.18,edge,a,height,material):wall(edge,a,at-.18,at+.18,height,material); edge=b }
+  for(const [a,b] of [...gaps,[to,to]]) { if(a>edge) axis==='x'?wall(at-.18,at+.18,edge,a,height,material):wall(edge,a,at-.18,at+.18,height,material); if(b>a){const base=Math.min(3.2,height-.2);lintels.push(axis==='x'?{x1:at-.18,x2:at+.18,z1:a,z2:b,height:height-base,base,material}:{x1:a,x2:b,z1:at-.18,z2:at+.18,height:height-base,base,material})}edge=b }
 }
 partition('x',-11,-12,8,[[-8,-2],[3,7]],5.5,'travertine')
 partition('x',13,-12,8,[[-7,-2],[3,7]],5.5,'travertine')
-partition('z',8,-11,13,[[-4,5]],4.5)
+partition('z',8,-11,13,[[-4,5]],5.5)
 partition('z',24,-6,8,[[-1.2,3.2]],4.5,'travertine')
 partition('x',-6,8,24,[[15,20]],4.5)
 partition('x',8,8,24,[[10,14],[19,23]],4.5)
@@ -95,7 +96,7 @@ export const furnishings:Furnishing[] = [
   {kind:'coffee',x:-2,z:-2.3},{kind:'piano',x:8.9,z:-6.7,angle:-.5},
   {kind:'dining',x:-17,z:-5.3},{kind:'island',x:-16.3,z:7.6},
   {kind:'sofa',x:-29,z:-11},{kind:'lounge',x:-32,z:-7,angle:-1.3},{kind:'coffee',x:-29,z:-8.2},
-  {kind:'bed',x:32,z:-4,angle:Math.PI,tone:'linen',scale:1.25},{kind:'lounge',x:36.5,z:-9,angle:2.6},
+  {kind:'bed',x:32,z:-.8,angle:0,tone:'linen',scale:1.15},{kind:'lounge',x:36.5,z:-9,angle:2.6},
   {kind:'bath',x:36,z:6.3,angle:0.4},{kind:'wardrobeIsland',x:27.5,z:7.5},
   {kind:'desk',x:14,z:23},{kind:'lounge',x:10.5,z:18.5,angle:-.6},
   {kind:'bed',x:28,z:22,angle:Math.PI,tone:'sage'},
@@ -120,7 +121,8 @@ export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
   {x1:-22.8,x2:-21.8,z1:3,z2:13}, // kitchen run
   {x1:24.3,x2:25.2,z1:3,z2:12},{x1:29.8,x2:30.8,z1:3,z2:12},
   {x1:31.5,x2:37.7,z1:11.8,z2:12.8}, // vanity
-  {x1:-38.8,x2:-35.3,z1:34,z2:38.8}, // sauna
+  {x1:-38.8,x2:-35.3,z1:37.1,z2:38.8}, // sauna bench
+  {x1:-38.8,x2:-35.3,z1:34,z2:35.5}, // sauna bench
   {x1:-35,x2:-30,z1:35,z2:38.8}, // spa water
   {x1:10,x2:19,z1:26.9,z2:27.8}, // library shelves
   {x1:-3,x2:5,z1:37,z2:45}, // arrival fountain
@@ -136,6 +138,7 @@ export function contains(r:Rect,p:Point,pad=0){return p.x>=r.x1-pad&&p.x<=r.x2+p
 export function floorAt(p:Point):number|null {
   const f=floors.find(r=>contains(r,p))
   if(!f)return null
+  if(f.name==='Arrival court'&&Math.hypot(p.x-1,p.z-41)>19)return null
   if(f.name==='Arrival steps')return FLOOR-Math.max(0,Math.min(1,(p.z-24)/7))*1.2
   return f.level??FLOOR
 }

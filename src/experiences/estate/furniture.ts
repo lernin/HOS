@@ -34,7 +34,7 @@ export function furnish(k:EstateKit){
     for(const x of [-1.65,1.65]){c(x,.34,1.03,.37,.65,'walnut',g);lamp(x,.69,1.03,g)}
     b(0,.43,-1.78,1.6,.19,.42,tone,g,.08);for(const x of [-.6,.6])b(x,.2,-1.78,.045,.4,.32,'bronze',g)
   }
-  function rug(f:Furnishing,g:T.Group){const size=f.kind==='bed'?[4.6,5.4]:f.kind==='coffee'?[6.7,7.4]:f.kind==='desk'?[5,5]:null;if(size){b(0,.015,0,size[0],.024,size[1],'rug',g,.035);b(0,.03,0,size[0]-.22,.012,size[1]-.22,'linen',g,.01)}}
+  function rug(f:Furnishing,g:T.Group){const size=f.kind==='bed'?[4.6,5.4]:f.kind==='coffee'?[6.7,7.4]:f.kind==='desk'?[5,5]:null;if(size){b(0,.015,0,size[0],.024,size[1],'rug',g,.035);b(0,.03,0,size[0]-.22,.012,size[1]-.22,'rug',g,.01)}}
   function piano(g:T.Group){const shape=new T.Shape();shape.moveTo(-.85,-1);shape.lineTo(.9,-1);shape.bezierCurveTo(1.1,-.3,.65,.05,.7,.8);shape.bezierCurveTo(.8,1.7,-.9,1.3,-.9,.4);shape.closePath()
     const geo=new T.ExtrudeGeometry(shape,{depth:.24,bevelEnabled:true,bevelSize:.055,bevelThickness:.03,bevelSegments:2});geo.rotateX(-Math.PI/2);k.mesh(geo,'black',0,.83,0,g)
     const lid=geo.clone();const m=k.mesh(lid,'black',-.3,1.25,0,g);m.rotation.z=.3
@@ -49,7 +49,7 @@ export function furnish(k:EstateKit){
       case 'island':b(0,.48,0,1.9,.96,4.7,'walnut',g,.02);b(0,1.01,0,2.08,.1,4.92,'white',g,.035);for(const z of [-2.4,2.4])b(0,.52,z,2.08,1.04,.09,'white',g,.035)
         b(0,1.07,.8,.74,.025,1.14,'black',g,.025);for(const z of [.52,1.12]){const m=k.mesh(new T.TorusGeometry(.16,.008,5,22),'basalt',0,1.088,z,g);m.rotation.x=Math.PI/2}
         b(0,1.07,-1,.5,.025,.72,'bronze',g,.05);beam([v(.3,1.05,-1.1),v(.3,1.47,-1.1),v(0,1.47,-1.1),v(0,1.3,-1.1)],.025,'bronze',g)
-        for(const z of [-1.4,0,1.4]){c(1.6,.43,z,.033,.8,'bronze',g);c(1.6,.83,z,.31,.11,'walnut',g);c(1.6,.07,z,.27,.035,'bronze',g);c(0,2.9,z,.25,.36,'bronze',g);c(0,2.7,z,.2,.015,'glow',g);c(0,3.2,z,.01,.6,'bronze',g)}break
+        for(const z of [-1.4,0,1.4]){c(1.6,.43,z,.033,.8,'bronze',g);c(1.6,.83,z,.31,.11,'walnut',g,.31,32);c(1.6,.07,z,.27,.035,'bronze',g);c(0,2.9,z,.25,.36,'bronze',g);c(0,2.7,z,.2,.015,'glow',g);c(0,3.2,z,.01,.6,'bronze',g)}break
       case 'bath':{const bowl=lathe([[0,.13],[.3,.08],[.5,.15],[.65,.45],[.66,.65],[.6,.7],[.53,.63],[.51,.36],[.3,.24],[0,.23]],'white',0,.03,0,g);bowl.scale.x=1.85;beam([v(1.12,0,.7),v(1.12,.93,.7),v(.8,.93,.7),v(.8,.83,.7)],.028,'bronze',g);break}
       case 'wardrobeIsland':b(0,.5,0,1.5,1,2.6,'walnut',g,.035);b(0,1.03,0,1.54,.05,2.64,'travertine',g,.03);for(const z of [-.7,0,.7])b(.765,.62,z,.02,.015,.23,'bronze',g);break
       case 'desk':b(0,.77,0,3.2,.12,1.15,'walnut',g,.1);for(const x of [-1.1,1.1])b(x,.36,0,.45,.7,.92,'walnut',g,.07);chair(0,.85,g);chair(-.8,-1,g,Math.PI);chair(.8,-1,g,Math.PI);lamp(-1,.85,0,g);book(.9,.87,0,g);b(0,.94,0,.6,.015,.42,'black',g,.02);break
