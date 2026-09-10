@@ -1,277 +1,365 @@
 import * as T from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { docks, houses, isWater, paths, riverCenter, spawn, terraces, tree, walkStep, placeName, type Point } from './world'
+import { docks, houses, isWater, paths, riverCenter, spawn, terraces, tree, walkStep, placeName, type Path, type Point } from './world'
 
 export type VillageInput = { x: number; z: number; yaw: number; pitch: number; paused: boolean; quality: number }
 export type VillageState = { position: Point; boating: boolean; location: string; action: string; visited: string[]; fps: number }
 
 export async function createVillage(canvas: HTMLCanvasElement, input: VillageInput, signal: AbortSignal, report: (s: VillageState) => void) {
   const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' })
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.4))
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.35))
   renderer.outputColorSpace = T.SRGBColorSpace
   renderer.toneMapping = T.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.15
+  renderer.toneMappingExposure = 1.08
   renderer.shadowMap.enabled = true
   renderer.shadowMap.type = T.PCFSoftShadowMap
+
   const scene = new T.Scene()
-  scene.background = new T.Color('#a4d7ed')
-  scene.fog = new T.Fog('#b4d6dd', 100, 330)
-  const camera = new T.PerspectiveCamera(66, 1, .08, 650)
+  scene.background = new T.Color('#b8dce7')
+  scene.fog = new T.Fog('#c6dce0', 105, 300)
+  const camera = new T.PerspectiveCamera(65, 1, .08, 560)
   camera.rotation.order = 'YXZ'
-  const light = new T.DirectionalLight('#ffedc6', 3.3)
-  light.position.set(-60, 110, 45)
-  light.castShadow = true
-  light.shadow.mapSize.set(2048, 2048)
-  Object.assign(light.shadow.camera, { left: -70, right: 70, top: 70, bottom: -70, near: 10, far: 240 })
-  light.shadow.normalBias = .045
-  light.shadow.bias = -.0001
-  scene.add(light, new T.HemisphereLight('#dcf5ff', '#68754b', 2))
+
+  const sun = new T.DirectionalLight('#fff0cf', 2.8)
+  sun.position.set(-55, 105, 55)
+  sun.castShadow = true
+  sun.shadow.mapSize.set(2048, 2048)
+  Object.assign(sun.shadow.camera, { left: -72, right: 72, top: 72, bottom: -72, near: 10, far: 230 })
+  sun.shadow.normalBias = .045
+  scene.add(sun, new T.HemisphereLight('#e8f6ff', '#64724f', 2.25))
+
   const staticGroup = new T.Group(); scene.add(staticGroup)
   const dynamic = new T.Group(); scene.add(dynamic)
   const materials = new Map<string, T.MeshStandardMaterial>()
-  const resources = new Set<T.BufferGeometry>(), textures = new Set<T.Texture>()
+  const resources = new Set<T.BufferGeometry>(), extraMaterials = new Set<T.Material>(), textures = new Set<T.Texture>()
   const mat = (color: string, roughness = .86) => {
-    const key = color + roughness
+    const key = `${color}:${roughness}`
     if (!materials.has(key)) materials.set(key, new T.MeshStandardMaterial({ color, roughness }))
     return materials.get(key)!
   }
-  const wood = '#795335', paleWood = '#bc9058', stone = '#92968d', cream = '#e4d6ac', slate = '#486174'
-  const mesh = (g: T.BufferGeometry, color: string, x: number, y: number, z: number, group: T.Group = staticGroup) => {
+  const wood = '#684b35', paleWood = '#b98954', stone = '#7f8a83', cream = '#eadfbd', trail = '#c7b991', moss = '#708c53'
+  const windowMaterial = new T.MeshStandardMaterial({ color: '#f6cf86', emissive: '#ed9d3c', emissiveIntensity: .7, roughness: .5 })
+  extraMaterials.add(windowMaterial)
+
+  const meshWith = (g: T.BufferGeometry, material: T.Material, x: number, y: number, z: number, group: T.Group = staticGroup) => {
     resources.add(g)
-    const m = new T.Mesh(g, mat(color)); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; group.add(m); return m
+    const m = new T.Mesh(g, material); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; group.add(m); return m
   }
+  const mesh = (g: T.BufferGeometry, color: string, x: number, y: number, z: number, group: T.Group = staticGroup) => meshWith(g, mat(color), x, y, z, group)
   const box = (x: number, y: number, z: number, w: number, h: number, d: number, color: string, group = staticGroup) => mesh(new T.BoxGeometry(w, h, d), color, x, y, z, group)
   const cylinder = (x: number, y: number, z: number, rt: number, rb: number, h: number, color: string, segments = 10, group = staticGroup) => mesh(new T.CylinderGeometry(rt, rb, h, segments), color, x, y, z, group)
+  const v = (x: number, y: number, z: number) => new T.Vector3(x, y, z)
   const beam = (a: T.Vector3, b: T.Vector3, radius: number, color: string, group = staticGroup) => {
     const m = cylinder((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2, radius, radius, a.distanceTo(b), color, 7, group)
-    m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), b.clone().sub(a).normalize()); return m
+    m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), b.clone().sub(a).normalize())
+    return m
   }
-  const v = (x: number, y: number, z: number) => new T.Vector3(x, y, z)
+
   let seed = 7941
   const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296 }
   const rock = (x: number, y: number, z: number, sx: number, sy: number, sz: number, color = stone) => {
-    const m = mesh(new T.DodecahedronGeometry(1, 0), color, x, y, z); m.scale.set(sx, sy, sz); m.rotation.set(rand() * .4, rand() * 6.28, rand() * .3); return m
+    const m = mesh(new T.DodecahedronGeometry(1, 0), color, x, y, z)
+    m.scale.set(sx, sy, sz); m.rotation.set(rand() * .32, rand() * Math.PI * 2, rand() * .2)
+    return m
   }
+
   let disposed = false, frame = 0, observer: ResizeObserver | undefined
-  const extraMaterials = new Set<T.Material>()
   const dispose = () => {
-    if (disposed) return; disposed = true; cancelAnimationFrame(frame); observer?.disconnect()
-    scene.traverse(o => { if (o instanceof T.Mesh) { resources.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) { extraMaterials.add(m); for (const value of Object.values(m)) if (value instanceof T.Texture) textures.add(value) } } })
-    resources.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); extraMaterials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); light.shadow.map?.dispose(); renderer.dispose()
+    if (disposed) return
+    disposed = true; cancelAnimationFrame(frame); observer?.disconnect()
+    scene.traverse(o => {
+      if (!(o instanceof T.Mesh)) return
+      resources.add(o.geometry)
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        extraMaterials.add(m)
+        for (const value of Object.values(m)) if (value instanceof T.Texture) textures.add(value)
+      }
+    })
+    resources.forEach(g => g.dispose()); materials.forEach(m => m.dispose()); extraMaterials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); sun.shadow.map?.dispose(); renderer.dispose()
   }
   signal.addEventListener('abort', dispose, { once: true })
+
   try {
-    // Riverbed, grassy banks, distinct rock terraces and distant alpine silhouettes.
-    box(0, -4, -30, 440, 4, 460, '#497666')
-    for (const side of [-1, 1]) {
-      for (let i = 0; i < 17; i++) {
-        const z = 65 - i * 10, x = riverCenter(z) + side * (27 + rand() * 7), y = 2 + rand() * 3
-        if (z < -90) continue
-        rock(x, y - 5, z, 16, 7, 12, '#849487')
-        cylinder(x, y - .7, z, 13, 14, 1, '#688742', 12)
+    // A single softly rolling valley replaces the old giant flat slab.
+    const valleyGeometry = new T.PlaneGeometry(430, 470, 28, 30)
+    const vp = valleyGeometry.attributes.position
+    for (let i = 0; i < vp.count; i++) {
+      const x = vp.getX(i), y = vp.getY(i)
+      const height = -4.4 + Math.sin(x * .027) * 1.35 + Math.sin(y * .022 + .8) * 1.1 + Math.sin((x + y) * .014) * .7
+      vp.setZ(i, height)
+    }
+    valleyGeometry.computeVertexNormals(); valleyGeometry.rotateX(-Math.PI / 2)
+    mesh(valleyGeometry, '#617d51', 0, 0, -55)
+
+    // Organic-edged terraces: grassy tops with irregular rock skirts, never circular platform walls.
+    function organicTerrace(cx: number, cy: number, cz: number, radius: number, phase: number) {
+      const segments = 44
+      const edge: { x: number; z: number }[] = []
+      for (let i = 0; i < segments; i++) {
+        const a = i / segments * Math.PI * 2
+        const wobble = 1 + Math.sin(a * 3 + phase) * .045 + Math.sin(a * 7 - phase * .7) * .028
+        edge.push({ x: Math.cos(a) * radius * wobble, z: Math.sin(a) * radius * wobble })
       }
-    }
-    for (const t of terraces) {
-      cylinder(t.x, t.y - 4.5, t.z, t.radius, t.radius + 1.7, 8.7, '#8c958b', 15)
-      cylinder(t.x, t.y - .22, t.z, t.radius, t.radius, .4, '#83a44d', 48)
-      for (let i = 0; i < 22; i++) {
-        const a = i / 22 * Math.PI * 2, x = t.x + Math.cos(a) * (t.radius - .3), z = t.z + Math.sin(a) * (t.radius - .3)
-        rock(x, t.y - 2.5, z, 1.5 + rand() * 1.5, 3, 2)
+      const topVertices = [cx, cy + .015, cz]
+      for (const e of edge) topVertices.push(cx + e.x, cy + .015, cz + e.z)
+      const topIndices: number[] = []
+      for (let i = 0; i < segments; i++) topIndices.push(0, i + 1, (i + 1) % segments + 1)
+      const top = new T.BufferGeometry(); top.setAttribute('position', new T.Float32BufferAttribute(topVertices, 3)); top.setIndex(topIndices); top.computeVertexNormals(); mesh(top, '#789552', 0, 0, 0)
+
+      const skirtVertices: number[] = [], skirtIndices: number[] = []
+      for (let i = 0; i < segments; i++) {
+        const e = edge[i], a = i / segments * Math.PI * 2
+        const outer = 1.10 + .035 * Math.sin(a * 5 + phase)
+        skirtVertices.push(cx + e.x, cy, cz + e.z, cx + e.x * outer, cy - 6.4 - Math.sin(a * 4 + phase) * 1.1, cz + e.z * outer)
       }
+      for (let i = 0; i < segments; i++) {
+        const n = (i + 1) % segments, a = i * 2, b = n * 2
+        skirtIndices.push(a, a + 1, b + 1, a, b + 1, b)
+      }
+      const skirt = new T.BufferGeometry(); skirt.setAttribute('position', new T.Float32BufferAttribute(skirtVertices, 3)); skirt.setIndex(skirtIndices); skirt.computeVertexNormals(); mesh(skirt, '#858e82', 0, 0, 0)
     }
-    for (let i = 0; i < 24; i++) {
-      const x = (i - 12) * 25, z = -230 - rand() * 75, h = 35 + rand() * 68
-      const mountain = mesh(new T.ConeGeometry(30 + rand() * 20, h, 5), i % 2 ? '#7395a5' : '#8eaeb9', x, h / 2 - 3, z)
-      mountain.rotation.y = rand() * 3
-      const snow = mesh(new T.ConeGeometry(10, h * .29, 5), '#e1f0ee', x, h * .85 - 3, z)
-      snow.rotation.y = mountain.rotation.y
+    terraces.forEach((t, i) => organicTerrace(t.x, t.y, t.z, t.radius, i * 1.47 + .4))
+
+    // Soft distant mountains are scenery only; there is no fake box-village on the horizon.
+    for (let i = 0; i < 17; i++) {
+      const x = (i - 8) * 34, z = -235 - rand() * 65, h = 36 + rand() * 60
+      const mountain = mesh(new T.ConeGeometry(30 + rand() * 24, h, 7), i % 2 ? '#7f9da3' : '#91aaa9', x, h / 2 - 7, z)
+      mountain.rotation.y = rand() * Math.PI
+      if (h > 66) { const snow = mesh(new T.ConeGeometry(10, h * .22, 7), '#e4eeee', x, h * .87 - 7, z); snow.rotation.y = mountain.rotation.y }
     }
-    // High waterfall cliffs frame the navigable river instead of blocking it.
-    const falls = [{ x: -12, z: -69, h: 25, w: 7 }, { x: 48, z: -62, h: 20, w: 5 }, { x: -53, z: -45, h: 15, w: 5 }]
-    for (const f of falls) {
-      for (let j = -2; j <= 2; j++) rock(f.x + j * 4, f.h / 2 - 2, f.z - 4, 5, f.h / 2 + 3, 8, '#849397')
-      cylinder(f.x, f.h, f.z - 5, 9, 10, .8, '#75944b', 12)
-    }
+
+    // River and lake.
     const waterMaterial = new T.ShaderMaterial({
-      uniforms: { time: { value: 0 }, deep: { value: new T.Color('#187e91') }, shallow: { value: new T.Color('#65d2d2') } },
-      vertexShader: `varying vec3 world; uniform float time; void main(){vec3 p=position; p.z+=.065*sin(p.x*1.3+time)*sin(p.y*.8-time*.7); vec4 w=modelMatrix*vec4(p,1.); world=w.xyz; gl_Position=projectionMatrix*viewMatrix*w;}`,
-      fragmentShader: `varying vec3 world; uniform float time; uniform vec3 deep; uniform vec3 shallow; void main(){float r=sin(world.x*1.7+world.z*.65+time*1.4)*sin(world.z*2.1-world.x*.3-time);float s=pow(max(0.,r),16.);float n=.5+.5*sin(world.x*.12+world.z*.08); vec3 c=mix(deep,shallow,n*.48+.22)+vec3(.45,.55,.5)*s*.5; gl_FragColor=vec4(c,1.);
-#include <tonemapping_fragment>\n#include <colorspace_fragment> }`,
+      uniforms: { time: { value: 0 }, deep: { value: new T.Color('#277d88') }, shallow: { value: new T.Color('#70c7bf') } },
+      vertexShader: `varying vec3 world; uniform float time; void main(){vec3 p=position; p.y+=.055*sin(p.x*1.1+time)*sin(p.z*.7-time*.6); vec4 w=modelMatrix*vec4(p,1.); world=w.xyz; gl_Position=projectionMatrix*viewMatrix*w;}`,
+      fragmentShader: `varying vec3 world; uniform float time; uniform vec3 deep; uniform vec3 shallow; void main(){float r=sin(world.x*1.5+world.z*.55+time*1.2)*sin(world.z*1.7-world.x*.25-time);float s=pow(max(0.,r),18.);float n=.5+.5*sin(world.x*.10+world.z*.075);vec3 c=mix(deep,shallow,n*.44+.24)+vec3(.42,.5,.45)*s*.38;gl_FragColor=vec4(c,1.);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>}`,
       side: T.DoubleSide,
     })
     extraMaterials.add(waterMaterial)
     const riverVertices: number[] = [], riverIndices: number[] = []
-    for (let i = 0; i <= 100; i++) { const z = 80 - i * 2; riverVertices.push(riverCenter(z) - 10, z, 0, riverCenter(z) + 10, z, 0); if (i < 100) { const k = i * 2; riverIndices.push(k, k + 1, k + 2, k + 1, k + 3, k + 2) } }
-    const riverGeometry = new T.BufferGeometry(); riverGeometry.setAttribute('position', new T.Float32BufferAttribute(riverVertices, 3)); riverGeometry.setIndex(riverIndices); resources.add(riverGeometry)
-    const river = new T.Mesh(riverGeometry, waterMaterial); river.rotation.x = Math.PI / 2; river.position.y = .05; scene.add(river)
-    const lakeGeometry = new T.CircleGeometry(46, 80); resources.add(lakeGeometry)
-    const lake = new T.Mesh(lakeGeometry, waterMaterial); lake.rotation.x = -Math.PI / 2; lake.scale.x = 1.15; lake.position.set(3, .03, -130); scene.add(lake)
-    const waterfallMaterial = new T.ShaderMaterial({ uniforms: { time: { value: 0 } }, transparent: true, side: T.DoubleSide,
+    for (let i = 0; i <= 104; i++) {
+      const z = 80 - i * 1.9, c = riverCenter(z), width = 9.5 + Math.sin(z * .035) * .7
+      riverVertices.push(c - width, .06, z, c + width, .06, z)
+      if (i < 104) { const k = i * 2; riverIndices.push(k, k + 1, k + 2, k + 1, k + 3, k + 2) }
+    }
+    const riverGeometry = new T.BufferGeometry(); riverGeometry.setAttribute('position', new T.Float32BufferAttribute(riverVertices, 3)); riverGeometry.setIndex(riverIndices); riverGeometry.computeVertexNormals(); resources.add(riverGeometry)
+    scene.add(new T.Mesh(riverGeometry, waterMaterial))
+    const lakeGeometry = new T.CircleGeometry(46, 72); resources.add(lakeGeometry)
+    const lake = new T.Mesh(lakeGeometry, waterMaterial); lake.rotation.x = -Math.PI / 2; lake.scale.x = 1.15; lake.position.set(3, .045, -130); scene.add(lake)
+
+    // Rock-framed waterfalls with irregular silhouettes instead of rectangular PlaneGeometry sheets.
+    const waterfallMaterial = new T.ShaderMaterial({
+      uniforms: { time: { value: 0 } }, transparent: true, side: T.DoubleSide, depthWrite: false,
       vertexShader: `varying vec2 v; void main(){v=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-      fragmentShader: `varying vec2 v;uniform float time;void main(){float a=sin(v.x*80.+sin(v.y*12.-time*5.))*0.5+0.5;float b=sin(v.y*75.-time*15.+v.x*13.);gl_FragColor=vec4(mix(vec3(.32,.72,.8),vec3(.94,1.,1.),a*.7+b*.12),.88);
-#include <tonemapping_fragment>\n#include <colorspace_fragment> }` })
+      fragmentShader: `varying vec2 v;uniform float time;void main(){float a=.5+.5*sin(v.x*55.+sin(v.y*9.-time*4.));float b=.5+.5*sin(v.y*66.-time*13.+v.x*11.);float edge=smoothstep(0.,.14,v.x)*smoothstep(0.,.14,1.-v.x);vec3 c=mix(vec3(.38,.74,.78),vec3(.93,.99,.96),a*.55+b*.18);gl_FragColor=vec4(c,.82*edge);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>}`,
+    })
     extraMaterials.add(waterfallMaterial)
+    const falls = [{ x: -12, z: -69, h: 24, w: 7 }, { x: 48, z: -62, h: 18, w: 5.5 }, { x: -53, z: -45, h: 14, w: 4.8 }]
     const foam: T.Mesh[] = []
     for (const f of falls) {
-      const g = new T.PlaneGeometry(f.w, f.h); resources.add(g)
-      const m = new T.Mesh(g, waterfallMaterial); m.position.set(f.x, f.h / 2, f.z + 2); scene.add(m)
-      for (let i = 0; i < 10; i++) { const m = mesh(new T.SphereGeometry(.6, 7, 5), '#e0f6ec', f.x + (rand() - .5) * f.w * 1.2, .5 + rand(), f.z + 2 + rand() * 2, dynamic); m.scale.set(1.5, .4, 1); foam.push(m) }
+      for (let j = -3; j <= 3; j++) rock(f.x + j * 3.4, f.h / 2 - 2, f.z - 4.6, 4.2, f.h / 2 + 3.5, 6.5, '#7f8987')
+      const segments = 18, verts: number[] = [], uvs: number[] = [], inds: number[] = []
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments, y = f.h * (1 - t) + .35
+        const width = f.w * (.78 + .16 * Math.sin(t * 8 + f.x) + .07 * Math.sin(t * 21))
+        const shift = Math.sin(t * 9 + f.z) * .35
+        verts.push(f.x + shift - width / 2, y, f.z + 1.7, f.x + shift + width / 2, y, f.z + 1.7)
+        uvs.push(0, t, 1, t)
+        if (i < segments) { const k = i * 2; inds.push(k, k + 1, k + 2, k + 1, k + 3, k + 2) }
+      }
+      const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(verts, 3)); g.setAttribute('uv', new T.Float32BufferAttribute(uvs, 2)); g.setIndex(inds); resources.add(g)
+      scene.add(new T.Mesh(g, waterfallMaterial))
+      for (let i = 0; i < 8; i++) { const m = mesh(new T.SphereGeometry(.55, 7, 5), '#e7f4e9', f.x + (rand() - .5) * f.w, .45 + rand() * .7, f.z + 2 + rand() * 2, dynamic); m.scale.set(1.6, .35, 1); foam.push(m) }
     }
-    // Continuous paths have matching physical surfaces. The stair is genuinely climbable.
-    for (const path of paths) {
-      for (let i = 1; i < path.points.length; i++) {
-        const a = path.points[i - 1], b = path.points[i], dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz)
-        const segments = Math.max(1, Math.ceil(length / (path.wood ? .45 : 1.1)))
-        for (let j = 0; j < segments; j++) {
-          const t = (j + .5) / segments
-          const tile = box(a.x + dx * t, a.y + (b.y - a.y) * t - .12, a.z + dz * t, path.width, .23, length / segments + .025, path.wood ? (j % 3 ? paleWood : '#ae814d') : (j % 2 ? '#d0c29c' : '#bfb492'))
-          tile.rotation.y = Math.atan2(dx, dz)
-          tile.rotation.x = -Math.atan2(b.y - a.y, length)
-        }
-        if (path.rails && (path.points.length < 40 || i % 6 === 0)) {
-          const start = path.points.length < 40 ? a : path.points[Math.max(0, i - 6)]
-          for (const side of [-1, 1]) {
-            const ox = dz / length * path.width * .48 * side, oz = -dx / length * path.width * .48 * side
-            cylinder(b.x + ox, b.y + .63, b.z + oz, .09, .11, 1.5, wood, 7)
-            for (const rise of [.6, 1.18]) beam(v(start.x + ox, start.y + rise, start.z + oz), v(b.x + ox, b.y + rise, b.z + oz), .055, '#ac915f')
-          }
+
+    // Solid continuous trail/bridge ribbons replace hundreds of visibly separate tiles.
+    function deckGeometry(path: Path) {
+      const pts = path.points, vertices: number[] = [], indices: number[] = []
+      const thickness = path.kind === 'trail' ? .10 : .26
+      for (let i = 0; i < pts.length; i++) {
+        const before = pts[Math.max(0, i - 1)], after = pts[Math.min(pts.length - 1, i + 1)]
+        const dx = after.x - before.x, dz = after.z - before.z, len = Math.hypot(dx, dz) || 1
+        const nx = -dz / len, nz = dx / len, half = path.width / 2
+        const q = pts[i], top = q.y + .015, bottom = q.y - thickness
+        vertices.push(q.x + nx * half, top, q.z + nz * half, q.x - nx * half, top, q.z - nz * half, q.x + nx * half, bottom, q.z + nz * half, q.x - nx * half, bottom, q.z - nz * half)
+      }
+      for (let i = 0; i < pts.length - 1; i++) {
+        const a = i * 4, b = (i + 1) * 4
+        indices.push(a, a + 1, b + 1, a, b + 1, b)
+        indices.push(a + 2, b + 2, b, a + 2, b, a)
+        indices.push(a + 1, a + 3, b + 3, a + 1, b + 3, b + 1)
+      }
+      const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(vertices, 3)); g.setIndex(indices); g.computeVertexNormals(); return g
+    }
+    function sidePoint(path: Path, index: number, side: number, rise: number) {
+      const before = path.points[Math.max(0, index - 1)], after = path.points[Math.min(path.points.length - 1, index + 1)]
+      const dx = after.x - before.x, dz = after.z - before.z, len = Math.hypot(dx, dz) || 1
+      const q = path.points[index], nx = -dz / len, nz = dx / len
+      return v(q.x + nx * path.width * .48 * side, q.y + rise, q.z + nz * path.width * .48 * side)
+    }
+    function addRails(path: Path) {
+      if (!path.rails) return
+      const step = path.points.length > 60 ? 12 : path.points.length > 18 ? 4 : 1
+      const samples: number[] = []
+      for (let i = 0; i < path.points.length; i += step) samples.push(i)
+      if (samples.at(-1) !== path.points.length - 1) samples.push(path.points.length - 1)
+      for (const side of [-1, 1]) {
+        for (let s = 0; s < samples.length; s++) {
+          const i = samples[s], post = sidePoint(path, i, side, .58)
+          cylinder(post.x, post.y, post.z, .085, .105, 1.18, wood, 7)
+          if (s > 0) beam(sidePoint(path, samples[s - 1], side, 1.08), sidePoint(path, i, side, 1.08), .06, paleWood)
         }
       }
     }
-    // Great willow, roots, branch supports, and a generous balcony.
-    cylinder(tree.x, 20, tree.z, 1.4, 2.6, 24, '#705136', 12)
+    for (const path of paths) {
+      const color = path.kind === 'trail' ? trail : path.kind === 'bridge' ? '#a8794c' : paleWood
+      mesh(deckGeometry(path), color, 0, 0, 0)
+      addRails(path)
+      if (path.kind === 'trail') {
+        const step = Math.max(1, Math.floor(path.points.length / 5))
+        for (let i = 1; i < path.points.length - 1; i += step) {
+          const q = path.points[i]
+          rock(q.x - path.width * .55, q.y + .08, q.z, .35, .25, .45, '#9a9b86')
+          rock(q.x + path.width * .55, q.y + .06, q.z, .3, .22, .4, '#939886')
+        }
+      }
+    }
+
+    // Focal storybook willow and treehouse deck.
+    cylinder(tree.x, 20, tree.z, 1.5, 2.65, 24, '#6a4b35', 12)
     for (let i = 0; i < 9; i++) {
       const a = i * Math.PI * 2 / 9
-      beam(v(tree.x, 24, tree.z), v(tree.x + Math.cos(a) * 8, 29 + rand() * 3, tree.z + Math.sin(a) * 8), .48, wood)
-      beam(v(tree.x, 11, tree.z), v(tree.x + Math.cos(a) * 5, 9, tree.z + Math.sin(a) * 5), .5, wood)
+      beam(v(tree.x, 24, tree.z), v(tree.x + Math.cos(a) * (6.5 + rand() * 2), 28 + rand() * 4, tree.z + Math.sin(a) * (6.5 + rand() * 2)), .4, wood)
+      beam(v(tree.x, 11, tree.z), v(tree.x + Math.cos(a) * 5.2, 9, tree.z + Math.sin(a) * 5.2), .45, wood)
     }
-    box(-39, 18.83, -12.75, 10, .34, 11.5, paleWood)
-    for (let i = 0; i < 15; i++) box(-43.9 + i * .7, 19.01, -12.75, .025, .02, 11.4, wood)
-    for (const z of [-18.5, -7]) for (let x = -43.9; x < -33.9; x += 1.1) {
-      if (z === -7 && x > -41 && x < -37) continue
-      cylinder(x, 19.65, z, .08, .1, 1.4, wood, 7)
-      box(x + .45, 20.2, z, 1.05, .12, .12, paleWood)
+    const leafColors = ['#6f995b', '#7ea45d', '#5f8b58', '#8baa67']
+    for (let i = 0; i < 24; i++) {
+      const a = rand() * Math.PI * 2, r = 2 + rand() * 7, y = 27 + rand() * 7
+      const crown = mesh(new T.IcosahedronGeometry(2.5 + rand() * 2.3, 1), leafColors[i % leafColors.length], tree.x + Math.cos(a) * r, y, tree.z + Math.sin(a) * r)
+      crown.scale.y = .8 + rand() * .45
     }
-    for (const x of [-43.9, -34]) { box(x, 20.2, -12.75, .12, .12, 11.5, paleWood); for (let z = -18.5; z <= -7; z += 1.1) cylinder(x, 19.65, z, .08, .1, 1.4, wood, 7) }
-    for (const z of [-17, -9]) beam(v(tree.x, 13, tree.z), v(-40, 18.6, z), .23, wood)
-    const glow = mat('#ffd381'); glow.emissive.set('#ffb744'); glow.emissiveIntensity = .6
+    cylinder(-39, 18.78, -14, 7, 7.4, .34, paleWood, 12)
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2
+      if (a < .85 || a > 5.45) continue
+      const px = -39 + Math.cos(a) * 6.55, pz = -14 + Math.sin(a) * 6.55
+      cylinder(px, 19.6, pz, .08, .1, 1.55, wood, 7)
+    }
+
     function lantern(x: number, y: number, z: number) {
-      cylinder(x, y + 1.25, z, .065, .1, 2.5, wood)
-      box(x, y + 2.4, z, .38, .55, .38, '#ffd381')
-      cylinder(x, y + 2.76, z, 0, .36, .25, slate, 4)
+      cylinder(x, y + 1.0, z, .055, .075, 2, wood, 7)
+      meshWith(new T.SphereGeometry(.19, 8, 6), windowMaterial, x, y + 1.95, z)
+      cylinder(x, y + 2.18, z, 0, .22, .22, '#536463', 5)
     }
-    function windowAt(x: number, y: number, z: number, sideways = false) {
-      const frame = box(x, y, z, 1.55, 1.7, .16, wood); const pane = box(x, y, z + .035, 1.3, 1.44, .18, '#ffd381')
-      if (sideways) { frame.rotation.y = Math.PI / 2; pane.rotation.y = Math.PI / 2 }
-      else { box(x, y, z + .15, .09, 1.5, .09, wood); box(x, y, z + .15, 1.4, .09, .09, wood); box(x, y - 1.13, z + .25, 1.85, .32, .5, paleWood) }
+    function windowAt(x: number, y: number, z: number, rotationY = 0) {
+      const g = new T.Group(); g.position.set(x, y, z); g.rotation.y = rotationY; staticGroup.add(g)
+      box(0, 0, 0, 1.55, 1.72, .16, wood, g)
+      meshWith(new T.BoxGeometry(1.28, 1.45, .18), windowMaterial, 0, 0, .045, g)
+      box(0, 0, .16, .075, 1.45, .075, wood, g); box(0, 0, .16, 1.28, .075, .075, wood, g)
+      box(0, -.98, .18, 1.72, .2, .42, paleWood, g)
+    }
+    function flowerBox(x: number, y: number, z: number) {
+      box(x, y, z, 1.55, .28, .42, paleWood)
+      for (let i = 0; i < 5; i++) {
+        cylinder(x - .58 + i * .29, y + .27, z, .018, .025, .36, '#55753e', 4)
+        mesh(new T.SphereGeometry(.09, 5, 3), ['#f1d88c', '#d9b2cb', '#ddd6a2'][i % 3], x - .58 + i * .29, y + .47, z)
+      }
+    }
+    function gable(x: number, y: number, z: number) {
+      const g = new T.BufferGeometry()
+      g.setAttribute('position', new T.Float32BufferAttribute([-3.4, 0, 0, 3.4, 0, 0, 0, 2.25, 0], 3)); g.setIndex([0, 1, 2]); g.computeVertexNormals()
+      mesh(g, cream, x, y, z)
     }
     function house(h: typeof houses[number]) {
       const { x, y, z } = h
-      box(x, y - .04, z, 7, .1, 7, '#b28b5c')
-      for (let j = 0; j < 12; j++) box(x - 3.3 + j * .58, y + .017, z, .017, .018, 7, wood)
-      box(x - 3.5, y + 2.15, z, .25, 4.3, 7, cream); box(x + 3.5, y + 2.15, z, .25, 4.3, 7, cream)
-      box(x, y + 2.15, z - 3.5, 7, 4.3, .25, cream)
-      for (const side of [-1, 1]) box(x + side * 2.27, y + 2.15, z + 3.5, 2.46, 4.3, .25, cream)
-      box(x, y + 3.85, z + 3.5, 2, .9, .25, wood)
-      for (const dx of [-3.5, 3.5]) for (const dz of [-3.5, 3.5]) box(x + dx, y + 2.2, z + dz, .3, 4.4, .3, wood)
-      for (const dz of [-3.5, 3.5]) { if (dz < 0) box(x, y + .35, z + dz, 7, .3, .3, wood); else for (const side of [-1, 1]) box(x + side * 2.27, y + .35, z + dz, 2.46, .3, .3, wood); box(x, y + 4.1, z + dz, 7, .25, .3, wood) }
-      // Pitched roof, individual slate courses, triangular gables.
-      for (const side of [-1, 1]) {
-        const roof = box(x + side * 2, y + 5.25, z, 4.7, .25, 8.3, h.roof); roof.rotation.z = side * -.51
-        for (let j = 0; j < 7; j++) { const course = box(x + side * (j * .56 + .24), y + 6.3 - (j * .56 + .24) * .56, z, .07, .09, 8.4, '#6d8490'); course.rotation.z = side * -.51 }
+      // Warm wood floor and four clean wall masses with a genuinely open front door.
+      box(x, y - .07, z, 6.8, .16, 6.8, '#a77b4c')
+      box(x - 3.4, y + 2.1, z, .26, 4.2, 6.8, cream); box(x + 3.4, y + 2.1, z, .26, 4.2, 6.8, cream)
+      box(x, y + 2.1, z - 3.4, 6.8, 4.2, .26, cream)
+      box(x - 2.25, y + 2.1, z + 3.4, 2.3, 4.2, .26, cream); box(x + 2.25, y + 2.1, z + 3.4, 2.3, 4.2, .26, cream)
+      box(x, y + 3.75, z + 3.4, 2.2, .9, .26, cream)
+      for (const dx of [-3.4, 3.4]) for (const dz of [-3.4, 3.4]) box(x + dx, y + 2.15, z + dz, .28, 4.35, .28, wood)
+      for (const dz of [-3.4, 3.4]) box(x, y + 4.05, z + dz, 6.9, .24, .28, wood)
+      // Two simple roof halves with generous overhang; no decorative roof-panel clutter.
+      for (const side of [-1, 1]) { const roof = box(x + side * 1.95, y + 5.25, z, 4.65, .28, 7.7, h.roof); roof.rotation.z = side * -.52 }
+      gable(x, y + 4.08, z - 3.41); gable(x, y + 4.08, z + 3.41)
+      beam(v(x - 3.65, y + 4.05, z - 3.42), v(x, y + 6.35, z - 3.42), .11, wood)
+      beam(v(x + 3.65, y + 4.05, z - 3.42), v(x, y + 6.35, z - 3.42), .11, wood)
+      beam(v(x - 3.65, y + 4.05, z + 3.42), v(x, y + 6.35, z + 3.42), .11, wood)
+      beam(v(x + 3.65, y + 4.05, z + 3.42), v(x, y + 6.35, z + 3.42), .11, wood)
+      // Open doorway is framed, not filled.
+      box(x - 1.12, y + 1.45, z + 3.54, .16, 2.9, .18, wood); box(x + 1.12, y + 1.45, z + 3.54, .16, 2.9, .18, wood); box(x, y + 2.88, z + 3.54, 2.4, .17, .18, wood)
+      windowAt(x - 2.25, y + 2.25, z + 3.55); windowAt(x + 2.25, y + 2.25, z + 3.55)
+      flowerBox(x - 2.25, y + 1.25, z + 3.72); flowerBox(x + 2.25, y + 1.25, z + 3.72)
+      // Sparse furnishings leave the middle of every room obvious and walkable.
+      box(x - 2.1, y + .38, z - .15, 1.45, .6, 2.25, wood); box(x - 2.1, y + .74, z - .15, 1.4, .18, 2.15, '#d8caaa')
+      box(x, y + 1.12, z - 2.6, 2.2, .16, .9, paleWood); for (const side of [-1, 1]) box(x + side * .9, y + .52, z - 2.6, .11, 1.05, .65, wood)
+      box(x + 2.75, y + 1.35, z - .9, .55, 2.7, 2.75, wood)
+      for (let shelf = 0; shelf < 3; shelf++) box(x + 2.42, y + .38 + shelf * .74, z - .9, .12, .11, 2.6, paleWood)
+      if (h.name === 'The Treetop Library') {
+        for (let i = 0; i < 12; i++) box(x + 2.35, y + .68 + (i % 3) * .74, z - 1.9 + Math.floor(i / 3) * .48, .18, .38, .24, ['#718983', '#a66d50', '#c3a45d'][i % 3])
       }
-      for (const dz of [-3.51, 3.51]) {
-        const g = new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute([-3.5, 4.2, 0, 3.5, 4.2, 0, 0, 6.25, 0, 0, 6.25, 0, 3.5, 4.2, 0, -3.5, 4.2, 0], 3)); g.computeVertexNormals(); mesh(g, cream, x, y, z + dz)
-        beam(v(x - 3.8, y + 4.12, z + dz), v(x, y + 6.5, z + dz), .12, wood); beam(v(x + 3.8, y + 4.12, z + dz), v(x, y + 6.5, z + dz), .12, wood)
-      }
-      box(x + 2.3, y + 5.9, z - 1.5, .9, 2.4, .95, '#aba696'); box(x + 2.3, y + 7.13, z - 1.5, 1.2, .23, 1.25, stone)
-      windowAt(x - 2.3, y + 2.35, z + 3.66); windowAt(x + 2.3, y + 2.35, z + 3.66)
-      // The doorway stays open: no teleport, loading screen, or invisible closed wall.
-      box(x, y + .035, z + .4, 2.2, .04, 3.4, '#748e77')
-      for (const s of [-1, 1]) box(x + s * 1.02, y + .06, z + .4, .065, .03, 3.3, '#dbb76b')
-      box(x - 2.1, y + .4, z - .3, 1.55, .65, 2.8, wood)
-      box(x - 2.1, y + .81, z - .3, 1.5, .25, 2.7, '#d2c6a5')
-      box(x - 2.1, y + .98, z + .2, 1.52, .12, 1.65, '#7e9c8c')
-      box(x - 2.1, y + 1, z - 1.2, 1.05, .22, .55, '#fff0ce')
-      box(x, y + 1.2, z - 2.6, 2.4, .18, 1.1, paleWood)
-      for (const side of [-1, 1]) box(x + side, y + .55, z - 2.6, .12, 1.1, .7, wood)
-      box(x + 2.85, y + 1.55, z - 1.1, .8, 3.1, 3.4, wood)
-      for (let shelf = 0; shelf < 4; shelf++) {
-        box(x + 2.37, y + .32 + shelf * .72, z - 1.1, .12, .12, 3.3, paleWood)
-        for (let b = 0; b < 10; b++) box(x + 2.35, y + .63 + shelf * .72, z - 2.45 + b * .28, .22, .4 + rand() * .16, .17, ['#738e89', '#a66d4a', '#ceae65', '#5b768c'][b % 4])
-      }
-      box(x, y + 1.32, z - 2.55, .65, .07, .44, '#e9dcbb')
-      const insideLight = new T.PointLight('#ffe2a0', 7, 8, 2); insideLight.position.set(x, y + 3.3, z); scene.add(insideLight)
-      const globe = mesh(new T.SphereGeometry(.24, 10, 8), '#ffd381', x, y + 3.55, z); globe.castShadow = false
-      lantern(x + 4.1, y, z + 4)
+      const light = new T.PointLight('#ffd998', 5.5, 8, 2); light.position.set(x, y + 3.2, z); scene.add(light)
+      meshWith(new T.SphereGeometry(.2, 9, 7), windowMaterial, x, y + 3.45, z)
+      // A small porch makes each entrance visually unmistakable.
+      box(x, y + .02, z + 4.2, 3.2, .14, 1.6, paleWood)
+      lantern(x + 2.25, y, z + 4.25)
     }
     houses.forEach(house)
-    // A working waterwheel and tiny distant village silhouettes.
-    const wheel = new T.Group(); wheel.position.set(14, 3.2, 6); wheel.rotation.y = Math.PI / 2; dynamic.add(wheel)
-    for (const z of [-.65, .65]) {
-      const ring = mesh(new T.TorusGeometry(2.6, .15, 6, 28), wood, 0, 0, z, wheel)
-      ring.castShadow = false
-      for (let j = 0; j < 10; j++) { const a = j * Math.PI / 5; beam(v(0, 0, z), v(Math.cos(a) * 2.6, Math.sin(a) * 2.6, z), .07, paleWood, wheel) }
-    }
-    for (let j = 0; j < 16; j++) { const a = j * Math.PI / 8; const paddle = box(Math.cos(a) * 2.55, Math.sin(a) * 2.55, 0, .55, .12, 1.7, paleWood, wheel); paddle.rotation.z = a }
-    box(19, 3, 6, 6, 6, 6, cream); cylinder(19, 7.7, 6, 0, 5.1, 3.6, slate, 4)
-    windowAt(19, 4, 9.1)
-    for (let i = 0; i < 7; i++) {
-      const x = -72 + i * 21, z = -93 - rand() * 12, y = 12 + rand() * 14
-      rock(x, y / 2 - 3, z, 11, y / 2 + 4, 12)
-      cylinder(x, y, z, 8, 9, .7, '#81a354', 12)
-      box(x, y + 2, z, 4.4, 4, 5, cream); cylinder(x, y + 5.3, z, 0, 4, 3, slate, 4)
-      box(x, y + 2, z + 2.55, 1.1, 1.5, .1, '#ffd381')
-    }
-    // Docks and boat; the bow points toward negative Z.
+
+    // Docks and a small rowboat.
     for (const d of docks) {
-      for (let j = 0; j < 18; j++) box(d.x, d.y - .15, d.z - 4.5 + j * .5, 6, .3, .47, j % 2 ? paleWood : '#b1834b')
-      for (const dx of [-2.8, 2.8]) for (const dz of [-4.1, 4.1]) { cylinder(d.x + dx, .7, d.z + dz, .18, .23, 3.4, wood); if (dx < 0) lantern(d.x + dx, d.y, d.z + dz) }
+      box(d.x, d.y - .12, d.z, 5.8, .28, 8.8, paleWood)
+      for (const dx of [-2.65, 2.65]) for (const dz of [-4, 4]) cylinder(d.x + dx, .7, d.z + dz, .15, .2, 3.2, wood, 7)
+      lantern(d.x - 2.5, d.y, d.z + 3.6)
     }
     const boat = new T.Group(); dynamic.add(boat)
-    const boatShape = new T.Shape(); boatShape.moveTo(0, -2.4); boatShape.bezierCurveTo(1.4, -1.3, 1.3, 1.3, .7, 2); boatShape.lineTo(-.7, 2); boatShape.bezierCurveTo(-1.3, 1.3, -1.4, -1.3, 0, -2.4)
-    const hullGeo = new T.ExtrudeGeometry(boatShape, { depth: .42, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: .12, bevelThickness: .12 }); hullGeo.rotateX(Math.PI / 2)
-    mesh(hullGeo, wood, 0, .33, 0, boat)
-    const curve = new T.CatmullRomCurve3([v(0, .64, -2.4), v(1.03, .58, -1), v(1.03, .58, 1), v(.65, .58, 2), v(-.65, .58, 2), v(-1.03, .58, 1), v(-1.03, .58, -1), v(0, .64, -2.4)])
-    mesh(new T.TubeGeometry(curve, 40, .12, 6, false), paleWood, 0, 0, 0, boat)
-    for (const z of [-.9, .7, 1.6]) box(0, .55, z, 1.7, .14, .42, paleWood, boat)
-    for (const side of [-1, 1]) { beam(v(side * .65, .7, .2), v(side * 1.7, .35, 1.65), .055, paleWood, boat); box(side * 1.6, .35, 1.5, .25, .09, .7, paleWood, boat).rotation.y = side * -.5 }
+    const boatShape = new T.Shape(); boatShape.moveTo(0, -2.35); boatShape.bezierCurveTo(1.32, -1.25, 1.25, 1.25, .7, 2); boatShape.lineTo(-.7, 2); boatShape.bezierCurveTo(-1.25, 1.25, -1.32, -1.25, 0, -2.35)
+    const hullGeo = new T.ExtrudeGeometry(boatShape, { depth: .4, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: .12, bevelThickness: .12 }); hullGeo.rotateX(Math.PI / 2)
+    mesh(hullGeo, wood, 0, .31, 0, boat)
+    for (const z of [-.85, .65, 1.55]) box(0, .55, z, 1.65, .13, .38, paleWood, boat)
+    for (const side of [-1, 1]) beam(v(side * .65, .68, .2), v(side * 1.65, .34, 1.55), .05, paleWood, boat)
     boat.position.set(docks[0].x + 4.6, .25, docks[0].z)
-    // Flowers, path-side lanterns and foliage. Small objects are merged by material.
-    for (const path of paths.filter(p => p.points.length < 40)) for (const p of path.points) lantern(p.x - 2, p.y, p.z)
-    for (const t of terraces) for (let i = 0; i < 100; i++) {
-      const a = rand() * Math.PI * 2, r = (0.65 + rand() * .3) * t.radius
-      const x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r
-      if (houses.some(h => Math.abs(x - h.x) < 5 && Math.abs(z - h.z) < 5)) continue
-      const color = ['#f4e9b7', '#b39bd4', '#f4ca63', '#e8c7d9'][i % 4]
-      cylinder(x, t.y + .18, z, .025, .035, .35, '#567b36', 4)
-      const flower = mesh(new T.SphereGeometry(.13, 5, 3), color, x, t.y + .4, z); flower.scale.y = .5
+
+    // Sparse flowers and lights guide the eye without covering the world in decorations.
+    for (const t of terraces) for (let i = 0; i < 36; i++) {
+      const a = rand() * Math.PI * 2, r = (.7 + rand() * .22) * t.radius, x = t.x + Math.cos(a) * r, z = t.z + Math.sin(a) * r
+      if (houses.some(h => Math.hypot(x - h.x, z - h.z) < 6)) continue
+      if (paths.some(path => path.points.some(q => Math.hypot(x - q.x, z - q.z) < 3.5))) continue
+      cylinder(x, t.y + .16, z, .02, .028, .32, '#55733e', 4)
+      const bloom = mesh(new T.SphereGeometry(.11, 5, 3), ['#efe0a7', '#c9aed7', '#e7c477'][i % 3], x, t.y + .36, z); bloom.scale.y = .55
     }
-    const placements: { x: number; y: number; z: number; scale: number; kind: string }[] = [{ x: tree.x, y: tree.y, z: tree.z, scale: 32, kind: 'tree' }]
+    const guideLights = [spawn, { x: -27, y: 4, z: 29 }, { x: -40, y: 9, z: -2 }, { x: 26, y: 8, z: -29.5 }, { x: 26, y: 1.5, z: -92 }]
+    guideLights.forEach(q => lantern(q.x + 2.1, q.y, q.z))
+
+    // Real tree assets remain as background foliage only, with clear space around paths and houses.
+    const placements: { x: number; y: number; z: number; scale: number; kind: 'pine' | 'tree' }[] = []
     for (const t of terraces) for (let j = 0; j < 7; j++) {
-      const a = j * Math.PI * 2 / 7, x = t.x + Math.cos(a) * (t.radius - 3), z = t.z + Math.sin(a) * (t.radius - 3)
-      if (paths.some(path => path.points.some(p => Math.hypot(x - p.x, z - p.z) < 4))) continue
+      const a = j * Math.PI * 2 / 7, x = t.x + Math.cos(a) * (t.radius - 2.5), z = t.z + Math.sin(a) * (t.radius - 2.5)
+      if (Math.hypot(x - tree.x, z - tree.z) < 11) continue
+      if (paths.some(path => path.points.some(q => Math.hypot(x - q.x, z - q.z) < 4))) continue
       if (houses.some(h => Math.hypot(x - h.x, z - h.z) < 7)) continue
       placements.push({ x, y: t.y, z, scale: 6 + rand() * 4, kind: j % 3 ? 'pine' : 'tree' })
     }
-    for (let j = 0; j < 130; j++) {
-      const side = j % 2 ? -1 : 1, x = side * (48 + rand() * 55), z = 63 - rand() * 250
+    for (let j = 0; j < 82; j++) {
+      const side = j % 2 ? -1 : 1, x = side * (48 + rand() * 56), z = 62 - rand() * 245
       if (isWater(x, z, -8)) continue
-      placements.push({ x, y: -1, z, scale: 10 + rand() * 12, kind: j % 5 ? 'pine' : 'tree' })
+      placements.push({ x, y: -2.5, z, scale: 10 + rand() * 11, kind: j % 5 ? 'pine' : 'tree' })
     }
     const loader = new GLTFLoader()
-    for (const kind of ['pine', 'tree']) {
-      const response = await fetch(`/woodland/${kind}.glb`, { signal }); if (!response.ok) throw new Error('The trees could not load. Please try again.')
+    for (const kind of ['pine', 'tree'] as const) {
+      const response = await fetch(`/woodland/${kind}.glb`, { signal })
+      if (!response.ok) throw new Error('The trees could not load. Please try again.')
       const gltf = await loader.parseAsync(await response.arrayBuffer(), '')
-      // Track parsed resources even if an abort arrives during decoding.
-      gltf.scene.traverse(o => { if (o instanceof T.Mesh) { resources.add(o.geometry); for (const m of Array.isArray(o.material) ? o.material : [o.material]) { extraMaterials.add(m); for (const val of Object.values(m)) if (val instanceof T.Texture) textures.add(val) } } })
-      if (signal.aborted) { resources.forEach(g => g.dispose()); extraMaterials.forEach(m => m.dispose()); textures.forEach(t => t.dispose()); throw new DOMException('Aborted', 'AbortError') }
+      gltf.scene.traverse(o => { if (o instanceof T.Mesh) for (const m of Array.isArray(o.material) ? o.material : [o.material]) { extraMaterials.add(m); for (const val of Object.values(m)) if (val instanceof T.Texture) textures.add(val) } })
+      if (signal.aborted) throw new DOMException('Aborted', 'AbortError')
       gltf.scene.updateMatrixWorld(true)
       const bounds = new T.Box3().setFromObject(gltf.scene), size = bounds.getSize(new T.Vector3()), center = bounds.getCenter(new T.Vector3())
       const items = placements.filter(p => p.kind === kind), matrix = new T.Matrix4(), transform = new T.Object3D()
       gltf.scene.traverse(o => {
         if (!(o instanceof T.Mesh)) return
+        resources.add(o.geometry)
         const instances = new T.InstancedMesh(o.geometry, o.material, items.length)
         items.forEach((p, i) => {
           const s = p.scale / size.y
@@ -281,12 +369,15 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
         instances.castShadow = true; instances.receiveShadow = true; instances.computeBoundingSphere(); scene.add(instances)
       })
     }
-    // Batch original architecture: one draw call per color, not one per plank/flower.
+
+    // Batch static architecture after layout is complete.
     staticGroup.updateMatrixWorld(true)
     const batches = new Map<T.Material, T.BufferGeometry[]>()
     staticGroup.traverse(o => {
       if (!(o instanceof T.Mesh) || Array.isArray(o.material)) return
-      const transformed = o.geometry.clone().applyMatrix4(o.matrixWorld); resources.add(transformed); const g = transformed.index ? transformed.toNonIndexed() : transformed; g.deleteAttribute('uv'); g.deleteAttribute('color'); resources.add(g)
+      const transformed = o.geometry.clone().applyMatrix4(o.matrixWorld); resources.add(transformed)
+      const g = transformed.index ? transformed.toNonIndexed() : transformed
+      g.deleteAttribute('uv'); g.deleteAttribute('color'); resources.add(g)
       if (!batches.has(o.material)) batches.set(o.material, [])
       batches.get(o.material)!.push(g)
     })
@@ -295,18 +386,18 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
       resources.add(g); const m = new T.Mesh(g, material); m.castShadow = true; m.receiveShadow = true; scene.add(m)
     }
     scene.remove(staticGroup)
+
     const resize = () => { const w = canvas.clientWidth, h = canvas.clientHeight; if (w && h) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix() } }
     observer = new ResizeObserver(resize); observer.observe(canvas); resize()
+
     let position: Point = { ...spawn }, boating = false, boatYaw = 0, velocity = 0, last = performance.now(), lastReport = 0, frames = 0, frameTime = 0, quality = -1
     const visited = new Set<string>(), cameraPosition = v(spawn.x, spawn.y + 1.6, spawn.z)
     const nearbyDock = () => docks.find(d => Math.hypot(position.x - d.x, position.z - d.z) < (boating ? 8 : 5.5))
     const interact = () => {
       if (input.paused) return
-      const d = nearbyDock()
-      if (!d) return
+      const d = nearbyDock(); if (!d) return
       if (boating) { boating = false; position = { ...d }; input.yaw = d === docks[0] ? .9 : Math.PI; velocity = 0 }
       else {
-        // Board only the actual boat, which remains at the dock where it was left.
         if (Math.hypot(position.x - boat.position.x, position.z - boat.position.z) > 8) return
         boating = true; position = { x: boat.position.x, y: .2, z: boat.position.z }; boatYaw = input.yaw; velocity = 0
       }
@@ -315,7 +406,7 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
     const tick = (now: number) => {
       if (disposed) return
       const dt = Math.min(.04, (now - last) / 1000); last = now
-      if (quality !== input.quality) { quality = input.quality; renderer.setPixelRatio(Math.min(devicePixelRatio, quality === 0 ? 1 : 1.5)); renderer.shadowMap.enabled = quality !== 0; resize() }
+      if (quality !== input.quality) { quality = input.quality; renderer.setPixelRatio(Math.min(devicePixelRatio, quality === 0 ? 1 : 1.45)); renderer.shadowMap.enabled = quality !== 0; resize() }
       if (!input.paused) {
         const norm = Math.max(1, Math.hypot(input.x, input.z)), x = input.x / norm, z = input.z / norm
         if (boating) {
@@ -331,8 +422,7 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
           boat.position.y = .25 + Math.sin(now * .0016) * .035
         }
         waterMaterial.uniforms.time.value = now * .001; waterfallMaterial.uniforms.time.value = now * .001
-        wheel.rotation.z -= dt * .22
-        foam.forEach((m, i) => { m.scale.y = .35 + Math.sin(now * .002 + i) * .12 })
+        foam.forEach((m, i) => { m.scale.y = .34 + Math.sin(now * .002 + i) * .1 })
       }
       const eye = boating ? 1.2 : 1.62
       cameraPosition.lerp(v(position.x, position.y + eye, position.z), 1 - Math.exp(-dt * 14))
