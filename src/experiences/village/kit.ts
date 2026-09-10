@@ -57,15 +57,15 @@ float surfaceNoise(vec3 p){
     shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>${functions}`)
     const p='vSurfacePosition'
     const expression=kind==='wood'
-      ? `float sn=surfaceNoise(${p}*2.7);float grain=.5+.5*sin((${p}.x+${p}.z)*24.0+${p}.y*3.5+sn*5.0);float surfaceTone=.84+.18*sn+.08*grain;`
+      ? `float sn=surfaceNoise(${p}*2.7);float grain=.5+.5*sin((${p}.x+${p}.z)*24.0+${p}.y*3.5+sn*5.0);float surfaceTone=.86+.14*sn+.06*grain;`
       : kind==='plaster'
-        ? `float sn=surfaceNoise(${p}*1.65);float fine=surfaceNoise(${p}*7.5);float surfaceTone=.91+.12*sn+.055*fine;`
+        ? `float sn=surfaceNoise(${p}*1.65);float fine=surfaceNoise(${p}*7.5);float surfaceTone=.93+.09*sn+.035*fine;`
         : kind==='stone'
-          ? `float sn=surfaceNoise(${p}*4.6);float fine=surfaceNoise(${p}*13.0);float surfaceTone=.82+.24*sn+.08*fine;`
-          : `float sn=surfaceNoise(${p}*5.2);float fleck=surfaceNoise(${p}*15.0);float rib=.5+.5*sin((${p}.x-${p}.z)*34.0);float surfaceTone=.86+.16*sn+.055*fleck+.035*rib;`
+          ? `float sn=surfaceNoise(${p}*4.6);float fine=surfaceNoise(${p}*13.0);float surfaceTone=.86+.18*sn+.055*fine;`
+          : `float sn=surfaceNoise(${p}*5.2);float fleck=surfaceNoise(${p}*15.0);float rib=.5+.5*sin((${p}.x-${p}.z)*34.0);float surfaceTone=.89+.12*sn+.04*fleck+.025*rib;`
     shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>\n${expression}\ndiffuseColor.rgb*=surfaceTone;`)
-    const roughness=kind==='plaster'?'.05':kind==='stone'?'.075':kind==='shingle'?'.06':'.045'
-    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor+(surfaceNoise(vSurfacePosition*8.0)-.5)*${roughness},.55,1.0);`)
+    const roughness=kind==='plaster'?'.035':kind==='stone'?'.055':kind==='shingle'?'.045':'.035'
+    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor+(surfaceNoise(vSurfacePosition*8.0)-.5)*${roughness},.58,1.0);`)
   }
 }
 export type Kit=ReturnType<typeof createKit>
