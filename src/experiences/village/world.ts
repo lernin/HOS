@@ -70,7 +70,7 @@ export const paths: Path[] = [
   {
     name: 'library-to-fern',
     points: [
-      p(-39, 19, -10.2), p(-35, 19, -10.2), p(-31, 19, -11.5), p(-27, 18.5, -13),
+      p(-39, 19, -10.2), p(-39, 19, -9.7), p(-34.8, 19, -9.7), p(-31, 19, -11.5), p(-27, 18.5, -13),
       p(-21, 17.5, -16), p(-13, 16, -20), p(-4, 14.5, -23.5), p(6, 12.5, -26),
       p(15, 10.5, -28), p(22, 9, -29), p(26, 8, -29.8),
     ],
@@ -144,9 +144,6 @@ export function blocked(x: number, y: number, z: number) {
 
 export function walkStep(position: Point, dx: number, dz: number): Point {
   const tryStep = (x: number, z: number) => {
-    // floorCandidates already orders path surfaces by spatial proximity. Keep that
-    // order at joints so the segment under the player's feet wins over an older
-    // overlapping segment with a merely closer height.
     const y = floorCandidates(x, z).find(candidate => Math.abs(candidate - position.y) < .8)
     return y !== undefined && !blocked(x, y, z) ? { x, y, z } : null
   }
