@@ -20,14 +20,12 @@ export const terraces = [
 
 const p = (x: number, y: number, z: number): Point => ({ x, y, z })
 
-// The climb is intentionally a broad, gentle spiral rather than a stack of steep steps.
 export const stairPoints = Array.from({ length: 145 }, (_, i) => {
   const t = i / 144
   const a = Math.PI / 2 + t * Math.PI * 4
   return p(tree.x + Math.cos(a) * 7.6, 9 + t * 10, tree.z + Math.sin(a) * 7.6)
 })
 
-// One continuous village route. Every route hands directly into the next one.
 export const paths: Path[] = [
   {
     name: 'entrance-to-willow',
@@ -39,7 +37,7 @@ export const paths: Path[] = [
     name: 'entrance-to-river-dock',
     points: [
       p(-23, 4, 42), p(-18, 4, 39), p(-12, 4, 40), p(-9, 4, 40.5),
-      p(-8.5, 3.5, 41), p(-8, 3, 41.5), p(-7.5, 2.5, 42), p(-7, 2, 42), p(-7, 1.5, 42),
+      p(-8.5, 3.5, 41), p(-8, 3, 41.5), p(-7.6, 2.5, 41.7), p(-7.3, 2, 41.85), p(-7, 1.5, 42),
     ],
     width: 3.2,
     kind: 'boardwalk',
@@ -48,8 +46,9 @@ export const paths: Path[] = [
   {
     name: 'willow-to-tree',
     points: [
-      p(-27, 4, 28.2), p(-31.5, 4, 28), p(-34, 4, 25.5), p(-34, 4, 22),
-      p(-39, 5.5, 13), p(-42, 7.3, 4), p(-40, 9, -2), p(-32, 9, -4.4),
+      p(-27, 4, 28.2), p(-31.5, 4, 28), p(-34, 4, 25.5), p(-34, 4, 22), p(-36.8, 4, 17),
+      p(-38, 4.5, 14), p(-39.5, 5.5, 10), p(-41, 6.5, 6), p(-42, 7.5, 3.5),
+      p(-42, 8, 3.2), p(-42, 8.5, 3), p(-42, 9, 2.8), p(-41, 9, 0), p(-32, 9, -4.4),
     ],
     width: 3.8,
     kind: 'trail',
