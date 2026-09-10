@@ -38,7 +38,7 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
     if (!materials.has(key)) materials.set(key, new T.MeshStandardMaterial({ color, roughness }))
     return materials.get(key)!
   }
-  const wood = '#684b35', paleWood = '#b98954', stone = '#7f8a83', cream = '#eadfbd', trail = '#c7b991', moss = '#708c53'
+  const wood = '#684b35', paleWood = '#b98954', stone = '#7f8a83', cream = '#eadfbd', trail = '#c7b991'
   const windowMaterial = new T.MeshStandardMaterial({ color: '#f6cf86', emissive: '#ed9d3c', emissiveIntensity: .7, roughness: .5 })
   extraMaterials.add(windowMaterial)
 
