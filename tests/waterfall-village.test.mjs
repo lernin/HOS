@@ -76,27 +76,57 @@ test('house doors work both ways while walls and sparse furniture block walking'
   }
 })
 
-test('walking cannot step into the river, off cliffs, or through the focal tree', () => {
-  const p = { x: -4.3, y: 1.5, z: 42 }
-  assert.deepEqual(w.walkStep(p, 1, 0), p)
-  assert.equal(w.floorCandidates(0, 45).length, 0)
-  assert.ok(w.blocked(w.tree.x, 9, w.tree.z))
-  assert.equal(w.floorCandidates(-1000, 0).length, 0)
+test('walking stops at water, bridge edges, major rocks, trees and walls', () => {
+  const bank = { x: -5.4, y: w.groundHeight(-5.4, 1), z: 1 }
+  let pos = bank
+  for (let i=0;i<150;i++) pos=w.walkStep(pos,.05,0)
+  assert.ok(!w.isWater(pos.x,pos.z), 'Walking stops before open water')
+  assert.ok(pos.x<0, 'Cannot cross the channel without its bridge')
+  const bridge=w.pathNamed('garden-bridge').points[30]
+  let onBridge={...bridge}
+  for(let i=0;i<90;i++)onBridge=w.walkStep(onBridge,0,.05)
+  assert.ok(distance(onBridge,bridge)<1.9,'Visible bridge railing agrees with its safe surface')
+  for(const o of w.obstacles)assert.ok(w.blocked(o.x,w.groundHeight(o.x,o.z),o.z))
+  for(const t of w.villageTrees)assert.ok(w.blocked(t.x,w.groundHeight(t.x,t.z),t.z))
+  assert.ok(w.blocked(w.tree.x,w.tree.y,w.tree.z))
+  assert.equal(w.floorCandidates(-1000,0).length,0)
+  const h=w.houses[0],inside={x:h.x,y:h.y,z:h.z}
+  assert.ok(w.walkStep(inside,12,0).x<h.x+3.4,'Large deltas cannot tunnel through walls')
 })
 
-test('river boat can reach the lake with full hull clearance and return to either dock', () => {
-  for (let z = 42; z >= -135; z -= .25) assert.ok(w.isWater(w.riverCenter(z), z, 2.5), `Blocked boat at ${z}`)
-  const start = { x: w.riverCenter(-105), z: -105 }
-  for (let i = 0; i <= 100; i++) {
-    const t = i / 100
-    assert.ok(w.isWater(start.x + (12.4 - start.x) * t, -105 + 4 * t, 2.5), `Lake dock approach ${t}`)
+test('a continuous lower loop crosses the garden bridge, climbs to Fern Cottage and returns', () => {
+  let pos=followPath(w.spawn,'entrance-to-willow')
+  pos=enterAndLeave(pos,w.houses[0])
+  pos=followPath(pos,'cottage-to-bridge')
+  pos=followPath(pos,'garden-bridge')
+  pos=followPath(pos,'cascade-lookout')
+  pos=followPath(pos,'cascade-lookout',true)
+  pos=followPath(pos,'bridge-to-fern')
+  pos=enterAndLeave(pos,w.houses[2])
+  pos=followPath(pos,'bridge-to-fern',true)
+  pos=followPath(pos,'garden-bridge',true)
+  pos=followPath(pos,'cottage-to-bridge',true)
+  pos=followPath(pos,'entrance-to-willow',true)
+  assert.ok(distance(pos,w.spawn)<.1)
+})
+
+test('lake boat route clears the full hull and both docking approaches', () => {
+  const checkpoints=[w.boatStart,{x:2,z:19},{x:4.7,z:21.5},{x:4.7,z:23},{x:2,z:25},{x:-1,z:23},w.boatStart]
+  let pos={...checkpoints[0]}
+  for(const target of checkpoints.slice(1))for(let i=0;i<100;i++) {
+    const t=(i+1)/100,x=pos.x+(target.x-pos.x)*t,z=pos.z+(target.z-pos.z)*t
+    assert.ok(w.isWater(x,z,1.55),`Boat hull clearance at ${x}, ${z}`)
+    assert.ok(w.waterHeight(z)<w.waterLevel+.12,'Boat cannot climb the cascade')
+    if(i===99)pos={...target}
   }
-  assert.equal(w.isWater(90, -130, 2.5), false)
-  assert.equal(w.placeName({ x: 3, y: .2, z: -130 }, true), 'The open lake')
+  assert.ok(distance(w.boatStart,w.docks[0])<4.8)
+  assert.ok(distance({x:4.7,z:23},w.docks[1])<4.8)
+  assert.equal(w.placeName({x:2,y:.65,z:21},true),'The open lake')
 })
 
 test('scene stays lazy-loaded behind the Lab gate and route resolvers include it', () => {
   const main = readFileSync(new URL('../src/main.tsx', import.meta.url), 'utf8')
+  assert.match(main, /const WaterfallVillage = lazy\(\(\) => import/ )
   assert.ok(main.indexOf('if (!pin)') < main.indexOf("if (view === 'waterfall-village')"))
   assert.ok((main.match(/window.location.pathname === '\/waterfall-village'/g) || []).length === 2)
   const config = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
