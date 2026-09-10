@@ -28,14 +28,59 @@ export function bevelBox(w:number,h:number,d:number,bevel=.06) {
   const s=new T.Shape();s.moveTo(-w/2,-h/2);s.lineTo(w/2,-h/2);s.lineTo(w/2,h/2);s.lineTo(-w/2,h/2);s.closePath()
   const g=new T.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelSize:bevel,bevelThickness:bevel,bevelSegments:1,steps:1});g.translate(0,0,-d/2);return g
 }
+type SurfaceKind='wood'|'plaster'|'stone'|'shingle'|'plain'
+const woodColors=new Set([palette.timber,palette.honey,palette.wood,palette.trim,'#5f806f','#6e7454','#8a684d','#55796b','#5b7c69','#76927b','#845730','#be955e','#ba915b'])
+const stoneColors=new Set([palette.stone,'#838e8d','#949b89','#8f978e','#a1a397','#a4a795','#91988d','#a8aa98'])
+const shingleColors=new Set([palette.slate,'#456578','#496b61','#a56748','#587487','#688391'])
+function surfaceKind(color:string):SurfaceKind {
+  const v=color.toLowerCase()
+  if(v===palette.plaster)return 'plaster'
+  if(woodColors.has(v))return 'wood'
+  if(stoneColors.has(v))return 'stone'
+  if(shingleColors.has(v))return 'shingle'
+  return 'plain'
+}
+function textureMaterial(m:T.MeshStandardMaterial,kind:SurfaceKind) {
+  if(kind==='plain')return
+  m.customProgramCacheKey=()=>`procedia-surface-v1-${kind}`
+  m.onBeforeCompile=shader=>{
+    shader.vertexShader=shader.vertexShader
+      .replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvSurfacePosition=(modelMatrix*vec4(position,1.0)).xyz;')
+    const functions=`
+varying vec3 vSurfacePosition;
+float surfaceHash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
+float surfaceNoise(vec3 p){
+  vec3 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);
+  return mix(mix(mix(surfaceHash(i),surfaceHash(i+vec3(1,0,0)),f.x),mix(surfaceHash(i+vec3(0,1,0)),surfaceHash(i+vec3(1,1,0)),f.x),f.y),mix(mix(surfaceHash(i+vec3(0,0,1)),surfaceHash(i+vec3(1,0,1)),f.x),mix(surfaceHash(i+vec3(0,1,1)),surfaceHash(i+vec3(1,1,1)),f.x),f.y),f.z);
+}`
+    shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>${functions}`)
+    const p='vSurfacePosition'
+    const expression=kind==='wood'
+      ? `float sn=surfaceNoise(${p}*2.7);float grain=.5+.5*sin((${p}.x+${p}.z)*24.0+${p}.y*3.5+sn*5.0);float surfaceTone=.84+.18*sn+.08*grain;`
+      : kind==='plaster'
+        ? `float sn=surfaceNoise(${p}*1.65);float fine=surfaceNoise(${p}*7.5);float surfaceTone=.91+.12*sn+.055*fine;`
+        : kind==='stone'
+          ? `float sn=surfaceNoise(${p}*4.6);float fine=surfaceNoise(${p}*13.0);float surfaceTone=.82+.24*sn+.08*fine;`
+          : `float sn=surfaceNoise(${p}*5.2);float fleck=surfaceNoise(${p}*15.0);float rib=.5+.5*sin((${p}.x-${p}.z)*34.0);float surfaceTone=.86+.16*sn+.055*fleck+.035*rib;`
+    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>\n${expression}\ndiffuseColor.rgb*=surfaceTone;`)
+    const roughness=kind==='plaster'?'.05':kind==='stone'?'.075':kind==='shingle'?'.06':'.045'
+    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor+(surfaceNoise(vSurfacePosition*8.0)-.5)*${roughness},.55,1.0);`)
+  }
+}
 export type Kit=ReturnType<typeof createKit>
 export function createKit(scene:T.Scene) {
   const root=new T.Group(),materials=new Map<string,T.MeshStandardMaterial>(),geometries=new Set<T.BufferGeometry>()
   const rand=random(),rocks=Array.from({length:7},(_,i)=>pebbleGeometry(i*73+3))
   rocks.forEach(g=>geometries.add(g))
   const material=(color:string) => {
-    if(!materials.has(color))materials.set(color,new T.MeshStandardMaterial({color,roughness:.88}))
-    return materials.get(color)!
+    const key=color.toLowerCase()
+    if(!materials.has(key)) {
+      const m=new T.MeshStandardMaterial({color,roughness:.88})
+      textureMaterial(m,surfaceKind(key))
+      materials.set(key,m)
+    }
+    return materials.get(key)!
   }
   const glow=material('#ffd58a');glow.emissive.set('#ffb447');glow.emissiveIntensity=.9
   const add=(g:T.BufferGeometry,color:string|T.Material,x=0,y=0,z=0,group:T.Group=root) => {
