@@ -6,6 +6,7 @@
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
+    { "source": "/ocean-estate", "destination": "/" },
     { "source": "/waterfall-village", "destination": "/" },
     { "source": "/woodland-walk", "destination": "/" },
     { "source": "/liquid-orb", "destination": "/" },
@@ -37,3 +38,4 @@
     }
   ]
 }
+

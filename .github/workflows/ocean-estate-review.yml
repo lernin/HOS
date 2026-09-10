@@ -1,0 +1,40 @@
+name: Ocean Estate review
+on:
+  push:
+    branches: [feature/ocean-estate-20260911]
+    paths:
+      - src/experiences/estate/**
+      - src/experiences/OceanEstate.tsx
+      - src/main.tsx
+      - tests/ocean-estate*
+      - .github/workflows/ocean-estate-review.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node --test tests/ocean-estate.test.mjs tests/waterfall-village.test.mjs
+      - run: npm install --no-save --package-lock=false playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Render estate and verify phone UI
+        run: |
+          npm run dev -- --port 4173 > /tmp/ocean-estate-vite.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/tests/ocean-estate-visual.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/ocean-estate-visual.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ocean-estate-review-${{ github.sha }}
+          path: artifacts/ocean-estate/
