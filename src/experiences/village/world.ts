@@ -144,10 +144,10 @@ export function blocked(x: number, y: number, z: number) {
 
 export function walkStep(position: Point, dx: number, dz: number): Point {
   const tryStep = (x: number, z: number) => {
-    const candidates = floorCandidates(x, z)
-      .filter(y => Math.abs(y - position.y) < .55)
-      .sort((a, b) => Math.abs(a - position.y) - Math.abs(b - position.y))
-    const y = candidates[0]
+    // floorCandidates already orders path surfaces by spatial proximity. Keep that
+    // order at joints so the segment under the player's feet wins over an older
+    // overlapping segment with a merely closer height.
+    const y = floorCandidates(x, z).find(candidate => Math.abs(candidate - position.y) < .8)
     return y !== undefined && !blocked(x, y, z) ? { x, y, z } : null
   }
   return tryStep(position.x + dx, position.z + dz)
