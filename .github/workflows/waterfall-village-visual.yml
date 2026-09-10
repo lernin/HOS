@@ -1,9 +1,7 @@
 name: Waterfall Village visual review
 on:
   push:
-    branches:
-      - preview/waterfall-storybook-slice-20260910
-      - improve/waterfall-house-quality-20260910
+    branches: [preview/waterfall-storybook-slice-20260910]
     paths:
       - src/experiences/village/**
       - src/experiences/WaterfallVillage.tsx
