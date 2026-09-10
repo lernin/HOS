@@ -17,7 +17,7 @@ export function villageAudio() {
     volume(value: number) { volume = value; master.gain.setTargetAtTime(value, context.currentTime, .1); birds.volume = value * .44 },
     update(x: number, z: number, inside: boolean, walking: boolean, boating: boolean) {
       if (disposed || context.state !== 'running') return
-      const distance = Math.min(Math.hypot(x + 12, z + 69), Math.hypot(x - 48, z + 62), Math.hypot(x + 53, z + 45))
+      const distance = Math.min(Math.hypot(x - 1, z + 2.5), Math.hypot(x - 2, z + 21))
       waterGain.gain.setTargetAtTime((.035 + .2 / (1 + distance * .05)) * (inside ? .25 : 1), context.currentTime, .4)
       birds.volume = volume * (inside ? .12 : .44)
       if (walking && !boating && context.currentTime - lastStep > .52) {

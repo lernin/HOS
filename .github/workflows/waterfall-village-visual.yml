@@ -1,0 +1,39 @@
+name: Waterfall Village visual review
+on:
+  push:
+    branches: [preview/waterfall-storybook-slice-20260910]
+    paths:
+      - src/experiences/village/**
+      - src/experiences/WaterfallVillage.tsx
+      - tests/waterfall-village*
+      - .github/workflows/waterfall-village-visual.yml
+permissions:
+  contents: read
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: node --test tests/waterfall-village.test.mjs
+      - run: npm install --no-save --package-lock=false playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Render reference viewpoints and continuous walk
+        run: |
+          npm run dev -- --port 4173 > /tmp/village-vite.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/tests/waterfall-village-visual.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/waterfall-village-visual.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: waterfall-village-visual-${{ github.sha }}
+          path: artifacts/waterfall-village/
