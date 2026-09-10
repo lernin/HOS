@@ -37,14 +37,20 @@ export const paths: Path[] = [
   },
   {
     name: 'entrance-to-river-dock',
-    points: [p(-23, 4, 42), p(-18, 4, 39), p(-12, 3.2, 40), p(-7, 1.5, 42)],
+    points: [
+      p(-23, 4, 42), p(-18, 4, 39), p(-12, 4, 40), p(-9, 4, 40.5),
+      p(-8.5, 3.5, 41), p(-8, 3, 41.5), p(-7.5, 2.5, 42), p(-7, 2, 42), p(-7, 1.5, 42),
+    ],
     width: 3.2,
     kind: 'boardwalk',
     rails: true,
   },
   {
     name: 'willow-to-tree',
-    points: [p(-27, 4, 28.2), p(-33, 4, 22), p(-39, 5.5, 13), p(-42, 7.3, 4), p(-40, 9, -2), p(-32, 9, -4.4)],
+    points: [
+      p(-27, 4, 28.2), p(-31.5, 4, 28), p(-34, 4, 25.5), p(-34, 4, 22),
+      p(-39, 5.5, 13), p(-42, 7.3, 4), p(-40, 9, -2), p(-32, 9, -4.4),
+    ],
     width: 3.8,
     kind: 'trail',
   },
@@ -65,9 +71,9 @@ export const paths: Path[] = [
   {
     name: 'library-to-fern',
     points: [
-      p(-39, 19, -10.2), p(-34, 19, -11), p(-28, 18.5, -13), p(-21, 17.5, -16),
-      p(-13, 16, -20), p(-4, 14.5, -23.5), p(6, 12.5, -26), p(15, 10.5, -28),
-      p(22, 9, -29), p(26, 8, -29.8),
+      p(-39, 19, -10.2), p(-35, 19, -10.2), p(-31, 19, -11.5), p(-27, 18.5, -13),
+      p(-21, 17.5, -16), p(-13, 16, -20), p(-4, 14.5, -23.5), p(6, 12.5, -26),
+      p(15, 10.5, -28), p(22, 9, -29), p(26, 8, -29.8),
     ],
     width: 3.5,
     kind: 'bridge',
@@ -76,8 +82,10 @@ export const paths: Path[] = [
   {
     name: 'fern-to-lake',
     points: [
-      p(26, 8, -29.8), p(31, 8, -38), p(34, 7.5, -48), p(37, 6, -58),
-      p(36, 4.5, -68), p(32, 3, -79), p(26, 1.5, -92), p(17, 1.5, -101),
+      p(26, 8, -29.8), p(30.2, 8, -29.8), p(30.5, 8, -34), p(32, 8, -41), p(35, 8, -50),
+      p(36, 7.5, -53), p(37, 7, -56), p(37, 6.5, -59), p(36.5, 6, -62), p(36, 5.5, -65),
+      p(35, 5, -69), p(34, 4.5, -73), p(32, 4, -78), p(30, 3.5, -83), p(28, 3, -87),
+      p(26, 2.5, -91), p(24, 2, -94), p(21, 1.5, -97), p(17, 1.5, -101),
     ],
     width: 3.6,
     kind: 'trail',
@@ -114,7 +122,6 @@ export function floorCandidates(x: number, z: number): number[] {
   pathHits.sort((a, b) => a.distance - b.distance)
   heights.push(...pathHits.map(hit => hit.y))
   for (const t of terraces) if (Math.hypot(x - t.x, z - t.z) < t.radius - .4) heights.push(t.y)
-  // The broad treehouse deck is also genuinely walkable.
   if (x > -44.5 && x < -31.5 && z > -19 && z < -5.5) heights.push(19)
   for (const d of docks) if (Math.abs(x - d.x) < 3 && Math.abs(z - d.z) < 4.5) heights.push(d.y)
   return heights
@@ -125,11 +132,9 @@ export function blocked(x: number, y: number, z: number) {
   for (const h of houses) {
     if (Math.abs(y - h.y) > 1) continue
     const dx = x - h.x, dz = z - h.z, edge = .42
-    // Houses are 6.8 x 6.8. The south-facing doorway is deliberately generous.
     if (Math.abs(dx) < 3.4 + edge && Math.abs(dz) < 3.4 + edge) {
       if (Math.abs(dx) > 3.4 - edge || dz < -3.4 + edge) return true
       if (dz > 3.4 - edge && Math.abs(dx) > 1.02) return true
-      // Sparse furnishings leave an obvious central circulation route.
       if (dx > -2.8 && dx < -1.35 && dz > -1.25 && dz < 1.05) return true
       if (dx > 2.15 && dz < .8) return true
       if (Math.abs(dx) < 1.3 && dz < -2.05) return true
