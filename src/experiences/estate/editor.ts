@@ -1,5 +1,6 @@
 import * as T from 'three'
 import { FLOOR } from './plan'
+import './editor.css'
 
 export type EditableRoomId = 'foyer' | 'great-room'
 export type EditableSurface = 'floor' | 'walls'
