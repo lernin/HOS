@@ -84,7 +84,8 @@ export const glass: Wall[] = [
   {x1:24,x2:29,z1:-12.08,z2:-11.98,height:3.4,material:'glass'},
   {x1:33,x2:39,z1:-12.08,z2:-11.98,height:3.4,material:'glass'},
   {x1:38.98,x2:39.08,z1:-12,z2:-5,height:3.4,material:'glass'},
-  {x1:38.98,x2:39.08,z1:-2,z2:13,height:3.0,material:'glass'},
+  {x1:38.98,x2:39.08,z1:-2,z2:2,height:3.8,material:'glass'},
+  {x1:38.98,x2:39.08,z1:2,z2:13,height:3.3,material:'glass'},
   {x1:39.98,x2:40.08,z1:19,z2:26,height:2.9,material:'glass'},
   {x1:39.98,x2:40.08,z1:33,z2:38,height:2.9,material:'glass'},
   {x1:-39.08,x2:-38.98,z1:14,z2:22,height:3.1,material:'glass'},
@@ -92,25 +93,27 @@ export const glass: Wall[] = [
 ]
 export type Furnishing = { kind:string; x:number; z:number; angle?:number; tone?:string; scale?:number }
 export const furnishings:Furnishing[] = [
-  {kind:'sofa',x:-2,z:-5},{kind:'sofa',x:-2,z:.6,angle:Math.PI},{kind:'lounge',x:-6,z:-2.4,angle:-Math.PI/2},{kind:'lounge',x:2.3,z:-2.1,angle:Math.PI/2},
+  {kind:'sofa',x:-2,z:-5,angle:Math.PI},{kind:'sofa',x:-2,z:.6},{kind:'lounge',x:-6,z:-2.4,angle:-Math.PI/2},{kind:'lounge',x:2.3,z:-2.1,angle:Math.PI/2},
   {kind:'coffee',x:-2,z:-2.3},{kind:'piano',x:8.9,z:-6.7,angle:-.5},
+  {kind:'sideTable',x:.2,z:-5},{kind:'floorLamp',x:-4.45,z:.9},{kind:'console',x:7.9,z:7.15},
   {kind:'dining',x:-17,z:-5.3},{kind:'island',x:-16.3,z:7.6},
-  {kind:'sofa',x:-29,z:-11},{kind:'lounge',x:-32,z:-7,angle:-1.3},{kind:'coffee',x:-29,z:-8.2},
+  {kind:'sofa',x:-29,z:-11,angle:Math.PI},{kind:'lounge',x:-32,z:-7,angle:-1.3},{kind:'coffee',x:-29,z:-8.2},
   {kind:'bed',x:32,z:-.8,angle:0,tone:'linen',scale:1.15},{kind:'lounge',x:36.5,z:-9,angle:2.6},
+  {kind:'sideTable',x:35.2,z:-9},{kind:'floorLamp',x:37.5,z:-8.6},
   {kind:'bath',x:36,z:6.3,angle:0.4},{kind:'wardrobeIsland',x:27.5,z:7.5},
   {kind:'desk',x:14,z:23},{kind:'lounge',x:10.5,z:18.5,angle:-.6},
   {kind:'bed',x:28,z:22,angle:Math.PI,tone:'sage'},
   {kind:'bed',x:36,z:21.5,angle:Math.PI,tone:'clay'},
   {kind:'bed',x:34.5,z:35.2,angle:Math.PI/2,tone:'indigo'},
-  {kind:'sofa',x:-33,z:6,angle:Math.PI,tone:'indigo'},{kind:'sofa',x:-33,z:2,angle:Math.PI,tone:'indigo'},
+  {kind:'sofa',x:-33,z:6,tone:'indigo'},{kind:'sofa',x:-33,z:2,tone:'indigo'},
   {kind:'treadmill',x:-36,z:16},{kind:'treadmill',x:-32.8,z:16},
   {kind:'treatment',x:-33,z:31.5},
-  {kind:'sofa',x:-18,z:-17,angle:Math.PI/2},{kind:'sofa',x:-14.5,z:-20},{kind:'fire',x:-15,z:-17},
+  {kind:'sofa',x:-18,z:-17,angle:-Math.PI/2},{kind:'sofa',x:-14.5,z:-20,angle:Math.PI},{kind:'fire',x:-15,z:-17},
   {kind:'outdoorDining',x:21,z:-17.5},
-  {kind:'lounger',x:-13,z:-28,angle:Math.PI},{kind:'lounger',x:14,z:-28,angle:Math.PI},
+  {kind:'lounger',x:-13,z:-28},{kind:'lounger',x:14,z:-28},
   {kind:'lounge',x:32,z:-19,angle:2.5},{kind:'lounge',x:36,z:-19,angle:-2.5},{kind:'fire',x:34,z:-17,scale:.7},
 ]
-const sizes:Record<string,[number,number]>={sofa:[3.5,1.18],lounge:[1.12,1.18],coffee:[1.9,1.35],piano:[2,2.5],dining:[3.5,6.2],island:[2,4.8],bed:[3.1,3.8],bath:[2.5,1.35],wardrobeIsland:[1.5,2.6],desk:[3.4,2.3],treadmill:[1.05,2.3],treatment:[1.5,2.7],fire:[2.2,1.3],outdoorDining:[3.4,5.5],lounger:[.95,2.2]}
+const sizes:Record<string,[number,number]>={sofa:[3.5,1.18],lounge:[1.12,1.18],coffee:[1.9,1.35],piano:[2,2.5],dining:[3.5,6.2],island:[3.8,4.9],bed:[3.8,4.1],bath:[2.5,1.35],wardrobeIsland:[1.5,2.6],desk:[3.4,2.3],treadmill:[1.05,2.3],treatment:[1.5,2.7],fire:[2.2,1.3],outdoorDining:[3.4,5.5],lounger:[.95,2.2],sideTable:[.8,.8],floorLamp:[.7,.7],console:[3.7,.8]}
 export function footprint(f:Furnishing):Rect {
   const [w,d]=sizes[f.kind],a=f.angle||0,s=f.scale||1
   const dx=(Math.abs(Math.cos(a))*w+Math.abs(Math.sin(a))*d)*s/2,dz=(Math.abs(Math.sin(a))*w+Math.abs(Math.cos(a))*d)*s/2
@@ -126,6 +129,7 @@ export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
   {x1:-35,x2:-30,z1:35,z2:38.8}, // spa water
   {x1:10,x2:19,z1:26.9,z2:27.8}, // library shelves
   {x1:-3,x2:5,z1:37,z2:45}, // arrival fountain
+  {x1:-1.4,x2:-.1,z1:22.05,z2:24.12},{x1:2.1,x2:3.4,z1:22.05,z2:24.12}, // open pivot-door leaves
 ]
 export const destinations=[
   {name:'Entrance',x:1,z:27,yaw:0},{name:'Great room',x:7,z:3,yaw:.7},

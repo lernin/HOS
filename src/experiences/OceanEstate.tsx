@@ -32,7 +32,7 @@ export function OceanEstate({onBack}:{onBack:()=>void}){
   function openSettings(){stop();input.current.paused=true;audio.current?.pause();setPlaces(false);dialog.current?.showModal()}
   function closeSettings(){stop();if(started&&!paused){input.current.paused=false;if(sound)void beginSound()}}
   function back(){stop();input.current.paused=true;audio.current?.pause();onBack()}
-  return <main className="oe-root" aria-label="Ocean Estate">
+  return <main className="oe-root" aria-label="Ocean Estate" data-player-x={state.position.x.toFixed(3)} data-player-z={state.position.z.toFixed(3)} data-camera-yaw={input.current.yaw.toFixed(3)}>
     <canvas ref={canvas} className="oe-canvas" aria-label="Explorable oceanfront estate" onContextMenu={e=>e.preventDefault()}
       onPointerDown={e=>{if(input.current.paused||pointer.current)return;e.currentTarget.setPointerCapture(e.pointerId);pointer.current={id:e.pointerId,x:e.clientX,y:e.clientY,startX:e.clientX,startY:e.clientY,dragged:false};if(prefs.mode==='walk'&&e.clientY>innerHeight*.58)input.current.z=-1}}
       onPointerMove={e=>{const p=pointer.current;if(!p||p.id!==e.pointerId||input.current.paused)return;const dx=e.clientX-p.x,dy=e.clientY-p.y;if(Math.hypot(e.clientX-p.startX,e.clientY-p.startY)>8)p.dragged=true;if(p.dragged){input.current.yaw-=dx*.003*prefs.sensitivity;input.current.pitch=Math.max(-1.05,Math.min(.95,input.current.pitch-dy*.003*prefs.sensitivity));input.current.lookedAt=performance.now();setHelp(false)}p.x=e.clientX;p.y=e.clientY}}

@@ -62,8 +62,8 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
         dirty=true
       }else{vx=0;vz=0}
       if(Math.hypot(position.x-lastShadow.x,position.z-lastShadow.z)>12){lastShadow={...position};sun.position.set(-55,input.lighting==='daylight'?70:30,-80);sun.target.position.set(0,6,0);renderer.shadowMap.needsUpdate=true}
-      const locations=[[-2,-2,4.7],[-17,7,3.1],[32,-4,3.2],[-32,30,2.8],[14,22,3.1],[-32,4,2.7],[27,22,2.8],[36,22,2.8]]
-      locations.sort((a,b)=>Math.hypot(a[0]-position.x,a[1]-position.z)-Math.hypot(b[0]-position.x,b[1]-position.z))
+      const locations=[[-2,-2,3.4],[-17,7,3.1],[32,-4,3.2],[-32,30,2.8],[14,22,3.1],[-32,4,2.7],[27,22,2.8],[36,22,2.8]],lightView=inspectView?.position??position
+      locations.sort((a,b)=>Math.hypot(a[0]-lightView.x,a[1]-lightView.z)-Math.hypot(b[0]-lightView.x,b[1]-lightView.z))
       fills.forEach((l,i)=>{const p=locations[i];l.position.set(p[0],FLOOR+p[2],p[1]);l.intensity=input.lighting==='evening'?75:10})
       if(inspectView){camera.position.copy(inspectView.position);camera.lookAt(inspectView.target)}
       if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}

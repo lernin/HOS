@@ -1,10 +1,10 @@
 import * as T from 'three'
-import { floors, walls, glass, lintels, furnishings, footprint, FLOOR } from './plan'
+import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR } from './plan'
 import { type EstateKit, random, v } from './kit'
 export function architecture(k:EstateKit){
   for(const f of floors){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
-    if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else k.box(x,y-.2,z,w,.4,d,f.material)
+    if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else k.box(x,y-.2,z,w,.4,d,f.material==='oak'?'oakFloor':f.material)
     if(f.material==='limestone'||f.material==='travertine'){
       for(let a=f.x1+2.8;a<f.x2;a+=2.8)k.box(a,y+.004,z,.011,.005,d,'rug')
       for(let a=f.z1+1.65;a<f.z2;a+=1.65)k.box(x,y+.005,a,w,.005,.01,'rug')
@@ -17,10 +17,10 @@ export function architecture(k:EstateKit){
   }
   for(const w of lintels)k.box((w.x1+w.x2)/2,FLOOR+w.base+w.height/2,(w.z1+w.z2)/2,w.x2-w.x1,w.height,w.z2-w.z1,w.material)
   for(const w of walls)k.box((w.x1+w.x2)/2,FLOOR+w.height/2,(w.z1+w.z2)/2,w.x2-w.x1,w.height,w.z2-w.z1,w.material)
-  for(const w of glass){const x=(w.x1+w.x2)/2,z=(w.z1+w.z2)/2,dx=w.x2-w.x1,dz=w.z2-w.z1;k.box(x,FLOOR+w.height/2,z,dx,w.height,dz,'glass')
-    for(const y of [.08,w.height])k.box(x,FLOOR+y,z,dx+.06,.055,dz+.06,'bronze')
+  for(const w of glass){const x=(w.x1+w.x2)/2,z=(w.z1+w.z2)/2,dx=w.x2-w.x1,dz=w.z2-w.z1,roof=floors.filter(f=>f.roof&&contains(f,{x,z},.15)).reduce((h,f)=>Math.max(h,f.roof!),w.height),height=roof-.035;k.box(x,FLOOR+height/2,z,dx,height,dz,'glass')
+    for(const y of [.08,height])k.box(x,FLOOR+y,z,dx+.06,.055,dz+.06,'bronze')
     const count=Math.ceil(Math.max(dx,dz)/2.9)
-    for(let i=0;i<=count;i++)k.box(w.x1+dx*i/count,FLOOR+w.height/2,w.z1+dz*i/count,.048,w.height,.048,'bronze')
+    for(let i=0;i<=count;i++)k.box(w.x1+dx*i/count,FLOOR+height/2,w.z1+dz*i/count,.048,height,.048,'bronze')
   }
   // Great-room ceiling: floating timber fins and a tall stone hearth.
   for(let i=0;i<28;i++)k.box(-10.7+i*.84,FLOOR+5.28,-2,.085,.23,19.7,'oak')
@@ -35,9 +35,9 @@ export function architecture(k:EstateKit){
   for(let i=0;i<5;i++){const m=k.mesh(new T.TorusGeometry(1.1+i*.07,.025,6,32),'bronze',1,FLOOR+3.2+i*.12,17);m.rotation.x=1.05+i*.09}
   // Deep terrace edge and concealed waterline conceal intersections with cliffs.
   for(const x of [-15.1,16.1])k.box(x,FLOOR-1.7,-29.2,.35,3.4,13.8,'travertine')
-  k.box(.5,FLOOR-1.4,-36.1,23.4,2.8,.25,'travertine')
+  k.box(.5,FLOOR-1.54,-36.1,23.4,2.8,.25,'travertine')
   k.box(.5,FLOOR-1.5,-30.2,23,0.2,12,'waterTile')
-  for(const x of [-10.95,11.95])k.box(x,FLOOR-.6,-30.2,.15,1.8,12,'waterTile')
+  for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
   // Railings sit at the walkable perimeter, never across a route.
   for(const [a,b] of [[v(-23,FLOOR,-24),v(-15,FLOOR,-24)],[v(16,FLOOR,-24),v(27,FLOOR,-24)],[v(44,FLOOR,-14),v(44,FLOOR,14)],[v(27,FLOOR,-23),v(40,FLOOR,-23)]]){
     const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.65,0,.035,1.24,d,'glass',g);k.box(0,1.28,0,.045,.04,d,'bronze',g);for(let i=0;i<=d/2;i++)k.box(0,.62,-d/2+i*2,.035,1.24,.035,'bronze',g)
@@ -49,6 +49,9 @@ export function architecture(k:EstateKit){
 export function landscape(k:EstateKit){
   const rand=random(82031),b=k.box
   const coastZ=(a:number,r:number)=>7+Math.sin(a)*64*r*(Math.sin(a)<0?.7+.3*Math.min(1,Math.abs(Math.cos(a))*3):1)
+  // All scattered planting excludes the constructed footprint, including the
+  // pool void. The perimeter moved during art direction; scatter must follow it.
+  const unbuilt=(x:number,z:number,pad=1)=>!floors.some(f=>contains(f,{x,z},pad))&&!contains({x1:-15,x2:16,z1:-38,z2:-23},{x,z},pad)
   function terrainHeight(x:number,z:number,r:number){const arrival=Math.max(0,Math.min(1,(z-24)/9));return 5.5-arrival*1.05-Math.pow(Math.max(0,(r-.7)/.3),1.3)*8+Math.sin(x*.14)*Math.sin(z*.18)*.24}
   const verts:number[]=[],ids:number[]=[],segments=100,rings=20
   for(let j=0;j<=rings;j++)for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2,r=j/rings,edge=1+.04*Math.sin(a*7)+.025*Math.sin(a*13),x=Math.cos(a)*58*r*edge,z=coastZ(a,r)*edge;verts.push(x,terrainHeight(x,z,r),z)}
@@ -85,8 +88,8 @@ export function landscape(k:EstateKit){
   function grasses(x:number,y:number,z:number,s=1){const g=k.group(x,y,z,rand()*6.28);g.scale.setScalar(s);for(let i=0;i<9;i++){const a=i*2.4,h=.45+rand()*.55,dx=Math.cos(a)*.4,dz=Math.sin(a)*.4;const p=[0,0,0,dx*.3-.03,h*.55,dz*.3,dx,h,dz,dx*.3+.03,h*.5,dz*.3];const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(p,3));geom.setIndex([0,1,2,0,2,3,2,1,0,3,2,0]);geom.computeVertexNormals();k.mesh(geom,i%2?'leaf':'leafLight',0,0,0,g)}}
   tree(-17.6,FLOOR+.37,20.8,1.05,4);tree(-29,5.2,30,1.1,3);tree(46,4,-7,1.25,1);tree(-30,5.1,-25,1.5,8);tree(18,4.7,43,1.2,9)
   for(const [x,z,s] of [[-8,28,4.2],[10,28,4.7],[-21,-21,4],[25,-22,4.8],[-34,41,4.5],[44,21,4.2]])palm(x,Math.min(FLOOR,terrainHeight(x,z,.65)),z,s,x)
-  for(let i=0;i<42;i++){const a=i/42*Math.PI*2,r=.75+rand()*.06,x=Math.cos(a)*58*r,z=coastZ(a,r);if((x>42&&z<-12)||(Math.abs(x)<21&&z<-25))continue;if(i%4===0)tree(x,terrainHeight(x,z,r),z,.75+rand()*.45,i);else palm(x,terrainHeight(x,z,r),z,3.5+rand()*2,i)}
-  for(let i=0;i<210;i++){const a=rand()*Math.PI*2,r=.7+rand()*.18,x=Math.cos(a)*58*r,z=coastZ(a,r);grasses(x,terrainHeight(x,z,r)+.05,z,1+rand());if(i%6===0)rock(x,terrainHeight(x,z,r),z,.7,.5,.65,i)}
+  for(let i=0;i<42;i++){const a=i/42*Math.PI*2,r=.75+rand()*.06,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,2)||(x>42&&z<-12)||(Math.abs(x)<21&&z<-25))continue;if(i%4===0)tree(x,terrainHeight(x,z,r),z,.75+rand()*.45,i);else palm(x,terrainHeight(x,z,r),z,3.5+rand()*2,i)}
+  for(let i=0;i<210;i++){const a=rand()*Math.PI*2,r=.7+rand()*.18,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,.5))continue;grasses(x,terrainHeight(x,z,r)+.05,z,1+rand());if(i%6===0)rock(x,terrainHeight(x,z,r),z,.7,.5,.65,i)}
   for(let i=0;i<32;i++){const x=-19.5+rand()*6.8,z=18.5+rand()*8;if(Math.hypot(x+15.6,z-25)>1.8)grasses(x,FLOOR+.4,z,.55+rand()*.6)}
   // Pots have modeled lips and soil; crowns use the same coherent frond language.
   for(const [x,z]of [[-9,-10],[11,-10],[-9,6],[11,6],[25,-10],[38,0],[9,26],[-22,12],[-34,-3],[-27,27],[42,-12],[42,12],[-7,22]]){
@@ -114,7 +117,37 @@ export function waters(scene:T.Scene){
   const common={time:{value:0},evening:{value:0},sunColor:{value:new T.Color('#ffe0ab')}}
   const water=new T.ShaderMaterial({uniforms:{...common,pool:{value:0}},side:T.DoubleSide,vertexShader:`varying vec3 wp;uniform float time;uniform float pool;void main(){vec3 p=position;if(pool<.5)p.z+=sin(p.x*.055+time*.35)*.24+sin(p.y*.083-time*.3)*.19;vec4 w=modelMatrix*vec4(p,1.);wp=w.xyz;gl_Position=projectionMatrix*viewMatrix*w;}`,fragmentShader:`
     uniform float time;uniform float evening;uniform float pool;varying vec3 wp;
-    void main(){vec2 p=wp.xz;float a=sin(p.x*.65+time*.65+sin(p.y*.5))*sin(p.y*.75-time*.45);float b=sin(p.x*3.3+p.y*1.4-time)*sin(p.y*2.7+time*.7);vec3 n=normalize(vec3(a*.09+b*.025,1.,cos(p.y*.7-time*.6)*.1));vec3 view=normalize(cameraPosition-wp);float fres=pow(1.-max(0.,dot(n,view)),4.);vec3 deep=mix(vec3(.012,.09,.14),vec3(.018,.23,.24),pool);vec3 sky=mix(vec3(.42,.57,.61),vec3(.15,.24,.32),evening);vec3 col=mix(deep,sky,fres*.35);float spec=pow(max(0.,dot(reflect(-normalize(vec3(-.5,.24,-.8)),n),view)),140.);col+=vec3(1.,.79,.45)*spec*.55*(1.-evening*.8);float caustic=pow(max(0.,sin(p.x*2.5+sin(p.y*3.+time*.4))+sin(p.y*2.7+time*.25)-.9),3.);col+=pool*caustic*.07;col+=a*.007+b*.004;float shore=(1.-smoothstep(54.,62.,length(vec2(p.x,(p.y-7.)*.91))))*smoothstep(48.,55.,length(vec2(p.x,(p.y-7.)*.91)));col+=shore*(.1+.06*sin(length(p)*3.-time));float haze=1.-exp(-distance(cameraPosition,wp)*.0016);col=mix(col,sky,haze);col*=1.-evening*.48;gl_FragColor=vec4(col,1.);#include <tonemapping_fragment>\n#include <colorspace_fragment>}
+    void main(){
+      vec2 p=wp.xz;
+      float a=sin(p.x*.65+time*.65+sin(p.y*.5))*sin(p.y*.75-time*.45);
+      float b=sin(p.x*3.3+p.y*1.4-time)*sin(p.y*2.7+time*.7);
+      vec3 n=normalize(vec3(a*.075+b*.018,1.,cos(p.y*.7-time*.6)*.08));
+      vec3 view=normalize(cameraPosition-wp);
+      float fres=pow(1.-max(0.,dot(n,view)),4.);
+      vec3 deep=mix(vec3(.012,.09,.14),vec3(.009,.125,.145),pool);
+      vec3 sky=mix(vec3(.42,.57,.61),vec3(.15,.24,.32),evening);
+      vec3 col=deep;
+      if(pool>.5){
+        // Refract the view ray onto a shallow analytical pool bed. This gives
+        // tile parallax and depth without an extra scene render on phones.
+        vec3 ray=refract(-view,n,.75);
+        vec2 bed=p+ray.xz*(1.37/max(.16,-ray.y));
+        vec2 uv=fract(bed*1.45),edge=min(uv,1.-uv);
+        float grout=1.-smoothstep(.014,.038,min(edge.x,edge.y));
+        float ribs=abs(sin(bed.x*4.+sin(bed.y*3.+time*.4))+sin(bed.y*3.7+time*.27));
+        float caustic=1.-smoothstep(.03,.2,ribs);
+        vec3 bedColor=vec3(.025,.23,.215)*(1.-grout*.16)+vec3(.02,.043,.034)*caustic;
+        col=mix(col,bedColor,.5*max(.1,dot(view,n)));
+      }
+      col=mix(col,sky,fres*.4);
+      float spec=pow(max(0.,dot(reflect(-normalize(vec3(-.5,.24,-.8)),n),view)),140.);
+      col+=vec3(1.,.79,.45)*spec*.55*(1.-evening*.8);
+      col+=a*.005+b*.003;
+      float shore=(1.-smoothstep(54.,62.,length(vec2(p.x,(p.y-7.)*.91))))*smoothstep(48.,55.,length(vec2(p.x,(p.y-7.)*.91)));
+      col+=(1.-pool)*shore*(.1+.06*sin(length(p)*3.-time));
+      float haze=1.-exp(-distance(cameraPosition,wp)*.0016);
+      col=mix(col,sky,haze);col*=1.-evening*.48;
+      gl_FragColor=vec4(col,1.);#include <tonemapping_fragment>\n#include <colorspace_fragment>}
   `.replace(';#include',';\n#include')})
   const ocean=new T.Mesh(new T.PlaneGeometry(4500,4500,100,100),water);ocean.rotation.x=-Math.PI/2;ocean.position.set(0,-1.1,-400);scene.add(ocean)
   const poolMat=water.clone();poolMat.uniforms.pool.value=1

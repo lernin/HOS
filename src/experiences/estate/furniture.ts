@@ -1,25 +1,33 @@
 import * as T from 'three'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { FLOOR, furnishings, type Furnishing } from './plan'
 import { type EstateKit, v } from './kit'
 export function furnish(k:EstateKit){
   const {box:b,cylinder:c,ellipsoid:e,beam,lathe}=k
-  function cushion(x:number,y:number,z:number,w:number,h:number,d:number,tone:string,g:T.Group){b(x,y,z,w,h,d,tone,g,.12);b(x,y+.008,z,w+.013,.012,d+.013,tone,g,.04)}
+  function cushion(x:number,y:number,z:number,w:number,h:number,d:number,tone:string,g:T.Group){
+    const geo=new RoundedBoxGeometry(w,h,d,3,Math.min(.13,h*.42)),p=geo.attributes.position
+    for(let i=0;i<p.count;i++){const px=p.getX(i),py=p.getY(i),pz=p.getZ(i),puff=Math.max(0,1-(px/(w*.5))**2)*Math.max(0,1-(pz/(d*.5))**2);p.setY(i,py+Math.sign(py)*puff*.028)}geo.computeVertexNormals()
+    return k.mesh(geo,tone,x,y,z,g)
+  }
   function vase(x:number,y:number,z:number,g:T.Group,scale=1){const m=lathe([[.12,0],[.2,.04],[.22,.23],[.16,.4],[.085,.45],[.09,.5]],'ceramic',x,y,z,g);m.scale.setScalar(scale);for(let j=0;j<3;j++)beam([v(x,y+.3,z),v(x+(j-1)*.09,y+.7,z+.03*j),v(x+(j-1)*.17,y+1+.1*j,z+.08)],.012,'bark',g)}
   function lamp(x:number,y:number,z:number,g:T.Group){c(x,y+.04,z,.19,.08,'bronze',g);c(x,y+.31,z,.025,.52,'bronze',g);c(x,y+.6,z,.28,.32,'linen',g,.21);c(x,y+.44,z,.2,.025,'glow',g)}
   function book(x:number,y:number,z:number,g:T.Group,tone='sage',a=0){const m=b(x,y,z,.32,.055,.24,tone,g,.012);m.rotation.y=a;b(x,y,z+.122,.28,.035,.008,'linen',g)}
   function chair(x:number,z:number,g:T.Group,a=0,tone='linen') {const q=new T.Group();q.position.set(x,0,z);q.rotation.y=a;g.add(q)
     for(const s of [-1,1])for(const t of [-1,1]){const leg=b(s*.27,.24,t*.24,.045,.46,.045,'walnut',q,.015);leg.rotation.z=s*-.05}
-    cushion(0,.48,0,.67,.13,.67,tone,q);b(0,.84,.28,.68,.66,.12,tone,q,.1)
+    cushion(0,.48,0,.67,.13,.67,tone,q)
+    const back=new T.LatheGeometry([[.39,.57],[.44,.64],[.43,.91],[.4,.95],[.36,.9],[.35,.62],[.39,.57]].map(([r,y])=>new T.Vector2(r,y)),18,-Math.PI/2,Math.PI);k.mesh(back,tone,0,0,0,q)
     for(const s of [-1,1])beam([v(s*.34,.6,-.22),v(s*.34,.73,-.02),v(s*.32,.75,.28)],.032,'walnut',q)
   }
   function sofa(g:T.Group,tone='linen'){b(0,.23,0,3.4,.26,1.1,'walnut',g,.06)
-    for(const x of [-1.1,0,1.1]){cushion(x,.49,-.07,1.06,.3,.94,tone,g);const back=b(x,.9,.37,1.07,.68,.26,tone,g,.11);back.rotation.x=-.08}
+    for(const x of [-1.1,0,1.1]){cushion(x,.49,-.07,1.06,.3,.94,tone,g);const back=cushion(x,.9,.37,1.07,.68,.3,tone,g);back.rotation.x=-.11}
     for(const x of [-1.65,1.65])b(x,.66,0,.22,.52,1.07,tone,g,.1)
-    for(const x of [-1.35,1.35]){const p=b(x,.88,.06,.49,.5,.19,'clay',g,.08);p.rotation.set(-.17,0,x*.1)}
-    const throwB=b(.72,.63,-.27,.57,.027,.98,'sage',g,.025);throwB.rotation.y=.14
+    for(const x of [-1.35,1.35]){const p=cushion(x,.88,.06,.49,.5,.22,'clay',g);p.rotation.set(-.22,0,x*.12)}
+    const cloth=new T.PlaneGeometry(.62,1.3,7,14),p=cloth.attributes.position
+    for(let i=0;i<p.count;i++){const t=(p.getY(i)+.65)/1.3;p.setXYZ(i,p.getX(i),.66-Math.max(0,t-.63)*.87+Math.sin(p.getX(i)*24+t*2)*.014,.39-t*1.3)}cloth.computeVertexNormals();k.mesh(cloth,'sage',.7,0,0,g)
   }
-  function lounge(g:T.Group,tone='linen'){c(0,.13,0,.41,.15,'bronze',g);cushion(0,.46,-.02,1.03,.24,1.02,tone,g);b(0,.86,.34,1.03,.7,.23,tone,g,.15)
-    for(const s of [-1,1])b(s*.45,.69,0,.13,.4,.96,'walnut',g,.06)
+  function lounge(g:T.Group,tone='linen'){c(0,.12,0,.35,.12,'bronze',g);c(0,.27,0,.12,.22,'walnut',g);cushion(0,.46,-.04,.99,.25,1.01,tone,g)
+    const shell=new T.LatheGeometry([[.4,.38],[.55,.54],[.57,.81],[.52,1.02],[.45,1.06],[.38,.9],[.36,.56],[.4,.38]].map(([r,y])=>new T.Vector2(r,y)),24,-Math.PI/2,Math.PI);k.mesh(shell,tone,0,0,0,g)
+    for(const s of [-1,1])e(s*.465,.74,0,.09,.27,.11,tone,g)
   }
   function dining(g:T.Group,outdoor=false){b(0,.79,0,1.4,.16,outdoor?4.2:4.8,outdoor?'travertine':'walnut',g,.12)
     for(const z of [-1.4,1.4])b(0,.39,z,.65,.72,.3,'walnut',g,.12)
@@ -46,10 +54,14 @@ export function furnish(k:EstateKit){
   for(const f of furnishings){const g=k.group(f.x,FLOOR,f.z,f.angle);g.scale.setScalar(f.scale||1);rug(f,g)
     switch(f.kind){case 'sofa':sofa(g,f.tone);break;case 'lounge':lounge(g,f.tone);break;case 'dining':dining(g);break;case 'outdoorDining':dining(g,true);break;case 'bed':bed(g,f.tone);break;case 'piano':piano(g);break
       case 'coffee':b(0,.32,0,1.86,.16,1.28,'travertine',g,.17);for(const x of [-.55,.55])c(x,.15,0,.25,.25,'travertine',g);vase(.5,.41,0,g,.5);book(-.3,.45,-.2,g);book(-.27,.505,-.16,g,'clay',.15);break
-      case 'island':b(0,.48,0,1.9,.96,4.7,'walnut',g,.02);b(0,1.01,0,2.08,.1,4.92,'white',g,.035);for(const z of [-2.4,2.4])b(0,.52,z,2.08,1.04,.09,'white',g,.035)
+      case 'sideTable':c(0,.26,0,.15,.52,'bronze',g);c(0,.53,0,.39,.07,'marble',g,.39,32);book(.05,.61,.02,g);break
+      case 'floorLamp':c(0,.045,0,.29,.09,'bronze',g);beam([v(0,.05,0),v(0,1.45,0),v(.22,1.68,0)],.022,'bronze',g);c(.22,1.59,0,.34,.42,'linen',g,.24,32);c(.22,1.375,0,.3,.015,'glow',g);break
+      case 'console':b(0,.58,0,3.65,.65,.72,'walnut',g,.07);for(const x of [-1.35,1.35])b(x,.14,0,.035,.28,.6,'bronze',g);b(0,.935,0,3.68,.06,.74,'travertine',g,.025);for(let i=0;i<25;i++)b(-1.73+i*.145,.58,-.365,.045,.58,.04,'oak',g,.013);vase(.95,.98,0,g,.8);book(-.9,1,0,g);lamp(-1.2,.98,0,g);break
+      case 'island':b(0,.48,0,1.9,.96,4.7,'walnut',g,.02);b(0,1.01,0,2.08,.1,4.92,'marble',g,.035);for(const z of [-2.4,2.4])b(0,.52,z,2.08,1.04,.09,'marble',g,.035)
         b(0,1.07,.8,.74,.025,1.14,'black',g,.025);for(const z of [.52,1.12]){const m=k.mesh(new T.TorusGeometry(.16,.008,5,22),'basalt',0,1.088,z,g);m.rotation.x=Math.PI/2}
         b(0,1.07,-1,.5,.025,.72,'bronze',g,.05);beam([v(.3,1.05,-1.1),v(.3,1.47,-1.1),v(0,1.47,-1.1),v(0,1.3,-1.1)],.025,'bronze',g)
-        for(const z of [-1.4,0,1.4]){c(1.6,.43,z,.033,.8,'bronze',g);c(1.6,.83,z,.31,.11,'walnut',g,.31,32);c(1.6,.07,z,.27,.035,'bronze',g);c(0,2.9,z,.25,.36,'bronze',g);c(0,2.7,z,.2,.015,'glow',g);c(0,3.2,z,.01,.6,'bronze',g)}break
+        for(const z of [-1.4,0,1.4]){for(const x of [1.4,1.8])for(const a of [-.2,.2])b(x,.41,z+a,.035,.78,.035,'walnut',g,.01);cushion(1.6,.83,z,.65,.13,.65,'clay',g);const foot=k.mesh(new T.TorusGeometry(.23,.015,6,20),'bronze',1.6,.28,z,g);foot.rotation.x=Math.PI/2;c(0,2.9,z,.25,.36,'bronze',g);c(0,2.7,z,.2,.015,'glow',g);c(0,3.2,z,.01,.6,'bronze',g)}
+        {const bowl=lathe([[0,0],[.1,0],[.26,.13],[.28,.17],[.25,.18],[.08,.05],[0,.05]],'ceramic',0,1.065,1.8,g);bowl.scale.z=1.3;for(let i=0;i<3;i++)e((i-1)*.11,1.21,1.8+(i%2)*.12,.095,.09,.085,i%2?'leafLight':'clay',g)}break
       case 'bath':{const bowl=lathe([[0,.13],[.3,.08],[.5,.15],[.65,.45],[.66,.65],[.6,.7],[.53,.63],[.51,.36],[.3,.24],[0,.23]],'white',0,.03,0,g);bowl.scale.x=1.85;beam([v(1.12,0,.7),v(1.12,.93,.7),v(.8,.93,.7),v(.8,.83,.7)],.028,'bronze',g);break}
       case 'wardrobeIsland':b(0,.5,0,1.5,1,2.6,'walnut',g,.035);b(0,1.03,0,1.54,.05,2.64,'travertine',g,.03);for(const z of [-.7,0,.7])b(.765,.62,z,.02,.015,.23,'bronze',g);break
       case 'desk':b(0,.77,0,3.2,.12,1.15,'walnut',g,.1);for(const x of [-1.1,1.1])b(x,.36,0,.45,.7,.92,'walnut',g,.07);chair(0,.85,g);chair(-.8,-1,g,Math.PI);chair(.8,-1,g,Math.PI);lamp(-1,.85,0,g);book(.9,.87,0,g);b(0,.94,0,.6,.015,.42,'black',g,.02);break
