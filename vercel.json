@@ -2,7 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "git": {
-    "deploymentEnabled": false
+    "deploymentEnabled": {
+      "improve/ocean-estate-great-room-floor-20260911": true
+    }
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
