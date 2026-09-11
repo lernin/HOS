@@ -2,9 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "git": {
-    "deploymentEnabled": {
-      "feature/ocean-estate-art-studio-20260911": true
-    }
+    "deploymentEnabled": false
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
