@@ -65,22 +65,28 @@ function fit(ratio:number,maxW:number,maxH:number){
   return {w,h}
 }
 
+type Placement={x:number;z:number;y:number;angle:number;maxW:number;maxH:number}
+
 export function decorateArt(scene:T.Scene,k:EstateKit){
   removeLegacySculptures(k)
   const collection=new T.Group();collection.name='Ocean Estate museum art';scene.add(collection)
   const loader=new T.TextureLoader();loader.setCrossOrigin('anonymous')
   const geometries:T.BufferGeometry[]=[],materials:T.Material[]=[],textures:T.Texture[]=[],lights:T.Light[]=[]
-  const placements=[
-    {x:-5.78,z:11,y:FLOOR+2.25,maxW:2.28,maxH:1.58},
-    {x:19.78,z:25,y:FLOOR+2.24,maxW:1.92,maxH:1.50},
-    {x:24.23,z:0,y:FLOOR+2.24,maxW:1.86,maxH:1.48},
+
+  // These three placements intentionally mirror the approved art-direction preview:
+  // hero work above the great-room hearth, still life at the kitchen/dining threshold,
+  // and a restful floral work in the primary suite.
+  const placements:Placement[]=[
+    {x:-10.50,z:0,y:FLOOR+2.72,angle:Math.PI/2,maxW:2.42,maxH:1.72},
+    {x:-20.85,z:2.23,y:FLOOR+2.04,angle:0,maxW:1.78,maxH:1.48},
+    {x:24.23,z:0,y:FLOOR+2.22,angle:Math.PI/2,maxW:1.86,maxH:1.50},
   ]
   const selected=chosenArt()
 
   placements.forEach((p,i)=>{
     const art=selected[i]||defaults[i]
     const {w,h}=fit(art.ratio,p.maxW,p.maxH)
-    const g=new T.Group();g.position.set(p.x,p.y,p.z);g.rotation.y=Math.PI/2;collection.add(g)
+    const g=new T.Group();g.position.set(p.x,p.y,p.z);g.rotation.y=p.angle;collection.add(g)
 
     const frameGeometry=new T.BoxGeometry(w+.20,h+.20,.075),frameMaterial=new T.MeshStandardMaterial({color:'#5c432f',roughness:.48,metalness:.04})
     const frame=new T.Mesh(frameGeometry,frameMaterial);g.add(frame);geometries.push(frameGeometry);materials.push(frameMaterial)
