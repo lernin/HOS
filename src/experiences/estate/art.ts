@@ -99,13 +99,20 @@ export function decorateArt(scene:T.Scene,k:EstateKit){
     const artGeometry=new T.PlaneGeometry(w,h),artMaterial=new T.MeshStandardMaterial({map:texture,roughness:.76,metalness:0,side:T.DoubleSide})
     const artMesh=new T.Mesh(artGeometry,artMaterial);artMesh.position.z=.054;artMesh.name=`${art.title} — ${art.artist}`;g.add(artMesh);geometries.push(artGeometry);materials.push(artMaterial)
 
-    const barW=Math.min(.78,w*.48),barGeometry=new T.BoxGeometry(barW,.055,.07),barMaterial=new T.MeshStandardMaterial({color:'#6b563d',roughness:.32,metalness:.7})
-    const bar=new T.Mesh(barGeometry,barMaterial);bar.position.set(0,h/2+.16,.13);g.add(bar);geometries.push(barGeometry);materials.push(barMaterial)
-    const glowGeometry=new T.BoxGeometry(barW*.82,.018,.024),glowMaterial=new T.MeshStandardMaterial({color:'#ffe3b3',emissive:'#ffce83',emissiveIntensity:2.6,roughness:.5})
-    const glow=new T.Mesh(glowGeometry,glowMaterial);glow.position.set(0,h/2+.132,.169);g.add(glow);geometries.push(glowGeometry);materials.push(glowMaterial)
+    // Picture light is deliberately proportional to the work instead of looking like a tiny task lamp.
+    // A wide low-emission bar plus three heavily feathered spots creates a broad gallery wash with
+    // no hard central hotspot contaminating the artwork.
+    const barW=w*.72,barGeometry=new T.BoxGeometry(barW,.05,.075),barMaterial=new T.MeshStandardMaterial({color:'#6b563d',roughness:.34,metalness:.66})
+    const bar=new T.Mesh(barGeometry,barMaterial);bar.position.set(0,h/2+.17,.14);g.add(bar);geometries.push(barGeometry);materials.push(barMaterial)
+    const glowGeometry=new T.BoxGeometry(barW*.90,.014,.025),glowMaterial=new T.MeshStandardMaterial({color:'#ffe7c2',emissive:'#ffd59b',emissiveIntensity:1.55,roughness:.62})
+    const glow=new T.Mesh(glowGeometry,glowMaterial);glow.position.set(0,h/2+.142,.181);g.add(glow);geometries.push(glowGeometry);materials.push(glowMaterial)
 
-    const target=new T.Object3D();target.position.set(0,0,.07);g.add(target)
-    const light=new T.SpotLight('#ffd9a0',10,3.2,Math.PI*.26,.88,2);light.position.set(0,h/2+.16,.42);light.target=target;light.castShadow=false;g.add(light);lights.push(light)
+    for(const s of [-1,0,1]){
+      const x=s*barW*.28
+      const target=new T.Object3D();target.position.set(s*w*.27,-h*.08,.075);g.add(target)
+      const light=new T.SpotLight('#ffe1b8',2.3,4.2,Math.PI*.34,.98,1.6)
+      light.position.set(x,h/2+.15,.48);light.target=target;light.castShadow=false;g.add(light);lights.push(light)
+    }
   })
 
   return ()=>{
