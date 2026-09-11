@@ -27,6 +27,28 @@
         });
       }
 
+      // Materials Studio is a standalone, phone-first Lab tool. Keep it visible in the
+      // React hub without coupling the static material browser to the main app bundle.
+      (() => {
+        const addMaterialsStudioCard = () => {
+          const grid = document.querySelector('.experience-grid');
+          if (!grid || document.getElementById('materials-studio-hub-card')) return;
+
+          const card = document.createElement('article');
+          card.className = 'experience-card';
+          card.id = 'materials-studio-hub-card';
+          card.innerHTML = '<span class="experience-icon">Mt</span><span class="experience-copy"><strong>Materials Studio</strong><small>Explore full-screen CC0 stone, wood, plaster, and surface textures for Ocean Estate.</small></span><button class="experience-go" type="button">Go</button>';
+          card.querySelector('button')?.addEventListener('click', () => { window.location.href = '/materials-studio'; });
+
+          const firstCard = grid.querySelector('.experience-card');
+          if (firstCard) firstCard.after(card); else grid.prepend(card);
+        };
+
+        const root = document.getElementById('root');
+        if (root) new MutationObserver(addMaterialsStudioCard).observe(root, { childList: true, subtree: true });
+        window.addEventListener('popstate', () => setTimeout(addMaterialsStudioCard, 0));
+        setTimeout(addMaterialsStudioCard, 0);
+      })();
     </script>
   </body>
 </html>
