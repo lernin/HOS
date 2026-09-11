@@ -14,7 +14,7 @@ export type EstateArtChoice={
 }
 
 const catalog:EstateArtChoice[]=[
-  {id:'museum-wave',title:'Under the Wave off Kanagawa (The Great Wave)',artist:'Katsushika Hokusai',date:'ca. 1830–32',museum:'The Met',ratio:1.472,image:'https://collectionapi.metmuseum.org/api/collection/v1/iiif/45434/134438/main-image',source:'https://www.metmuseum.org/art/collection/search/45434'},
+  {id:'museum-wave',title:'Under the Wave off Kanagawa (The Great Wave)',artist:'Katsushika Hokusai',date:'ca. 1830–32',museum:'The Met',ratio:1.472,image:'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Great_Wave_off_Kanagawa.jpg/1280px-Great_Wave_off_Kanagawa.jpg',source:'https://www.metmuseum.org/art/collection/search/45434'},
   {id:'museum-shono',title:'Sudden Shower in Shōno',artist:'Utagawa Hiroshige',date:'ca. 1833–34',museum:'The Met',ratio:1.477,image:'https://collectionapi.metmuseum.org/api/collection/v1/iiif/36967/130851/main-image',source:'https://www.metmuseum.org/art/collection/search/36967'},
   {id:'museum-seine',title:'The Seine at Giverny',artist:'Claude Monet',date:'1897',museum:'National Gallery of Art',ratio:1.239,image:'https://api.nga.gov/iiif/9b536eb8-6b53-42d5-aa3c-5e8b02f0b37a/full/full/0/default.jpg',source:'https://www.nga.gov/artworks/46655-seine-giverny'},
   {id:'museum-garden',title:"The Artist's Garden at Vétheuil",artist:'Claude Monet',date:'1881',museum:'National Gallery of Art',ratio:.808,image:'https://api.nga.gov/iiif/9fc88734-2f9a-4da8-8d46-2b570b201223/full/full/0/default.jpg',source:'https://www.nga.gov/artworks/52189-artists-garden-vetheuil'},
