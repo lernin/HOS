@@ -22,7 +22,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
   function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();disposeArt?.();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
   signal.addEventListener('abort',dispose,{once:true})
   try{
-    progress('Opening the house…');architecture(kit);furnish(kit);disposeArt=decorateArt(kit)
+    progress('Opening the house…');architecture(kit);furnish(kit);disposeArt=decorateArt(scene,kit)
     await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));if(signal.aborted)throw new DOMException('Aborted','AbortError')
     progress('Planting the coast…');landscape(kit);kit.finish();water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
