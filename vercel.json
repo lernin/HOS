@@ -2,11 +2,13 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
   "git": {
-    "deploymentEnabled": false
+    "deploymentEnabled": {
+      "feature/materials-studio-db-catalog-20260911": true
+    }
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
-    { "source": "/materials-studio", "destination": "/materials-studio/app.html" },
+    { "source": "/materials-studio", "destination": "/materials-studio/viewer-db.html" },
     { "source": "/ocean-estate", "destination": "/" },
     { "source": "/waterfall-village", "destination": "/" },
     { "source": "/woodland-walk", "destination": "/" },
