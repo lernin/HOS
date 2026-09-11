@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#111513" />
+<title>Materials Studio · The Lab</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111513}iframe{display:block;width:100%;height:100%;border:0;background:#111513}
+</style>
+</head>
+<body>
+<iframe id="studio" src="/materials-studio/index" title="Materials Studio"></iframe>
+<script>
+(() => {
+  const KEY='materials-studio-favorites-v1';
+  const frame=document.getElementById('studio');
+  const read=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return []}};
+  const write=v=>localStorage.setItem(KEY,JSON.stringify(v));
+  const slugFrom=(href='')=>href.split('/').filter(Boolean).pop()||'';
+
+  function install(){
+    const doc=frame.contentDocument;
+    if(!doc||doc.getElementById('love-material-btn'))return;
+
+    const style=doc.createElement('style');
+    style.textContent=`
+      .material-info{position:relative;padding-right:76px!important}
+      #love-material-btn{position:absolute;top:14px;right:14px;width:48px;height:48px;border-radius:50%;border:1px solid #49514d;background:#202623;color:#f2eee6;font-size:28px;line-height:1;display:grid;place-items:center;box-shadow:0 8px 20px rgba(0,0,0,.22);z-index:12}
+      #love-material-btn.loved{background:#6d3038;border-color:#8f4b54;color:#fff}
+      #loved-materials-btn{flex:0 0 auto;border:1px solid #594148;background:#2b2326;color:#e9c4ca;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800}
+      #loved-materials-btn.has-love{background:#6d3038;border-color:#8f4b54;color:#fff}
+      #love-drawer{position:fixed;inset:0;display:none;align-items:flex-end;background:rgba(6,8,7,.58);z-index:200;backdrop-filter:blur(5px)}
+      #love-drawer.open{display:flex}
+      #love-sheet{width:100%;max-height:72vh;overflow:auto;background:#171b19;border:1px solid #3a423f;border-radius:22px 22px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));box-shadow:0 -18px 50px rgba(0,0,0,.35)}
+      .love-sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}.love-sheet-head h2{margin:0;font:500 28px Georgia,serif}.love-close{width:38px;height:38px;border-radius:50%;border:1px solid #3a423f;background:#222826;color:#fff;font-size:20px}
+      .love-empty{padding:22px 4px;color:#9fa8a1;line-height:1.5}.love-list{display:grid;gap:8px}.love-item{display:flex;align-items:center;gap:11px;width:100%;text-align:left;border:1px solid #39413e;background:#202623;color:#f5f0e7;border-radius:14px;padding:11px}.love-item strong{display:block}.love-item span{display:block;color:#aeb5ae;font-size:11px;margin-top:2px}.love-heart{font-size:21px;color:#e8a8b0}
+    `;
+    doc.head.appendChild(style);
+
+    const info=doc.querySelector('.material-info');
+    const heart=doc.createElement('button');
+    heart.id='love-material-btn';
+    heart.type='button';
+    heart.setAttribute('aria-label','Add this material to favorites');
+    heart.textContent='♡';
+    info?.appendChild(heart);
+
+    const categories=doc.getElementById('categories');
+    const lovedBtn=doc.createElement('button');
+    lovedBtn.id='loved-materials-btn';
+    lovedBtn.type='button';
+    lovedBtn.textContent='♡ Loved';
+    categories?.appendChild(lovedBtn);
+
+    const drawer=doc.createElement('div');
+    drawer.id='love-drawer';
+    drawer.innerHTML='<div id="love-sheet"><div class="love-sheet-head"><h2>Loved materials</h2><button class="love-close" type="button" aria-label="Close">×</button></div><div id="love-list"></div></div>';
+    doc.body.appendChild(drawer);
+
+    const current=()=>{
+      const name=doc.getElementById('materialName')?.textContent?.trim()||'';
+      const source=doc.getElementById('sourceLink')?.href||'';
+      return {id:slugFrom(source)||name,name};
+    };
+    const update=()=>{
+      const item=current();
+      const favs=read();
+      const on=!!item.id&&favs.some(x=>x.id===item.id);
+      heart.textContent=on?'♥':'♡';
+      heart.classList.toggle('loved',on);
+      heart.setAttribute('aria-label',on?'Remove this material from favorites':'Add this material to favorites');
+      lovedBtn.textContent=`♥ Loved · ${favs.length}`;
+      lovedBtn.classList.toggle('has-love',favs.length>0);
+    };
+    const renderDrawer=()=>{
+      const favs=read();
+      const list=doc.getElementById('love-list');
+      if(!favs.length){list.innerHTML='<div class="love-empty">Tap the heart on any material you love. Your favorites stay saved on this device.</div>';return;}
+      list.innerHTML='<div class="love-list">'+favs.map(x=>`<button class="love-item" type="button" data-love-id="${x.id}"><span class="love-heart">♥</span><span><strong>${x.name}</strong><span>${x.id}</span></span></button>`).join('')+'</div>';
+      list.querySelectorAll('.love-item').forEach(btn=>btn.addEventListener('click',()=>{
+        const fav=favs.find(x=>x.id===btn.dataset.loveId);if(!fav)return;
+        const all=[...doc.querySelectorAll('.category')].find(b=>b.dataset.cat==='All');all?.click();
+        setTimeout(()=>{const thumb=[...doc.querySelectorAll('.thumb')].find(t=>t.getAttribute('aria-label')===fav.name);thumb?.click();drawer.classList.remove('open')},80);
+      }));
+    };
+
+    heart.addEventListener('click',()=>{
+      const item=current();if(!item.id)return;
+      let favs=read();
+      const idx=favs.findIndex(x=>x.id===item.id);
+      if(idx>=0)favs.splice(idx,1);else favs.push(item);
+      write(favs);update();
+    });
+    lovedBtn.addEventListener('click',()=>{renderDrawer();drawer.classList.add('open')});
+    drawer.querySelector('.love-close').addEventListener('click',()=>drawer.classList.remove('open'));
+    drawer.addEventListener('click',e=>{if(e.target===drawer)drawer.classList.remove('open')});
+
+    const name=doc.getElementById('materialName');
+    if(name)new MutationObserver(update).observe(name,{childList:true,subtree:true,characterData:true});
+    const catObserver=new MutationObserver(()=>{if(categories&&!categories.contains(lovedBtn))categories.appendChild(lovedBtn);update()});
+    if(categories)catObserver.observe(categories,{childList:true});
+    update();
+  }
+
+  frame.addEventListener('load',install);
+})();
+</script>
+</body>
+</html>
