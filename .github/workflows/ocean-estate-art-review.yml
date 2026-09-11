@@ -24,9 +24,12 @@ jobs:
       - run: node --test tests/ocean-estate.test.mjs tests/waterfall-village.test.mjs
       - name: Verify art catalog surface
         run: |
-          grep -q "50 original curated works" public/materials-studio/art.html
+          grep -q "12 real museum works" public/materials-studio/art.html
+          grep -q "museum-wave" public/materials-studio/art.html
+          grep -q "museum-still-life" public/materials-studio/art.html
+          grep -q "museum-roses" public/materials-studio/art.html
           grep -q "materials-studio-art-favorites-v1" public/materials-studio/art.html
-          grep -q "decorateArt" src/experiences/estate/scene.ts
+          grep -q "decorateArt(scene,kit)" src/experiences/estate/scene.ts
       - run: npm install --no-save --package-lock=false playwright@1.55.0
       - run: npx playwright install --with-deps chromium
       - name: Render estate and verify phone UI
