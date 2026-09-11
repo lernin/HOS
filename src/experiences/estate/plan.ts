@@ -6,7 +6,7 @@ export const FLOOR = 6
 export const EYE = 1.65
 export const spawn = { x: 1, z: 29, yaw: 0 }
 export const floors: Floor[] = [
-  { name: 'Great room', x1: -11, x2: 13, z1: -12, z2: 8, material: 'limestone', roof: 5.5 },
+  { name: 'Great room', x1: -11, x2: 13, z1: -12, z2: 8, material: 'greatRoomStone', roof: 5.5 },
   { name: 'Grand foyer', x1: -6, x2: 8, z1: 8, z2: 24, material: 'limestone', roof: 4.5 },
   { name: 'Ocean terrace', x1: -23, x2: 27, z1: -24, z2: -12, material: 'travertine' },
   { name: 'Pool walk', x1: -15, x2: -11, z1: -36, z2: -24, material: 'travertine' },
