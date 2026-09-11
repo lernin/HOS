@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { random, pebbleGeometry } from '../village/kit'
 export { random }
 export const v=(x:number,y:number,z:number)=>new T.Vector3(x,y,z)
-const colors:Record<string,string>={limestone:'#d8cbb7',greatRoomStone:'#f0e6d3',travertine:'#c9b69a',marble:'#e7e2d5',plaster:'#dfd9ca',oak:'#a58a63',oakFloor:'#a99a7e',walnut:'#644b36',bronze:'#5b4b37',basalt:'#3a4242',concrete:'#959488',linen:'#e5ddca',sage:'#8c9b86',clay:'#b19b86',indigo:'#465762',rug:'#b6a991',glass:'#c7e0dc',leaf:'#517352',leafLight:'#80935a',leafDark:'#314e43',bark:'#777365',soil:'#4c5140',white:'#f0ede3',black:'#222a29',gold:'#b29863',glow:'#ffe2af',ceramic:'#bba587',roof:'#72786c',waterTile:'#377e7f',pink:'#c79781'}
+const colors:Record<string,string>={limestone:'#d8cbb7',greatRoomStone:'#f0e6d3',grasscloth:'#e8dfcf',travertine:'#c9b69a',marble:'#e7e2d5',plaster:'#dfd9ca',oak:'#a58a63',oakFloor:'#a99a7e',walnut:'#644b36',bronze:'#5b4b37',basalt:'#3a4242',concrete:'#959488',linen:'#e5ddca',sage:'#8c9b86',clay:'#b19b86',indigo:'#465762',rug:'#b6a991',glass:'#c7e0dc',leaf:'#517352',leafLight:'#80935a',leafDark:'#314e43',bark:'#777365',soil:'#4c5140',white:'#f0ede3',black:'#222a29',gold:'#b29863',glow:'#ffe2af',ceramic:'#bba587',roof:'#72786c',waterTile:'#377e7f',pink:'#c79781'}
 const noiseGLSL=`
 float estateHash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float estateNoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(estateHash(i),estateHash(i+vec3(1,0,0)),f.x),mix(estateHash(i+vec3(0,1,0)),estateHash(i+vec3(1,1,0)),f.x),f.y),mix(mix(estateHash(i+vec3(0,0,1)),estateHash(i+vec3(1,0,1)),f.x),mix(estateHash(i+vec3(0,1,1)),estateHash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -18,7 +18,7 @@ export function createEstateKit(scene:T.Scene){
   for(const texture of [greatRoomStoneDiff,greatRoomStoneRough]){texture.wrapS=T.RepeatWrapping;texture.wrapT=T.RepeatWrapping;texture.anisotropy=4}
   function material(name:string){if(mats.has(name))return mats.get(name)!
     const metal=['bronze','gold','black'].includes(name),fabric=['linen','sage','clay','indigo','rug'].includes(name),wood=['oak','oakFloor','walnut','bark'].includes(name)
-    const m=new T.MeshStandardMaterial({color:colors[name]||name,roughness:metal?.28:fabric?.94:wood?.63:name==='marble'?.4:name==='greatRoomStone'?.62:.74,metalness:metal?.8:0})
+    const m=new T.MeshStandardMaterial({color:colors[name]||name,roughness:metal?.28:fabric?.94:wood?.63:name==='grasscloth'?.92:name==='marble'?.4:name==='greatRoomStone'?.62:.74,metalness:metal?.8:0})
     if(name==='glass'){m.transparent=true;m.opacity=.16;m.roughness=.13;m.metalness=.2;m.depthWrite=false}
     if(name==='glow'){m.emissive.set('#ffca79');m.emissiveIntensity=2;m.roughness=.55}
     if(name!=='glass'&&name!=='glow'){
@@ -32,13 +32,14 @@ export function createEstateKit(scene:T.Scene){
           s.fragmentShader='uniform sampler2D greatRoomStoneDiff;\nuniform sampler2D greatRoomStoneRough;\n'+s.fragmentShader
         }
         const pattern=name==='greatRoomStone'?`vec2 stoneUv=vec2(p.x,-p.z)/4.5;vec3 stoneTex=texture2D(greatRoomStoneDiff,stoneUv).rgb;float stoneRough=texture2D(greatRoomStoneRough,stoneUv).r;float detail=(dot(stoneTex,vec3(.299,.587,.114))-.52)*.22;`
+          :name==='grasscloth'?`float warp=sin(p.y*205.+estateNoise(p*2.2)*2.5)*.055;float weft=sin((p.x+p.z)*138.)*.035;float band=sin(p.y*38.+estateNoise(p*1.25)*5.)*.035;float detail=warp+weft+band+(estateNoise(p*24.)-.5)*.07;`
           :name==='oakFloor'?`vec2 board=vec2(p.x/.24,(p.z+estateHash(vec3(floor(p.x/.24),0.,0.))*3.)/3.);vec2 edge=min(fract(board),1.-fract(board));vec2 aa=max(fwidth(board),vec2(.001));float joint=1.-min(smoothstep(0.,aa.x+.006,edge.x),smoothstep(0.,aa.y+.002,edge.y));float detail=(estateHash(vec3(floor(board),2.))-.5)*.45+sin(p.x*180.+estateNoise(p*vec3(2.,.2,.13))*14.)*.045-joint*.8;`
           :wood?`float grain=sin(p.${name==='oak'?'x':'z'}*135.+estateNoise(p*vec3(.5,1.8,.5))*18.);float detail=grain*.09+estateNoise(p*vec3(9.,.18,9.))*.25-.125;`
           :fabric?'float detail=sin(p.x*240.)*sin(p.z*240.)*.22+estateNoise(p*85.)-.5;'
           :name==='marble'?'float vein=abs(sin(p.x*.65+p.z*.8+p.y*.72+estateNoise(p*.8)*3.5+estateNoise(p*2.1)*.55));float detail=-(1.-smoothstep(.02,.13,vein))*.46+estateNoise(p*1.3)*.13-.03;'
           :name==='travertine'?'float detail=sin((p.y+p.z*.035)*22.+estateNoise(p*1.8)*9.)*.13+estateNoise(p*3.)*.6-.3;'
           :'float detail=estateNoise(p*.7)*.65+estateNoise(p*12.)*.2-.425;'
-        s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',name==='greatRoomStone'?`#include <color_fragment>\nvec3 p=estateP;${pattern}\ndiffuseColor.rgb*=stoneTex*1.12;`:`#include <color_fragment>\nvec3 p=estateP;${pattern}\ndiffuseColor.rgb*=1.+detail*${name==='marble'?'.65':name==='oakFloor'?'.4':wood?'.22':fabric?'.10':'.20'};`)
+        s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',name==='greatRoomStone'?`#include <color_fragment>\nvec3 p=estateP;${pattern}\ndiffuseColor.rgb*=stoneTex*1.12;`:`#include <color_fragment>\nvec3 p=estateP;${pattern}\ndiffuseColor.rgb*=1.+detail*${name==='marble'?'.65':name==='grasscloth'?'.34':name==='oakFloor'?'.4':wood?'.22':fabric?'.10':'.20'};`)
         s.fragmentShader=s.fragmentShader.replace('#include <roughnessmap_fragment>',name==='greatRoomStone'?'#include <roughnessmap_fragment>\nroughnessFactor=clamp(mix(.48,.82,stoneRough),.38,.9);':'#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor+detail*.10,.08,1.);')
         s.fragmentShader=s.fragmentShader.replace('#include <normal_fragment_maps>','#include <normal_fragment_maps>\nnormal=normalize(normal+vec3(dFdx(detail),dFdy(detail),0.)*.035);')
       };m.customProgramCacheKey=()=>`estate-${name}`
@@ -54,6 +55,15 @@ export function createEstateKit(scene:T.Scene){
   function ellipsoid(x:number,y:number,z:number,sx:number,sy:number,sz:number,mat:string,parent:T.Group=root,detail=12){const m=mesh(new T.SphereGeometry(1,detail,Math.max(5,detail/2)),mat,x,y,z,parent);m.scale.set(sx,sy,sz);return m}
   function lathe(points:[number,number][],mat:string,x:number,y:number,z:number,parent:T.Group=root){return mesh(new T.LatheGeometry(points.map(([a,b])=>new T.Vector2(a,b)),24),mat,x,y,z,parent)}
   function group(x:number,y:number,z:number,angle=0){const g=new T.Group();g.position.set(x,y,z);g.rotation.y=angle;root.add(g);return g}
+  // Grand foyer finish layer only. Thin panels sit on the foyer side of the
+  // existing structural walls, preserving openings, collision and Great room finishes.
+  const foyerY=6+2.23,foyerH=4.42,t=.026
+  for(const [x,z,w,d] of [
+    [-3.6,23.80,4.8,t],[5.6,23.80,4.8,t],
+    [-5.80,11.5,t,7],[-5.80,22,t,4],
+    [7.80,9,t,2],[7.80,16.5,t,5],[7.80,23.5,t,1],
+    [-5,8.20,2,t],[6.5,8.20,3,t],
+  ] as [number,number,number,number][])box(x,foyerY,z,w,foyerH,d,'grasscloth')
   function finish(){root.updateMatrixWorld(true);const batches=new Map<string,{mat:T.Material,parts:T.BufferGeometry[]}>()
     root.traverse(o=>{if(!(o instanceof T.Mesh))return;const mat=o.material as T.Material
       let g=o.geometry.clone().applyMatrix4(o.matrixWorld);if(g.index){const old=g;g=g.toNonIndexed();old.dispose()}
