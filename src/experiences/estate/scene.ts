@@ -3,6 +3,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { createEstateKit } from './kit'
 import { architecture, landscape, waters, atmosphere, contactShadows, type LightPreset } from './environment'
 import { furnish } from './furniture'
+import { decorateArt } from './art'
 import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, spawn, type Point } from './plan'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;fast:boolean}
@@ -15,13 +16,13 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
   const hemi=new T.HemisphereLight('#c1d7eb','#8f7052',.75);scene.add(hemi)
   const sun=new T.DirectionalLight('#ffe0ad',3.1);sun.position.set(-45,38,-60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-60,right:60,top:60,bottom:-60,near:1,far:180});sun.shadow.bias=-.00015;sun.shadow.normalBias=.045;scene.add(sun,sun.target)
   const fills=Array.from({length:3},()=>{const l=new T.PointLight('#ffd395',12,18,2);scene.add(l);return l})
-  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
+  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,disposeArt:(()=>void)|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
   const raycaster=new T.Raycaster(),plane=new T.Plane(new T.Vector3(0,1,0),-FLOOR),hit=new T.Vector3()
   const marker=new T.Mesh(new T.RingGeometry(.17,.24,36),new T.MeshBasicMaterial({color:'#e7d3a6',side:T.DoubleSide,transparent:true,opacity:.85,depthWrite:false}));marker.rotation.x=-Math.PI/2;marker.visible=false;scene.add(marker)
-  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
+  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();disposeArt?.();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
   signal.addEventListener('abort',dispose,{once:true})
   try{
-    progress('Opening the house…');architecture(kit);furnish(kit)
+    progress('Opening the house…');architecture(kit);furnish(kit);disposeArt=decorateArt(kit)
     await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));if(signal.aborted)throw new DOMException('Aborted','AbortError')
     progress('Planting the coast…');landscape(kit);kit.finish();water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
@@ -33,8 +34,6 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     function go(point:Point,name='Your destination'){const route=navigator.path(position,point);if(!route)return false;path=route;destination=name;marker.position.set(point.x,(floorAt(point)??FLOOR)+.03,point.z);marker.visible=true;dirty=true;return true}
     function reset(){stop();position={x:spawn.x,z:spawn.z};input.yaw=spawn.yaw;input.pitch=-.025;yaw=input.yaw;pitch=input.pitch;camera.position.set(position.x,(floorAt(position)??FLOOR)+EYE,position.z);dirty=true}
     function pick(clientX:number,clientY:number){if(input.paused)return false;const r=canvas.getBoundingClientRect();raycaster.setFromCamera(new T.Vector2((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1),camera)
-      // Only visible floor targets; a wall or furniture face cannot act as a
-      // shortcut through the building. Arrival has its own lower surface.
       if(!raycaster.ray.intersectPlane(plane,hit))return false
       let p={x:hit.x,z:hit.z};const y=floorAt(p);if(y===null)return false
       if(y!==FLOOR){if(!raycaster.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-y),hit))return false;p={x:hit.x,z:hit.z}}
