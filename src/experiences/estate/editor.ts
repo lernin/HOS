@@ -9,7 +9,7 @@ export type EditorMaterial = { id:string; label:string; slug:string; surface:Edi
 const ph=(slug:string,map='diff')=>`https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/${slug}/${slug}_${map}_1k.jpg`
 
 export const estateEditorMaterials:EditorMaterial[]=[
-  {id:'marble01',label:'Cream Marble 01',slug:'marble_01',surface:'floor',use:'Calm cream stone · main rooms',meters:1.5},
+  {id:'marble01',label:'Cream Marble 01',slug:'marble_01',surface:'floor',use:'Large-format cream stone · staggered and naturally varied',meters:1.5},
   {id:'marbleTiles',label:'Beige Marble Tiles',slug:'marble_tiles',surface:'floor',use:'More visible tile rhythm',meters:1.35},
   {id:'oakPlanks',label:'Warm Oak Planks',slug:'oak_wood_planks',surface:'floor',use:'Warm private-room timber',meters:1.2},
   {id:'whitePlaster',label:'Soft White Plaster',slug:'white_plaster_02',surface:'walls',use:'Quiet matte architectural wall',meters:1.8},
@@ -52,8 +52,54 @@ export function createEstateEditor(scene:T.Scene,renderer:T.WebGLRenderer,camera
     if(!t){t=loader.load(url,()=>renderer.render(scene,camera));t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());if(color)t.colorSpace=T.SRGBColorSpace;textures.set(url,t)}
     return t
   }
+  function luxuryStoneMaterial(def:EditorMaterial){
+    const diff=texture(ph(def.slug),true),rough=texture(ph(def.slug,'rough')),normalTex=texture(ph(def.slug,'nor_gl'))
+    const m=new T.MeshStandardMaterial({color:'#fffaf0',roughness:.6,metalness:0})
+    m.onBeforeCompile=s=>{
+      s.uniforms.oeDiff={value:diff};s.uniforms.oeRough={value:rough};s.uniforms.oeNormal={value:normalTex}
+      s.vertexShader='varying vec3 oeWorld;\n'+s.vertexShader
+      s.vertexShader=s.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\noeWorld=(modelMatrix*vec4(transformed,1.)).xyz;')
+      s.fragmentShader=`varying vec3 oeWorld;\nuniform sampler2D oeDiff;\nuniform sampler2D oeRough;\nuniform sampler2D oeNormal;\nfloat oeHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}\n`+s.fragmentShader
+      s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
+        vec2 oeQ=oeWorld.xz;
+        const float oeTileW=1.20;
+        const float oeTileH=.60;
+        float oeRow=floor((oeQ.y+37.13)/oeTileH);
+        float oeStagger=mod(oeRow,2.)*.5;
+        vec2 oeTC=vec2((oeQ.x+53.7)/oeTileW+oeStagger,(oeQ.y+37.13)/oeTileH);
+        vec2 oeCell=floor(oeTC);
+        vec2 oeF=fract(oeTC);
+        float oeR=oeHash(oeCell);
+        vec2 oeU=oeF;
+        if(oeR<.25) oeU=oeF;
+        else if(oeR<.5) oeU=vec2(oeF.y,1.-oeF.x);
+        else if(oeR<.75) oeU=1.-oeF;
+        else oeU=vec2(1.-oeF.y,oeF.x);
+        vec2 oeOffset=(vec2(oeHash(oeCell+vec2(13.2,7.1)),oeHash(oeCell+vec2(3.7,19.4)))-.5)*.16;
+        vec2 oeStoneUv=clamp(vec2(.28)+oeU*.44+oeOffset,.04,.96);
+        vec3 oeStone=texture2D(oeDiff,oeStoneUv).rgb;
+        float oeTileTone=.94+oeHash(oeCell+vec2(41.3,2.7))*.11;
+        float oeMacro=sin(oeQ.x*.19+oeQ.y*.11)*.012+sin(oeQ.x*.071-oeQ.y*.083)*.009;
+        float oeEdge=min(min(oeF.x,1.-oeF.x)*oeTileW,min(oeF.y,1.-oeF.y)*oeTileH);
+        float oeGrout=smoothstep(.006,.014,oeEdge);
+        vec3 oeGroutColor=vec3(.755,.725,.665);
+        diffuseColor.rgb=mix(oeGroutColor,oeStone*(oeTileTone+oeMacro)*1.055,oeGrout);
+      `)
+      s.fragmentShader=s.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
+        float oeSurfaceR=texture2D(oeRough,oeStoneUv).r;
+        roughnessFactor=clamp(mix(.44,.76,oeSurfaceR)+(oeHash(oeCell+vec2(9.1,27.2))-.5)*.055,.40,.82);
+      `)
+      s.fragmentShader=s.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+        vec3 oeN=texture2D(oeNormal,oeStoneUv).xyz*2.-1.;
+        normal=normalize(normal+vec3(oeN.x,oeN.y,0.)*.035);
+      `)
+    }
+    m.customProgramCacheKey=()=>`oe-luxury-stone-${def.id}-v2`
+    materials.add(m);return m
+  }
   function materialFor(id:string,repeatX:number,repeatY:number){
     const def=estateEditorMaterials.find(m=>m.id===id);if(!def)return null
+    if(def.surface==='floor'&&def.id==='marble01')return luxuryStoneMaterial(def)
     const map=texture(ph(def.slug),true).clone(),rough=texture(ph(def.slug,'rough')).clone(),normal=texture(ph(def.slug,'nor_gl')).clone()
     for(const t of [map,rough,normal]){t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(Math.max(.5,repeatX/def.meters),Math.max(.5,repeatY/def.meters));t.needsUpdate=true}
     map.colorSpace=T.SRGBColorSpace
