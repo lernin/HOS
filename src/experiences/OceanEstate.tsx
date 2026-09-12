@@ -4,6 +4,7 @@ import { estateAudio } from './estate/audio'
 import { destinations, spawn } from './estate/plan'
 import type { LightPreset } from './estate/environment'
 import { estateEditorMaterials, estateEditorPreview, type EditableRoomId, type EditableSurface } from './estate/editor'
+import { loadEstateMaterialCatalog } from './estate/catalog'
 import './estate/estate.css'
 type Prefs={speed:number;sensitivity:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number}
 const defaults:Prefs={speed:2.4,sensitivity:1,quality:1,lighting:'golden',mode:'explore',volume:.35}
@@ -19,10 +20,13 @@ export function OceanEstate({onBack}:{onBack:()=>void}){
   const [prefs,setPrefs]=useState(readPrefs),[ready,setReady]=useState(false),[progress,setProgress]=useState('Opening Ocean Estate…'),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[started,setStarted]=useState(false),[paused,setPaused]=useState(false),[sound,setSound]=useState(false),[places,setPlaces]=useState(false),[notice,setNotice]=useState(''),[help,setHelp]=useState(true)
   const [state,setState]=useState<EstateState>({location:'Arrival steps',position:spawn,moving:false,destination:'',fps:0,touring:false})
   const [editMode,setEditMode]=useState(false),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
+  const [materialCatalog,setMaterialCatalog]=useState(estateEditorMaterials)
   const [markers,setMarkers]=useState<Record<EditableSurface,{x:number;y:number;visible:boolean}>>({floor:{x:0,y:0,visible:false},walls:{x:0,y:0,visible:false}})
   const stop=()=>{input.current.x=0;input.current.z=0;input.current.fast=false;keys.current.clear();pointer.current=null;engine.current?.stop()}
   const activeRoom:EditableRoomId|null=state.location==='Grand foyer'?'foyer':state.location==='Great room'?'great-room':null
-  useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
+  useEffect(()=>{const controller=new AbortController();void loadEstateMaterialCatalog(controller.signal).then(setMaterialCatalog).catch(()=>{});return()=>controller.abort()},[])
+  useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
+  useEffect(()=>{const e=engine.current;if(!e)return;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface])},[materialCatalog])
   useEffect(()=>()=>audio.current?.dispose(),[])
   useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,quality:prefs.quality,lighting:prefs.lighting});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
   useEffect(()=>{const pause=()=>{stop();input.current.paused=true;audio.current?.pause();setPaused(true)};const visibility=()=>{if(document.hidden)pause()}
@@ -65,7 +69,7 @@ export function OceanEstate({onBack}:{onBack:()=>void}){
     </>}
     {picker&&<section className="oe-material-picker" aria-label={`${roomName(picker.room)} ${picker.surface} materials`}>
       <header><div><span>{roomName(picker.room)}</span><h2>{picker.surface==='floor'?'Floor material':'Main wall material'}</h2></div><button onClick={()=>finishPicker(false)} aria-label="Undo and close">×</button></header>
-      <div className="oe-material-options">{estateEditorMaterials.filter(m=>m.surface===picker.surface).map(m=><button key={m.id} className={picker.current===m.id?'selected':''} onClick={()=>previewMaterial(m.id)}><i style={{backgroundImage:`url(${estateEditorPreview(m.id)})`}}/><span><strong>{m.label}</strong><small>{m.use}</small></span>{picker.current===m.id&&<b>✓</b>}</button>)}</div>
+      <div className="oe-material-options">{materialCatalog.map(m=><button key={m.id} className={picker.current===m.id?'selected':''} onClick={()=>previewMaterial(m.id)}><i style={{backgroundImage:`url(${estateEditorPreview(m)})`}}/><span><strong>{m.label}</strong><small>{m.category?`${m.category} · ${m.use}`:m.use}</small></span>{picker.current===m.id&&<b>✓</b>}</button>)}</div>
       <div className="oe-picker-actions"><button onClick={()=>previewMaterial(null)}>Original finish</button><button onClick={()=>finishPicker(false)}>Undo</button><button className="keep" onClick={()=>finishPicker(true)}>Keep this finish</button></div>
     </section>}
     {notice&&<div className="oe-notice" role="status">{notice}</div>}
