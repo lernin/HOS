@@ -120,7 +120,7 @@ export function createEstateEditor(scene:T.Scene,renderer:T.WebGLRenderer,camera
   function select(hit:EditorSurfaceHit|null){
     for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[]){
       const selected=hit?.room===room&&hit.surface===surface
-      for(const mesh of targets[room][surface]){const m=mesh.material as T.MeshBasicMaterial;m.opacity=selected?.08:0;m.colorWrite=!!selected;m.needsUpdate=true}
+      for(const mesh of targets[room][surface]){const m=mesh.material as T.MeshBasicMaterial;m.opacity=0;m.colorWrite=false;m.needsUpdate=true}
       for(const outline of outlines[room][surface])outline.visible=!!selected
     }
     renderer.render(scene,camera)
