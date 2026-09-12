@@ -6,7 +6,7 @@ const canvas=document.querySelector('canvas')!
 const engine=await createEstate(canvas,input,new AbortController().signal,state=>{document.querySelector('output')!.textContent=JSON.stringify({state,diagnostics:engine?.diagnostics()})},()=>{})
 const views:Record<string,number[][]>={
  arrival:[[1,7.1,29],[1,8,0]],great:[[7,7.65,4],[-2,7.6,-5]],ocean:[[3,7.65,-19],[0,6.5,-70]],courtyard:[[-8,7.65,25],[-17,8.2,20]],kitchen:[[-12.5,7.65,12],[-18,7.1,5]],suite:[[37,7.65,.2],[30,7.3,-10]],bath:[[32,7.65,4],[37,7.1,7]],exterior:[[8,10.5,-43],[2,8,0]],aerial:[[76,100,84],[0,3,3]],
- foyerFloor:[[1,9.2,20],[1,6.02,16]],foyerWall:[[1,8.2,17.3],[-5.8,8.2,17.3]],artHero:[[0,8.72,0],[-10.5,8.72,0]],
+ foyerFloor:[[1,9.2,20],[1,6.02,16]],foyerWall:[[1,8.2,12],[-5.8,8.2,12]],artHero:[[0,8.72,0],[-10.5,8.72,0]],
 }
 function center(){const r=canvas.getBoundingClientRect();return {x:r.left+r.width/2,y:r.top+r.height/2}}
 window.estateQA={
