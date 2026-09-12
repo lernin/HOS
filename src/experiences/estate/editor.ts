@@ -61,6 +61,7 @@ export function createEstateEditor(scene:T.Scene,renderer:T.WebGLRenderer,camera
   const definitions=new Map<string,EditorMaterial>(estateEditorMaterials.map(m=>[m.id,m]))
   const surfaces:Record<EditableRoomId,Record<EditableSurface,T.Mesh[]>>={foyer:{floor:[],walls:[]},'great-room':{floor:[],walls:[]}}
   const targets:Record<EditableRoomId,Record<EditableSurface,T.Mesh[]>>={foyer:{floor:[],walls:[]},'great-room':{floor:[],walls:[]}}
+  const outlines:Record<EditableRoomId,Record<EditableSurface,T.LineSegments[]>>={foyer:{floor:[],walls:[]},'great-room':{floor:[],walls:[]}}
   const pickables:T.Mesh[]=[]
   const raycaster=new T.Raycaster()
   function texture(url:string,color=false){
@@ -97,8 +98,11 @@ export function createEstateEditor(scene:T.Scene,renderer:T.WebGLRenderer,camera
     geometries.add(g)
     const base=new T.MeshStandardMaterial({transparent:true,opacity:0,depthWrite:false});materials.add(base)
     const finish=new T.Mesh(g,base);finish.position.set(x,y,z);finish.visible=false;finish.receiveShadow=true;finish.renderOrder=3;finish.userData.estateEditorSurface=true;scene.add(finish);surfaces[room][surface].push(finish)
-    const hitMat=new T.MeshBasicMaterial({color:'#f0cf8d',transparent:true,opacity:0,depthWrite:false,colorWrite:false,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});materials.add(hitMat)
+    const hitMat=new T.MeshBasicMaterial({color:'#ff4d3d',transparent:true,opacity:0,depthWrite:false,colorWrite:false,side:T.DoubleSide,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});materials.add(hitMat)
     const target=new T.Mesh(g,hitMat);target.position.set(x,y,z);target.renderOrder=8;target.userData.estateEditorSurface=true;target.userData.estateEditorHit={room,surface} satisfies EditorSurfaceHit;scene.add(target);targets[room][surface].push(target);pickables.push(target)
+    const edgeGeometry=new T.EdgesGeometry(g);geometries.add(edgeGeometry)
+    const edgeMaterial=new T.LineBasicMaterial({color:'#ff3b30',transparent:true,opacity:.95,depthTest:false});materials.add(edgeMaterial)
+    const outline=new T.LineSegments(edgeGeometry,edgeMaterial);outline.position.set(x,y,z);outline.visible=false;outline.renderOrder=10;scene.add(outline);outlines[room][surface].push(outline)
   }
   for(const room of ['foyer','great-room'] as EditableRoomId[]){
     const f=floorRects[room];addMesh(room,'floor',new T.BoxGeometry(f.w,.025,f.d),f.x,FLOOR+.018,f.z)
@@ -114,9 +118,10 @@ export function createEstateEditor(scene:T.Scene,renderer:T.WebGLRenderer,camera
     renderer.render(scene,camera)
   }
   function select(hit:EditorSurfaceHit|null){
-    for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])for(const mesh of targets[room][surface]){
-      const m=mesh.material as T.MeshBasicMaterial,selected=hit?.room===room&&hit.surface===surface
-      m.opacity=selected?.18:0;m.colorWrite=!!selected;m.needsUpdate=true
+    for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[]){
+      const selected=hit?.room===room&&hit.surface===surface
+      for(const mesh of targets[room][surface]){const m=mesh.material as T.MeshBasicMaterial;m.opacity=selected?.08:0;m.colorWrite=!!selected;m.needsUpdate=true}
+      for(const outline of outlines[room][surface])outline.visible=!!selected
     }
     renderer.render(scene,camera)
   }
@@ -132,5 +137,5 @@ export function createEstateEditor(scene:T.Scene,renderer:T.WebGLRenderer,camera
     const p=world.clone().project(camera),r=canvas.getBoundingClientRect(),visible=p.z>-1&&p.z<1&&p.x>-1.05&&p.x<1.05&&p.y>-1.05&&p.y<1.05
     return {x:r.left+(p.x+1)*r.width/2,y:r.top+(1-p.y)*r.height/2,visible}
   }
-  return {setMaterial,select,pick,project,registerMaterials(items:EditorMaterial[]){for(const item of items)definitions.set(item.id,item)},dispose(){for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[]){for(const m of surfaces[room][surface])scene.remove(m);for(const m of targets[room][surface])scene.remove(m)}textures.forEach(t=>t.dispose());materials.forEach(m=>{if(m instanceof T.MeshStandardMaterial){m.map?.dispose();m.roughnessMap?.dispose();m.normalMap?.dispose()}m.dispose()});geometries.forEach(g=>g.dispose())}}
+  return {setMaterial,select,pick,project,registerMaterials(items:EditorMaterial[]){for(const item of items)definitions.set(item.id,item)},dispose(){for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[]){for(const m of surfaces[room][surface])scene.remove(m);for(const m of targets[room][surface])scene.remove(m);for(const l of outlines[room][surface])scene.remove(l)}textures.forEach(t=>t.dispose());materials.forEach(m=>{if(m instanceof T.MeshStandardMaterial){m.map?.dispose();m.roughnessMap?.dispose();m.normalMap?.dispose()}m.dispose()});geometries.forEach(g=>g.dispose())}}
 }
