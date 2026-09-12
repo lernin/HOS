@@ -6,7 +6,7 @@ import { furnish } from './furniture'
 import { decorateArt } from './art'
 import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, spawn, type Point } from './plan'
-import { createEstateEditor, type EditableRoomId, type EditableSurface } from './editor'
+import { createEstateEditor, type EditableRoomId, type EditableSurface, type EditorMaterial } from './editor'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;fast:boolean}
 export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean}
 export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,signal:AbortSignal,report:(s:EstateState)=>void,progress:(s:string)=>void){
@@ -71,6 +71,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     }
     renderer.render(scene,camera);frame=requestAnimationFrame(tick)
     return {dispose,stop,reset,pick,go:(point:Point,name?:string)=>{tour=false;return go(point,name)},tour(){stop();tour=true;tourIndex=1;dwell=0},getPosition:()=>({...position}),diagnostics:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures}),inspect(view:{position:T.Vector3;target:T.Vector3}|null){inspectView=view;dirty=true},advance(dx:number,dz:number){position=moveSafely(position,dx,dz);dirty=true;return {...position}},walkable,
+      registerRoomMaterials(items:EditorMaterial[]){editor?.registerMaterials(items)},
       setRoomMaterial(room:EditableRoomId,surface:EditableSurface,id:string|null){editor?.setMaterial(room,surface,id);dirty=true},
       setEditSelection(room:EditableRoomId|null,surface:EditableSurface|null){editor?.select(room&&surface?{room,surface}:null);dirty=true},
       pickEditSurface(clientX:number,clientY:number){return editor?.pick(clientX,clientY)??null},
