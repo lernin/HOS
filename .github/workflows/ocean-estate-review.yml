@@ -1,7 +1,7 @@
 name: Ocean Estate review
 on:
   push:
-    branches: [feature/ocean-estate-20260911]
+    branches: [feature/ocean-estate-20260911, fix/ocean-estate-wall-floor-editor-20260912]
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx
