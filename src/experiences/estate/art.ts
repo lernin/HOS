@@ -13,6 +13,21 @@ export type EstateArtChoice={
   ratio:number
 }
 
+export type EstateArtDisplay={
+  art:EstateArtChoice
+  mesh:T.Mesh
+  center:T.Vector3
+  normal:T.Vector3
+  right:T.Vector3
+  width:number
+  height:number
+}
+
+export type EstateArtInstallation={
+  displays:EstateArtDisplay[]
+  dispose:()=>void
+}
+
 const catalog:EstateArtChoice[]=[
   {id:'museum-wave',title:'Under the Wave off Kanagawa (The Great Wave)',artist:'Katsushika Hokusai',date:'ca. 1830–32',museum:'The Met',ratio:1.472,image:'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Great_Wave_off_Kanagawa.jpg/1280px-Great_Wave_off_Kanagawa.jpg',source:'https://www.metmuseum.org/art/collection/search/45434'},
   {id:'museum-shono',title:'Sudden Shower in Shōno',artist:'Utagawa Hiroshige',date:'ca. 1833–34',museum:'The Met',ratio:1.477,image:'https://collectionapi.metmuseum.org/api/collection/v1/iiif/36967/130851/main-image',source:'https://www.metmuseum.org/art/collection/search/36967'},
@@ -67,11 +82,11 @@ function fit(ratio:number,maxW:number,maxH:number){
 
 type Placement={x:number;z:number;y:number;angle:number;maxW:number;maxH:number}
 
-export function decorateArt(scene:T.Scene,k:EstateKit){
+export function decorateArt(scene:T.Scene,k:EstateKit):EstateArtInstallation{
   removeLegacySculptures(k)
   const collection=new T.Group();collection.name='Ocean Estate museum art';scene.add(collection)
   const loader=new T.TextureLoader();loader.setCrossOrigin('anonymous')
-  const geometries:T.BufferGeometry[]=[],materials:T.Material[]=[],textures:T.Texture[]=[],lights:T.Light[]=[]
+  const geometries:T.BufferGeometry[]=[],materials:T.Material[]=[],textures:T.Texture[]=[],lights:T.Light[]=[],displays:EstateArtDisplay[]=[]
 
   // These three placements intentionally mirror the approved art-direction preview:
   // hero work above the great-room hearth, still life at the kitchen/dining threshold,
@@ -97,7 +112,12 @@ export function decorateArt(scene:T.Scene,k:EstateKit){
     const texture=loader.load(art.image,loaded=>{loaded.colorSpace=T.SRGBColorSpace;loaded.anisotropy=4;loaded.needsUpdate=true},undefined,()=>console.warn(`Ocean Estate art image failed: ${art.title}`))
     texture.colorSpace=T.SRGBColorSpace;textures.push(texture)
     const artGeometry=new T.PlaneGeometry(w,h),artMaterial=new T.MeshStandardMaterial({map:texture,roughness:.76,metalness:0,side:T.DoubleSide})
-    const artMesh=new T.Mesh(artGeometry,artMaterial);artMesh.position.z=.054;artMesh.name=`${art.title} — ${art.artist}`;g.add(artMesh);geometries.push(artGeometry);materials.push(artMaterial)
+    const artMesh=new T.Mesh(artGeometry,artMaterial);artMesh.position.z=.054;artMesh.name=`${art.title} — ${art.artist}`;artMesh.userData.estateArtId=art.id;g.add(artMesh);geometries.push(artGeometry);materials.push(artMaterial)
+
+    const normal=new T.Vector3(Math.sin(p.angle),0,Math.cos(p.angle)).normalize()
+    const right=new T.Vector3(Math.cos(p.angle),0,-Math.sin(p.angle)).normalize()
+    const center=new T.Vector3(p.x,p.y,p.z).addScaledVector(normal,.054)
+    displays.push({art,mesh:artMesh,center,normal,right,width:w,height:h})
 
     // Picture light is deliberately proportional to the work instead of looking like a tiny task lamp.
     // A wide low-emission bar plus three heavily feathered spots creates a broad gallery wash with
@@ -115,12 +135,12 @@ export function decorateArt(scene:T.Scene,k:EstateKit){
     }
   })
 
-  return ()=>{
+  return {displays,dispose:()=>{
     scene.remove(collection)
     lights.forEach(l=>l.dispose?.())
     textures.forEach(t=>t.dispose())
     materials.forEach(m=>m.dispose())
     geometries.forEach(g=>g.dispose())
     collection.clear()
-  }
+  }}
 }
