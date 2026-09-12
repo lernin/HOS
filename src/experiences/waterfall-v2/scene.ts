@@ -1,5 +1,5 @@
 import * as T from 'three'
-import { WORLD_HALF, bridgeAt, bridgeHeight, canStand, conceptById, floorHeight, getBridges, getPads, mainLoop, riverCenter, riverWidth, spawnFor, terrainHeight, waterHeight, zoneName, type ConceptId, type FlatPoint, type Point } from './world'
+import { WORLD_HALF, bridgeHeight, canStand, conceptById, floorHeight, getBridges, getPads, mainLoop, riverCenter, spawnFor, terrainHeight, waterHeight, zoneName, type ConceptId, type FlatPoint, type Point } from './world'
 
 export type VillageV2Input = { x: number; z: number; yaw: number; pitch: number; paused: boolean }
 export type VillageV2State = { position: Point; zone: string; fps: number }
