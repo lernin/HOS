@@ -24,7 +24,7 @@ export function riverCenter(id: ConceptId, z: number) {
 
 export function riverWidth(id: ConceptId, z: number) {
   const base = id === 'gorge' ? 6.2 : id === 'terraces' ? 7.6 : 7.1
-  return base + 1.2 * Math.sin(z * .045 + (id === 'terraces' ? .8 : .1)) ** 2 + 2.3 * Math.exp(-((z - 55) / 16) ** 2)
+  return base + 1.2 * Math.sin(z * .045 + (id === 'terraces' ? .8 : .1)) ** 2 + 2.3 * Math.exp(-(((z - 55) / 16) ** 2))
 }
 
 export function waterHeight(id: ConceptId, z: number) {
