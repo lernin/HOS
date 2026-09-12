@@ -6,6 +6,7 @@ import { furnish } from './furniture'
 import { decorateArt } from './art'
 import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, spawn, type Point } from './plan'
+import { createEstateEditor, type EditableRoomId, type EditableSurface } from './editor'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;fast:boolean}
 export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean}
 export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,signal:AbortSignal,report:(s:EstateState)=>void,progress:(s:string)=>void){
@@ -16,15 +17,15 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
   const hemi=new T.HemisphereLight('#c1d7eb','#8f7052',.75);scene.add(hemi)
   const sun=new T.DirectionalLight('#ffe0ad',3.1);sun.position.set(-45,38,-60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-60,right:60,top:60,bottom:-60,near:1,far:180});sun.shadow.bias=-.00015;sun.shadow.normalBias=.045;scene.add(sun,sun.target)
   const fills=Array.from({length:3},()=>{const l=new T.PointLight('#ffd395',12,18,2);scene.add(l);return l})
-  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,disposeArt:(()=>void)|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
+  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,disposeArt:(()=>void)|undefined,editor:ReturnType<typeof createEstateEditor>|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
   const raycaster=new T.Raycaster(),plane=new T.Plane(new T.Vector3(0,1,0),-FLOOR),hit=new T.Vector3()
   const marker=new T.Mesh(new T.RingGeometry(.17,.24,36),new T.MeshBasicMaterial({color:'#e7d3a6',side:T.DoubleSide,transparent:true,opacity:.85,depthWrite:false}));marker.rotation.x=-Math.PI/2;marker.visible=false;scene.add(marker)
-  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();disposeArt?.();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
+  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();editor?.dispose();disposeArt?.();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
   signal.addEventListener('abort',dispose,{once:true})
   try{
     progress('Opening the house…');architecture(kit);furnish(kit);disposeArt=decorateArt(scene,kit)
     await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));if(signal.aborted)throw new DOMException('Aborted','AbortError')
-    progress('Planting the coast…');landscape(kit);kit.finish();water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
+    progress('Planting the coast…');landscape(kit);kit.finish();editor=createEstateEditor(scene,renderer,camera,canvas);water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
     let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
@@ -37,7 +38,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(!raycaster.ray.intersectPlane(plane,hit))return false
       let p={x:hit.x,z:hit.z};const y=floorAt(p);if(y===null)return false
       if(y!==FLOOR){if(!raycaster.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-y),hit))return false;p={x:hit.x,z:hit.z}}
-      const distance=camera.position.distanceTo(hit);const blockers=raycaster.intersectObjects(scene.children,false).filter(o=>o.object!==marker&&(o.object as T.Mesh).material!==undefined);if(blockers[0]&&blockers[0].distance<distance-.45)return false
+      const distance=camera.position.distanceTo(hit);const blockers=raycaster.intersectObjects(scene.children,false).filter(o=>o.object!==marker&&!o.object.userData.estateEditorSurface&&(o.object as T.Mesh).material!==undefined);if(blockers[0]&&blockers[0].distance<distance-.45)return false
       tour=false;return go(p)
     }
     const resize=()=>{const w=canvas.clientWidth,h=canvas.clientHeight;if(w&&h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();dirty=true}}
@@ -69,6 +70,11 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(now-lastReport>500){report({location:locationAt(position),moving:path.length>0||Math.hypot(vx,vz)>.1,destination:path.length?destination:'',fps:Math.round(frameCount/((now-lastReport)/1000)),position:{...position},touring:tour});frameCount=0;lastReport=now}
     }
     renderer.render(scene,camera);frame=requestAnimationFrame(tick)
-    return {dispose,stop,reset,pick,go:(point:Point,name?:string)=>{tour=false;return go(point,name)},tour(){stop();tour=true;tourIndex=1;dwell=0},getPosition:()=>({...position}),diagnostics:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures}),inspect(view:{position:T.Vector3;target:T.Vector3}|null){inspectView=view;dirty=true},advance(dx:number,dz:number){position=moveSafely(position,dx,dz);dirty=true;return {...position}},walkable}
+    return {dispose,stop,reset,pick,go:(point:Point,name?:string)=>{tour=false;return go(point,name)},tour(){stop();tour=true;tourIndex=1;dwell=0},getPosition:()=>({...position}),diagnostics:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures}),inspect(view:{position:T.Vector3;target:T.Vector3}|null){inspectView=view;dirty=true},advance(dx:number,dz:number){position=moveSafely(position,dx,dz);dirty=true;return {...position}},walkable,
+      setRoomMaterial(room:EditableRoomId,surface:EditableSurface,id:string|null){editor?.setMaterial(room,surface,id);dirty=true},
+      setEditSelection(room:EditableRoomId|null,surface:EditableSurface|null){editor?.select(room&&surface?{room,surface}:null);dirty=true},
+      pickEditSurface(clientX:number,clientY:number){return editor?.pick(clientX,clientY)??null},
+      projectEditMarker(room:EditableRoomId,surface:EditableSurface){return editor?.project(room,surface)??{x:0,y:0,visible:false}}
+    }
   }catch(e){dispose();throw e}
 }
