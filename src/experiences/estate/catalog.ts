@@ -28,7 +28,7 @@ export async function loadEstateMaterialCatalog(signal?:AbortSignal):Promise<Edi
     if(!response.ok)throw new Error(`Material catalog ${response.status}`)
     const rows=await response.json() as MaterialRow[]
     if(!Array.isArray(rows)||!rows.length)throw new Error('Material catalog was empty')
-    return rows.map(row=>({
+    const materials=rows.map(row=>({
       id:row.id,
       label:row.name,
       slug:row.slug,
@@ -40,9 +40,11 @@ export async function loadEstateMaterialCatalog(signal?:AbortSignal):Promise<Edi
       normalUrl:row.normal_gl_url,
       roughnessUrl:row.roughness_url,
     }))
+    materials.sort((a,b)=>Number(b.slug==='marble_01')-Number(a.slug==='marble_01'))
+    return materials
   }catch(error){
     if(signal?.aborted)throw error
     console.warn('Ocean Estate material catalog unavailable; using built-in finishes.',error)
-    return estateEditorMaterials
+    return [...estateEditorMaterials].sort((a,b)=>Number(b.slug==='marble_01')-Number(a.slug==='marble_01'))
   }
 }
