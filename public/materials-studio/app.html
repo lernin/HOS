@@ -7,5 +7,8 @@
 <title>Materials Studio · The Lab</title>
 <style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111513}iframe{display:block;width:100%;height:100%;border:0;background:#111513}</style>
 </head>
-<body><iframe src="/materials-studio/viewer-db" title="Materials Studio"></iframe></body>
+<body><iframe id="studio" src="/materials-studio/viewer-db" title="Materials Studio"></iframe>
+<script>
+(()=>{const frame=document.getElementById('studio');frame.addEventListener('load',()=>{try{const doc=frame.contentDocument,tabs=doc?.querySelector('.tabs');if(!tabs||doc.getElementById('art-library-btn'))return;tabs.style.gridTemplateColumns='repeat(4,1fr)';const art=doc.createElement('button');art.id='art-library-btn';art.className='tab';art.type='button';art.textContent='Art';art.addEventListener('click',()=>{location.href='/materials-studio/art.html'});tabs.appendChild(art)}catch(e){console.warn('Art tab unavailable',e)}})})();
+</script></body>
 </html>
