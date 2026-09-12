@@ -23,3 +23,11 @@ test('entrance elevation changes continuously and tap targets do not snap throug
  assert.equal(navigator.path(plan.spawn,{x:1,z:41}),null)
  const garden={x:-10,z:32.7};const stopped=nav.moveSafely(garden,0,2);assert.ok(stopped.z<=33,'no drop from the raised garden into the arrival court')
 })
+test('material picker uses the full HOS catalog for every editable surface',()=>{
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ const catalog=readFileSync(new URL('../src/experiences/estate/catalog.ts',import.meta.url),'utf8')
+ assert.match(ui,/materialCatalog\.map\(/)
+ assert.doesNotMatch(ui,/filter\(m=>m\.surface===picker\.surface\)/)
+ assert.match(catalog,/material_assets\?select=/)
+ assert.match(catalog,/status=eq\.active/)
+})
