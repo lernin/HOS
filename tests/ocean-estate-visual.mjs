@@ -27,6 +27,7 @@ try{
  assert.ok(await findSurface('Main wall material',wallPoints),'direct foyer wall tap opens material picker');await page.screenshot({path:`${output}/phone-edit-wall.png`,timeout:120000});await page.getByRole('button',{name:'Undo and close'}).click();await page.waitForTimeout(180)
  await page.getByRole('button',{name:'Estate settings'}).click();await page.getByLabel('Design editing',{exact:true}).selectOption('off');await page.getByRole('button',{name:'Back to exploring'}).click();await page.getByRole('button',{name:'Places',exact:false}).click();await page.screenshot({path:`${output}/phone-places.png`,timeout:120000});await page.getByRole('button',{name:'Close places'}).click()
  assert.equal(await page.locator('body').evaluate(e=>e.scrollWidth<=innerWidth),true,'phone horizontal overflow')
+ await page.close()
  const mobile=await browser.newContext({viewport:{width:412,height:915},deviceScaleFactor:1,isMobile:true,hasTouch:true});const touch=await mobile.newPage()
  touch.on('pageerror',e=>errors.push(e.message));await touch.goto('http://127.0.0.1:4173/tests/ocean-estate-preview.html',{waitUntil:'load'});await touch.locator('.oe-primary,[aria-label="Estate settings"]').first().waitFor({state:'visible',timeout:120000});const step=touch.getByRole('button',{name:'Step inside'});if(await step.isVisible().catch(()=>false))await step.tap()
  await touch.getByRole('button',{name:'Estate settings'}).waitFor({state:'visible',timeout:120000})
