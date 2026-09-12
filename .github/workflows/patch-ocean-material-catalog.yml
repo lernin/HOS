@@ -1,0 +1,38 @@
+name: Patch Ocean Estate material catalog
+on:
+  push:
+    branches: [fix/ocean-estate-wall-floor-editor-20260912]
+    paths: [.github/workflows/patch-ocean-material-catalog.yml]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ocean-estate-wall-floor-editor-20260912
+      - name: Patch OceanEstate catalog integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('src/experiences/OceanEstate.tsx')
+          s=p.read_text()
+          def rep(old,new):
+              global s
+              n=s.count(old)
+              assert n==1, f'Expected one match, found {n}: {old[:80]}'
+              s=s.replace(old,new,1)
+          rep("import { estateEditorMaterials, estateEditorPreview, type EditableRoomId, type EditableSurface } from './estate/editor'\n", "import { estateEditorMaterials, estateEditorPreview, type EditableRoomId, type EditableSurface } from './estate/editor'\nimport { loadEstateMaterialCatalog } from './estate/catalog'\n")
+          rep("  const [editMode,setEditMode]=useState(false),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)\n", "  const [editMode,setEditMode]=useState(false),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)\n  const [materialCatalog,setMaterialCatalog]=useState(estateEditorMaterials)\n")
+          rep("  useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])\n", "  useEffect(()=>{const controller=new AbortController();void loadEstateMaterialCatalog(controller.signal).then(setMaterialCatalog).catch(()=>{});return()=>controller.abort()},[])\n  useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])\n  useEffect(()=>{const e=engine.current;if(!e)return;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface])},[materialCatalog])\n")
+          rep("      <div className=\"oe-material-options\">{estateEditorMaterials.filter(m=>m.surface===picker.surface).map(m=><button key={m.id} className={picker.current===m.id?'selected':''} onClick={()=>previewMaterial(m.id)}><i style={{backgroundImage:`url(${estateEditorPreview(m.id)})`}}/><span><strong>{m.label}</strong><small>{m.use}</small></span>{picker.current===m.id&&<b>✓</b>}</button>)}</div>\n", "      <div className=\"oe-material-options\">{materialCatalog.map(m=><button key={m.id} className={picker.current===m.id?'selected':''} onClick={()=>previewMaterial(m.id)}><i style={{backgroundImage:`url(${estateEditorPreview(m)})`}}/><span><strong>{m.label}</strong><small>{m.category?`${m.category} · ${m.use}`:m.use}</small></span>{picker.current===m.id&&<b>✓</b>}</button>)}</div>\n")
+          p.write_text(s)
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name "lernin"
+          git config user.email "ashley.benson.tait@gmail.com"
+          git add src/experiences/OceanEstate.tsx
+          git commit -m "Use all HOS materials on walls and floors"
+          git push origin HEAD:fix/ocean-estate-wall-floor-editor-20260912
