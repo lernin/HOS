@@ -23,3 +23,18 @@ test('entrance elevation changes continuously and tap targets do not snap throug
  assert.equal(navigator.path(plan.spawn,{x:1,z:41}),null)
  const garden={x:-10,z:32.7};const stopped=nav.moveSafely(garden,0,2);assert.ok(stopped.z<=33,'no drop from the raised garden into the arrival court')
 })
+test('material picker uses the active HOS catalog for every editable surface',()=>{
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ const catalog=readFileSync(new URL('../src/experiences/estate/catalog.ts',import.meta.url),'utf8')
+ assert.match(ui,/materialCatalog\.map\(/)
+ assert.doesNotMatch(ui,/filter\(m=>m\.surface===picker\.surface\)/)
+ assert.match(catalog,/material_assets\?select=/)
+ assert.match(catalog,/status=eq\.active/)
+})
+test('normal scene taps still route artwork separately from floor walking while edit taps use editor picking',()=>{
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ assert.match(ui,/pickEditSurface\(e\.clientX,e\.clientY\)/)
+ assert.match(ui,/else if\(prefs\.mode==='explore'\)\{const picked=engine\.current\?\.pick\(e\.clientX,e\.clientY\)/)
+ assert.match(ui,/picked\.kind==='art'\)enterArt\(picked\.art\)/)
+ assert.match(ui,/else setHelp\(false\)/)
+})
