@@ -64,14 +64,34 @@ export function createEstateEditor(scene:T.Scene,renderer:T.WebGLRenderer,camera
   const outlines:Record<EditableRoomId,Record<EditableSurface,T.LineSegments[]>>={foyer:{floor:[],walls:[]},'great-room':{floor:[],walls:[]}}
   const pickables:T.Mesh[]=[]
   const raycaster=new T.Raycaster()
-  function texture(url:string,color=false){
-    let t=textures.get(url)
-    if(!t){t=loader.load(url,()=>renderer.render(scene,camera));t.wrapS=t.wrapT=T.RepeatWrapping;t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());if(color)t.colorSpace=T.SRGBColorSpace;textures.set(url,t)}
-    return t
+  function texture(url:string,color=false,fallback?:string){
+    let cached=textures.get(url)
+    if(cached)return cached
+    const loaded=loader.load(url,()=>renderer.render(scene,camera),undefined,()=>{
+      if(!fallback||fallback===url)return
+      loader.load(fallback,replacement=>{
+        loaded.image=replacement.image
+        loaded.needsUpdate=true
+        renderer.render(scene,camera)
+        replacement.dispose()
+      })
+    })
+    loaded.wrapS=loaded.wrapT=T.RepeatWrapping
+    loaded.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy())
+    if(color)loaded.colorSpace=T.SRGBColorSpace
+    textures.set(url,loaded)
+    return loaded
   }
-  function urls(def:EditorMaterial){return {diff:def.diffuseUrl||ph(def.slug),rough:def.roughnessUrl||ph(def.slug,'rough'),normal:def.normalUrl||ph(def.slug,'nor_gl')}}
+  function urls(def:EditorMaterial){
+    const builtin=!def.diffuseUrl
+    return {
+      diff:def.diffuseUrl||ph(def.slug),
+      rough:def.roughnessUrl||(builtin?ph(def.slug,'rough'):null),
+      normal:def.normalUrl||(builtin?ph(def.slug,'nor_gl'):null),
+    }
+  }
   function permutedStoneMaterial(def:EditorMaterial){
-    const u=urls(def),diff=texture(u.diff,true),rough=texture(u.rough),normalTex=texture(u.normal)
+    const u=urls(def),diff=texture(u.diff,true),rough=texture(u.rough!),normalTex=texture(u.normal!)
     const m=new T.MeshStandardMaterial({color:'#ffffff',roughness:.58,metalness:0})
     m.onBeforeCompile=s=>{
       s.uniforms.oeDiff={value:diff};s.uniforms.oeRough={value:rough};s.uniforms.oeNormal={value:normalTex}
@@ -88,8 +108,10 @@ export function createEstateEditor(scene:T.Scene,renderer:T.WebGLRenderer,camera
   function materialFor(id:string,repeatX:number,repeatY:number,surface:EditableSurface){
     const def=definitions.get(id);if(!def)return null
     if(def.id==='marble01'&&surface==='floor')return permutedStoneMaterial(def)
-    const u=urls(def),map=texture(u.diff,true).clone(),rough=texture(u.rough).clone(),normal=texture(u.normal).clone()
-    for(const t of [map,rough,normal]){t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(Math.max(.5,repeatX/def.meters),Math.max(.5,repeatY/def.meters));t.needsUpdate=true}
+    const u=urls(def),map=texture(u.diff,true,def.previewUrl).clone()
+    const rough=u.rough?texture(u.rough).clone():null
+    const normal=u.normal?texture(u.normal).clone():null
+    for(const t of [map,rough,normal])if(t){t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(Math.max(.5,repeatX/def.meters),Math.max(.5,repeatY/def.meters));t.needsUpdate=true}
     map.colorSpace=T.SRGBColorSpace
     const m=new T.MeshStandardMaterial({color:'#ffffff',map,roughnessMap:rough,normalMap:normal,roughness:surface==='floor'?.58:.82,metalness:0,normalScale:new T.Vector2(.45,.45)})
     materials.add(m);return m
