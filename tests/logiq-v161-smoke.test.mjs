@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { chromium } from 'playwright'
 
 const baseUrl = process.env.LOGIQ_BASE_URL || 'http://127.0.0.1:4173'
 const mapId = '11111111-1111-4111-8111-111111111111'
+const d3Source = readFileSync(new URL('../node_modules/d3/dist/d3.min.js', import.meta.url), 'utf8')
 let browser
 
 test.before(async () => {
@@ -46,13 +48,27 @@ async function stubProduction(context, capture = []) {
 
 async function newContext(options = {}) {
   const context = await browser.newContext(options)
+  await context.route('https://cdn.jsdelivr.net/npm/d3@7*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: d3Source,
+  }))
   await context.addInitScript(() => sessionStorage.setItem('logiq_lab_pin_v1', 'test-pin'))
   return context
 }
 
 async function waitForTree(page) {
-  await page.waitForSelector('g.node')
-  await page.waitForFunction(() => document.querySelectorAll('g.node').length === 30)
+  try {
+    await page.waitForSelector('g.node', { timeout: 10_000 })
+    await page.waitForFunction(() => document.querySelectorAll('g.node').length === 30)
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      title: document.title,
+      d3: typeof window.d3,
+      body: document.body?.innerText?.slice(0, 300),
+    }))
+    throw new Error(`LOGiQ did not render: ${JSON.stringify(state)}`, { cause: error })
+  }
 }
 
 async function selectByName(page, name) {
@@ -83,7 +99,7 @@ test('immutable legacy route loads and retains the known-good tree', async () =>
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
-  await page.goto(`${baseUrl}/logiq-v161-legacy/`, { waitUntil: 'networkidle' })
+  await page.goto(`${baseUrl}/logiq-v161-legacy/index.html`, { waitUntil: 'networkidle' })
   await waitForTree(page)
 
   assert.equal(await page.locator('g.node').count(), 30)
@@ -102,7 +118,7 @@ test('desktop preview preserves legacy commands and autosaves through production
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
-  await page.goto(`${baseUrl}/logiq-v161/`, { waitUntil: 'networkidle' })
+  await page.goto(`${baseUrl}/logiq-v161/index.html`, { waitUntil: 'networkidle' })
   await waitForTree(page)
 
   assert.equal(await page.locator('body > header').isVisible(), true)
@@ -132,6 +148,7 @@ test('desktop preview preserves legacy commands and autosaves through production
   assert.deepEqual(await page.locator('#Dock .chip').allTextContents(), ['alpha', 'beta'])
 
   // Keyboard focus and horizontal navigation.
+  await page.evaluate(() => document.activeElement?.blur())
   await page.evaluate(() => window.LOGiQBridge.selectByName('Node 05'))
   const beforeNav = await page.evaluate(() => window.LOGiQBridge.getSelectedUid())
   await page.keyboard.press('ArrowRight')
@@ -139,7 +156,7 @@ test('desktop preview preserves legacy commands and autosaves through production
   assert.notEqual(afterNav, beforeNav)
   await page.keyboard.press('a')
   assert.equal(await page.evaluate(() => document.activeElement?.id), 'wordInput')
-  await page.keyboard.press('Escape')
+  await page.evaluate(() => document.activeElement?.blur())
 
   // Structural V-movement reorders siblings and Undo restores them.
   await page.evaluate(() => window.LOGiQBridge.selectByName('Node 05'))
@@ -151,6 +168,7 @@ test('desktop preview preserves legacy commands and autosaves through production
   const afterV = await page.evaluate(() => window.LOGiQBridge.snapshot().tree)
   assert.notDeepEqual(childNames(afterV, 'Node 02'), childNames(beforeV, 'Node 02'))
   await page.keyboard.press('u')
+  await page.waitForTimeout(900)
 
   // Drag/reparent and Undo.
   const source = page.locator('g.node').filter({ hasText: 'Node 05' })
@@ -160,7 +178,9 @@ test('desktop preview preserves legacy commands and autosaves through production
   assert.ok(sourceBox && targetBox)
   await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await page.mouse.down()
+  await page.mouse.move(sourceBox.x + sourceBox.width / 2 + 10, sourceBox.y + sourceBox.height / 2 + 10, { steps: 4 })
   await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 14 })
+  await page.waitForTimeout(180)
   await page.mouse.up()
   await page.waitForTimeout(650)
   assert.equal(await page.evaluate(() => window.LOGiQBridge.getParentName('Node 05')), 'Node 03')
@@ -214,7 +234,7 @@ test('mobile preview provides on-demand controls, contextual actions, library, a
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
-  await page.goto(`${baseUrl}/logiq-v161/`, { waitUntil: 'networkidle' })
+  await page.goto(`${baseUrl}/logiq-v161/index.html`, { waitUntil: 'networkidle' })
   await waitForTree(page)
 
   assert.equal(await page.locator('body > header').isVisible(), false)

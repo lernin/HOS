@@ -76,4 +76,4 @@ At mobile widths:
 | Mobile | Minimal header, hidden permanent Trash, on-demand panel, contextual navigation/edit |
 | Offline | Local pending snapshot, Offline state, online retry to Saved |
 
-The workflow is `.github/workflows/logiq-v161-preview.yml`. It builds HOS, runs the immutable baseline checks, installs a pinned Playwright/Chromium version, starts Vite, and runs the desktop/mobile smoke suite on preview pushes and matching pull requests.
+The workflow is `.github/workflows/logiq-v161-preview.yml`. It builds HOS, runs the immutable baseline checks, installs pinned Playwright/Chromium and D3 test fixtures, starts Vite, and runs the desktop/mobile smoke suite on preview pushes and matching pull requests. CI intercepts the legacy jsDelivr request with the pinned D3 fixture so the smoke result does not depend on third-party CDN availability.

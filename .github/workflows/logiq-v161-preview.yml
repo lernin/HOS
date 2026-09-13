@@ -34,13 +34,13 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test:logiq
-      - run: npm install --no-save --package-lock=false playwright@1.55.0
+      - run: npm install --no-save --package-lock=false playwright@1.55.0 d3@7.9.0
       - run: npx playwright install --with-deps chromium
       - name: Run desktop, mobile, and offline smoke tests
         run: |
           npm run dev -- --port 4173 > /tmp/logiq-v161-vite.log 2>&1 &
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:4173/logiq-v161/ >/dev/null; then break; fi
+            if curl -fsS http://127.0.0.1:4173/logiq-v161/index.html >/dev/null; then break; fi
             sleep 1
           done
           node --test tests/logiq-v161-smoke.test.mjs
