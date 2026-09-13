@@ -28,7 +28,7 @@ type Row = {
   ai_confidence:number|null
 }
 type Props={pin:string;onExit:()=>void}
-const filters=[['all','All'],['0','0'],['1','1'],['2','2'],['3','3'],['2+','2+']] as const
+const confidenceLevels=[0,1,2,3] as const
 
 export function ConceptInteractionReview({pin,onExit}:Props){
   const [rows,setRows]=useState<Row[]>([])
@@ -54,10 +54,14 @@ export function ConceptInteractionReview({pin,onExit}:Props){
     return ()=>{ if(advanceTimer.current) window.clearTimeout(advanceTimer.current) }
   },[pin])
 
-  const visible=useMemo(
-    ()=>rows.filter(r=>filter==='all'||(filter==='2+'?r.ashley_confidence>=2:String(r.ashley_confidence)===filter)),
-    [rows,filter]
-  )
+  const bucketCounts=useMemo(()=>confidenceLevels.map(level=>rows.filter(r=>r.ashley_confidence===level).length),[rows])
+  const availableLevels=confidenceLevels.filter(level=>bucketCounts[level]>0)
+  const visible=useMemo(()=>rows.filter(r=>String(r.ashley_confidence)===filter),[rows,filter])
+  useEffect(()=>{
+    if(!rows.length||visible.length)return
+    const next=confidenceLevels.find(level=>rows.some(r=>r.ashley_confidence===level))
+    if(next!==undefined){setFilter(String(next));setIdx(0)}
+  },[rows,visible.length,filter])
   useEffect(()=>setIdx(i=>Math.min(i,Math.max(0,visible.length-1))),[visible.length])
   const row=visible[idx]
   useEffect(()=>setNote(row?.review_note||''),[row?.id])
@@ -141,12 +145,21 @@ export function ConceptInteractionReview({pin,onExit}:Props){
     setToast(`${current.interaction_code} · confidence ${n} saved`)
     if(advanceTimer.current) window.clearTimeout(advanceTimer.current)
     advanceTimer.current=window.setTimeout(()=>{
-      const remainsVisible=filter==='all'||(filter==='2+'?n>=2:String(n)===filter)
       setToast('')
       void animateCard(1,()=>{
-        setRows(rs=>rs.map(r=>r.id===saved.id?saved:r))
+        const nextRows=rows.map(r=>r.id===saved.id?saved:r)
+        const currentLevel=Number(filter)
+        const currentBucket=nextRows.filter(r=>r.ashley_confidence===currentLevel)
+        setRows(nextRows)
         setPendingConfidence(null)
-        if(remainsVisible)setIdx(i=>i+1)
+        if(n===currentLevel){
+          setIdx(i=>Math.min(i+1,Math.max(0,currentBucket.length-1)))
+        }else if(currentBucket.length){
+          setIdx(i=>Math.min(i,Math.max(0,currentBucket.length-1)))
+        }else{
+          const nextLevel=confidenceLevels.find(level=>nextRows.some(r=>r.ashley_confidence===level))
+          if(nextLevel!==undefined){setFilter(String(nextLevel));setIdx(0)}
+        }
       })
     },950)
   }
@@ -185,7 +198,14 @@ export function ConceptInteractionReview({pin,onExit}:Props){
 
   return <main className="ci">
     <header><button onClick={onExit}>‹ Lab</button><b>Concept Interactions</b><span>{idx+1}/{visible.length}</span></header>
-    <nav>{filters.map(([v,l])=><button className={filter===v?'on':''} onClick={()=>{setFilter(v);setIdx(0)}} key={v}>{l}</button>)}</nav>
+    <div className="ci-bucket-area">
+      <div className={availableLevels.length===1&&availableLevels[0]===3?'ci-bucket-label complete':'ci-bucket-label'}>
+        {availableLevels.length===1&&availableLevels[0]===3?'✓ Everything is confidence 3':'YOUR CONFIDENCE · LOWER NUMBERS NEED REVIEW'}
+      </div>
+      <nav className="ci-buckets" aria-label="Your confidence review buckets">
+        {availableLevels.map(level=><button className={`bucket bucket-${level}${filter===String(level)?' on':''}`} onClick={()=>{setFilter(String(level));setIdx(0)}} key={level}><b>{level}</b><span>{bucketCounts[level]} {bucketCounts[level]===1?'item':'items'}</span></button>)}
+      </nav>
+    </div>
     <section
       ref={cardRef}
       className="ci-card"
@@ -244,10 +264,13 @@ export function ConceptInteractionReview({pin,onExit}:Props){
       <label className="ci-note"><small>Ashley note</small><textarea value={note} onChange={e=>setNote(e.target.value)} onBlur={()=>void save(undefined,note)} placeholder="Optional note — type or use Mic…"/></label>
 
       <div className="ci-actions">
-        <button className={recording?'ci-mic rec':'ci-mic'} onClick={mic}>{recording?'■ Stop':'● Mic'}</button>
-        <div className="ci-confidence">
+        <div className="ci-action-top">
+          <button className={recording?'ci-mic rec':'ci-mic'} onClick={mic}>{recording?'■ Stop':'● Mic'}</button>
           <div className="ci-ai"><span>AI confidence</span><b>{row.ai_confidence??'—'}</b><span>Use {row.usefulness??'—'} · Diff {row.difficulty??'—'}</span></div>
-          <div className="ci-ashley"><small>Your confidence</small>{[0,1,2,3].map(n=>{const shown=pendingConfidence?.id===row.id?pendingConfidence.value:row.ashley_confidence;return <button className={shown===n?'selected':''} onClick={()=>void choose(n)} key={n}>{n}</button>})}</div>
+        </div>
+        <div className="ci-ashley">
+          <small>Your confidence</small>
+          <div className="ci-confidence-buttons">{[0,1,2,3].map(n=>{const shown=pendingConfidence?.id===row.id?pendingConfidence.value:row.ashley_confidence;return <button className={`confidence-${n}${shown===n?' selected':''}`} onClick={()=>void choose(n)} key={n}>{n}</button>})}</div>
         </div>
       </div>
     </section>
