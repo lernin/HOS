@@ -11,6 +11,8 @@
 
 The working page is a direct copy of the recovered source. More than 248,000 leading source bytes remain identical to the checksum-locked baseline. A small bridge is appended after legacy initialization, and all new UI and persistence code lives in `public/logiq-v161/logiq-preview.js`. This keeps the legacy closure and handler order intact.
 
+Vercel uses clean URLs and redirects `/logiq-v161/index.html` to `/logiq-v161`. The integration seam therefore loads the enhancement and logo assets from absolute `/logiq-v161/...` paths. Relative paths silently resolve at the site root after that redirect and must not be reintroduced.
+
 ## Production persistence
 
 The preview uses the existing production Supabase project and only these existing PIN-guarded RPCs:
@@ -43,7 +45,7 @@ The Trees control now opens a real library dialog rather than the legacy prompt 
 
 ## Mobile-only behavior
 
-Phone UI is enabled below `700px`, plus coarse-pointer landscape screens no taller than `700px`. This catches phones whose landscape CSS width is wider than the old breakpoint. Desktop and fine-pointer layouts retain the legacy header, controls, tree, Dock, drag, Trash, pointer, and keyboard behavior.
+Phone UI is enabled below `700px`, plus coarse-pointer or hoverless viewports up to `1200px` wide. The wider touch breakpoint is intentional: Android can expose a roughly 980px CSS viewport when a link opens with desktop-like page scaling. Desktop fine-pointer layouts retain the legacy header, controls, tree, Dock, drag, Trash, pointer, and keyboard behavior.
 
 On phone layouts:
 
@@ -72,9 +74,9 @@ The direction preview appears while the puck moves, and supported devices vibrat
 Touch responsibilities therefore remain unambiguous:
 
 - two fingers pinch the existing D3 canvas zoom;
-- one finger on empty canvas pans;
-- tap a card to select it;
-- drag the card itself to use legacy move/reparent;
+- one finger pans even when the gesture begins over an unselected card;
+- a short, stationary tap selects a card;
+- only the selected card accepts drag/reparent gestures;
 - flick the attached `+` puck to create and dictate a related card.
 
 ## Regression coverage
@@ -95,7 +97,8 @@ Touch responsibilities therefore remain unambiguous:
 | Structural V | Hold-`V` plus arrow changes sibling order, Undo |
 | Autosave | Debounce, RPC payload, Saved state, no manual Save control |
 | Library | Production list RPC and rendered map entry |
-| Mobile | Compact portrait/landscape shell, permanent Fit, hidden Trash, on-demand panel, contextual navigation/edit |
+| Mobile | Compact portrait/landscape shell, permanent Fit, hidden Trash, on-demand panel, contextual navigation/edit, 980px Android-style viewport |
+| Touch arbitration | Pan beginning over an unselected card, tap-to-select, selected-only drag/reparent |
 | Gesture/voice | Selected-card create puck, child relationship, mocked microphone/transcription, resulting label |
 | Offline | Local pending snapshot, Offline state, online retry to Saved |
 

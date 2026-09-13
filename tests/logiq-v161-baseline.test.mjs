@@ -41,7 +41,8 @@ test('working preview is derived from the baseline through one integration seam'
   assert.ok(commonPrefix > 248_000, `legacy engine diverged too early at byte ${commonPrefix}`)
   assert.match(preview, /LOGiQ v161 preview integration seam/)
   assert.match(preview, /window\.LOGiQBridge = Object\.freeze/)
-  assert.match(preview, /<script src="logiq-preview\.js"><\/script>/)
+  assert.match(preview, /<script src="\/logiq-v161\/logiq-preview\.js"><\/script>/)
+  assert.match(preview, /Vercel clean URLs remove the trailing slash/)
   assert.doesNotMatch(preview, /patchLogiq|document\.write\(html\)/)
 })
 

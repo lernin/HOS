@@ -7165,6 +7165,15 @@ function getSelectedUid(){
   const changeListeners = new Set();
   let changeReady = false;
 
+  // Vercel clean URLs remove the trailing slash from /logiq-v161/index.html.
+  // Repair legacy relative logo URLs before loading the absolute enhancement.
+  document.querySelectorAll('[src^="logos/"]').forEach((element) => {
+    element.setAttribute('src', `/logiq-v161/${element.getAttribute('src')}`);
+  });
+  document.querySelectorAll('[href^="logos/"]').forEach((element) => {
+    element.setAttribute('href', `/logiq-v161/${element.getAttribute('href')}`);
+  });
+
   const snapshot = () => ({
     tree: state.root ? utils.deepClone(state.root.data) : null,
     wordBank: Array.isArray(state.wordBank) ? state.wordBank.slice() : []
@@ -7195,6 +7204,17 @@ function getSelectedUid(){
     notifyChange: emitChange,
     getSelectedUid: () => state.selectedUid || null,
     getSelectedUids: () => state.selectedUids ? Array.from(state.selectedUids) : [],
+    selectByUid(uid) {
+      const node = uid && state.root?.descendants().find((item) => item.data?._uid === uid);
+      if (!node) return false;
+      selectSingle(uid);
+      return true;
+    },
+    clearFocusSelection() {
+      clearGroup();
+      clearSelection();
+      return true;
+    },
     selectByName(name) {
       const node = state.root?.descendants().find((item) => item.data?.name === name);
       if (!node) return false;
@@ -7291,7 +7311,7 @@ function getSelectedUid(){
 
 </script>
 
-<script src="logiq-preview.js"></script>
+<script src="/logiq-v161/logiq-preview.js"></script>
 
 </body>
 

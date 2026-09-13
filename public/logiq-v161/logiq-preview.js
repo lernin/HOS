@@ -23,6 +23,7 @@
     recordingStream: null,
     recordingChunks: [],
     recordingUid: null,
+    canvasPointers: new Map(),
   }
 
   injectStyles()
@@ -123,7 +124,7 @@
       .logiq-pin-error{display:none;color:#dc2626;font-size:12px}.logiq-pin-error.is-visible{display:block}
       #logiq-mobile-header,#logiq-mobile-panel,#logiq-mobile-context,#logiq-spawn-puck,#logiq-spawn-ghost,#logiq-voice-bar{display:none}
 
-      @media (max-width:700px), (hover:none) and (pointer:coarse) and (max-height:700px){
+      @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
         body>header{display:none!important}
         svg#canvas{height:100dvh;touch-action:none}
         #trash{display:none!important}
@@ -154,6 +155,7 @@
         #logiq-voice-bar{position:fixed;z-index:3300;left:50%;bottom:70px;transform:translateX(-50%);align-items:center;gap:9px;max-width:calc(100vw - 20px);padding:8px 9px 8px 13px;border-radius:999px;background:#111827;color:#fff;box-shadow:0 12px 34px rgba(15,23,42,.35);font-size:13px;font-weight:700;white-space:nowrap}
         #logiq-voice-bar.is-visible{display:flex}
         #logiq-voice-stop{border:0;border-radius:999px;background:#ef4444;color:#fff;padding:8px 13px;font-weight:800}
+        svg#canvas g.node:not(.is-outlined){pointer-events:none}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
       }
       @media (hover:none) and (pointer:coarse) and (max-height:500px){
@@ -175,7 +177,7 @@
 
     document.body.insertAdjacentHTML('beforeend', `
       <div id="logiq-mobile-header">
-        <img src="logos/LOGO_GREEN_Q.svg" alt="LOGiQ">
+        <img src="/logiq-v161/logos/LOGO_GREEN_Q.svg" alt="LOGiQ">
         <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
         <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
         <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
@@ -278,6 +280,12 @@
     ui.spawnPuck.addEventListener('pointerup', finishSpawnGesture)
     ui.spawnPuck.addEventListener('pointercancel', cancelSpawnGesture)
 
+    const canvas = document.getElementById('canvas')
+    canvas?.addEventListener('pointerdown', beginCanvasPointer, true)
+    canvas?.addEventListener('pointermove', moveCanvasPointer, true)
+    canvas?.addEventListener('pointerup', finishCanvasPointer, true)
+    canvas?.addEventListener('pointercancel', cancelCanvasPointer, true)
+
     ui.mapList.addEventListener('click', handleMapAction)
     ui.pin.addEventListener('click', (event) => { if (event.target === ui.pin) finishPin(null) })
     document.getElementById('logiq-pin-cancel').addEventListener('click', () => finishPin(null))
@@ -342,7 +350,47 @@
   }
 
   function isPhoneUi() {
-    return window.matchMedia('(max-width:700px), (hover:none) and (pointer:coarse) and (max-height:700px)').matches
+    return window.matchMedia('(max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px)').matches
+  }
+
+  function beginCanvasPointer(event) {
+    if (!isPhoneUi() || event.target.closest?.('g.node.is-outlined')) return
+    app.canvasPointers.set(event.pointerId, {
+      x: event.clientX,
+      y: event.clientY,
+      started: performance.now(),
+      moved: false,
+      multi: app.canvasPointers.size > 0,
+    })
+    if (app.canvasPointers.size > 1) app.canvasPointers.forEach((pointer) => { pointer.multi = true })
+  }
+
+  function moveCanvasPointer(event) {
+    const pointer = app.canvasPointers.get(event.pointerId)
+    if (!pointer) return
+    if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > 9) pointer.moved = true
+  }
+
+  function finishCanvasPointer(event) {
+    const pointer = app.canvasPointers.get(event.pointerId)
+    app.canvasPointers.delete(event.pointerId)
+    if (!pointer || pointer.multi || pointer.moved || performance.now() - pointer.started > 450) return
+    const candidates = Array.from(document.querySelectorAll('g.node')).filter((node) => {
+      const rect = node.getBoundingClientRect()
+      return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
+    }).sort((a, b) => {
+      const ar = a.getBoundingClientRect()
+      const br = b.getBoundingClientRect()
+      return ar.width * ar.height - br.width * br.height
+    })
+    const uid = candidates[0]?.__data__?.data?._uid
+    if (uid) bridge.selectByUid(uid)
+    else bridge.clearFocusSelection()
+    requestAnimationFrame(updateContextActions)
+  }
+
+  function cancelCanvasPointer(event) {
+    app.canvasPointers.delete(event.pointerId)
   }
 
   function directionFromDelta(dx, dy) {

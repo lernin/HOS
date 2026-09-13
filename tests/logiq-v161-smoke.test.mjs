@@ -242,6 +242,50 @@ test('mobile preview provides on-demand controls, contextual actions, library, a
   assert.equal(await page.locator('#trash').isVisible(), false)
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true)
 
+  // Unselected cards pass touches through to canvas pan/pinch. A short tap
+  // selects one; only that selected card becomes draggable.
+  const node05 = page.locator('g.node').filter({ hasText: 'Node 05' })
+  let node05Box = await node05.boundingBox()
+  assert.ok(node05Box)
+  assert.equal(await node05.evaluate((node) => getComputedStyle(node).pointerEvents), 'none')
+
+  const panBefore = await page.evaluate(() => ({ ...d3.zoomTransform(document.getElementById('canvas')) }))
+  await page.evaluate(({ x, y }) => {
+    const canvas = document.getElementById('canvas')
+    const touch = (clientX, clientY) => new Touch({ identifier: 41, target: canvas, clientX, clientY, pageX: clientX, pageY: clientY })
+    const start = touch(x, y)
+    canvas.dispatchEvent(new TouchEvent('touchstart', { touches: [start], targetTouches: [start], changedTouches: [start], bubbles: true, cancelable: true }))
+    const moved = touch(x + 55, y + 45)
+    canvas.dispatchEvent(new TouchEvent('touchmove', { touches: [moved], targetTouches: [moved], changedTouches: [moved], bubbles: true, cancelable: true }))
+    canvas.dispatchEvent(new TouchEvent('touchend', { touches: [], targetTouches: [], changedTouches: [moved], bubbles: true, cancelable: true }))
+  }, { x: node05Box.x + node05Box.width / 2, y: node05Box.y + node05Box.height / 2 })
+  await page.waitForTimeout(100)
+  const panAfter = await page.evaluate(() => ({ ...d3.zoomTransform(document.getElementById('canvas')) }))
+  assert.ok(panAfter.x !== panBefore.x || panAfter.y !== panBefore.y, 'canvas should pan when a gesture starts over an unselected card')
+
+  node05Box = await node05.boundingBox()
+  const tapX = node05Box.x + node05Box.width / 2
+  const tapY = node05Box.y + node05Box.height / 2
+  await page.locator('#canvas').dispatchEvent('pointerdown', { pointerId: 3, pointerType: 'touch', clientX: tapX, clientY: tapY, bubbles: true })
+  await page.locator('#canvas').dispatchEvent('pointerup', { pointerId: 3, pointerType: 'touch', clientX: tapX, clientY: tapY, bubbles: true })
+  await page.waitForFunction(() => document.querySelector('g.node.is-outlined')?.textContent.includes('Node 05'))
+  assert.notEqual(await node05.evaluate((node) => getComputedStyle(node).pointerEvents), 'none')
+
+  const target03 = page.locator('g.node').filter({ hasText: 'Node 03' })
+  const selectedBox = await node05.boundingBox()
+  const targetBox = await target03.boundingBox()
+  assert.ok(selectedBox && targetBox)
+  await page.mouse.move(selectedBox.x + selectedBox.width / 2, selectedBox.y + selectedBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(selectedBox.x + selectedBox.width / 2 + 10, selectedBox.y + selectedBox.height / 2 + 10, { steps: 4 })
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 14 })
+  await page.waitForTimeout(180)
+  await page.mouse.up()
+  await page.waitForTimeout(650)
+  assert.equal(await page.evaluate(() => window.LOGiQBridge.getParentName('Node 05')), 'Node 03')
+  await page.evaluate(() => window.LOGiQBridge.undo())
+  await page.waitForTimeout(500)
+
   await page.locator('#logiq-mobile-menu-btn').tap()
   await page.waitForSelector('#logiq-mobile-panel.is-open')
   await page.locator('#logiq-mobile-word-input').fill('mobile word')
@@ -304,6 +348,23 @@ test('landscape phone shell stays compact and keeps Fit available without a tras
   await page.getByRole('button', { name: 'Recenter map' }).tap()
   await page.waitForTimeout(1300)
   assert.ok(Number.isFinite(await page.evaluate(() => d3.zoomTransform(document.getElementById('canvas')).k)))
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('phone shell survives a desktop-like 980px mobile viewport', async () => {
+  const context = await newContext({ viewport: { width: 980, height: 1743 }, isMobile: true, hasTouch: true })
+  await stubProduction(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logiq-v161/index.html`, { waitUntil: 'networkidle' })
+  await waitForTree(page)
+
+  assert.equal(await page.locator('body > header').isVisible(), false)
+  assert.equal(await page.locator('#logiq-mobile-header').isVisible(), true)
+  assert.equal(await page.locator('#trash').isVisible(), false)
+  assert.match(await page.locator('#logiq-mobile-header img').getAttribute('src'), /^\/logiq-v161\/logos\//)
   assert.deepEqual(errors, [])
   await context.close()
 })
