@@ -6,6 +6,7 @@ import test from 'node:test'
 
 const legacyPath = new URL('../public/logiq-v161-legacy/index.html', import.meta.url)
 const loaderPath = new URL('../public/logiq-v161/index.html', import.meta.url)
+const previewScriptPath = new URL('../public/logiq-v161/logiq-preview.js', import.meta.url)
 const expectedSourceSha = '14ba1d93c5ea9a772b7b0118a2ba5de6702164b222b8a93f4c35681ab64da66b'
 
 function sha256(value) {
@@ -29,11 +30,28 @@ test('immutable legacy source matches the recovered v161 payload', () => {
   assert.deepEqual(legacy, recovered)
 })
 
-test('baseline loader writes the recovered source without runtime patches', () => {
-  const loader = readFileSync(loaderPath, 'utf8')
-  assert.match(loader, /b64\.length !== 78920/)
-  assert.match(loader, /document\.write\(html\)/)
-  assert.doesNotMatch(loader, /patchLogiq|LOGIQ_SUPABASE|saveCurrentMap\s*=\s*async/)
+test('working preview is derived from the baseline through one integration seam', () => {
+  const baseline = readFileSync(legacyPath)
+  const previewBytes = readFileSync(loaderPath)
+  const preview = previewBytes.toString('utf8')
+  const seam = previewBytes.indexOf(Buffer.from('/* LOGiQ v161 preview integration seam.'))
+  assert.ok(seam > 240_000)
+  let commonPrefix = 0
+  while (previewBytes[commonPrefix] === baseline[commonPrefix]) commonPrefix += 1
+  assert.ok(commonPrefix > 248_000, `legacy engine diverged too early at byte ${commonPrefix}`)
+  assert.match(preview, /LOGiQ v161 preview integration seam/)
+  assert.match(preview, /window\.LOGiQBridge = Object\.freeze/)
+  assert.match(preview, /<script src="logiq-preview\.js"><\/script>/)
+  assert.doesNotMatch(preview, /patchLogiq|document\.write\(html\)/)
+})
+
+test('preview persistence targets only the existing production RPC surface', () => {
+  const script = readFileSync(previewScriptPath, 'utf8')
+  assert.match(script, /jzaghifuhinkzzhiojre\.supabase\.co/)
+  assert.doesNotMatch(script, /psfxnlrsaorrsdbadikk|logiq_maps(?:\?|\")/)
+  for (const rpc of ['logiq_map_save', 'logiq_map_list', 'logiq_map_delete']) {
+    assert.ok(script.includes(rpc), `missing production RPC: ${rpc}`)
+  }
 })
 
 test('legacy inline script parses and retains the core architecture', () => {
@@ -72,4 +90,3 @@ test('legacy DOM exposes the expected working controls and canvas', () => {
   assert.doesNotMatch(html, /id=["']saveBtn["']/)
   assert.doesNotMatch(html, /supabase\.co|LOGIQ_SUPABASE/)
 })
-

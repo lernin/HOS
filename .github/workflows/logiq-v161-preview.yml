@@ -1,0 +1,46 @@
+name: LOGiQ v161 preview regression
+on:
+  push:
+    branches:
+      - 'preview/logiq-v161-*'
+    paths:
+      - public/logiq-v161/**
+      - public/logiq-v161-legacy/**
+      - tests/logiq-v161-*
+      - docs/LOGIQ_V161_LEGACY.md
+      - package.json
+      - .github/workflows/logiq-v161-preview.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - public/logiq-v161/**
+      - public/logiq-v161-legacy/**
+      - tests/logiq-v161-*
+      - docs/LOGIQ_V161_LEGACY.md
+      - package.json
+      - .github/workflows/logiq-v161-preview.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:logiq
+      - run: npm install --no-save --package-lock=false playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Run desktop, mobile, and offline smoke tests
+        run: |
+          npm run dev -- --port 4173 > /tmp/logiq-v161-vite.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/logiq-v161/ >/dev/null; then break; fi
+            sleep 1
+          done
+          node --test tests/logiq-v161-smoke.test.mjs
