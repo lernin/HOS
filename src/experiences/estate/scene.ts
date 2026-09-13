@@ -80,14 +80,26 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       dirty=true
       return display.art
     }
+    function floorPointFromRay():Point|null{
+      if(!raycaster.ray.intersectPlane(plane,hit))return null
+      let p={x:hit.x,z:hit.z}
+      for(let i=0;i<6;i++){
+        const y=floorAt(p);if(y===null)return null
+        if(!raycaster.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-y),hit))return null
+        const next={x:hit.x,z:hit.z}
+        if(Math.hypot(next.x-p.x,next.z-p.z)<.001){p=next;break}
+        p=next
+      }
+      return floorAt(p)===null?null:p
+    }
     function pick(clientX:number,clientY:number):EstatePick|null{
       if(input.paused||artInspect)return null
       const r=canvas.getBoundingClientRect();raycaster.setFromCamera(new T.Vector2((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1),camera)
       const displays=artInstallation?.displays??[],artHit=raycaster.intersectObjects(displays.map(d=>d.mesh),false)[0]
       if(artHit){const display=displays.find(d=>d.mesh===artHit.object);if(display)return {kind:'art',art:beginArt(display)}}
-      if(!raycaster.ray.intersectPlane(plane,hit))return null
-      let p={x:hit.x,z:hit.z};const y=floorAt(p);if(y===null)return null
-      if(y!==FLOOR){if(!raycaster.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-y),hit))return null;p={x:hit.x,z:hit.z}}
+      const p=floorPointFromRay();if(!p)return null
+      const y=floorAt(p);if(y===null)return null
+      if(!raycaster.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-y),hit))return null
       const distance=camera.position.distanceTo(hit);const blockers=raycaster.intersectObjects(scene.children,false).filter(o=>o.object!==marker&&!o.object.userData.estateEditorSurface&&(o.object as T.Mesh).material!==undefined);if(blockers[0]&&blockers[0].distance<distance-.45)return null
       tour=false;return go(p)?{kind:'floor'}:null
     }
@@ -129,7 +141,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     observer=new ResizeObserver(resize);observer.observe(canvas);resize()
     function lighting(){const evening=input.lighting==='evening',day=input.lighting==='daylight';sky.set(evening?'#293c51':day?'#b1ccd8':'#b7c5c4');(scene.fog as T.FogExp2).color.copy(sky);hemi.intensity=evening?.22:day?1:.75;sun.intensity=evening?.07:day?3:3.6;sun.color.set(day?'#fff1db':'#ffe0ad');renderer.toneMappingExposure=evening?1.12:1.06;scene.environmentIntensity=evening?.12:.3;skyDome?.preset(input.lighting);lastShadow={x:999,z:999};renderer.shadowMap.needsUpdate=true;dirty=true}
     function tick(now:number){if(disposed)return;frame=requestAnimationFrame(tick);const dt=Math.min(.04,(now-last)/1000);last=now
-      if(quality!==input.quality){quality=input.quality;renderer.setPixelRatio(Math.min(devicePixelRatio,quality===0?1:quality===2?1.65:1.25));renderer.shadowMap.enabled=true;renderer.shadowMap.needsUpdate=true;resize()}
+      if(quality!==input.quality){quality=input.quality;renderer.setPixelRatio(Math.min(devicePixelRatio,quality===0?.85:quality===2?1.35:1));renderer.shadowMap.enabled=true;renderer.shadowMap.needsUpdate=true;resize()}
       if(preset!==input.lighting){preset=input.lighting;lighting()}
       if(!input.paused&&!inspectView&&!artInspect){
         let dx=0,dz=0;const manual=Math.hypot(input.x,input.z)>.01
@@ -154,7 +166,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(now-lastReport>500){report({location:locationAt(position),moving:!artInspect&&(path.length>0||Math.hypot(vx,vz)>.1),destination:!artInspect&&path.length?destination:'',fps:Math.round(frameCount/((now-lastReport)/1000)),position:{...position},touring:!artInspect&&tour});frameCount=0;lastReport=now}
     }
     renderer.render(scene,camera);frame=requestAnimationFrame(tick)
-    return {dispose,stop,reset,pick,closeArt,panArt,zoomArt,resetArtView,go:(point:Point,name?:string)=>{tour=false;return go(point,name)},tour(){if(artInspect)return;stop();tour=true;tourIndex=1;dwell=0},getPosition:()=>({...position}),diagnostics:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures}),inspect(view:{position:T.Vector3;target:T.Vector3}|null){inspectView=view;dirty=true},advance(dx:number,dz:number){if(artInspect)return {...position};position=moveSafely(position,dx,dz);dirty=true;return {...position}},walkable,
+    return {dispose,stop,reset,pick,closeArt,panArt,zoomArt,resetArtView,go:(point:Point,name?:string)=>{tour=false;return go(point,name)},tour(){if(artInspect)return;stop();tour=true;tourIndex=1;dwell=0},getPosition:()=>({...position}),diagnostics:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,pixelRatio:renderer.getPixelRatio()}),inspect(view:{position:T.Vector3;target:T.Vector3}|null){inspectView=view;dirty=true},advance(dx:number,dz:number){if(artInspect)return {...position};position=moveSafely(position,dx,dz);dirty=true;return {...position}},walkable,
       registerRoomMaterials(items:EditorMaterial[]){editor?.registerMaterials(items)},
       setRoomMaterial(room:EditableRoomId,surface:EditableSurface,id:string|null){editor?.setMaterial(room,surface,id);dirty=true},
       setEditSelection(room:EditableRoomId|null,surface:EditableSurface|null){editor?.select(room&&surface?{room,surface}:null);dirty=true},
