@@ -21,6 +21,7 @@ try{
  await page.setViewportSize({width:915,height:412});await page.evaluate(()=>{window.estateQA.preset('golden');window.estateQA.view('great')});await page.waitForTimeout(180);await page.screenshot({path:`${output}/phone-landscape-great.png`,timeout:120000})
 
  await page.evaluate(()=>window.estateQA.view('foyerFloor'));await page.waitForTimeout(120);assert.deepEqual(await page.evaluate(()=>window.estateQA.editPickCenter()),{room:'foyer',surface:'floor'},'foyer floor remains directly pickable');const floorPick=await page.evaluate(()=>window.estateQA.artPickCenter());assert.equal(floorPick?.kind,'floor','normal scene picking still routes a clear foyer floor tap to walking')
+ await page.evaluate(()=>window.estateQA.view('arrivalStep'));await page.waitForTimeout(120);const stairPick=await page.evaluate(()=>window.estateQA.artPickCenter());assert.equal(stairPick?.kind,'floor','arrival stairs remain valid click-to-walk targets')
  await page.evaluate(()=>window.estateQA.view('foyerWall'));await page.waitForTimeout(120);assert.deepEqual(await page.evaluate(()=>window.estateQA.editPickCenter()),{room:'foyer',surface:'walls'},'foyer wall remains directly pickable')
  await page.evaluate(()=>window.estateQA.view('artHero'));await page.waitForTimeout(120);const artPick=await page.evaluate(()=>window.estateQA.artPickCenter());assert.equal(artPick?.kind,'art','hero artwork remains separately pickable from floor walking');await page.screenshot({path:`${output}/art-pick.png`,timeout:120000});await page.close()
 
@@ -32,6 +33,6 @@ try{
  await touch.getByRole('button',{name:'Places',exact:false}).tap();assert.ok(await visible(touch.getByRole('navigation',{name:'Estate destinations'})),'Places opens in landscape');await touch.getByRole('button',{name:'Close places'}).tap()
  assert.equal(await touch.locator('body').evaluate(e=>e.scrollWidth<=innerWidth),true,'landscape phone horizontal overflow');await touch.screenshot({path:`${output}/phone-landscape-touch.png`,timeout:120000});await mobile.close()
 
- await writeFile(`${output}/verification.json`,JSON.stringify({errors,diagnostics,phoneViewport:{width:915,height:412},renderer:'Chromium SwiftShader; not physical phone hardware',ui:'landscape entry/settings, edit-mode control, deterministic floor/wall and artwork picking, touch drag-to-look, Places panel',routeTests:'see Node test output'},null,2))
+ await writeFile(`${output}/verification.json`,JSON.stringify({errors,diagnostics,phoneViewport:{width:915,height:412},renderer:'Chromium SwiftShader; not physical phone hardware',ui:'landscape entry/settings, edit-mode control, deterministic floor/wall/stair and artwork picking, touch drag-to-look, Places panel',routeTests:'see Node test output'},null,2))
  assert.ok(diagnostics.calls<350,`Draw calls ${diagnostics.calls}`);assert.ok(diagnostics.triangles<1300000,`Triangles ${diagnostics.triangles}`);assert.deepEqual(errors,[])
 }finally{await page.screenshot({path:output+'/last-ui.png',timeout:120000}).catch(()=>{});await writeFile(`${output}/console-errors.json`,JSON.stringify(errors,null,2));await browser.close()}
