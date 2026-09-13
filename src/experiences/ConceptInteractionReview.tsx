@@ -3,255 +3,311 @@ import { supabase } from '../lib/supabase'
 import { startRecordingSession, type RecordingSession } from '../lib/voiceCapture'
 import './concept-interaction-review.css'
 
-type Row = {
-  id:string
-  interaction_code:string
-  source_coordinate:string
-  target_coordinate:string
-  source_language:string|null
-  source_mode:string
-  target_language:string|null
-  target_mode:string
-  derived_command:string
-  technical_description:string
-  teacher_asker_does:string
-  teacher_asker_example:string|null
-  teacher_natural_prompt:string|null
-  student_responder_does:string
-  expected_response:string|null
-  usefulness:number|null
-  difficulty:number|null
-  prerequisites:string|null
-  notes:string|null
-  review_note:string|null
-  ashley_confidence:number
-  ai_confidence:number|null
+type ReviewComment = {
+  id: string
+  transcript: string
+  source: 'voice' | 'text'
+  created_at: string
 }
-type Props={pin:string;onExit:()=>void}
-const filters=[['all','All'],['0','0'],['1','1'],['2','2'],['3','3'],['2+','2+']] as const
 
-export function ConceptInteractionReview({pin,onExit}:Props){
-  const [rows,setRows]=useState<Row[]>([])
-  const [idx,setIdx]=useState(0)
-  const [filter,setFilter]=useState('0')
-  const [note,setNote]=useState('')
-  const [msg,setMsg]=useState('')
-  const [toast,setToast]=useState('')
-  const [pendingConfidence,setPendingConfidence]=useState<{id:string;value:number}|null>(null)
-  const [recording,setRecording]=useState(false)
-  const rec=useRef<RecordingSession|null>(null)
-  const cardRef=useRef<HTMLElement|null>(null)
-  const touchX=useRef<number|null>(null)
-  const touchDx=useRef(0)
-  const motionBusy=useRef(false)
-  const advanceTimer=useRef<number|null>(null)
+type Row = {
+  id: string
+  ordinal: number
+  code: string
+  category: string
+  label: string
+  description: string
+  example: string
+  primary_support: 'MEANING' | 'SAYING' | 'WRITING'
+  category_confidence: number
+  example_confidence: number
+  explanation_confidence: number
+  classification_confidence: number
+  review_note: string | null
+  review_comments: ReviewComment[] | null
+  updated_at: string
+}
 
-  useEffect(()=>{
-    supabase.rpc('lab_concept_interaction_read',{pin}).then(({data,error})=>{
-      if(error)setMsg(error.message)
-      else setRows(data as Row[])
+type ConfidenceField = 'category' | 'example' | 'explanation' | 'classification'
+type ConfidenceKey = 'category_confidence' | 'example_confidence' | 'explanation_confidence' | 'classification_confidence'
+type Props = { pin: string; onExit: () => void }
+
+const confidenceKey: Record<ConfidenceField, ConfidenceKey> = {
+  category: 'category_confidence',
+  example: 'example_confidence',
+  explanation: 'explanation_confidence',
+  classification: 'classification_confidence',
+}
+
+function StarMeter({ value }: { value: number }) {
+  return <span className="ci-stars" aria-label={`${value} of 3 confidence stars`}>
+    {[1, 2, 3].map(star => <span className={star <= value ? 'filled' : ''} key={star}>★</span>)}
+  </span>
+}
+
+function SupportPills({ active }: { active: Row['primary_support'] }) {
+  return <div className="ci-support-pills">
+    {(['MEANING', 'SAYING', 'WRITING'] as const).map(value => <span className={active === value ? 'active' : ''} key={value}>{value}</span>)}
+  </div>
+}
+
+export function ConceptInteractionReview({ pin, onExit }: Props) {
+  const [rows, setRows] = useState<Row[]>([])
+  const [idx, setIdx] = useState(0)
+  const [msg, setMsg] = useState('')
+  const [recording, setRecording] = useState(false)
+  const [transcribing, setTranscribing] = useState(false)
+  const rec = useRef<RecordingSession | null>(null)
+  const recordingInputId = useRef<string | null>(null)
+  const cardRef = useRef<HTMLElement | null>(null)
+  const touchX = useRef<number | null>(null)
+  const touchDx = useRef(0)
+  const motionBusy = useRef(false)
+
+  useEffect(() => {
+    let live = true
+    supabase.rpc('lab_concept_input_type_read', { pin }).then(({ data, error }) => {
+      if (!live) return
+      if (error) setMsg(error.message)
+      else setRows((data || []) as Row[])
     })
-    return ()=>{ if(advanceTimer.current) window.clearTimeout(advanceTimer.current) }
-  },[pin])
+    return () => { live = false }
+  }, [pin])
 
-  const visible=useMemo(
-    ()=>rows.filter(r=>filter==='all'||(filter==='2+'?r.ashley_confidence>=2:String(r.ashley_confidence)===filter)),
-    [rows,filter]
+  useEffect(() => {
+    if (idx >= rows.length) setIdx(Math.max(0, rows.length - 1))
+  }, [idx, rows.length])
+
+  const row = rows[idx]
+  const fullyReviewed = useMemo(
+    () => rows.filter(item => item.category_confidence > 0 && item.example_confidence > 0 && item.explanation_confidence > 0 && item.classification_confidence > 0).length,
+    [rows]
   )
-  useEffect(()=>setIdx(i=>Math.min(i,Math.max(0,visible.length-1))),[visible.length])
-  const row=visible[idx]
-  useEffect(()=>setNote(row?.review_note||''),[row?.id])
 
-  async function save(conf?:number,newNote?:string,applyLocal=true){
-    if(!row)return null
-    const {data,error}=await supabase.rpc('lab_concept_interaction_review',{
-      pin,
-      interaction_id:row.id,
-      new_confidence:conf??null,
-      new_note:newNote??null,
-      set_note:newNote!==undefined
-    })
-    if(error){setMsg(error.message);return null}
-    const saved=data as Row
-    if(applyLocal)setRows(rs=>rs.map(r=>r.id===row.id?saved:r))
-    return saved
+  function nextFrame() {
+    return new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
   }
 
-  function nextFrame(){
-    return new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))
-  }
-
-  async function animateCard(delta:number,midpoint:()=>void,startX=0){
-    if(motionBusy.current)return
-    const card=cardRef.current
-    if(!card){midpoint();return}
-    if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){midpoint();return}
-    motionBusy.current=true
-    card.style.pointerEvents='none'
-    const edge=delta>0?'-112%':'112%'
-    const start=`translateX(${startX}px) scale(${1-Math.min(Math.abs(startX)/2400,.02)})`
-    const out=card.animate(
-      [{transform:start,opacity:1},{transform:`translateX(${edge}) scale(.97)`,opacity:.28}],
-      {duration:startX?150:190,easing:'cubic-bezier(.4,0,.2,1)',fill:'forwards'}
+  async function animateCard(delta: number, midpoint: () => void, startX = 0) {
+    if (motionBusy.current || recording || transcribing) return
+    const card = cardRef.current
+    if (!card) { midpoint(); return }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { midpoint(); return }
+    motionBusy.current = true
+    card.style.pointerEvents = 'none'
+    const edge = delta > 0 ? '-112%' : '112%'
+    const start = `translateX(${startX}px) rotate(${startX * .008}deg)`
+    const out = card.animate(
+      [{ transform: start, opacity: 1 }, { transform: `translateX(${edge}) scale(.97)`, opacity: .22 }],
+      { duration: startX ? 150 : 190, easing: 'cubic-bezier(.4,0,.2,1)', fill: 'forwards' }
     )
-    try{
+    try {
       await out.finished
       midpoint()
       await nextFrame()
-      const incoming=cardRef.current
-      if(incoming){
-        const from=delta>0?'112%':'-112%'
-        const enter=incoming.animate(
-          [{transform:`translateX(${from}) scale(.97)`,opacity:.28},{transform:'translateX(0) scale(1)',opacity:1}],
-          {duration:230,easing:'cubic-bezier(.2,.75,.2,1)',fill:'forwards'}
+      const incoming = cardRef.current
+      if (incoming) {
+        const from = delta > 0 ? '112%' : '-112%'
+        const enter = incoming.animate(
+          [{ transform: `translateX(${from}) scale(.97)`, opacity: .22 }, { transform: 'translateX(0) scale(1)', opacity: 1 }],
+          { duration: 230, easing: 'cubic-bezier(.2,.75,.2,1)', fill: 'forwards' }
         )
         out.cancel()
         await enter.finished
         enter.cancel()
-        incoming.style.transform=''
-        incoming.style.opacity=''
-        incoming.style.pointerEvents=''
       }
-    }finally{
-      motionBusy.current=false
-      const active=cardRef.current
-      if(active){active.style.transform='';active.style.opacity='';active.style.pointerEvents=''}
+    } finally {
+      motionBusy.current = false
+      const active = cardRef.current
+      if (active) {
+        active.style.transform = ''
+        active.style.opacity = ''
+        active.style.pointerEvents = ''
+      }
     }
   }
 
-  function go(delta:number,startX=0){
-    const target=Math.max(0,Math.min(visible.length-1,idx+delta))
-    if(target===idx){
-      const card=cardRef.current
-      if(card&&startX){
-        const snap=card.animate([{transform:`translateX(${startX}px)`},{transform:'translateX(0)'}],{duration:150,easing:'ease-out'})
-        void snap.finished.finally(()=>{card.style.transform='';card.style.opacity=''})
+  function go(delta: number, startX = 0) {
+    if (recording || transcribing || !rows.length) return
+    const target = Math.max(0, Math.min(rows.length - 1, idx + delta))
+    if (target === idx) {
+      const card = cardRef.current
+      if (card && startX) {
+        const snap = card.animate([{ transform: `translateX(${startX}px)` }, { transform: 'translateX(0)' }], { duration: 150, easing: 'ease-out' })
+        void snap.finished.finally(() => { card.style.transform = ''; card.style.opacity = '' })
       }
       return
     }
-    void animateCard(delta,()=>setIdx(target),startX)
+    setMsg('')
+    void animateCard(delta, () => setIdx(target), startX)
   }
 
-  async function choose(n:number){
-    if(!row)return
-    const current=row
-    setPendingConfidence({id:current.id,value:n})
-    const saved=await save(n,undefined,false)
-    if(!saved){setPendingConfidence(null);return}
-    setToast(`${current.interaction_code} · confidence ${n} saved`)
-    if(advanceTimer.current) window.clearTimeout(advanceTimer.current)
-    advanceTimer.current=window.setTimeout(()=>{
-      const remainsVisible=filter==='all'||(filter==='2+'?n>=2:String(n)===filter)
-      setToast('')
-      void animateCard(1,()=>{
-        setRows(rs=>rs.map(r=>r.id===saved.id?saved:r))
-        setPendingConfidence(null)
-        if(remainsVisible)setIdx(i=>i+1)
-      })
-    },950)
+  async function cycleConfidence(field: ConfidenceField) {
+    if (!row) return
+    const key = confidenceKey[field]
+    const prior = row[key]
+    const next = (prior + 1) % 4
+    const inputId = row.id
+    setRows(all => all.map(item => item.id === inputId ? { ...item, [key]: next } : item))
+    setMsg('Saving…')
+
+    const { data, error } = await supabase.rpc('lab_concept_input_confidence_set', {
+      pin,
+      input_id: inputId,
+      field_key: field,
+      new_confidence: next,
+    })
+    if (error) {
+      setRows(all => all.map(item => item.id === inputId ? { ...item, [key]: prior } : item))
+      setMsg(error.message)
+      return
+    }
+    const saved = (data as Array<Pick<Row, 'id' | ConfidenceKey>>) || []
+    const update = saved[0] as Partial<Row> | undefined
+    if (update) setRows(all => all.map(item => item.id === inputId ? { ...item, ...update } : item))
+    setMsg(next ? `${field} · ${next} star${next === 1 ? '' : 's'} saved` : `${field} · confidence cleared`)
   }
 
-  async function mic(){
-    if(recording){
-      const s=rec.current
-      if(!s)return
-      s.stop()
+  async function mic() {
+    if (transcribing || !row) return
+    if (recording) {
+      const session = rec.current
+      const inputId = recordingInputId.current
+      if (!session || !inputId) return
+      rec.current = null
+      recordingInputId.current = null
+      session.stop()
       setRecording(false)
+      setTranscribing(true)
       setMsg('Transcribing…')
-      const blob=await s.blobPromise
-      const form=new FormData()
-      form.append('audio',blob,'concept-note.webm')
-      const res=await fetch('/api/transcribe',{method:'POST',headers:{'x-review-pin':pin},body:form})
-      const out=await res.json()
-      if(!res.ok){setMsg(out.error||'Transcription failed');return}
-      const next=[note,out.text].filter(Boolean).join(' ').trim()
-      setNote(next)
-      if(await save(undefined,next)) setMsg('Note saved')
+      try {
+        const blob = await session.blobPromise
+        const form = new FormData()
+        const extension = blob.type.includes('mp4') ? 'm4a' : 'webm'
+        form.append('audio', blob, `concept-input-comment.${extension}`)
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: { 'x-review-pin': pin },
+          body: form,
+        })
+        const transcription = await response.json() as { text?: string; error?: string }
+        if (!response.ok) throw new Error(transcription.error || 'Transcription failed.')
+        const transcript = (transcription.text || '').replace(/\s+/g, ' ').trim()
+        if (!transcript) throw new Error('I did not hear any words in that recording.')
+
+        setMsg('Saving comment…')
+        const { data, error } = await supabase.rpc('lab_concept_input_comment_add', {
+          pin,
+          input_id: inputId,
+          new_transcript: transcript,
+          comment_source: 'voice',
+        })
+        if (error) throw error
+        const saved = ((data || []) as ReviewComment[])[0]
+        if (!saved) throw new Error('The comment was not returned after saving.')
+        setRows(all => all.map(item => item.id === inputId
+          ? { ...item, review_comments: [...(item.review_comments || []), saved] }
+          : item))
+        setMsg('Voice comment saved')
+      } catch (error) {
+        setMsg(error instanceof Error ? error.message : 'Voice comment failed.')
+      } finally {
+        setTranscribing(false)
+      }
       return
     }
-    try{
-      rec.current=await startRecordingSession()
+
+    try {
+      rec.current = await startRecordingSession()
+      recordingInputId.current = row.id
       setRecording(true)
       setMsg('Recording — tap again to stop')
-    }catch(e){
-      setMsg(e instanceof Error?e.message:'Microphone failed')
+    } catch (error) {
+      setMsg(error instanceof Error ? error.message : 'Microphone failed')
     }
   }
 
-  if(!row)return <main className="ci">
-    <header><button onClick={onExit}>‹ Lab</button><b>Concept Interactions</b></header>
-    <div className="ci-empty">{rows.length?'No interactions in this filter.':'Loading…'} {msg}</div>
+  if (!row) return <main className="ci">
+    <header><button onClick={onExit}>‹ Lab</button><b>Concept Inputs</b><span>0/58</span></header>
+    <div className="ci-empty">{msg || 'Loading the 58 canonical inputs…'}</div>
   </main>
 
+  const comments = row.review_comments || []
+  const reviewCard = (field: ConfidenceField, title: string, body: React.ReactNode) => {
+    const value = row[confidenceKey[field]]
+    return <button className="ci-review-card" onClick={() => void cycleConfidence(field)} aria-label={`${title}. Confidence ${value} of 3. Tap to cycle.`}>
+      <span className="ci-review-head"><small>{title}</small><StarMeter value={value} /></span>
+      <span className="ci-review-body">{body}</span>
+      <span className="ci-tap-hint">Tap card: {value} → {(value + 1) % 4}</span>
+    </button>
+  }
+
   return <main className="ci">
-    <header><button onClick={onExit}>‹ Lab</button><b>Concept Interactions</b><span>{idx+1}/{visible.length}</span></header>
-    <nav>{filters.map(([v,l])=><button className={filter===v?'on':''} onClick={()=>{setFilter(v);setIdx(0)}} key={v}>{l}</button>)}</nav>
+    <header><button onClick={onExit}>‹ Lab</button><b>Concept Inputs</b><span>{row.ordinal}/58</span></header>
+
     <section
       ref={cardRef}
-      className="ci-card"
-      onTouchStart={e=>{
-        if((e.target as HTMLElement).closest('button,textarea,input,select')){touchX.current=null;return}
-        touchX.current=e.changedTouches[0].clientX
-        touchDx.current=0
+      className="ci-card ci-input-card"
+      onTouchStart={event => {
+        if ((event.target as HTMLElement).closest('button,input,textarea,select')) { touchX.current = null; return }
+        touchX.current = event.changedTouches[0].clientX
+        touchDx.current = 0
       }}
-      onTouchMove={e=>{
-        if(touchX.current===null||motionBusy.current)return
-        const d=e.changedTouches[0].clientX-touchX.current
-        touchDx.current=d
-        const card=cardRef.current
-        if(card){
-          card.style.transform=`translateX(${d}px) rotate(${d*.012}deg)`
-          card.style.opacity=String(Math.max(.72,1-Math.abs(d)/700))
+      onTouchMove={event => {
+        if (touchX.current === null || motionBusy.current || recording || transcribing) return
+        const delta = event.changedTouches[0].clientX - touchX.current
+        touchDx.current = delta
+        const card = cardRef.current
+        if (card) {
+          card.style.transform = `translateX(${delta}px) rotate(${delta * .01}deg)`
+          card.style.opacity = String(Math.max(.72, 1 - Math.abs(delta) / 700))
         }
       }}
-      onTouchEnd={()=>{
-        if(touchX.current===null)return
-        const d=touchDx.current
-        touchX.current=null
-        touchDx.current=0
-        if(Math.abs(d)>55)go(d<0?1:-1,d)
-        else{
-          const card=cardRef.current
-          if(card){
-            const snap=card.animate([{transform:`translateX(${d}px)`,opacity:card.style.opacity||'1'},{transform:'translateX(0)',opacity:1}],{duration:150,easing:'ease-out'})
-            void snap.finished.finally(()=>{card.style.transform='';card.style.opacity=''})
+      onTouchEnd={() => {
+        if (touchX.current === null) return
+        const delta = touchDx.current
+        touchX.current = null
+        touchDx.current = 0
+        if (Math.abs(delta) > 55) go(delta < 0 ? 1 : -1, delta)
+        else {
+          const card = cardRef.current
+          if (card) {
+            const snap = card.animate([{ transform: `translateX(${delta}px)`, opacity: card.style.opacity || '1' }, { transform: 'translateX(0)', opacity: 1 }], { duration: 150, easing: 'ease-out' })
+            void snap.finished.finally(() => { card.style.transform = ''; card.style.opacity = '' })
           }
         }
       }}
     >
-      <div className="ci-title"><strong>{row.interaction_code}</strong><span>{row.derived_command}</span></div>
-
-      <div className="ci-flow">
-        <div><small>Input</small><b>{row.source_coordinate}</b><span>{row.source_language||'—'} · {row.source_mode}</span></div>
-        <div className="ci-arrow">→</div>
-        <div><small>Output</small><b>{row.target_coordinate}</b><span>{row.target_language||'—'} · {row.target_mode}</span></div>
+      <div className="ci-input-title">
+        <span className="ci-number">#{row.ordinal}</span>
+        <div><small>{row.code}</small><h1>{row.label}</h1></div>
       </div>
 
-      <p className="ci-tech">{row.technical_description}</p>
-
-      <div className="ci-exchange">
-        <div className="ci-role"><small>Teacher / AI</small><b>{row.teacher_asker_does}</b><p>{row.teacher_asker_example||'—'}</p></div>
-        <div className="ci-arrow">→</div>
-        <div className="ci-role"><small>Student</small><b>{row.student_responder_does}</b><p>{row.expected_response||'—'}</p></div>
+      <div className="ci-review-grid">
+        {reviewCard('category', 'Category', row.category)}
+        {reviewCard('example', 'Clear example', row.example)}
+        {reviewCard('explanation', 'Explanation', row.description)}
+        {reviewCard('classification', 'Meaning / Saying / Writing', <><SupportPills active={row.primary_support} /><span className="ci-classification-copy">Primary intrinsic support: <b>{row.primary_support}</b></span></>)}
       </div>
 
-      <div className="ci-prompt">
-        <small>Teacher / AI says</small>
-        <b>{row.teacher_natural_prompt||'—'}</b>
-        <p><small>Needs</small> {row.prerequisites||'TBD'}</p>
-      </div>
-
-      <label className="ci-note"><small>Ashley note</small><textarea value={note} onChange={e=>setNote(e.target.value)} onBlur={()=>void save(undefined,note)} placeholder="Optional note — type or use Mic…"/></label>
-
-      <div className="ci-actions">
-        <button className={recording?'ci-mic rec':'ci-mic'} onClick={mic}>{recording?'■ Stop':'● Mic'}</button>
-        <div className="ci-confidence">
-          <div className="ci-ai"><span>AI confidence</span><b>{row.ai_confidence??'—'}</b><span>Use {row.usefulness??'—'} · Diff {row.difficulty??'—'}</span></div>
-          <div className="ci-ashley"><small>Your confidence</small>{[0,1,2,3].map(n=>{const shown=pendingConfidence?.id===row.id?pendingConfidence.value:row.ashley_confidence;return <button className={shown===n?'selected':''} onClick={()=>void choose(n)} key={n}>{n}</button>})}</div>
+      <section className="ci-comments">
+        <div className="ci-comments-head">
+          <div><small>Your comments</small><strong>{comments.length ? `${comments.length} saved` : 'No comments yet'}</strong></div>
+          <button className={recording ? 'ci-mic rec' : 'ci-mic'} onClick={() => void mic()} disabled={transcribing}>
+            {recording ? '■ Stop' : transcribing ? '… Saving' : '🎙 Mic'}
+          </button>
         </div>
-      </div>
+        {comments.length > 0 && <div className="ci-comment-list">
+          {[...comments].reverse().slice(0, 3).map(comment => <p key={comment.id}>{comment.transcript}</p>)}
+        </div>}
+        <div className={`ci-save-status${recording ? ' recording' : ''}`} role="status" aria-live="polite">{msg || 'Tap Mic, speak, then tap Stop. The transcript saves automatically.'}</div>
+      </section>
     </section>
-    <footer><button onClick={()=>go(-1)}>‹</button><span>{msg||`${rows.filter(r=>r.ashley_confidence===0).length} unconfirmed · swipe ↔`}</span><button onClick={()=>go(1)}>›</button></footer>
-    {toast&&<div className="ci-toast" role="status">{toast}</div>}
+
+    <footer>
+      <button onClick={() => go(-1)} disabled={idx === 0 || recording || transcribing}>‹</button>
+      <span>{fullyReviewed}/58 all four reviewed · swipe ↔</span>
+      <button onClick={() => go(1)} disabled={idx === rows.length - 1 || recording || transcribing}>›</button>
+    </footer>
   </main>
 }
