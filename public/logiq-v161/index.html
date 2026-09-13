@@ -16,9 +16,14 @@ html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,sans
 (async()=>{
   try{
     if(!window.pako) throw new Error('pako decompressor did not load');
-    const r=await fetch('./payload.b64',{cache:'no-store'});
-    if(!r.ok) throw new Error('payload request failed: '+r.status);
-    const b64=(await r.text()).replace(/\s+/g,'');
+    const names = Array.from({length:7},(_,i)=>`./parts/part-${String(i+1).padStart(3,'0')}.b64`);
+    const texts = await Promise.all(names.map(async u=>{
+      const r=await fetch(u,{cache:'no-store'});
+      if(!r.ok) throw new Error(`${u} failed: ${r.status}`);
+      return (await r.text()).replace(/[^A-Za-z0-9+/=]/g,'');
+    }));
+    const b64=texts.join('');
+    if(b64.length !== 78920) throw new Error(`payload length ${b64.length}, expected 78920`);
     const bin=atob(b64);
     const gz=new Uint8Array(bin.length);
     for(let i=0;i<bin.length;i++) gz[i]=bin.charCodeAt(i);
