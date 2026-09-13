@@ -59,7 +59,7 @@ function canopy(parent:T.Group,y:number,r=1.25,mat='leaf'){
 }
 function chairFrame(g:T.Group,w=.76,d=.82,h=.86,mat='walnut'){
   for(const sx of [-1,1])for(const sz of [-1,1])k.box(sx*w*.4,.38,sz*d*.38,.075,.72,.075,mat,g,.02)
-  k.box(0,.72,d*.34,w*.88,.07,.07,mat,g,.02)
+  k.box(0,h*.84,d*.34,w*.88,.07,.07,mat,g,.02)
 }
 function cushion(g:T.Group,y=.52,z=0,w=.74,d=.66,mat='linen'){k.box(0,y,z,w,.13,d,mat,g,.08)}
 
