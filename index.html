@@ -49,6 +49,29 @@
         window.addEventListener('popstate', () => setTimeout(addMaterialsStudioCard, 0));
         setTimeout(addMaterialsStudioCard, 0);
       })();
+
+      // LOGiQ v159 is preserved as a standalone baseline so it can be improved safely
+      // without rewriting the original interaction engine into React first.
+      (() => {
+        const addLogiqCard = () => {
+          const grid = document.querySelector('.experience-grid');
+          if (!grid || document.getElementById('logiq-v159-hub-card')) return;
+
+          const card = document.createElement('article');
+          card.className = 'experience-card';
+          card.id = 'logiq-v159-hub-card';
+          card.innerHTML = '<span class="experience-icon">Q</span><span class="experience-copy"><strong>LOGiQ v159</strong><small>Preserved LOGiQ tree workspace baseline. Open it here, then improve it without losing the known-good version.</small></span><button class="experience-go" type="button">Go</button>';
+          card.querySelector('button')?.addEventListener('click', () => { window.location.href = '/logiq-v159/'; });
+
+          const musicCard = Array.from(grid.querySelectorAll('.experience-card')).find(el => el.textContent?.includes('Music Discovery'));
+          if (musicCard) musicCard.after(card); else grid.append(card);
+        };
+
+        const root = document.getElementById('root');
+        if (root) new MutationObserver(addLogiqCard).observe(root, { childList: true, subtree: true });
+        window.addEventListener('popstate', () => setTimeout(addLogiqCard, 0));
+        setTimeout(addLogiqCard, 0);
+      })();
     </script>
   </body>
 </html>
