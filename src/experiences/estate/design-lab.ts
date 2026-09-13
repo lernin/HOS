@@ -57,6 +57,25 @@ function canopy(parent:T.Group,y:number,r=1.25,mat='leaf'){
     m.rotation.y=a
   }
 }
+function styleTree(x:number,z:number,style:number){
+  platform(x,z)
+  const g=k.group(x,.2,z,.03*(style-4))
+  // Deliberately keep the same trunk, scale and branch anchors. Only the visual
+  // language changes, so this gallery compares "brand" rather than species.
+  k.beam([v(0,0,0),v(.08,1.25,.03),v(-.05,2.45,.08),v(.18,3.25,.04)],.19,'bark',g,9)
+  const branchAngles=[-.95,-.25,.48,1.12]
+  branchAngles.forEach((a,i)=>k.beam([v(.02,1.9+i*.22,.05),v(Math.cos(a)*.62,2.72+i*.12,Math.sin(a)*.62),v(Math.cos(a)*1.18,3.12+i*.11,Math.sin(a)*1.18)],.065,'bark',g,7))
+  const blob=(a:number,y:number,r:number,mat='leaf',flat=.42,offset=.48)=>{const m=k.ellipsoid(Math.cos(a)*r*offset,y,Math.sin(a)*r*offset,r*.72,r*flat,r*.64,mat,g,10);m.rotation.y=a;return m}
+  if(style===0){for(let i=0;i<6;i++)blob(i*Math.PI/3,3.45+(i%2)*.08,1.65,'leafDark',.34,.5)}
+  if(style===1){for(let i=0;i<8;i++)blob(i*Math.PI/4,3.48,1.45,'leaf',.32,.52);k.ellipsoid(0,3.62,0,.8,.42,.8,'leafDark',g,10)}
+  if(style===2){for(let i=0;i<5;i++)blob(i*1.256,3.5+(i%2)*.24,1.42,'leafLight',.28,.56)}
+  if(style===3){for(const [y,r,n] of [[3.0,1.5,4],[3.55,1.25,4],[4.02,.85,3]] as const)for(let i=0;i<n;i++)blob(i*Math.PI*2/n+.35*y,y,r,'leafDark',.18,.5)}
+  if(style===4){for(let i=0;i<12;i++)blob(i*2.399,3.45+Math.sin(i*1.8)*.28,1.62,i%3===0?'leafLight':i%2?'leaf':'leafDark',.42,.52)}
+  if(style===5){branchAngles.forEach((a,i)=>blob(a,3.3+i*.16,.95,i%2?'leaf':'leafDark',.25,.9));k.ellipsoid(.18,4.02,.04,.72,.3,.7,'leaf',g,9)}
+  if(style===6){for(let i=0;i<8;i++){const a=i*2.399;blob(a,3.42+Math.sin(i*1.27)*.32,1.55,i%3===0?'leafLight':i%2?'leafDark':'leaf',.38,.54)}}
+  if(style===7){for(const [y,r] of [[3.05,1.52],[3.56,1.25],[4.02,.82]] as const){for(let i=0;i<6;i++)blob(i*Math.PI/3,y,r,'leafDark',.13,.48)}}
+  if(style===8){for(let i=0;i<10;i++){const a=i*2.1;blob(a,3.45+Math.sin(i)*.36,1.58,i%4===0?'leafLight':'leaf',.48,.5)};for(let i=0;i<5;i++){const a=i*1.26;k.ellipsoid(Math.cos(a)*.7,4.05+Math.sin(i)*.14,Math.sin(a)*.7,.58,.4,.56,'leafDark',g,9)}}
+}
 function chairFrame(g:T.Group,w=.76,d=.82,h=.86,mat='walnut'){
   for(const sx of [-1,1])for(const sz of [-1,1])k.box(sx*w*.4,.38,sz*d*.38,.075,.72,.075,mat,g,.02)
   k.box(0,h*.84,d*.34,w*.88,.07,.07,mat,g,.02)
@@ -91,6 +110,19 @@ const trees:Study[]=[
 {name:'5 · Sculptural Branch',detail:'Sparse architectural branching for a gallery-like garden.',build(x,z){platform(x,z);const g=k.group(x,.2,z,.2);k.beam([v(0,0,0),v(.18,1.4,.1),v(-.1,2.7,.12),v(.3,4,.06)],.2,'bark',g,8);for(let i=0;i<5;i++){const a=i*1.35;k.beam([v(0,2+i*.28,0),v(Math.cos(a)*.65,2.8+i*.25,Math.sin(a)*.65),v(Math.cos(a)*1.2,3.2+i*.18,Math.sin(a)*1.2)],.065,'bark',g,7);const m=k.ellipsoid(Math.cos(a)*1.28,3.25+i*.18,Math.sin(a)*1.28,.75,.34,.7,'leaf',g,9);m.rotation.y=a}}},
 {name:'6 · Flowering Tree',detail:'Soft green canopy with restrained warm blossoms.',build(x,z){platform(x,z);const g=k.group(x,.2,z);trunk(g,2.85,.2,.12);canopy(g,3.15,1.45);for(let i=0;i<14;i++){const a=i*2.1;k.ellipsoid(Math.cos(a)*1.15,3.15+Math.sin(i)*.5,Math.sin(a)*1.15,.12,.08,.12,'pink',g,7)}}}]
 
+const treeStyleNames=[
+  ['1 · Quiet Luxury','Low, broad and restrained. Dense dark-green masses with very little visual noise.'],
+  ['2 · Precision Modern','Clean symmetry and disciplined repetition; the most architectural interpretation.'],
+  ['3 · Nordic Calm','Airier, lighter foliage with more breathing room between masses.'],
+  ['4 · Japanese Garden','Cloud-pruned horizontal layers with deliberate negative space.'],
+  ['5 · Tropical Resort','Lush, generous and layered while keeping the same underlying tree.'],
+  ['6 · Sculptural Gallery','Branches become part of the composition; foliage is reduced to focal masses.'],
+  ['7 · Organic Modern','Controlled irregularity, mixed greens and a softer natural silhouette.'],
+  ['8 · Architectural Graphic','Strong horizontal tiers, almost like landscape architecture drawn in 3D.'],
+  ['9 · Storybook Natural','The fullest, roundest and most expressive version of the same tree.'],
+] as const
+const treeStyles:Study[]=treeStyleNames.map(([name,detail],i)=>({name,detail,build(x,z){styleTree(x,z,i)}}))
+
 const plants:Study[]=[
 {name:'1 · Agave Rosette',detail:'Low sculptural blue-green blades for stone beds.',build(x,z){platform(x,z);const g=k.group(x,.22,z);for(let i=0;i<15;i++){const a=i*2.4;const m=k.ellipsoid(Math.cos(a)*.38,.42+Math.sin(i)*.06,Math.sin(a)*.38,.72,.055,.16,i%3===0?'leafLight':'leaf',g,8);m.rotation.y=-a;m.rotation.z=.32}}},
 {name:'2 · Fountain Grass',detail:'Soft fine blades with a loose wind-shaped silhouette.',build(x,z){platform(x,z);const g=k.group(x,.22,z);for(let i=0;i<18;i++){const a=i*2.17,h=.75+(i%5)*.12;k.beam([v(0,0,0),v(Math.cos(a)*.18,h*.55,Math.sin(a)*.18),v(Math.cos(a)*.52,h,Math.sin(a)*.52)],.018,i%3===0?'leafLight':'leaf',g,5)}}},
@@ -119,6 +151,7 @@ const galleries:Gallery[]=[
 {key:'pillars',label:'Pillars',subtitle:'Entrance architecture',studies:pillars},
 {key:'palms',label:'Palms',subtitle:'Pool and arrival palms',studies:palms},
 {key:'trees',label:'Trees',subtitle:'Canopy and specimen trees',studies:trees},
+{key:'treeStyles',label:'Tree Styles',subtitle:'One tree, nine design languages',studies:treeStyles},
 {key:'plants',label:'Plants',subtitle:'Beds, pots and tropical planting',studies:plants},
 {key:'chairs',label:'Patio Chairs',subtitle:'Pool and terrace seating',studies:chairs},
 {key:'counters',label:'Kitchen Counters',subtitle:'Island and counter concepts',studies:counters},
@@ -160,7 +193,7 @@ function chooseStudy(index:number){
   if(index<0){goalPos.set(o.x,10.5,22);goalTarget.set(o.x,2.5,-2.8);return}
   const [lx,lz]=localPositions[index]
   const x=o.x+lx,z=o.z+lz
-  const tall=['palms','trees','pillars'].includes(galleries[activeGallery].key)
+  const tall=['palms','trees','treeStyles','pillars'].includes(galleries[activeGallery].key)
   const y=tall?5.2:3.25,dist=tall?8.7:6.2
   goalPos.set(x+Math.sin(orbit)*dist,y,z+Math.cos(orbit)*dist)
   goalTarget.set(x,tall?2.5:1.0,z)
