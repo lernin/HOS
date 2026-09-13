@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LOGiQ v161 Preview</title>
+<style>
+html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f0f2f5;color:#475569}
+#boot{height:100%;display:grid;place-items:center}.card{padding:24px;text-align:center}.err{white-space:pre-wrap;text-align:left;max-width:760px}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+</head>
+<body>
+<div id="boot"><div class="card"><strong>Opening LOGiQ v161…</strong></div></div>
+<script>
+(async()=>{
+  try{
+    if(!window.pako) throw new Error('pako decompressor did not load');
+    const r=await fetch('./payload.b64',{cache:'no-store'});
+    if(!r.ok) throw new Error('payload request failed: '+r.status);
+    const b64=(await r.text()).replace(/\s+/g,'');
+    const bin=atob(b64);
+    const gz=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) gz[i]=bin.charCodeAt(i);
+    const html=pako.ungzip(gz,{to:'string'});
+    document.open();
+    document.write(html);
+    document.close();
+  }catch(err){
+    document.getElementById('boot').innerHTML='<div class="card"><h2>LOGiQ v161 could not open</h2><div class="err"></div></div>';
+    document.querySelector('.err').textContent=String(err && (err.stack||err.message) || err);
+  }
+})();
+</script>
+</body>
+</html>
