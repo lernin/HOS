@@ -1,51 +1,81 @@
 export type Point = { x: number; y: number; z: number }
-export type HouseStyle = 'plaster' | 'brick'
+export type HouseStyle = 'plaster' | 'brick' | 'timber'
+export type RoofStyle = '4x4' | '4x6' | '6x4' | '6x6' | 'tower'
 export type HouseSpec = {
   id: string
   label: string
   x: number
   z: number
-  w: 4
-  d: 4
+  w: 4 | 6
+  d: 4 | 6
   y: number
+  rot: number
+  stories: 1 | 2
   style: HouseStyle
+  roof: RoofStyle
   enterable: boolean
+  balcony?: boolean
+  props?: 'workshop' | 'inn' | 'garden' | 'tower'
+}
+export type BridgeSpec = {
+  id: string
+  label: string
+  z: number
+  x: number
+  halfLength: number
+  halfWidth: number
+  rise: number
+  rails: boolean
 }
 
-export const WORLD_X = 46
-export const WORLD_Z = 40
+export const WORLD_X = 48
+export const WORLD_Z = 42
 export const EYE_HEIGHT = 1.64
 export const PLAYER_RADIUS = 0.34
-export const BRIDGE_Z = 1.5
 
 export function riverCenter(z: number) {
-  return 2.8 * Math.sin((z + 5) / 10.5) + z * 0.035
+  return 3.1 * Math.sin((z + 6) / 10.5) + 0.045 * z
 }
 
 export function riverWidth(z: number) {
-  const pond = Math.exp(-((z + 21) ** 2) / 55)
-  return 3.5 + pond * 4.2
+  const pond = Math.exp(-((z + 24) ** 2) / 45)
+  const meadowPool = Math.exp(-((z - 9) ** 2) / 85)
+  return 3.25 + pond * 5.3 + meadowPool * 0.9
 }
 
 export function rawTerrainHeight(x: number, z: number) {
-  const rolling = 0.52 * Math.sin((x + 8) * 0.11) + 0.42 * Math.cos((z - 4) * 0.095) + 0.22 * Math.sin((x + z) * 0.08)
+  const rolling = 0.42 * Math.sin((x + 8) * 0.095) + 0.36 * Math.cos((z - 5) * 0.085) + 0.18 * Math.sin((x + z) * 0.072)
   const dx = x - riverCenter(z)
-  const creekValley = -1.25 * Math.exp(-(dx * dx) / 32)
-  const edgeX = Math.max(0, Math.abs(x) - 27)
+  const creekValley = -1.42 * Math.exp(-(dx * dx) / 30)
+  const edgeX = Math.max(0, Math.abs(x) - 26)
   const edgeZ = Math.max(0, Math.abs(z) - 26)
-  const enclosingHills = edgeX * edgeX * 0.016 + edgeZ * edgeZ * 0.012
-  const northwestHill = 2.1 * Math.exp(-(((x + 25) / 14) ** 2 + ((z + 18) / 13) ** 2))
-  const southeastHill = 1.55 * Math.exp(-(((x - 28) / 15) ** 2 + ((z - 20) / 16) ** 2))
-  return rolling + creekValley + enclosingHills + northwestHill + southeastHill
+  const enclosingHills = edgeX * edgeX * 0.019 + edgeZ * edgeZ * 0.015
+  const westHill = 2.5 * Math.exp(-(((x + 28) / 15) ** 2 + ((z + 14) / 15) ** 2))
+  const eastHill = 1.8 * Math.exp(-(((x - 29) / 16) ** 2 + ((z - 18) / 17) ** 2))
+  const southRise = 1.25 * Math.exp(-(((x + 18) / 20) ** 2 + ((z - 30) / 13) ** 2))
+  return rolling + creekValley + enclosingHills + westHill + eastHill + southRise
 }
 
-const houseSeeds: Omit<HouseSpec, 'y'>[] = [
-  { id: 'creek-cottage', label: 'Creek Cottage', x: -10, z: 10, w: 4, d: 4, style: 'plaster', enterable: true },
-  { id: 'workshop', label: 'Riverside Workshop', x: 12, z: 7, w: 4, d: 4, style: 'plaster', enterable: false },
-  { id: 'hill-house', label: 'Hill House', x: -19, z: -10, w: 4, d: 4, style: 'plaster', enterable: false },
+const seeds: Omit<HouseSpec, 'y'>[] = [
+  { id: 'creek-cottage', label: 'Creek Cottage', x: -11, z: 13, w: 4, d: 4, rot: 0.08, stories: 1, style: 'plaster', roof: '4x4', enterable: true, props: 'garden' },
+  { id: 'riverside-workshop', label: 'Riverside Workshop', x: 11.5, z: 10, w: 6, d: 4, rot: -0.12, stories: 2, style: 'brick', roof: '6x4', enterable: false, balcony: true, props: 'workshop' },
+  { id: 'bridge-inn', label: 'Bridge Inn', x: -14.5, z: 0.5, w: 6, d: 6, rot: 0.1, stories: 2, style: 'timber', roof: '6x6', enterable: false, balcony: true, props: 'inn' },
+  { id: 'watch-tower', label: 'Old Watch Tower', x: 14.5, z: -2.5, w: 4, d: 4, rot: -0.05, stories: 2, style: 'brick', roof: 'tower', enterable: false, props: 'tower' },
+  { id: 'hill-house', label: 'Hill House', x: -24, z: -15.5, w: 4, d: 6, rot: 0.12, stories: 1, style: 'plaster', roof: '4x6', enterable: false, props: 'garden' },
+  { id: 'weaver-house', label: 'Weaver House', x: 21.5, z: -14, w: 6, d: 4, rot: -0.16, stories: 2, style: 'timber', roof: '6x4', enterable: false, balcony: true },
+  { id: 'pond-cottage', label: 'Pond Cottage', x: -9, z: -27, w: 4, d: 4, rot: -0.08, stories: 1, style: 'plaster', roof: '4x4', enterable: false, props: 'garden' },
+  { id: 'mill-house', label: 'Mill House', x: 11.5, z: -26, w: 4, d: 6, rot: 0.08, stories: 1, style: 'brick', roof: '4x6', enterable: false, props: 'workshop' },
 ]
 
-export const houses: HouseSpec[] = houseSeeds.map(house => ({ ...house, y: rawTerrainHeight(house.x, house.z) }))
+function localCoords(x: number, z: number, house: HouseSpec) {
+  const dx = x - house.x
+  const dz = z - house.z
+  const c = Math.cos(-house.rot)
+  const s = Math.sin(-house.rot)
+  return { x: dx * c - dz * s, z: dx * s + dz * c }
+}
+
+export const houses: HouseSpec[] = seeds.map(seed => ({ ...seed, y: rawTerrainHeight(seed.x, seed.z) + (seed.id === 'watch-tower' ? 0.12 : 0) }))
 
 function smoothstep(edge0: number, edge1: number, x: number) {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
@@ -55,11 +85,12 @@ function smoothstep(edge0: number, edge1: number, x: number) {
 export function terrainHeight(x: number, z: number) {
   let height = rawTerrainHeight(x, z)
   for (const house of houses) {
-    const dx = Math.max(0, Math.abs(x - house.x) - house.w / 2)
-    const dz = Math.max(0, Math.abs(z - house.z) - house.d / 2)
+    const local = localCoords(x, z, house)
+    const dx = Math.max(0, Math.abs(local.x) - house.w / 2)
+    const dz = Math.max(0, Math.abs(local.z) - house.d / 2)
     const dist = Math.hypot(dx, dz)
-    if (dist < 2.8) {
-      const blend = 1 - smoothstep(0.2, 2.8, dist)
+    if (dist < 3.3) {
+      const blend = 1 - smoothstep(0.1, 3.3, dist)
       height = height * (1 - blend) + house.y * blend
     }
   }
@@ -67,89 +98,106 @@ export function terrainHeight(x: number, z: number) {
 }
 
 export function waterHeight(z: number) {
-  return rawTerrainHeight(riverCenter(z), z) + 0.36
+  return rawTerrainHeight(riverCenter(z), z) + 0.34
 }
 
-export const BRIDGE_X = riverCenter(BRIDGE_Z)
-const bank = riverWidth(BRIDGE_Z) / 2 + 1.35
-export const BRIDGE_HALF_LENGTH = bank
-export const BRIDGE_HALF_WIDTH = 1.15
-export const BRIDGE_BASE_Y = Math.max(
-  terrainHeight(BRIDGE_X - bank, BRIDGE_Z),
-  terrainHeight(BRIDGE_X + bank, BRIDGE_Z),
-) + 0.16
-
-export function onBridge(x: number, z: number) {
-  return Math.abs(z - BRIDGE_Z) <= BRIDGE_HALF_WIDTH && Math.abs(x - BRIDGE_X) <= BRIDGE_HALF_LENGTH
+function bridgeAt(z: number, rise: number, rails: boolean, label: string, id: string): BridgeSpec {
+  const x = riverCenter(z)
+  const bank = riverWidth(z) / 2 + 1.3
+  return { id, label, z, x, halfLength: bank, halfWidth: 1.12, rise, rails }
 }
 
-export function bridgeDeckY(x: number) {
-  const t = Math.max(-1, Math.min(1, (x - BRIDGE_X) / BRIDGE_HALF_LENGTH))
-  return BRIDGE_BASE_Y + 0.58 * (1 - t * t)
+export const bridges: BridgeSpec[] = [
+  bridgeAt(2.2, 0.38, true, 'Market Bridge', 'market-bridge'),
+  bridgeAt(-19.6, 0.16, false, 'Pond Footbridge', 'pond-footbridge'),
+]
+
+export function bridgeFor(x: number, z: number) {
+  return bridges.find(bridge => Math.abs(z - bridge.z) <= bridge.halfWidth && Math.abs(x - bridge.x) <= bridge.halfLength)
+}
+
+export function bridgeDeckY(bridge: BridgeSpec, x: number) {
+  const left = terrainHeight(bridge.x - bridge.halfLength, bridge.z)
+  const right = terrainHeight(bridge.x + bridge.halfLength, bridge.z)
+  const base = Math.max(left, right) + 0.12
+  const t = Math.max(-1, Math.min(1, (x - bridge.x) / bridge.halfLength))
+  return base + bridge.rise * (1 - t * t)
 }
 
 function insideHouse(x: number, z: number, house: HouseSpec, margin = 0) {
-  return Math.abs(x - house.x) < house.w / 2 + margin && Math.abs(z - house.z) < house.d / 2 + margin
+  const local = localCoords(x, z, house)
+  return Math.abs(local.x) < house.w / 2 + margin && Math.abs(local.z) < house.d / 2 + margin
 }
 
 function hitsEnterableWalls(x: number, z: number, house: HouseSpec) {
-  const lx = x - house.x
-  const lz = z - house.z
-  const wall = PLAYER_RADIUS + 0.18
+  const local = localCoords(x, z, house)
+  const wall = PLAYER_RADIUS + 0.16
   const halfW = house.w / 2
   const halfD = house.d / 2
-  const nearBack = Math.abs(lz + halfD) < wall && Math.abs(lx) < halfW + wall
-  const nearLeft = Math.abs(lx + halfW) < wall && Math.abs(lz) < halfD + wall
-  const nearRight = Math.abs(lx - halfW) < wall && Math.abs(lz) < halfD + wall
-  const nearFront = Math.abs(lz - halfD) < wall && Math.abs(lx) < halfW + wall
-  const doorOpening = lx > -1.62 && lx < -0.38
+  const nearBack = Math.abs(local.z + halfD) < wall && Math.abs(local.x) < halfW + wall
+  const nearLeft = Math.abs(local.x + halfW) < wall && Math.abs(local.z) < halfD + wall
+  const nearRight = Math.abs(local.x - halfW) < wall && Math.abs(local.z) < halfD + wall
+  const nearFront = Math.abs(local.z - halfD) < wall && Math.abs(local.x) < halfW + wall
+  const doorCenter = house.w === 4 ? -1 : 0
+  const doorOpening = Math.abs(local.x - doorCenter) < 0.7
   return nearBack || nearLeft || nearRight || (nearFront && !doorOpening)
 }
 
 export function canStand(x: number, z: number) {
-  if (Math.abs(x) > WORLD_X - 1.1 || Math.abs(z) > WORLD_Z - 1.1) return false
+  if (Math.abs(x) > WORLD_X - 1.2 || Math.abs(z) > WORLD_Z - 1.2) return false
   const creekDistance = Math.abs(x - riverCenter(z))
-  if (creekDistance < riverWidth(z) / 2 + PLAYER_RADIUS * 0.45 && !onBridge(x, z)) return false
+  if (creekDistance < riverWidth(z) / 2 + PLAYER_RADIUS * 0.6 && !bridgeFor(x, z)) return false
   for (const house of houses) {
     if (house.enterable) {
       if (hitsEnterableWalls(x, z, house)) return false
-    } else if (insideHouse(x, z, house, PLAYER_RADIUS + 0.35)) {
-      return false
-    }
+    } else if (insideHouse(x, z, house, PLAYER_RADIUS + 0.38)) return false
   }
   return true
 }
 
 export function floorHeight(x: number, z: number) {
-  if (onBridge(x, z)) return bridgeDeckY(x)
-  const cottage = houses.find(h => h.enterable)
+  const bridge = bridgeFor(x, z)
+  if (bridge) return bridgeDeckY(bridge, x)
+  const cottage = houses.find(house => house.enterable)
   if (cottage && insideHouse(x, z, cottage, -0.05)) return cottage.y + 0.055
   return terrainHeight(x, z)
 }
 
-export const spawn: Point = { x: -15.5, y: 0, z: 18.2 }
+export const spawn: Point = { x: -18, y: 0, z: 21 }
 spawn.y = floorHeight(spawn.x, spawn.z)
 
 export function zoneName(x: number, z: number) {
-  const cottage = houses[0]
-  if (cottage.enterable && insideHouse(x, z, cottage, -0.05)) return 'Inside Creek Cottage'
-  if (onBridge(x, z)) return 'Little Creek Bridge'
-  for (const house of houses) {
-    if (Math.hypot(x - house.x, z - house.z) < 6) return house.label
-  }
-  if (Math.abs(x - riverCenter(z)) < 7) return z < -12 ? 'Willow Pond' : 'Creek Path'
-  if (z < -10) return 'Upper Meadow'
-  return 'Village Meadow'
+  const cottage = houses.find(house => house.enterable)
+  if (cottage && insideHouse(x, z, cottage, -0.05)) return 'Inside Creek Cottage'
+  const bridge = bridgeFor(x, z)
+  if (bridge) return bridge.label
+  for (const house of houses) if (Math.hypot(x - house.x, z - house.z) < 6.7) return house.label
+  if (Math.abs(x - riverCenter(z)) < 7.5) return z < -14 ? 'Willow Pond' : z > 8 ? 'South Creek' : 'Market Creek'
+  if (z < -12) return 'Upper Meadow'
+  if (z > 13) return 'Orchard Lane'
+  return 'Village Green'
 }
 
 export const pathLines = [
   [
-    { x: -16, z: 19 }, { x: -11, z: 13 }, { x: -7, z: 7 }, { x: BRIDGE_X - 3.2, z: BRIDGE_Z },
+    { x: -20, z: 22 }, { x: -15, z: 17 }, { x: -11, z: 13 }, { x: -12, z: 8 }, { x: -14.5, z: 0.5 }, { x: bridges[0].x - 4.2, z: bridges[0].z },
   ],
   [
-    { x: BRIDGE_X + 3.2, z: BRIDGE_Z }, { x: 7, z: 4 }, { x: 12, z: 7 }, { x: 18, z: 10 },
+    { x: bridges[0].x + 4.2, z: bridges[0].z }, { x: 7, z: 5 }, { x: 11.5, z: 10 }, { x: 18, z: 13 },
   ],
   [
-    { x: -7, z: 7 }, { x: -11, z: 1 }, { x: -15, z: -5 }, { x: -19, z: -10 }, { x: -20, z: -17 },
+    { x: -14.5, z: 0.5 }, { x: -17, z: -6 }, { x: -21, z: -11 }, { x: -24, z: -15.5 }, { x: -19, z: -20 }, { x: bridges[1].x - 5, z: bridges[1].z },
+  ],
+  [
+    { x: bridges[1].x + 5, z: bridges[1].z }, { x: 5, z: -18 }, { x: 13, z: -16 }, { x: 21.5, z: -14 },
+  ],
+  [
+    { x: bridges[1].x - 4, z: bridges[1].z }, { x: -8, z: -23 }, { x: -9, z: -27 },
+  ],
+  [
+    { x: bridges[1].x + 4, z: bridges[1].z }, { x: 7, z: -23 }, { x: 11.5, z: -26 },
+  ],
+  [
+    { x: 7, z: 5 }, { x: 12, z: 1 }, { x: 14.5, z: -2.5 }, { x: 14, z: -9 }, { x: 13, z: -16 },
   ],
 ]
