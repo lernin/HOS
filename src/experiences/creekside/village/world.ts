@@ -31,7 +31,7 @@ export type BridgeSpec = {
 export const WORLD_X = 48
 export const WORLD_Z = 42
 export const EYE_HEIGHT = 1.64
-export const PLAYER_RADIUS = 0.34
+export const PLAYER_RADIUS = 0.28
 
 export function riverCenter(z: number) {
   return 3.1 * Math.sin((z + 6) / 10.5) + 0.045 * z
@@ -67,7 +67,7 @@ const seeds: Omit<HouseSpec, 'y'>[] = [
   { id: 'mill-house', label: 'Mill House', x: 11.5, z: -26, w: 4, d: 6, rot: 0.08, stories: 1, style: 'brick', roof: '4x6', enterable: false, props: 'workshop' },
 ]
 
-function localCoords(x: number, z: number, house: HouseSpec) {
+export function localCoords(x: number, z: number, house: HouseSpec) {
   const dx = x - house.x
   const dz = z - house.z
   const c = Math.cos(-house.rot)
@@ -103,25 +103,27 @@ export function waterHeight(z: number) {
 
 function bridgeAt(z: number, rise: number, rails: boolean, label: string, id: string): BridgeSpec {
   const x = riverCenter(z)
-  const bank = riverWidth(z) / 2 + 1.3
-  return { id, label, z, x, halfLength: bank, halfWidth: 1.12, rise, rails }
+  const bank = riverWidth(z) / 2 + 1.35
+  return { id, label, z, x, halfLength: bank, halfWidth: rails ? 1.42 : 1.28, rise, rails }
 }
 
 export const bridges: BridgeSpec[] = [
-  bridgeAt(2.2, 0.38, true, 'Market Bridge', 'market-bridge'),
-  bridgeAt(-19.6, 0.16, false, 'Pond Footbridge', 'pond-footbridge'),
+  bridgeAt(2.2, 0.34, true, 'Market Bridge', 'market-bridge'),
+  bridgeAt(-19.6, 0.12, false, 'Pond Footbridge', 'pond-footbridge'),
 ]
 
-export function bridgeFor(x: number, z: number) {
-  return bridges.find(bridge => Math.abs(z - bridge.z) <= bridge.halfWidth && Math.abs(x - bridge.x) <= bridge.halfLength)
+export function bridgeFor(x: number, z: number, inset = 0) {
+  return bridges.find(bridge => Math.abs(z - bridge.z) <= Math.max(0.25, bridge.halfWidth - inset) && Math.abs(x - bridge.x) <= bridge.halfLength + 0.08)
 }
 
 export function bridgeDeckY(bridge: BridgeSpec, x: number) {
-  const left = terrainHeight(bridge.x - bridge.halfLength, bridge.z)
-  const right = terrainHeight(bridge.x + bridge.halfLength, bridge.z)
-  const base = Math.max(left, right) + 0.12
-  const t = Math.max(-1, Math.min(1, (x - bridge.x) / bridge.halfLength))
-  return base + bridge.rise * (1 - t * t)
+  const leftX = bridge.x - bridge.halfLength
+  const rightX = bridge.x + bridge.halfLength
+  const left = terrainHeight(leftX, bridge.z) + 0.08
+  const right = terrainHeight(rightX, bridge.z) + 0.08
+  const u = Math.max(0, Math.min(1, (x - leftX) / Math.max(0.001, rightX - leftX)))
+  const baseline = left + (right - left) * u
+  return baseline + bridge.rise * 4 * u * (1 - u)
 }
 
 function insideHouse(x: number, z: number, house: HouseSpec, margin = 0) {
@@ -129,9 +131,9 @@ function insideHouse(x: number, z: number, house: HouseSpec, margin = 0) {
   return Math.abs(local.x) < house.w / 2 + margin && Math.abs(local.z) < house.d / 2 + margin
 }
 
-function hitsEnterableWalls(x: number, z: number, house: HouseSpec) {
+function hitsEnterableWalls(x: number, z: number, house: HouseSpec, radius: number) {
   const local = localCoords(x, z, house)
-  const wall = PLAYER_RADIUS + 0.16
+  const wall = radius + 0.10
   const halfW = house.w / 2
   const halfD = house.d / 2
   const nearBack = Math.abs(local.z + halfD) < wall && Math.abs(local.x) < halfW + wall
@@ -139,18 +141,21 @@ function hitsEnterableWalls(x: number, z: number, house: HouseSpec) {
   const nearRight = Math.abs(local.x - halfW) < wall && Math.abs(local.z) < halfD + wall
   const nearFront = Math.abs(local.z - halfD) < wall && Math.abs(local.x) < halfW + wall
   const doorCenter = house.w === 4 ? -1 : 0
-  const doorOpening = Math.abs(local.x - doorCenter) < 0.7
+  // Collision is deliberately more forgiving than the visible doorway so a thumb-controlled
+  // player can pass through without pixel-perfect alignment.
+  const doorOpening = Math.abs(local.x - doorCenter) < 1.06
   return nearBack || nearLeft || nearRight || (nearFront && !doorOpening)
 }
 
-export function canStand(x: number, z: number) {
+export function canStand(x: number, z: number, radius = PLAYER_RADIUS) {
   if (Math.abs(x) > WORLD_X - 1.2 || Math.abs(z) > WORLD_Z - 1.2) return false
+  const bridge = bridgeFor(x, z, radius * 0.08)
   const creekDistance = Math.abs(x - riverCenter(z))
-  if (creekDistance < riverWidth(z) / 2 + PLAYER_RADIUS * 0.6 && !bridgeFor(x, z)) return false
+  if (creekDistance < riverWidth(z) / 2 + radius * 0.55 && !bridge) return false
   for (const house of houses) {
     if (house.enterable) {
-      if (hitsEnterableWalls(x, z, house)) return false
-    } else if (insideHouse(x, z, house, PLAYER_RADIUS + 0.38)) return false
+      if (hitsEnterableWalls(x, z, house, radius)) return false
+    } else if (insideHouse(x, z, house, radius + 0.26)) return false
   }
   return true
 }
@@ -159,7 +164,7 @@ export function floorHeight(x: number, z: number) {
   const bridge = bridgeFor(x, z)
   if (bridge) return bridgeDeckY(bridge, x)
   const cottage = houses.find(house => house.enterable)
-  if (cottage && insideHouse(x, z, cottage, -0.05)) return cottage.y + 0.055
+  if (cottage && insideHouse(x, z, cottage, -0.04)) return cottage.y + 0.055
   return terrainHeight(x, z)
 }
 
@@ -168,7 +173,7 @@ spawn.y = floorHeight(spawn.x, spawn.z)
 
 export function zoneName(x: number, z: number) {
   const cottage = houses.find(house => house.enterable)
-  if (cottage && insideHouse(x, z, cottage, -0.05)) return 'Inside Creek Cottage'
+  if (cottage && insideHouse(x, z, cottage, -0.04)) return 'Inside Creek Cottage'
   const bridge = bridgeFor(x, z)
   if (bridge) return bridge.label
   for (const house of houses) if (Math.hypot(x - house.x, z - house.z) < 6.7) return house.label
