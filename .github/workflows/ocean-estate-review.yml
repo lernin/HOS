@@ -1,7 +1,16 @@
 name: Ocean Estate review
 on:
   push:
-    branches: [feature/ocean-estate-20260911]
+    branches:
+      - 'preview/ocean-estate-*'
+    paths:
+      - src/experiences/estate/**
+      - src/experiences/OceanEstate.tsx
+      - src/main.tsx
+      - tests/ocean-estate*
+      - .github/workflows/ocean-estate-review.yml
+  pull_request:
+    branches: [main]
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx
@@ -25,7 +34,7 @@ jobs:
       - run: node --test tests/ocean-estate.test.mjs tests/waterfall-village.test.mjs
       - run: npm install --no-save --package-lock=false playwright@1.55.0
       - run: npx playwright install --with-deps chromium
-      - name: Render estate and verify phone UI
+      - name: Render estate and verify landscape phone interactions
         run: |
           npm run dev -- --port 4173 > /tmp/ocean-estate-vite.log 2>&1 &
           for i in {1..30}; do

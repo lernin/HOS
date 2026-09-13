@@ -28,9 +28,20 @@ export function architecture(k:EstateKit){
   k.box(-10.54,FLOOR+.75,0,.045,.6,2.4,'black')
   for(let i=0;i<11;i++)k.ellipsoid(-10.49,FLOOR+.58+.03*(i%3),-.95+i*.18,.02,.09,.06,'glow',k.root,8)
   for(const x of [-1.3,3.3]){const g=k.group(x,FLOOR,24,x<0?1.05:-1.05);k.box(x<0?1.04:-1.04,1.8,0,2.04,3.6,.13,'walnut',g,.035);k.box(x<0?1.8:-1.8,1.7,-.1,.03,1.1,.04,'bronze',g)}
-  // Covered arrival portal and discreet pendant sculpture.
+  // Covered arrival portal: Design Lab study 4, Fluted Stone, scaled to the real stair approach.
   k.box(1,FLOOR+4,26.6,13,.28,6,'travertine')
-  for(const x of [-5,7])k.box(x,FLOOR+1.9,29.2,.35,3.8,.35,'travertine')
+  const arrivalGround=FLOOR-10*1.2/14,arrivalRoofBottom=FLOOR+4-.14
+  const foundationH=.28,plinthH=.18,capH=.14,shaftBottom=arrivalGround+foundationH+plinthH,shaftTop=arrivalRoofBottom-capH,pillarH=shaftTop-shaftBottom,shaftY=shaftBottom+pillarH/2
+  for(const x of [-5,7]){
+    // Two-stage stone foundation lands visibly on the stair paving.
+    k.box(x,arrivalGround+foundationH/2,29.2,1.06,foundationH,.92,'travertine',k.root,.07)
+    k.box(x,arrivalGround+foundationH+plinthH/2,29.2,.90,plinthH,.80,'limestone',k.root,.045)
+    // The chosen fluted column is deliberately slim relative to the roof span.
+    k.box(x,shaftY,29.2,.82,pillarH,.72,'travertine',k.root,.045)
+    for(const dx of [-.28,-.14,.14,.28])k.box(x+dx,shaftY,29.585,.065,pillarH-.24,.055,'limestone',k.root,.018)
+    k.box(x,shaftY,29.62,.062,pillarH-.55,.05,'glow',k.root,.016)
+    k.box(x,arrivalRoofBottom-capH/2,29.2,.92,capH,.82,'bronze',k.root,.035)
+  }
   for(const [x,z] of [[-3,11],[5,11],[-3,21],[5,21]]){k.cylinder(x,FLOOR+.44,z,.22,.88,'travertine');k.ellipsoid(x,FLOOR+1.16,z,.32,.38,.19,'bronze')}
   for(let i=0;i<5;i++){const m=k.mesh(new T.TorusGeometry(1.1+i*.07,.025,6,32),'bronze',1,FLOOR+3.2+i*.12,17);m.rotation.x=1.05+i*.09}
   // Deep terrace edge and concealed waterline conceal intersections with cliffs.

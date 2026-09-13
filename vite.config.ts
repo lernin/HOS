@@ -9,6 +9,7 @@ export default defineConfig({
       input: {
         app: resolve(__dirname, 'index.html'),
         manager: resolve(__dirname, 'manager.html'),
+        designLab: resolve(__dirname, 'design-lab.html'),
       },
     },
   },
