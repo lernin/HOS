@@ -7217,6 +7217,33 @@ function getSelectedUid(){
       if (!state.selectedUid) return false;
       return !!addChildOf(state.selectedUid, '', { noEdit: false });
     },
+    createRelative(direction) {
+      if (!state.selectedUid) return null;
+      const before = state.selectedUid;
+      if (direction === 'up') insertParentAboveSelectedAndEdit();
+      if (direction === 'left') addElderSiblingLeftAndEdit();
+      if (direction === 'down') addChildBelowSelectedAndEdit();
+      if (direction === 'right') addYoungerSiblingRightAndEdit();
+      const created = state.selectedUid && state.selectedUid !== before ? state.selectedUid : null;
+      if (created && state.editingUid) closeNodeEditor(false, false);
+      emitChange();
+      return created;
+    },
+    renameNode(uid, name) {
+      const target = uid && utils.findByUid(state.root?.data, uid);
+      const next = String(name || '').trim();
+      if (!target || !next) return false;
+      const prev = target.name || '';
+      if (next === prev) return true;
+      pushHistory({ type: 'rename', uid, prev, next });
+      target.name = next;
+      state.root = d3.hierarchy(state.root.data);
+      utils.assignIds(state.root);
+      treeManager.layoutAndRender(false);
+      selectSingle(uid);
+      emitChange();
+      return true;
+    },
     deleteSelection({ nodeOnly = false } = {}) {
       if (nodeOnly) {
         deleteSelectedNodeOnly();

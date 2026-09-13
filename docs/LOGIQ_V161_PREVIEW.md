@@ -5,7 +5,8 @@
 - Immutable baseline: `/logiq-v161-legacy/`
 - Working preview: `/logiq-v161/`
 - Baseline tag: `logiq-v161-legacy-baseline-20260913`
-- Preview branch: `preview/logiq-v161-recovery-mobile-autosave-20260913`
+- Stable preview branch: `preview/logiq-v161-recovery-mobile-autosave-20260913`
+- Gesture prototype branch: `preview/logiq-v161-gesture-prototype-20260914`
 - Approval gate: do not merge this branch to `main` until the preview regression workflow passes and the preview is explicitly approved.
 
 The working page is a direct copy of the recovered source. More than 248,000 leading source bytes remain identical to the checksum-locked baseline. A small bridge is appended after legacy initialization, and all new UI and persistence code lives in `public/logiq-v161/logiq-preview.js`. This keeps the legacy closure and handler order intact.
@@ -42,18 +43,39 @@ The Trees control now opens a real library dialog rather than the legacy prompt 
 
 ## Mobile-only behavior
 
-The breakpoint is `700px`. Above it, legacy header, control, tree, Dock, drag, Trash, pointer, and keyboard behavior remain in place.
+Phone UI is enabled below `700px`, plus coarse-pointer landscape screens no taller than `700px`. This catches phones whose landscape CSS width is wider than the old breakpoint. Desktop and fine-pointer layouts retain the legacy header, controls, tree, Dock, drag, Trash, pointer, and keyboard behavior.
 
-At mobile widths:
+On phone layouts:
 
-- a 52px header shows menu, LOGiQ identity, current map, save state, and library access;
-- word entry and secondary commands appear only when the menu is opened;
-- the permanent Trash target is hidden (it may appear temporarily during an active drag);
-- selecting a node reveals contextual navigation, structural Move mode, Edit, Add Child, and Delete;
+- a 48px header (44px in short landscape) contains LOGiQ identity, a type-or-speak field, microphone, Undo, a permanent crosshair/Fit control, save-state dot, and overflow menu;
+- Maps, Mix, Word Dock, Help, and typed-add variants appear on demand in the overflow menu;
+- account text is not duplicated into the phone header;
+- the permanent Trash target stays hidden, including during drag; deletion remains available after selecting a node;
+- selecting a node reveals contextual navigation, Edit, Delete, and a green directional-create puck attached to the selected card;
 - arrow controls mirror keyboard navigation;
-- Move plus an arrow mirrors hold-`V` structural movement;
 - the Word Dock remains reachable and scrollable above the contextual action bar;
 - map/library and PIN interfaces use touch-sized dialogs and controls.
+
+### Directional creation and voice
+
+The selected card itself keeps the legacy drag/reparent handler. This is deliberate: using the same one-finger surface for both reparent and create would make the intent ambiguous and could damage the tightly coupled legacy drag path. A small green `+` puck appears beside the selected card instead. Flick the puck at least 48 CSS pixels within 850ms:
+
+| Flick | Equivalent legacy command | Result |
+|---|---|---|
+| Up | `Shift+I` | Insert an intermediary parent above the selected non-root card |
+| Left | `Shift+J` | Insert an older sibling |
+| Down | `Shift+K` | Add a child |
+| Right | `Shift+L` | Insert a younger sibling |
+
+The direction preview appears while the puck moves, and supported devices vibrate once when the commit threshold is crossed. On release, LOGiQ creates a blank card through the existing legacy command, starts microphone capture, and shows a Stop pill. Stop uploads the clip to the existing `/api/transcribe` endpoint; successful text renames the exact new card and enters normal autosave. If microphone permission or transcription fails, the new card remains selected and opens for typing. The header microphone performs voice-to-text into the compact entry field without creating a card.
+
+Touch responsibilities therefore remain unambiguous:
+
+- two fingers pinch the existing D3 canvas zoom;
+- one finger on empty canvas pans;
+- tap a card to select it;
+- drag the card itself to use legacy move/reparent;
+- flick the attached `+` puck to create and dictate a related card.
 
 ## Regression coverage
 
@@ -73,7 +95,8 @@ At mobile widths:
 | Structural V | Hold-`V` plus arrow changes sibling order, Undo |
 | Autosave | Debounce, RPC payload, Saved state, no manual Save control |
 | Library | Production list RPC and rendered map entry |
-| Mobile | Minimal header, hidden permanent Trash, on-demand panel, contextual navigation/edit |
+| Mobile | Compact portrait/landscape shell, permanent Fit, hidden Trash, on-demand panel, contextual navigation/edit |
+| Gesture/voice | Selected-card create puck, child relationship, mocked microphone/transcription, resulting label |
 | Offline | Local pending snapshot, Offline state, online retry to Saved |
 
 The workflow is `.github/workflows/logiq-v161-preview.yml`. It builds HOS, runs the immutable baseline checks, installs pinned Playwright/Chromium and D3 test fixtures, starts Vite, and runs the desktop/mobile smoke suite on preview pushes and matching pull requests. CI intercepts the legacy jsDelivr request with the pinned D3 fixture so the smoke result does not depend on third-party CDN availability.

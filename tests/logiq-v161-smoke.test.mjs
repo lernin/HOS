@@ -260,7 +260,8 @@ test('mobile preview provides on-demand controls, contextual actions, library, a
   await page.locator('.node-edit-input').press('Enter')
   await page.waitForFunction(() => Array.from(document.querySelectorAll('g.node')).some((node) => node.textContent.includes('Mobile 05')))
 
-  await page.locator('#logiq-mobile-library-btn').tap()
+  await page.locator('#logiq-mobile-menu-btn').tap()
+  await page.locator('[data-tool="library"]').tap()
   await page.waitForSelector('#logiq-library.is-open')
   await page.waitForFunction(() => document.querySelector('#logiq-map-list')?.textContent.includes('Production map'))
   assert.ok(requests.some((request) => request.name === 'logiq_map_list'))
@@ -278,6 +279,94 @@ test('mobile preview provides on-demand controls, contextual actions, library, a
   await page.evaluate(() => window.dispatchEvent(new Event('online')))
   await page.waitForFunction(() => Array.from(document.querySelectorAll('.logiq-save-state')).some((element) => element.textContent === 'Saved'), null, { timeout: 6000 })
 
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('landscape phone shell stays compact and keeps Fit available without a trash target', async () => {
+  const context = await newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true })
+  await stubProduction(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logiq-v161/index.html`, { waitUntil: 'networkidle' })
+  await waitForTree(page)
+
+  assert.equal(await page.locator('body > header').isVisible(), false)
+  assert.ok((await page.locator('#logiq-mobile-header').boundingBox()).height <= 48)
+  assert.equal(await page.locator('#logiq-mobile-header').getByText('Logged in as Ashley').count(), 0)
+  assert.equal(await page.locator('#trash').isVisible(), false)
+  await page.evaluate(() => document.body.classList.add('global-no-cursor'))
+  assert.equal(await page.locator('#trash').isVisible(), false)
+
+  await page.keyboard.press('z')
+  await page.waitForTimeout(400)
+  await page.getByRole('button', { name: 'Recenter map' }).tap()
+  await page.waitForTimeout(1300)
+  assert.ok(Number.isFinite(await page.evaluate(() => d3.zoomTransform(document.getElementById('canvas')).k)))
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('selected-card spawn gesture creates a child and voice names it', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await context.addInitScript(() => {
+    class FakeRecorder extends EventTarget {
+      constructor(stream) { super(); this.stream = stream; this.state = 'inactive'; this.mimeType = 'audio/webm' }
+      start() { this.state = 'recording' }
+      stop() {
+        this.state = 'inactive'
+        this.dispatchEvent(new MessageEvent('dataavailable', { data: new Blob(['voice'], { type: this.mimeType }) }))
+        this.dispatchEvent(new Event('stop'))
+      }
+    }
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } })
+    Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: FakeRecorder })
+  })
+  await stubProduction(context)
+  await context.route('**/api/transcribe', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ text: 'Spoken puppy' }) }))
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logiq-v161/index.html`, { waitUntil: 'networkidle' })
+  await waitForTree(page)
+
+  await page.evaluate(() => window.LOGiQBridge.selectByName('Node 05'))
+  await page.waitForSelector('#logiq-spawn-puck.is-visible')
+  const puck = await page.locator('#logiq-spawn-puck').boundingBox()
+  assert.ok(puck)
+  const x = puck.x + puck.width / 2
+  const y = puck.y + puck.height / 2
+  await page.locator('#logiq-spawn-puck').dispatchEvent('pointerdown', { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y, bubbles: true })
+  await page.locator('#logiq-spawn-puck').dispatchEvent('pointermove', { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y + 70, bubbles: true })
+  await page.locator('#logiq-spawn-puck').dispatchEvent('pointerup', { pointerId: 7, pointerType: 'touch', clientX: x, clientY: y + 70, bubbles: true })
+  await page.waitForSelector('#logiq-voice-bar.is-visible')
+  await page.getByRole('button', { name: 'Stop' }).tap()
+  await page.waitForFunction(() => {
+    const visit = (node) => node?.name === 'Spoken puppy' || (node?.children || []).some(visit)
+    return visit(window.LOGiQBridge.snapshot().tree)
+  })
+  assert.equal(await page.evaluate(() => window.LOGiQBridge.getParentName('Spoken puppy')), 'Node 05')
+
+  // The other flick directions reuse the proven v161 Shift+I/J/L semantics.
+  assert.equal(await page.evaluate(() => {
+    LOGiQBridge.selectByName('Node 06')
+    const uid = LOGiQBridge.createRelative('left')
+    return LOGiQBridge.renameNode(uid, 'Older sibling') && LOGiQBridge.getParentName('Older sibling')
+  }), 'Node 02')
+  await page.evaluate(() => { LOGiQBridge.undo(); LOGiQBridge.undo() })
+  assert.equal(await page.evaluate(() => {
+    LOGiQBridge.selectByName('Node 06')
+    const uid = LOGiQBridge.createRelative('right')
+    return LOGiQBridge.renameNode(uid, 'Younger sibling') && LOGiQBridge.getParentName('Younger sibling')
+  }), 'Node 02')
+  await page.evaluate(() => { LOGiQBridge.undo(); LOGiQBridge.undo() })
+  assert.equal(await page.evaluate(() => {
+    LOGiQBridge.selectByName('Node 06')
+    const uid = LOGiQBridge.createRelative('up')
+    LOGiQBridge.renameNode(uid, 'Intermediate parent')
+    return LOGiQBridge.getParentName('Node 06')
+  }), 'Intermediate parent')
   assert.deepEqual(errors, [])
   await context.close()
 })
