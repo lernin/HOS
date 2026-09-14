@@ -6,10 +6,8 @@
   const C = {
     doubleTap: 360,
     tapMove: 11,
-    dragStart: 9,
-    flickMin: 52,
-    flickMax: 340,
-    flickRatio: 1.45,
+    holdMs: 280,
+    holdSlop: 8,
     edgeZone: 84,
     edgeStep: 14,
     pinKey: 'logiq_lab_pin_v1',
@@ -22,8 +20,10 @@
     if (!win || !doc || !win.LOGiQBridge || !mobile(win)) return
 
     const bridge = win.LOGiQBridge
+    win.__logiqV2ConsumedPointers ||= new Set()
+
     const state = {
-      active: new Set(), pointers: new Map(), lastTap: null, gesture: null,
+      active: new Set(), pointers: new Map(), lastTap: null, hold: null, gesture: null,
       edgeRaf: 0, actionRaf: 0, actionUid: null, editorUid: null,
       recorder: null, recordingUid: null, recordingStream: null, chunks: [], toastTimer: 0,
     }
@@ -49,7 +49,6 @@
     const style = doc.createElement('style')
     style.textContent = `
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
-        body.logiq-mobile-v2 #logiq-mobile-header,
         body.logiq-mobile-v2 #logiq-mobile-context,
         body.logiq-mobile-v2 #logiq-voice-bar{display:none!important}
         body.logiq-mobile-v2 svg#canvas g.node{pointer-events:none!important}
@@ -73,9 +72,9 @@
         #logiq-v2-toast{position:fixed;z-index:4000;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%) translateY(8px);max-width:calc(100vw - 28px);padding:8px 11px;border-radius:999px;background:rgba(15,23,42,.92);color:#fff;font:700 12px/1.25 system-ui;opacity:0;pointer-events:none;transition:.16s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         #logiq-v2-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
         body.logiq-mobile-v2.v2-drag svg#canvas{cursor:grabbing}
+        body.logiq-mobile-v2.v2-drag g.node.is-outlined rect:not(.grabzone){stroke:#2563eb!important;stroke-width:3px!important}
         body.logiq-mobile-v2.v2-cancel g.node.is-outlined rect:not(.grabzone){stroke:#ef4444!important;stroke-width:3px!important}
         @media (orientation:landscape){
-          body.logiq-mobile-v2 #logiq-mobile-header{display:none!important}
           #logiq-v2-rail{top:50%;transform:translateY(-50%)}
           body.logiq-mobile-v2 #logiq-mobile-panel{top:8px;bottom:8px;left:58px;right:auto;width:min(300px,42vw);overflow:auto}
         }
@@ -157,92 +156,174 @@
     const down = e => {
       if (e.pointerType === 'mouse') return
       const had = state.active.size > 0
-      if (had) state.pointers.forEach(p => { p.multi = true })
+      if (had) {
+        state.pointers.forEach(p => { p.multi = true })
+        cancelHold(win,state)
+      }
+
       state.active.add(e.pointerId)
       const node = hitNode(doc,e.clientX,e.clientY), uid = nodeUid(node)
       state.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,uid,multi:had,moved:false})
 
-      if (state.gesture) {
-        if (e.pointerId !== state.gesture.pointerId && !node) {
-          e.preventDefault(); e.stopImmediatePropagation(); state.gesture.cancel = true; doc.body.classList.add('v2-cancel'); win.navigator.vibrate?.([10,24,10])
+      if (state.gesture && e.pointerId !== state.gesture.pointerId) {
+        e.preventDefault(); e.stopImmediatePropagation()
+        if (!node) {
+          state.gesture.cancel = true
+          doc.body.classList.add('v2-cancel')
+          win.navigator.vibrate?.([10,24,10])
         }
         return
       }
-      if (had) { state.lastTap = null; return }
-      const now = win.performance.now()
-      if (!(uid && state.lastTap?.uid === uid && now-state.lastTap.time <= C.doubleTap)) return
 
-      e.preventDefault(); e.stopImmediatePropagation(); state.lastTap = null; bridge.selectByUid(uid); state.actionUid = null; closeEditor(state)
-      state.gesture = {pointerId:e.pointerId,uid,node,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,started:now,before:snapshot(bridge),drag:false,cancel:false}
-      try { canvas.setPointerCapture?.(e.pointerId) } catch (_) {}
+      if (had || !uid) return
+      const before = captureState(bridge)
+      const hold = {
+        pointerId:e.pointerId, uid, node,
+        x:e.clientX, y:e.clientY, lastX:e.clientX, lastY:e.clientY,
+        before, moved:false, timer:0,
+      }
+      hold.timer = win.setTimeout(() => latchHold(doc,win,bridge,state,hold), C.holdMs)
+      state.hold = hold
     }
 
     const move = e => {
       const p = state.pointers.get(e.pointerId)
       if (p && Math.hypot(e.clientX-p.x,e.clientY-p.y) > C.tapMove) p.moved = true
-      const g = state.gesture; if (!g || g.pointerId !== e.pointerId) return
-      e.preventDefault(); e.stopImmediatePropagation(); g.lastX = e.clientX; g.lastY = e.clientY
-      const dist = Math.hypot(e.clientX-g.x,e.clientY-g.y)
-      if (!g.drag && dist >= C.dragStart) beginDrag(doc,win,state,g)
-      if (g.drag) mouse(win,win,'mousemove',e.clientX,e.clientY,1)
-    }
 
-    const up = e => {
-      const p = state.pointers.get(e.pointerId); state.active.delete(e.pointerId); state.pointers.delete(e.pointerId)
-      const g = state.gesture
-      if (g && g.pointerId === e.pointerId) {
-        e.preventDefault(); e.stopImmediatePropagation()
-        const dx = e.clientX-g.x, dy = e.clientY-g.y, elapsed = win.performance.now()-g.started, dist = Math.hypot(dx,dy), flick = !g.cancel && isFlick(dx,dy,elapsed)
-        finishDrag(doc,win,state,g,e.clientX,e.clientY)
-        if (g.cancel) return restore(win,bridge,g)
-        if (flick) {
-          const dir = Math.abs(dx)>Math.abs(dy) ? (dx<0?'left':'right') : (dy<0?'up':'down')
-          if (snapshot(bridge)!==g.before) bridge.undo()
-          return win.requestAnimationFrame(() => {
-            bridge.selectByUid(g.uid)
-            const uid = bridge.createRelative(dir)
-            if (!uid) return toast(win,state,'That relation cannot be created here')
-            bridge.selectByUid(uid); state.actionUid = uid; win.navigator.vibrate?.(16); toast(win,state,'Blank card created')
-          })
-        }
-        if (dist < C.tapMove && elapsed < 520) {
-          const node = nodeByUid(doc,g.uid); if (node) openEditor(win,bridge,state,node,g.uid)
+      const hold = state.hold
+      if (hold && hold.pointerId === e.pointerId) {
+        hold.lastX=e.clientX; hold.lastY=e.clientY
+        if (Math.hypot(e.clientX-hold.x,e.clientY-hold.y) > C.holdSlop) {
+          hold.moved = true
+          cancelHold(win,state)
         }
         return
       }
+
+      const g = state.gesture
+      if (!g || g.pointerId !== e.pointerId) return
+      e.preventDefault(); e.stopImmediatePropagation()
+      g.lastX=e.clientX; g.lastY=e.clientY
+      mouse(win,win,'mousemove',e.clientX,e.clientY,1)
+    }
+
+    const up = e => {
+      const p = state.pointers.get(e.pointerId)
+      state.active.delete(e.pointerId)
+      state.pointers.delete(e.pointerId)
+
+      if (state.hold?.pointerId === e.pointerId) cancelHold(win,state)
+
+      const g = state.gesture
+      if (g && g.pointerId === e.pointerId) {
+        finishDrag(doc,win,state,g,e.clientX,e.clientY)
+        win.setTimeout(() => settleDrag(win,bridge,g),0)
+        return
+      }
+
       if (!p || p.multi || p.moved) return
       const node = hitNode(doc,e.clientX,e.clientY), uid = nodeUid(node)
-      if (!uid) { state.lastTap = null; if (!state.recorder) state.actionUid = null; return }
-      bridge.selectByUid(uid); state.lastTap = {uid,time:win.performance.now()}; state.actionUid = blank(node) ? uid : null
+      if (!uid || uid !== p.uid) {
+        state.lastTap = null
+        if (!state.recorder) state.actionUid = null
+        return
+      }
+
+      const now = win.performance.now()
+      if (state.lastTap?.uid === uid && now-state.lastTap.time <= C.doubleTap) {
+        state.lastTap = null
+        const live = nodeByUid(doc,uid)
+        if (live) openEditor(win,bridge,state,live,uid)
+        return
+      }
+
+      bridge.selectByUid(uid)
+      state.lastTap = {uid,time:now}
+      state.actionUid = blank(node) ? uid : null
     }
 
     const cancel = e => {
-      state.active.delete(e.pointerId); state.pointers.delete(e.pointerId)
+      state.active.delete(e.pointerId)
+      state.pointers.delete(e.pointerId)
+      if (state.hold?.pointerId === e.pointerId) cancelHold(win,state)
       if (!state.gesture || state.gesture.pointerId !== e.pointerId) return
-      const g = state.gesture; finishDrag(doc,win,state,g,g.lastX,g.lastY); restore(win,bridge,g)
+      const g = state.gesture
+      finishDrag(doc,win,state,g,g.lastX,g.lastY)
+      win.setTimeout(() => restoreExact(bridge,g),0)
     }
 
     canvas.addEventListener('pointerdown',down,true)
     canvas.addEventListener('pointermove',move,true)
     canvas.addEventListener('pointerup',up,true)
     canvas.addEventListener('pointercancel',cancel,true)
-    const suppress = e => { if (state.gesture) { e.preventDefault(); e.stopImmediatePropagation() } }
-    canvas.addEventListener('touchstart',suppress,{capture:true,passive:false})
+
+    const suppress = e => {
+      if (!state.gesture) return
+      e.preventDefault(); e.stopImmediatePropagation()
+    }
     canvas.addEventListener('touchmove',suppress,{capture:true,passive:false})
   }
 
-  function beginDrag(doc,win,state,g) {
-    const node = nodeByUid(doc,g.uid) || g.node; if (!node) return
-    g.drag = true; doc.body.classList.add('v2-drag'); mouse(node,win,'mousedown',g.x,g.y,1); mouse(win,win,'mousemove',g.lastX,g.lastY,1); edgeLoop(doc,win,state); win.navigator.vibrate?.(8)
+  function latchHold(doc,win,bridge,state,hold) {
+    if (state.hold !== hold || hold.moved) return
+    const pointer = state.pointers.get(hold.pointerId)
+    if (!pointer || pointer.multi || state.active.size !== 1) return cancelHold(win,state)
+
+    state.hold = null
+    if (hold.timer) win.clearTimeout(hold.timer)
+    bridge.selectByUid(hold.uid)
+    state.actionUid = null
+    closeEditor(state)
+
+    const node = nodeByUid(doc,hold.uid) || hold.node
+    if (!node) return
+
+    state.gesture = {
+      pointerId:hold.pointerId, uid:hold.uid, node,
+      x:hold.x, y:hold.y, lastX:hold.lastX, lastY:hold.lastY,
+      before:hold.before, cancel:false,
+    }
+    win.__logiqV2ConsumedPointers.add(hold.pointerId)
+    win.__logiqV2DragActive = true
+    doc.body.classList.add('v2-drag')
+    mouse(node,win,'mousedown',hold.x,hold.y,1)
+    edgeLoop(doc,win,state)
+    win.navigator.vibrate?.(12)
+  }
+
+  function cancelHold(win,state) {
+    const hold = state.hold
+    if (!hold) return
+    if (hold.timer) win.clearTimeout(hold.timer)
+    state.hold = null
   }
 
   function finishDrag(doc,win,state,g,x,y) {
-    if (g.drag) mouse(win,win,'mouseup',x,y,0)
-    state.gesture = null; doc.body.classList.remove('v2-drag','v2-cancel'); if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf); state.edgeRaf = 0
+    mouse(win,win,'mouseup',x,y,0)
+    state.gesture = null
+    win.__logiqV2DragActive = false
+    doc.body.classList.remove('v2-drag','v2-cancel')
+    if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf)
+    state.edgeRaf = 0
   }
 
-  function restore(win,bridge,g) {
-    win.setTimeout(() => { if (snapshot(bridge)!==g.before) bridge.undo(); bridge.selectByUid(g.uid) },0)
+  function settleDrag(win,bridge,g) {
+    const after = bridge.snapshot()
+    const changed = stableState(after) !== stableState(g.before)
+    const missing = !treeHasUid(after?.tree,g.uid)
+    if (g.cancel || missing) {
+      if (changed) bridge.undo()
+      if (stableState(bridge.snapshot()) !== stableState(g.before)) bridge.loadMap(g.before.tree,g.before.wordBank)
+      bridge.selectByUid(g.uid)
+    }
+    win.setTimeout(() => win.__logiqV2ConsumedPointers.delete(g.pointerId),0)
+  }
+
+  function restoreExact(bridge,g) {
+    const changed = stableState(bridge.snapshot()) !== stableState(g.before)
+    if (changed) bridge.undo()
+    if (stableState(bridge.snapshot()) !== stableState(g.before)) bridge.loadMap(g.before.tree,g.before.wordBank)
+    bridge.selectByUid(g.uid)
   }
 
   function mouse(target,win,type,x,y,buttons) {
@@ -253,7 +334,7 @@
     if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf)
     const tick = () => {
       const g = state.gesture
-      if (!g || !g.drag) { state.edgeRaf=0; return }
+      if (!g) { state.edgeRaf=0; return }
       if (edgePan(doc,win,g.lastX,g.lastY)) mouse(win,win,'mousemove',g.lastX,g.lastY,1)
       state.edgeRaf = win.requestAnimationFrame(tick)
     }
@@ -321,13 +402,16 @@
   function hitNode(doc,x,y){return Array.from(doc.querySelectorAll('g.node')).filter(n=>{const r=n.getBoundingClientRect();return x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom}).sort((a,b)=>{const ar=a.getBoundingClientRect(),br=b.getBoundingClientRect();return ar.width*ar.height-br.width*br.height})[0]||null}
   function cardText(node){const d=node?.__data__?.data||{};for(const k of ['label','text','name','title','value'])if(typeof d[k]==='string'&&d[k].trim())return d[k].trim();return Array.from(node?.querySelectorAll?.('text')||[]).map(e=>e.textContent?.trim()||'').filter(Boolean).join(' ').trim()}
   function blank(node){const t=cardText(node).toLowerCase();return !t||['new','new card','untitled','…','...'].includes(t)}
-  function snapshot(bridge){const s=bridge.snapshot();return JSON.stringify({tree:s?.tree||null,wordBank:Array.isArray(s?.wordBank)?s.wordBank:[]})}
-  function isFlick(dx,dy,ms){const major=Math.max(Math.abs(dx),Math.abs(dy)),minor=Math.max(1,Math.min(Math.abs(dx),Math.abs(dy)));return ms<=C.flickMax&&Math.hypot(dx,dy)>=C.flickMin&&major/minor>=C.flickRatio}
+  function captureState(bridge){const s=bridge.snapshot();return {tree:JSON.parse(JSON.stringify(s?.tree||null)),wordBank:Array.isArray(s?.wordBank)?s.wordBank.slice():[]}}
+  function stableState(s){return JSON.stringify({tree:s?.tree||null,wordBank:Array.isArray(s?.wordBank)?s.wordBank:[]})}
+  function treeHasUid(node,uid){if(!node)return false;if(node._uid===uid)return true;return Array.isArray(node.children)&&node.children.some(child=>treeHasUid(child,uid))}
 
   function edgePan(doc,win,x,y) {
     const svg=doc.getElementById('canvas'); if(!svg||!win.d3)return false
+    const portrait=win.matchMedia('(orientation:portrait)').matches
+    const leftInset=portrait?4:54, topInset=portrait?54:4
     const step=(p,min,max)=>{if(p<min+C.edgeZone){const q=Math.max(0,Math.min(1,(min+C.edgeZone-p)/C.edgeZone));return C.edgeStep*q*q}if(p>max-C.edgeZone){const q=Math.max(0,Math.min(1,(p-(max-C.edgeZone))/C.edgeZone));return -C.edgeStep*q*q}return 0}
-    const dx=step(x,54,win.innerWidth),dy=step(y,4,win.innerHeight-4);if(!dx&&!dy)return false
+    const dx=step(x,leftInset,win.innerWidth),dy=step(y,topInset,win.innerHeight-4);if(!dx&&!dy)return false
     const t=win.d3.zoomTransform(svg),next=win.d3.zoomIdentity.translate(t.x+dx,t.y+dy).scale(t.k);svg.__zoom=next
     const root=Array.from(svg.children).find(c=>c.tagName?.toLowerCase()==='g');if(root)root.setAttribute('transform',next.toString());return true
   }
