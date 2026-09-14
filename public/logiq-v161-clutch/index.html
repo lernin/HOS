@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <title>LOGiQ Mobile Clutch Prototype</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f8fafc}
+    #app{position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff}
+    #loading{position:fixed;inset:0;display:grid;place-items:center;font:600 14px system-ui;color:#475569;background:#fff;z-index:2}
+  </style>
+</head>
+<body>
+  <div id="loading">Loading mobile clutch prototype…</div>
+  <iframe id="app" src="/logiq-v161/" allow="microphone" title="LOGiQ mobile clutch prototype"></iframe>
+  <script>
+  (() => {
+    'use strict'
+
+    const frame = document.getElementById('app')
+    const loading = document.getElementById('loading')
+
+    const FLICK_MIN_PX = 52
+    const FLICK_MAX_MS = 340
+    const FLICK_STRAIGHT_RATIO = 1.45
+    const EDGE_ZONE = 76
+    const EDGE_MAX_STEP = 13
+
+    frame.addEventListener('load', () => {
+      loading.style.display = 'none'
+      const win = frame.contentWindow
+      const doc = frame.contentDocument
+      if (!win || !doc || !win.LOGiQBridge) return
+
+      const bridge = win.LOGiQBridge
+      const state = {
+        clutchHeld: false,
+        clutchPointerId: null,
+        gesture: null,
+        taps: new Map(),
+      }
+
+      injectPrototypeStyles(doc)
+      const clutch = buildClutch(doc)
+      bindClutch(clutch, doc, win, state)
+      bindCanvasGestures(doc, win, bridge, state)
+      doc.body.classList.add('logiq-clutch-prototype')
+    })
+
+    function injectPrototypeStyles(doc) {
+      const style = doc.createElement('style')
+      style.id = 'logiq-clutch-prototype-styles'
+      style.textContent = `
+        @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+          body.logiq-clutch-prototype svg#canvas g.node{pointer-events:none!important}
+          body.logiq-clutch-prototype.logiq-clutch-held svg#canvas g.node{pointer-events:all!important}
+
+          #logiq-clutch-control{
+            position:fixed;z-index:3900;left:max(14px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));
+            width:72px;height:72px;border-radius:50%;border:1px solid rgba(100,116,139,.38);
+            display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-select:none;
+            background:rgba(255,255,255,.82);box-shadow:0 10px 30px rgba(15,23,42,.18), inset 0 0 0 7px rgba(148,163,184,.08);
+            backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#475569;
+            transition:transform 90ms ease,background 90ms ease,box-shadow 90ms ease,color 90ms ease;
+          }
+          #logiq-clutch-control .ring{width:38px;height:38px;border-radius:50%;border:2px solid currentColor;display:grid;place-items:center;font:800 10px/1 system-ui;letter-spacing:.04em}
+          #logiq-clutch-control .label{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);padding:5px 8px;border-radius:999px;background:rgba(15,23,42,.82);color:#fff;font:700 10px/1 system-ui;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 90ms ease}
+          body.logiq-clutch-held #logiq-clutch-control{transform:scale(.94);background:rgba(220,252,231,.96);color:#15803d;box-shadow:0 8px 26px rgba(21,128,61,.22), inset 0 0 0 7px rgba(34,197,94,.09)}
+          body.logiq-clutch-held #logiq-clutch-control .label{opacity:1}
+
+          body.logiq-clutch-prototype #logiq-mobile-context{left:auto;right:8px;width:154px;grid-template-columns:1fr 1fr}
+          body.logiq-clutch-prototype #logiq-mobile-context button[data-action="left"],
+          body.logiq-clutch-prototype #logiq-mobile-context button[data-action="up"],
+          body.logiq-clutch-prototype #logiq-mobile-context button[data-action="down"],
+          body.logiq-clutch-prototype #logiq-mobile-context button[data-action="right"]{display:none!important}
+        }
+      `
+      doc.head.appendChild(style)
+    }
+
+    function buildClutch(doc) {
+      const button = doc.createElement('button')
+      button.id = 'logiq-clutch-control'
+      button.type = 'button'
+      button.setAttribute('aria-label', 'Hold to manipulate cards')
+      button.innerHTML = '<span class="ring">HOLD</span><span class="label">MOVE · FLICK</span>'
+      doc.body.appendChild(button)
+      return button
+    }
+
+    function bindClutch(clutch, doc, win, state) {
+      const engage = (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        state.clutchHeld = true
+        state.clutchPointerId = event.pointerId
+        doc.body.classList.add('logiq-clutch-held')
+        try { clutch.setPointerCapture(event.pointerId) } catch (_) {}
+        win.navigator.vibrate?.(10)
+      }
+      const release = (event) => {
+        if (state.clutchPointerId != null && event.pointerId !== state.clutchPointerId) return
+        state.clutchHeld = false
+        state.clutchPointerId = null
+        doc.body.classList.remove('logiq-clutch-held')
+      }
+      clutch.addEventListener('pointerdown', engage, { passive:false })
+      clutch.addEventListener('pointerup', release, { passive:false })
+      clutch.addEventListener('pointercancel', release, { passive:false })
+      clutch.addEventListener('lostpointercapture', release, { passive:false })
+    }
+
+    function bindCanvasGestures(doc, win, bridge, state) {
+      const canvas = doc.getElementById('canvas')
+      if (!canvas) return
+
+      const rememberTap = (event) => {
+        if (event.pointerType === 'mouse') return
+        state.taps.set(event.pointerId, { x:event.clientX, y:event.clientY, at:win.performance.now() })
+      }
+
+      const begin = (event) => {
+        rememberTap(event)
+        if (!state.clutchHeld || event.pointerId === state.clutchPointerId) return
+        const node = hitNodeAt(doc, event.clientX, event.clientY)
+        if (!node) {
+          event.preventDefault()
+          event.stopImmediatePropagation()
+          return
+        }
+        const uid = node.__data__?.data?._uid
+        if (!uid) return
+        bridge.selectByUid(uid)
+        state.gesture = {
+          pointerId:event.pointerId,
+          uid,
+          x:event.clientX,
+          y:event.clientY,
+          lastX:event.clientX,
+          lastY:event.clientY,
+          started:win.performance.now(),
+          before:stableSnapshot(bridge.snapshot()),
+        }
+      }
+
+      const move = (event) => {
+        const gesture = state.gesture
+        if (!gesture || gesture.pointerId !== event.pointerId || !state.clutchHeld) return
+        gesture.lastX = event.clientX
+        gesture.lastY = event.clientY
+        edgePan(doc, win, event.clientX, event.clientY)
+      }
+
+      const end = (event) => {
+        const tap = state.taps.get(event.pointerId)
+        state.taps.delete(event.pointerId)
+
+        if (tap && isVoiceListening(doc) && win.performance.now() - tap.at < 480 && Math.hypot(event.clientX-tap.x,event.clientY-tap.y) < 11) {
+          const selected = bridge.getSelectedUid()
+          const node = hitNodeAt(doc, event.clientX, event.clientY)
+          if (selected && node?.__data__?.data?._uid === selected) {
+            event.preventDefault()
+            doc.getElementById('logiq-voice-stop')?.click()
+          }
+        }
+
+        const gesture = state.gesture
+        if (!gesture || gesture.pointerId !== event.pointerId) return
+        state.gesture = null
+
+        const dx = event.clientX - gesture.x
+        const dy = event.clientY - gesture.y
+        const elapsed = win.performance.now() - gesture.started
+        if (!isFlick(dx, dy, elapsed)) return
+
+        const direction = Math.abs(dx) > Math.abs(dy)
+          ? (dx < 0 ? 'left' : 'right')
+          : (dy < 0 ? 'up' : 'down')
+
+        win.setTimeout(() => {
+          const after = stableSnapshot(bridge.snapshot())
+          if (after !== gesture.before) bridge.undo()
+          win.requestAnimationFrame(() => {
+            bridge.selectByUid(gesture.uid)
+            win.requestAnimationFrame(() => triggerExistingSpawnGesture(doc, win, direction))
+          })
+        }, 0)
+      }
+
+      const cancel = (event) => {
+        state.taps.delete(event.pointerId)
+        if (state.gesture?.pointerId === event.pointerId) state.gesture = null
+      }
+
+      canvas.addEventListener('pointerdown', begin, true)
+      canvas.addEventListener('pointermove', move, true)
+      canvas.addEventListener('pointerup', end, true)
+      canvas.addEventListener('pointercancel', cancel, true)
+
+      canvas.addEventListener('touchstart', (event) => {
+        if (!state.clutchHeld) return
+        for (const touch of event.changedTouches || []) {
+          if (!hitNodeAt(doc, touch.clientX, touch.clientY)) {
+            event.preventDefault()
+            event.stopImmediatePropagation()
+            return
+          }
+        }
+      }, { capture:true, passive:false })
+    }
+
+    function hitNodeAt(doc, x, y) {
+      return Array.from(doc.querySelectorAll('g.node')).filter((node) => {
+        const rect = node.getBoundingClientRect()
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+      }).sort((a,b) => {
+        const ar = a.getBoundingClientRect()
+        const br = b.getBoundingClientRect()
+        return ar.width*ar.height - br.width*br.height
+      })[0] || null
+    }
+
+    function stableSnapshot(snapshot) {
+      return JSON.stringify({ tree:snapshot?.tree || null, wordBank:Array.isArray(snapshot?.wordBank) ? snapshot.wordBank : [] })
+    }
+
+    function isFlick(dx, dy, elapsed) {
+      const major = Math.max(Math.abs(dx), Math.abs(dy))
+      const minor = Math.max(1, Math.min(Math.abs(dx), Math.abs(dy)))
+      return elapsed <= FLICK_MAX_MS && Math.hypot(dx,dy) >= FLICK_MIN_PX && major/minor >= FLICK_STRAIGHT_RATIO
+    }
+
+    function triggerExistingSpawnGesture(doc, win, direction) {
+      const puck = doc.getElementById('logiq-spawn-puck')
+      if (!puck) return
+      const vectors = { left:[-64,0], right:[64,0], up:[0,-64], down:[0,64] }
+      const [dx,dy] = vectors[direction]
+      const opts = { bubbles:true, cancelable:true, pointerType:'touch', pointerId:991, isPrimary:true, button:0 }
+      try {
+        puck.dispatchEvent(new win.PointerEvent('pointerdown', { ...opts, clientX:120, clientY:120 }))
+        puck.dispatchEvent(new win.PointerEvent('pointermove', { ...opts, clientX:120+dx, clientY:120+dy }))
+        puck.dispatchEvent(new win.PointerEvent('pointerup', { ...opts, clientX:120+dx, clientY:120+dy }))
+      } catch (_) {}
+    }
+
+    function isVoiceListening(doc) {
+      return !!doc.getElementById('logiq-voice-bar')?.classList.contains('is-visible')
+    }
+
+    function edgePan(doc, win, x, y) {
+      const svg = doc.getElementById('canvas')
+      if (!svg || !win.d3) return
+      const width = win.innerWidth
+      const height = win.innerHeight
+      const topInset = 54
+      const bottomInset = 8
+
+      const axisStep = (position, min, max) => {
+        if (position < min + EDGE_ZONE) {
+          const p = Math.max(0, Math.min(1, (min + EDGE_ZONE - position) / EDGE_ZONE))
+          return EDGE_MAX_STEP * p * p
+        }
+        if (position > max - EDGE_ZONE) {
+          const p = Math.max(0, Math.min(1, (position - (max - EDGE_ZONE)) / EDGE_ZONE))
+          return -EDGE_MAX_STEP * p * p
+        }
+        return 0
+      }
+
+      const dx = axisStep(x, 0, width)
+      const dy = axisStep(y, topInset, height-bottomInset)
+      if (!dx && !dy) return
+
+      const t = win.d3.zoomTransform(svg)
+      const next = win.d3.zoomIdentity.translate(t.x + dx, t.y + dy).scale(t.k)
+      svg.__zoom = next
+      const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+      if (root) root.setAttribute('transform', next.toString())
+    }
+  })()
+  </script>
+</body>
+</html>
