@@ -27,7 +27,7 @@ async function contextForPhone() {
 }
 
 async function appFrame(page) {
-  await page.goto(`${baseUrl}/logiq-v162-mobile/`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`${baseUrl}/logiq-v162-mobile/index.html`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('#app')
   let frame = null
   for (let i = 0; i < 50 && !frame; i += 1) {
