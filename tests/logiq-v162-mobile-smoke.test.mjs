@@ -82,12 +82,13 @@ test('mobile v2 unlocks, zooms below 0.4 without snapping, and drag/reparents wh
   const fitted = await frame.evaluate(() => d3.zoomTransform(document.getElementById('canvas')).k)
   assert.ok(fitted < 0.4, `phone fit should be allowed below 0.4, got ${fitted}`)
 
-  const zoomedOut = await frame.evaluate(() => {
+  const targetScale = Math.max(0.02, fitted * 0.7)
+  const zoomedOut = await frame.evaluate(target => {
     const canvas = document.getElementById('canvas')
     const before = d3.zoomTransform(canvas).k
-    window.eval(`state.zoom.scaleTo(d3.select(document.getElementById('canvas')), ${Math.max(0.02, fitted * 0.7)})`)
+    window.eval(`state.zoom.scaleTo(d3.select(document.getElementById('canvas')), ${target})`)
     return { before, after: d3.zoomTransform(canvas).k }
-  })
+  }, targetScale)
   assert.ok(zoomedOut.after < zoomedOut.before, `zoom should continue outward from fit: ${JSON.stringify(zoomedOut)}`)
   assert.ok(zoomedOut.after < 0.4)
 
