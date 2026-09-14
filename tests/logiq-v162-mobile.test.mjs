@@ -9,6 +9,7 @@ const dragVisualFix = await readFile(new URL('../public/logiq-v162-mobile/v2-dra
 const chrome = await readFile(new URL('../public/logiq-v162-mobile/orientation-chrome.js', import.meta.url), 'utf8')
 const flick = await readFile(new URL('../public/logiq-v162-mobile/direct-flick.js', import.meta.url), 'utf8')
 const undoFix = await readFile(new URL('../public/logiq-v162-mobile/undo-bank-fix.js', import.meta.url), 'utf8')
+const lockZoom = await readFile(new URL('../public/logiq-v162-mobile/working-lock-zoom.js', import.meta.url), 'utf8')
 
 test('mobile v2 shell stays isolated from the released v161 route', () => {
   assert.match(index, /src="\/logiq-v161\/"/)
@@ -17,6 +18,7 @@ test('mobile v2 shell stays isolated from the released v161 route', () => {
   assert.match(index, /\.\/v2-drag-visual-fix\.js/)
   assert.match(index, /\.\/orientation-chrome\.js/)
   assert.match(index, /\.\/undo-bank-fix\.js/)
+  assert.match(index, /\.\/working-lock-zoom\.js/)
   assert.match(index, /\.\/direct-flick\.js/)
   assert.doesNotMatch(index, /<script src="\.\/v2\.js"><\/script>/)
 })
@@ -111,6 +113,31 @@ test('Word Bank deletion is converted to one atomic tree+bank undo entry', () =>
   assert.match(undoFix, /prevBank: transaction\.beforeBank/)
 })
 
+test('working lock is per-map, blocks structural mutation, and still permits rename', () => {
+  assert.match(lockZoom, /LOCK_PREFIX = 'logiq_working_lock_v1:'/)
+  assert.match(lockZoom, /map\.id \? `id:\$\{map\.id\}`/)
+  assert.match(lockZoom, /logiq-working-locked/)
+  assert.match(lockZoom, /sameStructure\(before, now\)/)
+  assert.match(lockZoom, /rename\/text edit is intentional/)
+  assert.match(lockZoom, /bridge\.loadMap\(before\.tree, before\.wordBank \|\| \[\]\)/)
+  assert.match(lockZoom, /Structure is locked/)
+})
+
+test('working lock is visible on desktop, portrait header, and landscape rail', () => {
+  assert.match(lockZoom, /header \.controls/)
+  assert.match(lockZoom, /logiq-mobile-menu-btn/)
+  assert.match(lockZoom, /#logiq-v2-rail \.divider/)
+  assert.match(lockZoom, /🔒/)
+  assert.match(lockZoom, /🔓/)
+})
+
+test('fit-scale zoom continuity accepts scales below the legacy 0.4 floor', () => {
+  assert.match(lockZoom, /MIN_ZOOM = 0\.06/)
+  assert.match(lockZoom, /if \(!t \|\| t\.k >= 0\.4\) return/)
+  assert.match(lockZoom, /nextK = Math\.max\(MIN_ZOOM/)
+  assert.match(lockZoom, /svg\.__zoom = next/)
+})
+
 test('mobile v2 keeps local blank-card voice and double-tap edit', () => {
   assert.match(js, /state\.lastTap\?\.uid === uid/)
   assert.match(js, /openEditor\(win,bridge,state,live,uid\)/)
@@ -125,4 +152,5 @@ test('mobile v2 scripts parse', () => {
   assert.doesNotThrow(() => new Function(chrome))
   assert.doesNotThrow(() => new Function(flick))
   assert.doesNotThrow(() => new Function(undoFix))
+  assert.doesNotThrow(() => new Function(lockZoom))
 })
