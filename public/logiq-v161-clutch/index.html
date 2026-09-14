@@ -62,7 +62,11 @@
       style.textContent = `
         @media (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
           body.logiq-twohand-prototype svg#canvas g.node{pointer-events:none!important}
-          body.logiq-twohand-prototype.logiq-manipulation-held svg#canvas g.node{pointer-events:all!important}
+          body.logiq-twohand-prototype.logiq-manipulation-held svg#canvas g.node,
+          body.logiq-twohand-prototype.logiq-drag-latched svg#canvas g.node{pointer-events:all!important}
+
+          body.logiq-twohand-prototype.logiq-drag-latched svg#canvas{cursor:grabbing}
+          body.logiq-twohand-prototype.logiq-drag-cancel g.node.is-outlined rect:not(.grabzone){stroke:#ef4444!important;stroke-width:3px!important}
 
           body.logiq-twohand-prototype #logiq-mobile-context{left:auto;right:8px;width:154px;grid-template-columns:1fr 1fr}
           body.logiq-twohand-prototype #logiq-mobile-context button[data-action="left"],
@@ -112,6 +116,17 @@
         if (event.pointerType === 'mouse') return
         const node = hitNodeAt(doc, event.clientX, event.clientY)
 
+        if (state.gesture) {
+          if (event.pointerId !== state.gesture.pointerId && !node) {
+            event.preventDefault()
+            event.stopImmediatePropagation()
+            state.gesture.cancelOnRelease = true
+            doc.body.classList.add('logiq-drag-cancel')
+            win.navigator.vibrate?.([12, 30, 12])
+          }
+          return
+        }
+
         if (state.backgroundPointerId == null) {
           if (node) return
           state.backgroundPointerId = event.pointerId
@@ -120,7 +135,7 @@
           return
         }
 
-        if (event.pointerId === state.backgroundPointerId || !node || state.gesture) return
+        if (event.pointerId === state.backgroundPointerId || !node) return
         const uid = node.__data__?.data?._uid
         if (!uid) return
 
@@ -136,7 +151,9 @@
           lastY:event.clientY,
           started:win.performance.now(),
           before:stableSnapshot(bridge.snapshot()),
+          cancelOnRelease:false,
         }
+        doc.body.classList.add('logiq-drag-latched')
 
         dispatchMouse(node, win, 'mousedown', event.clientX, event.clientY, 1)
         startEdgeLoop(doc, win, state)
@@ -154,7 +171,6 @@
 
       const end = (event) => {
         if (event.pointerId === state.backgroundPointerId) {
-          if (state.gesture) finishDrag(doc, win, state, state.gesture.lastX, state.gesture.lastY)
           state.backgroundPointerId = null
           doc.body.classList.remove('logiq-manipulation-held')
           return
@@ -168,8 +184,18 @@
         const dx = event.clientX - gesture.x
         const dy = event.clientY - gesture.y
         const elapsed = win.performance.now() - gesture.started
-        const flick = isFlick(dx, dy, elapsed)
+        const flick = isFlick(dx, dy, elapsed) && !gesture.cancelOnRelease
+        const cancelMove = gesture.cancelOnRelease
         finishDrag(doc, win, state, event.clientX, event.clientY)
+
+        if (cancelMove) {
+          win.setTimeout(() => {
+            const after = stableSnapshot(bridge.snapshot())
+            if (after !== gesture.before) bridge.undo()
+            bridge.selectByUid(gesture.uid)
+          }, 0)
+          return
+        }
 
         if (!flick) return
         const direction = Math.abs(dx) > Math.abs(dy)
@@ -194,12 +220,19 @@
 
       const cancel = (event) => {
         if (event.pointerId === state.backgroundPointerId) {
-          if (state.gesture) finishDrag(doc, win, state, state.gesture.lastX, state.gesture.lastY)
           state.backgroundPointerId = null
           doc.body.classList.remove('logiq-manipulation-held')
           return
         }
-        if (state.gesture?.pointerId === event.pointerId) finishDrag(doc, win, state, state.gesture.lastX, state.gesture.lastY)
+        if (state.gesture?.pointerId === event.pointerId) {
+          const gesture = state.gesture
+          finishDrag(doc, win, state, gesture.lastX, gesture.lastY)
+          win.setTimeout(() => {
+            const after = stableSnapshot(bridge.snapshot())
+            if (after !== gesture.before) bridge.undo()
+            bridge.selectByUid(gesture.uid)
+          }, 0)
+        }
       }
 
       canvas.addEventListener('pointerdown', begin, true)
@@ -212,6 +245,7 @@
       if (!state.gesture) return
       dispatchMouse(win, win, 'mouseup', x, y, 0)
       state.gesture = null
+      doc.body.classList.remove('logiq-drag-latched', 'logiq-drag-cancel')
       if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf)
       state.edgeRaf = 0
     }
@@ -236,7 +270,7 @@
       if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf)
       const tick = () => {
         const gesture = state.gesture
-        if (!gesture || state.backgroundPointerId == null) {
+        if (!gesture) {
           state.edgeRaf = 0
           return
         }
