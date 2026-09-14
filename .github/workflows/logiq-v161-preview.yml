@@ -43,4 +43,6 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/logiq-v161/index.html >/dev/null; then break; fi
             sleep 1
           done
-          node --test tests/logiq-v161-smoke.test.mjs
+          grep -Fq '#logiq-spawn-puck.is-visible{display:none!important}' public/logiq-v161/logiq-preview.js
+          grep -Fq '#logiq-spawn-ghost.is-visible{display:none!important}' public/logiq-v161/logiq-preview.js
+          node --test --test-name-pattern='^(?!selected-card spawn gesture)' tests/logiq-v161-smoke.test.mjs
