@@ -4,8 +4,10 @@
   const frame = document.getElementById('app')
   if (!frame) return
 
-  const LOCK_PREFIX = 'logiq_working_lock_v1:'
-  const MIN_ZOOM = 0.06
+  const LOCK_PREFIX = 'logiq_working_lock_v2:'
+  const MIN_ZOOM = 0.02
+  const ICON_LOCKED = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>'
+  const ICON_UNLOCKED = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M16 10V7a4 4 0 0 0-7.5-2"></path></svg>'
 
   frame.addEventListener('load', () => {
     const win = frame.contentWindow
@@ -27,17 +29,21 @@
     const lockKey = key => LOCK_PREFIX + key
     const snapshot = () => JSON.stringify(bridge.snapshot())
 
+    const renderLock = button => {
+      button.innerHTML = state.locked ? ICON_LOCKED : ICON_UNLOCKED
+      button.dataset.lockState = state.locked ? 'locked' : 'unlocked'
+      button.title = state.locked ? 'Structure locked — tap to unlock' : 'Structure unlocked — tap to lock'
+      button.setAttribute('aria-label', button.title)
+      button.setAttribute('aria-pressed', String(state.locked))
+    }
+
     const setLocked = (value, { persist = true } = {}) => {
       state.locked = !!value
       state.mapKey = mapKey()
       state.guardSnapshot = snapshot()
+      win.__logiqWorkingLocked = state.locked
       doc.body.classList.toggle('logiq-working-locked', state.locked)
-      controls.forEach(button => {
-        button.textContent = state.locked ? '🔒' : '🔓'
-        button.title = state.locked ? 'Structure locked — tap to unlock' : 'Structure unlocked — tap to protect map'
-        button.setAttribute('aria-label', button.title)
-        button.setAttribute('aria-pressed', String(state.locked))
-      })
+      controls.forEach(renderLock)
       if (persist) win.localStorage.setItem(lockKey(state.mapKey), state.locked ? '1' : '0')
     }
 
@@ -48,11 +54,14 @@
       setLocked(win.localStorage.getItem(lockKey(key)) === '1', { persist: false })
     }
 
-    controls.forEach(button => button.addEventListener('click', event => {
-      event.preventDefault(); event.stopImmediatePropagation()
-      setLocked(!state.locked)
-      toast(doc, state, state.locked ? 'Map structure locked' : 'Map structure unlocked')
-    }))
+    controls.forEach(button => {
+      button.addEventListener('pointerdown', event => event.stopPropagation())
+      button.addEventListener('click', event => {
+        event.preventDefault(); event.stopImmediatePropagation()
+        setLocked(!state.locked)
+        toast(doc, state, state.locked ? 'Map structure locked' : 'Map structure unlocked')
+      })
+    })
 
     // Structural UI is disabled while locked; navigation, selection, zoom and deliberate editing remain.
     doc.addEventListener('click', event => {
@@ -63,12 +72,6 @@
       if (!structural) return
       event.preventDefault(); event.stopImmediatePropagation()
       toast(doc, state, 'Unlock structure to change the map')
-    }, true)
-
-    // Mobile hold-drag recognizer: prevent latch by making every canvas touch multi while locked.
-    doc.getElementById('canvas')?.addEventListener('pointerdown', event => {
-      if (!state.locked || event.pointerType === 'mouse') return
-      win.__logiqWorkingLocked = true
     }, true)
 
     // Safety net: any structural mutation that slips through is rolled back, but rename is allowed.
@@ -92,35 +95,17 @@
       toast(doc, state, 'Structure is locked')
     })
 
-    // The legacy fit transform can be below its 0.4 interactive floor. Lower that floor so the
-    // first pinch/wheel continues smoothly from the fitted scale instead of snapping upward.
-    const svg = doc.getElementById('canvas')
+    // Patch the actual D3 zoom behavior used by wheel AND touch pinch. The old 0.4 floor was
+    // what caused fit-to-tree (~0.1–0.3 on a phone) to snap inward on the first pinch.
     const patchZoomFloor = () => {
-      const zoom = svg?.__zoom
-      if (!svg || !win.d3 || !zoom) return
-      // D3 stores the behavior on __zoom but not its scaleExtent. A tiny wheel event is allowed to
-      // reveal a snap only if the behavior floor remains high, so install a wheel/pinch continuity
-      // guard that preserves the fitted transform until the native gesture crosses it naturally.
-      svg.dataset.logiqContinuousFitZoom = String(MIN_ZOOM)
+      try {
+        win.eval(`state.zoom.scaleExtent([${MIN_ZOOM}, 2.4])`)
+        win.__logiqZoomFloor = MIN_ZOOM
+      } catch (_) {}
     }
     patchZoomFloor()
+    win.setTimeout(patchZoomFloor, 50)
     win.addEventListener('resize', patchZoomFloor)
-
-    // Direct wheel continuity for desktop at fitted scales below the legacy 0.4 floor.
-    svg?.addEventListener('wheel', event => {
-      const t = win.d3?.zoomTransform(svg)
-      if (!t || t.k >= 0.4) return
-      event.preventDefault(); event.stopImmediatePropagation()
-      const factor = Math.exp(-event.deltaY * 0.0015)
-      const nextK = Math.max(MIN_ZOOM, Math.min(2.4, t.k * factor))
-      const rect = svg.getBoundingClientRect()
-      const px = event.clientX - rect.left, py = event.clientY - rect.top
-      const ratio = nextK / t.k
-      const next = win.d3.zoomIdentity.translate(px - (px - t.x) * ratio, py - (py - t.y) * ratio).scale(nextK)
-      svg.__zoom = next
-      const root = Array.from(svg.children).find(el => el.tagName?.toLowerCase() === 'g')
-      if (root) root.setAttribute('transform', next.toString())
-    }, { capture: true, passive: false })
 
     state.mapKey = mapKey()
     setLocked(win.localStorage.getItem(lockKey(state.mapKey)) === '1', { persist: false })
@@ -156,8 +141,9 @@
   function injectStyles(doc) {
     const style = doc.createElement('style')
     style.textContent = `
-      .logiq-working-lock-btn{font-family:"Apple Color Emoji","Segoe UI Emoji",system-ui!important}
-      body.logiq-working-locked .logiq-working-lock-btn{background:#dcfce7!important;border-color:#22c55e!important;color:#166534!important}
+      .logiq-working-lock-btn svg{width:20px;height:20px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+      .logiq-working-lock-btn[data-lock-state="unlocked"]{background:#fff!important;border-color:#dbe3ec!important;color:#475569!important}
+      .logiq-working-lock-btn[data-lock-state="locked"]{background:#dcfce7!important;border-color:#22c55e!important;color:#166534!important}
       body.logiq-working-locked #trash,
       body.logiq-working-locked #logiq-spawn-puck{opacity:.28!important;pointer-events:none!important}
       body.logiq-working-locked [data-action="delete"],
