@@ -16,19 +16,18 @@
     if (!canvas) return
 
     installStyles(doc)
-    installDesktopFeedbackBridge(doc)
 
     const state = {
       active: new Set(),
       pointers: new Map(),
       hold: null,
       drag: null,
-      cleanupTimer: 0,
+      feedbackRaf: 0,
     }
 
     win.addEventListener('pointerdown', (event) => onDown(event, doc, win, canvas, state), true)
     win.addEventListener('pointermove', (event) => onMove(event, doc, win, state), true)
-    win.addEventListener('pointerup', (event) => onUp(event, doc, win, state), true)
+    win.addEventListener('pointerup', (event) => onUp(event, doc, win, canvas, state), true)
     win.addEventListener('pointercancel', (event) => onCancel(event, doc, win, state), true)
   })
 
@@ -41,85 +40,36 @@
     style.id = 'logiq-v2-branch-affordance-styles'
     style.textContent = `
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
-        /* The branch preview replaces the earlier single-card preview. */
+        /* Replace both mobile's earlier fixed mini-card and desktop's drag mini with one exact-size branch preview. */
         #logiq-v2-drag-card{display:none!important}
+        body.logiq-mobile-v2.v2-branch-drag .drag-mini{display:none!important;opacity:0!important}
+
         #logiq-v2-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
         #logiq-v2-branch-preview svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
         #logiq-v2-branch-preview line{stroke:#cfcfcf;stroke-width:2;stroke-linecap:round}
-        #logiq-v2-branch-preview .v2-float-node{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:0 8px;border:2px solid #fff;border-radius:10px;background:#fff;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24);font:600 14px/1.15 Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        #logiq-v2-branch-preview .v2-float-node{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:0 8px;border:2px solid #fff;border-radius:10px;background:#fff;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24);font:600 14px/1.15 Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:none!important}
         #logiq-v2-branch-preview .v2-float-node.is-root{border-color:#2563eb;box-shadow:0 8px 22px rgba(37,99,235,.18),0 1px 3px rgba(0,0,0,.16)}
+
+        /* Keep the complete source branch in place as a ghost. */
         body.logiq-mobile-v2 .v2-branch-origin-ghost{opacity:.24!important}
         body.logiq-mobile-v2 .v2-branch-origin-ghost rect:not(.grabzone){fill:#f8fafc!important;stroke:#64748b!important;stroke-width:2px!important;stroke-dasharray:5 4!important}
         body.logiq-mobile-v2 .v2-branch-origin-ghost text{opacity:.58!important}
-        body.logiq-mobile-v2.v2-cancel #logiq-v2-branch-preview .v2-float-node.is-root{border-color:#ef4444;box-shadow:0 8px 22px rgba(239,68,68,.2)}
+
+        /* Desktop drag mode normally hides every non-source node. Keep the stable tree visible on mobile,
+           but dim it enough that the desktop hover-adopt wake-up remains obvious. */
+        body.logiq-mobile-v2.v2-branch-drag svg.dragging-mode g.nodes g.node.is-others{opacity:.34!important}
+        body.logiq-mobile-v2.v2-branch-drag svg.dragging-mode g.nodes g.node.hover-adopt-sub{opacity:.58!important}
+        body.logiq-mobile-v2.v2-branch-drag svg.dragging-mode g.nodes g.node.hover-adopt{opacity:1!important}
         body.logiq-mobile-v2.v2-branch-drag g.node.drop-target rect:not(.grabzone){fill:#22c55e!important;filter:drop-shadow(0 0 7px rgba(34,197,94,.38))}
         body.logiq-mobile-v2.v2-branch-drag g.node.drop-target text{fill:#fff!important}
+
+        /* Mobile has no visible trash target. Move the legacy hit box away so it can never steal a held-card drop. */
+        body.logiq-mobile-v2.v2-branch-drag #trash{display:block!important;position:fixed!important;left:-10000px!important;right:auto!important;top:-10000px!important;bottom:auto!important}
+
+        body.logiq-mobile-v2.v2-cancel #logiq-v2-branch-preview .v2-float-node.is-root{border-color:#ef4444;box-shadow:0 8px 22px rgba(239,68,68,.2)}
       }
     `
     doc.head.appendChild(style)
-  }
-
-  function installDesktopFeedbackBridge(doc) {
-    const script = doc.createElement('script')
-    script.id = 'logiq-v2-desktop-feedback-bridge'
-    script.textContent = `
-      (() => {
-        try {
-          window.__logiqV2DesktopFeedback = {
-            pickScreen(clientX, clientY) {
-              const svg = elements.svg.node()
-              const rect = svg.getBoundingClientRect()
-              const px = clientX - rect.left
-              const py = clientY - rect.top
-              const t = d3.zoomTransform(svg)
-              const [gx, gy] = t.invert([px, py])
-              return Detectors.pick({ x: gx, y: gy })
-            },
-            show(drop, excludedUids) {
-              const excluded = new Set(excludedUids || [])
-              elements.caretDot.style('opacity', 0)
-              elements.gNodes.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
-              if (!drop) return null
-
-              if (drop.type === 'node') {
-                if (excluded.has(drop.targetUid)) return null
-                const targetH = state.root?.descendants().find(n => n.data && n.data._uid === drop.targetUid)
-                if (!targetH) return null
-                elements.gNodes.selectAll('g.node')
-                  .filter(n => n.data && n.data._uid === drop.targetUid)
-                  .classed('drop-target hover-adopt', true)
-                const subUids = new Set(targetH.descendants().map(n => n.data._uid))
-                elements.gNodes.selectAll('g.node')
-                  .filter(n => n.data && subUids.has(n.data._uid))
-                  .classed('hover-adopt-sub', true)
-                return { type: 'node', targetUid: drop.targetUid }
-              }
-
-              if (drop.type === 'gap') {
-                if (excluded.has(drop.parentUid)) return null
-                const [cx, cy] = caretXYFromHit(drop._hit)
-                elements.caretDot.attr('cx', cx).attr('cy', cy).attr('r', CONFIG.CARET_DOT_RADIUS).style('opacity', 1)
-                return { type: 'gap', parentUid: drop.parentUid, prevUid: drop.prevUid, nextUid: drop.nextUid }
-              }
-
-              if (drop.type === 'rootAbove') {
-                const [cx, cy] = caretXYFromHit(drop._hit)
-                elements.caretDot.attr('cx', cx).attr('cy', cy).attr('r', CONFIG.CARET_DOT_RADIUS).style('opacity', 1)
-                return { type: 'rootAbove' }
-              }
-              return null
-            },
-            clear() {
-              elements.caretDot.style('opacity', 0)
-              elements.gNodes.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
-            }
-          }
-        } catch (error) {
-          window.__logiqV2DesktopFeedback = null
-        }
-      })()
-    `
-    doc.head.appendChild(script)
   }
 
   function onDown(event, doc, win, canvas, state) {
@@ -144,7 +94,6 @@
       uid,
       source,
       multi: alreadyActive,
-      moved: false,
     }
     state.pointers.set(event.pointerId, pointer)
     if (alreadyActive || !uid) return
@@ -163,10 +112,7 @@
     if (state.hold?.pointerId === event.pointerId) {
       state.hold.lastX = event.clientX
       state.hold.lastY = event.clientY
-      if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) > HOLD_SLOP) {
-        pointer.moved = true
-        cancelHold(win, state)
-      }
+      if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) > HOLD_SLOP) cancelHold(win, state)
       return
     }
 
@@ -174,24 +120,46 @@
     if (!drag || drag.pointerId !== event.pointerId) return
     drag.lastX = event.clientX
     drag.lastY = event.clientY
-    movePreview(doc, win, drag, event.clientX, event.clientY)
+    movePreview(drag, event.clientX, event.clientY)
+    mouse(win, win, 'mousemove', event.clientX, event.clientY, 1)
   }
 
-  function onUp(event, doc, win, state) {
+  function onUp(event, doc, win, canvas, state) {
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
-    if (!state.drag || state.drag.pointerId !== event.pointerId) return
+
     const drag = state.drag
-    if (state.cleanupTimer) win.clearTimeout(state.cleanupTimer)
-    state.cleanupTimer = win.setTimeout(() => cleanup(doc, state, drag), 0)
+    if (!drag || drag.pointerId !== event.pointerId) return
+
+    /* Own the release so v2-ghost does not run a second synthetic drag transaction. */
+    event.preventDefault()
+    event.stopImmediatePropagation()
+
+    const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
+    const endX = canceled ? drag.x : event.clientX
+    const endY = canceled ? drag.y : event.clientY
+
+    if (canceled) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+    mouse(win, win, 'mouseup', endX, endY, 0)
+
+    /* Let the existing V2 pointer-cancel path clear its hold/edge-pan bookkeeping without committing again. */
+    cleanup(doc, win, state, drag)
+    dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
   }
 
   function onCancel(event, doc, win, state) {
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
-    if (state.drag?.pointerId === event.pointerId) cleanup(doc, state, state.drag)
+
+    const drag = state.drag
+    if (!drag || drag.pointerId !== event.pointerId) return
+
+    /* A system cancel returns the desktop drag to its source, which is a self-drop/no-op. */
+    mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+    mouse(win, win, 'mouseup', drag.x, drag.y, 0)
+    cleanup(doc, win, state, drag)
   }
 
   function latch(doc, win, state, hold) {
@@ -208,43 +176,44 @@
 
     const branch = typeof hierarchy.descendants === 'function' ? hierarchy.descendants() : [hierarchy]
     const uids = branch.map(item => item?.data?._uid).filter(Boolean)
-    const uidSet = new Set(uids)
     const preview = makeBranchPreview(doc, win, branch, hold.uid)
     if (!preview) return
 
     for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
 
-    const rootRect = source.getBoundingClientRect()
     state.drag = {
       pointerId: hold.pointerId,
       uid: hold.uid,
       uids,
-      uidSet,
       x: hold.x,
       y: hold.y,
       lastX: hold.lastX,
       lastY: hold.lastY,
-      rootCenterX: rootRect.left + rootRect.width / 2,
-      rootCenterY: rootRect.top + rootRect.height / 2,
       preview,
       multi: false,
-      lastDrop: null,
     }
+
     doc.body.classList.add('v2-branch-drag')
-    movePreview(doc, win, state.drag, hold.lastX, hold.lastY)
+
+    /* This is the real desktop drag start. It marks the subtree and initializes the same
+       Detectors.pick/drop-target/caret machinery desktop uses, but it does not mutate the tree. */
+    mouse(source, win, 'mousedown', hold.x, hold.y, 1)
+    mouse(win, win, 'mousemove', hold.lastX, hold.lastY, 1)
+    movePreview(state.drag, hold.lastX, hold.lastY)
+    startFeedbackLoop(win, state)
   }
 
   function makeBranchPreview(doc, win, branch, rootUid) {
     const nodes = []
     const centers = new Map()
+
     for (const item of branch) {
       const uid = item?.data?._uid
       const node = uid ? nodeByUid(doc, uid) : null
       if (!node) continue
       const rect = node.getBoundingClientRect()
       if (rect.width < 1 || rect.height < 1) continue
-      const entry = { item, uid, node, rect }
-      nodes.push(entry)
+      nodes.push({ item, uid, node, rect })
       centers.set(uid, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
     }
     if (!nodes.length) return null
@@ -271,6 +240,7 @@
       card.className = `v2-float-node${entry.uid === rootUid ? ' is-root' : ''}`
       card.dataset.uid = entry.uid
       card.textContent = cardText(entry.node) || ' '
+      /* Exact on-screen dimensions: no scale-up on latch. */
       card.style.left = `${entry.rect.left}px`
       card.style.top = `${entry.rect.top}px`
       card.style.width = `${entry.rect.width}px`
@@ -288,32 +258,34 @@
     return host
   }
 
-  function movePreview(doc, win, drag, x, y) {
+  function movePreview(drag, x, y) {
     if (!drag?.preview) return
     const dx = x - drag.x
     const dy = y - drag.y
     drag.preview.style.transform = `translate3d(${dx}px,${dy}px,0)`
-
-    const centerX = drag.rootCenterX + dx
-    const centerY = drag.rootCenterY + dy
-    const feedback = win.__logiqV2DesktopFeedback
-    if (!feedback) return
-    try {
-      const drop = feedback.pickScreen(centerX, centerY)
-      drag.lastDrop = feedback.show(drop, drag.uids)
-    } catch (_) {
-      drag.lastDrop = null
-    }
   }
 
-  function cleanup(doc, state, drag) {
+  function startFeedbackLoop(win, state) {
+    if (state.feedbackRaf) win.cancelAnimationFrame(state.feedbackRaf)
+    const tick = () => {
+      const drag = state.drag
+      if (!drag) { state.feedbackRaf = 0; return }
+      /* Edge auto-pan changes graph coordinates even while the finger is stationary.
+         Re-feeding the current pointer keeps desktop attraction/caret feedback live. */
+      mouse(win, win, 'mousemove', drag.lastX, drag.lastY, 1)
+      state.feedbackRaf = win.requestAnimationFrame(tick)
+    }
+    state.feedbackRaf = win.requestAnimationFrame(tick)
+  }
+
+  function cleanup(doc, win, state, drag) {
     if (!drag) return
     drag.preview?.remove?.()
     for (const uid of drag.uids || []) nodeByUid(doc, uid)?.classList.remove('v2-branch-origin-ghost')
-    try { frame.contentWindow?.__logiqV2DesktopFeedback?.clear?.() } catch (_) {}
     doc.body.classList.remove('v2-branch-drag')
+    if (state.feedbackRaf) win.cancelAnimationFrame(state.feedbackRaf)
+    state.feedbackRaf = 0
     if (state.drag === drag) state.drag = null
-    state.cleanupTimer = 0
   }
 
   function cancelHold(win, state) {
@@ -321,6 +293,37 @@
     if (!hold) return
     if (hold.timer) win.clearTimeout(hold.timer)
     state.hold = null
+  }
+
+  function dispatchPointerCancel(canvas, win, pointerId, x, y) {
+    try {
+      canvas.dispatchEvent(new win.PointerEvent('pointercancel', {
+        bubbles: true,
+        cancelable: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        clientX: x,
+        clientY: y,
+      }))
+    } catch (_) {}
+  }
+
+  function mouse(target, win, type, x, y, buttons) {
+    try {
+      target.dispatchEvent(new win.MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        view: win,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+        button: 0,
+        buttons,
+        shiftKey: false,
+      }))
+    } catch (_) {}
   }
 
   function nodeUid(node) {
