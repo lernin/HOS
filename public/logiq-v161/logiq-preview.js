@@ -4,6 +4,23 @@
   const bridge = window.LOGiQBridge
   if (!bridge) return
 
+  const ZOOM_MIN = 0.02
+  try {
+    state.zoom.scaleExtent([ZOOM_MIN, 2.4])
+    window.LOGiQZoom = Object.freeze({
+      extent: () => state.zoom.scaleExtent().slice(),
+      scale: () => d3.zoomTransform(elements.svg.node()).k,
+      scaleTo(value) {
+        const svg = elements.svg.node()
+        const k = Math.max(ZOOM_MIN, Math.min(2.4, Number(value) || ZOOM_MIN))
+        elements.svg.call(state.zoom.scaleTo, k, [svg.clientWidth / 2, svg.clientHeight / 2])
+        return d3.zoomTransform(svg).k
+      },
+    })
+  } catch (error) {
+    window.LOGiQZoomError = String(error?.message || error)
+  }
+
   const SUPABASE_URL = 'https://jzaghifuhinkzzhiojre.supabase.co'
   const SUPABASE_KEY = 'sb_publishable_rQDzA5bYlbzvaTjyo-uTXw_LiiIAddI'
   const PIN_KEY = 'logiq_lab_pin_v1'
