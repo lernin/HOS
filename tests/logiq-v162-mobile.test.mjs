@@ -3,18 +3,18 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const index = await readFile(new URL('../public/logiq-v162-mobile/index.html', import.meta.url), 'utf8')
-const js = await readFile(new URL('../public/logiq-v162-mobile/v2.js', import.meta.url), 'utf8')
+const js = await readFile(new URL('../public/logiq-v162-mobile/v2-ghost.js', import.meta.url), 'utf8')
 const chrome = await readFile(new URL('../public/logiq-v162-mobile/orientation-chrome.js', import.meta.url), 'utf8')
 const flick = await readFile(new URL('../public/logiq-v162-mobile/direct-flick.js', import.meta.url), 'utf8')
 const undoFix = await readFile(new URL('../public/logiq-v162-mobile/undo-bank-fix.js', import.meta.url), 'utf8')
 
 test('mobile v2 shell stays isolated from the released v161 route', () => {
   assert.match(index, /src="\/logiq-v161\/"/)
-  assert.match(index, /\.\/v2\.js/)
+  assert.match(index, /\.\/v2-ghost\.js/)
   assert.match(index, /\.\/orientation-chrome\.js/)
   assert.match(index, /\.\/undo-bank-fix\.js/)
   assert.match(index, /\.\/direct-flick\.js/)
-  assert.doesNotMatch(index, /logiq-mobile-word-input/)
+  assert.doesNotMatch(index, /<script src="\.\/v2\.js"><\/script>/)
 })
 
 test('mobile v2 keeps navigation primary with portrait header and landscape rail', () => {
@@ -44,12 +44,22 @@ test('mobile v2 uses stationary hold to latch drag while preserving pinch and pa
   assert.match(js, /if \(had\).*cancelHold/s)
   assert.match(js, /state\.active\.size !== 1/)
   assert.match(js, /__logiqV2ConsumedPointers\.add/)
-  assert.doesNotMatch(js, /beginDrag\(doc,win,state,g\)/)
 })
 
-test('invalid or canceled held-card drag restores exact tree and bank state', () => {
+test('held-card drag keeps a ghost origin and defers structural mutation until release', () => {
+  assert.match(js, /v2-origin-ghost/)
+  assert.match(js, /logiq-v2-drag-card/)
+  assert.match(js, /node\.classList\.add\('v2-origin-ghost'\)/)
+  assert.match(js, /updateFloating\(win,state\.gesture/)
+  assert.doesNotMatch(js, /mouse\(node,win,'mousedown',hold\.x/)
+  assert.match(js, /function commitDrop/)
+  assert.match(js, /mouse\(node,win,'mousedown',sx,sy,1\)/)
+  assert.match(js, /mouse\(win,win,'mouseup',x,y,0\)/)
+})
+
+test('invalid held-card drop restores exact tree and bank state', () => {
   assert.match(js, /const missing = !treeHasUid/)
-  assert.match(js, /if \(g\.cancel \|\| missing\)/)
+  assert.match(js, /if \(missing\)/)
   assert.match(js, /bridge\.loadMap\(g\.before\.tree,g\.before\.wordBank\)/)
 })
 
