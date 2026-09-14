@@ -29,9 +29,12 @@ async function contextForPhone() {
 async function appFrame(page) {
   await page.goto(`${baseUrl}/logiq-v162-mobile/index.html`, { waitUntil: 'domcontentloaded' })
   await page.waitForSelector('#app')
+  // Vercel resolves /logiq-v161/ as a directory index; Vite's smoke server does not.
+  // Repoint the same iframe so all wrapper load listeners fire against the explicit local file.
+  await page.evaluate(() => { document.getElementById('app').src = '/logiq-v161/index.html' })
   let frame = null
   for (let i = 0; i < 50 && !frame; i += 1) {
-    frame = page.frames().find(item => item.url().includes('/logiq-v161/')) || null
+    frame = page.frames().find(item => item.url().includes('/logiq-v161/index.html')) || null
     if (!frame) await new Promise(resolve => setTimeout(resolve, 100))
   }
   assert.ok(frame, 'LOGiQ iframe should load')
