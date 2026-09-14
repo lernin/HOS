@@ -27,10 +27,16 @@ async function contextForPhone() {
 }
 
 async function appFrame(page) {
-  await page.goto(`${baseUrl}/logiq-v162-mobile/`, { waitUntil: 'networkidle' })
-  await page.waitForFunction(() => document.getElementById('app')?.contentDocument?.querySelectorAll('g.node').length === 30)
-  const frame = page.frames().find(item => item.url().includes('/logiq-v161/'))
+  await page.goto(`${baseUrl}/logiq-v162-mobile/`, { waitUntil: 'domcontentloaded' })
+  await page.waitForSelector('#app')
+  let frame = null
+  for (let i = 0; i < 50 && !frame; i += 1) {
+    frame = page.frames().find(item => item.url().includes('/logiq-v161/')) || null
+    if (!frame) await new Promise(resolve => setTimeout(resolve, 100))
+  }
   assert.ok(frame, 'LOGiQ iframe should load')
+  await frame.waitForSelector('g.node', { timeout: 10_000 })
+  await frame.waitForFunction(() => document.querySelectorAll('g.node').length === 30, null, { timeout: 10_000 })
   return frame
 }
 
