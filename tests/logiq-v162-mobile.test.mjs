@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 const index = await readFile(new URL('../public/logiq-v162-mobile/index.html', import.meta.url), 'utf8')
 const js = await readFile(new URL('../public/logiq-v162-mobile/v2-ghost.js', import.meta.url), 'utf8')
+const branchAffordance = await readFile(new URL('../public/logiq-v162-mobile/v2-branch-affordance.js', import.meta.url), 'utf8')
 const chrome = await readFile(new URL('../public/logiq-v162-mobile/orientation-chrome.js', import.meta.url), 'utf8')
 const flick = await readFile(new URL('../public/logiq-v162-mobile/direct-flick.js', import.meta.url), 'utf8')
 const undoFix = await readFile(new URL('../public/logiq-v162-mobile/undo-bank-fix.js', import.meta.url), 'utf8')
@@ -11,6 +12,7 @@ const undoFix = await readFile(new URL('../public/logiq-v162-mobile/undo-bank-fi
 test('mobile v2 shell stays isolated from the released v161 route', () => {
   assert.match(index, /src="\/logiq-v161\/"/)
   assert.match(index, /\.\/v2-ghost\.js/)
+  assert.match(index, /\.\/v2-branch-affordance\.js/)
   assert.match(index, /\.\/orientation-chrome\.js/)
   assert.match(index, /\.\/undo-bank-fix\.js/)
   assert.match(index, /\.\/direct-flick\.js/)
@@ -48,13 +50,31 @@ test('mobile v2 uses stationary hold to latch drag while preserving pinch and pa
 
 test('held-card drag keeps a ghost origin and defers structural mutation until release', () => {
   assert.match(js, /v2-origin-ghost/)
-  assert.match(js, /logiq-v2-drag-card/)
   assert.match(js, /node\.classList\.add\('v2-origin-ghost'\)/)
-  assert.match(js, /updateFloating\(win,state\.gesture/)
   assert.doesNotMatch(js, /mouse\(node,win,'mousedown',hold\.x/)
   assert.match(js, /function commitDrop/)
   assert.match(js, /mouse\(node,win,'mousedown',sx,sy,1\)/)
   assert.match(js, /mouse\(win,win,'mouseup',x,y,0\)/)
+})
+
+test('mobile drag preview keeps exact card sizes and carries the whole subtree', () => {
+  assert.match(branchAffordance, /hierarchy\.descendants\(\)/)
+  assert.match(branchAffordance, /v2-branch-origin-ghost/)
+  assert.match(branchAffordance, /logiq-v2-branch-preview/)
+  assert.match(branchAffordance, /card\.style\.width = `\$\{entry\.rect\.width\}px`/)
+  assert.match(branchAffordance, /card\.style\.height = `\$\{entry\.rect\.height\}px`/)
+  assert.match(branchAffordance, /#logiq-v2-drag-card\{display:none!important\}/)
+  assert.doesNotMatch(branchAffordance, /scale\(1\.0?2\)/)
+  assert.match(branchAffordance, /parentUid = entry\.item\?\.parent\?\.data\?\._uid/)
+})
+
+test('mobile drag reuses the desktop attraction detector and affordance classes', () => {
+  assert.match(branchAffordance, /Detectors\.pick\(\{ x: gx, y: gy \}\)/)
+  assert.match(branchAffordance, /drop-target hover-adopt hover-adopt-sub/)
+  assert.match(branchAffordance, /caretXYFromHit\(drop\._hit\)/)
+  assert.match(branchAffordance, /CONFIG\.CARET_DOT_RADIUS/)
+  assert.match(branchAffordance, /feedback\.pickScreen\(centerX, centerY\)/)
+  assert.match(branchAffordance, /feedback\.show\(drop, drag\.uids\)/)
 })
 
 test('invalid held-card drop restores exact tree and bank state', () => {
@@ -80,6 +100,7 @@ test('mobile v2 keeps local blank-card voice and double-tap edit', () => {
 
 test('mobile v2 scripts parse', () => {
   assert.doesNotThrow(() => new Function(js))
+  assert.doesNotThrow(() => new Function(branchAffordance))
   assert.doesNotThrow(() => new Function(chrome))
   assert.doesNotThrow(() => new Function(flick))
   assert.doesNotThrow(() => new Function(undoFix))
