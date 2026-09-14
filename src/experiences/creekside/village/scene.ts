@@ -3,7 +3,7 @@ import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { createGridNavigator, moveSafely, type NavigationSurface, type NavPoint } from '../../shared3d/navigation'
 import {
   EYE_HEIGHT, PLAYER_RADIUS, WORLD_X, WORLD_Z, bridges, bridgeDeckY, canStand,
-  doorLocalX, floorHeight, houses, insideHouse, localCoords, pathLines, riverCenter,
+  doorLocalX, floorHeight, houses, insideHouse, pathLines, riverCenter,
   riverWidth, spawn, terrainHeight, waterHeight, zoneName,
   type BridgeSpec, type HouseSpec, type Point,
 } from './world'
@@ -32,7 +32,6 @@ const names = [
   'Balcony_Cross_Straight','Balcony_Simple_Straight','Prop_Chimney','Prop_Chimney2','Prop_Crate','Prop_Wagon','Prop_Vine1','Prop_Vine2','Prop_WoodenFence_Single','Door_2_Round',
 ] as const
 const STORY = 3.12
-const UP = new T.Vector3(0,1,0)
 
 function rng(seed:number){let n=seed>>>0;return()=>{n=Math.imul(n^(n>>>15),1|n);n^=n+Math.imul(n^(n>>>7),61|n);return((n^(n>>>14))>>>0)/4294967296}}
 
