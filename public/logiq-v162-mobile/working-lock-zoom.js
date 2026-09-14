@@ -5,7 +5,6 @@
   if (!frame) return
 
   const LOCK_PREFIX = 'logiq_working_lock_v2:'
-  const MIN_ZOOM = 0.02
   const ICON_LOCKED = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>'
   const ICON_UNLOCKED = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"></rect><path d="M16 10V7a4 4 0 0 0-7.5-2"></path></svg>'
 
@@ -95,41 +94,10 @@
       toast(doc, state, 'Structure is locked')
     })
 
-    // The legacy engine keeps its state in the iframe's global lexical scope. A normal script
-    // inserted into that same document can safely reach the real D3 zoom behavior; cross-window
-    // eval cannot. Patch the native pinch/wheel floor there so fit-to-tree never snaps to 0.4.
-    installZoomPatch(doc, MIN_ZOOM)
-
     state.mapKey = mapKey()
     setLocked(win.localStorage.getItem(lockKey(state.mapKey)) === '1', { persist: false })
     win.setInterval(syncMap, 500)
   })
-
-  function installZoomPatch(doc, minZoom) {
-    const script = doc.createElement('script')
-    script.textContent = `
-      (() => {
-        try {
-          state.zoom.scaleExtent([${minZoom}, 2.4]);
-          window.__logiqZoomFloor = ${minZoom};
-          window.__logiqZoomApi = Object.freeze({
-            extent: () => state.zoom.scaleExtent().slice(),
-            scale: () => d3.zoomTransform(elements.svg.node()).k,
-            scaleTo(value) {
-              const svg = elements.svg.node();
-              const k = Math.max(${minZoom}, Math.min(2.4, Number(value) || ${minZoom}));
-              elements.svg.call(state.zoom.scaleTo, k, [svg.clientWidth / 2, svg.clientHeight / 2]);
-              return d3.zoomTransform(svg).k;
-            }
-          });
-        } catch (error) {
-          window.__logiqZoomPatchError = String(error && error.message || error);
-        }
-      })();
-    `
-    ;(doc.head || doc.documentElement).appendChild(script)
-    script.remove()
-  }
 
   function buildControls(doc) {
     const buttons = []
