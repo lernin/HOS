@@ -48,10 +48,9 @@ test('mobile v2 uses stationary hold to latch drag while preserving pinch and pa
   assert.match(js, /__logiqV2ConsumedPointers\.add/)
 })
 
-test('held-card drag keeps a ghost origin and defers structural mutation until release', () => {
+test('held-card drag keeps a ghost origin and defers the V2 fallback transaction until release', () => {
   assert.match(js, /v2-origin-ghost/)
   assert.match(js, /node\.classList\.add\('v2-origin-ghost'\)/)
-  assert.doesNotMatch(js, /mouse\(node,win,'mousedown',hold\.x/)
   assert.match(js, /function commitDrop/)
   assert.match(js, /mouse\(node,win,'mousedown',sx,sy,1\)/)
   assert.match(js, /mouse\(win,win,'mouseup',x,y,0\)/)
@@ -64,17 +63,25 @@ test('mobile drag preview keeps exact card sizes and carries the whole subtree',
   assert.match(branchAffordance, /card\.style\.width = `\$\{entry\.rect\.width\}px`/)
   assert.match(branchAffordance, /card\.style\.height = `\$\{entry\.rect\.height\}px`/)
   assert.match(branchAffordance, /#logiq-v2-drag-card\{display:none!important\}/)
+  assert.match(branchAffordance, /transform:none!important/)
   assert.doesNotMatch(branchAffordance, /scale\(1\.0?2\)/)
   assert.match(branchAffordance, /parentUid = entry\.item\?\.parent\?\.data\?\._uid/)
 })
 
-test('mobile drag reuses the desktop attraction detector and affordance classes', () => {
-  assert.match(branchAffordance, /Detectors\.pick\(\{ x: gx, y: gy \}\)/)
-  assert.match(branchAffordance, /drop-target hover-adopt hover-adopt-sub/)
-  assert.match(branchAffordance, /caretXYFromHit\(drop\._hit\)/)
-  assert.match(branchAffordance, /CONFIG\.CARET_DOT_RADIUS/)
-  assert.match(branchAffordance, /feedback\.pickScreen\(centerX, centerY\)/)
-  assert.match(branchAffordance, /feedback\.show\(drop, drag\.uids\)/)
+test('mobile held drag drives the real desktop drag feedback engine', () => {
+  assert.match(branchAffordance, /mouse\(source, win, 'mousedown', hold\.x, hold\.y, 1\)/)
+  assert.match(branchAffordance, /mouse\(win, win, 'mousemove', event\.clientX, event\.clientY, 1\)/)
+  assert.match(branchAffordance, /mouse\(win, win, 'mouseup', endX, endY, 0\)/)
+  assert.match(branchAffordance, /dragging-mode g\.nodes g\.node\.hover-adopt-sub/)
+  assert.match(branchAffordance, /g\.node\.drop-target rect/)
+  assert.match(branchAffordance, /shiftKey: false/)
+  assert.match(branchAffordance, /startFeedbackLoop/)
+})
+
+test('mobile branch drag prevents hidden trash from stealing a drop', () => {
+  assert.match(branchAffordance, /v2-branch-drag #trash/)
+  assert.match(branchAffordance, /left:-10000px!important/)
+  assert.match(branchAffordance, /top:-10000px!important/)
 })
 
 test('invalid held-card drop restores exact tree and bank state', () => {
