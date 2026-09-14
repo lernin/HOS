@@ -16,7 +16,385 @@
   <script>
   (() => {
     'use strict'
-    // content unchanged from commit 70adb05d
+
+    const frame = document.getElementById('app')
+    const loading = document.getElementById('loading')
+
+    const FLICK_MIN_PX = 52
+    const FLICK_MAX_MS = 340
+    const FLICK_STRAIGHT_RATIO = 1.45
+    const EDGE_ZONE = 84
+    const EDGE_MAX_STEP = 14
+    const RECORD_ARM_TIMEOUT = 10000
+
+    frame.addEventListener('load', () => {
+      loading.style.display = 'none'
+      const win = frame.contentWindow
+      const doc = frame.contentDocument
+      if (!win || !doc || !win.LOGiQBridge || !isMobileTouch(win)) return
+
+      const bridge = win.LOGiQBridge
+      const state = {
+        backgroundPointerId: null,
+        gesture: null,
+        edgeRaf: 0,
+        cardRecordingUid: null,
+        recordingStarted: false,
+        recordingArmedAt: 0,
+        recordRaf: 0,
+      }
+
+      injectPrototypeStyles(doc)
+      const recordStop = buildRecordingStop(doc)
+      bindCanvasGestures(doc, win, bridge, state)
+      bindRecordingStop(recordStop, doc, win, state)
+      state.recordStop = recordStop
+      doc.body.classList.add('logiq-twohand-prototype')
+    })
+
+    function isMobileTouch(win) {
+      return win.matchMedia('((pointer:coarse) and (max-width:1200px)), ((hover:none) and (max-width:1200px))').matches
+    }
+
+    function injectPrototypeStyles(doc) {
+      const style = doc.createElement('style')
+      style.id = 'logiq-twohand-prototype-styles'
+      style.textContent = `
+        @media (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+          body.logiq-twohand-prototype svg#canvas g.node{pointer-events:none!important}
+          body.logiq-twohand-prototype.logiq-manipulation-held svg#canvas g.node,
+          body.logiq-twohand-prototype.logiq-drag-latched svg#canvas g.node{pointer-events:all!important}
+
+          body.logiq-twohand-prototype.logiq-drag-latched svg#canvas{cursor:grabbing}
+          body.logiq-twohand-prototype.logiq-drag-cancel g.node.is-outlined rect:not(.grabzone){stroke:#ef4444!important;stroke-width:3px!important}
+
+          body.logiq-twohand-prototype #logiq-mobile-context{left:auto;right:8px;width:154px;grid-template-columns:1fr 1fr}
+          body.logiq-twohand-prototype #logiq-mobile-context button[data-action="left"],
+          body.logiq-twohand-prototype #logiq-mobile-context button[data-action="up"],
+          body.logiq-twohand-prototype #logiq-mobile-context button[data-action="down"],
+          body.logiq-twohand-prototype #logiq-mobile-context button[data-action="right"]{display:none!important}
+
+          body.logiq-twohand-prototype.logiq-card-recording #logiq-voice-bar{display:none!important}
+          #logiq-card-record-stop{
+            position:fixed;z-index:3950;display:none;place-items:center;width:34px;height:34px;padding:0;
+            border:2px solid #fff;border-radius:50%;background:#ef4444;color:#fff;box-shadow:0 5px 16px rgba(15,23,42,.28);
+            touch-action:none;user-select:none;-webkit-user-select:none;
+          }
+          #logiq-card-record-stop.is-visible{display:grid}
+          #logiq-card-record-stop::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logiq-record-pulse 1.05s ease-out infinite}
+          #logiq-card-record-stop .stop-square{width:10px;height:10px;border-radius:2px;background:#fff}
+          @keyframes logiq-record-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.25);opacity:0}}
+        }
+      `
+      doc.head.appendChild(style)
+    }
+
+    function buildRecordingStop(doc) {
+      const button = doc.createElement('button')
+      button.id = 'logiq-card-record-stop'
+      button.type = 'button'
+      button.setAttribute('aria-label', 'Stop recording this card')
+      button.innerHTML = '<span class="stop-square" aria-hidden="true"></span>'
+      doc.body.appendChild(button)
+      return button
+    }
+
+    function bindRecordingStop(button, doc, win, state) {
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        win.navigator.vibrate?.(12)
+        doc.getElementById('logiq-voice-stop')?.click()
+      }, { passive:false })
+    }
+
+    function bindCanvasGestures(doc, win, bridge, state) {
+      const canvas = doc.getElementById('canvas')
+      if (!canvas) return
+
+      const begin = (event) => {
+        if (event.pointerType === 'mouse') return
+        const node = hitNodeAt(doc, event.clientX, event.clientY)
+
+        if (state.gesture) {
+          if (event.pointerId !== state.gesture.pointerId && !node) {
+            event.preventDefault()
+            event.stopImmediatePropagation()
+            state.gesture.cancelOnRelease = true
+            doc.body.classList.add('logiq-drag-cancel')
+            win.navigator.vibrate?.([12, 30, 12])
+          }
+          return
+        }
+
+        if (state.backgroundPointerId == null) {
+          if (node) return
+          state.backgroundPointerId = event.pointerId
+          doc.body.classList.add('logiq-manipulation-held')
+          win.navigator.vibrate?.(7)
+          return
+        }
+
+        if (event.pointerId === state.backgroundPointerId || !node) return
+        const uid = node.__data__?.data?._uid
+        if (!uid) return
+
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        bridge.selectByUid(uid)
+        state.gesture = {
+          pointerId:event.pointerId,
+          uid,
+          x:event.clientX,
+          y:event.clientY,
+          lastX:event.clientX,
+          lastY:event.clientY,
+          started:win.performance.now(),
+          before:stableSnapshot(bridge.snapshot()),
+          cancelOnRelease:false,
+        }
+        doc.body.classList.add('logiq-drag-latched')
+
+        dispatchMouse(node, win, 'mousedown', event.clientX, event.clientY, 1)
+        startEdgeLoop(doc, win, state)
+      }
+
+      const move = (event) => {
+        const gesture = state.gesture
+        if (!gesture || gesture.pointerId !== event.pointerId) return
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        gesture.lastX = event.clientX
+        gesture.lastY = event.clientY
+        dispatchMouse(win, win, 'mousemove', event.clientX, event.clientY, 1)
+      }
+
+      const end = (event) => {
+        if (event.pointerId === state.backgroundPointerId) {
+          state.backgroundPointerId = null
+          doc.body.classList.remove('logiq-manipulation-held')
+          return
+        }
+
+        const gesture = state.gesture
+        if (!gesture || gesture.pointerId !== event.pointerId) return
+        event.preventDefault()
+        event.stopImmediatePropagation()
+
+        const dx = event.clientX - gesture.x
+        const dy = event.clientY - gesture.y
+        const elapsed = win.performance.now() - gesture.started
+        const flick = isFlick(dx, dy, elapsed) && !gesture.cancelOnRelease
+        const cancelMove = gesture.cancelOnRelease
+        finishDrag(doc, win, state, event.clientX, event.clientY)
+
+        if (cancelMove) {
+          win.setTimeout(() => {
+            const after = stableSnapshot(bridge.snapshot())
+            if (after !== gesture.before) bridge.undo()
+            bridge.selectByUid(gesture.uid)
+          }, 0)
+          return
+        }
+
+        if (!flick) return
+        const direction = Math.abs(dx) > Math.abs(dy)
+          ? (dx < 0 ? 'left' : 'right')
+          : (dy < 0 ? 'up' : 'down')
+
+        win.setTimeout(() => {
+          const after = stableSnapshot(bridge.snapshot())
+          if (after !== gesture.before) bridge.undo()
+          win.requestAnimationFrame(() => {
+            bridge.selectByUid(gesture.uid)
+            win.requestAnimationFrame(() => {
+              triggerExistingSpawnGesture(doc, win, direction)
+              win.setTimeout(() => {
+                const createdUid = bridge.getSelectedUid()
+                if (createdUid && createdUid !== gesture.uid) armCardRecording(doc, win, state, createdUid)
+              }, 30)
+            })
+          })
+        }, 0)
+      }
+
+      const cancel = (event) => {
+        if (event.pointerId === state.backgroundPointerId) {
+          state.backgroundPointerId = null
+          doc.body.classList.remove('logiq-manipulation-held')
+          return
+        }
+        if (state.gesture?.pointerId === event.pointerId) {
+          const gesture = state.gesture
+          finishDrag(doc, win, state, gesture.lastX, gesture.lastY)
+          win.setTimeout(() => {
+            const after = stableSnapshot(bridge.snapshot())
+            if (after !== gesture.before) bridge.undo()
+            bridge.selectByUid(gesture.uid)
+          }, 0)
+        }
+      }
+
+      canvas.addEventListener('pointerdown', begin, true)
+      canvas.addEventListener('pointermove', move, true)
+      canvas.addEventListener('pointerup', end, true)
+      canvas.addEventListener('pointercancel', cancel, true)
+    }
+
+    function finishDrag(doc, win, state, x, y) {
+      if (!state.gesture) return
+      dispatchMouse(win, win, 'mouseup', x, y, 0)
+      state.gesture = null
+      doc.body.classList.remove('logiq-drag-latched', 'logiq-drag-cancel')
+      if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf)
+      state.edgeRaf = 0
+    }
+
+    function dispatchMouse(target, win, type, x, y, buttons) {
+      try {
+        target.dispatchEvent(new win.MouseEvent(type, {
+          bubbles:true,
+          cancelable:true,
+          view:win,
+          clientX:x,
+          clientY:y,
+          screenX:x,
+          screenY:y,
+          button:0,
+          buttons,
+        }))
+      } catch (_) {}
+    }
+
+    function startEdgeLoop(doc, win, state) {
+      if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf)
+      const tick = () => {
+        const gesture = state.gesture
+        if (!gesture) {
+          state.edgeRaf = 0
+          return
+        }
+        const moved = edgePan(doc, win, gesture.lastX, gesture.lastY)
+        if (moved) dispatchMouse(win, win, 'mousemove', gesture.lastX, gesture.lastY, 1)
+        state.edgeRaf = win.requestAnimationFrame(tick)
+      }
+      state.edgeRaf = win.requestAnimationFrame(tick)
+    }
+
+    function hitNodeAt(doc, x, y) {
+      return Array.from(doc.querySelectorAll('g.node')).filter((node) => {
+        const rect = node.getBoundingClientRect()
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+      }).sort((a,b) => {
+        const ar = a.getBoundingClientRect()
+        const br = b.getBoundingClientRect()
+        return ar.width*ar.height - br.width*br.height
+      })[0] || null
+    }
+
+    function stableSnapshot(snapshot) {
+      return JSON.stringify({ tree:snapshot?.tree || null, wordBank:Array.isArray(snapshot?.wordBank) ? snapshot.wordBank : [] })
+    }
+
+    function isFlick(dx, dy, elapsed) {
+      const major = Math.max(Math.abs(dx), Math.abs(dy))
+      const minor = Math.max(1, Math.min(Math.abs(dx), Math.abs(dy)))
+      return elapsed <= FLICK_MAX_MS && Math.hypot(dx,dy) >= FLICK_MIN_PX && major/minor >= FLICK_STRAIGHT_RATIO
+    }
+
+    function triggerExistingSpawnGesture(doc, win, direction) {
+      const puck = doc.getElementById('logiq-spawn-puck')
+      if (!puck) return
+      const vectors = { left:[-64,0], right:[64,0], up:[0,-64], down:[0,64] }
+      const [dx,dy] = vectors[direction]
+      const opts = { bubbles:true, cancelable:true, pointerType:'touch', pointerId:991, isPrimary:true, button:0 }
+      try {
+        puck.dispatchEvent(new win.PointerEvent('pointerdown', { ...opts, clientX:120, clientY:120 }))
+        puck.dispatchEvent(new win.PointerEvent('pointermove', { ...opts, clientX:120+dx, clientY:120+dy }))
+        puck.dispatchEvent(new win.PointerEvent('pointerup', { ...opts, clientX:120+dx, clientY:120+dy }))
+      } catch (_) {}
+    }
+
+    function armCardRecording(doc, win, state, uid) {
+      state.cardRecordingUid = uid
+      state.recordingStarted = false
+      state.recordingArmedAt = win.performance.now()
+      doc.body.classList.add('logiq-card-recording')
+      if (state.recordRaf) win.cancelAnimationFrame(state.recordRaf)
+
+      const tick = () => {
+        if (!state.cardRecordingUid) {
+          state.recordRaf = 0
+          return
+        }
+        const voiceBar = doc.getElementById('logiq-voice-bar')
+        const listening = !!voiceBar?.classList.contains('is-visible')
+        if (listening) state.recordingStarted = true
+
+        if (state.recordingStarted && !listening) {
+          clearCardRecording(doc, win, state)
+          return
+        }
+        if (!state.recordingStarted && win.performance.now() - state.recordingArmedAt > RECORD_ARM_TIMEOUT) {
+          clearCardRecording(doc, win, state)
+          return
+        }
+
+        const node = Array.from(doc.querySelectorAll('g.node')).find((element) => element.__data__?.data?._uid === state.cardRecordingUid)
+        const rect = node?.getBoundingClientRect()
+        if (listening && rect && rect.width > 1 && rect.height > 1 && rect.right > 0 && rect.left < win.innerWidth && rect.bottom > 0 && rect.top < win.innerHeight) {
+          const button = state.recordStop
+          button.style.left = `${Math.max(4, Math.min(win.innerWidth-38, rect.right-38))}px`
+          button.style.top = `${Math.max(50, Math.min(win.innerHeight-38, rect.top+5))}px`
+          button.classList.add('is-visible')
+        } else {
+          state.recordStop.classList.remove('is-visible')
+        }
+        state.recordRaf = win.requestAnimationFrame(tick)
+      }
+      state.recordRaf = win.requestAnimationFrame(tick)
+    }
+
+    function clearCardRecording(doc, win, state) {
+      state.cardRecordingUid = null
+      state.recordingStarted = false
+      doc.body.classList.remove('logiq-card-recording')
+      state.recordStop?.classList.remove('is-visible')
+      if (state.recordRaf) win.cancelAnimationFrame(state.recordRaf)
+      state.recordRaf = 0
+    }
+
+    function edgePan(doc, win, x, y) {
+      const svg = doc.getElementById('canvas')
+      if (!svg || !win.d3) return false
+      const width = win.innerWidth
+      const height = win.innerHeight
+      const topInset = 54
+      const bottomInset = 8
+
+      const axisStep = (position, min, max) => {
+        if (position < min + EDGE_ZONE) {
+          const p = Math.max(0, Math.min(1, (min + EDGE_ZONE - position) / EDGE_ZONE))
+          return EDGE_MAX_STEP * p * p
+        }
+        if (position > max - EDGE_ZONE) {
+          const p = Math.max(0, Math.min(1, (position - (max - EDGE_ZONE)) / EDGE_ZONE))
+          return -EDGE_MAX_STEP * p * p
+        }
+        return 0
+      }
+
+      const dx = axisStep(x, 0, width)
+      const dy = axisStep(y, topInset, height-bottomInset)
+      if (!dx && !dy) return false
+
+      const t = win.d3.zoomTransform(svg)
+      const next = win.d3.zoomIdentity.translate(t.x + dx, t.y + dy).scale(t.k)
+      svg.__zoom = next
+      const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+      if (root) root.setAttribute('transform', next.toString())
+      return true
+    }
   })()
   </script>
 </body>
