@@ -40,7 +40,7 @@ async function appFrame(page) {
   assert.ok(frame, 'LOGiQ iframe should load')
   await frame.waitForSelector('g.node', { timeout: 10_000 })
   await frame.waitForFunction(() => document.querySelectorAll('g.node').length === 30, null, { timeout: 10_000 })
-  await frame.waitForFunction(() => !!window.__logiqZoomApi && window.__logiqZoomFloor === 0.02, null, { timeout: 5_000 })
+  await frame.waitForFunction(() => !!window.LOGiQZoom, null, { timeout: 5_000 })
   return frame
 }
 
@@ -85,17 +85,17 @@ test('mobile v2 unlocks, zooms below 0.4 without snapping, and drag/reparents wh
   await lock.waitFor({ state: 'visible' })
   assert.equal(await lock.getAttribute('data-lock-state'), 'unlocked')
   assert.equal(await frame.evaluate(() => window.__logiqWorkingLocked), false)
-  assert.deepEqual(await frame.evaluate(() => window.__logiqZoomApi.extent()), [0.02, 2.4])
+  assert.deepEqual(await frame.evaluate(() => window.LOGiQZoom.extent()), [0.02, 2.4])
 
   await frame.evaluate(() => window.LOGiQBridge.fit())
   await new Promise(resolve => setTimeout(resolve, 1300))
-  const fitted = await frame.evaluate(() => window.__logiqZoomApi.scale())
+  const fitted = await frame.evaluate(() => window.LOGiQZoom.scale())
   assert.ok(fitted < 0.4, `phone fit should be allowed below 0.4, got ${fitted}`)
 
   const targetScale = Math.max(0.02, fitted * 0.7)
   const zoomedOut = await frame.evaluate(target => {
-    const before = window.__logiqZoomApi.scale()
-    const after = window.__logiqZoomApi.scaleTo(target)
+    const before = window.LOGiQZoom.scale()
+    const after = window.LOGiQZoom.scaleTo(target)
     return { before, after }
   }, targetScale)
   assert.ok(zoomedOut.after < zoomedOut.before, `zoom should continue outward from fit: ${JSON.stringify(zoomedOut)}`)
