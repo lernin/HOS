@@ -95,22 +95,41 @@
       toast(doc, state, 'Structure is locked')
     })
 
-    // Patch the actual D3 zoom behavior used by wheel AND touch pinch. The old 0.4 floor was
-    // what caused fit-to-tree (~0.1–0.3 on a phone) to snap inward on the first pinch.
-    const patchZoomFloor = () => {
-      try {
-        win.eval(`state.zoom.scaleExtent([${MIN_ZOOM}, 2.4])`)
-        win.__logiqZoomFloor = MIN_ZOOM
-      } catch (_) {}
-    }
-    patchZoomFloor()
-    win.setTimeout(patchZoomFloor, 50)
-    win.addEventListener('resize', patchZoomFloor)
+    // The legacy engine keeps its state in the iframe's global lexical scope. A normal script
+    // inserted into that same document can safely reach the real D3 zoom behavior; cross-window
+    // eval cannot. Patch the native pinch/wheel floor there so fit-to-tree never snaps to 0.4.
+    installZoomPatch(doc, MIN_ZOOM)
 
     state.mapKey = mapKey()
     setLocked(win.localStorage.getItem(lockKey(state.mapKey)) === '1', { persist: false })
     win.setInterval(syncMap, 500)
   })
+
+  function installZoomPatch(doc, minZoom) {
+    const script = doc.createElement('script')
+    script.textContent = `
+      (() => {
+        try {
+          state.zoom.scaleExtent([${minZoom}, 2.4]);
+          window.__logiqZoomFloor = ${minZoom};
+          window.__logiqZoomApi = Object.freeze({
+            extent: () => state.zoom.scaleExtent().slice(),
+            scale: () => d3.zoomTransform(elements.svg.node()).k,
+            scaleTo(value) {
+              const svg = elements.svg.node();
+              const k = Math.max(${minZoom}, Math.min(2.4, Number(value) || ${minZoom}));
+              elements.svg.call(state.zoom.scaleTo, k, [svg.clientWidth / 2, svg.clientHeight / 2]);
+              return d3.zoomTransform(svg).k;
+            }
+          });
+        } catch (error) {
+          window.__logiqZoomPatchError = String(error && error.message || error);
+        }
+      })();
+    `
+    ;(doc.head || doc.documentElement).appendChild(script)
+    script.remove()
+  }
 
   function buildControls(doc) {
     const buttons = []
