@@ -135,9 +135,11 @@ test('working lock has distinct locked and unlocked line icons on desktop and mo
 
 test('fit-scale zoom continuity patches the real D3 behavior below the legacy 0.4 floor', () => {
   assert.match(lockZoom, /MIN_ZOOM = 0\.02/)
+  assert.match(lockZoom, /installZoomPatch\(doc, MIN_ZOOM\)/)
   assert.match(lockZoom, /state\.zoom\.scaleExtent\(\[/)
-  assert.match(lockZoom, /win\.__logiqZoomFloor = MIN_ZOOM/)
-  assert.doesNotMatch(lockZoom, /t\.k >= 0\.4/)
+  assert.match(lockZoom, /window\.__logiqZoomFloor/)
+  assert.match(lockZoom, /window\.__logiqZoomApi/)
+  assert.doesNotMatch(lockZoom, /win\.eval/)
 })
 
 test('mobile v2 keeps local blank-card voice and double-tap edit', () => {
