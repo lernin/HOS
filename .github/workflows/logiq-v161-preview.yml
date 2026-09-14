@@ -45,4 +45,4 @@ jobs:
           done
           grep -Fq '#logiq-spawn-puck.is-visible{display:none!important}' public/logiq-v161/logiq-preview.js
           grep -Fq '#logiq-spawn-ghost.is-visible{display:none!important}' public/logiq-v161/logiq-preview.js
-          node --test --test-name-pattern='^(?!selected-card spawn gesture)' tests/logiq-v161-smoke.test.mjs
+          node --test --test-name-pattern='^(immutable legacy route|desktop preview|mobile preview|landscape phone shell|phone shell survives)' tests/logiq-v161-smoke.test.mjs
