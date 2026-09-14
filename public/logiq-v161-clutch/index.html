@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <title>LOGiQ Mobile Clutch Prototype</title>
+  <title>LOGiQ Mobile Two-Hand Prototype</title>
   <style>
     html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#f8fafc}
     #app{position:fixed;inset:0;width:100%;height:100%;border:0;background:#fff}
@@ -11,8 +11,8 @@
   </style>
 </head>
 <body>
-  <div id="loading">Loading mobile clutch prototype…</div>
-  <iframe id="app" src="/logiq-v161/" allow="microphone" title="LOGiQ mobile clutch prototype"></iframe>
+  <div id="loading">Loading mobile gesture prototype…</div>
+  <iframe id="app" src="/logiq-v161/" allow="microphone" title="LOGiQ mobile two-hand prototype"></iframe>
   <script>
   (() => {
     'use strict'
@@ -23,113 +23,109 @@
     const FLICK_MIN_PX = 52
     const FLICK_MAX_MS = 340
     const FLICK_STRAIGHT_RATIO = 1.45
-    const EDGE_ZONE = 76
-    const EDGE_MAX_STEP = 13
+    const EDGE_ZONE = 84
+    const EDGE_MAX_STEP = 14
+    const RECORD_ARM_TIMEOUT = 10000
 
     frame.addEventListener('load', () => {
       loading.style.display = 'none'
       const win = frame.contentWindow
       const doc = frame.contentDocument
-      if (!win || !doc || !win.LOGiQBridge) return
+      if (!win || !doc || !win.LOGiQBridge || !isMobileTouch(win)) return
 
       const bridge = win.LOGiQBridge
       const state = {
-        clutchHeld: false,
-        clutchPointerId: null,
+        backgroundPointerId: null,
         gesture: null,
-        taps: new Map(),
+        edgeRaf: 0,
+        cardRecordingUid: null,
+        recordingStarted: false,
+        recordingArmedAt: 0,
+        recordRaf: 0,
       }
 
       injectPrototypeStyles(doc)
-      const clutch = buildClutch(doc)
-      bindClutch(clutch, doc, win, state)
+      const recordStop = buildRecordingStop(doc)
       bindCanvasGestures(doc, win, bridge, state)
-      doc.body.classList.add('logiq-clutch-prototype')
+      bindRecordingStop(recordStop, doc, win, state)
+      state.recordStop = recordStop
+      doc.body.classList.add('logiq-twohand-prototype')
     })
+
+    function isMobileTouch(win) {
+      return win.matchMedia('((pointer:coarse) and (max-width:1200px)), ((hover:none) and (max-width:1200px))').matches
+    }
 
     function injectPrototypeStyles(doc) {
       const style = doc.createElement('style')
-      style.id = 'logiq-clutch-prototype-styles'
+      style.id = 'logiq-twohand-prototype-styles'
       style.textContent = `
-        @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
-          body.logiq-clutch-prototype svg#canvas g.node{pointer-events:none!important}
-          body.logiq-clutch-prototype.logiq-clutch-held svg#canvas g.node{pointer-events:all!important}
+        @media (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+          body.logiq-twohand-prototype svg#canvas g.node{pointer-events:none!important}
+          body.logiq-twohand-prototype.logiq-manipulation-held svg#canvas g.node{pointer-events:all!important}
 
-          #logiq-clutch-control{
-            position:fixed;z-index:3900;left:max(14px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom));
-            width:72px;height:72px;border-radius:50%;border:1px solid rgba(100,116,139,.38);
-            display:grid;place-items:center;touch-action:none;user-select:none;-webkit-user-select:none;
-            background:rgba(255,255,255,.82);box-shadow:0 10px 30px rgba(15,23,42,.18), inset 0 0 0 7px rgba(148,163,184,.08);
-            backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);color:#475569;
-            transition:transform 90ms ease,background 90ms ease,box-shadow 90ms ease,color 90ms ease;
+          body.logiq-twohand-prototype #logiq-mobile-context{left:auto;right:8px;width:154px;grid-template-columns:1fr 1fr}
+          body.logiq-twohand-prototype #logiq-mobile-context button[data-action="left"],
+          body.logiq-twohand-prototype #logiq-mobile-context button[data-action="up"],
+          body.logiq-twohand-prototype #logiq-mobile-context button[data-action="down"],
+          body.logiq-twohand-prototype #logiq-mobile-context button[data-action="right"]{display:none!important}
+
+          body.logiq-twohand-prototype.logiq-card-recording #logiq-voice-bar{display:none!important}
+          #logiq-card-record-stop{
+            position:fixed;z-index:3950;display:none;place-items:center;width:34px;height:34px;padding:0;
+            border:2px solid #fff;border-radius:50%;background:#ef4444;color:#fff;box-shadow:0 5px 16px rgba(15,23,42,.28);
+            touch-action:none;user-select:none;-webkit-user-select:none;
           }
-          #logiq-clutch-control .ring{width:38px;height:38px;border-radius:50%;border:2px solid currentColor;display:grid;place-items:center;font:800 10px/1 system-ui;letter-spacing:.04em}
-          #logiq-clutch-control .label{position:absolute;left:50%;bottom:78px;transform:translateX(-50%);padding:5px 8px;border-radius:999px;background:rgba(15,23,42,.82);color:#fff;font:700 10px/1 system-ui;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity 90ms ease}
-          body.logiq-clutch-held #logiq-clutch-control{transform:scale(.94);background:rgba(220,252,231,.96);color:#15803d;box-shadow:0 8px 26px rgba(21,128,61,.22), inset 0 0 0 7px rgba(34,197,94,.09)}
-          body.logiq-clutch-held #logiq-clutch-control .label{opacity:1}
-
-          body.logiq-clutch-prototype #logiq-mobile-context{left:auto;right:8px;width:154px;grid-template-columns:1fr 1fr}
-          body.logiq-clutch-prototype #logiq-mobile-context button[data-action="left"],
-          body.logiq-clutch-prototype #logiq-mobile-context button[data-action="up"],
-          body.logiq-clutch-prototype #logiq-mobile-context button[data-action="down"],
-          body.logiq-clutch-prototype #logiq-mobile-context button[data-action="right"]{display:none!important}
+          #logiq-card-record-stop.is-visible{display:grid}
+          #logiq-card-record-stop::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logiq-record-pulse 1.05s ease-out infinite}
+          #logiq-card-record-stop .stop-square{width:10px;height:10px;border-radius:2px;background:#fff}
+          @keyframes logiq-record-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.25);opacity:0}}
         }
       `
       doc.head.appendChild(style)
     }
 
-    function buildClutch(doc) {
+    function buildRecordingStop(doc) {
       const button = doc.createElement('button')
-      button.id = 'logiq-clutch-control'
+      button.id = 'logiq-card-record-stop'
       button.type = 'button'
-      button.setAttribute('aria-label', 'Hold to manipulate cards')
-      button.innerHTML = '<span class="ring">HOLD</span><span class="label">MOVE · FLICK</span>'
+      button.setAttribute('aria-label', 'Stop recording this card')
+      button.innerHTML = '<span class="stop-square" aria-hidden="true"></span>'
       doc.body.appendChild(button)
       return button
     }
 
-    function bindClutch(clutch, doc, win, state) {
-      const engage = (event) => {
+    function bindRecordingStop(button, doc, win, state) {
+      button.addEventListener('pointerdown', (event) => {
         event.preventDefault()
-        event.stopPropagation()
-        state.clutchHeld = true
-        state.clutchPointerId = event.pointerId
-        doc.body.classList.add('logiq-clutch-held')
-        try { clutch.setPointerCapture(event.pointerId) } catch (_) {}
-        win.navigator.vibrate?.(10)
-      }
-      const release = (event) => {
-        if (state.clutchPointerId != null && event.pointerId !== state.clutchPointerId) return
-        state.clutchHeld = false
-        state.clutchPointerId = null
-        doc.body.classList.remove('logiq-clutch-held')
-      }
-      clutch.addEventListener('pointerdown', engage, { passive:false })
-      clutch.addEventListener('pointerup', release, { passive:false })
-      clutch.addEventListener('pointercancel', release, { passive:false })
-      clutch.addEventListener('lostpointercapture', release, { passive:false })
+        event.stopImmediatePropagation()
+        win.navigator.vibrate?.(12)
+        doc.getElementById('logiq-voice-stop')?.click()
+      }, { passive:false })
     }
 
     function bindCanvasGestures(doc, win, bridge, state) {
       const canvas = doc.getElementById('canvas')
       if (!canvas) return
 
-      const rememberTap = (event) => {
-        if (event.pointerType === 'mouse') return
-        state.taps.set(event.pointerId, { x:event.clientX, y:event.clientY, at:win.performance.now() })
-      }
-
       const begin = (event) => {
-        rememberTap(event)
-        if (!state.clutchHeld || event.pointerId === state.clutchPointerId) return
+        if (event.pointerType === 'mouse') return
         const node = hitNodeAt(doc, event.clientX, event.clientY)
-        if (!node) {
-          event.preventDefault()
-          event.stopImmediatePropagation()
+
+        if (state.backgroundPointerId == null) {
+          if (node) return
+          state.backgroundPointerId = event.pointerId
+          doc.body.classList.add('logiq-manipulation-held')
+          win.navigator.vibrate?.(7)
           return
         }
+
+        if (event.pointerId === state.backgroundPointerId || !node || state.gesture) return
         const uid = node.__data__?.data?._uid
         if (!uid) return
+
+        event.preventDefault()
+        event.stopImmediatePropagation()
         bridge.selectByUid(uid)
         state.gesture = {
           pointerId:event.pointerId,
@@ -141,38 +137,41 @@
           started:win.performance.now(),
           before:stableSnapshot(bridge.snapshot()),
         }
+
+        dispatchMouse(node, win, 'mousedown', event.clientX, event.clientY, 1)
+        startEdgeLoop(doc, win, state)
       }
 
       const move = (event) => {
         const gesture = state.gesture
-        if (!gesture || gesture.pointerId !== event.pointerId || !state.clutchHeld) return
+        if (!gesture || gesture.pointerId !== event.pointerId) return
+        event.preventDefault()
+        event.stopImmediatePropagation()
         gesture.lastX = event.clientX
         gesture.lastY = event.clientY
-        edgePan(doc, win, event.clientX, event.clientY)
+        dispatchMouse(win, win, 'mousemove', event.clientX, event.clientY, 1)
       }
 
       const end = (event) => {
-        const tap = state.taps.get(event.pointerId)
-        state.taps.delete(event.pointerId)
-
-        if (tap && isVoiceListening(doc) && win.performance.now() - tap.at < 480 && Math.hypot(event.clientX-tap.x,event.clientY-tap.y) < 11) {
-          const selected = bridge.getSelectedUid()
-          const node = hitNodeAt(doc, event.clientX, event.clientY)
-          if (selected && node?.__data__?.data?._uid === selected) {
-            event.preventDefault()
-            doc.getElementById('logiq-voice-stop')?.click()
-          }
+        if (event.pointerId === state.backgroundPointerId) {
+          if (state.gesture) finishDrag(doc, win, state, state.gesture.lastX, state.gesture.lastY)
+          state.backgroundPointerId = null
+          doc.body.classList.remove('logiq-manipulation-held')
+          return
         }
 
         const gesture = state.gesture
         if (!gesture || gesture.pointerId !== event.pointerId) return
-        state.gesture = null
+        event.preventDefault()
+        event.stopImmediatePropagation()
 
         const dx = event.clientX - gesture.x
         const dy = event.clientY - gesture.y
         const elapsed = win.performance.now() - gesture.started
-        if (!isFlick(dx, dy, elapsed)) return
+        const flick = isFlick(dx, dy, elapsed)
+        finishDrag(doc, win, state, event.clientX, event.clientY)
 
+        if (!flick) return
         const direction = Math.abs(dx) > Math.abs(dy)
           ? (dx < 0 ? 'left' : 'right')
           : (dy < 0 ? 'up' : 'down')
@@ -182,31 +181,70 @@
           if (after !== gesture.before) bridge.undo()
           win.requestAnimationFrame(() => {
             bridge.selectByUid(gesture.uid)
-            win.requestAnimationFrame(() => triggerExistingSpawnGesture(doc, win, direction))
+            win.requestAnimationFrame(() => {
+              triggerExistingSpawnGesture(doc, win, direction)
+              win.setTimeout(() => {
+                const createdUid = bridge.getSelectedUid()
+                if (createdUid && createdUid !== gesture.uid) armCardRecording(doc, win, state, createdUid)
+              }, 30)
+            })
           })
         }, 0)
       }
 
       const cancel = (event) => {
-        state.taps.delete(event.pointerId)
-        if (state.gesture?.pointerId === event.pointerId) state.gesture = null
+        if (event.pointerId === state.backgroundPointerId) {
+          if (state.gesture) finishDrag(doc, win, state, state.gesture.lastX, state.gesture.lastY)
+          state.backgroundPointerId = null
+          doc.body.classList.remove('logiq-manipulation-held')
+          return
+        }
+        if (state.gesture?.pointerId === event.pointerId) finishDrag(doc, win, state, state.gesture.lastX, state.gesture.lastY)
       }
 
       canvas.addEventListener('pointerdown', begin, true)
       canvas.addEventListener('pointermove', move, true)
       canvas.addEventListener('pointerup', end, true)
       canvas.addEventListener('pointercancel', cancel, true)
+    }
 
-      canvas.addEventListener('touchstart', (event) => {
-        if (!state.clutchHeld) return
-        for (const touch of event.changedTouches || []) {
-          if (!hitNodeAt(doc, touch.clientX, touch.clientY)) {
-            event.preventDefault()
-            event.stopImmediatePropagation()
-            return
-          }
+    function finishDrag(doc, win, state, x, y) {
+      if (!state.gesture) return
+      dispatchMouse(win, win, 'mouseup', x, y, 0)
+      state.gesture = null
+      if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf)
+      state.edgeRaf = 0
+    }
+
+    function dispatchMouse(target, win, type, x, y, buttons) {
+      try {
+        target.dispatchEvent(new win.MouseEvent(type, {
+          bubbles:true,
+          cancelable:true,
+          view:win,
+          clientX:x,
+          clientY:y,
+          screenX:x,
+          screenY:y,
+          button:0,
+          buttons,
+        }))
+      } catch (_) {}
+    }
+
+    function startEdgeLoop(doc, win, state) {
+      if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf)
+      const tick = () => {
+        const gesture = state.gesture
+        if (!gesture || state.backgroundPointerId == null) {
+          state.edgeRaf = 0
+          return
         }
-      }, { capture:true, passive:false })
+        const moved = edgePan(doc, win, gesture.lastX, gesture.lastY)
+        if (moved) dispatchMouse(win, win, 'mousemove', gesture.lastX, gesture.lastY, 1)
+        state.edgeRaf = win.requestAnimationFrame(tick)
+      }
+      state.edgeRaf = win.requestAnimationFrame(tick)
     }
 
     function hitNodeAt(doc, x, y) {
@@ -243,13 +281,58 @@
       } catch (_) {}
     }
 
-    function isVoiceListening(doc) {
-      return !!doc.getElementById('logiq-voice-bar')?.classList.contains('is-visible')
+    function armCardRecording(doc, win, state, uid) {
+      state.cardRecordingUid = uid
+      state.recordingStarted = false
+      state.recordingArmedAt = win.performance.now()
+      doc.body.classList.add('logiq-card-recording')
+      if (state.recordRaf) win.cancelAnimationFrame(state.recordRaf)
+
+      const tick = () => {
+        if (!state.cardRecordingUid) {
+          state.recordRaf = 0
+          return
+        }
+        const voiceBar = doc.getElementById('logiq-voice-bar')
+        const listening = !!voiceBar?.classList.contains('is-visible')
+        if (listening) state.recordingStarted = true
+
+        if (state.recordingStarted && !listening) {
+          clearCardRecording(doc, win, state)
+          return
+        }
+        if (!state.recordingStarted && win.performance.now() - state.recordingArmedAt > RECORD_ARM_TIMEOUT) {
+          clearCardRecording(doc, win, state)
+          return
+        }
+
+        const node = Array.from(doc.querySelectorAll('g.node')).find((element) => element.__data__?.data?._uid === state.cardRecordingUid)
+        const rect = node?.getBoundingClientRect()
+        if (listening && rect && rect.width > 1 && rect.height > 1 && rect.right > 0 && rect.left < win.innerWidth && rect.bottom > 0 && rect.top < win.innerHeight) {
+          const button = state.recordStop
+          button.style.left = `${Math.max(4, Math.min(win.innerWidth-38, rect.right-38))}px`
+          button.style.top = `${Math.max(50, Math.min(win.innerHeight-38, rect.top+5))}px`
+          button.classList.add('is-visible')
+        } else {
+          state.recordStop.classList.remove('is-visible')
+        }
+        state.recordRaf = win.requestAnimationFrame(tick)
+      }
+      state.recordRaf = win.requestAnimationFrame(tick)
+    }
+
+    function clearCardRecording(doc, win, state) {
+      state.cardRecordingUid = null
+      state.recordingStarted = false
+      doc.body.classList.remove('logiq-card-recording')
+      state.recordStop?.classList.remove('is-visible')
+      if (state.recordRaf) win.cancelAnimationFrame(state.recordRaf)
+      state.recordRaf = 0
     }
 
     function edgePan(doc, win, x, y) {
       const svg = doc.getElementById('canvas')
-      if (!svg || !win.d3) return
+      if (!svg || !win.d3) return false
       const width = win.innerWidth
       const height = win.innerHeight
       const topInset = 54
@@ -269,13 +352,14 @@
 
       const dx = axisStep(x, 0, width)
       const dy = axisStep(y, topInset, height-bottomInset)
-      if (!dx && !dy) return
+      if (!dx && !dy) return false
 
       const t = win.d3.zoomTransform(svg)
       const next = win.d3.zoomIdentity.translate(t.x + dx, t.y + dy).scale(t.k)
       svg.__zoom = next
       const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
       if (root) root.setAttribute('transform', next.toString())
+      return true
     }
   })()
   </script>
