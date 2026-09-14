@@ -113,9 +113,10 @@ test('Word Bank deletion is converted to one atomic tree+bank undo entry', () =>
   assert.match(undoFix, /prevBank: transaction\.beforeBank/)
 })
 
-test('working lock is per-map, blocks structural mutation, and still permits rename', () => {
-  assert.match(lockZoom, /LOCK_PREFIX = 'logiq_working_lock_v1:'/)
+test('working lock is per-map, defaults cleanly, blocks structural mutation, and still permits rename', () => {
+  assert.match(lockZoom, /LOCK_PREFIX = 'logiq_working_lock_v2:'/)
   assert.match(lockZoom, /map\.id \? `id:\$\{map\.id\}`/)
+  assert.match(lockZoom, /win\.__logiqWorkingLocked = state\.locked/)
   assert.match(lockZoom, /logiq-working-locked/)
   assert.match(lockZoom, /sameStructure\(before, now\)/)
   assert.match(lockZoom, /rename\/text edit is intentional/)
@@ -123,19 +124,20 @@ test('working lock is per-map, blocks structural mutation, and still permits ren
   assert.match(lockZoom, /Structure is locked/)
 })
 
-test('working lock is visible on desktop, portrait header, and landscape rail', () => {
+test('working lock has distinct locked and unlocked line icons on desktop and mobile', () => {
+  assert.match(lockZoom, /ICON_LOCKED/)
+  assert.match(lockZoom, /ICON_UNLOCKED/)
+  assert.match(lockZoom, /data-lock-state/)
   assert.match(lockZoom, /header \.controls/)
   assert.match(lockZoom, /logiq-mobile-menu-btn/)
   assert.match(lockZoom, /#logiq-v2-rail \.divider/)
-  assert.match(lockZoom, /🔒/)
-  assert.match(lockZoom, /🔓/)
 })
 
-test('fit-scale zoom continuity accepts scales below the legacy 0.4 floor', () => {
-  assert.match(lockZoom, /MIN_ZOOM = 0\.06/)
-  assert.match(lockZoom, /if \(!t \|\| t\.k >= 0\.4\) return/)
-  assert.match(lockZoom, /nextK = Math\.max\(MIN_ZOOM/)
-  assert.match(lockZoom, /svg\.__zoom = next/)
+test('fit-scale zoom continuity patches the real D3 behavior below the legacy 0.4 floor', () => {
+  assert.match(lockZoom, /MIN_ZOOM = 0\.02/)
+  assert.match(lockZoom, /state\.zoom\.scaleExtent\(\[/)
+  assert.match(lockZoom, /win\.__logiqZoomFloor = MIN_ZOOM/)
+  assert.doesNotMatch(lockZoom, /t\.k >= 0\.4/)
 })
 
 test('mobile v2 keeps local blank-card voice and double-tap edit', () => {
