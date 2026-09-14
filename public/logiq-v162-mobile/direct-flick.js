@@ -14,6 +14,7 @@
     const bridge = win?.LOGiQBridge
     if (!win || !doc || !bridge || !mobile(win)) return
 
+    win.__logiqV2ConsumedPointers ||= new Set()
     const canvas = doc.getElementById('canvas')
     if (!canvas) return
 
@@ -45,6 +46,11 @@
       active.delete(event.pointerId)
       const candidate = candidates.get(event.pointerId)
       candidates.delete(event.pointerId)
+
+      if (win.__logiqV2ConsumedPointers.has(event.pointerId)) {
+        win.__logiqV2ConsumedPointers.delete(event.pointerId)
+        return
+      }
       if (!candidate || candidate.multi) return
 
       const dx = event.clientX - candidate.x
@@ -70,6 +76,7 @@
     const clear = (event) => {
       active.delete(event.pointerId)
       candidates.delete(event.pointerId)
+      win.__logiqV2ConsumedPointers.delete(event.pointerId)
     }
     canvas.addEventListener('pointercancel', clear, true)
   })
