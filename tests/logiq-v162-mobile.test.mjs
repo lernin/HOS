@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises'
 const index = await readFile(new URL('../public/logiq-v162-mobile/index.html', import.meta.url), 'utf8')
 const js = await readFile(new URL('../public/logiq-v162-mobile/v2-ghost.js', import.meta.url), 'utf8')
 const branchAffordance = await readFile(new URL('../public/logiq-v162-mobile/v2-branch-affordance.js', import.meta.url), 'utf8')
+const dragVisualFix = await readFile(new URL('../public/logiq-v162-mobile/v2-drag-visual-fix.js', import.meta.url), 'utf8')
 const chrome = await readFile(new URL('../public/logiq-v162-mobile/orientation-chrome.js', import.meta.url), 'utf8')
 const flick = await readFile(new URL('../public/logiq-v162-mobile/direct-flick.js', import.meta.url), 'utf8')
 const undoFix = await readFile(new URL('../public/logiq-v162-mobile/undo-bank-fix.js', import.meta.url), 'utf8')
@@ -13,6 +14,7 @@ test('mobile v2 shell stays isolated from the released v161 route', () => {
   assert.match(index, /src="\/logiq-v161\/"/)
   assert.match(index, /\.\/v2-ghost\.js/)
   assert.match(index, /\.\/v2-branch-affordance\.js/)
+  assert.match(index, /\.\/v2-drag-visual-fix\.js/)
   assert.match(index, /\.\/orientation-chrome\.js/)
   assert.match(index, /\.\/undo-bank-fix\.js/)
   assert.match(index, /\.\/direct-flick\.js/)
@@ -78,6 +80,17 @@ test('mobile held drag drives the real desktop drag feedback engine', () => {
   assert.match(branchAffordance, /startFeedbackLoop/)
 })
 
+test('mobile branch drag visually stays the same except ghost and green destination affordance', () => {
+  assert.match(dragVisualFix, /\.drag-mini,g\.drag-mini\{display:none!important/)
+  assert.match(dragVisualFix, /\.v2-float-node\.is-root\{border-color:#22c55e!important/)
+  assert.doesNotMatch(dragVisualFix, /#2563eb/)
+  assert.match(dragVisualFix, /v2-branch-origin-ghost\{opacity:\.44!important/)
+  assert.match(dragVisualFix, /g\.node\.is-others\{opacity:1!important/)
+  assert.match(dragVisualFix, /--det-node:transparent!important/)
+  assert.match(dragVisualFix, /--det-cousin-r:transparent!important/)
+  assert.match(dragVisualFix, /g\.node\.drop-target rect/)
+})
+
 test('mobile branch drag prevents hidden trash from stealing a drop', () => {
   assert.match(branchAffordance, /v2-branch-drag #trash/)
   assert.match(branchAffordance, /left:-10000px!important/)
@@ -108,6 +121,7 @@ test('mobile v2 keeps local blank-card voice and double-tap edit', () => {
 test('mobile v2 scripts parse', () => {
   assert.doesNotThrow(() => new Function(js))
   assert.doesNotThrow(() => new Function(branchAffordance))
+  assert.doesNotThrow(() => new Function(dragVisualFix))
   assert.doesNotThrow(() => new Function(chrome))
   assert.doesNotThrow(() => new Function(flick))
   assert.doesNotThrow(() => new Function(undoFix))
