@@ -38,43 +38,58 @@
     return html.replace(globalRegex, '');
   }
 
-  function removeSecondTabRegistration(html) {
-    const pair = /[ \t]*window\.addEventListener\('keydown', tabDown, true\);\r?\n[ \t]*window\.addEventListener\('keyup', tabUp, true\);\r?\n/g;
-    const matches = [...html.matchAll(pair)];
+  function removeSecondMatch(html, regex, label) {
+    const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`;
+    const globalRegex = new RegExp(regex.source, flags);
+    const matches = [...html.matchAll(globalRegex)];
     if (matches.length !== 2) {
-      throw new Error(`LOGiQ hygiene expected two identical Tab listener registrations; found ${matches.length}`);
+      throw new Error(`LOGiQ hygiene expected two ${label}; found ${matches.length}`);
     }
     const second = matches[1];
     return html.slice(0, second.index) + html.slice(second.index + second[0].length);
   }
 
-  function removeUnusedSavedMapsSurface(html) {
-    // The recovered v161 source contains a localStorage maps implementation, but no
-    // save/maps controls exist in the DOM. Its only call sites are two guarded pairs
-    // wired to null element references, so the entire surface is unreachable.
+  function removeSecondTabRegistration(html) {
+    return removeSecondMatch(
+      html,
+      /[ \t]*window\.addEventListener\('keydown', tabDown, true\);\r?\n[ \t]*window\.addEventListener\('keyup', tabUp, true\);\r?\n/g,
+      'identical Tab listener registrations'
+    );
+  }
+
+  function cleanLegacySavedMapsSurface(html) {
+    // The Trees button is real and remains active: it can load/delete historical
+    // savedMaps_v1 data. The Save button, however, does not exist in the DOM, so
+    // saveCurrentMap and its two guarded listener registrations are unreachable.
+    // openMapsMenu has two identical click registrations; keep exactly one.
     assertMatchCount(html, /\bsaveCurrentMap\b/g, 3, 'saveCurrentMap references');
     assertMatchCount(html, /\bopenMapsMenu\b/g, 3, 'openMapsMenu references');
     assertMatchCount(html, /\bid\s*=\s*["']saveBtn["']/gi, 0, 'saveBtn DOM ids');
-    assertMatchCount(html, /\bid\s*=\s*["']mapsBtn["']/gi, 0, 'mapsBtn DOM ids');
+    assertMatchCount(html, /\bid\s*=\s*["']mapsBtn["']/gi, 1, 'mapsBtn DOM ids');
 
-    let cleaned = removeMarkedBlock(
+    let cleaned = removeSingleRegex(
       html,
-      '/* [patch] saved-refs start */',
-      '/* [patch] saved-refs end */',
-      'unused saved-map element refs'
+      /[ \t]*saveBtn:\s*document\.getElementById\("saveBtn"\),\r?\n/,
+      'unused saveBtn element ref'
     );
 
     cleaned = removeSingleRegex(
       cleaned,
-      /[ \t]*\/\* \[patch\] saved-maps start \*\/[\s\S]*?(?=function onNodeRightButtonDown\(event, d\)\{)/,
-      'unused savedMaps_v1 runtime'
+      /[ \t]*function saveCurrentMap\(\)\{[\s\S]*?(?=[ \t]*function openMapsMenu\(\)\{)/,
+      'unreachable saveCurrentMap function'
     );
 
     cleaned = removeAllRegex(
       cleaned,
-      /[ \t]*elements\.saveBtn && elements\.saveBtn\.addEventListener\("click", saveCurrentMap\);\r?\n[ \t]*elements\.mapsBtn && elements\.mapsBtn\.addEventListener\("click", openMapsMenu\);\r?\n/g,
+      /[ \t]*elements\.saveBtn && elements\.saveBtn\.addEventListener\("click", saveCurrentMap\);\r?\n/g,
       2,
-      'guarded saved-map listener pairs'
+      'guarded saveCurrentMap listener registrations'
+    );
+
+    cleaned = removeSecondMatch(
+      cleaned,
+      /[ \t]*elements\.mapsBtn && elements\.mapsBtn\.addEventListener\("click", openMapsMenu\);\r?\n/g,
+      'identical Trees button listener registrations'
     );
 
     return cleaned;
@@ -106,10 +121,11 @@
     cleaned = removeSecondTabRegistration(cleaned);
     removals.push('duplicate-tab-listener-registration');
 
-    // Unreachable legacy local-map implementation: its two expected DOM hooks do not
-    // exist, and the only function references are those null-guarded listener pairs.
-    cleaned = removeUnusedSavedMapsSurface(cleaned);
-    removals.push('unused-savedmaps-v1-surface');
+    // Preserve the active Trees menu, but remove its unreachable Save half and the
+    // duplicate Trees click registration.
+    cleaned = cleanLegacySavedMapsSurface(cleaned);
+    removals.push('unreachable-local-map-save-path');
+    removals.push('duplicate-trees-listener-registration');
 
     return { html: cleaned, removals };
   }
