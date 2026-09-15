@@ -71,3 +71,5 @@ CI must pass all of the following before a preview is offered for acceptance:
 - browser interruption smoke proving a latched Node 09 branch drag cancels on blur and leaves the complete map unchanged.
 
 Automated browser tests intercept Supabase RPCs and do not write production map data.
+
+Latest verified application behavior is the frozen-origin implementation introduced before commit `a004620c4b71427d676e38db193944e02ae8784e`; GitHub Actions run #103 passed the complete gate and the matching Vercel preview was READY with HTTP 200 on `/logiq-v162-mobile/`.
