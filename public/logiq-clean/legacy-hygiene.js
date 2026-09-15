@@ -95,6 +95,17 @@
     return cleaned;
   }
 
+  function removeDeadEnforceMoatForSelected(html) {
+    // Verified dead in inventory batch v161-camera-moat-001: the exact symbol name
+    // occurs once (its declaration), is not exported, and has no call site.
+    assertMatchCount(html, /\benforceMoatForSelected\b/g, 1, 'enforceMoatForSelected references');
+    return removeSingleRegex(
+      html,
+      /[ \t]*\/\* Keyboard-only moat recenter \(call AFTER handling arrows\/J\/K\/L\/I\) \*\/\r?\n[ \t]*function enforceMoatForSelected\(\)\{[\s\S]*?[ \t]*flyCenterToUID\(selUid, \{ duration: dur \}\);\r?\n[ \t]*state\._lastMoat = now;\r?\n[ \t]*\}\r?\n[ \t]*\}\r?\n/,
+      'dead enforceMoatForSelected function'
+    );
+  }
+
   function sanitize(html) {
     let cleaned = String(html);
     const removals = [];
@@ -126,6 +137,10 @@
     cleaned = cleanLegacySavedMapsSurface(cleaned);
     removals.push('unreachable-local-map-save-path');
     removals.push('duplicate-trees-listener-registration');
+
+    // Dead helper: inventory and exact-name source audit prove there is no caller.
+    cleaned = removeDeadEnforceMoatForSelected(cleaned);
+    removals.push('dead-enforce-moat-for-selected');
 
     return { html: cleaned, removals };
   }
