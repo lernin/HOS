@@ -46,24 +46,20 @@ async function open(route) {
 
 async function legacyBehavior(route) {
   const { context, page } = await open(route)
-
   const wordInput = page.locator('#wordInput')
   await wordInput.fill('hygiene-word')
   await wordInput.press('Enter')
   const chipsBefore = await page.locator('#Dock .chip').allTextContents()
   const dockClassBefore = await page.locator('#Dock').getAttribute('class')
-
   await page.evaluate(() => document.activeElement?.blur())
   await page.keyboard.press('Shift+w')
   await page.waitForTimeout(100)
   const chipsAfter = await page.locator('#Dock .chip').allTextContents()
   const dockClassAfter = await page.locator('#Dock').getAttribute('class')
-
   const node09 = page.locator('g.node').filter({ has: page.locator('text.label', { hasText: 'Node 09' }) })
   await node09.dblclick()
   await page.waitForTimeout(100)
   const editorVisible = await page.locator('.node-edit-input').isVisible().catch(() => false)
-
   const result = {
     chipsBefore,
     chipsAfter,
@@ -93,7 +89,6 @@ async function treesMenuBehavior(route) {
       },
     ]))
   })
-
   let promptCount = 0
   page.on('dialog', async (dialog) => {
     if (dialog.type() === 'prompt') {
@@ -103,7 +98,6 @@ async function treesMenuBehavior(route) {
       await dialog.dismiss()
     }
   })
-
   await page.locator('#mapsBtn').click()
   await page.waitForFunction(() => {
     const labels = Array.from(document.querySelectorAll('text.label')).map((node) => node.textContent)
@@ -111,7 +105,6 @@ async function treesMenuBehavior(route) {
   }, null, { timeout: 3000 })
   const labels = await page.locator('text.label').allTextContents()
   const stored = await page.evaluate(() => localStorage.getItem('savedMaps_v1'))
-
   const result = { promptCount, labels, stored }
   await context.close()
   return result
@@ -129,6 +122,7 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
     'dead-enforce-moat-for-selected',
     'superseded-early-fly-center-to-uid',
     'superseded-early-center-on-selected',
+    'duplicate-standalone-shift-f-owner',
   ])
   await context.close()
 
