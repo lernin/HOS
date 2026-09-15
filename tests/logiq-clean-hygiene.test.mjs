@@ -163,3 +163,21 @@ test('clean runtime keeps only the active flyCenterToUID declaration', async () 
 
   assert.equal(declarationCount, 1, 'the superseded early flyCenterToUID declaration must be removed')
 })
+
+test('clean runtime keeps only the active centerOnSelected declaration', async () => {
+  const clean = await open('/logiq-clean/index.html')
+  const cleanState = await clean.page.evaluate(() => ({
+    declarationCount: (document.documentElement.innerHTML.match(/function\s+centerOnSelected\s*\(/g) || []).length,
+    activeBody: typeof centerOnSelected === 'function' ? centerOnSelected.toString() : null,
+  }))
+  await clean.context.close()
+
+  const legacy = await open('/logiq-v161-legacy/index.html')
+  const legacyActiveBody = await legacy.page.evaluate(() => (
+    typeof centerOnSelected === 'function' ? centerOnSelected.toString() : null
+  ))
+  await legacy.context.close()
+
+  assert.equal(cleanState.declarationCount, 1, 'the superseded early centerOnSelected declaration must be removed')
+  assert.equal(cleanState.activeBody, legacyActiveBody, 'the active centerOnSelected binding must remain unchanged')
+})
