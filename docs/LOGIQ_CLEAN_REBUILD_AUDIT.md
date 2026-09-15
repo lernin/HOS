@@ -16,7 +16,7 @@ This avoids two opposite risks:
 
 Three paths are removed from `/logiq-clean/` only:
 
-1. **Unreachable Shift+W Word Bank-to-Trash block.** `keyDispatcher` handles every `W`/`Shift+W` earlier with `toggleDock()` and immediately returns, so the later Shift+W block cannot execute.
+1. **Unreachable Shift+W Word Bank-to-Trash block.** `keyDispatcher` handles `W`/`Shift+W` earlier and returns, so the later Shift+W Word Bank-to-Trash block cannot execute. The regression test deliberately treats the earlier legacy Shift+W behavior as opaque and requires the clean candidate to match it exactly while proving the Word Bank is not cleared.
 2. **Suppressed node double-click editor handler.** The SVG installs a capture-phase `dblclick` mute that prevents the event from reaching the node handler. Removing the target handler preserves the established behavior: double-click does not open the editor.
 3. **Second identical Tab listener registration.** The same `tabDown`/`tabUp` callbacks are registered twice with the same event type and capture flag. Under DOM event-listener semantics the second registration is a no-op, so the clean candidate retains one registration.
 
@@ -27,7 +27,7 @@ Three paths are removed from `/logiq-clean/` only:
 `tests/logiq-clean-hygiene.test.mjs` verifies that:
 
 - exactly the three approved hygiene removals are reported;
-- Shift+W keeps its established dock-toggle behavior and does not clear the Word Bank;
+- Shift+W behavior remains exactly equivalent to the immutable v161 route and does not clear the Word Bank;
 - double-click remains muted;
 - clean behavior matches the immutable v161 route for these cases.
 
