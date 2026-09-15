@@ -6,11 +6,18 @@
   <title>LOGiQ clean baseline candidate</title>
 </head>
 <body>
+<script src="/logiq-clean/legacy-hygiene.js"></script>
 <script>
 (async () => {
   const response = await fetch('/logiq-v161-legacy/index.html', { cache: 'no-store' });
   if (!response.ok) throw new Error(`Failed to load immutable v161 baseline: ${response.status}`);
-  let html = await response.text();
+
+  const source = await response.text();
+  const hygiene = window.LOGiQLegacyHygiene?.sanitize(source);
+  if (!hygiene) throw new Error('LOGiQ legacy hygiene layer did not load');
+
+  window.__LOGIQ_HYGIENE_REPORT__ = Object.freeze({ removals: hygiene.removals.slice() });
+  let html = hygiene.html;
   html = html.replace('<head>', '<head><base href="/logiq-v161-legacy/">');
   document.open();
   document.write(html);
