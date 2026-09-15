@@ -1,0 +1,54 @@
+name: LOGiQ clean rebuild parity
+
+on:
+  push:
+    branches:
+      - 'rebuild/logiq-v161-clean-mobile-*'
+    paths:
+      - public/logiq-clean/**
+      - public/logiq-v161-legacy/**
+      - tests/logiq-clean-*
+      - tests/logiq-v161-baseline.test.mjs
+      - docs/LOGIQ_CLEAN_REBUILD*.md
+      - .github/workflows/logiq-clean-rebuild.yml
+      - package.json
+      - package-lock.json
+  pull_request:
+    branches: [main]
+    paths:
+      - public/logiq-clean/**
+      - public/logiq-v161-legacy/**
+      - tests/logiq-clean-*
+      - tests/logiq-v161-baseline.test.mjs
+      - docs/LOGIQ_CLEAN_REBUILD*.md
+      - .github/workflows/logiq-clean-rebuild.yml
+      - package.json
+      - package-lock.json
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Verify immutable v161 source
+        run: node --test --test-name-pattern='^(immutable legacy source|legacy inline script|legacy DOM)' tests/logiq-v161-baseline.test.mjs
+      - run: npm install --no-save --package-lock=false playwright@1.55.0 d3@7.9.0
+      - run: npx playwright install --with-deps chromium
+      - name: Run v161 parity harness
+        run: |
+          npm run dev -- --port 4173 > /tmp/logiq-clean-vite.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/logiq-clean/index.html >/dev/null; then break; fi
+            sleep 1
+          done
+          node --test tests/logiq-clean-parity.test.mjs
