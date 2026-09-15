@@ -61,8 +61,11 @@
       }
     }
 
+    /* Watch only structural changes. Desktop attraction feedback changes SVG classes on every
+       drag frame; observing those classes created needless feedback work and could starve touch
+       handling. Child-list changes are sufficient to detect/rebuild a vanished ghost or branch. */
     const observer = new MutationObserver(ensure)
-    observer.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
+    observer.observe(doc.body, { childList: true, subtree: true })
 
     win.addEventListener('pointermove', () => {
       if (dragging()) ensure()
