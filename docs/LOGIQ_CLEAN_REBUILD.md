@@ -49,18 +49,22 @@ Prefer wrapping known-good v161 behavior first and extracting behind tests. Do n
 
 ## Execution order
 
-1. Build the v161 visual/behavior parity harness before changing shared rendering.
-2. Establish the minimal shared geometry/layout interfaces.
-3. Introduce shared structural command boundaries.
-4. Attach desktop behavior and prove v161 parity.
-5. Add the mobile adapter from the retained acceptance requirements.
-6. Add persistence/library behind an adapter.
-7. Retire legacy/compatibility seams only when a tested replacement owns the responsibility.
-8. Run desktop + mobile + persistence acceptance before any merge proposal.
+1. Build and lock the v161 visual/behavior parity harness.
+2. **Audit and clean the legacy runtime before modularization.** Remove only code proven dead/unreachable/superseded/no-op, one checkpoint at a time, with parity green after every removal. See `LOGIQ_CLEAN_REBUILD_AUDIT.md`.
+3. Establish the minimal shared geometry/layout interfaces from the cleaned runtime.
+4. Introduce shared structural command boundaries.
+5. Attach desktop behavior and prove v161 parity.
+6. Add the mobile adapter from the retained acceptance requirements.
+7. Add persistence/library behind an adapter.
+8. Retire remaining legacy/compatibility seams only when a tested replacement owns the responsibility.
+9. Run desktop + mobile + persistence acceptance before any merge proposal.
+
+The hygiene pass is intentionally conservative. Multiple legacy listeners and helper branches remain until call-site or behavior tests prove they can be removed safely; listener order is part of recovered behavior.
 
 ## Safety boundary
 
 - Rebuild branch: `rebuild/logiq-v161-clean-mobile-20260915`
 - Existing `/logiq-v161/` and `/logiq-v162-mobile/` routes remain untouched while the clean candidate is built.
+- The immutable `/logiq-v161-legacy/` source is never edited; the clean route applies explicit, asserted hygiene transforms.
 - Manual preview data may continue to use the existing PIN-guarded production Supabase RPCs only when that persistence step is reached; automated tests must stub them.
 - No merge to `main` and no production deployment without Ashley's separate explicit approval.
