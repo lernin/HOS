@@ -62,10 +62,10 @@
         body.logiq-mobile-v2.v2-branch-drag #Dock{visibility:hidden!important;pointer-events:none!important}
         body.logiq-mobile-v2.v2-branch-drag svg#canvas,body.logiq-mobile-v2.v2-branch-drag svg#canvas *{-webkit-user-drag:none!important}
 
-        #logiq-v2-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
-        #logiq-v2-branch-preview svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-        #logiq-v2-branch-preview line{stroke:#cfcfcf;stroke-width:var(--v2-link-width,2px);stroke-linecap:round}
-        #logiq-v2-branch-preview .v2-float-node{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:0 var(--v2-pad-x,8px);border:var(--v2-border-width,2px) solid #fff;border-radius:var(--v2-radius,10px);background:#fff;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-weight:600;line-height:1.15;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:none!important}
+        .v2-branch-layer{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
+        .v2-branch-layer svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+        .v2-branch-layer line{stroke:#cfcfcf;stroke-width:var(--v2-link-width,2px);stroke-linecap:round}
+        .v2-branch-layer .v2-float-node{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:0 var(--v2-pad-x,8px);border:var(--v2-border-width,2px) solid #fff;border-radius:var(--v2-radius,10px);background:#fff;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;font-weight:600;line-height:1.15;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:none!important}
         #logiq-v2-branch-preview .v2-float-node.is-root{border-color:#22c55e}
 
         body.logiq-mobile-v2 .v2-branch-origin-ghost{opacity:.44!important}
@@ -196,7 +196,7 @@
 
     const branch = typeof hierarchy.descendants === 'function' ? hierarchy.descendants() : [hierarchy]
     const uids = branch.map(item => item?.data?._uid).filter(Boolean)
-    const preview = makeBranchPreview(doc, win, branch, hold.uid)
+    const preview = window.LOGiQBranchGeometry?.createPreview(doc, win, branch, hold.uid)
     if (!preview) return
 
     const bridge = win.LOGiQBridge
@@ -232,75 +232,6 @@
     movePreview(state.drag, hold.lastX, hold.lastY)
     startFeedbackLoop(doc, win, state)
     win.navigator.vibrate?.(12)
-  }
-
-  function makeBranchPreview(doc, win, branch, rootUid) {
-    const nodes = []
-    const centers = new Map()
-    const zoom = currentZoom(doc, win)
-
-    for (const item of branch) {
-      const uid = item?.data?._uid
-      const node = uid ? nodeByUid(doc, uid) : null
-      if (!node) continue
-      const rect = node.getBoundingClientRect()
-      if (rect.width < 1 || rect.height < 1) continue
-      nodes.push({ item, uid, node, rect })
-      centers.set(uid, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
-    }
-    if (!nodes.length) return null
-
-    const host = doc.createElement('div')
-    host.id = 'logiq-v2-branch-preview'
-    host.style.setProperty('--v2-link-width', `${Math.max(.6, 2 * zoom)}px`)
-    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    svg.setAttribute('aria-hidden', 'true')
-    host.appendChild(svg)
-
-    for (const entry of nodes) {
-      const parentUid = entry.item?.parent?.data?._uid
-      if (!parentUid || !centers.has(parentUid)) continue
-      const a = centers.get(parentUid)
-      const b = centers.get(entry.uid)
-      const line = doc.createElementNS('http://www.w3.org/2000/svg', 'line')
-      line.setAttribute('x1', String(a.x)); line.setAttribute('y1', String(a.y))
-      line.setAttribute('x2', String(b.x)); line.setAttribute('y2', String(b.y))
-      svg.appendChild(line)
-    }
-
-    for (const entry of nodes) {
-      const card = doc.createElement('div')
-      card.className = `v2-float-node${entry.uid === rootUid ? ' is-root' : ''}`
-      card.dataset.uid = entry.uid
-      card.textContent = cardText(entry.node) || ' '
-      card.style.left = `${entry.rect.left}px`
-      card.style.top = `${entry.rect.top}px`
-      card.style.width = `${entry.rect.width}px`
-      card.style.height = `${entry.rect.height}px`
-      card.style.setProperty('--v2-border-width', `${Math.max(.7, 2 * zoom)}px`)
-      card.style.setProperty('--v2-radius', `${Math.max(2, 10 * zoom)}px`)
-      card.style.setProperty('--v2-pad-x', `${Math.max(1, 8 * zoom)}px`)
-      const text = entry.node.querySelector('text')
-      if (text) {
-        const computed = win.getComputedStyle(text)
-        const baseSize = Number.parseFloat(computed.fontSize)
-        if (Number.isFinite(baseSize)) card.style.fontSize = `${Math.max(1, baseSize * zoom)}px`
-        if (computed.fontWeight) card.style.fontWeight = computed.fontWeight
-        if (computed.fontFamily) card.style.fontFamily = computed.fontFamily
-      }
-      host.appendChild(card)
-    }
-
-    doc.body.appendChild(host)
-    return host
-  }
-
-  function currentZoom(doc, win) {
-    try {
-      const svg = doc.getElementById('canvas')
-      const k = win.d3?.zoomTransform(svg)?.k
-      return Number.isFinite(k) && k > 0 ? k : 1
-    } catch (_) { return 1 }
   }
 
   function movePreview(drag, x, y) {
@@ -471,15 +402,4 @@
       })[0] || null
   }
 
-  function cardText(node) {
-    const data = node?.__data__?.data || {}
-    for (const key of ['label','text','name','title','value']) {
-      if (typeof data[key] === 'string' && data[key].trim()) return data[key].trim()
-    }
-    return Array.from(node?.querySelectorAll?.('text') || [])
-      .map(element => element.textContent?.trim() || '')
-      .filter(Boolean)
-      .join(' ')
-      .trim()
-  }
 })()

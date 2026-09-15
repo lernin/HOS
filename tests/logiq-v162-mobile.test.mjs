@@ -7,6 +7,7 @@ const core = await readFile(new URL('../public/logiq-v161/index.html', import.me
 const preview = await readFile(new URL('../public/logiq-v161/logiq-preview.js', import.meta.url), 'utf8')
 const js = await readFile(new URL('../public/logiq-v162-mobile/v2-ghost.js', import.meta.url), 'utf8')
 const branchAffordance = await readFile(new URL('../public/logiq-v162-mobile/v2-branch-affordance.js', import.meta.url), 'utf8')
+const branchGeometry = await readFile(new URL('../public/logiq-v162-mobile/branch-geometry.js', import.meta.url), 'utf8')
 const dragVisualFix = await readFile(new URL('../public/logiq-v162-mobile/v2-drag-visual-fix.js', import.meta.url), 'utf8')
 const chrome = await readFile(new URL('../public/logiq-v162-mobile/orientation-chrome.js', import.meta.url), 'utf8')
 const flick = await readFile(new URL('../public/logiq-v162-mobile/direct-flick.js', import.meta.url), 'utf8')
@@ -17,6 +18,7 @@ test('mobile v2 shell stays isolated from the released v161 route', () => {
   assert.match(index, /src="\/logiq-v161\/"/)
   assert.match(index, /\.\/v2-ghost\.js/)
   assert.match(index, /\.\/v2-branch-affordance\.js/)
+  assert.match(index, /\.\/branch-geometry\.js/)
   assert.match(index, /\.\/v2-drag-visual-fix\.js/)
   assert.match(index, /\.\/orientation-chrome\.js/)
   assert.match(index, /\.\/undo-bank-fix\.js/)
@@ -65,13 +67,13 @@ test('held-card drag keeps a ghost origin and defers the V2 fallback transaction
 test('mobile drag preview keeps exact card sizes and carries the whole subtree', () => {
   assert.match(branchAffordance, /hierarchy\.descendants\(\)/)
   assert.match(branchAffordance, /v2-branch-origin-ghost/)
-  assert.match(branchAffordance, /logiq-v2-branch-preview/)
-  assert.match(branchAffordance, /card\.style\.width = `\$\{entry\.rect\.width\}px`/)
-  assert.match(branchAffordance, /card\.style\.height = `\$\{entry\.rect\.height\}px`/)
+  assert.match(branchAffordance, /LOGiQBranchGeometry\?\.createPreview/)
+  assert.match(branchGeometry, /card\.style\.width = `\$\{entry\.rect\.width\}px`/)
+  assert.match(branchGeometry, /card\.style\.height = `\$\{entry\.rect\.height\}px`/)
   assert.match(branchAffordance, /#logiq-v2-drag-card\{display:none!important\}/)
   assert.match(branchAffordance, /transform:none!important/)
   assert.doesNotMatch(branchAffordance, /scale\(1\.0?2\)/)
-  assert.match(branchAffordance, /parentUid = entry\.item\?\.parent\?\.data\?\._uid/)
+  assert.match(branchGeometry, /parentUid = entry\.item\?\.parent\?\.data\?\._uid/)
 })
 
 test('mobile held drag drives the real desktop drag feedback engine', () => {

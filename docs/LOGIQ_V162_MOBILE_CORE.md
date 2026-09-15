@@ -24,6 +24,12 @@ This document is the current source of truth for `/logiq-v162-mobile/`. The olde
 - Only a live green node target or green caret commits a reparent.
 - Edge auto-pan remains available during active drag.
 
+## Modularization checkpoint
+
+`branch-geometry.js` now captures the complete rendered subtree once at pickup: card boxes, rendered type, and connector positions. The held-card gesture owner (`v2-branch-affordance.js`) requests that preview and owns pointer movement plus commit/cancel; it no longer constructs cards or chooses font/card sizes. The moving layer and the independent origin clone share `.v2-branch-layer` positioning rules, so an SVG redraw cannot relocate the ghost. An incomplete branch capture refuses to start a drag.
+
+The remaining visual overrides in `v2-drag-visual-fix.js`, frozen-origin/watchdog layers, and synthetic desktop drag bridge are migration seams. Next reduce those only after the Node 09 geometry and branch browser regressions, valid reparent, pan/pinch, and lock flows remain green. This checkpoint does not change map persistence or production Supabase `jzaghifuhinkzzhiojre`.
+
 ## Drag interruption safety
 
 Mobile browsers can steal focus or a pointer-up event for browser UI, password prompts, system overlays, or app switching. A watchdog therefore cancels an active structural drag on:
@@ -65,11 +71,12 @@ CI must pass all of the following before a preview is offered for acceptance:
 - static LOGiQ regressions;
 - legacy desktop/mobile/offline smoke tests;
 - v162 gesture interaction smoke;
-- frozen-origin regression proving Node 09 + Nodes 22/23/24 remain visible at the source even if live SVG ghost classes disappear;
+- frozen-origin regression proving Node 09 + Nodes 22/23/24 remain visible at the source even if live SVG ghost classes disappear or the SVG node is replaced;
+- rendered Node 09 card geometry and font remain stable before pickup, during movement, and after cancellation; frozen origin coordinates remain fixed;
 - partial-branch regression proving a lost moving descendant hard-cancels without changing the map;
 - owner-device regression tests;
 - browser interruption smoke proving a latched Node 09 branch drag cancels on blur and leaves the complete map unchanged.
 
 Automated browser tests intercept Supabase RPCs and do not write production map data.
 
-Latest verified application behavior is the frozen-origin implementation introduced before commit `a004620c4b71427d676e38db193944e02ae8784e`; GitHub Actions run #103 passed the complete gate and the matching Vercel preview was READY with HTTP 200 on `/logiq-v162-mobile/`.
+The current preview must pass this gate on its exact commit before physical-phone review. The earlier frozen-origin candidate passed GitHub Actions run #103; that run does not validate subsequent modularization.
