@@ -151,3 +151,14 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
   assert.equal(cleanTrees.promptCount, 1)
   assert.deepEqual(cleanTrees.labels, ['Saved Root', 'Saved Child'])
 })
+
+test('clean runtime keeps only the active flyCenterToUID declaration', async () => {
+  const { context, page } = await open('/logiq-clean/index.html')
+  const declarationCount = await page.evaluate(() => {
+    const html = document.documentElement.innerHTML
+    return (html.match(/function\s+flyCenterToUID\s*\(/g) || []).length
+  })
+  await context.close()
+
+  assert.equal(declarationCount, 1, 'the superseded early flyCenterToUID declaration must be removed')
+})
