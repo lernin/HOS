@@ -40,21 +40,25 @@ async function activeSummary(page) {
   }))
 }
 
+async function selectedDistanceFromCanvasCenter(page, node) {
+  const box = await node.boundingBox()
+  const canvas = await page.locator('#canvas').boundingBox()
+  assert.ok(box && canvas)
+  const dx = Math.abs((box.x + box.width / 2) - (canvas.x + canvas.width / 2))
+  const dy = Math.abs((box.y + box.height / 2) - (canvas.y + canvas.height / 2))
+  return { dx, dy, distance: Math.hypot(dx, dy) }
+}
+
 async function shiftFCenter(route) {
   const { context, page } = await open(route)
   const node = page.locator('g.node').filter({ hasText: 'Node 30' }).first()
   await node.click()
+  const before = await selectedDistanceFromCanvasCenter(page, node)
   await page.keyboard.press('Shift+F')
   await page.waitForTimeout(1350)
-  const box = await node.boundingBox()
-  const canvas = await page.locator('#canvas').boundingBox()
-  assert.ok(box && canvas)
-  const result = {
-    dx: Math.abs((box.x + box.width / 2) - (canvas.x + canvas.width / 2)),
-    dy: Math.abs((box.y + box.height / 2) - (canvas.y + canvas.height / 2)),
-  }
+  const after = await selectedDistanceFromCanvasCenter(page, node)
   await context.close()
-  return result
+  return { before, after }
 }
 
 async function tabFromCanvas(route) {
@@ -114,9 +118,18 @@ async function tabWithSettingsModal(route) {
 test('Shift+F centering behavior matches immutable v161', async () => {
   const legacy = await shiftFCenter('/logiq-v161-legacy/index.html')
   const clean = await shiftFCenter('/logiq-clean/index.html')
-  assert.ok(legacy.dx < 3 && legacy.dy < 3, `legacy Shift+F did not center selected node in canvas: ${JSON.stringify(legacy)}`)
-  assert.ok(clean.dx < 3 && clean.dy < 3, `clean Shift+F did not center selected node in canvas: ${JSON.stringify(clean)}`)
-  assert.ok(Math.abs(clean.dx - legacy.dx) < 1 && Math.abs(clean.dy - legacy.dy) < 1)
+
+  // Preserve what v161 actually does rather than imposing an ideal mathematical
+  // center. Both routes must materially move the selected node toward center,
+  // and the clean route must finish at the same observed offset as v161.
+  assert.ok(legacy.after.distance < legacy.before.distance * 0.2,
+    `legacy Shift+F did not materially center: ${JSON.stringify(legacy)}`)
+  assert.ok(clean.after.distance < clean.before.distance * 0.2,
+    `clean Shift+F did not materially center: ${JSON.stringify(clean)}`)
+  assert.ok(Math.abs(clean.after.dx - legacy.after.dx) < 1,
+    `Shift+F horizontal endpoint diverged: ${JSON.stringify({ legacy, clean })}`)
+  assert.ok(Math.abs(clean.after.dy - legacy.after.dy) < 1,
+    `Shift+F vertical endpoint diverged: ${JSON.stringify({ legacy, clean })}`)
 })
 
 test('Tab from canvas matches immutable v161 focus behavior', async () => {
