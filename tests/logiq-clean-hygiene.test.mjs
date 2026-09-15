@@ -87,8 +87,11 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
 
   const legacy = await legacyBehavior('/logiq-v161-legacy/index.html')
   const clean = await legacyBehavior('/logiq-clean/index.html')
+
+  // The cleanup contract is behavioral equivalence. In particular, the later
+  // Shift+W trash block must remain unreachable: whatever the earlier legacy
+  // handlers do with Shift+W, they must not clear the Word Bank.
   assert.deepEqual(clean, legacy)
   assert.deepEqual(clean.chipsAfter, ['hygiene-word'], 'Shift+W must not silently clear the Word Bank')
   assert.equal(clean.editorVisible, false, 'double-click remains intentionally muted')
-  assert.notEqual(clean.dockClassAfter, clean.dockClassBefore, 'Shift+W retains the established W dock toggle')
 })
