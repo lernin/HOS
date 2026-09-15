@@ -23,6 +23,7 @@
 
     canvas.addEventListener('pointerdown', (event) => {
       if (event.pointerType === 'mouse') return
+      if (win.__logiqWorkingLocked) return
 
       const alreadyActive = active.size > 0
       if (alreadyActive) candidates.forEach((candidate) => { candidate.multi = true })
@@ -46,6 +47,8 @@
       active.delete(event.pointerId)
       const candidate = candidates.get(event.pointerId)
       candidates.delete(event.pointerId)
+
+      if (win.__logiqWorkingLocked) return
 
       if (win.__logiqV2ConsumedPointers.has(event.pointerId)) {
         win.__logiqV2ConsumedPointers.delete(event.pointerId)

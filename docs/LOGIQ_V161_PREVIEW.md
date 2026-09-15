@@ -103,3 +103,16 @@ Touch responsibilities therefore remain unambiguous:
 | Offline | Local pending snapshot, Offline state, online retry to Saved |
 
 The workflow is `.github/workflows/logiq-v161-preview.yml`. It builds HOS, runs the immutable baseline checks, installs pinned Playwright/Chromium and D3 test fixtures, starts Vite, and runs the desktop/mobile smoke suite on preview pushes and matching pull requests. CI intercepts the legacy jsDelivr request with the pinned D3 fixture so the smoke result does not depend on third-party CDN availability.
+
+## Mobile-core candidate
+
+The preview-only `/logiq-v162-mobile/` shell adds the current mobile interaction candidate without changing the released `/logiq-v161/` route:
+
+- a per-map Working Lock blocks hold-drag/reparent, directional flick creation, delete, Word Dock structural moves, Add, and Mix while leaving selection, deliberate rename, pan, Fit, and pinch zoom available;
+- lock state is local to the browser and follows an unsaved map when its first successful autosave assigns a production map UUID;
+- the working bridge lowers the interactive zoom floor from `0.4` to `0.02`, so a two-finger pinch continues smoothly from a phone Fit scale below `0.4` instead of jumping inward;
+- an unlocked card latches after a stationary 280 ms hold and then uses the legacy desktop drop engine to reparent the whole branch.
+
+No schema, migration, RLS, authentication, or deployment-target change is included. Manual use of the preview still calls the existing PIN-guarded RPCs in production Supabase `jzaghifuhinkzzhiojre`; automated browser tests intercept those RPCs and make no production writes.
+
+`tests/logiq-v162-mobile-smoke.test.mjs` exercises a real two-touch pinch below `0.4`, locked navigation, locked drag rejection before a preview can latch, lock persistence across reopening, touch unlock, and successful unlocked reparenting. Production merge remains gated on Ashley's physical-phone approval of the Vercel preview.

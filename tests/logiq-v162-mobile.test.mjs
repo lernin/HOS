@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const index = await readFile(new URL('../public/logiq-v162-mobile/index.html', import.meta.url), 'utf8')
+const core = await readFile(new URL('../public/logiq-v161/index.html', import.meta.url), 'utf8')
+const preview = await readFile(new URL('../public/logiq-v161/logiq-preview.js', import.meta.url), 'utf8')
 const js = await readFile(new URL('../public/logiq-v162-mobile/v2-ghost.js', import.meta.url), 'utf8')
 const branchAffordance = await readFile(new URL('../public/logiq-v162-mobile/v2-branch-affordance.js', import.meta.url), 'utf8')
 const dragVisualFix = await readFile(new URL('../public/logiq-v162-mobile/v2-drag-visual-fix.js', import.meta.url), 'utf8')
@@ -116,12 +118,17 @@ test('Word Bank deletion is converted to one atomic tree+bank undo entry', () =>
 test('working lock is per-map, defaults cleanly, blocks structural mutation, and still permits rename', () => {
   assert.match(lockZoom, /LOCK_PREFIX = 'logiq_working_lock_v2:'/)
   assert.match(lockZoom, /map\.id \? `id:\$\{map\.id\}`/)
+  assert.match(lockZoom, /claimedSameMap/)
+  assert.match(lockZoom, /localStorage\.removeItem\(lockKey\(state\.mapKey\)\)/)
   assert.match(lockZoom, /win\.__logiqWorkingLocked = state\.locked/)
   assert.match(lockZoom, /logiq-working-locked/)
   assert.match(lockZoom, /sameStructure\(before, now\)/)
   assert.match(lockZoom, /rename\/text edit is intentional/)
   assert.match(lockZoom, /bridge\.loadMap\(before\.tree, before\.wordBank \|\| \[\]\)/)
   assert.match(lockZoom, /Structure is locked/)
+  assert.match(js, /win\.__logiqWorkingLocked/)
+  assert.match(branchAffordance, /win\.__logiqWorkingLocked/)
+  assert.match(flick, /win\.__logiqWorkingLocked/)
 })
 
 test('working lock has distinct locked and unlocked line icons on desktop and mobile', () => {
@@ -134,12 +141,14 @@ test('working lock has distinct locked and unlocked line icons on desktop and mo
 })
 
 test('fit-scale zoom continuity patches the real D3 behavior below the legacy 0.4 floor', () => {
-  assert.match(lockZoom, /MIN_ZOOM = 0\.02/)
-  assert.match(lockZoom, /installZoomPatch\(doc, MIN_ZOOM\)/)
-  assert.match(lockZoom, /state\.zoom\.scaleExtent\(\[/)
-  assert.match(lockZoom, /window\.__logiqZoomFloor/)
-  assert.match(lockZoom, /window\.__logiqZoomApi/)
-  assert.doesNotMatch(lockZoom, /win\.eval/)
+  assert.match(preview, /ZOOM_MIN = 0\.02/)
+  assert.match(preview, /bridge\.setZoomExtent\(\[ZOOM_MIN, 2\.4\]\)/)
+  assert.match(preview, /bridge\.scaleZoomTo\(value\)/)
+  assert.match(core, /getZoomExtent\(\)/)
+  assert.match(core, /setZoomExtent\(extent\)/)
+  assert.match(core, /getZoomScale\(\)/)
+  assert.match(core, /scaleZoomTo\(value\)/)
+  assert.doesNotMatch(preview, /\bstate\.zoom\b|\belements\.svg\b/)
 })
 
 test('mobile v2 keeps local blank-card voice and double-tap edit', () => {

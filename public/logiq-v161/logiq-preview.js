@@ -6,16 +6,11 @@
 
   const ZOOM_MIN = 0.02
   try {
-    state.zoom.scaleExtent([ZOOM_MIN, 2.4])
+    bridge.setZoomExtent([ZOOM_MIN, 2.4])
     window.LOGiQZoom = Object.freeze({
-      extent: () => state.zoom.scaleExtent().slice(),
-      scale: () => d3.zoomTransform(elements.svg.node()).k,
-      scaleTo(value) {
-        const svg = elements.svg.node()
-        const k = Math.max(ZOOM_MIN, Math.min(2.4, Number(value) || ZOOM_MIN))
-        elements.svg.call(state.zoom.scaleTo, k, [svg.clientWidth / 2, svg.clientHeight / 2])
-        return d3.zoomTransform(svg).k
-      },
+      extent: () => bridge.getZoomExtent(),
+      scale: () => bridge.getZoomScale(),
+      scaleTo: value => bridge.scaleZoomTo(value),
     })
   } catch (error) {
     window.LOGiQZoomError = String(error?.message || error)

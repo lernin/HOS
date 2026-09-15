@@ -180,7 +180,7 @@
         return
       }
 
-      if (had || !uid) return
+      if (had || !uid || win.__logiqWorkingLocked) return
       const before = captureState(bridge)
       const hold = {
         pointerId:e.pointerId, uid, node,
@@ -278,6 +278,7 @@
 
   function latchHold(doc,win,bridge,state,hold) {
     if (state.hold !== hold || hold.moved) return
+    if (win.__logiqWorkingLocked) return cancelHold(win,state)
     const pointer = state.pointers.get(hold.pointerId)
     if (!pointer || pointer.multi || state.active.size !== 1) return cancelHold(win,state)
 

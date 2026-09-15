@@ -14,15 +14,14 @@
     const bridge = win?.LOGiQBridge
     if (!win || !doc || !bridge) return
 
-    const state = { locked: false, mapKey: '', guardSnapshot: '', restoring: false, toastTimer: 0 }
+    const state = { locked: false, mapKey: '', mapRef: null, guardSnapshot: '', restoring: false, toastTimer: 0 }
     injectStyles(doc)
     const controls = buildControls(doc)
 
     const currentMap = () => {
       try { return JSON.parse(win.localStorage.getItem('logiq_v161_current_map_v1') || '{}') || {} } catch (_) { return {} }
     }
-    const mapKey = () => {
-      const map = currentMap()
+    const mapKey = (map = currentMap()) => {
       return map.id ? `id:${map.id}` : `name:${map.name || 'Untitled map'}`
     }
     const lockKey = key => LOCK_PREFIX + key
@@ -37,8 +36,10 @@
     }
 
     const setLocked = (value, { persist = true } = {}) => {
+      const map = currentMap()
       state.locked = !!value
-      state.mapKey = mapKey()
+      state.mapRef = map
+      state.mapKey = mapKey(map)
       state.guardSnapshot = snapshot()
       win.__logiqWorkingLocked = state.locked
       doc.body.classList.toggle('logiq-working-locked', state.locked)
@@ -47,8 +48,18 @@
     }
 
     const syncMap = () => {
-      const key = mapKey()
-      if (key === state.mapKey) return
+      const map = currentMap()
+      const key = mapKey(map)
+      if (key === state.mapKey) {
+        state.mapRef = map
+        return
+      }
+      const claimedSameMap = !state.mapRef?.id && !!map.id && state.mapRef?.name === map.name
+      if (claimedSameMap && win.localStorage.getItem(lockKey(key)) === null) {
+        win.localStorage.setItem(lockKey(key), state.locked ? '1' : '0')
+        win.localStorage.removeItem(lockKey(state.mapKey))
+      }
+      state.mapRef = map
       state.mapKey = key
       setLocked(win.localStorage.getItem(lockKey(key)) === '1', { persist: false })
     }
@@ -94,8 +105,8 @@
       toast(doc, state, 'Structure is locked')
     })
 
-    state.mapKey = mapKey()
-    setLocked(win.localStorage.getItem(lockKey(state.mapKey)) === '1', { persist: false })
+    const initialMap = currentMap()
+    setLocked(win.localStorage.getItem(lockKey(mapKey(initialMap))) === '1', { persist: false })
     win.setInterval(syncMap, 500)
   })
 

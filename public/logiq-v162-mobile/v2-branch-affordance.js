@@ -75,6 +75,7 @@
   function onDown(event, doc, win, canvas, state) {
     if (event.pointerType === 'mouse') return
     if (!(event.target === canvas || canvas.contains(event.target))) return
+    if (win.__logiqWorkingLocked) return
 
     const alreadyActive = state.active.size > 0
     if (alreadyActive) {
@@ -164,6 +165,7 @@
 
   function latch(doc, win, state, hold) {
     if (state.hold !== hold) return
+    if (win.__logiqWorkingLocked) return cancelHold(win, state)
     const pointer = state.pointers.get(hold.pointerId)
     if (!pointer || pointer.multi || state.active.size !== 1) return cancelHold(win, state)
 
