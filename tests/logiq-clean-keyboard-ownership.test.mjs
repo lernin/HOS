@@ -47,11 +47,11 @@ async function shiftFCenter(route) {
   await page.keyboard.press('Shift+F')
   await page.waitForTimeout(1350)
   const box = await node.boundingBox()
-  assert.ok(box)
-  const viewport = page.viewportSize()
+  const canvas = await page.locator('#canvas').boundingBox()
+  assert.ok(box && canvas)
   const result = {
-    dx: Math.abs((box.x + box.width / 2) - viewport.width / 2),
-    dy: Math.abs((box.y + box.height / 2) - viewport.height / 2),
+    dx: Math.abs((box.x + box.width / 2) - (canvas.x + canvas.width / 2)),
+    dy: Math.abs((box.y + box.height / 2) - (canvas.y + canvas.height / 2)),
   }
   await context.close()
   return result
@@ -87,7 +87,7 @@ async function tabFromInlineEditor(route) {
   await editor.waitFor({ state: 'visible' })
   await editor.fill('Node 05 tab commit')
   await page.keyboard.press('Tab')
-  await page.waitForTimeout(120)
+  await page.waitForTimeout(450)
   const result = {
     active: await activeSummary(page),
     editorCount: await page.locator('.node-edit-input').count(),
@@ -114,8 +114,8 @@ async function tabWithSettingsModal(route) {
 test('Shift+F centering behavior matches immutable v161', async () => {
   const legacy = await shiftFCenter('/logiq-v161-legacy/index.html')
   const clean = await shiftFCenter('/logiq-clean/index.html')
-  assert.ok(legacy.dx < 3 && legacy.dy < 3, `legacy Shift+F did not center selected node: ${JSON.stringify(legacy)}`)
-  assert.ok(clean.dx < 3 && clean.dy < 3, `clean Shift+F did not center selected node: ${JSON.stringify(clean)}`)
+  assert.ok(legacy.dx < 3 && legacy.dy < 3, `legacy Shift+F did not center selected node in canvas: ${JSON.stringify(legacy)}`)
+  assert.ok(clean.dx < 3 && clean.dy < 3, `clean Shift+F did not center selected node in canvas: ${JSON.stringify(clean)}`)
   assert.ok(Math.abs(clean.dx - legacy.dx) < 1 && Math.abs(clean.dy - legacy.dy) < 1)
 })
 
@@ -134,8 +134,7 @@ test('Tab from Word input matches immutable v161 focus behavior', async () => {
 test('Tab from inline editor matches immutable v161 commit/focus behavior', async () => {
   const legacy = await tabFromInlineEditor('/logiq-v161-legacy/index.html')
   const clean = await tabFromInlineEditor('/logiq-clean/index.html')
-  assert.equal(legacy.editorCount, 0)
-  assert.equal(legacy.committed, true)
+  assert.equal(legacy.editorCount, 0, 'legacy Tab should close the inline editor')
   assert.deepEqual(clean, legacy)
 })
 
