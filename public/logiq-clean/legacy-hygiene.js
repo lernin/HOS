@@ -118,6 +118,18 @@
     );
   }
 
+  function removeSupersededEarlyCenterOnSelected(html) {
+    // Two same-scope declarations exist. JavaScript binds calls to the later
+    // declaration, which is the active helper exercised by Shift+F parity tests.
+    // Remove only the earlier CONFIG_FLY wrapper.
+    assertMatchCount(html, /function\s+centerOnSelected\s*\(/g, 2, 'centerOnSelected declarations');
+    return removeSingleRegex(
+      html,
+      /[ \t]*\/\* Center the \*current\* selection with a given duration \(no zoom\)\. \*\/\r?\n[ \t]*function centerOnSelected\(\{ duration = CONFIG_FLY\.hotkeyDuration \} = \{\}\)\{[\s\S]*?[ \t]*flyCenterToUID\(uid, \{ duration \}\);\r?\n[ \t]*\}\r?\n/,
+      'superseded early centerOnSelected declaration'
+    );
+  }
+
   function sanitize(html) {
     let cleaned = String(html);
     const removals = [];
@@ -157,6 +169,10 @@
     // Same-scope duplicate: the later declaration is the binding used at runtime.
     cleaned = removeSupersededEarlyFlyCenterToUID(cleaned);
     removals.push('superseded-early-fly-center-to-uid');
+
+    // Same-scope duplicate: preserve the later active binding byte-for-byte.
+    cleaned = removeSupersededEarlyCenterOnSelected(cleaned);
+    removals.push('superseded-early-center-on-selected');
 
     return { html: cleaned, removals };
   }
