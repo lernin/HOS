@@ -11,6 +11,7 @@ on:
       - tests/logiq-v162-*
       - docs/LOGIQ_V161_LEGACY.md
       - docs/LOGIQ_V161_PREVIEW.md
+      - docs/LOGIQ_V162_MOBILE_CORE.md
       - package.json
       - .github/workflows/logiq-v161-preview.yml
   pull_request:
@@ -23,6 +24,7 @@ on:
       - tests/logiq-v162-*
       - docs/LOGIQ_V161_LEGACY.md
       - docs/LOGIQ_V161_PREVIEW.md
+      - docs/LOGIQ_V162_MOBILE_CORE.md
       - package.json
       - .github/workflows/logiq-v161-preview.yml
 permissions:
