@@ -119,9 +119,6 @@ test('Shift+F centering behavior matches immutable v161', async () => {
   const legacy = await shiftFCenter('/logiq-v161-legacy/index.html')
   const clean = await shiftFCenter('/logiq-clean/index.html')
 
-  // Preserve what v161 actually does rather than imposing an ideal mathematical
-  // center. Both routes must materially move the selected node toward center,
-  // and the clean route must finish at the same observed offset as v161.
   assert.ok(legacy.after.distance < legacy.before.distance * 0.2,
     `legacy Shift+F did not materially center: ${JSON.stringify(legacy)}`)
   assert.ok(clean.after.distance < clean.before.distance * 0.2,
@@ -143,8 +140,8 @@ test('clean runtime gives Shift+F a single camera owner', async () => {
   })
   await context.close()
 
-  assert.deepEqual(owners, { dispatcher: 0, standalone: 1 },
-    'Shift+F must be owned only by the standalone treeManager centering listener')
+  assert.deepEqual(owners, { dispatcher: 1, standalone: 0 },
+    'Shift+F must be owned only by keyDispatcher, which preserves ordinary selectedUid centering')
 })
 
 test('Tab from canvas matches immutable v161 focus behavior', async () => {
