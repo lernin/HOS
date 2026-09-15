@@ -105,8 +105,6 @@ async function treesMenuBehavior(route) {
   })
 
   await page.locator('#mapsBtn').click()
-  // Wait for both the loaded tree and the D3 exit transition of the old 30-node
-  // sample tree. Sampling immediately after Saved Root appears is timing-sensitive.
   await page.waitForFunction(() => {
     const labels = Array.from(document.querySelectorAll('text.label')).map((node) => node.textContent)
     return labels.length === 2 && labels.includes('Saved Root') && labels.includes('Saved Child')
@@ -131,23 +129,17 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
     'dead-enforce-moat-for-selected',
     'superseded-early-fly-center-to-uid',
     'superseded-early-center-on-selected',
-    'duplicate-keydispatcher-shift-f-owner',
   ])
   await context.close()
 
   const legacy = await legacyBehavior('/logiq-v161-legacy/index.html')
   const clean = await legacyBehavior('/logiq-clean/index.html')
-
-  // The cleanup contract is behavioral equivalence. In particular, the later
-  // Shift+W trash block must remain unreachable: whatever the earlier legacy
-  // handlers do with Shift+W, they must not clear the Word Bank.
   assert.deepEqual(clean, legacy)
   assert.deepEqual(clean.chipsAfter, ['hygiene-word'], 'Shift+W must not silently clear the Word Bank')
   assert.equal(clean.editorVisible, false, 'double-click remains intentionally muted')
   assert.equal(clean.saveButtonCount, 0, 'legacy runtime exposes no saveBtn control')
   assert.equal(clean.mapsButtonCount, 1, 'Trees control is active and must be preserved')
 
-  // Compare stable post-transition behavior, not transient exiting D3 nodes.
   const legacyTrees = await treesMenuBehavior('/logiq-v161-legacy/index.html')
   const cleanTrees = await treesMenuBehavior('/logiq-clean/index.html')
   assert.deepEqual(cleanTrees, legacyTrees, 'Trees menu load behavior must remain identical to v161')
@@ -162,7 +154,6 @@ test('clean runtime keeps only the active flyCenterToUID declaration', async () 
     return (html.match(/function\s+flyCenterToUID\s*\(/g) || []).length
   })
   await context.close()
-
   assert.equal(declarationCount, 1, 'the superseded early flyCenterToUID declaration must be removed')
 })
 
