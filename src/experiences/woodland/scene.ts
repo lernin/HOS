@@ -19,26 +19,52 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
   const observer=new ResizeObserver(resize);observer.observe(canvas);resize()
   signal.addEventListener('abort',dispose,{once:true})
   try{
+    const seeded=(seed:number)=>()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296}
+    const makeSurfaceTexture=(kind:'grass'|'cobble')=>{
+      const surface=document.createElement('canvas');surface.width=surface.height=256;const ctx=surface.getContext('2d')!,r=seeded(kind==='grass'?7319:2917)
+      if(kind==='grass'){
+        ctx.fillStyle='#6f8952';ctx.fillRect(0,0,256,256)
+        for(let i=0;i<5000;i++){
+          const x=r()*256,y=r()*256,l=.7+r()*3.2;ctx.strokeStyle=r()<.45?'rgba(38,78,35,.32)':r()<.72?'rgba(149,160,91,.24)':'rgba(87,108,55,.28)';ctx.lineWidth=.4+r()*.75
+          ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+(r()-.5)*2.2,y-l);ctx.stroke()
+        }
+        for(let i=0;i<220;i++){ctx.fillStyle='rgba(74,63,36,.11)';ctx.beginPath();ctx.arc(r()*256,r()*256,1+r()*3.4,0,Math.PI*2);ctx.fill()}
+      }else{
+        ctx.fillStyle='#756957';ctx.fillRect(0,0,256,256);ctx.strokeStyle='rgba(58,52,45,.54)';ctx.lineWidth=2
+        for(let row=-1;row<12;row++){
+          const y=row*25,offset=(row%2)*22
+          for(let col=-2;col<9;col++){
+            const x=col*45+offset+(r()-.5)*4,w=37+r()*10,h=18+r()*5
+            ctx.fillStyle=r()<.34?'#a99a7f':r()<.67?'#968873':'#b5a68b';ctx.beginPath();ctx.roundRect(x,y+(r()-.5)*3,w,h,4+r()*4);ctx.fill();ctx.stroke()
+          }
+        }
+        for(let i=0;i<480;i++){ctx.fillStyle='rgba(55,50,43,.15)';ctx.fillRect(r()*256,r()*256,.5+r()*1.8,.5+r()*1.8)}
+      }
+      const tex=new T.CanvasTexture(surface);tex.colorSpace=T.SRGBColorSpace;tex.wrapS=tex.wrapT=T.RepeatWrapping;tex.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());textures.add(tex);return tex
+    }
+    const grassTexture=makeSurfaceTexture('grass');grassTexture.repeat.set(56,56)
+    const cobbleTexture=makeSurfaceTexture('cobble');cobbleTexture.repeat.set(1.8,1.8)
+
     const ground=new T.PlaneGeometry(440,440,180,180);ground.rotateX(-Math.PI/2)
     const pos=ground.attributes.position,colors=[];const c=new T.Color()
-    for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,heightAt(x,z));c.setHSL(.235+Math.sin(x*.04)*.015,.34,.26+.045*Math.sin(z*.03+x*.02));colors.push(c.r,c.g,c.b)}
+    for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,heightAt(x,z));c.setHSL(.235+Math.sin(x*.04)*.015,.22,.74+.035*Math.sin(z*.03+x*.02));colors.push(c.r,c.g,c.b)}
     ground.setAttribute('color',new T.Float32BufferAttribute(colors,3));ground.computeVertexNormals()
-    const earth=new T.Mesh(ground,new T.MeshStandardMaterial({vertexColors:true,roughness:1}));earth.receiveShadow=true;scene.add(earth);track(earth)
-    function trailMesh(line:{x:number;z:number}[],halfWidth:number,lift:number,color:string,roughness:number){
-      const vertices:number[]=[],indices:number[]=[]
+    const earth=new T.Mesh(ground,new T.MeshStandardMaterial({map:grassTexture,vertexColors:true,color:'#9fb681',roughness:1}));earth.receiveShadow=true;scene.add(earth);track(earth)
+    function trailMesh(line:{x:number;z:number}[],halfWidth:number,lift:number,color:string,roughness:number,map?:T.Texture){
+      const vertices:number[]=[],indices:number[]=[],uvs:number[]=[]
       for(let i=0;i<line.length;i++){
         const p=line[i],a=line[Math.max(0,i-1)],b=line[Math.min(line.length-1,i+1)],dx=b.x-a.x,dz=b.z-a.z,l=Math.hypot(dx,dz)||1
         for(const side of [-1,1]){
           const x=p.x-dz/l*halfWidth*side,z=p.z+dx/l*halfWidth*side
-          vertices.push(x,heightAt(x,z)+lift,z)
+          vertices.push(x,heightAt(x,z)+lift,z);uvs.push(side<0?0:1,i*.32)
         }
         if(i<line.length-1){const k=i*2;indices.push(k,k+2,k+1,k+1,k+2,k+3)}
       }
-      const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setIndex(indices);geo.computeVertexNormals()
-      const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color,roughness,side:T.DoubleSide}));mesh.receiveShadow=true;scene.add(mesh);track(mesh)
+      const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geo.setAttribute('uv',new T.Float32BufferAttribute(uvs,2));geo.setIndex(indices);geo.computeVertexNormals()
+      const mesh=new T.Mesh(geo,new T.MeshStandardMaterial({color,map,roughness,side:T.DoubleSide}));mesh.receiveShadow=true;scene.add(mesh);track(mesh)
     }
-    // A darker compacted-earth shoulder under a lighter center gives the road a clean, readable edge.
-    for(const line of paths){trailMesh(line,3.05,.026,'#806f4d',1);trailMesh(line,2.48,.042,'#c8b485',.98)}
+    // Keep a compacted-earth shoulder, then lay a visibly textured old-stone walking ribbon over it.
+    for(const line of paths){trailMesh(line,3.08,.026,'#766548',1);trailMesh(line,2.5,.043,'#cfc1a0',.98,cobbleTexture)}
     const all=placements(),solids=all.filter(p=>p.solid),kinds=['tree','tree-b','pine','bush','fern','grass','rock','clover'],loader=new GLTFLoader(),batches:T.InstancedMesh[]=[]
     for(let n=0;n<kinds.length;n++){
       const kind=kinds[n],response=await fetch(`/woodland/${kind}.glb`,{signal});if(!response.ok)throw Error(`Could not load ${kind}`)
