@@ -128,6 +128,7 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
     'duplicate-tab-listener-registration',
     'unreachable-local-map-save-path',
     'duplicate-trees-listener-registration',
+    'dead-enforce-moat-for-selected',
   ])
   await context.close()
 
