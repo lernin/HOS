@@ -127,7 +127,9 @@ async function wrappedLabelSnapshot(page) {
   await editor.waitFor({ state: 'visible' })
   await editor.fill('A deliberately wrapped parity label for typography')
   await editor.press('Enter')
-  await page.waitForFunction(() => Array.from(document.querySelectorAll('text.label')).some((label) => label.textContent.includes('deliberately wrapped parity')))
+  // Wrapped SVG labels may split text across tspans without preserving spaces in textContent.
+  // The editor disappearing is the stable signal that the rename/render cycle completed.
+  await editor.waitFor({ state: 'hidden' })
   await page.waitForTimeout(250)
   return visualSnapshot(page)
 }
