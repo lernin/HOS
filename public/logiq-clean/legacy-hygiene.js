@@ -106,6 +106,18 @@
     );
   }
 
+  function removeSupersededEarlyFlyCenterToUID(html) {
+    // Inventory batch v161-camera-moat-001 proved that two same-scope declarations
+    // exist and the later declaration is the active binding. Remove only the earlier
+    // CONFIG_FLY version, leaving the active unified camera helper untouched.
+    assertMatchCount(html, /function\s+flyCenterToUID\s*\(/g, 2, 'flyCenterToUID declarations');
+    return removeSingleRegex(
+      html,
+      /[ \t]*\/\* Smoothly pan to a node's center, preserving current zoom\. \*\/\r?\n[ \t]*function flyCenterToUID\(uid, \{ duration = CONFIG_FLY\.hotkeyDuration \} = \{\}\)\{[\s\S]*?(?=[ \t]*\/\* Center the \*current\* selection with a given duration \(no zoom\)\. \*\/)/,
+      'superseded early flyCenterToUID declaration'
+    );
+  }
+
   function sanitize(html) {
     let cleaned = String(html);
     const removals = [];
@@ -141,6 +153,10 @@
     // Dead helper: inventory and exact-name source audit prove there is no caller.
     cleaned = removeDeadEnforceMoatForSelected(cleaned);
     removals.push('dead-enforce-moat-for-selected');
+
+    // Same-scope duplicate: the later declaration is the binding used at runtime.
+    cleaned = removeSupersededEarlyFlyCenterToUID(cleaned);
+    removals.push('superseded-early-fly-center-to-uid');
 
     return { html: cleaned, removals };
   }
