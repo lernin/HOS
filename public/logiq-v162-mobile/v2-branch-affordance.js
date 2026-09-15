@@ -36,6 +36,16 @@
     win.addEventListener('pointermove', (event) => onMove(event, doc, win, state), true)
     win.addEventListener('pointerup', (event) => onUp(event, doc, win, canvas, state), true)
     win.addEventListener('pointercancel', (event) => onCancel(event, doc, win, state), true)
+
+    /* Android/Chrome can otherwise manufacture a native text/group drag image from SVG content.
+       The mobile branch engine is pointer-driven; native HTML drag/drop must never run in parallel. */
+    const suppressNativeDrag = (event) => {
+      if (!state.drag) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }
+    win.addEventListener('dragstart', suppressNativeDrag, true)
+    win.addEventListener('drop', suppressNativeDrag, true)
   })
 
   function mobile(win) {
@@ -49,6 +59,8 @@
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
         #logiq-v2-drag-card{display:none!important}
         body.logiq-mobile-v2.v2-branch-drag .drag-mini{display:none!important;opacity:0!important}
+        body.logiq-mobile-v2.v2-branch-drag #Dock{visibility:hidden!important;pointer-events:none!important}
+        body.logiq-mobile-v2.v2-branch-drag svg#canvas,body.logiq-mobile-v2.v2-branch-drag svg#canvas *{-webkit-user-drag:none!important}
 
         #logiq-v2-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
         #logiq-v2-branch-preview svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
@@ -151,6 +163,7 @@
     if (snapBack) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
     mouse(win, win, 'mouseup', endX, endY, 0)
 
+    settleRelease(win, drag, snapBack)
     cleanup(doc, win, state, drag)
     dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
   }
@@ -164,6 +177,7 @@
     if (!drag || drag.pointerId !== event.pointerId) return
     mouse(win, win, 'mousemove', drag.x, drag.y, 1)
     mouse(win, win, 'mouseup', drag.x, drag.y, 0)
+    settleRelease(win, drag, true)
     cleanup(doc, win, state, drag)
   }
 
@@ -185,6 +199,15 @@
     const preview = makeBranchPreview(doc, win, branch, hold.uid)
     if (!preview) return
 
+    const bridge = win.LOGiQBridge
+    const before = captureState(bridge)
+
+    /* Mobile hold always means exactly this card's subtree. Desktop's selectedUids is a
+       separate group-edit concept and may be stale from an earlier operation, so clear it
+       before feeding the synthetic desktop drag lifecycle. */
+    bridge?.clearFocusSelection?.()
+    bridge?.selectByUid?.(hold.uid)
+
     for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
 
     state.drag = {
@@ -196,6 +219,7 @@
       lastX: hold.lastX,
       lastY: hold.lastY,
       preview,
+      before,
       multi: false,
     }
 
@@ -334,6 +358,46 @@
     if (inline > .05) return true
     const computed = Number.parseFloat(win.getComputedStyle(caret).opacity || '0')
     return computed > .05
+  }
+
+  function settleRelease(win, drag, snapBack) {
+    const bridge = win.LOGiQBridge
+    if (!bridge || !drag?.before) return
+    win.setTimeout(() => {
+      const after = bridge.snapshot()
+      const bankChanged = JSON.stringify(after?.wordBank || []) !== JSON.stringify(drag.before.wordBank || [])
+      const missingBranchNode = (drag.uids || []).some(uid => !treeHasUid(after?.tree, uid))
+      const changedOnSnapBack = snapBack && stableState(after) !== stableState(drag.before)
+
+      /* A structural drag must never create/delete Word Dock entries or lose part of the branch.
+         If the legacy engine ever does that, restore the exact pre-drag snapshot instead of
+         leaving a fragile/corrupted map. Background release is always an exact no-op. */
+      if (bankChanged || missingBranchNode || changedOnSnapBack) {
+        bridge.loadMap(drag.before.tree, drag.before.wordBank)
+        bridge.selectByUid(drag.uid)
+      }
+    }, 0)
+  }
+
+  function captureState(bridge) {
+    const snapshot = bridge?.snapshot?.() || {}
+    return {
+      tree: snapshot.tree ? JSON.parse(JSON.stringify(snapshot.tree)) : null,
+      wordBank: Array.isArray(snapshot.wordBank) ? snapshot.wordBank.slice() : [],
+    }
+  }
+
+  function stableState(value) {
+    return JSON.stringify({
+      tree: value?.tree || null,
+      wordBank: Array.isArray(value?.wordBank) ? value.wordBank : [],
+    })
+  }
+
+  function treeHasUid(node, uid) {
+    if (!node) return false
+    if (node._uid === uid) return true
+    return Array.isArray(node.children) && node.children.some(child => treeHasUid(child, uid))
   }
 
   function cleanup(doc, win, state, drag) {
