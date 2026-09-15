@@ -42,8 +42,9 @@ async function appFrame(page) {
     if (!frame) await new Promise(resolve => setTimeout(resolve, 100))
   }
   assert.ok(frame, 'LOGiQ iframe should load')
-  await frame.waitForSelector('g.node', { timeout: 10_000 })
-  await frame.waitForFunction(() => document.querySelectorAll('g.node').length === 30, null, { timeout: 10_000 })
+  // A fully fitted map may intentionally render cards far below normal reading size. Readiness
+  // is the complete tree being rendered, not Playwright's element-visibility heuristic.
+  await frame.waitForFunction(() => document.querySelectorAll('g.node').length === 30, null, { timeout: 15_000 })
   await frame.waitForFunction(() => !!window.LOGiQZoom || !!window.LOGiQZoomError, null, { timeout: 5_000 })
   assert.equal(await frame.evaluate(() => window.LOGiQZoomError || null), null)
   return frame
