@@ -138,11 +138,13 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
   assert.equal(clean.saveButtonCount, 0, 'legacy runtime exposes no saveBtn control')
   assert.equal(clean.mapsButtonCount, 1, 'Trees control is active and must be preserved')
 
-  // Protect the user-visible contract rather than relying on whether classic-script
-  // declarations happen to appear as window properties after document.write().
+  // Protect the user-visible contract rather than relying on implementation globals.
+  // v161 keeps exiting nodes in the DOM briefly during its D3 transition, so compare
+  // legacy and clean exactly, then assert that the loaded tree is present.
   const legacyTrees = await treesMenuBehavior('/logiq-v161-legacy/index.html')
   const cleanTrees = await treesMenuBehavior('/logiq-clean/index.html')
   assert.deepEqual(cleanTrees, legacyTrees, 'Trees menu load behavior must remain identical to v161')
   assert.equal(cleanTrees.promptCount, 1)
-  assert.deepEqual(cleanTrees.labels, ['Saved Root', 'Saved Child'])
+  assert.ok(cleanTrees.labels.includes('Saved Root'))
+  assert.ok(cleanTrees.labels.includes('Saved Child'))
 })
