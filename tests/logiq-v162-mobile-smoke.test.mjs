@@ -112,9 +112,13 @@ async function holdDragToBackground(frame, sourceName, pointerId = 61) {
     const baseFont = Number.parseFloat(text ? getComputedStyle(text).fontSize : '0')
     const expectedFont = baseFont * window.LOGiQZoom.scale()
     const previewFont = Number.parseFloat(preview ? getComputedStyle(preview).fontSize : '0')
+    const dock = document.getElementById('Dock')
     return {
       branchPreview: !!document.getElementById('logiq-v2-branch-preview'),
+      branchCards: document.querySelectorAll('#logiq-v2-branch-preview .v2-float-node').length,
       legacyPreview: !!document.getElementById('logiq-v2-drag-card'),
+      legacyGroupSelectionCount: window.LOGiQBridge.getSelectedUids().length,
+      dockVisibility: dock ? getComputedStyle(dock).visibility : null,
       sourceWidth: sourceRect?.width || 0,
       sourceHeight: sourceRect?.height || 0,
       previewWidth: previewRect?.width || 0,
@@ -202,7 +206,7 @@ async function flickCard(frame, sourceName, dx = 72, pointerId = 81) {
   await new Promise(resolve => setTimeout(resolve, 200))
 }
 
-test('mobile v2 unlocks, zooms below 0.4, keeps drag size stable, snaps background drops back, and reparents valid drops', async () => {
+test('mobile v2 isolates subtree drag from legacy groups, keeps exact visuals, snaps background drops back, and reparents whole branches', async () => {
   const context = await contextForPhone()
   const page = await context.newPage()
   const errors = []
@@ -225,15 +229,42 @@ test('mobile v2 unlocks, zooms below 0.4, keeps drag size stable, snaps backgrou
   assert.ok(pinch.scales.every(scale => scale < 0.4), `pinch must never snap to the legacy 0.4 floor: ${JSON.stringify(pinch)}`)
   assert.ok(pinch.scales.every((scale, index, values) => index === 0 || scale <= values[index - 1]), `pinch samples should move smoothly outward: ${JSON.stringify(pinch)}`)
 
+  // Reproduce the phone failure: leave an unrelated desktop-style multi-selection behind,
+  // then hold a real subtree root (Node 09 owns Node 22/23/24).
+  const staleGroupCount = await frame.evaluate(() => {
+    const bridge = window.LOGiQBridge
+    bridge.selectByName('Node 05')
+    bridge.dispatchKey('g')
+    bridge.selectByName('Node 09')
+    bridge.dispatchKey('g')
+    return bridge.getSelectedUids().length
+  })
+  assert.equal(staleGroupCount, 2, 'test must begin with stale legacy multi-selection state')
+
   const beforeBackground = await frame.evaluate(() => window.LOGiQBridge.snapshot())
-  const dragVisual = await holdDragToBackground(frame, 'Node 08')
-  assert.equal(dragVisual.branchPreview, true, 'held branch should use the branch preview')
-  assert.equal(dragVisual.legacyPreview, false, 'held branch must not create the old second drag card')
+  const dragVisual = await holdDragToBackground(frame, 'Node 09')
+  assert.equal(dragVisual.branchPreview, true, 'held subtree should use the branch preview')
+  assert.equal(dragVisual.branchCards, 4, 'Node 09 drag preview must contain Node 09 plus Node 22/23/24')
+  assert.equal(dragVisual.legacyPreview, false, 'held subtree must not create the old second drag card')
+  assert.equal(dragVisual.legacyGroupSelectionCount, 0, 'mobile hold must clear stale desktop multi-selection before drag starts')
+  assert.equal(dragVisual.dockVisibility, 'hidden', 'Word Dock must not participate visually or natively in a structural branch drag')
   assert.ok(Math.abs(dragVisual.previewWidth - dragVisual.sourceWidth) < 0.75, `drag card width must not jump: ${JSON.stringify(dragVisual)}`)
   assert.ok(Math.abs(dragVisual.previewHeight - dragVisual.sourceHeight) < 0.75, `drag card height must not jump: ${JSON.stringify(dragVisual)}`)
   assert.ok(Math.abs(dragVisual.previewFont - dragVisual.expectedFont) < 0.75, `drag text must stay at rendered scale: ${JSON.stringify(dragVisual)}`)
-  assert.deepEqual(await frame.evaluate(() => window.LOGiQBridge.snapshot()), beforeBackground, 'dropping a held branch on background must snap back without changing the map')
+  assert.deepEqual(await frame.evaluate(() => window.LOGiQBridge.snapshot()), beforeBackground, 'dropping a whole held branch on background must be an exact no-op')
   assert.equal(await frame.evaluate(() => !!document.getElementById('logiq-v2-branch-preview')), false, 'background snapback must clean up the preview')
+
+  const beforeBranchMove = await frame.evaluate(() => ({
+    wordBank: window.LOGiQBridge.snapshot().wordBank,
+    node05Parent: window.LOGiQBridge.getParentName('Node 05'),
+  }))
+  assert.equal(await holdDrag(frame, 'Node 09', 'Node 10', 62), true)
+  assert.equal(await frame.evaluate(() => window.LOGiQBridge.getParentName('Node 09')), 'Node 10')
+  assert.equal(await frame.evaluate(() => window.LOGiQBridge.getParentName('Node 22')), 'Node 09')
+  assert.equal(await frame.evaluate(() => window.LOGiQBridge.getParentName('Node 23')), 'Node 09')
+  assert.equal(await frame.evaluate(() => window.LOGiQBridge.getParentName('Node 24')), 'Node 09')
+  assert.equal(await frame.evaluate(() => window.LOGiQBridge.getParentName('Node 05')), beforeBranchMove.node05Parent, 'unrelated stale group member must not move')
+  assert.deepEqual(await frame.evaluate(() => window.LOGiQBridge.snapshot().wordBank), beforeBranchMove.wordBank, 'structural branch drag must never create Word Dock entries')
 
   assert.equal(await holdDrag(frame, 'Node 05', 'Node 03'), true)
   assert.equal(await frame.evaluate(() => window.LOGiQBridge.getParentName('Node 05')), 'Node 03')
