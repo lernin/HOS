@@ -1,0 +1,1 @@
+Handoff: clean rebuild direction selected. Branch `rebuild/logiq-v161-clean-mobile-20260915` is documentation-only so far. Preserve current routes; build parity harness next.
