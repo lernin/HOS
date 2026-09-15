@@ -18,6 +18,8 @@ This document is the current source of truth for `/logiq-v162-mobile/`. The olde
 - Stationary hold (`280 ms`, `8 px` slop) starts structural branch drag.
 - A held card means exactly that card plus its descendants; stale desktop multi-selection is cleared first.
 - Drag preview preserves rendered card/label size.
+- The complete source branch remains as an independent frozen ghost at its original position for the entire held gesture. It does not depend on the live SVG nodes surviving a redraw.
+- If the moving branch representation ever loses a descendant during the gesture, the drag cancels and restores the pre-drag state rather than degrading to a root-only move.
 - Blank-background release is an exact no-op/snapback.
 - Only a live green node target or green caret commits a reparent.
 - Edge auto-pan remains available during active drag.
@@ -63,6 +65,8 @@ CI must pass all of the following before a preview is offered for acceptance:
 - static LOGiQ regressions;
 - legacy desktop/mobile/offline smoke tests;
 - v162 gesture interaction smoke;
+- frozen-origin regression proving Node 09 + Nodes 22/23/24 remain visible at the source even if live SVG ghost classes disappear;
+- partial-branch regression proving a lost moving descendant hard-cancels without changing the map;
 - owner-device regression tests;
 - browser interruption smoke proving a latched Node 09 branch drag cancels on blur and leaves the complete map unchanged.
 
