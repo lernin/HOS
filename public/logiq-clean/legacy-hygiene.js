@@ -114,6 +114,30 @@
     );
   }
 
+  function removeDuplicateStandaloneShiftFOwner(html) {
+    // Direct RED/GREEN evidence establishes ownership: keyDispatcher's global
+    // centerOnSelected handles the ordinary selectedUid path used by v161. The
+    // later standalone treeManager listener can no-op because it reads a different
+    // selection surface. Preserve the dispatcher and remove only this duplicate.
+    assertMatchCount(
+      html,
+      /if\s*\(lower === 'f' && e\.shiftKey\)\s*\{\s*e\.preventDefault\(\);\s*centerOnSelected\(\);\s*return;\s*\}/g,
+      1,
+      'keyDispatcher Shift+F owners'
+    );
+    assertMatchCount(
+      html,
+      /if\s*\(e\.key === 'F' && e\.shiftKey\)/g,
+      1,
+      'standalone Shift+F owners'
+    );
+    return removeSingleRegex(
+      html,
+      /document\.addEventListener\('keydown', \(e\) => \{\r?\n[ \t]*if \(e\.key === 'F' && e\.shiftKey\) \{\r?\n[ \t]*if \(isTextField\(e\.target\) && !state\.tabHold\) return; \/\/ don't hijack typing\r?\n[ \t]*e\.preventDefault\(\);\r?\n[ \t]*treeManager\.centerOnSelected\(\);\r?\n[ \t]*\}\r?\n\}, true\);\r?\n/,
+      'duplicate standalone Shift+F owner'
+    );
+  }
+
   function sanitize(html) {
     let cleaned = String(html);
     const removals = [];
@@ -139,6 +163,9 @@
 
     cleaned = removeSupersededEarlyCenterOnSelected(cleaned);
     removals.push('superseded-early-center-on-selected');
+
+    cleaned = removeDuplicateStandaloneShiftFOwner(cleaned);
+    removals.push('duplicate-standalone-shift-f-owner');
 
     return { html: cleaned, removals };
   }
