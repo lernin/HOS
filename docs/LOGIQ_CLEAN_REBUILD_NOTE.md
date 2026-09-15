@@ -1,0 +1,1 @@
+This file intentionally remains documentation-only. Runtime work starts only after the parity harness is implemented and green.
