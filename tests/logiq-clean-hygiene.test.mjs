@@ -77,6 +77,43 @@ async function legacyBehavior(route) {
   return result
 }
 
+async function treesMenuBehavior(route) {
+  const { context, page } = await open(route)
+  await page.evaluate(() => {
+    localStorage.setItem('savedMaps_v1', JSON.stringify([
+      {
+        name: 'Hygiene Saved Tree',
+        data: {
+          name: 'Saved Root',
+          _uid: 'hygiene-saved-root',
+          children: [
+            { name: 'Saved Child', _uid: 'hygiene-saved-child' },
+          ],
+        },
+      },
+    ]))
+  })
+
+  let promptCount = 0
+  page.on('dialog', async (dialog) => {
+    if (dialog.type() === 'prompt') {
+      promptCount += 1
+      await dialog.accept('1')
+    } else {
+      await dialog.dismiss()
+    }
+  })
+
+  await page.locator('#mapsBtn').click()
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('text.label')).some((node) => node.textContent === 'Saved Root'))
+  const labels = await page.locator('text.label').allTextContents()
+  const stored = await page.evaluate(() => localStorage.getItem('savedMaps_v1'))
+
+  const result = { promptCount, labels, stored }
+  await context.close()
+  return result
+}
+
 test('hygiene removes only proven-dead legacy paths and preserves their observable behavior', async () => {
   const { context, page } = await open('/logiq-clean/index.html')
   const report = await page.evaluate(() => window.__LOGIQ_HYGIENE_REPORT__)
@@ -84,7 +121,8 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
     'unreachable-shift-w-wordbank-trash',
     'suppressed-node-dblclick-editor',
     'duplicate-tab-listener-registration',
-    'unused-savedmaps-v1-surface',
+    'unreachable-local-map-save-path',
+    'duplicate-trees-listener-registration',
   ])
 
   const cleanSavedMapsGlobals = await page.evaluate(() => ({
@@ -93,8 +131,8 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
   }))
   assert.deepEqual(cleanSavedMapsGlobals, {
     saveCurrentMap: 'undefined',
-    openMapsMenu: 'undefined',
-  }, 'clean candidate must not retain the unreachable savedMaps_v1 runtime')
+    openMapsMenu: 'function',
+  }, 'clean candidate removes only the unreachable Save half of the legacy local-map surface')
   await context.close()
 
   const legacy = await legacyBehavior('/logiq-v161-legacy/index.html')
@@ -107,5 +145,11 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
   assert.deepEqual(clean.chipsAfter, ['hygiene-word'], 'Shift+W must not silently clear the Word Bank')
   assert.equal(clean.editorVisible, false, 'double-click remains intentionally muted')
   assert.equal(clean.saveButtonCount, 0, 'legacy runtime exposes no saveBtn control')
-  assert.equal(clean.mapsButtonCount, 0, 'legacy runtime exposes no mapsBtn control')
+  assert.equal(clean.mapsButtonCount, 1, 'Trees control is active and must be preserved')
+
+  const legacyTrees = await treesMenuBehavior('/logiq-v161-legacy/index.html')
+  const cleanTrees = await treesMenuBehavior('/logiq-clean/index.html')
+  assert.deepEqual(cleanTrees, legacyTrees, 'Trees menu load behavior must remain identical to v161')
+  assert.equal(cleanTrees.promptCount, 1)
+  assert.deepEqual(cleanTrees.labels, ['Saved Root', 'Saved Child'])
 })
