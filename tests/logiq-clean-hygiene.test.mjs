@@ -131,6 +131,7 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
     'dead-enforce-moat-for-selected',
     'superseded-early-fly-center-to-uid',
     'superseded-early-center-on-selected',
+    'duplicate-keydispatcher-shift-f-owner',
   ])
   await context.close()
 
