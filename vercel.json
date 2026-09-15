@@ -8,6 +8,7 @@
   "rewrites": [
     { "source": "/materials-studio", "destination": "/materials-studio/app.html" },
     { "source": "/ocean-estate", "destination": "/" },
+    { "source": "/waterfall-village-v2", "destination": "/" },
     { "source": "/waterfall-village", "destination": "/" },
     { "source": "/woodland-walk", "destination": "/" },
     { "source": "/liquid-orb", "destination": "/" },
