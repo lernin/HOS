@@ -105,7 +105,12 @@ async function treesMenuBehavior(route) {
   })
 
   await page.locator('#mapsBtn').click()
-  await page.waitForFunction(() => Array.from(document.querySelectorAll('text.label')).some((node) => node.textContent === 'Saved Root'))
+  // Wait for both the loaded tree and the D3 exit transition of the old 30-node
+  // sample tree. Sampling immediately after Saved Root appears is timing-sensitive.
+  await page.waitForFunction(() => {
+    const labels = Array.from(document.querySelectorAll('text.label')).map((node) => node.textContent)
+    return labels.length === 2 && labels.includes('Saved Root') && labels.includes('Saved Child')
+  }, null, { timeout: 3000 })
   const labels = await page.locator('text.label').allTextContents()
   const stored = await page.evaluate(() => localStorage.getItem('savedMaps_v1'))
 
@@ -138,13 +143,10 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
   assert.equal(clean.saveButtonCount, 0, 'legacy runtime exposes no saveBtn control')
   assert.equal(clean.mapsButtonCount, 1, 'Trees control is active and must be preserved')
 
-  // Protect the user-visible contract rather than relying on implementation globals.
-  // v161 keeps exiting nodes in the DOM briefly during its D3 transition, so compare
-  // legacy and clean exactly, then assert that the loaded tree is present.
+  // Compare stable post-transition behavior, not transient exiting D3 nodes.
   const legacyTrees = await treesMenuBehavior('/logiq-v161-legacy/index.html')
   const cleanTrees = await treesMenuBehavior('/logiq-clean/index.html')
   assert.deepEqual(cleanTrees, legacyTrees, 'Trees menu load behavior must remain identical to v161')
   assert.equal(cleanTrees.promptCount, 1)
-  assert.ok(cleanTrees.labels.includes('Saved Root'))
-  assert.ok(cleanTrees.labels.includes('Saved Child'))
+  assert.deepEqual(cleanTrees.labels, ['Saved Root', 'Saved Child'])
 })
