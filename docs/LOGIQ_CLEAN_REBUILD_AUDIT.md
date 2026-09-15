@@ -1,7 +1,7 @@
 # LOGiQ legacy hygiene audit — checkpoints 1–2
 
 Canonical workroom: HOS Issue #108  
-Branch: `rebuild/logiq-v161-clean-mobile-flycenter-20260915`
+Branch: `rebuild/logiq-v161-clean-mobile-centerselected-20260915`
 
 ## Decision
 
@@ -14,7 +14,7 @@ This avoids two opposite risks:
 
 ## Confirmed safe removals in the clean candidate
 
-Seven cleanup units are now applied to `/logiq-clean/` only:
+Eight cleanup units are now applied to `/logiq-clean/` only:
 
 1. **Unreachable Shift+W Word Bank-to-Trash block.** `keyDispatcher` handles `W`/`Shift+W` earlier and returns, so the later block cannot execute. Regression protection requires clean behavior to match v161 and proves the Word Bank is not cleared.
 2. **Suppressed node double-click editor handler.** The SVG capture-phase `dblclick` mute prevents the event from reaching the node target handler. Removing the target handler preserves established behavior.
@@ -23,6 +23,7 @@ Seven cleanup units are now applied to `/logiq-clean/` only:
 5. **Second identical Trees click registration.** `openMapsMenu` was attached twice to the same `mapsBtn` with the same callback. The clean candidate keeps one registration. A browser regression loads a `savedMaps_v1` tree and requires exact post-transition behavior parity.
 6. **Dead `enforceMoatForSelected` helper.** Inventory batch `v161-camera-moat-001` established confidence 3: exact-name source audit finds only the declaration, it is not exported, and it has no caller. The transform asserts exactly one symbol occurrence before removing the function. Active moat behavior (`checkMoatAndAutoFit`, navigation/zoom paths, and camera helpers) is not touched.
 7. **Superseded early `flyCenterToUID` declaration.** Inventory batch `v161-camera-moat-001` established that two same-scope declarations exist and the later unified camera declaration is the active binding. A RED regression first proved the clean runtime still contained two declarations; the hygiene transform now asserts exactly two and removes only the earlier `CONFIG_FLY.hotkeyDuration` version. The full v161 parity/keyboard gate remains unchanged.
+8. **Superseded early `centerOnSelected` declaration.** Source audit established two same-scope declarations; JavaScript resolves runtime calls to the later declaration. A RED regression first failed with `2 !== 1` while all existing parity checks stayed green. The hygiene transform asserts exactly two declarations and removes only the earlier `CONFIG_FLY.hotkeyDuration` wrapper. The regression also requires the remaining active function body to match immutable v161 byte-for-byte.
 
 `public/logiq-clean/legacy-hygiene.js` asserts the expected source shape before removing anything. If the baseline no longer contains exactly the expected dead/no-op structure, sanitization fails rather than silently editing unexpected code.
 
@@ -33,6 +34,7 @@ The current gate protects:
 - immutable v161 checksum/source integrity;
 - exact hygiene removal report;
 - one active `flyCenterToUID` declaration in the clean runtime;
+- one active `centerOnSelected` declaration whose active function body matches immutable v161;
 - Shift+W Word Bank behavior;
 - muted double-click behavior;
 - active Trees/`savedMaps_v1` loading behavior;
@@ -63,7 +65,8 @@ The keyboard ownership tests intentionally compare against **observed v161 behav
 - unreachable local-map Save path;
 - duplicate Trees click registration;
 - dead `enforceMoatForSelected` helper;
-- superseded early `flyCenterToUID` declaration.
+- superseded early `flyCenterToUID` declaration;
+- superseded early `centerOnSelected` declaration.
 
 ### Suspicious / order-dependent — do not remove yet
 
@@ -71,7 +74,7 @@ The keyboard ownership tests intentionally compare against **observed v161 behav
 - Shift+F dual ownership (`keyDispatcher` plus separate capture listener);
 - stacked Tab handlers whose combined behavior is now regression-protected but whose individual ownership is not isolated;
 - duplicate/helper-like logic around selection, Escape, navigation and structural commands;
-- remaining duplicate camera helpers, including the early `centerOnSelected` declaration, until each supersession is independently regression-protected;
+- any remaining duplicate camera helpers until each supersession is independently regression-protected;
 - documentation/code mismatch around Dock select-all modifier;
 - drag/drop branches that may participate in detector, history or animation ordering.
 
@@ -89,4 +92,4 @@ Do not combine cleanup with architecture extraction or mobile redesign in the sa
 
 ## Current exit status
 
-Keyboard/listener inventory and legacy-map hygiene are established. The clean candidate has now removed one confidence-3 dead moat helper and one confidence-3 superseded camera declaration, with the complete regression gate green after each checkpoint. Modular extraction remains gated until the high-confidence hygiene pass is complete. The next cleanup should again be one independently proven unit; the early superseded `centerOnSelected` declaration is the next likely candidate, not a broad refactor.
+Keyboard/listener inventory and legacy-map hygiene are established. The clean candidate has now removed one confidence-3 dead moat helper and two independently proven superseded camera declarations, with the complete regression gate green after each code checkpoint. Modular extraction remains gated until the high-confidence hygiene pass is complete. The next cleanup should again be one independently proven unit selected from the remaining inventory, not a broad refactor.
