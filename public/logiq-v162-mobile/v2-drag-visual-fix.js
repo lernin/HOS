@@ -14,7 +14,7 @@
     style.textContent = `
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
         #logiq-v2-drag-card,.drag-mini,g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
-        #logiq-v2-branch-preview .v2-float-node{transform:none!important;background:#fff!important;color:#374151!important;border:2px solid #fff!important;border-radius:10px!important;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24)!important}
+        #logiq-v2-branch-preview .v2-float-node{transform:none!important;background:#fff!important;color:#374151!important;border-style:solid!important;border-width:var(--v2-border-width,2px)!important;border-color:#fff!important;border-radius:var(--v2-radius,10px)!important;padding-left:var(--v2-pad-x,8px)!important;padding-right:var(--v2-pad-x,8px)!important;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24)!important}
         #logiq-v2-branch-preview .v2-float-node.is-root{border-color:#22c55e!important;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24)!important}
         body.logiq-mobile-v2.v2-cancel #logiq-v2-branch-preview .v2-float-node.is-root{border-color:#ef4444!important}
         body.logiq-mobile-v2.v2-branch-drag g.node.v2-branch-origin-ghost{opacity:.44!important}

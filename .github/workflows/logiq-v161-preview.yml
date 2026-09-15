@@ -1,13 +1,17 @@
-name: LOGiQ v161 preview regression
+name: LOGiQ preview regression
 on:
   push:
     branches:
-      - 'preview/logiq-v161-*'
+      - 'preview/logiq-*'
     paths:
       - public/logiq-v161/**
       - public/logiq-v161-legacy/**
+      - public/logiq-v162-mobile/**
       - tests/logiq-v161-*
+      - tests/logiq-v162-*
       - docs/LOGIQ_V161_LEGACY.md
+      - docs/LOGIQ_V161_PREVIEW.md
+      - docs/LOGIQ_V162_MOBILE_CORE.md
       - package.json
       - .github/workflows/logiq-v161-preview.yml
   pull_request:
@@ -15,8 +19,12 @@ on:
     paths:
       - public/logiq-v161/**
       - public/logiq-v161-legacy/**
+      - public/logiq-v162-mobile/**
       - tests/logiq-v161-*
+      - tests/logiq-v162-*
       - docs/LOGIQ_V161_LEGACY.md
+      - docs/LOGIQ_V161_PREVIEW.md
+      - docs/LOGIQ_V162_MOBILE_CORE.md
       - package.json
       - .github/workflows/logiq-v161-preview.yml
 permissions:
@@ -36,9 +44,9 @@ jobs:
       - run: npm run test:logiq
       - run: npm install --no-save --package-lock=false playwright@1.55.0 d3@7.9.0
       - run: npx playwright install --with-deps chromium
-      - name: Run desktop, mobile, and offline smoke tests
+      - name: Run desktop, mobile, offline, and v162 interaction smoke tests
         run: |
-          npm run dev -- --port 4173 > /tmp/logiq-v161-vite.log 2>&1 &
+          npm run dev -- --port 4173 > /tmp/logiq-vite.log 2>&1 &
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:4173/logiq-v161/index.html >/dev/null; then break; fi
             sleep 1
@@ -46,3 +54,6 @@ jobs:
           grep -Fq '#logiq-spawn-puck.is-visible{display:none!important}' public/logiq-v161/logiq-preview.js
           grep -Fq '#logiq-spawn-ghost.is-visible{display:none!important}' public/logiq-v161/logiq-preview.js
           node --test --test-name-pattern='^(immutable legacy route|desktop preview|mobile preview|landscape phone shell|phone shell survives)' tests/logiq-v161-smoke.test.mjs
+          node --test tests/logiq-v162-mobile-smoke.test.mjs
+          node --test tests/logiq-v162-origin-ghost-smoke.test.mjs
+          node --test tests/logiq-v162-safety-smoke.test.mjs
