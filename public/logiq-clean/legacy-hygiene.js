@@ -130,6 +130,31 @@
     );
   }
 
+  function removeDuplicateKeyDispatcherShiftFOwner(html) {
+    // Inventory batch v161-keyboard-camera-002 found two Shift+F owners. The
+    // keyDispatcher path runs first, then the standalone listener invokes
+    // treeManager.centerOnSelected(), replacing the first camera transition.
+    // Direct Shift+F parity protects the final observed v161 endpoint, so keep
+    // the standalone final owner and remove only the earlier dispatcher branch.
+    assertMatchCount(
+      html,
+      /if\s*\(lower === 'f' && e\.shiftKey\)\s*\{\s*e\.preventDefault\(\);\s*centerOnSelected\(\);\s*return;\s*\}/g,
+      1,
+      'keyDispatcher Shift+F owners'
+    );
+    assertMatchCount(
+      html,
+      /if\s*\(e\.key === 'F' && e\.shiftKey\)/g,
+      1,
+      'standalone Shift+F owners'
+    );
+    return removeSingleRegex(
+      html,
+      /[ \t]*if \(lower === 'f' && e\.shiftKey\) \{ e\.preventDefault\(\); centerOnSelected\(\); return; \}\r?\n/,
+      'duplicate keyDispatcher Shift+F owner'
+    );
+  }
+
   function sanitize(html) {
     let cleaned = String(html);
     const removals = [];
@@ -173,6 +198,11 @@
     // Same-scope duplicate: preserve the later active binding byte-for-byte.
     cleaned = removeSupersededEarlyCenterOnSelected(cleaned);
     removals.push('superseded-early-center-on-selected');
+
+    // Duplicate keyboard ownership: preserve the later owner that determines the
+    // observed Shift+F camera endpoint and remove only the overwritten first owner.
+    cleaned = removeDuplicateKeyDispatcherShiftFOwner(cleaned);
+    removals.push('duplicate-keydispatcher-shift-f-owner');
 
     return { html: cleaned, removals };
   }
