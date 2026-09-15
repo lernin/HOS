@@ -132,6 +132,21 @@ test('Shift+F centering behavior matches immutable v161', async () => {
     `Shift+F vertical endpoint diverged: ${JSON.stringify({ legacy, clean })}`)
 })
 
+test('clean runtime gives Shift+F a single camera owner', async () => {
+  const { context, page } = await open('/logiq-clean/index.html')
+  const owners = await page.evaluate(() => {
+    const html = document.documentElement.innerHTML
+    return {
+      dispatcher: (html.match(/if\s*\(lower === 'f' && e\.shiftKey\)\s*\{\s*e\.preventDefault\(\);\s*centerOnSelected\(\);\s*return;\s*\}/g) || []).length,
+      standalone: (html.match(/if\s*\(e\.key === 'F' && e\.shiftKey\)/g) || []).length,
+    }
+  })
+  await context.close()
+
+  assert.deepEqual(owners, { dispatcher: 0, standalone: 1 },
+    'Shift+F must be owned only by the standalone treeManager centering listener')
+})
+
 test('Tab from canvas matches immutable v161 focus behavior', async () => {
   const legacy = await tabFromCanvas('/logiq-v161-legacy/index.html')
   const clean = await tabFromCanvas('/logiq-clean/index.html')
