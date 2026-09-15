@@ -58,10 +58,6 @@
   }
 
   function cleanLegacySavedMapsSurface(html) {
-    // The Trees button is real and remains active: it can load/delete historical
-    // savedMaps_v1 data. The Save button, however, does not exist in the DOM, so
-    // saveCurrentMap and its two guarded listener registrations are unreachable.
-    // openMapsMenu has two identical click registrations; keep exactly one.
     assertMatchCount(html, /\bsaveCurrentMap\b/g, 3, 'saveCurrentMap references');
     assertMatchCount(html, /\bopenMapsMenu\b/g, 3, 'openMapsMenu references');
     assertMatchCount(html, /\bid\s*=\s*["']saveBtn["']/gi, 0, 'saveBtn DOM ids');
@@ -72,32 +68,26 @@
       /[ \t]*saveBtn:\s*document\.getElementById\("saveBtn"\),\r?\n/,
       'unused saveBtn element ref'
     );
-
     cleaned = removeSingleRegex(
       cleaned,
       /[ \t]*function saveCurrentMap\(\)\{[\s\S]*?(?=[ \t]*function openMapsMenu\(\)\{)/,
       'unreachable saveCurrentMap function'
     );
-
     cleaned = removeAllRegex(
       cleaned,
       /[ \t]*elements\.saveBtn && elements\.saveBtn\.addEventListener\("click", saveCurrentMap\);\r?\n/g,
       2,
       'guarded saveCurrentMap listener registrations'
     );
-
     cleaned = removeSecondMatch(
       cleaned,
       /[ \t]*elements\.mapsBtn && elements\.mapsBtn\.addEventListener\("click", openMapsMenu\);\r?\n/g,
       'identical Trees button listener registrations'
     );
-
     return cleaned;
   }
 
   function removeDeadEnforceMoatForSelected(html) {
-    // Verified dead in inventory batch v161-camera-moat-001: the exact symbol name
-    // occurs once (its declaration), is not exported, and has no call site.
     assertMatchCount(html, /\benforceMoatForSelected\b/g, 1, 'enforceMoatForSelected references');
     return removeSingleRegex(
       html,
@@ -107,9 +97,6 @@
   }
 
   function removeSupersededEarlyFlyCenterToUID(html) {
-    // Inventory batch v161-camera-moat-001 proved that two same-scope declarations
-    // exist and the later declaration is the active binding. Remove only the earlier
-    // CONFIG_FLY version, leaving the active unified camera helper untouched.
     assertMatchCount(html, /function\s+flyCenterToUID\s*\(/g, 2, 'flyCenterToUID declarations');
     return removeSingleRegex(
       html,
@@ -119,9 +106,6 @@
   }
 
   function removeSupersededEarlyCenterOnSelected(html) {
-    // Two same-scope declarations exist. JavaScript binds calls to the later
-    // declaration, which is the active helper exercised by Shift+F parity tests.
-    // Remove only the earlier CONFIG_FLY wrapper.
     assertMatchCount(html, /function\s+centerOnSelected\s*\(/g, 2, 'centerOnSelected declarations');
     return removeSingleRegex(
       html,
@@ -130,79 +114,31 @@
     );
   }
 
-  function removeDuplicateKeyDispatcherShiftFOwner(html) {
-    // Inventory batch v161-keyboard-camera-002 found two Shift+F owners. The
-    // keyDispatcher path runs first, then the standalone listener invokes
-    // treeManager.centerOnSelected(), replacing the first camera transition.
-    // Direct Shift+F parity protects the final observed v161 endpoint, so keep
-    // the standalone final owner and remove only the earlier dispatcher branch.
-    assertMatchCount(
-      html,
-      /if\s*\(lower === 'f' && e\.shiftKey\)\s*\{\s*e\.preventDefault\(\);\s*centerOnSelected\(\);\s*return;\s*\}/g,
-      1,
-      'keyDispatcher Shift+F owners'
-    );
-    assertMatchCount(
-      html,
-      /if\s*\(e\.key === 'F' && e\.shiftKey\)/g,
-      1,
-      'standalone Shift+F owners'
-    );
-    return removeSingleRegex(
-      html,
-      /[ \t]*if \(lower === 'f' && e\.shiftKey\) \{ e\.preventDefault\(\); centerOnSelected\(\); return; \}\r?\n/,
-      'duplicate keyDispatcher Shift+F owner'
-    );
-  }
-
   function sanitize(html) {
     let cleaned = String(html);
     const removals = [];
 
-    // Unreachable: keyDispatcher handles every W/Shift+W earlier and returns.
-    cleaned = removeMarkedBlock(
-      cleaned,
-      '/* [patch] shift-W wordbank to trash start */',
-      '/* [patch] shift-W wordbank to trash end */',
-      'unreachable Shift+W Word Bank-to-Trash'
-    );
+    cleaned = removeMarkedBlock(cleaned, '/* [patch] shift-W wordbank to trash start */', '/* [patch] shift-W wordbank to trash end */', 'unreachable Shift+W Word Bank-to-Trash');
     removals.push('unreachable-shift-w-wordbank-trash');
 
-    // Unreachable: the SVG capture listener stops dblclick before node target handlers run.
-    cleaned = removeSingleRegex(
-      cleaned,
-      /[ \t]*nEnter\.on\("dblclick", \(event,d\)=>\{ event\.stopPropagation\(\); openNodeEditor\(d\); \}\);\r?\n/,
-      'suppressed node dblclick editor handler'
-    );
+    cleaned = removeSingleRegex(cleaned, /[ \t]*nEnter\.on\("dblclick", \(event,d\)=>\{ event\.stopPropagation\(\); openNodeEditor\(d\); \}\);\r?\n/, 'suppressed node dblclick editor handler');
     removals.push('suppressed-node-dblclick-editor');
 
-    // No-op duplicate: addEventListener ignores a second registration with the same
-    // type, callback, and capture flag. Keep the first registration only.
     cleaned = removeSecondTabRegistration(cleaned);
     removals.push('duplicate-tab-listener-registration');
 
-    // Preserve the active Trees menu, but remove its unreachable Save half and the
-    // duplicate Trees click registration.
     cleaned = cleanLegacySavedMapsSurface(cleaned);
     removals.push('unreachable-local-map-save-path');
     removals.push('duplicate-trees-listener-registration');
 
-    // Dead helper: inventory and exact-name source audit prove there is no caller.
     cleaned = removeDeadEnforceMoatForSelected(cleaned);
     removals.push('dead-enforce-moat-for-selected');
 
-    // Same-scope duplicate: the later declaration is the binding used at runtime.
     cleaned = removeSupersededEarlyFlyCenterToUID(cleaned);
     removals.push('superseded-early-fly-center-to-uid');
 
-    // Same-scope duplicate: preserve the later active binding byte-for-byte.
     cleaned = removeSupersededEarlyCenterOnSelected(cleaned);
     removals.push('superseded-early-center-on-selected');
-
-    // Duplicate keyboard ownership: preserve the later owner that determines the
-    // observed Shift+F camera endpoint and remove only the overwritten first owner.
-    cleaned = removeDuplicateKeyDispatcherShiftFOwner(cleaned);
-    removals.push('duplicate-keydispatcher-shift-f-owner');
 
     return { html: cleaned, removals };
   }
