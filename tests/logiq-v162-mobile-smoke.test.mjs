@@ -85,6 +85,58 @@ async function holdDrag(frame, sourceName, targetName, pointerId = 51) {
   return latched
 }
 
+async function holdDragToBackground(frame, sourceName, pointerId = 61) {
+  const source = await nodeCenter(frame, sourceName)
+  assert.ok(source, `missing background-drag source ${sourceName}`)
+  const background = await frame.evaluate(() => {
+    const nodes = Array.from(document.querySelectorAll('g.node')).map(node => node.getBoundingClientRect())
+    const clear = (x, y) => nodes.every(r => x < r.left - 34 || x > r.right + 34 || y < r.top - 34 || y > r.bottom + 34)
+    for (let y = innerHeight - 120; y >= 150; y -= 40) {
+      for (let x = 105; x <= innerWidth - 105; x += 40) if (clear(x, y)) return { x, y }
+    }
+    return { x: innerWidth / 2, y: innerHeight - 140 }
+  })
+
+  await frame.evaluate(({ source, pointerId }) => {
+    const canvas = document.getElementById('canvas')
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch', pointerId, isPrimary: true, buttons: 1, clientX: source.x, clientY: source.y }))
+  }, { source, pointerId })
+  await new Promise(resolve => setTimeout(resolve, 340))
+
+  const visual = await frame.evaluate(sourceName => {
+    const sourceNode = Array.from(document.querySelectorAll('g.node')).find(element => element.textContent.includes(sourceName))
+    const preview = document.querySelector('#logiq-v2-branch-preview .v2-float-node.is-root')
+    const sourceRect = sourceNode?.getBoundingClientRect()
+    const previewRect = preview?.getBoundingClientRect()
+    const text = sourceNode?.querySelector('text')
+    const baseFont = Number.parseFloat(text ? getComputedStyle(text).fontSize : '0')
+    const expectedFont = baseFont * window.LOGiQZoom.scale()
+    const previewFont = Number.parseFloat(preview ? getComputedStyle(preview).fontSize : '0')
+    return {
+      branchPreview: !!document.getElementById('logiq-v2-branch-preview'),
+      legacyPreview: !!document.getElementById('logiq-v2-drag-card'),
+      sourceWidth: sourceRect?.width || 0,
+      sourceHeight: sourceRect?.height || 0,
+      previewWidth: previewRect?.width || 0,
+      previewHeight: previewRect?.height || 0,
+      expectedFont,
+      previewFont,
+    }
+  }, sourceName)
+
+  await frame.evaluate(({ background, pointerId }) => {
+    const canvas = document.getElementById('canvas')
+    canvas.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, pointerType: 'touch', pointerId, isPrimary: true, buttons: 1, clientX: background.x, clientY: background.y }))
+  }, { background, pointerId })
+  await new Promise(resolve => setTimeout(resolve, 100))
+  await frame.evaluate(({ background, pointerId }) => {
+    const canvas = document.getElementById('canvas')
+    canvas.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, pointerType: 'touch', pointerId, isPrimary: true, buttons: 0, clientX: background.x, clientY: background.y }))
+  }, { background, pointerId })
+  await new Promise(resolve => setTimeout(resolve, 700))
+  return visual
+}
+
 async function pinchZoomOut(frame, startRadius = 72, endRadius = 42) {
   return frame.evaluate(async ({ startRadius, endRadius }) => {
     const canvas = document.getElementById('canvas')
@@ -150,7 +202,7 @@ async function flickCard(frame, sourceName, dx = 72, pointerId = 81) {
   await new Promise(resolve => setTimeout(resolve, 200))
 }
 
-test('mobile v2 unlocks, zooms below 0.4 without snapping, and drag/reparents when unlocked', async () => {
+test('mobile v2 unlocks, zooms below 0.4, keeps drag size stable, snaps background drops back, and reparents valid drops', async () => {
   const context = await contextForPhone()
   const page = await context.newPage()
   const errors = []
@@ -172,6 +224,16 @@ test('mobile v2 unlocks, zooms below 0.4 without snapping, and drag/reparents wh
   assert.ok(pinch.after < pinch.before, `pinch should continue outward from fit: ${JSON.stringify(pinch)}`)
   assert.ok(pinch.scales.every(scale => scale < 0.4), `pinch must never snap to the legacy 0.4 floor: ${JSON.stringify(pinch)}`)
   assert.ok(pinch.scales.every((scale, index, values) => index === 0 || scale <= values[index - 1]), `pinch samples should move smoothly outward: ${JSON.stringify(pinch)}`)
+
+  const beforeBackground = await frame.evaluate(() => window.LOGiQBridge.snapshot())
+  const dragVisual = await holdDragToBackground(frame, 'Node 08')
+  assert.equal(dragVisual.branchPreview, true, 'held branch should use the branch preview')
+  assert.equal(dragVisual.legacyPreview, false, 'held branch must not create the old second drag card')
+  assert.ok(Math.abs(dragVisual.previewWidth - dragVisual.sourceWidth) < 0.75, `drag card width must not jump: ${JSON.stringify(dragVisual)}`)
+  assert.ok(Math.abs(dragVisual.previewHeight - dragVisual.sourceHeight) < 0.75, `drag card height must not jump: ${JSON.stringify(dragVisual)}`)
+  assert.ok(Math.abs(dragVisual.previewFont - dragVisual.expectedFont) < 0.75, `drag text must stay at rendered scale: ${JSON.stringify(dragVisual)}`)
+  assert.deepEqual(await frame.evaluate(() => window.LOGiQBridge.snapshot()), beforeBackground, 'dropping a held branch on background must snap back without changing the map')
+  assert.equal(await frame.evaluate(() => !!document.getElementById('logiq-v2-branch-preview')), false, 'background snapback must clean up the preview')
 
   assert.equal(await holdDrag(frame, 'Node 05', 'Node 03'), true)
   assert.equal(await frame.evaluate(() => window.LOGiQBridge.getParentName('Node 05')), 'Node 03')
