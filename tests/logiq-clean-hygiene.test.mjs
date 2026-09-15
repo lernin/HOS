@@ -26,7 +26,19 @@ async function open(route) {
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}${route}`, { waitUntil: 'networkidle' })
-  await page.waitForFunction(() => document.querySelectorAll('g.node').length === 30)
+  try {
+    await page.waitForFunction(() => document.querySelectorAll('g.node').length === 30, null, { timeout: 10_000 })
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      title: document.title,
+      body: document.body?.innerText?.slice(0, 500),
+      scripts: Array.from(document.scripts).map((script) => script.src || '[inline]'),
+      d3: typeof window.d3,
+      hygiene: window.__LOGIQ_HYGIENE_REPORT__ || null,
+    }))
+    await context.close()
+    throw new Error(`${route} did not render: ${JSON.stringify({ errors, state })}`, { cause: error })
+  }
   await page.waitForTimeout(1000)
   assert.deepEqual(errors, [], `${route} emitted browser errors`)
   return { context, page }
