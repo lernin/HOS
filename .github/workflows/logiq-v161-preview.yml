@@ -53,3 +53,4 @@ jobs:
           grep -Fq '#logiq-spawn-ghost.is-visible{display:none!important}' public/logiq-v161/logiq-preview.js
           node --test --test-name-pattern='^(immutable legacy route|desktop preview|mobile preview|landscape phone shell|phone shell survives)' tests/logiq-v161-smoke.test.mjs
           node --test tests/logiq-v162-mobile-smoke.test.mjs
+          node --test tests/logiq-v162-safety-smoke.test.mjs
