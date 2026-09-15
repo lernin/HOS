@@ -1,0 +1,1 @@
+Source of truth: HOS Issue #108. This branch intentionally keeps all runtime changes gated behind the v161 parity harness.
