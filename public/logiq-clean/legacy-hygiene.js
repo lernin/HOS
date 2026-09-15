@@ -1,6 +1,7 @@
 (() => {
   function countMatches(text, regex) {
-    return [...text.matchAll(regex)].length;
+    const flags = regex.flags.includes('g') ? regex.flags : `${regex.flags}g`;
+    return [...String(text).matchAll(new RegExp(regex.source, flags))].length;
   }
 
   function removeMarkedBlock(html, startMarker, endMarker, label) {
