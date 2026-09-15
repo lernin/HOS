@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LOGiQ clean baseline candidate</title>
+</head>
+<body>
+<script>
+(async () => {
+  const response = await fetch('/logiq-v161-legacy/index.html', { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Failed to load immutable v161 baseline: ${response.status}`);
+  let html = await response.text();
+  html = html.replace('<head>', '<head><base href="/logiq-v161-legacy/">');
+  document.open();
+  document.write(html);
+  document.close();
+})();
+</script>
+</body>
+</html>
