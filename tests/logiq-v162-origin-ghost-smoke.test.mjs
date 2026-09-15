@@ -231,3 +231,25 @@ test('Node 09 branch keeps card geometry and rendered type through pickup, trave
   assert.equal(await frame.evaluate(() => document.querySelectorAll('#logiq-v2-branch-preview, #logiq-v2-origin-freeze').length), 0)
   await context.close()
 })
+
+test('starting a branch drag does not reflow unrelated cards before commit', async () => {
+  const { context, frame } = await openPhone()
+  await new Promise(resolve => setTimeout(resolve, 1200))
+  const positions = () => frame.evaluate(() => Object.fromEntries(Array.from(document.querySelectorAll('g.node')).map(node => {
+    const uid = node.__data__?.data?._uid
+    const r = node.getBoundingClientRect()
+    return [uid, { x: r.x, y: r.y, width: r.width, height: r.height }]
+  }).filter(([uid]) => uid)))
+  const before = await positions()
+  const pointerId = 904
+  await beginHold(frame, 'Node 09', pointerId)
+  const branchUids = await frame.evaluate(() => Array.from(document.querySelectorAll('#logiq-v2-branch-preview .v2-float-node')).map(node => node.dataset.uid))
+  assert.equal(branchUids.length, 4)
+  const holding = await positions()
+  const displaced = Object.entries(before).filter(([uid, rect]) => !branchUids.includes(uid) && holding[uid] &&
+    (Math.abs(holding[uid].x - rect.x) > .5 || Math.abs(holding[uid].y - rect.y) > .5))
+  assert.deepEqual(displaced.map(([uid]) => uid), [], 'unrelated cards moved before an explicit valid drop')
+  await frame.evaluate(() => window.dispatchEvent(new Event('blur')))
+  await frame.waitForFunction(() => !window.__logiqV2DragActive)
+  await context.close()
+})

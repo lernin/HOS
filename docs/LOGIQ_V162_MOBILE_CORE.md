@@ -26,9 +26,9 @@ This document is the current source of truth for `/logiq-v162-mobile/`. The olde
 
 ## Modularization checkpoint
 
-`branch-geometry.js` now captures the complete rendered subtree once at pickup: card boxes, rendered type, and connector positions. The held-card gesture owner (`v2-branch-affordance.js`) requests that preview and owns pointer movement plus commit/cancel; it no longer constructs cards or chooses font/card sizes. The moving layer and the independent origin clone share `.v2-branch-layer` positioning rules, so an SVG redraw cannot relocate the ghost. An incomplete branch capture refuses to start a drag.
+`branch-geometry.js` now captures the complete rendered subtree once at pickup: card boxes, rendered type, and connector positions. It also owns the independent frozen-origin clone and its repair on DOM redraw; the obsolete `origin-ghost-freeze.js` wrapper is removed. The held-card gesture owner (`v2-branch-affordance.js`) requests that preview and owns pointer movement plus commit/cancel; it no longer constructs cards or chooses font/card sizes. The moving layer and origin clone share `.v2-branch-layer` positioning rules. An incomplete branch capture refuses to start a drag.
 
-The remaining visual overrides in `v2-drag-visual-fix.js`, frozen-origin/watchdog layers, and synthetic desktop drag bridge are migration seams. Next reduce those only after the Node 09 geometry and branch browser regressions, valid reparent, pan/pinch, and lock flows remain green. This checkpoint does not change map persistence or production Supabase `jzaghifuhinkzzhiojre`.
+The remaining visual overrides in `v2-drag-visual-fix.js`, drag watchdog, and synthetic desktop drag bridge are migration seams. Next reduce those only after the Node 09 geometry and branch browser regressions, valid reparent, pan/pinch, and lock flows remain green. The new browser check also verifies unrelated cards stay at the same screen coordinates when a drag begins. This checkpoint does not change map persistence or production Supabase `jzaghifuhinkzzhiojre`.
 
 ## Drag interruption safety
 
