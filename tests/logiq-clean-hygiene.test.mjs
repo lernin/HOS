@@ -70,6 +70,8 @@ async function legacyBehavior(route) {
     dockClassBefore,
     dockClassAfter,
     editorVisible,
+    saveButtonCount: await page.locator('#saveBtn').count(),
+    mapsButtonCount: await page.locator('#mapsBtn').count(),
   }
   await context.close()
   return result
@@ -82,7 +84,17 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
     'unreachable-shift-w-wordbank-trash',
     'suppressed-node-dblclick-editor',
     'duplicate-tab-listener-registration',
+    'unused-savedmaps-v1-surface',
   ])
+
+  const cleanSavedMapsGlobals = await page.evaluate(() => ({
+    saveCurrentMap: typeof window.saveCurrentMap,
+    openMapsMenu: typeof window.openMapsMenu,
+  }))
+  assert.deepEqual(cleanSavedMapsGlobals, {
+    saveCurrentMap: 'undefined',
+    openMapsMenu: 'undefined',
+  }, 'clean candidate must not retain the unreachable savedMaps_v1 runtime')
   await context.close()
 
   const legacy = await legacyBehavior('/logiq-v161-legacy/index.html')
@@ -94,4 +106,6 @@ test('hygiene removes only proven-dead legacy paths and preserves their observab
   assert.deepEqual(clean, legacy)
   assert.deepEqual(clean.chipsAfter, ['hygiene-word'], 'Shift+W must not silently clear the Word Bank')
   assert.equal(clean.editorVisible, false, 'double-click remains intentionally muted')
+  assert.equal(clean.saveButtonCount, 0, 'legacy runtime exposes no saveBtn control')
+  assert.equal(clean.mapsButtonCount, 0, 'legacy runtime exposes no mapsBtn control')
 })
