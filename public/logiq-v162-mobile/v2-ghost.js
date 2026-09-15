@@ -180,7 +180,9 @@
         return
       }
 
-      if (had || !uid || win.__logiqWorkingLocked) return
+      /* v2-branch-affordance owns stationary-hold movement. Keep this layer focused on
+         tap/select, double-tap edit and MIC so there is never a second drag transaction. */
+      if (had || !uid || win.__logiqWorkingLocked || win.__logiqBranchDragOwnsHold) return
       const before = captureState(bridge)
       const hold = {
         pointerId:e.pointerId, uid, node,
@@ -278,6 +280,7 @@
 
   function latchHold(doc,win,bridge,state,hold) {
     if (state.hold !== hold || hold.moved) return
+    if (win.__logiqBranchDragOwnsHold) return cancelHold(win,state)
     if (win.__logiqWorkingLocked) return cancelHold(win,state)
     const pointer = state.pointers.get(hold.pointerId)
     if (!pointer || pointer.multi || state.active.size !== 1) return cancelHold(win,state)
