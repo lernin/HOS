@@ -1,0 +1,725 @@
+
+  /* ======================= THEME VARIABLES ======================= */
+  :root {
+    --background-color: #f0f2f5; /*eef1f5;*/
+    --card-color: #ffffff;
+    --text-color: #374151;
+    --text-selected-color: #949494;
+    --link-color: #cfcfcf;
+    --target-color: #22c55e;
+    --ghost-color: #22c55e;
+    --subtree-bg-color: #eeeeee;
+    --selected-fill: #d1fae5;
+    --selected-outline: #ffffff; /* blue border for all normal nodes */
+    --ant-dash: 6px;   /* length of red dash */
+    --ant-gap: 4px;    /* gap */
+    --ant-speed: 1400ms;/* speed; tweak to taste */
+    --dock-right-safe: 16px;
+    --dock-right-pad: 8px;
+    --det-node: rgba(120,120,120,.18);
+    --det-sib: rgba(59,130,246,.18);
+    --det-cousin-l: rgba(249,115,22,.18);  /* orange */
+    --det-cousin-r: rgba(34,197,94,.18);   /* green */
+    --det-edge: rgba(147,51,234,.18);
+
+
+ 
+  }
+
+  /* ======================= BASE PAGE ======================= */
+  html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* [patch] hide-scrollbar */
+  /*background: var(--background-color); background fix */ 
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  padding-top: 0px;   /* push page content below header */
+}
+
+/* ======================= CURSOR HIDING ======================= */
+
+/* Old global-no-cursor = dragging (cursor none + no text select) */
+.global-no-cursor, .global-no-cursor * {
+  cursor: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+}
+
+/* New: hide cursor only (for keyboard nav) */
+.global-hide-cursor, .global-hide-cursor * {
+  cursor: none !important;
+}
+
+
+
+  /* ======================= TRASH BUTTON ======================= */
+  #trash {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    width: 80px;
+    height: 80px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(255, 255, 255, 127);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;  /* keep on top */
+    transform-origin: 50% 65%;
+    transition: box-shadow 140ms ease, border-color 140ms ease, background 140ms ease;
+  }
+
+  #trash svg {
+    width: 40px;
+    height: 40px;
+    color: #94a3b8;                 /* idle gray */
+    transition: color 140ms ease;   /* smooth change */
+  }
+
+  #trash .lid {
+    transform-origin: 20px 10px;
+    transition: transform 140ms ease;
+  }
+
+  #trash .body,
+  #trash .lid-shape {
+    fill: #cbd5e1;
+  }
+
+  #trash .stripe {
+    fill: #fff;  /* bright white vertical bars */
+  }
+
+  /* Danger zone when dragging near/over */
+  #trash.near,
+  #trash.over {
+    border-color: #ef4444;
+    background: #fff;
+    box-shadow:
+      0 10px 28px rgba(239,68,68,.18),
+      0 0 18px rgba(239,68,68,.12);
+  }
+
+  #trash.near svg,
+  #trash.over svg,
+  #trash:hover svg {
+    color: #ef4444;
+  }
+
+  /* Lid hover/drag tilt + fill */
+  #trash:hover .lid,
+  #trash:hover .body,
+  #trash:hover .lid-shape,
+  #trash.near .body,
+  #trash.near .lid-shape,
+  #trash.over .body,
+  #trash.over .lid-shape {
+    fill: #ef4444; /* red fill */
+  }
+
+  #trash.near .lid,
+  #trash.over .lid {
+    transform: rotate(18deg);
+  }
+
+  /* Wiggle animation */
+  @keyframes trash-wiggle {
+    0%, 100% { transform: rotate(0); }
+    25%      { transform: rotate(2.8deg); }
+    75%      { transform: rotate(-2.8deg); }
+  }
+
+  #trash.wiggle { animation: trash-wiggle 420ms ease-in-out infinite; }
+
+  @media (prefers-reduced-motion: reduce) {
+    #trash.wiggle { animation: none; }
+  }
+
+/* ======================= HEADER & CONTROLS ======================= */
+header {
+  position: fixed;
+  top: 0;
+  z-index: 50;
+  padding: 10px 10px;
+  background: #ffffff;
+  backdrop-filter: blur(6px);
+
+  /* remove flat border */
+  border-bottom: none;
+
+  /* add subtle Facebook-style shadow */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1),
+              0 2px 4px rgba(0, 0, 0, 0.06);
+
+  font-size: 14px;
+  color: #475569;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  width: 100%;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+
+  .brand img {
+  width: 34px;   /* or 32px to match your input height */
+  height: auto;  /* keep proportions */
+  display: block;
+}
+
+
+  .word-tools { display: flex; gap: 8px; align-items: center; }
+
+  .word-tools input {
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fff;
+    min-width: 220px;
+  }
+
+  .btn {
+    padding: 6px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    color: #334155;
+    cursor: pointer;
+    transition: .15s;
+  }
+
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn:hover:not(:disabled) { background: #f1f5f9; border-color: #cbd5e1; }
+
+  .controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+/* ======================= DOCK & CHIPS ======================= */
+
+/* Bottom dock — ribbon style */
+#Dock{
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 15;
+
+  display: flex;
+  flex-wrap: wrap-reverse;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
+
+  padding-left: 8px;
+  padding-right: 96px;   /* room for trash */
+}
+
+/* Left dock — column flow, heads-up style */
+#Dock.dock-left {
+  position: fixed;
+  left: 0;              /* stick Dock flush to viewport edge */
+  top: 64px;
+  bottom: 16px;
+  z-index: 15;
+
+  width: 300px;         /* fits 3×180px columns + gaps */
+  max-width: 100%;
+  overflow-y: auto;     /* only vertical scroll */
+  overflow-x: hidden;   /* kill horizontal scrollbar */
+
+  display: block !important;
+  column-width: 180px;
+  column-gap: 12px;
+  padding: 4px 16px 4px 16px; /* equal padding inside Dock */
+  text-align: left;
+}
+
+
+
+
+/* Chips inside left dock */
+#Dock.dock-left .chip{
+  display: inline-block;
+  break-inside: avoid;
+  margin: 0 8px 5px 0;   /* <-- spacing between rows/columns */
+}
+
+/* Hidden mode */
+#Dock.dock-hidden{
+  display: none !important;
+}
+
+/* ======================= CHIPS ======================= */
+.chip{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 2px 10px;
+  min-height: 24px;
+
+  border: 1px solid #e5e7eb;    /* <-- border ON chips */
+  border-radius: 8px;
+  background: #f8fafc;          /* <-- subtle chip background */
+  color: #111827;
+  font-weight: 600;
+  cursor: grab;
+  user-select: none;
+
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  flex: 0 0 auto;
+
+  transition: opacity 200ms ease, transform 200ms ease;
+  will-change: auto;
+}
+
+.chip:active { cursor: grabbing; }
+
+.chip.is-outlined{
+  background: #e0f2fe;          /* highlight */
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 1px #60a5fa inset;
+}
+
+/* Collapse helper */
+.chip-collapse{
+  overflow: hidden !important;
+  width: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  opacity: 0.001 !important;
+  transform: scale(0.96);
+  white-space: nowrap !important;
+  height: 24px !important;
+  margin: 0 !important;
+  transition: none !important;
+}
+
+
+
+
+
+
+  /* ======================= HINT & TOAST ======================= */
+  #Hint{
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 16px;
+    z-index: 14;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 999px;
+    background: rgba(255,255,255,.9);
+    box-shadow: 0 6px 16px rgba(0,0,0,.08);
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  #Toast{
+    position: fixed;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 96px;
+    z-index: 30;
+    display: none;
+    padding: 6px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: rgba(255,255,255,.95);
+    box-shadow: 0 6px 16px rgba(0,0,0,.08);
+    font-weight: 600;
+    color: #334155;
+  }
+
+  /* ======================= SVG CANVAS ======================= */
+  svg#canvas { width: 100%; height: calc(100vh - 58px); display: block; cursor: grab; }
+  svg#canvas:active { cursor: grabbing; }
+
+  /* [patch] prevent-selection start */
+  svg#canvas, svg#canvas * { -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; }
+  svg#canvas ::selection { background: transparent; }
+  svg#canvas ::-moz-selection { background: transparent; }
+  /* [patch] prevent-selection end */
+
+
+/* ======================= NODES & LINKS ======================= */
+.node rect{
+  fill: var(--card-color);
+  stroke: var(--selected-outline);
+  stroke-width: 2;
+  rx: 10; ry: 10;
+  filter: drop-shadow(0 1px 3px rgba(0,0,0,0.12))
+          drop-shadow(0 1px 2px rgba(0,0,0,0.24));
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, filter;
+}
+
+.label{
+  fill: #374151;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform;
+}
+
+/* subtree deemphasis */
+.node.is-subtree .label { 
+  fill: var(--text-selected-color); 
+  transition: fill 0.5s ease 0.25s;
+}
+
+/* GROUP MEMBER = green outline */
+.node.is-outlined rect:not(.grabzone) {
+  stroke: #22c55e; 
+  stroke-width: 2px; 
+  vector-effect: scaling-stroke;
+}
+
+/* FOCUS WHEN GROUP EXISTS = selected fill */
+.node.is-filled rect:not(.grabzone){
+  fill: var(--selected-fill);
+}
+
+
+
+/* drop target */
+.node.drop-target rect:not(.grabzone) { fill: #22c55e; }
+.node.drop-target text { fill: #fff; }
+
+/* keep text readable */
+.node.is-outlined text { fill: #374151; }
+
+/* links */
+.link { fill: none; stroke: var(--link-color); }
+
+/* ======================= DRAGGING STATES ======================= */
+
+
+
+
+/* ======================= V-HOLD VISUALS (focus-only) ======================= */
+@keyframes vants {
+  to { stroke-dashoffset: calc(-1 * (var(--ant-dash) + var(--ant-gap))); }
+}
+
+/* We’ll toggle .vhold-mode on <svg>; we’ll add .is-focus-vhold on the focused node <g> */
+svg.vhold-mode g.nodes g.node.is-focus-vhold rect:not(.grabzone){
+  fill: var(--selected-fill);
+  stroke: var(--target-color);
+  stroke-width: 2px;
+  vector-effect: scaling-stroke;
+  stroke-linecap: butt;
+  stroke-dasharray: var(--ant-dash) var(--ant-gap);
+  stroke-dashoffset: 0;
+  animation: vants var(--ant-speed) linear infinite;
+  transition: none !important;
+}
+
+svg.vhold-mode g.nodes g.node.is-focus-vhold text.label{
+  fill: #374151 !important;
+  transition: none !important;
+}
+
+
+
+
+
+svg.dragging-mode g.nodes g.node.is-others { opacity: 0; }
+svg.dragging-mode g.nodes g.node.is-subtree rect:not(.grabzone){ 
+  fill: var(--subtree-bg-color); 
+  transition: fill 0.5s ease 0.25s; 
+}
+svg.dragging-mode g.links path.link { opacity: 0.25; }
+svg.dragging-mode g.links path.link:not(.is-sub-link) { 
+  stroke: var(--ghost-color); 
+  transition: stroke 0.5s ease .25s, opacity 0.2s ease; 
+}
+svg.dragging-mode g.links path.link.is-sub-link { opacity: 0.15; }
+svg.dragging-mode g.links path.link.is-sub-link,
+svg.dragging-mode g.links path.link.is-parent-link { stroke: var(--link-color); }
+
+
+/* Subtree wake-up while hovering a drop target */
+svg.dragging-mode g.nodes g.node.hover-adopt-sub {
+  opacity: 0.45 !important;      /* make subtree visible but muted */
+  pointer-events: auto;           /* allow hover to be felt inside subtree */
+  filter: none !important;
+}
+
+svg.dragging-mode g.nodes g.node.hover-adopt {
+  opacity: 1 !important;          /* the target node itself stays fully visible */
+}
+
+
+
+
+/* ======================= CARET ======================= */
+.caret-dot{ 
+  fill: var(--target-color); 
+  stroke: none; 
+  opacity: 0; 
+  transition: opacity .1s ease; 
+  pointer-events: none; 
+}
+
+/* ======================= DRAG MINI PROXY ======================= */
+.drag-mini{ pointer-events:none; opacity:0; transition:opacity 1ms ease; }
+.drag-mini rect{
+  fill: var(--card-color);
+  rx: 10; ry: 10;
+  stroke: var(--target-color);
+  stroke-width: 2px;
+  vector-effect: scaling-stroke;
+  filter: none;
+  transition: none !important;
+}
+svg.dragging-mode .drag-mini rect{
+  filter:
+    drop-shadow(0 1px 1px rgba(0,0,0,0.20))
+    drop-shadow(0 3px 3px rgba(0,0,0,0.14))
+    drop-shadow(0 6px 6px rgba(0,0,0,0.12));
+}
+
+
+  
+  
+  /* inherit the same color your labels use */
+.drag-mini { color: #374151; } /* or var(--text-color) */
+
+
+/* tie SVG text fill to CSS color */
+.drag-mini { color: var(--text-color); }
+
+.drag-mini text.title{
+  fill: currentColor !important;   /* ← stops black proxy text */
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  transform: translateY(0px);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+
+
+
+
+
+
+  /* ======================= DROP FLASH ======================= */
+  
+  @keyframes dropFlash{
+    0%   { fill: #eeeeee;  stroke: var(--target-color); stroke-width: 0px; }
+    70%  { stroke-width: 0px; }
+    100% { fill: var(--card-color); stroke: var(--stroke-color); stroke-width: 0px; }
+  }
+
+
+
+
+svg.delete-intent g.nodes g.node.is-subtree rect:not(.grabzone){
+  fill: #ffffff;
+  stroke: #ef4444;
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: butt;
+  stroke-dasharray: var(--ant-dash) var(--ant-gap);
+  stroke-dashoffset: 0;
+  animation: ants var(--ant-speed) linear infinite;
+  transition: none !important;   /* <-- no fade, snap instantly */
+}
+
+svg.delete-intent g.nodes g.node.is-subtree text {
+  fill: #000000 !important;       /* snap text to black */
+  transition: none !important;    /* no slow tween */
+}
+
+
+
+
+
+
+
+
+
+
+
+
+@keyframes ants {
+  to { stroke-dashoffset: calc(-1 * (var(--ant-dash) + var(--ant-gap))); }
+}
+
+
+
+svg.delete-intent g.links path.link.is-sub-link,
+svg.delete-intent g.links path.link.is-parent-link {
+  stroke: #ef4444;
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: butt;
+  stroke-dasharray: var(--ant-dash) var(--ant-gap);
+  stroke-dashoffset: 0;
+  animation: ants var(--ant-speed) linear infinite;
+  transition: none !important; /* snap instantly */
+}
+
+
+
+
+
+
+
+
+
+
+
+  /* ======================= INLINE EDITOR ======================= */
+  .node-edit-input{
+  position: fixed;
+  z-index: 2000;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 10px;
+
+  background: var(--card-color);
+  border-style: solid;           /* width set in JS */
+  border-color: #22c55e;         /* temp high-viz */
+  border-radius: 10px;           /* radius scaled in JS */
+
+  color: #374151;
+  font-weight: 600;
+  text-align: center;
+
+  outline: none;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+
+  .node-edit-input::placeholder{ color: #94a3b8; }
+
+  /* ======================= DETECTOR OVERLAY ======================= */
+  .detector-layer{ pointer-events: none; }
+  .det-rect{ stroke: var(--det-stroke); stroke-width: 1px; }
+  .det-node{ fill: var(--det-node); }
+  .det-sibling{ fill: var(--det-sib); }
+  .det-cousin-l{ fill: var(--det-cousin-l); }
+  .det-cousin-r{ fill: var(--det-cousin-r); }
+  .det-edge{ fill: var(--det-edge); }
+
+  /* ======================= SETTINGS MODAL ======================= */
+  .settings-backdrop{ position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; z-index: 1000; }
+  .settings-backdrop.show{ display: block; }
+
+  .settings-modal{
+    position: absolute;
+    right: 16px;
+    top: 72px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 12px 34px rgba(0,0,0,.16);
+    padding: 12px 14px 14px;
+    min-width: 320px;
+    max-width: 92vw;
+  }
+
+  .settings-header{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .settings-header strong{ font-size: 14px; }
+
+  .settings-close{
+    border: 0;
+    background: transparent;
+    font-size: 18px;
+    cursor: pointer;
+    border-radius: 8px;
+    padding: 4px;
+  }
+  .settings-close:hover{ background: #f3f4f6; }
+
+  .settings-row{
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+    margin: 8px 0;
+  }
+
+  #verticalGap{ width: 100%; }
+
+  .gap-controls .btn{ min-width: 44px; padding: 6px 10px; }
+  .gap-controls .btn + .btn{ margin-left: 6px; }
+  .gap-readout{ margin-left: 8px; opacity: .8; }
+
+  /* ======================= HOVER & GRABZONE ======================= */
+  /* [patch] grabzone-invisible start */
+  .node rect.grabzone{
+    fill: transparent !important;
+    stroke: none !important;
+    pointer-events: all;
+    transition: none !important;
+    animation: none !important;
+  }
+  /* [patch] grabzone-invisible end */
+
+  
+/* Keep the SAME number of drop-shadow functions and just change numbers.
+   This lets the browser interpolate smoothly. Don’t toggle stroke. */
+.node:hover rect:not(.grabzone){
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.18))
+          drop-shadow(0 2px 4px rgba(0,0,0,0.20));
+}
+
+/* Lift box + label together without touching the parent <g> */
+.node:hover rect:not(.grabzone),
+.node:hover text{
+  transform: translateY(0px);
+}
+
+
+/* === Swirling color background === */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1; /* keep it behind everything */
+  background: radial-gradient(circle at center, hsl(110, 100%, 88%), #eca7e7, #f3f598);
+  animation: swirl 270s linear infinite;
+  background-size: 400% 400%;
+}
+
+@keyframes swirl {
+  0% { background-position: 0% 50%; filter: hue-rotate(0deg); }
+  50% { background-position: 100% 50%; filter: hue-rotate(180deg); }
+  100% { background-position: 0% 50%; filter: hue-rotate(360deg); }
+}
+
+
+
+
+

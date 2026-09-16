@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - 'rebuild/logiq-v161-clean-mobile-*'
+      - 'rebuild/logiq-v161-css-extraction-20260915'
     paths:
       - public/logiq-clean/**
       - public/logiq-v161-legacy/**

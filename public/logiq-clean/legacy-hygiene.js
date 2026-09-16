@@ -138,6 +138,20 @@
     );
   }
 
+  function externalizeLegacyStyle(html) {
+    assertMatchCount(
+      html,
+      /<style>[\s\S]*?<\/style>/gi,
+      1,
+      'legacy inline style blocks'
+    );
+
+    return html.replace(
+      /<style>[\s\S]*?<\/style>/i,
+      '<link rel="stylesheet" href="/logiq-clean/legacy-v161.css">'
+    );
+  }
+
   function sanitize(html) {
     let cleaned = String(html);
     const removals = [];
@@ -166,6 +180,8 @@
 
     cleaned = removeDuplicateStandaloneShiftFOwner(cleaned);
     removals.push('duplicate-standalone-shift-f-owner');
+
+    cleaned = externalizeLegacyStyle(cleaned);
 
     return { html: cleaned, removals };
   }
