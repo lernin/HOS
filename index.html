@@ -72,6 +72,33 @@
         window.addEventListener('popstate', () => setTimeout(addLogiqCard, 0));
         setTimeout(addLogiqCard, 0);
       })();
+
+      // Engagement Matrix is intentionally isolated as a fast-moving learning prototype.
+      // The card only appears after the normal Lab has been unlocked. A direct visit still
+      // asks for the Lab PIN in its dedicated entry point.
+      (() => {
+        const addEngagementCard = () => {
+          const grid = document.querySelector('.experience-grid');
+          if (!grid || document.getElementById('engagement-matrix-hub-card')) return;
+
+          const card = document.createElement('article');
+          card.className = 'experience-card';
+          card.id = 'engagement-matrix-hub-card';
+          card.innerHTML = '<span class="experience-icon">EM</span><span class="experience-copy"><strong>Engagement Matrix</strong><small>Try Standalone, Decompose, and Compose across engagement levels 0–15.</small></span><button class="experience-go" type="button">Go</button>';
+          card.querySelector('button')?.addEventListener('click', () => {
+            sessionStorage.setItem('engagement-lab-unlocked', '1');
+            window.location.href = '/engagement-lab';
+          });
+
+          const conceptCard = Array.from(grid.querySelectorAll('.experience-card')).find(el => el.textContent?.includes('Concept Interactions'));
+          if (conceptCard) conceptCard.after(card); else grid.append(card);
+        };
+
+        const root = document.getElementById('root');
+        if (root) new MutationObserver(addEngagementCard).observe(root, { childList: true, subtree: true });
+        window.addEventListener('popstate', () => setTimeout(addEngagementCard, 0));
+        setTimeout(addEngagementCard, 0);
+      })();
     </script>
   </body>
 </html>
