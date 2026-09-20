@@ -7,6 +7,7 @@ import {
   createInitialSession,
   recordAllOutcomeAndAdvance,
   recordObservation,
+  recordObservations,
   recordStudentOutcome,
   setDeckMode,
   undoSession,
@@ -62,6 +63,26 @@ test('imitation can be recorded without implying a production failure', () => {
   assert.deepEqual(next.events.map((event) => event.outcome), ['imitate_success'])
 })
 
+test('terminal result for the last unresolved learner advances automatically', () => {
+  const one = recordStudentOutcome(createInitialSession(), 'a', 'produce_success', 100)
+  const two = recordStudentOutcome(one, 'b', 'produce_success', 200)
+  const next = recordStudentOutcome(two, 'c', 'imitate_success', 300)
+
+  assert.equal(next.cardIndex, 1)
+  assert.deepEqual(next.unresolved, ['a', 'b', 'c'])
+  assert.equal(next.events.length, 3)
+})
+
+test('production failure for the last unresolved learner does not advance', () => {
+  const one = recordStudentOutcome(createInitialSession(), 'a', 'produce_success', 100)
+  const two = recordStudentOutcome(one, 'b', 'produce_success', 200)
+  const next = recordStudentOutcome(two, 'c', 'produce_failure', 300)
+
+  assert.equal(next.cardIndex, 0)
+  assert.deepEqual(next.unresolved, ['c'])
+  assert.deepEqual(next.productionFailed, ['c'])
+})
+
 test('observation can be toggled off by repeating the same swipe', () => {
   const watched = recordObservation(createInitialSession(), 'a', 'watch_success', 100)
   const cleared = recordObservation(watched, 'a', 'watch_success', 200)
@@ -74,6 +95,24 @@ test('opposite observation replaces the current per-card observation', () => {
   const next = recordObservation(watched, 'a', 'watch_failure', 200)
   assert.deepEqual(next.observations.a, { watch: 'negative', listen: null })
   assert.deepEqual(next.events.map((event) => event.outcome), ['watch_failure'])
+})
+
+test('diagonal observation gesture records watch and listen as one undoable action', () => {
+  const next = recordObservations(createInitialSession(), 'a', ['watch_success', 'listen_success'], 100)
+  assert.deepEqual(next.observations.a, { watch: 'positive', listen: 'positive' })
+  assert.deepEqual(next.events.map((event) => event.outcome), ['watch_success', 'listen_success'])
+  assert.equal(next.history.length, 1)
+
+  const restored = undoSession(next)
+  assert.deepEqual(restored.observations.a, { watch: null, listen: null })
+  assert.equal(restored.events.length, 0)
+})
+
+test('repeating the same diagonal observation clears both axes', () => {
+  const first = recordObservations(createInitialSession(), 'a', ['watch_success', 'listen_success'], 100)
+  const second = recordObservations(first, 'a', ['watch_success', 'listen_success'], 200)
+  assert.deepEqual(second.observations.a, { watch: null, listen: null })
+  assert.equal(second.events.length, 0)
 })
 
 test('main card advance creates no new evidence and resets current-card markers', () => {
