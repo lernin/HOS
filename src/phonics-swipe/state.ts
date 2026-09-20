@@ -18,6 +18,16 @@ export type Outcome =
   | 'listen_success'
   | 'listen_failure'
 
+export type AssessmentOutcome = Extract<
+  Outcome,
+  'produce_success' | 'produce_failure' | 'imitate_success' | 'imitate_failure'
+>
+
+export type ObservationOutcome = Extract<
+  Outcome,
+  'watch_success' | 'watch_failure' | 'listen_success' | 'listen_failure'
+>
+
 export type AttentionValue = 'positive' | 'negative' | null
 
 export type ObservationState = {
@@ -179,7 +189,7 @@ export const setDeckMode = (state: SessionState, deckMode: DeckMode): SessionSta
 export const recordStudentOutcome = (
   state: SessionState,
   studentId: StudentId,
-  outcome: Extract<Outcome, 'produce_success' | 'produce_failure' | 'imitate_success' | 'imitate_failure'>,
+  outcome: AssessmentOutcome,
   createdAt = Date.now(),
 ): SessionState => {
   if (!state.unresolved.includes(studentId)) return state
@@ -217,45 +227,53 @@ export const recordStudentOutcome = (
     })
   }
 
+  const unresolved = state.unresolved.filter((id) => id !== studentId)
+  if (unresolved.length === 0) {
+    return withHistory(state, resetForNextCard(state, events))
+  }
+
   return withHistory(state, {
     deckMode: state.deckMode,
     cardIndex: state.cardIndex,
-    unresolved: state.unresolved.filter((id) => id !== studentId),
+    unresolved,
     productionFailed: state.productionFailed.filter((id) => id !== studentId),
     observations: cloneObservations(state.observations),
     events,
   })
 }
 
-export const recordObservation = (
+export const recordObservations = (
   state: SessionState,
   studentId: StudentId,
-  outcome: Extract<Outcome, 'watch_success' | 'watch_failure' | 'listen_success' | 'listen_failure'>,
+  outcomes: ObservationOutcome[],
   createdAt = Date.now(),
 ): SessionState => {
-  if (!state.unresolved.includes(studentId)) return state
+  if (!state.unresolved.includes(studentId) || outcomes.length === 0) return state
 
   const card = getCurrentCard(state)
   const observations = cloneObservations(state.observations)
-  const isWatch = outcome.startsWith('watch_')
-  const value: AttentionValue = outcome.endsWith('_success') ? 'positive' : 'negative'
-  const key = isWatch ? 'watch' : 'listen'
-  const previous = observations[studentId][key]
+  let events = [...state.events]
 
-  const relatedOutcomes: Outcome[] = isWatch
-    ? ['watch_success', 'watch_failure']
-    : ['listen_success', 'listen_failure']
+  for (const outcome of outcomes) {
+    const isWatch = outcome.startsWith('watch_')
+    const value: AttentionValue = outcome.endsWith('_success') ? 'positive' : 'negative'
+    const key = isWatch ? 'watch' : 'listen'
+    const previous = observations[studentId][key]
+    const relatedOutcomes: Outcome[] = isWatch
+      ? ['watch_success', 'watch_failure']
+      : ['listen_success', 'listen_failure']
 
-  let events = removeLatestEvent(
-    state.events,
-    (event) => event.deckMode === state.deckMode && event.cardId === card.id && event.studentId === studentId && relatedOutcomes.includes(event.outcome),
-  )
+    events = removeLatestEvent(
+      events,
+      (event) => event.deckMode === state.deckMode && event.cardId === card.id && event.studentId === studentId && relatedOutcomes.includes(event.outcome),
+    )
 
-  if (previous === value) {
-    observations[studentId][key] = null
-  } else {
-    observations[studentId][key] = value
-    events = [...events, { deckMode: state.deckMode, cardId: card.id, studentId, outcome, createdAt }]
+    if (previous === value) {
+      observations[studentId][key] = null
+    } else {
+      observations[studentId][key] = value
+      events = [...events, { deckMode: state.deckMode, cardId: card.id, studentId, outcome, createdAt }]
+    }
   }
 
   return withHistory(state, {
@@ -268,12 +286,19 @@ export const recordObservation = (
   })
 }
 
+export const recordObservation = (
+  state: SessionState,
+  studentId: StudentId,
+  outcome: ObservationOutcome,
+  createdAt = Date.now(),
+): SessionState => recordObservations(state, studentId, [outcome], createdAt)
+
 export const advanceWithoutEvidence = (state: SessionState): SessionState =>
   withHistory(state, resetForNextCard(state, [...state.events]))
 
 export const recordAllOutcomeAndAdvance = (
   state: SessionState,
-  outcome: Extract<Outcome, 'produce_success' | 'produce_failure' | 'imitate_success' | 'imitate_failure'>,
+  outcome: AssessmentOutcome,
   createdAt = Date.now(),
 ): SessionState => {
   if (state.unresolved.length === 0) return state
