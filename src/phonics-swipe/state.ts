@@ -146,7 +146,14 @@ const removeLatestEvent = (
   events: MockEvidenceEvent[],
   predicate: (event: MockEvidenceEvent) => boolean,
 ) => {
-  const index = events.findLastIndex(predicate)
+  let index = -1
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const event = events[i]
+    if (event && predicate(event)) {
+      index = i
+      break
+    }
+  }
   if (index < 0) return [...events]
   return [...events.slice(0, index), ...events.slice(index + 1)]
 }
