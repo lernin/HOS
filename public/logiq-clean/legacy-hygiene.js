@@ -138,6 +138,55 @@
     );
   }
 
+  const keyboardZoomListenerPattern = /window\.addEventListener\('keydown', \(e\) => \{\r?\n[ \t]*\/\/ Don.t hijack Undo\/Redo or when typing in inputs\r?\n[ \t]*if \(e\.ctrlKey \|\| e\.metaKey \|\| e\.altKey\) return;\r?\n[ \t]*if \(isTextField\(e\.target\)\) return;\r?\n\r?\n[ \t]*\/\/ Z = zoom in, Shift\+Z = zoom out\r?\n[ \t]*if \(e\.key === 'z' \|\| e\.key === 'Z'\) \{\r?\n[ \t]*e\.preventDefault\(\);\r?\n[ \t]*zoomByStep\(e\.shiftKey \? -1 : \+1\);\r?\n[ \t]*\}\r?\n[ \t]*\}, \{ passive: false \}\);\r?\n/;
+
+  function externalizeKeyboardZoom(html) {
+    assertMatchCount(
+      html,
+      keyboardZoomListenerPattern,
+      1,
+      'Z/Shift+Z keyboard listeners'
+    );
+    assertMatchCount(
+      html,
+      /<script>\r?\n\(\(\) => \{/g,
+      1,
+      'legacy runtime script anchors'
+    );
+
+    const mountCall = [
+      'window.LOGiQKeyboardZoom.mount({',
+      '  target: window,',
+      '  zoomByStep,',
+      '  isTextField,',
+      '});',
+      '',
+    ].join('\n');
+
+    const withoutInlineOwner = html.replace(keyboardZoomListenerPattern, mountCall);
+    return withoutInlineOwner.replace(
+      /<script>(\r?\n)\(\(\) => \{/,
+      (_match, newline) => (
+        `<script src="/logiq-clean/keyboard-zoom.js"></script>${newline}`
+        + `<script>${newline}(() => {`
+      )
+    );
+  }
+
+  function externalizeLegacyStyle(html) {
+    assertMatchCount(
+      html,
+      /<style>[\s\S]*?<\/style>/gi,
+      1,
+      'legacy inline style blocks'
+    );
+
+    return html.replace(
+      /<style>[\s\S]*?<\/style>/i,
+      '<link rel="stylesheet" href="/logiq-clean/legacy-v161.css">'
+    );
+  }
+
   function sanitize(html) {
     let cleaned = String(html);
     const removals = [];
@@ -166,6 +215,9 @@
 
     cleaned = removeDuplicateStandaloneShiftFOwner(cleaned);
     removals.push('duplicate-standalone-shift-f-owner');
+
+    cleaned = externalizeKeyboardZoom(cleaned);
+    cleaned = externalizeLegacyStyle(cleaned);
 
     return { html: cleaned, removals };
   }

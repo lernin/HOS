@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - 'rebuild/logiq-v161-clean-mobile-*'
+      - 'rebuild/logiq-v161-css-extraction-20260915'
+      - 'rebuild/logiq-v161-keyboard-zoom-20260916'
     paths:
       - public/logiq-clean/**
       - public/logiq-v161-legacy/**

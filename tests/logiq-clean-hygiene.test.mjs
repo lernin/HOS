@@ -5,6 +5,8 @@ import { chromium } from 'playwright'
 
 const baseUrl = process.env.LOGIQ_BASE_URL || 'http://127.0.0.1:4173'
 const d3Source = readFileSync(new URL('../node_modules/d3/dist/d3.min.js', import.meta.url), 'utf8')
+const immutableLegacyPath = new URL('../public/logiq-v161-legacy/index.html', import.meta.url)
+const extractedCssPath = new URL('../public/logiq-clean/legacy-v161.css', import.meta.url)
 let browser
 
 test.before(async () => {
@@ -167,4 +169,82 @@ test('clean runtime keeps only the active centerOnSelected declaration', async (
 
   assert.equal(cleanState.declarationCount, 1, 'the superseded early centerOnSelected declaration must be removed')
   assert.equal(cleanState.activeBody, legacyActiveBody, 'the active centerOnSelected binding must remain unchanged')
+})
+
+test('clean runtime externalizes the exact immutable v161 legacy stylesheet', async () => {
+  const { context, page } = await open('/logiq-clean/index.html')
+
+  const state = await page.evaluate(async () => {
+    const legacySource = await fetch('/logiq-v161-legacy/index.html', { cache: 'no-store' }).then((r) => r.text())
+    const match = legacySource.match(/<style>([\s\S]*?)<\/style>/i)
+    if (!match) throw new Error('immutable v161 legacy style block not found')
+
+    const externalHref = '/logiq-clean/legacy-v161.css'
+    const links = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map((link) => new URL(link.href).pathname)
+      .filter((pathname) => pathname === externalHref)
+
+    const extractedCss = await fetch(externalHref, { cache: 'no-store' }).then(async (r) => ({
+      ok: r.ok,
+      text: await r.text(),
+    }))
+
+    return {
+      inlineStyleCount: document.head.querySelectorAll('style').length,
+      externalStylesheetCount: links.length,
+      extractedCssOk: extractedCss.ok,
+      extractedCss: extractedCss.text,
+      legacyCss: match[1],
+    }
+  })
+
+  await context.close()
+
+  assert.equal(state.inlineStyleCount, 0, 'clean runtime must not retain legacy inline style ownership')
+  assert.equal(state.externalStylesheetCount, 1, 'clean runtime must load exactly one extracted legacy stylesheet')
+  assert.equal(state.extractedCssOk, true, 'extracted legacy stylesheet must be fetchable')
+  assert.equal(state.extractedCss, state.legacyCss, 'external stylesheet must exactly match immutable v161 CSS payload')
+})
+
+test('extracted stylesheet preserves the immutable v161 style payload as raw bytes', () => {
+  const immutableSource = readFileSync(immutableLegacyPath)
+  const extractedCss = readFileSync(extractedCssPath)
+  const startDelimiter = Buffer.from('<style>')
+  const endDelimiter = Buffer.from('</style>')
+  const start = immutableSource.indexOf(startDelimiter)
+  const end = immutableSource.indexOf(endDelimiter)
+
+  assert.equal(start, immutableSource.lastIndexOf(startDelimiter), 'immutable v161 source must contain one ASCII <style> delimiter')
+  assert.equal(end, immutableSource.lastIndexOf(endDelimiter), 'immutable v161 source must contain one ASCII </style> delimiter')
+  assert.ok(start >= 0 && end > start, 'immutable v161 style delimiters must be ordered')
+  assert.deepEqual(
+    immutableSource.subarray(start + startDelimiter.length, end),
+    extractedCss,
+    'extracted stylesheet bytes must equal the immutable v161 style payload'
+  )
+})
+
+test('sanitizer rejects sanitized legacy input with zero or two style blocks', async () => {
+  const immutableSource = readFileSync(immutableLegacyPath, 'utf8')
+  const styleStart = immutableSource.indexOf('<style>')
+  const styleEnd = immutableSource.indexOf('</style>', styleStart) + '</style>'.length
+  assert.ok(styleStart >= 0 && styleEnd > styleStart, 'immutable v161 style block must exist')
+  const styleBlock = immutableSource.slice(styleStart, styleEnd)
+  const inputs = [
+    [immutableSource.replace(styleBlock, ''), 'LOGiQ hygiene expected 1 legacy inline style blocks; found 0'],
+    [immutableSource.replace('</style>', '</style><style></style>'), 'LOGiQ hygiene expected 1 legacy inline style blocks; found 2'],
+  ]
+
+  const { context, page } = await open('/logiq-clean/index.html')
+  try {
+    for (const [input, expectedMessage] of inputs) {
+      const escapedMessage = expectedMessage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      await assert.rejects(
+        page.evaluate((source) => window.LOGiQLegacyHygiene.sanitize(source), input),
+        { message: new RegExp(escapedMessage) }
+      )
+    }
+  } finally {
+    await context.close()
+  }
 })

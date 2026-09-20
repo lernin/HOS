@@ -1,7 +1,7 @@
 # LOGiQ legacy hygiene audit — checkpoints 1–4
 
 Canonical workroom: HOS Issue #108  
-Current checkpoint branch: `rebuild/logiq-v161-clean-mobile-shiftf-20260915`
+Current checkpoint branch: `rebuild/logiq-v161-keyboard-zoom-20260916`
 
 ## Decision
 
@@ -11,6 +11,18 @@ This avoids two opposite risks:
 
 1. modularizing dead/superseded code and carrying historical junk into the new architecture;
 2. broad cleanup that accidentally changes behavior encoded in listener order, duplicated state surfaces, or shared closure state.
+
+## Modularization checkpoint 1 — legacy CSS extraction
+
+- Immutable v161 remains unchanged.
+- `/logiq-clean/legacy-v161.css` now owns the clean candidate's legacy presentation CSS.
+- `legacy-hygiene.js` fail-closed replaces exactly one inline legacy `<style>` block with one absolute `/logiq-clean/legacy-v161.css` link.
+- The extracted CSS payload is byte-equivalent to the immutable v161 style payload.
+- The nine hygiene-removal entries remain unchanged.
+- Full build, immutable-source, visual geometry, drag, keyboard, camera, hygiene, and CSS-ownership gates pass on the exact checkpoint head.
+- No merge, production deployment, Supabase mutation, or production-data mutation occurred. The owner authorized the normal Vercel preview created by publishing this checkpoint branch.
+
+Checkpoint verification is recorded at code/test head `f7d480cabf31765b2904694383f8f11cce8682a5`: byte equivalence passed, `npm run build` passed, immutable baseline passed `1/1`, and the full browser parity/hygiene/keyboard/visual/drag/CSS-ownership harness passed `11/11`.
 
 ## Confirmed safe removals in the clean candidate
 
@@ -96,4 +108,17 @@ Do not combine cleanup with architecture extraction or mobile redesign in the sa
 
 The **high-confidence hygiene pass is complete for the current inventory**. The four confidence-3 rows classified as `dead`, `superseded`, or `duplicated` are `enforceMoatForSelected`, the early `flyCenterToUID`, the early `centerOnSelected`, and the Shift+F duplicate listener; all four have now been handled in the clean candidate with direct or structural regression protection. The immutable inventory rows remain in Supabase because they describe the historical v161 source, not because cleanup is pending.
 
-The remaining suspicious code is active or order-dependent and should not be deleted merely to make the monolith smaller. The next checkpoint should be a **separate modular-extraction design checkpoint**, beginning with the smallest low-coupling boundary and preserving the full parity gate. No architecture extraction is part of this hygiene checkpoint.
+The high-confidence hygiene pass is complete for the current inventory, and modularization has now begun with the legacy CSS boundary recorded above. The remaining suspicious code is active or order-dependent and should not be deleted merely to make the monolith smaller. The next design checkpoint may select one small pure-JavaScript responsibility, beginning with the smallest low-coupling boundary and preserving the full parity gate; that responsibility is not designed or started here. No further architecture extraction is part of this checkpoint.
+
+## Modularization checkpoint 2 — keyboard zoom adapter
+
+- Reviewed code/test head: `437f11f79bd58eb4ee3fd76745352703f6b21f4c`; tree: `c62dcf330218f547ac153b99aae572aa0a1aa5e5`; worktree status was clean before this audit-only edit.
+- Immutable v161 retained blob `94ad599f24e84a6629072cc98557ea3842a915d1`.
+- Z/Shift+Z keyboard-event ownership moved to `/logiq-clean/keyboard-zoom.js`.
+- `zoomByStep`, `isTextField`, D3 zoom state, runtime state, DOM references, and the W listener remain private in the transformed legacy closure.
+- The adapter receives only `target`, `zoomByStep`, and `isTextField`; its namespace is frozen and duplicate mounting fails closed.
+- RED ownership and malformed-source failures were observed before implementation.
+- On the exact reviewed code head, the complete build, immutable, parity, hygiene, CSS, keyboard, visual, drag, and adapter gate passed: `npm run build`; immutable baseline `1/1`; and parity/hygiene/keyboard ownership `17/17`.
+- Supabase inventory was read-only; no Supabase data/schema mutation occurred.
+- No main merge or production deployment occurred.
+- No next JavaScript extraction was started.
