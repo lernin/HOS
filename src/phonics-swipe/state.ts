@@ -1,4 +1,12 @@
 export type StudentId = 'a' | 'b' | 'c'
+export type DeckMode = 'alphabet' | 'blends' | 'digraphs' | 'trigraphs'
+export type CardTone = 'vowel' | 'stop' | 'fricative' | 'affricate' | 'nasal' | 'approximant' | 'mixed' | 'blend'
+
+export type PhonicsCard = {
+  id: string
+  label: string
+  tone: CardTone
+}
 
 export type Outcome =
   | 'produce_success'
@@ -18,6 +26,7 @@ export type ObservationState = {
 }
 
 export type MockEvidenceEvent = {
+  deckMode: DeckMode
   cardId: string
   studentId: StudentId
   outcome: Outcome
@@ -25,6 +34,7 @@ export type MockEvidenceEvent = {
 }
 
 export type SessionSnapshot = {
+  deckMode: DeckMode
   cardIndex: number
   unresolved: StudentId[]
   productionFailed: StudentId[]
@@ -38,18 +48,43 @@ export type SessionState = SessionSnapshot & {
 
 export const STUDENT_IDS: StudentId[] = ['a', 'b', 'c']
 
-export const PHONICS_DECK = [
-  { id: 'a', label: 'A' },
-  { id: 'b', label: 'B' },
-  { id: 'c', label: 'C' },
-  { id: 'f', label: 'F' },
-  { id: 'l', label: 'L' },
-  { id: 'r', label: 'R' },
-  { id: 's', label: 'S' },
-  { id: 'ch', label: 'CH' },
-  { id: 'sh', label: 'SH' },
-  { id: 'th', label: 'TH' },
-] as const
+const alphabet = (label: string, tone: CardTone): PhonicsCard => ({
+  id: `alphabet-${label.toLowerCase()}`,
+  label,
+  tone,
+})
+
+export const PHONICS_DECKS: Record<DeckMode, PhonicsCard[]> = {
+  alphabet: [
+    alphabet('A', 'vowel'), alphabet('B', 'stop'), alphabet('C', 'mixed'), alphabet('D', 'stop'),
+    alphabet('E', 'vowel'), alphabet('F', 'fricative'), alphabet('G', 'stop'), alphabet('H', 'fricative'),
+    alphabet('I', 'vowel'), alphabet('J', 'affricate'), alphabet('K', 'stop'), alphabet('L', 'approximant'),
+    alphabet('M', 'nasal'), alphabet('N', 'nasal'), alphabet('O', 'vowel'), alphabet('P', 'stop'),
+    alphabet('Q', 'mixed'), alphabet('R', 'approximant'), alphabet('S', 'fricative'), alphabet('T', 'stop'),
+    alphabet('U', 'vowel'), alphabet('V', 'fricative'), alphabet('W', 'approximant'), alphabet('X', 'mixed'),
+    alphabet('Y', 'mixed'), alphabet('Z', 'fricative'),
+  ],
+  blends: ['BL', 'CL', 'FL', 'GL', 'PL', 'SL', 'BR', 'CR', 'DR', 'FR', 'GR', 'PR', 'TR', 'SK', 'SM', 'SN', 'SP', 'ST', 'SW'].map((label) => ({
+    id: `blend-${label.toLowerCase()}`,
+    label,
+    tone: 'blend' as const,
+  })),
+  digraphs: [
+    { id: 'digraph-ch', label: 'CH', tone: 'affricate' },
+    { id: 'digraph-sh', label: 'SH', tone: 'fricative' },
+    { id: 'digraph-th', label: 'TH', tone: 'fricative' },
+    { id: 'digraph-ph', label: 'PH', tone: 'fricative' },
+    { id: 'digraph-wh', label: 'WH', tone: 'approximant' },
+    { id: 'digraph-ng', label: 'NG', tone: 'nasal' },
+    { id: 'digraph-ck', label: 'CK', tone: 'stop' },
+    { id: 'digraph-qu', label: 'QU', tone: 'mixed' },
+  ],
+  trigraphs: [
+    { id: 'trigraph-tch', label: 'TCH', tone: 'affricate' },
+    { id: 'trigraph-dge', label: 'DGE', tone: 'affricate' },
+    { id: 'trigraph-igh', label: 'IGH', tone: 'vowel' },
+  ],
+}
 
 const emptyObservations = (): Record<StudentId, ObservationState> => ({
   a: { watch: null, listen: null },
@@ -64,6 +99,7 @@ const cloneObservations = (observations: Record<StudentId, ObservationState>) =>
 })
 
 const snapshot = (state: SessionState): SessionSnapshot => ({
+  deckMode: state.deckMode,
   cardIndex: state.cardIndex,
   unresolved: [...state.unresolved],
   productionFailed: [...state.productionFailed],
@@ -76,26 +112,62 @@ const withHistory = (state: SessionState, next: SessionSnapshot): SessionState =
   history: [...state.history, snapshot(state)],
 })
 
-const nextCardIndex = (index: number) => (index + 1) % PHONICS_DECK.length
+export const getDeck = (mode: DeckMode) => PHONICS_DECKS[mode]
 
-const currentCardId = (state: SessionState) => PHONICS_DECK[state.cardIndex]?.id ?? PHONICS_DECK[0].id
+export const getCurrentCard = (state: SessionState) => {
+  const deck = getDeck(state.deckMode)
+  return deck[state.cardIndex] ?? deck[0]
+}
+
+export const getNextCard = (state: SessionState) => {
+  const deck = getDeck(state.deckMode)
+  return deck[(state.cardIndex + 1) % deck.length] ?? deck[0]
+}
+
+const nextCardIndex = (state: SessionState) => {
+  const deck = getDeck(state.deckMode)
+  return (state.cardIndex + 1) % deck.length
+}
+
+const resetMarkers = () => ({
+  unresolved: [...STUDENT_IDS],
+  productionFailed: [] as StudentId[],
+  observations: emptyObservations(),
+})
 
 const resetForNextCard = (state: SessionState, events: MockEvidenceEvent[]): SessionSnapshot => ({
-  cardIndex: nextCardIndex(state.cardIndex),
-  unresolved: [...STUDENT_IDS],
-  productionFailed: [],
-  observations: emptyObservations(),
+  deckMode: state.deckMode,
+  cardIndex: nextCardIndex(state),
+  ...resetMarkers(),
   events,
 })
 
+const removeLatestEvent = (
+  events: MockEvidenceEvent[],
+  predicate: (event: MockEvidenceEvent) => boolean,
+) => {
+  const index = events.findLastIndex(predicate)
+  if (index < 0) return [...events]
+  return [...events.slice(0, index), ...events.slice(index + 1)]
+}
+
 export const createInitialSession = (): SessionState => ({
+  deckMode: 'alphabet',
   cardIndex: 0,
-  unresolved: [...STUDENT_IDS],
-  productionFailed: [],
-  observations: emptyObservations(),
+  ...resetMarkers(),
   events: [],
   history: [],
 })
+
+export const setDeckMode = (state: SessionState, deckMode: DeckMode): SessionState => {
+  if (state.deckMode === deckMode) return state
+  return withHistory(state, {
+    deckMode,
+    cardIndex: 0,
+    ...resetMarkers(),
+    events: [...state.events],
+  })
+}
 
 export const recordStudentOutcome = (
   state: SessionState,
@@ -105,22 +177,41 @@ export const recordStudentOutcome = (
 ): SessionState => {
   if (!state.unresolved.includes(studentId)) return state
 
-  const event = { cardId: currentCardId(state), studentId, outcome, createdAt }
+  const card = getCurrentCard(state)
+
+  if (outcome === 'produce_failure' && state.productionFailed.includes(studentId)) {
+    return withHistory(state, {
+      ...snapshot(state),
+      productionFailed: state.productionFailed.filter((id) => id !== studentId),
+      events: removeLatestEvent(
+        state.events,
+        (event) => event.deckMode === state.deckMode && event.cardId === card.id && event.studentId === studentId && event.outcome === 'produce_failure',
+      ),
+    })
+  }
+
+  const event: MockEvidenceEvent = {
+    deckMode: state.deckMode,
+    cardId: card.id,
+    studentId,
+    outcome,
+    createdAt,
+  }
   const events = [...state.events, event]
 
   if (outcome === 'produce_failure') {
     return withHistory(state, {
+      deckMode: state.deckMode,
       cardIndex: state.cardIndex,
       unresolved: [...state.unresolved],
-      productionFailed: state.productionFailed.includes(studentId)
-        ? [...state.productionFailed]
-        : [...state.productionFailed, studentId],
+      productionFailed: [...state.productionFailed, studentId],
       observations: cloneObservations(state.observations),
       events,
     })
   }
 
   return withHistory(state, {
+    deckMode: state.deckMode,
     cardIndex: state.cardIndex,
     unresolved: state.unresolved.filter((id) => id !== studentId),
     productionFailed: state.productionFailed.filter((id) => id !== studentId),
@@ -137,21 +228,36 @@ export const recordObservation = (
 ): SessionState => {
   if (!state.unresolved.includes(studentId)) return state
 
+  const card = getCurrentCard(state)
   const observations = cloneObservations(state.observations)
-  if (outcome === 'watch_success') observations[studentId].watch = 'positive'
-  if (outcome === 'watch_failure') observations[studentId].watch = 'negative'
-  if (outcome === 'listen_success') observations[studentId].listen = 'positive'
-  if (outcome === 'listen_failure') observations[studentId].listen = 'negative'
+  const isWatch = outcome.startsWith('watch_')
+  const value: AttentionValue = outcome.endsWith('_success') ? 'positive' : 'negative'
+  const key = isWatch ? 'watch' : 'listen'
+  const previous = observations[studentId][key]
+
+  const relatedOutcomes: Outcome[] = isWatch
+    ? ['watch_success', 'watch_failure']
+    : ['listen_success', 'listen_failure']
+
+  let events = removeLatestEvent(
+    state.events,
+    (event) => event.deckMode === state.deckMode && event.cardId === card.id && event.studentId === studentId && relatedOutcomes.includes(event.outcome),
+  )
+
+  if (previous === value) {
+    observations[studentId][key] = null
+  } else {
+    observations[studentId][key] = value
+    events = [...events, { deckMode: state.deckMode, cardId: card.id, studentId, outcome, createdAt }]
+  }
 
   return withHistory(state, {
+    deckMode: state.deckMode,
     cardIndex: state.cardIndex,
     unresolved: [...state.unresolved],
     productionFailed: [...state.productionFailed],
     observations,
-    events: [
-      ...state.events,
-      { cardId: currentCardId(state), studentId, outcome, createdAt },
-    ],
+    events,
   })
 }
 
@@ -165,17 +271,38 @@ export const recordAllOutcomeAndAdvance = (
 ): SessionState => {
   if (state.unresolved.length === 0) return state
 
-  const cardId = currentCardId(state)
+  const card = getCurrentCard(state)
+
+  if (outcome === 'produce_failure' && state.unresolved.every((id) => state.productionFailed.includes(id))) {
+    let events = [...state.events]
+    for (const studentId of state.unresolved) {
+      events = removeLatestEvent(
+        events,
+        (event) => event.deckMode === state.deckMode && event.cardId === card.id && event.studentId === studentId && event.outcome === 'produce_failure',
+      )
+    }
+    return withHistory(state, {
+      deckMode: state.deckMode,
+      cardIndex: state.cardIndex,
+      unresolved: [...state.unresolved],
+      productionFailed: state.productionFailed.filter((id) => !state.unresolved.includes(id)),
+      observations: cloneObservations(state.observations),
+      events,
+    })
+  }
+
   const events = state.unresolved.map((studentId) => ({
-    cardId,
+    deckMode: state.deckMode,
+    cardId: card.id,
     studentId,
     outcome,
     createdAt,
-  }))
+  } as MockEvidenceEvent))
   const nextEvents = [...state.events, ...events]
 
   if (outcome === 'produce_failure') {
     return withHistory(state, {
+      deckMode: state.deckMode,
       cardIndex: state.cardIndex,
       unresolved: [...state.unresolved],
       productionFailed: Array.from(new Set([...state.productionFailed, ...state.unresolved])),
@@ -192,6 +319,7 @@ export const undoSession = (state: SessionState): SessionState => {
   if (!previous) return state
 
   return {
+    deckMode: previous.deckMode,
     cardIndex: previous.cardIndex,
     unresolved: [...previous.unresolved],
     productionFailed: [...previous.productionFailed],
