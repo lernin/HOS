@@ -25,12 +25,12 @@ const levels = [
 
 test('engagement lab exposes the three structural modes and canonical 0-15 ladder', () => {
   const source = read('src/experiences/EngagementLab.tsx')
-  for (const mode of ['Standalone', 'Decompose', 'Compose']) assert.match(source, new RegExp(mode))
+  for (const mode of ['Standalone', 'Decompose', 'Compose']) assert.ok(source.includes(mode), `missing ${mode}`)
   levels.forEach((label, level) => {
-    assert.match(source, new RegExp(`level:\\s*${level}`), `missing level ${level}`)
-    assert.match(source, new RegExp(label.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')), `missing ${label}`)
+    assert.ok(source.includes(`level: ${level}`), `missing level ${level}`)
+    assert.ok(source.includes(label), `missing ${label}`)
   })
-  for (const preset of ['umbrella', 'pencil', 'L /l/']) assert.match(source, new RegExp(preset.replace('/', '\\/'), 'i'))
+  for (const preset of ['umbrella', 'pencil', 'L /l/']) assert.ok(source.toLowerCase().includes(preset.toLowerCase()), `missing preset ${preset}`)
 })
 
 test('engagement lab includes interactive verify, choice, construction and production controls', () => {
@@ -39,20 +39,29 @@ test('engagement lab includes interactive verify, choice, construction and produ
   assert.match(source, /False/)
   assert.match(source, /choice/i)
   assert.match(source, /token/i)
-  assert.match(source, /input/)
+  assert.match(source, /<input/)
   assert.match(source, /reset/i)
 })
 
-test('the Lab router exposes engagement-lab behind the existing app gate', () => {
-  const source = read('src/main.tsx')
-  assert.match(source, /engagement-lab/)
-  assert.match(source, /EngagementLab/)
-  assert.match(source, /Engagement Matrix/)
-  assert.match(source, /navigate\('engagement-lab'\)/)
+test('entry router exposes engagement-lab and its dedicated entry keeps the Lab PIN check', () => {
+  const router = read('src/entry-router.ts')
+  const entry = read('src/engagement-lab-entry.tsx')
+  assert.match(router, /engagement-lab/)
+  assert.match(router, /engagement-lab-entry/)
+  assert.match(entry, /lab_thekonym_read/)
+  assert.match(entry, /EngagementLab/)
 })
 
-test('vercel routes engagement-lab through the existing SPA', () => {
+test('the unlocked Lab hub links to Engagement Matrix', () => {
+  const source = read('index.html')
+  assert.match(source, /Engagement Matrix/)
+  assert.match(source, /engagement-matrix-hub-card/)
+  assert.match(source, /engagement-lab-unlocked/)
+  assert.match(source, /\/engagement-lab/)
+})
+
+test('vercel routes engagement-lab through the SPA', () => {
   const source = read('vercel.json')
-  assert.match(source, /engagement-lab/)
-  assert.match(source, /index\.html/)
+  assert.match(source, /"source": "\/engagement-lab"/)
+  assert.match(source, /"destination": "\/"/)
 })
