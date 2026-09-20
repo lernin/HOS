@@ -7,6 +7,8 @@ type SwipeOptions = {
   disabled?: boolean
   threshold?: number
   onCommit: (direction: SwipeDirection) => void
+  onTap?: () => void
+  shouldThrow?: (direction: SwipeDirection) => boolean
 }
 
 type DragState = {
@@ -24,7 +26,13 @@ const directionFromDelta = (x: number, y: number): SwipeDirection => {
 const reducedMotion = () =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-export const useSwipe = ({ disabled = false, threshold = 44, onCommit }: SwipeOptions) => {
+export const useSwipe = ({
+  disabled = false,
+  threshold = 44,
+  onCommit,
+  onTap,
+  shouldThrow = () => true,
+}: SwipeOptions) => {
   const origin = useRef<{ x: number; y: number; pointerId: number } | null>(null)
   const locked = useRef(false)
   const [drag, setDrag] = useState<DragState>({ x: 0, y: 0, dragging: false, throwing: false })
@@ -62,10 +70,24 @@ export const useSwipe = ({ disabled = false, threshold = 44, onCommit }: SwipeOp
     if (distance < threshold) {
       origin.current = null
       setDrag({ x: 0, y: 0, dragging: false, throwing: false })
+      onTap?.()
       return
     }
 
     const direction = directionFromDelta(x, y)
+    locked.current = true
+    origin.current = null
+
+    if (!shouldThrow(direction)) {
+      setDrag({ x: x * 0.2, y: y * 0.2, dragging: false, throwing: false })
+      const delay = reducedMotion() ? 0 : 90
+      window.setTimeout(() => {
+        onCommit(direction)
+        reset()
+      }, delay)
+      return
+    }
+
     const viewport = Math.max(
       typeof window === 'undefined' ? 900 : window.innerWidth,
       typeof window === 'undefined' ? 900 : window.innerHeight,
@@ -78,8 +100,6 @@ export const useSwipe = ({ disabled = false, threshold = 44, onCommit }: SwipeOp
       right: { x: throwDistance, y: y * 0.35 },
     }[direction]
 
-    locked.current = true
-    origin.current = null
     setDrag({ x: throwVector.x, y: throwVector.y, dragging: false, throwing: true })
 
     const delay = reducedMotion() ? 0 : 190
@@ -87,7 +107,7 @@ export const useSwipe = ({ disabled = false, threshold = 44, onCommit }: SwipeOp
       onCommit(direction)
       reset()
     }, delay)
-  }, [onCommit, reset, threshold])
+  }, [onCommit, onTap, reset, shouldThrow, threshold])
 
   const cancel = useCallback(() => {
     if (locked.current) return
