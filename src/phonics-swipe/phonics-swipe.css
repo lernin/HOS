@@ -71,16 +71,6 @@ button { font: inherit; }
   position: relative;
 }
 
-.phonics-child-edge {
-  position: absolute;
-  top: 2px;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .24em;
-  color: rgba(255,255,255,.32);
-  transform: rotate(180deg);
-}
-
 .phonics-card-wrap {
   width: min(86vw, 520px);
   height: min(47svh, 470px);
@@ -109,7 +99,6 @@ button { font: inherit; }
   height: 100%;
   padding: 30px 24px;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   color: #101812;
@@ -117,41 +106,45 @@ button { font: inherit; }
   pointer-events: none;
 }
 
-.phonics-card-kicker {
-  font-size: 11px;
-  letter-spacing: .22em;
-  font-weight: 900;
-  color: #34815b;
-}
-
 .phonics-card-child-face strong {
-  margin: 4px 0 8px;
-  font-size: clamp(112px, 36vw, 210px);
+  font-size: clamp(120px, 39vw, 220px);
   line-height: .9;
   letter-spacing: -.08em;
-}
-
-.phonics-card-note {
-  font-size: 15px;
-  font-weight: 720;
-  color: #52645a;
 }
 
 .phonics-card-help {
   max-width: 440px;
   margin-top: 10px;
-  color: rgba(255,255,255,.46);
+  color: rgba(255,255,255,.42);
   font-size: 11px;
   text-align: center;
 }
 
 .phonics-teacher-panel {
-  padding: 10px 12px max(14px, env(safe-area-inset-bottom));
+  padding: 8px 12px max(14px, env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255,255,255,.08);
   background: rgba(2, 8, 5, .56);
   backdrop-filter: blur(18px);
   position: relative;
   z-index: 5;
+}
+
+.phonics-mode-banner {
+  max-width: 520px;
+  min-height: 25px;
+  margin: 0 auto 5px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  background: rgba(120,233,170,.1);
+  color: rgba(224,255,237,.82);
+  font-size: 9px;
+  font-weight: 720;
+  text-align: center;
+}
+
+.phonics-mode-banner-muted {
+  background: transparent;
+  color: rgba(255,255,255,.38);
 }
 
 .phonics-legend {
@@ -189,6 +182,7 @@ button { font: inherit; }
   justify-content: center;
   gap: 5px;
   padding: 8px 4px;
+  position: relative;
 }
 
 .phonics-person {
@@ -211,6 +205,7 @@ button { font: inherit; }
   font-size: 18px;
   box-shadow: 0 8px 20px rgba(0,0,0,.2);
   pointer-events: none;
+  transition: background 150ms ease, color 150ms ease;
 }
 
 .phonics-all { border-color: rgba(118,236,172,.28); }
@@ -233,13 +228,56 @@ button { font: inherit; }
   pointer-events: none;
 }
 
-.phonics-person-placeholder {
-  opacity: .28;
-  border-style: dashed;
+.phonics-production-pending {
+  background: rgba(185, 156, 86, .14);
+  border-color: rgba(224, 194, 118, .28);
 }
 
-.phonics-person-placeholder span { font-size: 22px; }
-.phonics-person-placeholder small { font-size: 9px; }
+.phonics-production-pending .phonics-avatar {
+  background: #e8dfbf;
+  color: #322d1e;
+}
+
+.phonics-pending-dot {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(236, 198, 103, .78);
+  box-shadow: 0 0 0 3px rgba(236, 198, 103, .08);
+  pointer-events: none;
+}
+
+.phonics-observing {
+  outline: 1px solid rgba(124, 226, 170, .45);
+  outline-offset: 2px;
+}
+
+.phonics-observe-badge {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 7px;
+  line-height: 1;
+  letter-spacing: .11em;
+  font-weight: 900;
+  color: rgba(181, 244, 209, .78);
+  pointer-events: none;
+}
+
+.phonics-watch-positive { border-top-color: rgba(98, 224, 151, .9); }
+.phonics-watch-negative { border-bottom-color: rgba(207, 118, 118, .78); }
+.phonics-listen-positive { border-right-color: rgba(98, 224, 151, .9); }
+.phonics-listen-negative { border-left-color: rgba(207, 118, 118, .78); }
+
+.phonics-person-placeholder {
+  opacity: .18;
+  border-style: dashed;
+  background: transparent;
+}
 
 .phonics-status {
   max-width: 520px;
@@ -272,10 +310,11 @@ button { font: inherit; }
 @media (max-height: 700px) {
   .phonics-teacher-bar { min-height: 60px; padding-top: 8px; }
   .phonics-card-wrap { height: 39svh; min-height: 220px; }
-  .phonics-card-child-face strong { font-size: clamp(90px, 30vw, 160px); }
+  .phonics-card-child-face strong { font-size: clamp(96px, 31vw, 170px); }
   .phonics-person, .phonics-person-placeholder { min-height: 70px; }
   .phonics-avatar { width: 36px; height: 36px; }
   .phonics-people { min-height: 70px; }
+  .phonics-mode-banner { min-height: 21px; padding: 3px 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
