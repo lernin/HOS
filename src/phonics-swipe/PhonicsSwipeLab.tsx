@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react'
 import {
-  PHONICS_DECK,
   advanceWithoutEvidence,
   createInitialSession,
+  getCurrentCard,
+  getNextCard,
   recordAllOutcomeAndAdvance,
   recordObservation,
   recordStudentOutcome,
+  setDeckMode,
   undoSession,
 } from './state'
-import type { ObservationState, Outcome, StudentId } from './state'
+import type { DeckMode, ObservationState, Outcome, PhonicsCard, StudentId } from './state'
 import { useSwipe } from './useSwipe'
 import type { SwipeDirection } from './useSwipe'
 
@@ -17,6 +19,13 @@ const STUDENTS: Array<{ id: StudentId; name: string; short: string }> = [
   { id: 'b', name: 'B', short: 'B' },
   { id: 'c', name: 'C', short: 'C' },
 ]
+
+const DECK_LABELS: Record<DeckMode, string> = {
+  alphabet: 'Alphabet',
+  blends: 'Blends',
+  digraphs: 'Digraphs',
+  trigraphs: 'Trigraphs',
+}
 
 type AssessmentOutcome = Extract<
   Outcome,
@@ -95,7 +104,6 @@ function StudentChip({
       {observing ? <span className="phonics-observe-badge">OBSERVE</span> : null}
       <span className="phonics-avatar">{short}</span>
       <span className="phonics-person-name">{name}</span>
-      {productionFailed ? <span className="phonics-pending-dot" aria-label="production missed once" /> : null}
     </button>
   )
 }
@@ -127,21 +135,46 @@ function AllChip({ disabled, onSwipe }: AllChipProps) {
 }
 
 type MainCardProps = {
-  cardId: string
-  label: string
+  card: PhonicsCard
+  nextCard: PhonicsCard
+  canUndo: boolean
   onSwipe: (direction: SwipeDirection) => void
+  onUndo: () => void
 }
 
-function MainCard({ cardId, label, onSwipe }: MainCardProps) {
+function MainCard({ card, nextCard, canUndo, onSwipe, onUndo }: MainCardProps) {
   const swipe = useSwipe({ threshold: 52, onCommit: onSwipe })
 
   return (
-    <div className="phonics-card-wrap" key={cardId}>
-      <div className="phonics-card" style={swipe.style} {...swipe.handlers}>
+    <div className="phonics-card-wrap" key={`${card.id}-${nextCard.id}`}>
+      <div
+        className={`phonics-card phonics-card-under phonics-tone-${nextCard.tone}`}
+        aria-hidden="true"
+      >
         <div className="phonics-card-child-face">
-          <strong>{label}</strong>
+          <strong>{nextCard.label}</strong>
         </div>
       </div>
+
+      <div
+        className={`phonics-card phonics-card-current phonics-tone-${card.tone}`}
+        style={swipe.style}
+        {...swipe.handlers}
+      >
+        <div className="phonics-card-child-face">
+          <strong>{card.label}</strong>
+        </div>
+      </div>
+
+      <button
+        className="phonics-undo"
+        type="button"
+        aria-label="Undo last action"
+        disabled={!canUndo}
+        onClick={onUndo}
+      >
+        ↶
+      </button>
     </div>
   )
 }
@@ -149,7 +182,8 @@ function MainCard({ cardId, label, onSwipe }: MainCardProps) {
 export function PhonicsSwipeLab() {
   const [session, setSession] = useState(createInitialSession)
   const [observingStudent, setObservingStudent] = useState<StudentId | null>(null)
-  const card = PHONICS_DECK[session.cardIndex] ?? PHONICS_DECK[0]
+  const card = getCurrentCard(session)
+  const nextCard = getNextCard(session)
   const unresolved = useMemo(() => new Set(session.unresolved), [session.unresolved])
   const productionFailed = useMemo(() => new Set(session.productionFailed), [session.productionFailed])
   const latest = session.events.at(-1)
@@ -178,36 +212,46 @@ export function PhonicsSwipeLab() {
     setObservingStudent((current) => current === studentId ? null : studentId)
   }
 
+  const changeDeck = (deckMode: DeckMode) => {
+    setObservingStudent(null)
+    setSession((current) => setDeckMode(current, deckMode))
+  }
+
   const observingName = observingStudent
     ? STUDENTS.find((student) => student.id === observingStudent)?.name ?? observingStudent
     : null
 
   return (
     <main className="phonics-lab-shell">
-      <header className="phonics-teacher-bar">
-        <div>
-          <span className="phonics-eyebrow">LAB PROTOTYPE</span>
-          <h1>Phonics swipe</h1>
-        </div>
-        <button
-          className="phonics-undo"
-          type="button"
-          disabled={session.history.length === 0}
-          onClick={() => setSession((current) => undoSession(current))}
-        >
-          ↶ Undo
-        </button>
-      </header>
-
       <section className="phonics-stage" aria-label="Current learning card">
-        <MainCard cardId={card.id} label={card.label} onSwipe={advanceCard} />
-        <div className="phonics-card-help">Swipe the card anywhere to move on — nothing is inferred.</div>
+        <MainCard
+          card={card}
+          nextCard={nextCard}
+          canUndo={session.history.length > 0}
+          onSwipe={advanceCard}
+          onUndo={() => setSession((current) => undoSession(current))}
+        />
       </section>
 
       <section className="phonics-teacher-panel" aria-label="Teacher evidence controls">
+        <div className="phonics-deck-row">
+          <label className="phonics-deck-select">
+            <span>Set</span>
+            <select
+              value={session.deckMode}
+              onChange={(event) => changeDeck(event.currentTarget.value as DeckMode)}
+            >
+              {(Object.keys(DECK_LABELS) as DeckMode[]).map((mode) => (
+                <option key={mode} value={mode}>{DECK_LABELS[mode]}</option>
+              ))}
+            </select>
+          </label>
+          <span className="phonics-card-position">{session.cardIndex + 1}</span>
+        </div>
+
         {observingStudent ? (
           <div className="phonics-mode-banner">
-            Observe {observingName}: ↑ watched · ↓ not watching · ← not listening · listened → · tap again to exit
+            Observe {observingName}: ↑ watched · ↓ not watching · ← not listening · listened → · repeat a swipe to clear it
           </div>
         ) : (
           <div className="phonics-mode-banner phonics-mode-banner-muted">
