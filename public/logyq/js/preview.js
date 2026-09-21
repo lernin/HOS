@@ -551,12 +551,8 @@
       EDGE_ZONE: 84,
       EDGE_STEP: 14,
       PX_PER_CM: 38,
-      OFFSET_UP_CM: 1.45,
+      OFFSET_UP_CM: 1.1,
       OFFSET_SIDE_CM: 0,
-      // Latch pans the map north by OFFSET_UP_CM *and* pops the floating
-      // card by the same D so neither sits under the finger. Side stays 0.
-      // Set false to skip the map pan (card-pop only).
-      LATCH_MAP_SHIFT: true,
       BANK_DWELL_MS: 480,
     }
   }
@@ -736,7 +732,6 @@
       lastY: hold.lastY,
       preview: previewHost,
       multi: false,
-      mapShiftY: 0,
       bankChip: null,
       bankSince: 0,
       bankArmed: false,
@@ -745,7 +740,6 @@
     doc.body.classList.add('v2-branch-drag')
     bridge.selectByUid(hold.uid)
     mouse(source, win, 'mousedown', hold.x, hold.y, 1)
-    shiftMapOnLatch(doc, win, state.drag)
     stampOriginGhost(doc, uids)
     state.drag.originLayout = captureOriginLayout(doc, uids)
     const visual = visualPoint(hold.x, hold.y)
@@ -911,38 +905,6 @@
     return { x: x + offset.x, y: y + offset.y }
   }
 
-  function latchShiftPx() {
-    return liftPx()
-  }
-
-  function applyZoomNow(doc, win, next) {
-    const svg = doc.getElementById('canvas')
-    if (!svg || !next) return
-    svg.__zoom = next
-    const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
-    if (root) root.setAttribute('transform', next.toString())
-  }
-
-  function shiftMapOnLatch(doc, win, drag) {
-    if (!v162Constants().LATCH_MAP_SHIFT || !drag || !win.d3) return
-    const svg = doc.getElementById('canvas')
-    if (!svg) return
-    const dy = latchShiftPx()
-    const t = win.d3.zoomTransform(svg)
-    applyZoomNow(doc, win, win.d3.zoomIdentity.translate(t.x, t.y - dy).scale(t.k))
-    drag.mapShiftY = dy
-  }
-
-  function revertMapShift(doc, win, drag) {
-    const dy = drag?.mapShiftY
-    if (!dy || !win.d3) return
-    const svg = doc.getElementById('canvas')
-    if (!svg) return
-    const t = win.d3.zoomTransform(svg)
-    applyZoomNow(doc, win, win.d3.zoomIdentity.translate(t.x, t.y + dy).scale(t.k))
-    drag.mapShiftY = 0
-  }
-
   function hitBankChip(doc, x, y) {
     const dock = doc.getElementById('Dock')
     if (!dock || dock.classList.contains('dock-hidden')) return null
@@ -992,7 +954,6 @@
 
   function cleanupDrag(doc, win, state, drag) {
     if (!drag) return
-    revertMapShift(doc, win, drag)
     drag.preview?.remove?.()
     for (const uid of drag.uids || []) nodeByUid(doc, uid)?.classList.remove('v2-branch-origin-ghost')
     doc.body.classList.remove('v2-branch-drag', 'v2-cancel', 'v2-dock-target')
@@ -1370,11 +1331,9 @@
     preview.gestures.fingerOffset = fingerOffset
     preview.gestures.visualPoint = visualPoint
     preview.gestures.liftPx = liftPx
-    preview.gestures.latchShiftPx = latchShiftPx
     preview.gestures.yieldNodeDrag = yieldNodeDrag
     preview.gestures.dockDropKind = dockDropKind
     preview.gestures.hitBankChip = hitBankChip
-    preview.gestures.shiftMapOnLatch = shiftMapOnLatch
     preview.gestures.paintFlickDown = paintFlickDown
     preview.gestures.paintTap = paintTap
     preview.gestures.flickDirection = flickDirection
