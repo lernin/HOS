@@ -21,6 +21,7 @@
   const CURRENT_KEY = 'logyq_current_map_v1'
   const PENDING_KEY = 'logyq_pending_save_v1'
   const LIBRARY_KEY = 'logyq_maps_v1'
+  const PAINT_KEY = 'logyq_paint_color_v1'
   const DEFAULT_NAME = 'Untitled map'
 
   const app = {
@@ -148,6 +149,11 @@
         .logiq-mobile-entry{height:36px;min-width:66px;flex:1;border:1px solid #dbe3ec;border-radius:10px;padding:0 9px;font:inherit;font-size:14px;background:rgba(255,255,255,.9)}
         #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border-radius:10px;font-size:17px;padding:0}
         #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+        #logyq-paint-btn.is-paint-on{border-color:#0f172a;box-shadow:inset 0 0 0 3px var(--paint-active,#fde68a)}
+        #logyq-paint-strip{position:fixed;display:none;z-index:3200;top:54px;left:8px;right:8px;align-items:center;gap:8px;padding:8px;overflow-x:auto;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
+        #logyq-paint-strip.is-open{display:flex}
+        .logyq-swatch{flex:0 0 32px;width:32px;height:32px;border:2px solid #e2e8f0;border-radius:999px;background:#fff;color:#334155;font-size:16px;line-height:1;padding:0}
+        .logyq-swatch.is-active{border-color:#0f172a;box-shadow:0 0 0 2px rgba(15,23,42,.18)}
         #logiq-mobile-header .logiq-save-state{width:9px;overflow:hidden;gap:0;flex:0 0 9px;color:transparent}
         #logiq-mobile-header .logiq-save-state::before{flex:0 0 8px;width:8px;height:8px}
         #logiq-mobile-panel{position:fixed;display:none;z-index:3100;top:54px;right:8px;left:8px;padding:12px;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
@@ -206,6 +212,7 @@
         <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
         <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
         <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
+        <button class="logiq-icon-btn" id="logyq-paint-btn" aria-label="Paint colors" aria-expanded="false" aria-haspopup="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><circle cx="8" cy="16" r="3"></circle><circle cx="16" cy="16" r="3"></circle></svg></button>
         <span class="logiq-save-state" role="status" aria-live="polite"></span>
         <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
       </div>`)
@@ -216,7 +223,8 @@
         <div class="logiq-mobile-tools">
           <button data-tool="add">Add typed words</button><button data-tool="add-child">Add to selected</button>
           <button data-tool="library">Maps</button><button data-tool="mix">Mix</button>
-          <button data-tool="dock">Word Dock</button><button data-tool="help">Help</button>
+          <button data-tool="paint">Paint colors</button><button data-tool="dock">Word Dock</button>
+          <button data-tool="help">Help</button>
         </div>
       </section>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
@@ -244,13 +252,144 @@
       pinForm: document.getElementById('logiq-pin-form'),
       pinInput: document.getElementById('logiq-pin-input'),
       pinError: document.querySelector('.logiq-pin-error'),
+      paintButton: document.getElementById('logyq-paint-btn'),
     }
   }
 
+  const PAINT_SWATCHES = [
+    { id: 'off', value: 'off', label: 'Off' },
+    { id: 'clear', value: 'clear', label: 'Clear' },
+    { id: 'sun', value: '#fde68a', label: 'Sun' },
+    { id: 'peach', value: '#fed7aa', label: 'Peach' },
+    { id: 'rose', value: '#fecdd3', label: 'Rose' },
+    { id: 'lilac', value: '#e9d5ff', label: 'Lilac' },
+    { id: 'sky', value: '#bae6fd', label: 'Sky' },
+    { id: 'mint', value: '#bbf7d0', label: 'Mint' },
+    { id: 'sage', value: '#d9f99d', label: 'Sage' },
+  ]
+
+  function readPaintColor() {
+    const stored = localStorage.getItem(PAINT_KEY)
+    if (!stored) return null
+    try {
+      const parsed = JSON.parse(stored)
+      if (parsed && typeof parsed === 'object' && 'color' in parsed) return parsed.color || null
+    } catch (_error) {}
+    if (stored === 'off' || stored === 'clear' || stored === 'null') return stored === 'clear' ? 'clear' : null
+    return stored
+  }
+
+  function persistPaintColor(color) {
+    try { localStorage.setItem(PAINT_KEY, JSON.stringify({ color: color ?? null })) } catch (_error) {}
+  }
+
+  function ensurePaintStrip(doc) {
+    let strip = doc.getElementById('logyq-paint-strip')
+    if (strip) return strip
+    strip = doc.createElement('div')
+    strip.id = 'logyq-paint-strip'
+    strip.setAttribute('role', 'listbox')
+    strip.setAttribute('aria-label', 'Paint colors')
+    strip.innerHTML = PAINT_SWATCHES.map((swatch) => {
+      const tone = swatch.value === 'off' || swatch.value === 'clear' ? '' : ` style="background:${swatch.value}"`
+      return `<button type="button" class="logyq-swatch" role="option" data-paint="${swatch.value}" aria-label="${swatch.label}"${tone}>${swatch.value === 'off' ? '×' : swatch.value === 'clear' ? '○' : ''}</button>`
+    }).join('')
+    doc.body.appendChild(strip)
+    return strip
+  }
+
+  function syncPaintChrome(doc) {
+    const paint = preview.paint
+    const button = doc.getElementById('logyq-paint-btn')
+    const strip = doc.getElementById('logyq-paint-strip')
+    if (button) {
+      button.classList.toggle('is-paint-on', !!paint.active)
+      button.setAttribute('aria-pressed', String(!!paint.active))
+      button.style.setProperty('--paint-active', paint.active && paint.color && paint.color !== 'clear' ? paint.color : '')
+    }
+    if (strip) {
+      strip.classList.toggle('is-open', !!paint.open)
+      strip.querySelectorAll('[data-paint]').forEach((el) => {
+        const value = el.getAttribute('data-paint')
+        const selected = paint.active
+          ? value === (paint.color || 'clear')
+          : value === 'off'
+        el.classList.toggle('is-active', selected)
+        el.setAttribute('aria-selected', String(selected))
+      })
+    }
+    if (button) button.setAttribute('aria-expanded', String(!!paint.open))
+  }
+
+  function setPaint(doc, { color, active, open } = {}) {
+    const paint = preview.paint
+    if (color !== undefined) {
+      paint.color = color === 'off' ? paint.last : color
+      if (color && color !== 'off') paint.last = color === 'clear' ? 'clear' : color
+    }
+    if (active !== undefined) paint.active = !!active
+    if (open !== undefined) paint.open = !!open
+    if (paint.color && paint.color !== 'off') persistPaintColor(paint.color)
+    syncPaintChrome(doc)
+    return paint
+  }
+
+  function openPaintStrip(doc) {
+    return setPaint(doc, { open: true })
+  }
+
+  function closePaintStrip(doc) {
+    return setPaint(doc, { open: false })
+  }
+
+  function bindPaintUi() {
+    const doc = document
+    const last = readPaintColor()
+    preview.paint = {
+      key: PAINT_KEY,
+      swatches: PAINT_SWATCHES,
+      last,
+      color: last,
+      active: false,
+      open: false,
+      set: (opts) => setPaint(doc, opts),
+      openStrip: () => openPaintStrip(doc),
+      closeStrip: () => closePaintStrip(doc),
+      isActive: () => !!preview.paint.active,
+    }
+    const strip = ensurePaintStrip(doc)
+    const button = doc.getElementById('logyq-paint-btn')
+    button?.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (preview.paint.open) closePaintStrip(doc)
+      else openPaintStrip(doc)
+    })
+    strip.addEventListener('click', (event) => {
+      const swatch = event.target?.closest?.('[data-paint]')
+      if (!swatch) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      const value = swatch.getAttribute('data-paint')
+      if (value === 'off') setPaint(doc, { active: false, open: false })
+      else setPaint(doc, { color: value, active: true, open: false })
+    })
+    doc.getElementById('logyq-paint-settings-btn')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      document.getElementById('settingsBackdrop')?.classList.remove('show')
+      closeMobilePanel()
+      openPaintStrip(doc)
+    })
+    syncPaintChrome(doc)
+  }
+
   function bindUi() {
+    bindPaintUi()
     ui.menuButton.addEventListener('click', () => {
       const open = ui.mobilePanel.classList.toggle('is-open')
       ui.menuButton.setAttribute('aria-expanded', String(open))
+      if (open) closePaintStrip(document)
     })
     document.getElementById('logiq-mobile-mic-btn').addEventListener('click', () => startVoiceCapture())
     document.getElementById('logiq-voice-stop').addEventListener('click', stopVoiceCapture)
@@ -276,6 +415,11 @@
       if (action === 'library') openLibrary()
       if (action === 'dock') bridge.cycleDock()
       if (action === 'help') document.getElementById('helpBtn')?.click()
+      if (action === 'paint') {
+        closeMobilePanel()
+        openPaintStrip(document)
+        return
+      }
       closeMobilePanel()
     }))
     ui.mobileInput.addEventListener('keydown', (event) => {
@@ -297,6 +441,7 @@
       if (event.key !== 'Escape') return
       closeMobilePanel()
       closeLibrary()
+      closePaintStrip(document)
       if (ui.pin.classList.contains('is-open')) finishPin(null)
     })
   }
@@ -426,6 +571,7 @@
     if (!canvas || canvas.dataset.logyqV162 === '1') return
     canvas.dataset.logyqV162 = '1'
     doc.body.classList.add('logyq-mobile-v162')
+    try { bridge.core?.selection?.applySelectionStyles?.() } catch (_error) {}
     win.__logyqV2ConsumedPointers ||= new Set()
     win.requestAnimationFrame(() => {
       win.requestAnimationFrame(() => {
@@ -874,6 +1020,8 @@
   function onFlickDown(event, doc, win, state) {
     if (event.pointerType === 'mouse') return
 
+    if (preview.paint?.open) preview.paint.closeStrip?.()
+
     const alreadyActive = state.active.size > 0
     if (alreadyActive) state.candidates.forEach((candidate) => { candidate.multi = true })
     state.active.add(event.pointerId)
@@ -910,10 +1058,20 @@
     const elapsed = win.performance.now() - candidate.started
     if (Math.hypot(dx, dy) > v162Constants().TAP_MOVE) candidate.moved = true
 
+    // Paint vs create: tap is short+stationary (not pan). Flick-down paints a
+    // branch only while a palette color is active. Left/right/up still create.
+    // Hold-to-drag move is not paint. Double-tap edit still wins on tap 2.
     if (candidate.uid && isFlick(dx, dy, elapsed)) {
-      const direction = Math.abs(dx) > Math.abs(dy)
-        ? (dx < 0 ? 'left' : 'right')
-        : (dy < 0 ? 'up' : 'down')
+      const direction = flickDirection(dx, dy)
+      if (paintFlickDown(direction)) {
+        state.lastTap = null
+        win.requestAnimationFrame(() => {
+          restoreView(doc, win, candidate.view)
+          bridge.paintBranch(candidate.uid, preview.paint.color)
+          win.navigator.vibrate?.(16)
+        })
+        return
+      }
       state.lastTap = null
       win.requestAnimationFrame(() => {
         restoreView(doc, win, candidate.view)
@@ -956,7 +1114,13 @@
       return
     }
 
-    bridge.selectByUid(uid)
+    if (paintTap()) {
+      bridge.paintUid(uid, preview.paint.color)
+      state.lastTap = { uid, time: now }
+      clearCardMic(state.mic)
+      return
+    }
+
     state.lastTap = { uid, time: now }
     if (blank(node)) armBlankCardMic(state.mic, doc, uid)
     else clearCardMic(state.mic)
@@ -973,6 +1137,24 @@
     const major = Math.max(Math.abs(dx), Math.abs(dy))
     const minor = Math.max(1, Math.min(Math.abs(dx), Math.abs(dy)))
     return elapsed <= C.FLICK_MAX_MS && Math.hypot(dx, dy) >= C.FLICK_MIN && major / minor >= C.FLICK_RATIO
+  }
+
+  function flickDirection(dx, dy) {
+    return Math.abs(dx) > Math.abs(dy)
+      ? (dx < 0 ? 'left' : 'right')
+      : (dy < 0 ? 'up' : 'down')
+  }
+
+  function paintActive() {
+    return !!preview.paint?.active
+  }
+
+  function paintFlickDown(direction) {
+    return paintActive() && direction === 'down'
+  }
+
+  function paintTap() {
+    return paintActive()
   }
 
   function nodeUid(node) {
@@ -1185,6 +1367,9 @@
     preview.gestures.dockDropKind = dockDropKind
     preview.gestures.hitBankChip = hitBankChip
     preview.gestures.shiftMapOnLatch = shiftMapOnLatch
+    preview.gestures.paintFlickDown = paintFlickDown
+    preview.gestures.paintTap = paintTap
+    preview.gestures.flickDirection = flickDirection
   }
   function setSaveState(state) {
     const text = state === 'saving' ? 'Saving' : state === 'offline' ? 'Offline' : 'Saved'

@@ -124,8 +124,21 @@ function __selectedUid(){
       || null;
 }
 
+/* Phone has no select UX. Do not follow-focus / re-center from tap, moat, or
+   create-relative fly. Desktop keyboard IJKL-style center-on-select stays.
+   Inline-edit magnification uses flyEditFocusToUID and is not gated here. */
+function phoneNoFollowCamera(){
+  try {
+    if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true;
+    return !!window.matchMedia?.('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px))')?.matches;
+  } catch (_e) {
+    return false;
+  }
+}
+
 /* Smoothly pan to a node's center, preserving current zoom. */
 function flyCenterToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
+  if (phoneNoFollowCamera()) return;
   const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
@@ -206,6 +219,7 @@ function centerOnSelected({ duration = logyq.fly.hotkeyDuration } = {}){
 
 /// Debounced center-on-selected (no zoom), mirrors autoFitSoon style
 function centerOnSelectedSoon(delay){
+  if (phoneNoFollowCamera()) return;
   try { clearTimeout(window.__centerSoonT); } catch (_e) {}
   const d = Number.isFinite(delay) ? delay : logyq.fly.moatDelayMs;
   window.__centerSoonT = setTimeout(() => {
@@ -220,6 +234,7 @@ function centerOnSelectedSoon(delay){
 
 // keep the name, change the behavior to "center on selected"
 function checkMoatAndAutoFit(sourceTag = 'kbd'){
+  if (phoneNoFollowCamera()) return;
   const { state, moat } = logyq
 
       // Don’t run the moat while the user is dragging/panning the map
@@ -251,6 +266,7 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
 
   attach('camera', {
     computeNearestWallPct,
+    phoneNoFollowCamera,
     flyCenterToUID,
     flyEditFocusToUID,
     centerOnSelected,
@@ -1883,20 +1899,25 @@ function applySelectionStyles(){
 
   const hasGroup = !!(state.selectedUids && state.selectedUids.size > 0);
   const vFocus = !!(state.vHold && !hasGroup && state.selectedUid);
+  const phone = !!logyq.camera?.phoneNoFollowCamera?.();
 
   elements.gNodes.selectAll("g.node")
     .classed("is-outlined", n =>
-      (!hasGroup && state.selectedUid === n.data._uid) ||
-      (hasGroup && state.selectedUids.has(n.data._uid))
+      !phone && (
+        (!hasGroup && state.selectedUid === n.data._uid) ||
+        (hasGroup && state.selectedUids.has(n.data._uid))
+      )
     )
     // Selected fill if a group exists (your old behavior) OR while V-hold focus-only.
     .classed("is-filled", n =>
-      (hasGroup && state.selectedUid === n.data._uid) ||
-      (vFocus && state.selectedUid === n.data._uid)
+      !phone && (
+        (hasGroup && state.selectedUid === n.data._uid) ||
+        (vFocus && state.selectedUid === n.data._uid)
+      )
     )
     // This class triggers marching-ants via the CSS above (only during V-hold focus-only).
     .classed("is-focus-vhold", n =>
-      vFocus && state.selectedUid === n.data._uid
+      !phone && vFocus && state.selectedUid === n.data._uid
     );
 }
 
@@ -4942,6 +4963,9 @@ const nEnter = selNodes.enter()
     nEnter.append("rect").attr("x", -CONFIG.CARD_WIDTH/2).attr("y", -CONFIG.CARD_HEIGHT/2).attr("width", CONFIG.CARD_WIDTH).attr("height", CONFIG.CARD_HEIGHT);
     nEnter.append("text").attr("class","label").attr("x",0).attr("y",0).style("font-size", `${CONFIG.FONT_SIZE}px`).text(d=>d.data.name);
 
+    nEnter.merge(selNodes).select("rect:not(.grabzone)")
+      .style("fill", d => d.data.color || null);
+
     selNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
     selNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
@@ -5771,6 +5795,33 @@ elements.svg.on("contextmenu", (event) => {
     wordBank: Array.isArray(logyq.state.wordBank) ? logyq.state.wordBank.slice() : []
   });
 
+  const normalizePaintColor = (color) => {
+    if (color == null) return null;
+    const next = String(color).trim().toLowerCase();
+    if (!next || next === 'off' || next === 'clear' || next === '#fff' || next === '#ffffff' || next === 'white') return null;
+    return String(color).trim();
+  };
+
+  // Color lives on node data (`color`) so snapshot / maps / reload keep it.
+  // Does not change selection or fly the camera.
+  const paintNodes = (uid, color, branch) => {
+    const node = uid && logyq.state.root?.descendants().find((item) => item.data?._uid === uid);
+    if (!node) return false;
+    const next = normalizePaintColor(color);
+    const targets = branch && typeof node.descendants === 'function' ? node.descendants() : [node];
+    const changed = targets.some((item) => (item?.data?.color || null) !== next);
+    if (!changed) return true;
+    pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
+    for (const item of targets) {
+      if (!item?.data) continue;
+      if (next) item.data.color = next;
+      else delete item.data.color;
+    }
+    logyq.treeManager.layoutAndRender(false);
+    emitChange();
+    return true;
+  };
+
   const emitChange = () => {
     if (!changeReady) return;
     const value = snapshot();
@@ -5856,6 +5907,12 @@ elements.svg.on("contextmenu", (event) => {
       logyq.selection.selectSingle(uid);
       emitChange();
       return true;
+    },
+    paintUid(uid, color) {
+      return paintNodes(uid, color, false);
+    },
+    paintBranch(uid, color) {
+      return paintNodes(uid, color, true);
     },
     deleteSelection({ nodeOnly = false } = {}) {
       if (nodeOnly) {

@@ -85,8 +85,21 @@ function __selectedUid(){
       || null;
 }
 
+/* Phone has no select UX. Do not follow-focus / re-center from tap, moat, or
+   create-relative fly. Desktop keyboard IJKL-style center-on-select stays.
+   Inline-edit magnification uses flyEditFocusToUID and is not gated here. */
+function phoneNoFollowCamera(){
+  try {
+    if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true;
+    return !!window.matchMedia?.('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px))')?.matches;
+  } catch (_e) {
+    return false;
+  }
+}
+
 /* Smoothly pan to a node's center, preserving current zoom. */
 function flyCenterToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
+  if (phoneNoFollowCamera()) return;
   const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
@@ -167,6 +180,7 @@ function centerOnSelected({ duration = logyq.fly.hotkeyDuration } = {}){
 
 /// Debounced center-on-selected (no zoom), mirrors autoFitSoon style
 function centerOnSelectedSoon(delay){
+  if (phoneNoFollowCamera()) return;
   try { clearTimeout(window.__centerSoonT); } catch (_e) {}
   const d = Number.isFinite(delay) ? delay : logyq.fly.moatDelayMs;
   window.__centerSoonT = setTimeout(() => {
@@ -181,6 +195,7 @@ function centerOnSelectedSoon(delay){
 
 // keep the name, change the behavior to "center on selected"
 function checkMoatAndAutoFit(sourceTag = 'kbd'){
+  if (phoneNoFollowCamera()) return;
   const { state, moat } = logyq
 
       // Don’t run the moat while the user is dragging/panning the map
@@ -212,6 +227,7 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
 
   attach('camera', {
     computeNearestWallPct,
+    phoneNoFollowCamera,
     flyCenterToUID,
     flyEditFocusToUID,
     centerOnSelected,

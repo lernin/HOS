@@ -16,7 +16,7 @@ v161 is the tree engine plus the small `LOGiQBridge` integration that `logiq-pre
 
 - Served at `/logyq/` with absolute asset paths under that prefix.
 - Application bridge is `window.LOGYQBridge` (not `LOGiQBridge`).
-- Map and PIN storage uses only `logyq_*` keys (`logyq_current_map_v1`, `logyq_pending_save_v1`, `logyq_maps_v1`, `logyq_lab_pin_v1`).
+- Map and PIN storage uses only `logyq_*` keys (`logyq_current_map_v1`, `logyq_pending_save_v1`, `logyq_maps_v1`, `logyq_lab_pin_v1`, `logyq_paint_color_v1`).
 - Maps autosave into `localStorage.logyq_maps_v1`. LOGYQ does not call `logiq_map_save`, `logiq_map_list`, or `logiq_map_delete`, and does not ship the production Supabase URL or key.
 - The Lab PIN is stored as `logyq_lab_pin_v1` and is used only for `/api/transcribe` (voice). Maps never prompt for a PIN.
 
@@ -51,7 +51,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | File | Responsibility |
 |---|---|
 | `00-api.js` | Shared `logyq` bag and `attach()` registry |
-| `01-config.js` | `CONFIG`, moat/fly config. Registers `logyq.camera` (`flyCenterToUID`, `centerOnSelected`, `checkMoatAndAutoFit`). |
+| `01-config.js` | `CONFIG`, moat/fly config. Registers `logyq.camera` (`flyCenterToUID`, `centerOnSelected`, `checkMoatAndAutoFit`, `phoneNoFollowCamera`). Phone skips follow-camera. |
 | `02-state.js` | Shared `state`, `elements`, word-input, dock bounds. Registers `logyq.input` and `logyq.dock`. |
 | `03-utils.js` | UID/clone/path helpers |
 | `04-png-export.js` | PNG/SVG export |
@@ -77,9 +77,9 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `00-boot.js` | Bridge guard, `LOGYQPreview` bag, storage keys, boot sequence |
 | `01-helpers.js` | JSON/localStorage helpers |
 | `02-styles.js` | Injected preview/mobile CSS, including v162 hold-drag ghost styles |
-| `03-ui.js` | Maps library chrome. Compact phone header markup lives in `index.html`. No spawn-puck, no bottom arrow bar, no drag-hand radios. |
+| `03-ui.js` | Maps library chrome. Compact phone header markup lives in `index.html` (includes the paint palette button). No spawn-puck, no bottom arrow bar, no drag-hand radios. |
 | `04-gestures.js` | Header-mic voice only (fills type-or-speak). |
-| `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag with origin ghost + one-card SVG clone + edge auto-pan, ~360ms double-tap edit, tap-to-MIC, finger offset. |
+| `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag with origin ghost + one-card SVG clone + edge auto-pan, ~360ms double-tap edit, tap-to-MIC, finger offset. Paint: tap one card / flick-down branch while a palette color is active. |
 | `06-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
 
 ## Shared state (explicit `logyq` bag)

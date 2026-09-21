@@ -271,6 +271,9 @@ const nEnter = selNodes.enter()
     nEnter.append("rect").attr("x", -CONFIG.CARD_WIDTH/2).attr("y", -CONFIG.CARD_HEIGHT/2).attr("width", CONFIG.CARD_WIDTH).attr("height", CONFIG.CARD_HEIGHT);
     nEnter.append("text").attr("class","label").attr("x",0).attr("y",0).style("font-size", `${CONFIG.FONT_SIZE}px`).text(d=>d.data.name);
 
+    nEnter.merge(selNodes).select("rect:not(.grabzone)")
+      .style("fill", d => d.data.color || null);
+
     selNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
     selNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();

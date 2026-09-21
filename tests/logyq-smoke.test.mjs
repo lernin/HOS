@@ -157,6 +157,8 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   assert.equal(await page.locator('body > header').isVisible(), false)
   assert.equal(await page.locator('#logiq-mobile-header').count(), 1)
   assert.equal(await page.locator('#logiq-mobile-header').isVisible(), true)
+  assert.equal(await page.locator('#logyq-paint-btn').count(), 1)
+  assert.equal(await page.locator('#logyq-paint-btn').isVisible(), true)
   const headerBox = await page.locator('#logiq-mobile-header').boundingBox()
   assert.ok(headerBox, 'phone header should be laid out')
   assert.ok(headerBox.height <= 52, `phone header height ${headerBox.height} should stay compact`)
@@ -307,6 +309,141 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return Math.abs(t.k - prev.k) < 0.06 && Math.hypot(t.x - prev.x, t.y - prev.y) < 24
   }, beforeEdit)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not re-center', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubProduction(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForTree(page)
+
+  async function nodeCenter(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === label)
+      const rect = node.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId = 51) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const canvas = document.getElementById('canvas')
+      canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function zoomNow() {
+    return page.evaluate(() => {
+      const t = window.d3.zoomTransform(document.getElementById('canvas'))
+      return { x: t.x, y: t.y, k: t.k }
+    })
+  }
+
+  const beforeTap = await zoomNow()
+  const idle = await nodeCenter('Node 08')
+  await touch('pointerdown', idle.x, idle.y, 51)
+  await touch('pointerup', idle.x, idle.y, 51)
+  await page.waitForTimeout(180)
+  const afterTap = await zoomNow()
+  assert.ok(Math.hypot(afterTap.x - beforeTap.x, afterTap.y - beforeTap.y) < 6, 'tap must not re-center the map')
+  assert.ok(Math.abs(afterTap.k - beforeTap.k) < 0.02)
+  assert.equal(await page.locator('svg#canvas g.node.is-outlined').count(), 0)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.paintTap()), false)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.paintFlickDown('down')), false)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.paintFlickDown('left')), false)
+
+  await page.locator('#logyq-paint-btn').click()
+  await page.waitForSelector('#logyq-paint-strip.is-open')
+  await page.locator('#logyq-paint-strip [data-paint="#fde68a"]').click()
+  await page.waitForFunction(() => window.LOGYQPreview.paint?.active === true)
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('logyq_paint_color_v1') || 'null'))
+  assert.equal(stored?.color, '#fde68a')
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.paintTap()), true)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.paintFlickDown('down')), true)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.paintFlickDown('left')), false)
+
+  const beforePaint = await zoomNow()
+  const paintCard = await nodeCenter('Node 08')
+  await touch('pointerdown', paintCard.x, paintCard.y, 52)
+  await touch('pointerup', paintCard.x, paintCard.y, 52)
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 08')
+    return node?.__data__?.data?.color === '#fde68a'
+  })
+  const afterPaint = await zoomNow()
+  assert.ok(Math.hypot(afterPaint.x - beforePaint.x, afterPaint.y - beforePaint.y) < 6, 'paint tap must not re-center')
+  const tapPaint = await page.evaluate(() => {
+    const byName = (label) => Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === label)
+    return {
+      self: byName('Node 08')?.__data__?.data?.color || null,
+      other: byName('Node 07')?.__data__?.data?.color || null,
+      outlined: document.querySelectorAll('svg#canvas g.node.is-outlined').length,
+    }
+  })
+  assert.equal(tapPaint.self, '#fde68a')
+  assert.equal(tapPaint.other, null)
+  assert.equal(tapPaint.outlined, 0)
+
+  const beforeBranch = await page.locator('svg#canvas g.node').count()
+  const branch = await nodeCenter('Node 02')
+  await touch('pointerdown', branch.x, branch.y, 53)
+  await touch('pointerup', branch.x, branch.y + 70, 53)
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 02')
+    return node?.__data__?.descendants?.().every((item) => item.data.color === '#fde68a')
+  })
+  assert.equal(await page.locator('svg#canvas g.node').count(), beforeBranch)
+  const branchPaint = await page.evaluate(() => {
+    const byName = (label) => Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === label)
+    const root = byName('Node 02')
+    return {
+      names: root.__data__.descendants().map((item) => item.data.name),
+      colors: root.__data__.descendants().map((item) => item.data.color),
+      sibling: byName('Node 03')?.__data__?.data?.color || null,
+    }
+  })
+  assert.ok(branchPaint.names.length >= 2)
+  assert.ok(branchPaint.colors.every((color) => color === '#fde68a'))
+  assert.equal(branchPaint.sibling, null)
+
+  const snapshot = await page.evaluate(() => window.LOGYQBridge.snapshot().tree)
+  assert.equal(findNode(snapshot, 'Node 08').color, '#fde68a')
+  assert.equal(findNode(snapshot, 'Node 02').color, '#fde68a')
+
+  const beforeCreate = await page.locator('svg#canvas g.node').count()
+  const side = await nodeCenter('Node 04')
+  await touch('pointerdown', side.x, side.y, 54)
+  await touch('pointerup', side.x + 80, side.y, 54)
+  await page.waitForFunction((count) => document.querySelectorAll('g.node').length > count, beforeCreate)
+
+  await page.locator('#logyq-paint-btn').click()
+  await page.waitForSelector('#logyq-paint-strip.is-open')
+  await page.locator('#logyq-paint-strip [data-paint="off"]').click()
+  await page.waitForFunction(() => window.LOGYQPreview.paint?.active === false)
+  const beforeDownCreate = await page.locator('svg#canvas g.node').count()
+  const createDown = await nodeCenter('Node 10')
+  await touch('pointerdown', createDown.x, createDown.y, 55)
+  await touch('pointerup', createDown.x, createDown.y + 70, 55)
+  await page.waitForFunction((count) => document.querySelectorAll('g.node').length > count, beforeDownCreate)
 
   assert.deepEqual(errors, [])
   await context.close()

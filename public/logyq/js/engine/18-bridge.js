@@ -19,6 +19,33 @@
     wordBank: Array.isArray(logyq.state.wordBank) ? logyq.state.wordBank.slice() : []
   });
 
+  const normalizePaintColor = (color) => {
+    if (color == null) return null;
+    const next = String(color).trim().toLowerCase();
+    if (!next || next === 'off' || next === 'clear' || next === '#fff' || next === '#ffffff' || next === 'white') return null;
+    return String(color).trim();
+  };
+
+  // Color lives on node data (`color`) so snapshot / maps / reload keep it.
+  // Does not change selection or fly the camera.
+  const paintNodes = (uid, color, branch) => {
+    const node = uid && logyq.state.root?.descendants().find((item) => item.data?._uid === uid);
+    if (!node) return false;
+    const next = normalizePaintColor(color);
+    const targets = branch && typeof node.descendants === 'function' ? node.descendants() : [node];
+    const changed = targets.some((item) => (item?.data?.color || null) !== next);
+    if (!changed) return true;
+    pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
+    for (const item of targets) {
+      if (!item?.data) continue;
+      if (next) item.data.color = next;
+      else delete item.data.color;
+    }
+    logyq.treeManager.layoutAndRender(false);
+    emitChange();
+    return true;
+  };
+
   const emitChange = () => {
     if (!changeReady) return;
     const value = snapshot();
@@ -104,6 +131,12 @@
       logyq.selection.selectSingle(uid);
       emitChange();
       return true;
+    },
+    paintUid(uid, color) {
+      return paintNodes(uid, color, false);
+    },
+    paintBranch(uid, color) {
+      return paintNodes(uid, color, true);
     },
     deleteSelection({ nodeOnly = false } = {}) {
       if (nodeOnly) {

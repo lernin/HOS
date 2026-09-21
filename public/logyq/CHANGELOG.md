@@ -68,6 +68,14 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Edit zoom.** Mobile `openNodeEditor` (double-tap / E) delays `flyEditFocusToUID`: pan to ~32% of the visual viewport height and magnify to at least k=1.35 (never zoom out). Enter / blur / Escape animate back to a **copied** pre-edit transform. If the user pinches or pans mid-edit (`zoom` `sourceEvent`), restore is skipped.
 - **Word Bank hit is strict.** v162 has no node→dock drop; accidental banks were tree adopts through the bottom dock overlay (finger on the ribbon, visual/ghost still on a detector). Finger contact must land **inside a chip inset 8px** to call `sendSubtreeToWordBank`. Finger in the dock slack (16px) cancels the tree drop. Chip→tree drops stay.
 
+## Phone paint + no-select (PR 112)
+
+- **Mobile has no select UX.** Tap does not outline a card. `is-outlined` / `is-filled` are suppressed on phone. Follow-camera is off: `phoneNoFollowCamera()` no-ops `flyCenterToUID`, moat `checkMoatAndAutoFit`, and `centerOnSelectedSoon`. Desktop keyboard IJKL center-on-select stays. Double-tap edit still uses `flyEditFocusToUID`.
+- **Palette in the phone header.** `#logyq-paint-btn` opens a swatch strip. Last color persists as `logyq_paint_color_v1`. Paint stays on after a swatch pick until **Off**. Settings / ⋮ can deep-link to the strip. Painting does not require opening Settings each time.
+- **Tap paints one card.** Short stationary pointer (move ≤ 11px) with an active color calls `paintUid`. Pan (touch+move) is not a paint tap.
+- **Flick-down paints the branch.** Same flick detector as create (52px / 340ms / 1.45 ratio). **Only `direction === 'down'` while paint is active** steals create-flick. Left / right / up still create. Hold-to-drag is unchanged (not paint).
+- **Color is node data.** `data.color` on the tree; snapshot / maps / reload keep it. Undo is `replace-root`. Card shape (rx, stroke chrome) is unchanged; only fill changes.
+
 ## Fearless-delete wave
 
 See `SAFE_TO_RIP.md`. Spawn-puck, retired bind no-ops, engine prompt-maps, fake user badge, never-shown Hint, unused `startInlineEdit` / `zoomToNodeCenter` / `getSelectionUids` / `copySubtreeToClipboard` / `createFirstCardAndEdit`, the muted node `dblclick` bind, the dead swim-lane pin branch plus `showLaneAtY`/`hideLane`, unused `window.__add*` create aliases, and the unread `elements.mapsBtn` field were deleted. Keyboard create/edit/drag/selection verbs remain. Zoom still calls no-op `refreshLaneOnZoom`.

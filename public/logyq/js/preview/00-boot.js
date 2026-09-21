@@ -21,6 +21,7 @@
   const CURRENT_KEY = 'logyq_current_map_v1'
   const PENDING_KEY = 'logyq_pending_save_v1'
   const LIBRARY_KEY = 'logyq_maps_v1'
+  const PAINT_KEY = 'logyq_paint_color_v1'
   const DEFAULT_NAME = 'Untitled map'
 
   const app = {

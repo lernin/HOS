@@ -32,6 +32,7 @@
     if (!canvas || canvas.dataset.logyqV162 === '1') return
     canvas.dataset.logyqV162 = '1'
     doc.body.classList.add('logyq-mobile-v162')
+    try { bridge.core?.selection?.applySelectionStyles?.() } catch (_error) {}
     win.__logyqV2ConsumedPointers ||= new Set()
     win.requestAnimationFrame(() => {
       win.requestAnimationFrame(() => {
@@ -480,6 +481,8 @@
   function onFlickDown(event, doc, win, state) {
     if (event.pointerType === 'mouse') return
 
+    if (preview.paint?.open) preview.paint.closeStrip?.()
+
     const alreadyActive = state.active.size > 0
     if (alreadyActive) state.candidates.forEach((candidate) => { candidate.multi = true })
     state.active.add(event.pointerId)
@@ -516,10 +519,20 @@
     const elapsed = win.performance.now() - candidate.started
     if (Math.hypot(dx, dy) > v162Constants().TAP_MOVE) candidate.moved = true
 
+    // Paint vs create: tap is short+stationary (not pan). Flick-down paints a
+    // branch only while a palette color is active. Left/right/up still create.
+    // Hold-to-drag move is not paint. Double-tap edit still wins on tap 2.
     if (candidate.uid && isFlick(dx, dy, elapsed)) {
-      const direction = Math.abs(dx) > Math.abs(dy)
-        ? (dx < 0 ? 'left' : 'right')
-        : (dy < 0 ? 'up' : 'down')
+      const direction = flickDirection(dx, dy)
+      if (paintFlickDown(direction)) {
+        state.lastTap = null
+        win.requestAnimationFrame(() => {
+          restoreView(doc, win, candidate.view)
+          bridge.paintBranch(candidate.uid, preview.paint.color)
+          win.navigator.vibrate?.(16)
+        })
+        return
+      }
       state.lastTap = null
       win.requestAnimationFrame(() => {
         restoreView(doc, win, candidate.view)
@@ -562,7 +575,13 @@
       return
     }
 
-    bridge.selectByUid(uid)
+    if (paintTap()) {
+      bridge.paintUid(uid, preview.paint.color)
+      state.lastTap = { uid, time: now }
+      clearCardMic(state.mic)
+      return
+    }
+
     state.lastTap = { uid, time: now }
     if (blank(node)) armBlankCardMic(state.mic, doc, uid)
     else clearCardMic(state.mic)
@@ -579,6 +598,24 @@
     const major = Math.max(Math.abs(dx), Math.abs(dy))
     const minor = Math.max(1, Math.min(Math.abs(dx), Math.abs(dy)))
     return elapsed <= C.FLICK_MAX_MS && Math.hypot(dx, dy) >= C.FLICK_MIN && major / minor >= C.FLICK_RATIO
+  }
+
+  function flickDirection(dx, dy) {
+    return Math.abs(dx) > Math.abs(dy)
+      ? (dx < 0 ? 'left' : 'right')
+      : (dy < 0 ? 'up' : 'down')
+  }
+
+  function paintActive() {
+    return !!preview.paint?.active
+  }
+
+  function paintFlickDown(direction) {
+    return paintActive() && direction === 'down'
+  }
+
+  function paintTap() {
+    return paintActive()
   }
 
   function nodeUid(node) {
@@ -791,4 +828,7 @@
     preview.gestures.dockDropKind = dockDropKind
     preview.gestures.hitBankChip = hitBankChip
     preview.gestures.shiftMapOnLatch = shiftMapOnLatch
+    preview.gestures.paintFlickDown = paintFlickDown
+    preview.gestures.paintTap = paintTap
+    preview.gestures.flickDirection = flickDirection
   }
