@@ -3,6 +3,8 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const index = await readFile(new URL('../public/logiq-v162-mobile/index.html', import.meta.url), 'utf8')
+const core = await readFile(new URL('../public/logiq-v161/index.html', import.meta.url), 'utf8')
+const preview = await readFile(new URL('../public/logiq-v161/logiq-preview.js', import.meta.url), 'utf8')
 const js = await readFile(new URL('../public/logiq-v162-mobile/v2-ghost.js', import.meta.url), 'utf8')
 const branchAffordance = await readFile(new URL('../public/logiq-v162-mobile/v2-branch-affordance.js', import.meta.url), 'utf8')
 const dragVisualFix = await readFile(new URL('../public/logiq-v162-mobile/v2-drag-visual-fix.js', import.meta.url), 'utf8')
@@ -48,6 +50,25 @@ test('mobile v2 uses stationary hold to latch drag while preserving pinch and pa
   assert.match(js, /if \(had\).*cancelHold/s)
   assert.match(js, /state\.active\.size !== 1/)
   assert.match(js, /__logiqV2ConsumedPointers\.add/)
+})
+
+test('mobile v2 keeps pinch continuous below the desktop zoom floor', () => {
+  assert.match(preview, /const ZOOM_MIN = 0\.02/)
+  assert.match(core, /setZoomExtent\(extent\)/)
+  assert.match(core, /getZoomExtent\(\)/)
+  assert.match(core, /getZoomScale\(\)/)
+  assert.match(core, /scaleZoomTo\(value\)/)
+  assert.match(preview, /bridge\.setZoomExtent\(\[ZOOM_MIN, 2\.4\]\)/)
+  assert.match(preview, /window\.LOGiQZoom = Object\.freeze/)
+})
+
+test('mobile branch drag is the sole held-gesture owner and protects the Word Bank', () => {
+  assert.match(branchAffordance, /win\.__logiqBranchDragOwnsHold = true/)
+  assert.match(js, /win\.__logiqBranchDragOwnsHold/)
+  assert.match(branchAffordance, /bridge\?\.clearFocusSelection\?\.\(\)/)
+  assert.match(branchAffordance, /win\.addEventListener\('dragstart', suppressNativeDrag, true\)/)
+  assert.match(branchAffordance, /bankChanged \|\| missingBranchNode \|\| changedOnSnapBack/)
+  assert.match(branchAffordance, /bridge\.loadMap\(drag\.before\.tree, drag\.before\.wordBank\)/)
 })
 
 test('held-card drag keeps a ghost origin and defers the V2 fallback transaction until release', () => {
