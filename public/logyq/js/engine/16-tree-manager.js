@@ -295,12 +295,33 @@ centerOnSelected(opts = {}) {
       return {x, y, width:r-x, height:bt-y};
     };
     const b=merge(nb,lb);
-    const fullW=elements.svg.node().clientWidth, fullH=elements.svg.node().clientHeight;
+    const svgNode = elements.svg.node();
+    const fullW=svgNode.clientWidth, fullH=svgNode.clientHeight;
     if(!b||!b.width||!b.height) return;
-    const scale=Math.min(1, (fullW-pad)/b.width, (fullH-pad)/b.height);
+    const phone = typeof window !== 'undefined' && window.matchMedia
+      && window.matchMedia('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px)),(max-width:700px)').matches;
+    const headerH = phone ? (document.getElementById('logiq-mobile-header')?.getBoundingClientRect().height || 48) : 0;
+    const dockEl = phone ? document.getElementById('Dock') : null;
+    const dockBox = dockEl && !dockEl.classList.contains('dock-hidden') ? dockEl.getBoundingClientRect() : null;
+    const dockH = dockBox && dockBox.height > 8 ? dockBox.height + 8 : 16;
+    const usableH = Math.max(80, fullH - headerH - dockH);
+    const widthScale = (fullW - pad) / b.width;
+    const heightScale = ((phone ? usableH : fullH) - pad) / b.height;
+    const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1];
+    const scale = phone
+      ? Math.min(maxK, Math.max(0.02, widthScale))
+      : Math.min(1, widthScale, heightScale);
     if(!isFinite(scale) || scale<=0) return;
-    const tx=(fullW/2)-scale*(b.x+b.width/2), ty=(fullH/2)-scale*(b.y+b.height/2);
-  const el = elements.svg.node();
+    const tx=(fullW/2)-scale*(b.x+b.width/2);
+    let ty;
+    if (!phone) {
+      ty = (fullH/2)-scale*(b.y+b.height/2);
+    } else if (scale * b.height <= usableH - pad) {
+      ty = (headerH + usableH/2) - scale*(b.y+b.height/2);
+    } else {
+      ty = headerH + pad - scale * b.y;
+    }
+  const el = svgNode;
 const t0 = d3.zoomTransform(el);
 const dx = tx - t0.x, dy = ty - t0.y, dk = Math.abs(scale - t0.k);
 const dist = Math.hypot(dx, dy) + dk * 600;
