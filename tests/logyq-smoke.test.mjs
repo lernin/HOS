@@ -333,7 +333,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
     const onGhost = pick({ x: held.x, y: held.y })
     const besideOther = other ? pick({ x: other.x + CONFIG.CARD_WIDTH / 2 + 10, y: other.y }) : null
     const underSibling = sibling ? pick({ x: sibling.x, y: sibling.y }) : null
-    const besideSibling = sibling ? pick({ x: sibling.x - CONFIG.CARD_WIDTH / 2 - 12, y: sibling.y }) : null
+    const besideSibling = sibling ? pick({ x: sibling.x - CONFIG.CARD_WIDTH / 2 - 4, y: sibling.y }) : null
     const betweenCousins = (cousinA && cousinB)
       ? pick({ x: (cousinA.x + cousinB.x) / 2, y: cousinA.y })
       : null
