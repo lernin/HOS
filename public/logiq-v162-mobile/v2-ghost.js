@@ -78,7 +78,7 @@
         body.logiq-mobile-v2 g.node.v2-origin-ghost{opacity:.28!important}
         body.logiq-mobile-v2 g.node.v2-origin-ghost rect:not(.grabzone){stroke:#64748b!important;stroke-width:2px!important;stroke-dasharray:5 4!important;fill:#f8fafc!important}
         body.logiq-mobile-v2 g.node.v2-origin-ghost text{opacity:.58!important}
-        #logiq-v2-drag-card{position:fixed;z-index:3940;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:5px 9px;border:2px solid #2563eb;border-radius:10px;background:#fff;color:#374151;box-shadow:0 12px 30px rgba(15,23,42,.28);font:650 14px/1.15 system-ui;text-align:center;pointer-events:none;user-select:none;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transform:scale(1.02)}
+        #logiq-v2-drag-card{position:fixed;z-index:3940;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:5px 9px;border:2px solid #2563eb;border-radius:10px;background:#fff;color:#374151;box-shadow:0 12px 30px rgba(15,23,42,.28);font:650 14px/1.15 system-ui;text-align:center;pointer-events:none;user-select:none;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transform:none}
         body.logiq-mobile-v2.v2-cancel #logiq-v2-drag-card{border-color:#ef4444;box-shadow:0 12px 30px rgba(239,68,68,.24)}
         body.logiq-mobile-v2.v2-cancel g.node.v2-origin-ghost rect:not(.grabzone){stroke:#ef4444!important}
         @media (orientation:landscape){
@@ -182,9 +182,7 @@
         return
       }
 
-      /* v2-branch-affordance owns stationary-hold movement. Keep this layer focused on
-         tap/select, double-tap edit and MIC so there is never a second drag transaction. */
-      if (had || !uid || win.__logiqBranchDragOwnsHold) return
+      if (had || !uid) return
       const before = captureState(bridge)
       const hold = {
         pointerId:e.pointerId, uid, node,
@@ -282,7 +280,6 @@
 
   function latchHold(doc,win,bridge,state,hold) {
     if (state.hold !== hold || hold.moved) return
-    if (win.__logiqBranchDragOwnsHold) return cancelHold(win,state)
     const pointer = state.pointers.get(hold.pointerId)
     if (!pointer || pointer.multi || state.active.size !== 1) return cancelHold(win,state)
 
@@ -295,13 +292,18 @@
     const node = nodeByUid(doc,hold.uid) || hold.node
     if (!node) return
     const rect = node.getBoundingClientRect()
+    const hierarchy = node.__data__
+    const ghostUids = typeof hierarchy?.descendants === 'function'
+      ? hierarchy.descendants().map(item => item?.data?._uid).filter(Boolean)
+      : [hold.uid]
     const preview = makeFloating(doc,node,rect,hold.x,hold.y)
-    node.classList.add('v2-origin-ghost')
+    for (const uid of ghostUids) nodeByUid(doc,uid)?.classList.add('v2-origin-ghost')
 
     state.gesture = {
       pointerId:hold.pointerId, uid:hold.uid, node,
       x:hold.x, y:hold.y, lastX:hold.lastX, lastY:hold.lastY,
       before:hold.before, cancel:false, preview,
+      ghostUids,
       grabX:Math.max(0,hold.x-rect.left), grabY:Math.max(0,hold.y-rect.top),
     }
     win.__logiqV2ConsumedPointers.add(hold.pointerId)
@@ -340,7 +342,7 @@
   }
 
   function endGhostDrag(doc,win,state,g) {
-    nodeByUid(doc,g.uid)?.classList.remove('v2-origin-ghost')
+    for (const uid of g.ghostUids || []) nodeByUid(doc,uid)?.classList.remove('v2-origin-ghost')
     g.preview?.remove?.()
     state.gesture = null
     win.__logiqV2DragActive = false
