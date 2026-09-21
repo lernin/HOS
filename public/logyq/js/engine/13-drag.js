@@ -82,7 +82,7 @@ elements.gLinks.selectAll("path.link").classed("is-sub-link is-parent-link", fal
 behavior(){
   return d3.drag()
     .filter((event) => {
-      if (isTextField(event.target)) return false;
+      if (logyq.input.isTextField(event.target)) return false;
       return event.button === 0;         // left button only (Shift allowed now)
     })
     .on("start", this.start)

@@ -24,6 +24,8 @@
     deletion: null,
     drag: null,
     wordDock: null,
+    dock: null,
+    input: null,
     mix: null,
     treeManager: null,
     keyboard: null,

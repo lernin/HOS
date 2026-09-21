@@ -51,7 +51,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 |---|---|
 | `00-api.js` | Shared `logyq` bag and `attach()` registry |
 | `01-config.js` | `CONFIG`, moat/fly config. Registers `logyq.camera` (`flyCenterToUID`, `centerOnSelected`, `checkMoatAndAutoFit`). |
-| `02-state.js` | Shared `state`, `elements`, word-input, dock bounds |
+| `02-state.js` | Shared `state`, `elements`, word-input, dock bounds. Registers `logyq.input` and `logyq.dock`. |
 | `03-utils.js` | UID/clone/path helpers |
 | `04-png-export.js` | PNG/SVG export |
 | `05-history.js` | `pushHistory` / `undo` |

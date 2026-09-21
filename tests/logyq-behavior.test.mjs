@@ -732,3 +732,42 @@ test('structure movers notify camera moat after a successful change', () => {
   moveSelectedHorizontally(1)
   assert.deepEqual(tags, ['vhold'])
 })
+
+test('isTextField treats inputs and role=textbox as typing surfaces', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/02-state.js', import.meta.url), 'utf8')
+  const start = source.indexOf('const isTextField')
+  const end = source.indexOf('function keyIsNav')
+  const isTextField = new Function(`${source.slice(start, end)}; return isTextField;`)()
+  assert.equal(isTextField(null), false)
+  assert.equal(isTextField({ matches: () => true, getAttribute: () => null }), true)
+  assert.equal(isTextField({ matches: () => false, getAttribute: (name) => name === 'role' ? 'textbox' : null }), true)
+  assert.equal(isTextField({ matches: () => false, getAttribute: () => 'button' }), false)
+})
+
+test('cycleDockSide walks bottom → left → hidden → bottom', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/02-state.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function applyDockSide')
+  const end = source.indexOf("attach('input'")
+  const classes = new Set()
+  const logyq = {
+    state: { dockSide: 'bottom' },
+    elements: {
+      Dock: {
+        classList: {
+          remove(...names) { names.forEach((name) => classes.delete(name)) },
+          add(name) { classes.add(name) },
+        },
+      },
+    },
+  }
+  const { cycleDockSide } = new Function(
+    'logyq',
+    `${source.slice(start, end)}; return { applyDockSide, cycleDockSide };`,
+  )(logyq)
+  assert.equal(cycleDockSide(), 'left')
+  assert.ok(classes.has('dock-left'))
+  assert.equal(cycleDockSide(), 'hidden')
+  assert.ok(classes.has('dock-hidden'))
+  assert.equal(cycleDockSide(), 'bottom')
+  assert.equal(classes.size, 0)
+})

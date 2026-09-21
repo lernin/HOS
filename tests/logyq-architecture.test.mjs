@@ -113,6 +113,8 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('treeOps', {",
     "attach('deletion', {",
     "attach('wordDock', {",
+    "attach('dock', {",
+    "attach('input', {",
     "attach('mix', {",
     "attach('drag', dragManager)",
     "attach('treeManager', treeManager)",
@@ -175,6 +177,11 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.doesNotMatch(history, /typeof treeManager/)
   const stateFrag = readFileSync(join(logyqDir, 'js/engine/02-state.js'), 'utf8')
   assert.match(stateFrag, /logyq\.wordDock\.addWords/)
+  assert.match(stateFrag, /attach\('input', \{[\s\S]*?\}\);/)
+  assert.match(stateFrag, /attach\('dock', \{[\s\S]*?\}\);/)
+  assert.match(stateFrag, /logyq\.treeOps\.addChildOf/)
+  assert.match(stateFrag, /logyq\.selection\.showToast/)
+  assert.match(history, /logyq\.dock\.updateDockBounds/)
   const mix = readFileSync(join(logyqDir, 'js/engine/15-mix-and-context.js'), 'utf8')
   assert.match(mix, /attach\('mix', \{[\s\S]*?\}\);/)
   assert.match(mix, /const \{ state, utils \} = logyq/)
@@ -204,6 +211,12 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(drag, /logyq\.detectors\.pick/)
   assert.match(drag, /logyq\.selection\.insertNodeAtDrop/)
   assert.match(drag, /window\.DRAG_SLOP_PX \|\| 10/)
+  assert.match(drag, /logyq\.input\.isTextField/)
+  assert.match(keyboard, /logyq\.input\.isTextField/)
+  assert.match(selection, /logyq\.input\.isTextField/)
+  assert.match(treeManager, /logyq\.input\.isTextField/)
+  assert.match(treeManager, /logyq\.dock\.cycleDockSide/)
+  assert.match(treeManager, /logyq\.dock\.updateDockBounds/)
   assert.match(keyboard, /attach\('keyboard', \{[\s\S]*?\}\);/)
   assert.match(keyboard, /const \{ state, elements, utils \} = logyq/)
   assert.match(keyboard, /if \(window\.startInlineEdit\) startInlineEdit/)

@@ -25,6 +25,8 @@
     deletion: null,
     drag: null,
     wordDock: null,
+    dock: null,
+    input: null,
     mix: null,
     treeManager: null,
     keyboard: null,
@@ -307,10 +309,11 @@ attach('elements', elements)
 // - While editing an inline node: Enter confirms rename; Shift+Enter adds right-sibling (your editor handler already stops propagation)
 
 function commitWordInput(domEvent, opts = {}){
+  const { state, elements } = logyq
   const el = elements.wordInput;
   if (!el) return;
   const raw = (el.value || '').trim();
-  if (!raw) { showToast('Type something first'); return; }
+  if (!raw) { logyq.selection.showToast('Type something first'); return; }
 
   // If it looks like JSON/GIQ, keep your old importer behavior.
   // (If you want to force-bank instead, remove this early return.)
@@ -342,18 +345,18 @@ if (toTree) {
   // support comma-separated words just like bank does
   const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
   if (parts.length === 0) {
-    showToast('Type something first');
+    logyq.selection.showToast('Type something first');
   } else {
-    parts.forEach(p => addChildOf(uid, p, { noEdit: true }));
+    parts.forEach(p => logyq.treeOps.addChildOf(uid, p, { noEdit: true }));
 
-    const node = utils.findByUid(state.root?.data, uid);
-    showToast(node ? `Added under "${node.name}"` : 'Added under selected');
+    const node = logyq.utils.findByUid(state.root?.data, uid);
+    logyq.selection.showToast(node ? `Added under "${node.name}"` : 'Added under selected');
   }
 } else {
   // Split like the toTree branch so "a, b, c" makes three chips
   const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
   parts.forEach(p => logyq.wordDock.addWords(p, 'bank'));
-  showToast('Added to Word Dock');
+  logyq.selection.showToast('Added to Word Dock');
 }
 
 
@@ -404,50 +407,45 @@ elements.addWordBtn.addEventListener('contextmenu', (e) => {
 
 /* ---------- Add box handler: JSON / GIQ / comma-words ---------- */
 function handleAddBox(){
+  const { state, elements } = logyq
   const el = elements.wordInput;
   if (!el) return;
   const raw = (el.value || '').trim();
   if (!raw) return;
 
-  const parsed = parseIncoming(raw);
+  const parsed = logyq.treeOps.parseIncoming(raw);
+  const focused =
+    state.selectedUid ||
+    (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null);
 
   if (parsed && parsed.tree){
-    // 1) JSON/GIQ → make subtree under selected or root (rightmost)
-    const target =
-      (__selectedUid && __selectedUid()) ||       // selected node
-      (state.root && state.root.data && state.root.data._uid) || // root
-      null;
+    const target = focused || (state.root && state.root.data && state.root.data._uid) || null;
 
-    // add subtree under target (or become new root if none)
-    addSubtreeChildOf(target, parsed.tree);
+    logyq.treeOps.addSubtreeChildOf(target, parsed.tree);
 
-    // (optional) merge word bank into Dock (front)
     if (Array.isArray(parsed.wordBank) && parsed.wordBank.length){
       parsed.wordBank.forEach(w => logyq.wordDock?.addWords?.(w, 'bank'));
     }
 
-    showToast('Imported tree', 900);
+    logyq.selection.showToast('Imported tree', 900);
   } else {
-    // 2) Fallback: comma-separated words → add to the right, one by one
     const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
     if (parts.length){
-      const base = (__selectedUid && __selectedUid()) ||
+      const base = focused ||
                    (state.root && state.root.data && state.root.data._uid) ||
                    null;
 
       if (!state.root && parts.length){
-        // If no map yet: first word becomes root; rest as its children
         const rootData = { name: parts[0] };
-        utils.assignUids(rootData);
-        state.root = d3.hierarchy(rootData); utils.assignIds(state.root);
+        logyq.utils.assignUids(rootData);
+        state.root = d3.hierarchy(rootData); logyq.utils.assignIds(state.root);
         logyq.treeManager.layoutAndRender(false);
-        setSelected(state.root.data._uid);
-        parts.slice(1).forEach(p => addChildOf(state.root.data._uid, p, { noEdit: true }));
+        logyq.selection.setSelected(state.root.data._uid);
+        parts.slice(1).forEach(p => logyq.treeOps.addChildOf(state.root.data._uid, p, { noEdit: true }));
       } else if (base){
-        // Append as rightmost children under base
-        parts.forEach(p => addChildOf(base, p, { noEdit: true }));
+        parts.forEach(p => logyq.treeOps.addChildOf(base, p, { noEdit: true }));
       }
-      showToast('Added words', 900);
+      logyq.selection.showToast('Added words', 900);
     }
   }
 
@@ -471,8 +469,8 @@ elements.svg.on('click.bgClear', (event) => {
   const t = event.target;
   if (t && t.closest && t.closest('g.node')) return;
 
-  clearGroup();
-  clearSelection();
+  logyq.selection.clearGroup();
+  logyq.selection.clearSelection();
 });
 
 
@@ -510,12 +508,36 @@ window.addEventListener("resize", updateDockBounds, { passive: true });
 
 /* --- Dock side applier (bottom ↔ left ↔ hidden) --- */
 function applyDockSide(){
+  const { state, elements } = logyq
   const el = elements.Dock;
   if (!el) return;
   el.classList.remove('dock-left','dock-hidden');
   if (state.dockSide === 'left')      el.classList.add('dock-left');
   else if (state.dockSide === 'hidden') el.classList.add('dock-hidden');
 }
+
+function cycleDockSide(){
+  const { state } = logyq
+  state.dockSide =
+    state.dockSide === 'bottom' ? 'left' :
+    state.dockSide === 'left'   ? 'hidden' :
+                        'bottom';
+  applyDockSide();
+  return state.dockSide;
+}
+
+  attach('input', {
+    isTextField,
+    keyIsNav,
+    commitWordInput,
+    handleAddBox,
+  });
+
+  attach('dock', {
+    applyDockSide,
+    cycleDockSide,
+    updateDockBounds,
+  });
 
 /* call once so the current state is applied on load */
 applyDockSide();
@@ -703,7 +725,7 @@ applyDockSide();
     state.history.push(action);
     if(state.history.length>CONFIG.HISTORY_LIMIT) state.history.shift();
       /* [patch] dock-bounds-init start */
-      try{ updateDockBounds(); }catch(_e){}
+      try{ logyq.dock.updateDockBounds(); }catch(_e){}
       /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
   }
@@ -727,7 +749,7 @@ function autoFitSoon(delay){
   function undo(){
     const a = state.history.pop();
       /* [patch] dock-bounds-init start */
-      try{ updateDockBounds(); }catch(_e){}
+      try{ logyq.dock.updateDockBounds(); }catch(_e){}
       /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
     if(!a) return;
@@ -1702,10 +1724,10 @@ function startInlineEdit({ wipe = false } = {}) {
 window.addEventListener('keydown', (e) => { //red
   const { state } = logyq
   // Ignore if not a nav key, or if user is typing in a field, or using modifiers
-  if (!keyIsNav(e)) return;
+  if (!logyq.input.keyIsNav(e)) return;
 if (state.vHold) return; 
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (isTextField(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
 
 
 
@@ -1936,7 +1958,7 @@ function selectSingle(uid){
 function onNodeMouseDown(event, d){
   const { state, config: CONFIG } = logyq
   if (event.button !== 0) return;                  // left only
-  if (isTextField?.(event.target)) return;
+  if (logyq.input.isTextField(event.target)) return;
 
   const uid = d?.data?._uid;
   if (!uid) return;
@@ -2276,7 +2298,7 @@ function removeNode(uid, { abandon = false } = {}){
 // --- V-hold handlers (focus-only visuals) ---
 window.addEventListener('keydown', (e) => {
   const { state, elements } = logyq
-  if (isTextField?.(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey){
     const noGroup = !(state.selectedUids && state.selectedUids.size > 0);
     if (noGroup && state.selectedUid){
@@ -2292,7 +2314,7 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keydown', (e) => {
   const { state } = logyq
   if (!state.vHold) return;
-  if (isTextField?.(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
 
   const k = e.key;
@@ -2350,7 +2372,7 @@ window.addEventListener('keyup', (e) => {
 window.addEventListener('keydown', (e) => {
   const { state } = logyq
   // Don’t steal keys from inputs
-  if (typeof isTextField === 'function' && isTextField(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
 
   // --- G / Shift+G: group toggles ---
   if ((e.key === 'g' || e.key === 'G') && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -3366,7 +3388,7 @@ elements.gLinks.selectAll("path.link").classed("is-sub-link is-parent-link", fal
 behavior(){
   return d3.drag()
     .filter((event) => {
-      if (isTextField(event.target)) return false;
+      if (logyq.input.isTextField(event.target)) return false;
       return event.button === 0;         // left button only (Shift allowed now)
     })
     .on("start", this.start)
@@ -4838,7 +4860,7 @@ function onNodeLeftDown(event, d){
   if (event.button !== 0) return;
 
   // Don’t interfere with text inputs/inline editor
-  if (isTextField?.(event.target)) return;
+  if (logyq.input.isTextField(event.target)) return;
 
   // Keep it local to the node
   event.stopPropagation();
@@ -5087,7 +5109,7 @@ elements.svg.on("wheel.smooth", function (event) {
 window.addEventListener('keydown', (e) => {
     // Don’t hijack Undo/Redo or when typing in inputs
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (isTextField(e.target)) return;
+    if (logyq.input.isTextField(e.target)) return;
 
     // Z = zoom in, Shift+Z = zoom out
     if (e.key === 'z' || e.key === 'Z') {
@@ -5098,18 +5120,14 @@ window.addEventListener('keydown', (e) => {
 
     window.addEventListener('keydown', (e) => {  //green
         if (e.shiftKey || e.metaKey || e.altKey) return;
-        if (isTextField(e.target)) return;
+        if (logyq.input.isTextField(e.target)) return;
         if (e.key === 'w' || e.key === 'W'){
             e.preventDefault();
             e.stopPropagation(); // avoid any older W handlers, if any
-                state.dockSide =
-                state.dockSide === 'bottom' ? 'left' :
-                state.dockSide === 'left'   ? 'hidden' :
-                                    'bottom';
-            applyDockSide();
+            const side = logyq.dock.cycleDockSide();
             logyq.selection.showToast(
-                state.dockSide === 'bottom' ? 'Word Bank → Bottom' :
-                state.dockSide === 'left'   ? 'Word Bank → Left'   :
+                side === 'bottom' ? 'Word Bank → Bottom' :
+                side === 'left'   ? 'Word Bank → Left'   :
                                     'Word Bank → Hidden', 900
     );}}, 
     
@@ -5160,7 +5178,7 @@ window.addEventListener('keydown', (e) => {
     // Right-click Add → funnel into the same logic as Enter/Shift+Enter
 elements.addWordBtn.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  commitWordInput(e);
+  logyq.input.commitWordInput(e);
 });
 
 
@@ -5246,7 +5264,7 @@ elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMap
 
     logyq.wordDock.render();
     /* [patch] dock-bounds-init start */
-    try{ updateDockBounds(); }catch(_e){}
+    try{ logyq.dock.updateDockBounds(); }catch(_e){}
     /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
 
@@ -5575,7 +5593,7 @@ window.addEventListener('keyup', tabUp, true);
 function keyDispatcher(e){
   const { state, elements, utils } = logyq
   // Only block hotkeys while typing *unless* Tab is being held
-  if (isTextField(e.target) && !state.tabHold) return;
+  if (logyq.input.isTextField(e.target) && !state.tabHold) return;
   const modalOpen = elements.settings.backdrop && elements.settings.backdrop.classList.contains("show");
   const t = e.target || {};
   const typing = (t instanceof HTMLInputElement) || (t instanceof HTMLTextAreaElement) || t.isContentEditable === true;
@@ -5673,7 +5691,7 @@ if ((lower === 'w' && e.shiftKey) && !e.metaKey){
 //  - T: delete subtree(s) to Trash
 //  - Shift+T: delete node only (promote children)
 if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey) {
-  if (typeof isTextField === 'function' && isTextField(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
   e.preventDefault();
 
   // Build selection (support focus-only case)
@@ -5740,7 +5758,7 @@ if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey) {
 if (!e.ctrlKey && !e.metaKey) {
   const k = e.key?.toLowerCase?.();
   if (k === 'd') {
-    if (typeof isTextField === 'function' && isTextField(e.target)) return;
+    if (logyq.input.isTextField(e.target)) return;
     e.preventDefault();
 
     // Build selection (support focus-only case)

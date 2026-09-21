@@ -320,7 +320,7 @@ function onNodeLeftDown(event, d){
   if (event.button !== 0) return;
 
   // Don’t interfere with text inputs/inline editor
-  if (isTextField?.(event.target)) return;
+  if (logyq.input.isTextField(event.target)) return;
 
   // Keep it local to the node
   event.stopPropagation();

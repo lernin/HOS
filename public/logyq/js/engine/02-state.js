@@ -93,10 +93,11 @@ attach('elements', elements)
 // - While editing an inline node: Enter confirms rename; Shift+Enter adds right-sibling (your editor handler already stops propagation)
 
 function commitWordInput(domEvent, opts = {}){
+  const { state, elements } = logyq
   const el = elements.wordInput;
   if (!el) return;
   const raw = (el.value || '').trim();
-  if (!raw) { showToast('Type something first'); return; }
+  if (!raw) { logyq.selection.showToast('Type something first'); return; }
 
   // If it looks like JSON/GIQ, keep your old importer behavior.
   // (If you want to force-bank instead, remove this early return.)
@@ -128,18 +129,18 @@ if (toTree) {
   // support comma-separated words just like bank does
   const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
   if (parts.length === 0) {
-    showToast('Type something first');
+    logyq.selection.showToast('Type something first');
   } else {
-    parts.forEach(p => addChildOf(uid, p, { noEdit: true }));
+    parts.forEach(p => logyq.treeOps.addChildOf(uid, p, { noEdit: true }));
 
-    const node = utils.findByUid(state.root?.data, uid);
-    showToast(node ? `Added under "${node.name}"` : 'Added under selected');
+    const node = logyq.utils.findByUid(state.root?.data, uid);
+    logyq.selection.showToast(node ? `Added under "${node.name}"` : 'Added under selected');
   }
 } else {
   // Split like the toTree branch so "a, b, c" makes three chips
   const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
   parts.forEach(p => logyq.wordDock.addWords(p, 'bank'));
-  showToast('Added to Word Dock');
+  logyq.selection.showToast('Added to Word Dock');
 }
 
 
@@ -190,50 +191,45 @@ elements.addWordBtn.addEventListener('contextmenu', (e) => {
 
 /* ---------- Add box handler: JSON / GIQ / comma-words ---------- */
 function handleAddBox(){
+  const { state, elements } = logyq
   const el = elements.wordInput;
   if (!el) return;
   const raw = (el.value || '').trim();
   if (!raw) return;
 
-  const parsed = parseIncoming(raw);
+  const parsed = logyq.treeOps.parseIncoming(raw);
+  const focused =
+    state.selectedUid ||
+    (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null);
 
   if (parsed && parsed.tree){
-    // 1) JSON/GIQ → make subtree under selected or root (rightmost)
-    const target =
-      (__selectedUid && __selectedUid()) ||       // selected node
-      (state.root && state.root.data && state.root.data._uid) || // root
-      null;
+    const target = focused || (state.root && state.root.data && state.root.data._uid) || null;
 
-    // add subtree under target (or become new root if none)
-    addSubtreeChildOf(target, parsed.tree);
+    logyq.treeOps.addSubtreeChildOf(target, parsed.tree);
 
-    // (optional) merge word bank into Dock (front)
     if (Array.isArray(parsed.wordBank) && parsed.wordBank.length){
       parsed.wordBank.forEach(w => logyq.wordDock?.addWords?.(w, 'bank'));
     }
 
-    showToast('Imported tree', 900);
+    logyq.selection.showToast('Imported tree', 900);
   } else {
-    // 2) Fallback: comma-separated words → add to the right, one by one
     const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
     if (parts.length){
-      const base = (__selectedUid && __selectedUid()) ||
+      const base = focused ||
                    (state.root && state.root.data && state.root.data._uid) ||
                    null;
 
       if (!state.root && parts.length){
-        // If no map yet: first word becomes root; rest as its children
         const rootData = { name: parts[0] };
-        utils.assignUids(rootData);
-        state.root = d3.hierarchy(rootData); utils.assignIds(state.root);
+        logyq.utils.assignUids(rootData);
+        state.root = d3.hierarchy(rootData); logyq.utils.assignIds(state.root);
         logyq.treeManager.layoutAndRender(false);
-        setSelected(state.root.data._uid);
-        parts.slice(1).forEach(p => addChildOf(state.root.data._uid, p, { noEdit: true }));
+        logyq.selection.setSelected(state.root.data._uid);
+        parts.slice(1).forEach(p => logyq.treeOps.addChildOf(state.root.data._uid, p, { noEdit: true }));
       } else if (base){
-        // Append as rightmost children under base
-        parts.forEach(p => addChildOf(base, p, { noEdit: true }));
+        parts.forEach(p => logyq.treeOps.addChildOf(base, p, { noEdit: true }));
       }
-      showToast('Added words', 900);
+      logyq.selection.showToast('Added words', 900);
     }
   }
 
@@ -257,8 +253,8 @@ elements.svg.on('click.bgClear', (event) => {
   const t = event.target;
   if (t && t.closest && t.closest('g.node')) return;
 
-  clearGroup();
-  clearSelection();
+  logyq.selection.clearGroup();
+  logyq.selection.clearSelection();
 });
 
 
@@ -296,12 +292,36 @@ window.addEventListener("resize", updateDockBounds, { passive: true });
 
 /* --- Dock side applier (bottom ↔ left ↔ hidden) --- */
 function applyDockSide(){
+  const { state, elements } = logyq
   const el = elements.Dock;
   if (!el) return;
   el.classList.remove('dock-left','dock-hidden');
   if (state.dockSide === 'left')      el.classList.add('dock-left');
   else if (state.dockSide === 'hidden') el.classList.add('dock-hidden');
 }
+
+function cycleDockSide(){
+  const { state } = logyq
+  state.dockSide =
+    state.dockSide === 'bottom' ? 'left' :
+    state.dockSide === 'left'   ? 'hidden' :
+                        'bottom';
+  applyDockSide();
+  return state.dockSide;
+}
+
+  attach('input', {
+    isTextField,
+    keyIsNav,
+    commitWordInput,
+    handleAddBox,
+  });
+
+  attach('dock', {
+    applyDockSide,
+    cycleDockSide,
+    updateDockBounds,
+  });
 
 /* call once so the current state is applied on load */
 applyDockSide();

@@ -2,7 +2,7 @@
 function keyDispatcher(e){
   const { state, elements, utils } = logyq
   // Only block hotkeys while typing *unless* Tab is being held
-  if (isTextField(e.target) && !state.tabHold) return;
+  if (logyq.input.isTextField(e.target) && !state.tabHold) return;
   const modalOpen = elements.settings.backdrop && elements.settings.backdrop.classList.contains("show");
   const t = e.target || {};
   const typing = (t instanceof HTMLInputElement) || (t instanceof HTMLTextAreaElement) || t.isContentEditable === true;
@@ -100,7 +100,7 @@ if ((lower === 'w' && e.shiftKey) && !e.metaKey){
 //  - T: delete subtree(s) to Trash
 //  - Shift+T: delete node only (promote children)
 if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey) {
-  if (typeof isTextField === 'function' && isTextField(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
   e.preventDefault();
 
   // Build selection (support focus-only case)
@@ -167,7 +167,7 @@ if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey) {
 if (!e.ctrlKey && !e.metaKey) {
   const k = e.key?.toLowerCase?.();
   if (k === 'd') {
-    if (typeof isTextField === 'function' && isTextField(e.target)) return;
+    if (logyq.input.isTextField(e.target)) return;
     e.preventDefault();
 
     // Build selection (support focus-only case)

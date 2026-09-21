@@ -3,7 +3,7 @@
     state.history.push(action);
     if(state.history.length>CONFIG.HISTORY_LIMIT) state.history.shift();
       /* [patch] dock-bounds-init start */
-      try{ updateDockBounds(); }catch(_e){}
+      try{ logyq.dock.updateDockBounds(); }catch(_e){}
       /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
   }
@@ -27,7 +27,7 @@ function autoFitSoon(delay){
   function undo(){
     const a = state.history.pop();
       /* [patch] dock-bounds-init start */
-      try{ updateDockBounds(); }catch(_e){}
+      try{ logyq.dock.updateDockBounds(); }catch(_e){}
       /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
     if(!a) return;

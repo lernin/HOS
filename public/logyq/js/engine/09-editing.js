@@ -160,10 +160,10 @@ function startInlineEdit({ wipe = false } = {}) {
 window.addEventListener('keydown', (e) => { //red
   const { state } = logyq
   // Ignore if not a nav key, or if user is typing in a field, or using modifiers
-  if (!keyIsNav(e)) return;
+  if (!logyq.input.keyIsNav(e)) return;
 if (state.vHold) return; 
   if (e.ctrlKey || e.metaKey || e.altKey) return;
-  if (isTextField(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
 
 
 

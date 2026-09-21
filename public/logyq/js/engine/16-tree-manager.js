@@ -91,7 +91,7 @@ elements.svg.on("wheel.smooth", function (event) {
 window.addEventListener('keydown', (e) => {
     // Don’t hijack Undo/Redo or when typing in inputs
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (isTextField(e.target)) return;
+    if (logyq.input.isTextField(e.target)) return;
 
     // Z = zoom in, Shift+Z = zoom out
     if (e.key === 'z' || e.key === 'Z') {
@@ -102,18 +102,14 @@ window.addEventListener('keydown', (e) => {
 
     window.addEventListener('keydown', (e) => {  //green
         if (e.shiftKey || e.metaKey || e.altKey) return;
-        if (isTextField(e.target)) return;
+        if (logyq.input.isTextField(e.target)) return;
         if (e.key === 'w' || e.key === 'W'){
             e.preventDefault();
             e.stopPropagation(); // avoid any older W handlers, if any
-                state.dockSide =
-                state.dockSide === 'bottom' ? 'left' :
-                state.dockSide === 'left'   ? 'hidden' :
-                                    'bottom';
-            applyDockSide();
+            const side = logyq.dock.cycleDockSide();
             logyq.selection.showToast(
-                state.dockSide === 'bottom' ? 'Word Bank → Bottom' :
-                state.dockSide === 'left'   ? 'Word Bank → Left'   :
+                side === 'bottom' ? 'Word Bank → Bottom' :
+                side === 'left'   ? 'Word Bank → Left'   :
                                     'Word Bank → Hidden', 900
     );}}, 
     
@@ -164,7 +160,7 @@ window.addEventListener('keydown', (e) => {
     // Right-click Add → funnel into the same logic as Enter/Shift+Enter
 elements.addWordBtn.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  commitWordInput(e);
+  logyq.input.commitWordInput(e);
 });
 
 
@@ -250,7 +246,7 @@ elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMap
 
     logyq.wordDock.render();
     /* [patch] dock-bounds-init start */
-    try{ updateDockBounds(); }catch(_e){}
+    try{ logyq.dock.updateDockBounds(); }catch(_e){}
     /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
 

@@ -135,7 +135,7 @@ function selectSingle(uid){
 function onNodeMouseDown(event, d){
   const { state, config: CONFIG } = logyq
   if (event.button !== 0) return;                  // left only
-  if (isTextField?.(event.target)) return;
+  if (logyq.input.isTextField(event.target)) return;
 
   const uid = d?.data?._uid;
   if (!uid) return;
@@ -475,7 +475,7 @@ function removeNode(uid, { abandon = false } = {}){
 // --- V-hold handlers (focus-only visuals) ---
 window.addEventListener('keydown', (e) => {
   const { state, elements } = logyq
-  if (isTextField?.(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey){
     const noGroup = !(state.selectedUids && state.selectedUids.size > 0);
     if (noGroup && state.selectedUid){
@@ -491,7 +491,7 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keydown', (e) => {
   const { state } = logyq
   if (!state.vHold) return;
-  if (isTextField?.(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
 
   const k = e.key;
@@ -549,7 +549,7 @@ window.addEventListener('keyup', (e) => {
 window.addEventListener('keydown', (e) => {
   const { state } = logyq
   // Don’t steal keys from inputs
-  if (typeof isTextField === 'function' && isTextField(e.target)) return;
+  if (logyq.input.isTextField(e.target)) return;
 
   // --- G / Shift+G: group toggles ---
   if ((e.key === 'g' || e.key === 'G') && !e.ctrlKey && !e.metaKey && !e.altKey) {
