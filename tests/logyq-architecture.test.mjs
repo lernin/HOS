@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { engineSource, logyqDir } from './logyq-source.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
-const logyqDir = join(root, 'public/logyq')
 const indexPath = join(logyqDir, 'index.html')
 const previewPath = join(logyqDir, 'logyq-preview.js')
 
@@ -31,10 +31,12 @@ test('LOGYQ lives only under public/logyq and does not import v161 asset paths',
 
 test('isolated copy retains the v161 engine markers and working controls', () => {
   const html = readFileSync(indexPath, 'utf8')
+  const engine = engineSource()
   const preview = readFileSync(previewPath, 'utf8')
 
   assert.match(html, /<title>LOGYQ<\/title>/)
-  assert.match(html, /window\.LOGYQBridge = Object\.freeze/)
+  assert.match(engine, /window\.LOGYQBridge = Object\.freeze/)
+  assert.match(html, /<script src="\/logyq\/js\/engine\.js"><\/script>/)
   assert.match(html, /<script src="\/logyq\/logyq-preview\.js"><\/script>/)
   assert.match(preview, /const bridge = window\.LOGYQBridge/)
   assert.match(preview, /logyq_current_map_v1/)
@@ -56,7 +58,7 @@ test('isolated copy retains the v161 engine markers and working controls', () =>
     'function moveSelectedHorizontally',
     'function sendSubtreeToWordBank',
     'function deleteNodesToTrash',
-  ]) assert.ok(html.includes(marker), `missing engine marker: ${marker}`)
+  ]) assert.ok(engine.includes(marker), `missing engine marker: ${marker}`)
 
   for (const id of [
     'wordInput', 'addWordBtn', 'undoBtn', 'mixBtn', 'mapsBtn', 'fitBtn',
@@ -75,12 +77,7 @@ test('LOGYQ preview still targets the existing production RPC surface', () => {
 })
 
 test('copied engine script parses', () => {
-  const html = readFileSync(indexPath, 'utf8')
-  const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
-    .map((match) => match[1])
-    .filter(Boolean)
-  assert.equal(scripts.length, 1)
-  assert.doesNotThrow(() => new Function(scripts[0]))
+  assert.doesNotThrow(() => new Function(engineSource()))
   assert.ok(statSync(join(logyqDir, 'logos/LOGO_GREEN_Q.svg')).isFile())
 })
 

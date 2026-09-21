@@ -1,24 +1,6 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-
-const root = fileURLToPath(new URL('..', import.meta.url))
-
-function engineSource() {
-  const html = readFileSync(join(root, 'public/logyq/index.html'), 'utf8')
-  const match = html.match(/<script>([\s\S]*?)<\/script>/i)
-  assert.ok(match, 'expected inline engine script')
-  return match[1]
-}
-
-function extractBlock(source, startMarker, endMarker) {
-  const start = source.indexOf(startMarker)
-  const end = source.indexOf(endMarker, start)
-  assert.ok(start >= 0 && end > start, `could not extract ${startMarker}`)
-  return source.slice(start, end)
-}
+import { engineSource, extractBlock } from './logyq-source.mjs'
 
 function loadUtils() {
   const source = engineSource()
