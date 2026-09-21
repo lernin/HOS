@@ -7280,6 +7280,30 @@ function getSelectedUid(){
     undo() { undo(); },
     mix(includeBank = false) { randomizeTree(!!includeBank); },
     fit() { treeManager.autoFit(); },
+    getZoomExtent() {
+      return state.zoom ? state.zoom.scaleExtent().slice() : null;
+    },
+    setZoomExtent(extent) {
+      if (!state.zoom || !Array.isArray(extent) || extent.length !== 2) return null;
+      const min = Number(extent[0]);
+      const max = Number(extent[1]);
+      if (!Number.isFinite(min) || !Number.isFinite(max) || min <= 0 || max < min) return null;
+      state.zoom.scaleExtent([min, max]);
+      return state.zoom.scaleExtent().slice();
+    },
+    getZoomScale() {
+      const svg = elements.svg?.node?.();
+      return svg ? d3.zoomTransform(svg).k : null;
+    },
+    scaleZoomTo(value) {
+      const svg = elements.svg?.node?.();
+      if (!svg || !state.zoom) return null;
+      const [min, max] = state.zoom.scaleExtent();
+      const numeric = Number(value);
+      const scale = Math.max(min, Math.min(max, Number.isFinite(numeric) ? numeric : min));
+      elements.svg.call(state.zoom.scaleTo, scale, [svg.clientWidth / 2, svg.clientHeight / 2]);
+      return d3.zoomTransform(svg).k;
+    },
     loadMap(tree, wordBank = []) {
       const next = utils.deepClone(tree || { name: 'New map' });
       utils.assignUids(next);
