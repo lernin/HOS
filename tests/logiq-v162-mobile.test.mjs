@@ -69,6 +69,8 @@ test('mobile branch drag is the sole held-gesture owner and protects the Word Ba
   assert.match(branchAffordance, /win\.addEventListener\('dragstart', suppressNativeDrag, true\)/)
   assert.match(branchAffordance, /bankChanged \|\| missingBranchNode \|\| changedOnSnapBack/)
   assert.match(branchAffordance, /bridge\.loadMap\(drag\.before\.tree, drag\.before\.wordBank\)/)
+  assert.match(branchAffordance, /canvas\.setPointerCapture\?\.\(event\.pointerId\)/)
+  assert.match(branchAffordance, /canvas\?\.releasePointerCapture\?\.\(drag\.pointerId\)/)
 })
 
 test('held-card drag keeps a ghost origin and defers the V2 fallback transaction until release', () => {
@@ -79,8 +81,9 @@ test('held-card drag keeps a ghost origin and defers the V2 fallback transaction
   assert.match(js, /mouse\(win,win,'mouseup',x,y,0\)/)
 })
 
-test('mobile drag preview keeps exact card sizes and carries the whole subtree', () => {
+test('mobile drag preview keeps the held card at its exact rendered size', () => {
   assert.match(branchAffordance, /hierarchy\.descendants\(\)/)
+  assert.match(branchAffordance, /makeBranchPreview\(doc, win, \[hierarchy\], hold\.uid\)/)
   assert.match(branchAffordance, /v2-branch-origin-ghost/)
   assert.match(branchAffordance, /logiq-v2-branch-preview/)
   assert.match(branchAffordance, /card\.style\.width = `\$\{entry\.rect\.width\}px`/)
@@ -89,6 +92,17 @@ test('mobile drag preview keeps exact card sizes and carries the whole subtree',
   assert.match(branchAffordance, /transform:none!important/)
   assert.doesNotMatch(branchAffordance, /scale\(1\.0?2\)/)
   assert.match(branchAffordance, /parentUid = entry\.item\?\.parent\?\.data\?\._uid/)
+})
+
+test('mobile selection preserves the card geometry instead of scaling its rectangle', () => {
+  assert.match(js, /g\.node\.is-outlined rect:not\(\.grabzone\),\s+body\.logiq-mobile-v2 g\.node\.is-filled rect:not\(\.grabzone\)\{transform:none!important/)
+})
+
+test('mobile editor overlays the card and centers it horizontally', () => {
+  assert.match(js, /centerX = Math\.round\(win\.innerWidth \/ 2\)/)
+  assert.match(js, /input\.style\.height=\`\$\{height\}px\`/)
+  assert.match(js, /input\.style\.left=\`\$\{Math\.max\(8,centerX-width\/2\)\}px\`/)
+  assert.match(js, /input\.style\.top=\`\$\{Math\.max\(8,Math\.min\(win\.innerHeight-height-8,r\.top\+Math\.max\(0,\(r\.height-height\)\/2\)\)\)\}px\`/)
 })
 
 test('mobile held drag drives the real desktop drag feedback engine', () => {
