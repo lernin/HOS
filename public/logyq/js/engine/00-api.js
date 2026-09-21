@@ -18,7 +18,10 @@
     editing: null,
     selection: null,
     treeOps: null,
+    deletion: null,
     drag: null,
+    wordDock: null,
+    mix: null,
     treeManager: null,
     keyboard: null,
   }

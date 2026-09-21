@@ -280,7 +280,7 @@ state.dragState.drop = null;
 
 
       if (state.dragState.multiUids && state.dragState.multiUids.length > 1){
-        deleteNodesToTrash(state.dragState.multiUids);
+        logyq.deletion.deleteNodesToTrash(state.dragState.multiUids);
         dragManager.clear(); logyq.treeManager.layoutAndRender(true, true); return;
       }
       // Single delete

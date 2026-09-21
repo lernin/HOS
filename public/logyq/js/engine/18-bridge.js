@@ -107,13 +107,13 @@
     },
     deleteSelection({ nodeOnly = false } = {}) {
       if (nodeOnly) {
-        deleteSelectedNodeOnly();
+        logyq.deletion.deleteSelectedNodeOnly();
       } else {
-        const grouped = state.selectedUids ? Array.from(state.selectedUids) : [];
-        const targets = grouped.length ? grouped : (state.selectedUid ? [state.selectedUid] : []);
+        const grouped = logyq.state.selectedUids ? Array.from(logyq.state.selectedUids) : [];
+        const targets = grouped.length ? grouped : (logyq.state.selectedUid ? [logyq.state.selectedUid] : []);
         if (!targets.length) return false;
-        deleteNodesToTrash(targets);
-        if (state.root) treeManager.layoutAndRender(false);
+        logyq.deletion.deleteNodesToTrash(targets);
+        if (logyq.state.root) logyq.treeManager.layoutAndRender(false);
       }
       emitChange();
       return true;

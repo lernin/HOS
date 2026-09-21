@@ -280,6 +280,91 @@ function fakeHierarchy(data) {
   return root
 }
 
+function loadDeletion() {
+  const utils = loadUtils()
+  const source = readFileSync(new URL('../public/logyq/js/engine/11-deletion.js', import.meta.url), 'utf8')
+  const history = []
+  const emptied = { count: 0 }
+  const logyq = {
+    utils,
+    state: { root: null, wordBank: [], selectedUid: null, selectedUids: new Set() },
+    history: { pushHistory: (action) => history.push(action) },
+    treeManager: { layoutAndRender() {}, renderEmpty() { emptied.count += 1 } },
+    selection: {
+      setSelected(uid) { logyq.state.selectedUid = uid },
+      selectSingle(uid) { logyq.state.selectedUid = uid },
+      clearSelection() { logyq.state.selectedUid = null },
+      clearGroup() { logyq.state.selectedUids = new Set() },
+    },
+    editing: { openNodeEditor() {}, updateNodeEditorPosition() {} },
+    drag: { clear() {} },
+  }
+  const fns = new Function(
+    'logyq',
+    'd3',
+    'attach',
+    `${source}; return { deleteNodesToTrash, deleteSelectedNodeOnly, deleteSelectedNodesOnly, exportGIQ };`,
+  )(logyq, { hierarchy: fakeHierarchy }, (name, value) => { logyq[name] = value; return value })
+  return { logyq, history, emptied, ...fns }
+}
+
+test('deleteNodesToTrash drops a subtree, skips nested selections, and clears a selected root', () => {
+  const { logyq, history, emptied, deleteNodesToTrash } = loadDeletion()
+  const tree = {
+    name: 'root',
+    children: [
+      { name: 'a', children: [{ name: 'a1' }] },
+      { name: 'b' },
+    ],
+  }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  const aUid = tree.children[0]._uid
+  const a1Uid = tree.children[0].children[0]._uid
+  deleteNodesToTrash([aUid, a1Uid])
+  assert.deepEqual(tree.children.map((child) => child.name), ['b'])
+  assert.equal(history[0].type, 'delete')
+  assert.equal(history[0].subtree.name, 'a')
+
+  const rooted = { name: 'only' }
+  logyq.utils.assignUids(rooted)
+  logyq.state.root = fakeHierarchy(rooted)
+  deleteNodesToTrash([rooted._uid])
+  assert.equal(logyq.state.root, null)
+  assert.equal(history.at(-1).type, 'delete-root')
+  assert.equal(emptied.count, 1)
+})
+
+test('deleteSelectedNodeOnly promotes children into the parent', () => {
+  const { logyq, history, deleteSelectedNodeOnly } = loadDeletion()
+  const tree = {
+    name: 'root',
+    children: [
+      { name: 'keep' },
+      { name: 'mid', children: [{ name: 'kid' }] },
+    ],
+  }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  const midUid = tree.children[1]._uid
+  logyq.state.selectedUids = new Set([midUid])
+  deleteSelectedNodeOnly()
+  assert.deepEqual(tree.children.map((child) => child.name), ['keep', 'kid'])
+  assert.equal(history[0].type, 'replace-root')
+  assert.equal(logyq.state.selectedUid, tree._uid)
+})
+
+test('exportGIQ still concatenates JSON, hashes, and the word bank', () => {
+  const { logyq, exportGIQ } = loadDeletion()
+  const tree = { name: 'Map', children: [{ name: 'Child' }] }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  logyq.state.wordBank = ['alpha', 'beta']
+  const giq = exportGIQ()
+  assert.match(giq, /"name": "Map"/)
+  assert.match(giq, /\n###\nalpha,beta\n\$\$\$/)
+})
+
 function loadTreeOps() {
   const utils = loadUtils()
   const source = readFileSync(new URL('../public/logyq/js/engine/12-tree-ops.js', import.meta.url), 'utf8')

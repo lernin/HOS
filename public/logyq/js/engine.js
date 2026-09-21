@@ -19,7 +19,10 @@
     editing: null,
     selection: null,
     treeOps: null,
+    deletion: null,
     drag: null,
+    wordDock: null,
+    mix: null,
     treeManager: null,
     keyboard: null,
   }
@@ -2518,17 +2521,18 @@ window.addEventListener('keydown', (e) => {
 
 /* [patch] multi-node-trash helper start */
 function deleteNodesToTrash(uids){
+  const { state, utils } = logyq
   if (!state.root || !Array.isArray(uids) || !uids.length) return;
 
   // If root is selected, delete the whole tree.
   const rootUid = state.root.data && state.root.data._uid;
   if (rootUid && uids.includes(rootUid)){
-    pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data) });
+    logyq.history.pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data) });
     state.root = null;
-    clearGroup();
-    clearSelection();
-    dragManager.clear();
-    treeManager.renderEmpty();
+    logyq.selection.clearGroup();
+    logyq.selection.clearSelection();
+    logyq.drag.clear();
+    logyq.treeManager.renderEmpty();
     return;
   }
 
@@ -2556,7 +2560,7 @@ function deleteNodesToTrash(uids){
     if (!parent) continue;
 
     const idx = (parent.children || []).findIndex(c => c && c._uid === uid);
-    pushHistory({
+    logyq.history.pushHistory({
       type: 'delete',
       parentPath: utils.pathToUid(state.root.data, parent._uid),
       index: idx,
@@ -2569,8 +2573,8 @@ function deleteNodesToTrash(uids){
 
 state.root = d3.hierarchy(state.root.data);
 utils.assignIds(state.root);
-clearGroup();        // <— add this
-clearSelection();    // keep if you still want focus cleared
+logyq.selection.clearGroup();        // <— add this
+logyq.selection.clearSelection();    // keep if you still want focus cleared
 
 }
 /* [patch] multi-node-trash helper end */
@@ -2578,6 +2582,7 @@ clearSelection();    // keep if you still want focus cleared
 
 /* [patch] delete-selected-node-only helper start */
 function deleteSelectedNodeOnly(){
+  const { state, utils } = logyq
   if (!state.root) return;
   if (!state.selectedUids || state.selectedUids.size !== 1) return;
 
@@ -2593,11 +2598,11 @@ function deleteSelectedNodeOnly(){
     const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
     // If the root has no children, the map becomes empty
     if (kidsH.length === 0){
-      pushHistory({ type: 'replace-root', prev });
+      logyq.history.pushHistory({ type: 'replace-root', prev });
       state.root = null;
-      clearGroup();
-      clearSelection();
-      treeManager.renderEmpty();
+      logyq.selection.clearGroup();
+      logyq.selection.clearSelection();
+      logyq.treeManager.renderEmpty();
       return;
     }
     const newRootData = kidsH[0].data;
@@ -2606,12 +2611,12 @@ function deleteSelectedNodeOnly(){
     // New root gets the other former root-children as its children too
     newRootData.children = (newRootData.children || []).concat(others);
 
-    pushHistory({ type: 'replace-root', prev });
+    logyq.history.pushHistory({ type: 'replace-root', prev });
     state.root = d3.hierarchy(newRootData);
     utils.assignIds(state.root);
-    clearGroup(); 
-    clearSelection();
-    selectSingle(state.root.data._uid);
+    logyq.selection.clearGroup(); 
+    logyq.selection.clearSelection();
+    logyq.selection.selectSingle(state.root.data._uid);
     return;
   }
 
@@ -2621,7 +2626,7 @@ function deleteSelectedNodeOnly(){
   const idx = arr.findIndex(c => c && c._uid === uid);
   const kids = (h.data.children || []).slice();
 
-  pushHistory({ type: 'replace-root', prev });
+  logyq.history.pushHistory({ type: 'replace-root', prev });
 
   if (idx > -1){
     // replace the node with its children
@@ -2631,18 +2636,19 @@ function deleteSelectedNodeOnly(){
 
   state.root = d3.hierarchy(state.root.data);
   utils.assignIds(state.root);
-  clearSelection();
-  selectSingle(parentData._uid);
+  logyq.selection.clearSelection();
+  logyq.selection.selectSingle(parentData._uid);
 }
 /* [patch] delete-selected-node-only helper end */
 
 /* [patch] delete-selected-nodes-only (multi) start */
 function deleteSelectedNodesOnly(){
+  const { state, utils } = logyq
   if (!state.root || !state.selectedUids || state.selectedUids.size === 0) return;
 
   // Snapshot once so Undo restores the whole tree in one step
   const prev = utils.deepClone(state.root.data);
-  pushHistory({ type: 'replace-root', prev });
+  logyq.history.pushHistory({ type: 'replace-root', prev });
 
   const selected = Array.from(state.selectedUids);
   const set = new Set(selected);
@@ -2654,8 +2660,8 @@ function deleteSelectedNodesOnly(){
     if (kidsH.length === 0){
       // deleting the only root node leaves an empty tree
       state.root = null;
-      clearSelection();
-      treeManager.renderEmpty();
+      logyq.selection.clearSelection();
+      logyq.treeManager.renderEmpty();
       return;
     }
     const newRootData = kidsH[0].data;
@@ -2704,12 +2710,13 @@ function deleteSelectedNodesOnly(){
   // Rebuild hierarchy and clear selection
   state.root = state.root ? d3.hierarchy(state.root.data) : null;
   if (state.root) utils.assignIds(state.root);
-  clearSelection();
+  logyq.selection.clearSelection();
 }
 /* [patch] delete-selected-nodes-only (multi) end */
 
 
 function exportGIQ(){
+  const { state } = logyq
   if (!state.root) return '';
 
   const jsonPart = JSON.stringify(state.root.data, null, 2);
@@ -2722,6 +2729,7 @@ function exportGIQ(){
 
 
 function copySubtreeToClipboard(uid){
+  const { state, utils } = logyq
   let text;
 
   if (uid){
@@ -2735,7 +2743,7 @@ function copySubtreeToClipboard(uid){
   }
 
   navigator.clipboard.writeText(text).then(
-    () => showToast(uid ? "Copied JSON" : "Copied GIQ", 800),
+    () => logyq.selection.showToast(uid ? "Copied JSON" : "Copied GIQ", 800),
     err => console.error("Clipboard error:", err)
   );
 }
@@ -2745,6 +2753,7 @@ function copySubtreeToClipboard(uid){
 
 /* ---------- first-card helper ---------- */
 function createFirstCardAndEdit(){
+  const { state, utils, elements } = logyq
   // 1) Build a blank root
   const rootData = { name: '' };
   utils.assignUids(rootData);
@@ -2752,17 +2761,17 @@ function createFirstCardAndEdit(){
   utils.assignIds(state.root);
 
   // 2) Render the tree
-  treeManager.layoutAndRender(true);
+  logyq.treeManager.layoutAndRender(true);
 
   // 3) Focus the new root (state only; DOM may not be ready yet)
   const uid = state.root.data._uid;
-  setSelected(uid);
+  logyq.selection.setSelected(uid);
 
   // 4) After the DOM updates: assert visibility, center, open editor
   requestAnimationFrame(() => {
     try {
       // Re-apply selection classes to the *real* just-rendered nodes
-      applySelectionStyles();
+      logyq.selection.applySelectionStyles();
 
       // Make sure nothing is hidden by style/transition leftovers
       if (elements.gNodes) {
@@ -2772,8 +2781,8 @@ function createFirstCardAndEdit(){
       }
 
       // Center/fit so the root is on-screen immediately
-      if (typeof treeManager.autoFit === 'function') {
-        treeManager.autoFit();
+      if (typeof logyq.treeManager.autoFit === 'function') {
+        logyq.treeManager.autoFit();
       } else if (typeof flyCenterToUID === 'function') {
         flyCenterToUID(uid, { duration: 0 });
       }
@@ -2782,17 +2791,17 @@ function createFirstCardAndEdit(){
     // Open inline editor on the root
     const h = state.root.descendants().find(n => n.data && n.data._uid === uid);
     if (h) {
-      openNodeEditor(h);
+      logyq.editing.openNodeEditor(h);
       // After editor attaches, restyle & place it one more time
       setTimeout(() => {
         try {
-          applySelectionStyles();
+          logyq.selection.applySelectionStyles();
           if (elements.gNodes) {
             elements.gNodes.selectAll('g.node')
               .attr('display', null)
               .style('opacity', 1);
           }
-          updateNodeEditorPosition?.();
+          logyq.editing.updateNodeEditorPosition?.();
         } catch (_) {}
       }, 0);
     }
@@ -2816,6 +2825,15 @@ function createFirstCardAndEdit(){
  * @param {boolean} [opts.select=true]   - if true, select/focus the new node
  * @returns {string|null} The new node's UID, or null on failure.
  */
+
+  attach('deletion', {
+    deleteNodesToTrash,
+    deleteSelectedNodeOnly,
+    deleteSelectedNodesOnly,
+    exportGIQ,
+    copySubtreeToClipboard,
+    createFirstCardAndEdit,
+  });
 function addChildOf(parentUid, newName = '', opts = {}) {
   const { noEdit = false, select = true } = opts;
   const { state, utils } = logyq
@@ -3640,7 +3658,7 @@ state.dragState.drop = null;
 
 
       if (state.dragState.multiUids && state.dragState.multiUids.length > 1){
-        deleteNodesToTrash(state.dragState.multiUids);
+        logyq.deletion.deleteNodesToTrash(state.dragState.multiUids);
         dragManager.clear(); logyq.treeManager.layoutAndRender(true, true); return;
       }
       // Single delete
@@ -5846,15 +5864,15 @@ if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey) {
     // node-only delete (reattach/promote children)
     if (selected.length === 1) {
       state.selectedUids = new Set(selected);
-      deleteSelectedNodeOnly();
+      logyq.deletion.deleteSelectedNodeOnly();
     } else {
       state.selectedUids = new Set(selected);
-      deleteSelectedNodesOnly();
+      logyq.deletion.deleteSelectedNodesOnly();
     }
   } else {
     // full subtree delete(s) to Trash
     state.selectedUids = new Set(selected);
-    deleteNodesToTrash(selected);
+    logyq.deletion.deleteNodesToTrash(selected);
   }
 
   // --- Refresh visuals
@@ -6532,13 +6550,13 @@ function getSelectedUid(){
     },
     deleteSelection({ nodeOnly = false } = {}) {
       if (nodeOnly) {
-        deleteSelectedNodeOnly();
+        logyq.deletion.deleteSelectedNodeOnly();
       } else {
-        const grouped = state.selectedUids ? Array.from(state.selectedUids) : [];
-        const targets = grouped.length ? grouped : (state.selectedUid ? [state.selectedUid] : []);
+        const grouped = logyq.state.selectedUids ? Array.from(logyq.state.selectedUids) : [];
+        const targets = grouped.length ? grouped : (logyq.state.selectedUid ? [logyq.state.selectedUid] : []);
         if (!targets.length) return false;
-        deleteNodesToTrash(targets);
-        if (state.root) treeManager.layoutAndRender(false);
+        logyq.deletion.deleteNodesToTrash(targets);
+        if (logyq.state.root) logyq.treeManager.layoutAndRender(false);
       }
       emitChange();
       return true;

@@ -107,6 +107,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('editing', {",
     "attach('selection', {",
     "attach('treeOps', {",
+    "attach('deletion', {",
     "attach('drag', dragManager)",
     "attach('treeManager', treeManager)",
     "attach('keyboard', {",
@@ -122,6 +123,10 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(treeOps, /attach\('treeOps'/)
   assert.match(treeOps, /logyq\.history\.pushHistory/)
   assert.match(treeOps, /logyq\.selection\.setSelected/)
+  const deletion = readFileSync(join(logyqDir, 'js/engine/11-deletion.js'), 'utf8')
+  assert.match(deletion, /attach\('deletion', \{[\s\S]*?\}\);/)
+  assert.match(deletion, /const \{ state, utils \} = logyq/)
+  assert.match(deletion, /logyq\.history\.pushHistory/)
   const drag = readFileSync(join(logyqDir, 'js/engine/13-drag.js'), 'utf8')
   assert.match(drag, /const \{ state, elements \} = logyq/)
   assert.match(drag, /logyq\.detectors\.pick/)

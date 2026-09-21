@@ -60,7 +60,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `08-detectors.js` | Invisible drop hit regions |
 | `09-editing.js` | Inline node editor. Registers `logyq.editing`. Reads shared state through the bag. |
 | `10-selection.js` | Focus/group selection, toasts, drop insert, reparent helpers. Registers `logyq.selection`. |
-| `11-deletion.js` | Trash/delete and related create/export helpers still adjacent in source |
+| `11-deletion.js` | Trash/delete helpers plus adjacent create/export helpers (`exportGIQ`, `createFirstCardAndEdit`). Registers `logyq.deletion`. Orphan add-child JSDoc at the file end is leftover v161 text; the real add helpers live in `12-tree-ops.js`. |
 | `12-tree-ops.js` | Add child/sibling, GIQ/JSON parse, Word Dock transfer. Registers `logyq.treeOps`. `DRAG_SLOP_PX` still lives at the bottom of this fragment because drag is concatenated later. |
 | `13-drag.js` | Subtree / node-only / group drag. Registers `logyq.drag`. Drop-case order is unchanged: group, then Shift-solo, then subtree. |
 | `14-word-dock.js` | Chip render, chip drag, `normalizeToTree` |
@@ -82,7 +82,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 
 ## Shared state (explicit `logyq` bag)
 
-Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), tree ops (`12-tree-ops.js`), drag (`13-drag.js`), and keyboard (`17-keyboard.js`) register cluster APIs on the bag and take shared state/managers from it. `LOGYQBridge` selection, edit, add-child, and create-relative methods go through those APIs. `LOGYQBridge.core` exposes the bag for tests.
+Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), tree ops (`12-tree-ops.js`), deletion (`11-deletion.js`), drag (`13-drag.js`), and keyboard (`17-keyboard.js`) register cluster APIs on the bag and take shared state/managers from it. `LOGYQBridge` selection, edit, add-child, create-relative, and delete-selection methods go through those APIs. `LOGYQBridge.core` exposes the bag for tests.
 
 Unconverted fragments still use ambient `state`, `elements`, `utils`, and friends; `attach()` makes those the same object references as `logyq.*`. Hidden communication that remains:
 

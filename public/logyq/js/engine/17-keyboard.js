@@ -125,15 +125,15 @@ if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey) {
     // node-only delete (reattach/promote children)
     if (selected.length === 1) {
       state.selectedUids = new Set(selected);
-      deleteSelectedNodeOnly();
+      logyq.deletion.deleteSelectedNodeOnly();
     } else {
       state.selectedUids = new Set(selected);
-      deleteSelectedNodesOnly();
+      logyq.deletion.deleteSelectedNodesOnly();
     }
   } else {
     // full subtree delete(s) to Trash
     state.selectedUids = new Set(selected);
-    deleteNodesToTrash(selected);
+    logyq.deletion.deleteNodesToTrash(selected);
   }
 
   // --- Refresh visuals
