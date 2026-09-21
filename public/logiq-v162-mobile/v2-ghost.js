@@ -61,7 +61,7 @@
         body.logiq-mobile-v2 #logiq-mobile-panel{top:max(8px,env(safe-area-inset-top));left:58px;right:8px;width:auto;max-width:330px}
         body.logiq-mobile-v2 #logiq-mobile-panel button[data-tool="add"],
         body.logiq-mobile-v2 #logiq-mobile-panel button[data-tool="add-selected"]{display:none!important}
-        #logiq-v2-rail{position:fixed;z-index:3900;left:max(6px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));display:flex;flex-direction:column;gap:6px;padding:5px;border:1px solid #e2e8f0;border-radius:14px;background:rgba(255,255,255,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);backdrop-filter:blur(8px)}
+        #logiq-v2-rail{position:fixed;z-index:3900;left:max(6px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));display:none;flex-direction:column;gap:6px;padding:5px;border:1px solid #e2e8f0;border-radius:14px;background:rgba(255,255,255,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);backdrop-filter:blur(8px)}
         #logiq-v2-rail button{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font:750 15px/1 system-ui;padding:0;touch-action:manipulation}
         #logiq-v2-rail button:active{transform:scale(.95);background:#f1f5f9}
         #logiq-v2-rail button[data-v2="delete"]{color:#dc2626}
@@ -86,7 +86,7 @@
         body.logiq-mobile-v2.v2-cancel #logiq-v2-drag-card{border-color:#ef4444;box-shadow:0 12px 30px rgba(239,68,68,.24)}
         body.logiq-mobile-v2.v2-cancel g.node.v2-origin-ghost rect:not(.grabzone){stroke:#ef4444!important}
         @media (orientation:landscape){
-          #logiq-v2-rail{top:50%;transform:translateY(-50%)}
+          #logiq-v2-rail{display:flex;top:50%;transform:translateY(-50%)}
           body.logiq-mobile-v2 #logiq-mobile-panel{top:8px;bottom:8px;left:58px;right:auto;width:min(300px,42vw);overflow:auto}
         }
       }`
@@ -187,6 +187,7 @@
       }
 
       if (had || !uid) return
+      try { canvas.setPointerCapture?.(e.pointerId) } catch (_) {}
       const before = captureState(bridge)
       const hold = {
         pointerId:e.pointerId, uid, node,
@@ -270,10 +271,28 @@
       releaseConsumedLater(win,g.pointerId)
     }
 
+    const cancelActiveDrag = () => {
+      cancelHold(win,state)
+      state.active.clear()
+      state.pointers.clear()
+      const g = state.gesture
+      if (!g) return
+      endGhostDrag(doc,win,state,g)
+      bridge.selectByUid(g.uid)
+      releaseConsumedLater(win,g.pointerId)
+    }
+
+    const cancelHiddenDrag = () => {
+      if (doc.hidden) cancelActiveDrag()
+    }
+
     canvas.addEventListener('pointerdown',down,true)
-    canvas.addEventListener('pointermove',move,true)
-    canvas.addEventListener('pointerup',up,true)
-    canvas.addEventListener('pointercancel',cancel,true)
+    win.addEventListener('pointermove',move,true)
+    win.addEventListener('pointerup',up,true)
+    win.addEventListener('pointercancel',cancel,true)
+    canvas.addEventListener('lostpointercapture',cancel,true)
+    win.addEventListener('blur',cancelActiveDrag,true)
+    doc.addEventListener('visibilitychange',cancelHiddenDrag,true)
 
     const suppress = e => {
       if (!state.gesture) return
@@ -385,11 +404,15 @@
   }
 
   function endGhostDrag(doc,win,state,g) {
+    state.gesture = null
+    const canvas = doc.getElementById('canvas')
+    try {
+      if (canvas?.hasPointerCapture?.(g.pointerId)) canvas.releasePointerCapture?.(g.pointerId)
+    } catch (_) {}
     for (const uid of g.ghostUids || []) nodeByUid(doc,uid)?.classList.remove('v2-origin-ghost')
     doc.querySelectorAll('g.node.v2-drop-target').forEach(node => node.classList.remove('v2-drop-target'))
     g.caret?.remove?.()
     g.preview?.remove?.()
-    state.gesture = null
     win.__logiqV2DragActive = false
     doc.body.classList.remove('v2-drag','v2-cancel')
     if (state.edgeRaf) win.cancelAnimationFrame(state.edgeRaf)
