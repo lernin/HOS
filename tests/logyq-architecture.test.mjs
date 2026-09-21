@@ -86,10 +86,12 @@ test('LOGYQ preview persists maps locally and does not call production LOGiQ RPC
     assert.doesNotMatch(preview, new RegExp(rpc))
     assert.doesNotMatch(engine, new RegExp(rpc))
   }
-  assert.match(engine, /logyq_saved_maps_v1/)
-  assert.match(engine, /logyq_ashley_user_v1/)
+  assert.doesNotMatch(engine, /logyq_saved_maps_v1/)
+  assert.doesNotMatch(engine, /logyq_ashley_user_v1/)
   assert.doesNotMatch(engine, /savedMaps_v1/)
   assert.doesNotMatch(engine, /["']ashleyUser["']/)
+  assert.doesNotMatch(engine, /function saveCurrentMap/)
+  assert.doesNotMatch(engine, /function openMapsMenu/)
 })
 
 test('engine exposes a shared logyq API bag that fragments register onto', () => {
@@ -247,6 +249,11 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(history, /const \{ state, elements, config: CONFIG \} = logyq/)
   assert.match(editing, /setSelectionSet\(merged\)/)
   assert.doesNotMatch(engine, /function setSelectionSet/)
+  assert.doesNotMatch(engine, /function startInlineEdit/)
+  assert.doesNotMatch(engine, /function createFirstCardAndEdit/)
+  assert.doesNotMatch(engine, /function getSelectionUids/)
+  assert.doesNotMatch(engine, /function copySubtreeToClipboard/)
+  assert.doesNotMatch(treeManager, /nEnter\.on\("dblclick"/)
 })
 
 test('copied engine script parses', () => {
@@ -291,8 +298,9 @@ test('preview fragments concatenate to the served enhancement without edits', ()
   assert.doesNotMatch(assembled.source, /bridge\.dispatchKey\('w'\)/)
   assert.match(assembled.source, /window\.LOGYQPreview = preview/)
   assert.match(assembled.source, /attach\('gestures'/)
-  assert.doesNotMatch(assembled.source, /bindSpawnGestures\(ui\.spawnPuck\)/)
-  assert.doesNotMatch(assembled.source, /bindCanvasGestures\(document/)
+  assert.doesNotMatch(assembled.source, /logiq-spawn-puck/)
+  assert.doesNotMatch(assembled.source, /function bindCanvasGestures/)
+  assert.doesNotMatch(assembled.source, /function bindSpawnGestures/)
   assert.match(assembled.source, /HOLD_MS: 280/)
   assert.match(assembled.source, /DOUBLE_TAP_MS: 360/)
   assert.match(assembled.source, /FLICK_MIN: 52/)

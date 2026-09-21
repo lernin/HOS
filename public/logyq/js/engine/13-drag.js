@@ -759,10 +759,3 @@ state.dragState.drop = null;
 attach('drag', dragManager)
 
 
-function getSelectionUids(){
-  const { state } = logyq
-  return state.selectedUids ? Array.from(state.selectedUids) : [];
-}
-
-
-

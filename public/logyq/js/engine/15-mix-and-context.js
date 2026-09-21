@@ -313,55 +313,7 @@ if (event.shiftKey && !event.metaKey) {
 
 
 
-  /* [patch] saved-maps start */
-  const SAVED_KEY = "logyq_saved_maps_v1";
-  function getSavedMaps(){ try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); } catch(_e){ return []; } }
-  function setSavedMaps(arr){ try { localStorage.setItem(SAVED_KEY, JSON.stringify(arr || [])); } catch(_e){} }
-  function saveCurrentMap(){
-    const { state, utils } = logyq
-    if (!state.root) { logyq.selection.showToast("Nothing to save"); return; }
-    const saved = getSavedMaps();
-    const defaultName = "Map " + (saved.length + 1);
-    const name = (prompt("Save map as:", defaultName) || defaultName).trim();
-    saved.push({ name, data: utils.deepClone(state.root.data) });
-    setSavedMaps(saved);
-    logyq.selection.showToast("Saved " + name, 1200);
-  }
-  function openMapsMenu(){
-    const { state, utils } = logyq
-    const saved = getSavedMaps();
-    if (!saved.length) { alert("No saved maps yet."); return; }
-    const list = saved.map((m,i)=> (i+1) + ". " + m.name).join("\n");
-    const input = prompt(
-      "Choose a map to load (number):\n" + list + "\n\nOr type: del <n>  (e.g., del 2)",
-      "1"
-    );
-    if (!input) return;
-    const s = input.trim().toLowerCase();
-    if (s.startsWith("del")) {
-      const n = parseInt(s.split(/\s+/)[1], 10);
-      if (Number.isFinite(n) && n >= 1 && n <= saved.length) {
-        saved.splice(n-1, 1);
-        setSavedMaps(saved);
-        logyq.selection.showToast("Deleted", 900);
-      }
-      return;
-    }
-    const idx = parseInt(s, 10) - 1;
-    if (!Number.isFinite(idx) || !saved[idx]) return;
-    const rec = saved[idx];
-    state.root = d3.hierarchy(utils.deepClone(rec.data));
-    utils.assignIds(state.root);
-    logyq.selection.setSelected(null);
-    logyq.treeManager.layoutAndRender(false);
-    logyq.treeManager.autoFit();
-    logyq.selection.showToast("Loaded " + rec.name, 1200);
-  }
-
-
   attach('mix', {
     randomizeTree,
     onNodeContextMenu,
-    saveCurrentMap,
-    openMapsMenu,
   });

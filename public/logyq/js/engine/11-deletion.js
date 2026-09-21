@@ -207,96 +207,9 @@ function exportGIQ(){
 }
 
 
-function copySubtreeToClipboard(uid){
-  const { state, utils } = logyq
-  let text;
-
-  if (uid){
-    // copy just that node as JSON
-    const node = utils.findByUid(state.root?.data, uid);
-    if (!node) return;
-    text = JSON.stringify(node, null, 2);
-  } else {
-    // copy whole project as GIQ
-    text = exportGIQ();
-  }
-
-  navigator.clipboard.writeText(text).then(
-    () => logyq.selection.showToast(uid ? "Copied JSON" : "Copied GIQ", 800),
-    err => console.error("Clipboard error:", err)
-  );
-}
-
-
-
-
-/* ---------- first-card helper ---------- */
-function createFirstCardAndEdit(){
-  const { state, utils, elements } = logyq
-  // 1) Build a blank root
-  const rootData = { name: '' };
-  utils.assignUids(rootData);
-  state.root = d3.hierarchy(rootData);
-  utils.assignIds(state.root);
-
-  // 2) Render the tree
-  logyq.treeManager.layoutAndRender(true);
-
-  // 3) Focus the new root (state only; DOM may not be ready yet)
-  const uid = state.root.data._uid;
-  logyq.selection.setSelected(uid);
-
-  // 4) After the DOM updates: assert visibility, center, open editor
-  requestAnimationFrame(() => {
-    try {
-      // Re-apply selection classes to the *real* just-rendered nodes
-      logyq.selection.applySelectionStyles();
-
-      // Make sure nothing is hidden by style/transition leftovers
-      if (elements.gNodes) {
-        elements.gNodes.selectAll('g.node')
-          .attr('display', null)
-          .style('opacity', 1);
-      }
-
-      // Center/fit so the root is on-screen immediately
-      if (typeof logyq.treeManager.autoFit === 'function') {
-        logyq.treeManager.autoFit();
-      }
-    } catch (_) {}
-
-    // Open inline editor on the root
-    const h = state.root.descendants().find(n => n.data && n.data._uid === uid);
-    if (h) {
-      logyq.editing.openNodeEditor(h);
-      // After editor attaches, restyle & place it one more time
-      setTimeout(() => {
-        try {
-          logyq.selection.applySelectionStyles();
-          if (elements.gNodes) {
-            elements.gNodes.selectAll('g.node')
-              .attr('display', null)
-              .style('opacity', 1);
-          }
-          logyq.editing.updateNodeEditorPosition?.();
-        } catch (_) {}
-      }, 0);
-    }
-  });
-}
-
-
-
-
-
-
-
-
   attach('deletion', {
     deleteNodesToTrash,
     deleteSelectedNodeOnly,
     deleteSelectedNodesOnly,
     exportGIQ,
-    copySubtreeToClipboard,
-    createFirstCardAndEdit,
   });

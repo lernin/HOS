@@ -30,12 +30,9 @@
     saving: false,
     saveAgain: false,
     libraryRows: [],
-    spawnGesture: null,
     recorder: null,
     recordingStream: null,
     recordingChunks: [],
-    recordingUid: null,
-    canvasPointers: new Map(),
   }
   preview.app = app
 

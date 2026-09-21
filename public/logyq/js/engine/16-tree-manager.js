@@ -160,9 +160,6 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
   }
 });
 
-elements.saveBtn && elements.saveBtn.addEventListener("click", logyq.mix.saveCurrentMap);
-elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMapsMenu);
-
     setupSettings();
     /* [patch] help-init start */
     setupHelp();
@@ -183,18 +180,6 @@ elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMap
     try{ logyq.dock.updateDockBounds(); }catch(_e){}
     /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
-
-    try{
-      const key="logyq_ashley_user_v1";
-      let stored=localStorage.getItem(key);
-      if(!stored){
-        const u={ username:"Ashley", created:Date.now() };
-        localStorage.setItem(key, JSON.stringify(u));
-        stored=JSON.stringify(u);
-      }
-      const u=JSON.parse(stored||"{}");
-      if(elements.userBadge) elements.userBadge.textContent = u.username ? ("Logged in as "+u.username) : "";
-    }catch(_e){}
   },
 
   renderEmpty(){
@@ -272,7 +257,6 @@ const nEnter = selNodes.enter()
 
 
 
-    nEnter.on("dblclick", (event,d)=>{ event.stopPropagation(); logyq.editing.openNodeEditor(d); });
     /* [patch] grabzone-behind start */
     nEnter.insert("rect",":first-child")
       .attr("class","grabzone")

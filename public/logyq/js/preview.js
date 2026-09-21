@@ -30,12 +30,9 @@
     saving: false,
     saveAgain: false,
     libraryRows: [],
-    spawnGesture: null,
     recorder: null,
     recordingStream: null,
     recordingChunks: [],
-    recordingUid: null,
-    canvasPointers: new Map(),
   }
   preview.app = app
 
@@ -135,7 +132,7 @@
       .logiq-pin-card h2,.logiq-pin-card p{margin:0}.logiq-pin-card p{font-size:13px;color:#64748b}
       .logiq-pin-actions{display:flex;justify-content:flex-end;gap:8px}
       .logiq-pin-error{display:none;color:#dc2626;font-size:12px}.logiq-pin-error.is-visible{display:block}
-      #logiq-mobile-header,#logiq-mobile-panel,#logiq-mobile-context,#logiq-spawn-puck,#logiq-spawn-ghost,#logiq-voice-bar{display:none}
+      #logiq-mobile-header,#logiq-mobile-panel,#logiq-mobile-context,#logiq-voice-bar{display:none}
 
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
         body>header{display:none!important}
@@ -143,7 +140,6 @@
         #trash{display:none!important}
         #Dock{left:8px;right:8px;bottom:66px;padding:0 4px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
         #Dock.dock-left{top:54px;bottom:66px;width:min(220px,72vw);padding:8px}
-        #Hint{bottom:72px}
         #Toast{bottom:122px;max-width:calc(100vw - 36px);text-align:center}
         #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px)}
         #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto}
@@ -160,11 +156,6 @@
         #logiq-mobile-context button{min-width:0;height:40px;border:1px solid #e2e8f0;border-radius:9px;background:#fff;color:#334155;font-size:12px;font-weight:700;padding:2px}
         #logiq-mobile-context button[data-action="delete"]{color:#dc2626}
         #logiq-mobile-context button.is-active{background:#dcfce7;border-color:#22c55e;color:#166534}
-        #logiq-spawn-puck{position:fixed;z-index:3200;width:38px;height:38px;border:2px solid #fff;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 5px 16px rgba(15,23,42,.3);font-size:24px;line-height:30px;align-items:center;justify-content:center;touch-action:none;user-select:none}
-        #logiq-spawn-puck.is-visible{display:none!important}
-        #logiq-spawn-puck.is-dragging{transform:scale(1.08);background:#15803d}
-        #logiq-spawn-ghost{position:fixed;z-index:3190;min-width:92px;padding:7px 10px;border-radius:999px;background:rgba(15,23,42,.9);color:#fff;text-align:center;font-size:12px;font-weight:750;pointer-events:none;transform:translate(-50%,-50%)}
-        #logiq-spawn-ghost.is-visible{display:none!important}
         #logiq-voice-bar{position:fixed;z-index:3300;left:50%;bottom:70px;transform:translateX(-50%);align-items:center;gap:9px;max-width:calc(100vw - 20px);padding:8px 9px 8px 13px;border-radius:999px;background:#111827;color:#fff;box-shadow:0 12px 34px rgba(15,23,42,.35);font-size:13px;font-weight:700;white-space:nowrap}
         #logiq-voice-bar.is-visible{display:flex}
         #logiq-voice-stop{border:0;border-radius:999px;background:#ef4444;color:#fff;padding:8px 13px;font-weight:800}
@@ -231,8 +222,6 @@
         <button data-action="left" aria-label="Previous node">←</button><button data-action="up" aria-label="Parent node">↑</button><button data-action="down" aria-label="Child node">↓</button><button data-action="right" aria-label="Next node">→</button>
         <button data-action="edit">Edit</button><button data-action="delete">Delete</button>
       </nav>
-      <button id="logiq-spawn-puck" aria-label="Flick to create a related card" title="Flick: up parent, left/right sibling, down child">+</button>
-      <div id="logiq-spawn-ghost" aria-hidden="true"></div>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
       <div class="logiq-backdrop" id="logiq-library" aria-hidden="true">
         <section class="logiq-modal" role="dialog" aria-modal="true" aria-labelledby="logiq-library-title">
@@ -251,8 +240,6 @@
       mobilePanel: document.getElementById('logiq-mobile-panel'),
       mobileInput: document.getElementById('logiq-mobile-word-input'),
       mobileContext: document.getElementById('logiq-mobile-context'),
-      spawnPuck: document.getElementById('logiq-spawn-puck'),
-      spawnGhost: document.getElementById('logiq-spawn-ghost'),
       voiceBar: document.getElementById('logiq-voice-bar'),
       voiceStatus: document.getElementById('logiq-voice-status'),
       library: document.getElementById('logiq-library'),
@@ -269,7 +256,7 @@
       const open = ui.mobilePanel.classList.toggle('is-open')
       ui.menuButton.setAttribute('aria-expanded', String(open))
     })
-    document.getElementById('logiq-mobile-mic-btn').addEventListener('click', () => startVoiceCapture(null))
+    document.getElementById('logiq-mobile-mic-btn').addEventListener('click', () => startVoiceCapture())
     document.getElementById('logiq-voice-stop').addEventListener('click', stopVoiceCapture)
 
     const legacyMaps = document.getElementById('mapsBtn')
@@ -309,9 +296,6 @@
       if (action === 'edit') bridge.editSelected()
       if (action === 'delete' && window.confirm('Delete the selected node or subtree?')) bridge.deleteSelection()
     })
-
-    // Direct-flick / hold-drag / double-tap bind themselves from 05-v162-gestures.js.
-    // Do not reattach bindCanvasGestures / bindSpawnGestures; those race the v162 layer.
 
     ui.mapList.addEventListener('click', handleMapAction)
     ui.pin.addEventListener('click', (event) => { if (event.target === ui.pin) finishPin(null) })
@@ -358,24 +342,10 @@
     const selectedUid = bridge.getSelectedUid()
     const selected = selectedUid || bridge.getSelectedUids().length
     ui.mobileContext.classList.toggle('is-visible', !!selected)
-    ui.spawnPuck.classList.remove('is-visible')
-    ui.spawnGhost.classList.remove('is-visible')
   }
 
   function updateMapName() {
     localStorage.setItem(CURRENT_KEY, JSON.stringify(app.current))
-  }
-
-  function isPhoneUi() {
-    return window.matchMedia('(max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px)').matches
-  }
-
-  function bindCanvasGestures(_canvas) {
-    // Retired. Old tap-vs-pan capture raced the v162 layer. Header-mic voice stays below.
-  }
-
-  function bindSpawnGestures(_puck) {
-    // Retired. Spawn-puck auto-voice raced direct-flick createRelative.
   }
 
   function showMobileToast(message) {
@@ -387,33 +357,27 @@
     showMobileToast.timer = setTimeout(() => { toast.style.display = 'none' }, 1800)
   }
 
-  async function startVoiceCapture(uid) {
+  async function startVoiceCapture() {
     if (app.recorder) return
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       showMobileToast('Voice capture is not available in this browser')
-      if (uid) bridge.editSelected({ wipe: true })
       return
     }
     const pin = await getPin(true)
-    if (!pin) {
-      if (uid) bridge.editSelected({ wipe: true })
-      return
-    }
+    if (!pin) return
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
       app.recorder = recorder
       app.recordingStream = stream
       app.recordingChunks = []
-      app.recordingUid = uid
       recorder.addEventListener('dataavailable', (event) => { if (event.data?.size) app.recordingChunks.push(event.data) })
       recorder.addEventListener('stop', transcribeRecording, { once: true })
       recorder.start()
-      ui.voiceStatus.textContent = uid ? 'Listening for card…' : 'Listening…'
+      ui.voiceStatus.textContent = 'Listening…'
       ui.voiceBar.classList.add('is-visible')
     } catch (_error) {
       showMobileToast('Microphone permission is needed for voice entry')
-      if (uid) bridge.editSelected({ wipe: true })
     }
   }
 
@@ -424,14 +388,12 @@
   }
 
   async function transcribeRecording() {
-    const uid = app.recordingUid
     const recorder = app.recorder
     const chunks = app.recordingChunks.slice()
     app.recordingStream?.getTracks?.().forEach((track) => track.stop())
     app.recorder = null
     app.recordingStream = null
     app.recordingChunks = []
-    app.recordingUid = null
     try {
       const audio = new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' })
       const form = new FormData()
@@ -440,15 +402,11 @@
       const result = await response.json()
       if (!response.ok || !result?.text?.trim()) throw new Error(result?.error || 'No speech detected')
       const text = result.text.trim()
-      if (uid) bridge.renameNode(uid, text)
-      else {
-        ui.mobileInput.value = text
-        ui.mobileInput.focus()
-      }
-      showMobileToast(uid ? `Added “${text}”` : 'Voice text ready')
+      ui.mobileInput.value = text
+      ui.mobileInput.focus()
+      showMobileToast('Voice text ready')
     } catch (_error) {
       showMobileToast('Could not transcribe. Type the card instead.')
-      if (uid) bridge.editSelected({ wipe: true })
     } finally {
       ui.voiceBar.classList.remove('is-visible')
       requestAnimationFrame(updateContextActions)
@@ -456,9 +414,6 @@
   }
 
   attach('gestures', {
-    constants: null,
-    bindCanvas: bindCanvasGestures,
-    bindSpawn: bindSpawnGestures,
     startVoiceCapture,
     stopVoiceCapture,
   });

@@ -45,18 +45,11 @@ function keyIsNav(e){
     undoBtn: document.getElementById("undoBtn"),
     fitBtn: document.getElementById("fitBtn"),
     mixBtn: document.getElementById("mixBtn"),
-    /* [patch] saved-refs start */
-    saveBtn: document.getElementById("saveBtn"),
     mapsBtn: document.getElementById("mapsBtn"),
-    /* [patch] saved-refs end */
-
-
     wordInput: document.getElementById("wordInput"),
     addWordBtn: document.getElementById("addWordBtn"),
     Dock: document.getElementById("Dock"),
-    Hint: document.getElementById("Hint"),
     Toast: document.getElementById("Toast"),
-    userBadge: document.getElementById("userBadge"),
     settings: {
       backdrop: document.getElementById("settingsBackdrop"),
       close: document.getElementById("settingsClose"),

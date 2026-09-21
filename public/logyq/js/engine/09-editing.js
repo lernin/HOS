@@ -131,30 +131,7 @@
     input.addEventListener("blur", function(){ closeNodeEditor(true, false); });
     updateNodeEditorPosition();
     setTimeout(function(){ try{ input.focus(); var L=input.value.length; input.setSelectionRange(L,L); }catch(_e){} }, 0);
-    // zoomToNodeCenter(state.editingUid, 1.5);
   }
-
-/* [patch] edit-hotkey helpers start */
-function startInlineEdit({ wipe = false } = {}) {
-  const { state } = logyq
-  if (!state.root) return;
-
-  const count = state.selectedUids ? state.selectedUids.size : 0;
-  if (count === 0) { showToast('Select a node for editing'); return; }
-  if (count > 1)   { showToast('Select just one node'); return; }
-
-  const uid = [...state.selectedUids][0];
-  const h = state.root.descendants().find(n => n.data && n.data._uid === uid);
-  if (!h) return;
-
-  openNodeEditor(h);
-  if (wipe && state.editorEl) {
-    state.editorEl.value = '';
-    try { state.editorEl.focus(); } catch(_) {}
-  }
-}
-/* [patch] edit-hotkey helpers end */
-
 
 // --- Auto-fit + sticky-multiselect when nav keys move focus ---
 window.addEventListener('keydown', (e) => { //red
@@ -235,24 +212,10 @@ window.addEventListener('keydown', (e) => { //purple
 
 
 
-  function zoomToNodeCenter(uid, desired){
-    const { state, elements } = logyq
-    if(!elements.svg || !elements.gRoot || !state.root) return;
-    const h = state.root.descendants().find(n=>n.data._uid===uid); if(!h) return;
-    const svgEl = elements.svg.node(); const W = svgEl.clientWidth, H = svgEl.clientHeight;
-    const m = elements.gRoot.node().getScreenCTM(); const curK = m ? (m.a||1) : 1;
-    const k = Math.max(curK, desired||1.4);
-    const tx = (W/2) - k * h.x; const ty = (H/2) - k * h.y;
-    elements.svg.transition().duration(360).call(state.zoom.transform, d3.zoomIdentity.translate(tx,ty).scale(k));
-    setTimeout(updateNodeEditorPosition, 20);
-  }
-
   attach('editing', {
     updateNodeEditorPosition,
     closeNodeEditor,
     openNodeEditor,
-    startInlineEdit,
-    zoomToNodeCenter,
   })
 
 

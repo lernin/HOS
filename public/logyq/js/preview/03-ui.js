@@ -26,8 +26,6 @@
         <button data-action="left" aria-label="Previous node">←</button><button data-action="up" aria-label="Parent node">↑</button><button data-action="down" aria-label="Child node">↓</button><button data-action="right" aria-label="Next node">→</button>
         <button data-action="edit">Edit</button><button data-action="delete">Delete</button>
       </nav>
-      <button id="logiq-spawn-puck" aria-label="Flick to create a related card" title="Flick: up parent, left/right sibling, down child">+</button>
-      <div id="logiq-spawn-ghost" aria-hidden="true"></div>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
       <div class="logiq-backdrop" id="logiq-library" aria-hidden="true">
         <section class="logiq-modal" role="dialog" aria-modal="true" aria-labelledby="logiq-library-title">
@@ -46,8 +44,6 @@
       mobilePanel: document.getElementById('logiq-mobile-panel'),
       mobileInput: document.getElementById('logiq-mobile-word-input'),
       mobileContext: document.getElementById('logiq-mobile-context'),
-      spawnPuck: document.getElementById('logiq-spawn-puck'),
-      spawnGhost: document.getElementById('logiq-spawn-ghost'),
       voiceBar: document.getElementById('logiq-voice-bar'),
       voiceStatus: document.getElementById('logiq-voice-status'),
       library: document.getElementById('logiq-library'),
@@ -64,7 +60,7 @@
       const open = ui.mobilePanel.classList.toggle('is-open')
       ui.menuButton.setAttribute('aria-expanded', String(open))
     })
-    document.getElementById('logiq-mobile-mic-btn').addEventListener('click', () => startVoiceCapture(null))
+    document.getElementById('logiq-mobile-mic-btn').addEventListener('click', () => startVoiceCapture())
     document.getElementById('logiq-voice-stop').addEventListener('click', stopVoiceCapture)
 
     const legacyMaps = document.getElementById('mapsBtn')
@@ -104,9 +100,6 @@
       if (action === 'edit') bridge.editSelected()
       if (action === 'delete' && window.confirm('Delete the selected node or subtree?')) bridge.deleteSelection()
     })
-
-    // Direct-flick / hold-drag / double-tap bind themselves from 05-v162-gestures.js.
-    // Do not reattach bindCanvasGestures / bindSpawnGestures; those race the v162 layer.
 
     ui.mapList.addEventListener('click', handleMapAction)
     ui.pin.addEventListener('click', (event) => { if (event.target === ui.pin) finishPin(null) })
@@ -153,15 +146,9 @@
     const selectedUid = bridge.getSelectedUid()
     const selected = selectedUid || bridge.getSelectedUids().length
     ui.mobileContext.classList.toggle('is-visible', !!selected)
-    ui.spawnPuck.classList.remove('is-visible')
-    ui.spawnGhost.classList.remove('is-visible')
   }
 
   function updateMapName() {
     localStorage.setItem(CURRENT_KEY, JSON.stringify(app.current))
-  }
-
-  function isPhoneUi() {
-    return window.matchMedia('(max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px)').matches
   }
 

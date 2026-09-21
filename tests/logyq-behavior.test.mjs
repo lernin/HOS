@@ -220,22 +220,15 @@ test('insertNodeAtDrop places a node in a sibling gap or under a target', () => 
   assert.equal(tree.children[0].children[0].name, 'leaf')
 })
 
-test('inline edit still requires exactly one selected node', () => {
-  const source = readFileSync(new URL('../public/logyq/js/engine/09-editing.js', import.meta.url), 'utf8')
-  const block = extractBlock(source, 'function startInlineEdit({ wipe = false } = {}) {', '/* [patch] edit-hotkey helpers end */')
-  const toasts = []
-  const opened = []
-  const startInlineEdit = new Function('logyq', 'showToast', 'openNodeEditor', `${block}; return startInlineEdit;`)
-  const run = (selectedUids) => startInlineEdit(
-    { state: { root: {}, selectedUids, editorEl: null } },
-    (msg) => toasts.push(msg),
-    (node) => opened.push(node),
-  )()
-
-  run(new Set())
-  run(new Set(['a', 'b']))
-  assert.deepEqual(toasts, ['Select a node for editing', 'Select just one node'])
-  assert.equal(opened.length, 0)
+test('inline edit goes through openNodeEditor, not a second helper', () => {
+  const editing = readFileSync(new URL('../public/logyq/js/engine/09-editing.js', import.meta.url), 'utf8')
+  const keyboard = readFileSync(new URL('../public/logyq/js/engine/17-keyboard.js', import.meta.url), 'utf8')
+  const bridge = readFileSync(new URL('../public/logyq/js/engine/18-bridge.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(editing, /function startInlineEdit/)
+  assert.doesNotMatch(editing, /function zoomToNodeCenter/)
+  assert.match(editing, /function openNodeEditor/)
+  assert.match(keyboard, /logyq\.editing\.openNodeEditor\(h\)/)
+  assert.match(bridge, /logyq\.editing\.openNodeEditor\(node\)/)
 })
 
 test('normalizeToTree preserves v161 array, node, and plain-object rules', () => {
@@ -500,12 +493,11 @@ test('drag drop handling keeps group, solo, then subtree order', () => {
   assert.match(source, /Never allow rootAbove while dragging the current root/)
 })
 
-test('getSelectionUids reads the group set from the logyq bag', () => {
-  const source = readFileSync(new URL('../public/logyq/js/engine/13-drag.js', import.meta.url), 'utf8')
-  const start = source.indexOf('function getSelectionUids(){')
-  const fn = new Function('logyq', `${source.slice(start)}; return getSelectionUids;`)
-  assert.deepEqual(fn({ state: { selectedUids: new Set(['b', 'a']) } })().sort(), ['a', 'b'])
-  assert.deepEqual(fn({ state: { selectedUids: null } })(), [])
+test('dead getSelectionUids helper is gone; bridge getSelectedUids is the live read', () => {
+  const drag = readFileSync(new URL('../public/logyq/js/engine/13-drag.js', import.meta.url), 'utf8')
+  const bridge = readFileSync(new URL('../public/logyq/js/engine/18-bridge.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(drag, /function getSelectionUids/)
+  assert.match(bridge, /getSelectedUids: \(\) => logyq\.state\.selectedUids/)
 })
 
 test('keyboard W cycles the dock CSS side and no longer dumps the WordBank', () => {
@@ -784,19 +776,22 @@ test('cycleDockSide walks bottom → left → hidden → bottom', () => {
   assert.equal(setSide('nope'), 'hidden')
 })
 
-test('preview gestures expose v162 flick/hold/double-tap seams and retire the spawn puck', () => {
+test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn puck', () => {
   const gestures = readFileSync(new URL('../public/logyq/js/preview/04-gestures.js', import.meta.url), 'utf8')
   const v162 = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
   const ui = readFileSync(new URL('../public/logyq/js/preview/03-ui.js', import.meta.url), 'utf8')
   const boot = readFileSync(new URL('../public/logyq/js/preview/00-boot.js', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
   assert.match(boot, /window\.LOGYQPreview = preview/)
   assert.match(gestures, /attach\('gestures'/)
-  assert.match(gestures, /function bindCanvasGestures/)
-  assert.match(gestures, /function bindSpawnGestures/)
+  assert.doesNotMatch(gestures, /function bindCanvasGestures/)
+  assert.doesNotMatch(gestures, /function bindSpawnGestures/)
   assert.doesNotMatch(gestures, /addEventListener\('pointerdown'/)
-  assert.doesNotMatch(ui, /bindSpawnGestures\(ui\.spawnPuck\)/)
-  assert.doesNotMatch(ui, /bindCanvasGestures\(/)
-  assert.doesNotMatch(ui, /ui\.spawnPuck\.addEventListener/)
+  assert.doesNotMatch(ui, /logiq-spawn-puck/)
+  assert.doesNotMatch(ui, /spawnPuck/)
+  assert.doesNotMatch(styles, /logiq-spawn-puck/)
+  assert.doesNotMatch(boot, /spawnGesture/)
+  assert.doesNotMatch(boot, /canvasPointers/)
   assert.match(v162, /HOLD_MS: 280/)
   assert.match(v162, /HOLD_SLOP: 8/)
   assert.match(v162, /DOUBLE_TAP_MS: 360/)

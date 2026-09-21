@@ -308,28 +308,7 @@ header {
 
 
 
-  /* ======================= HINT & TOAST ======================= */
-  #Hint{
-    position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: 16px;
-    z-index: 14;
-    display: none;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
-    border: 1px solid #e5e7eb;
-    border-radius: 999px;
-    background: rgba(255,255,255,.9);
-    box-shadow: 0 6px 16px rgba(0,0,0,.08);
-    font-weight: 600;
-    color: #334155;
-    cursor: pointer;
-    user-select: none;
-  }
-
-  #Toast{
+  /* ======================= TOAST ======================= */
     position: fixed;
     left: 50%;
     transform: translateX(-50%);

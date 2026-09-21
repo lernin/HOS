@@ -264,18 +264,11 @@ function keyIsNav(e){
     undoBtn: document.getElementById("undoBtn"),
     fitBtn: document.getElementById("fitBtn"),
     mixBtn: document.getElementById("mixBtn"),
-    /* [patch] saved-refs start */
-    saveBtn: document.getElementById("saveBtn"),
     mapsBtn: document.getElementById("mapsBtn"),
-    /* [patch] saved-refs end */
-
-
     wordInput: document.getElementById("wordInput"),
     addWordBtn: document.getElementById("addWordBtn"),
     Dock: document.getElementById("Dock"),
-    Hint: document.getElementById("Hint"),
     Toast: document.getElementById("Toast"),
-    userBadge: document.getElementById("userBadge"),
     settings: {
       backdrop: document.getElementById("settingsBackdrop"),
       close: document.getElementById("settingsClose"),
@@ -1720,30 +1713,7 @@ if (dir === +1){
     input.addEventListener("blur", function(){ closeNodeEditor(true, false); });
     updateNodeEditorPosition();
     setTimeout(function(){ try{ input.focus(); var L=input.value.length; input.setSelectionRange(L,L); }catch(_e){} }, 0);
-    // zoomToNodeCenter(state.editingUid, 1.5);
   }
-
-/* [patch] edit-hotkey helpers start */
-function startInlineEdit({ wipe = false } = {}) {
-  const { state } = logyq
-  if (!state.root) return;
-
-  const count = state.selectedUids ? state.selectedUids.size : 0;
-  if (count === 0) { showToast('Select a node for editing'); return; }
-  if (count > 1)   { showToast('Select just one node'); return; }
-
-  const uid = [...state.selectedUids][0];
-  const h = state.root.descendants().find(n => n.data && n.data._uid === uid);
-  if (!h) return;
-
-  openNodeEditor(h);
-  if (wipe && state.editorEl) {
-    state.editorEl.value = '';
-    try { state.editorEl.focus(); } catch(_) {}
-  }
-}
-/* [patch] edit-hotkey helpers end */
-
 
 // --- Auto-fit + sticky-multiselect when nav keys move focus ---
 window.addEventListener('keydown', (e) => { //red
@@ -1824,24 +1794,10 @@ window.addEventListener('keydown', (e) => { //purple
 
 
 
-  function zoomToNodeCenter(uid, desired){
-    const { state, elements } = logyq
-    if(!elements.svg || !elements.gRoot || !state.root) return;
-    const h = state.root.descendants().find(n=>n.data._uid===uid); if(!h) return;
-    const svgEl = elements.svg.node(); const W = svgEl.clientWidth, H = svgEl.clientHeight;
-    const m = elements.gRoot.node().getScreenCTM(); const curK = m ? (m.a||1) : 1;
-    const k = Math.max(curK, desired||1.4);
-    const tx = (W/2) - k * h.x; const ty = (H/2) - k * h.y;
-    elements.svg.transition().duration(360).call(state.zoom.transform, d3.zoomIdentity.translate(tx,ty).scale(k));
-    setTimeout(updateNodeEditorPosition, 20);
-  }
-
   attach('editing', {
     updateNodeEditorPosition,
     closeNodeEditor,
     openNodeEditor,
-    startInlineEdit,
-    zoomToNodeCenter,
   })
 
 
@@ -2694,98 +2650,11 @@ function exportGIQ(){
 }
 
 
-function copySubtreeToClipboard(uid){
-  const { state, utils } = logyq
-  let text;
-
-  if (uid){
-    // copy just that node as JSON
-    const node = utils.findByUid(state.root?.data, uid);
-    if (!node) return;
-    text = JSON.stringify(node, null, 2);
-  } else {
-    // copy whole project as GIQ
-    text = exportGIQ();
-  }
-
-  navigator.clipboard.writeText(text).then(
-    () => logyq.selection.showToast(uid ? "Copied JSON" : "Copied GIQ", 800),
-    err => console.error("Clipboard error:", err)
-  );
-}
-
-
-
-
-/* ---------- first-card helper ---------- */
-function createFirstCardAndEdit(){
-  const { state, utils, elements } = logyq
-  // 1) Build a blank root
-  const rootData = { name: '' };
-  utils.assignUids(rootData);
-  state.root = d3.hierarchy(rootData);
-  utils.assignIds(state.root);
-
-  // 2) Render the tree
-  logyq.treeManager.layoutAndRender(true);
-
-  // 3) Focus the new root (state only; DOM may not be ready yet)
-  const uid = state.root.data._uid;
-  logyq.selection.setSelected(uid);
-
-  // 4) After the DOM updates: assert visibility, center, open editor
-  requestAnimationFrame(() => {
-    try {
-      // Re-apply selection classes to the *real* just-rendered nodes
-      logyq.selection.applySelectionStyles();
-
-      // Make sure nothing is hidden by style/transition leftovers
-      if (elements.gNodes) {
-        elements.gNodes.selectAll('g.node')
-          .attr('display', null)
-          .style('opacity', 1);
-      }
-
-      // Center/fit so the root is on-screen immediately
-      if (typeof logyq.treeManager.autoFit === 'function') {
-        logyq.treeManager.autoFit();
-      }
-    } catch (_) {}
-
-    // Open inline editor on the root
-    const h = state.root.descendants().find(n => n.data && n.data._uid === uid);
-    if (h) {
-      logyq.editing.openNodeEditor(h);
-      // After editor attaches, restyle & place it one more time
-      setTimeout(() => {
-        try {
-          logyq.selection.applySelectionStyles();
-          if (elements.gNodes) {
-            elements.gNodes.selectAll('g.node')
-              .attr('display', null)
-              .style('opacity', 1);
-          }
-          logyq.editing.updateNodeEditorPosition?.();
-        } catch (_) {}
-      }, 0);
-    }
-  });
-}
-
-
-
-
-
-
-
-
   attach('deletion', {
     deleteNodesToTrash,
     deleteSelectedNodeOnly,
     deleteSelectedNodesOnly,
     exportGIQ,
-    copySubtreeToClipboard,
-    createFirstCardAndEdit,
   });
 function addChildOf(parentUid, newName = '', opts = {}) {
   const { noEdit = false, select = true } = opts;
@@ -3950,13 +3819,6 @@ state.dragState.drop = null;
 attach('drag', dragManager)
 
 
-function getSelectionUids(){
-  const { state } = logyq
-  return state.selectedUids ? Array.from(state.selectedUids) : [];
-}
-
-
-
   /* ======================= CHIPS & INPUT ======================= */
   function clearChipSelection(){ document.querySelectorAll("#Dock .chip.is-outlined").forEach(el=>el.classList.remove("is-outlined")); }
   function getSelectedChipNames(){ return Array.from(document.querySelectorAll("#Dock .chip.is-outlined")).map(el=>el.textContent.trim()).filter(Boolean); }
@@ -4738,57 +4600,9 @@ if (event.shiftKey && !event.metaKey) {
 
 
 
-  /* [patch] saved-maps start */
-  const SAVED_KEY = "logyq_saved_maps_v1";
-  function getSavedMaps(){ try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); } catch(_e){ return []; } }
-  function setSavedMaps(arr){ try { localStorage.setItem(SAVED_KEY, JSON.stringify(arr || [])); } catch(_e){} }
-  function saveCurrentMap(){
-    const { state, utils } = logyq
-    if (!state.root) { logyq.selection.showToast("Nothing to save"); return; }
-    const saved = getSavedMaps();
-    const defaultName = "Map " + (saved.length + 1);
-    const name = (prompt("Save map as:", defaultName) || defaultName).trim();
-    saved.push({ name, data: utils.deepClone(state.root.data) });
-    setSavedMaps(saved);
-    logyq.selection.showToast("Saved " + name, 1200);
-  }
-  function openMapsMenu(){
-    const { state, utils } = logyq
-    const saved = getSavedMaps();
-    if (!saved.length) { alert("No saved maps yet."); return; }
-    const list = saved.map((m,i)=> (i+1) + ". " + m.name).join("\n");
-    const input = prompt(
-      "Choose a map to load (number):\n" + list + "\n\nOr type: del <n>  (e.g., del 2)",
-      "1"
-    );
-    if (!input) return;
-    const s = input.trim().toLowerCase();
-    if (s.startsWith("del")) {
-      const n = parseInt(s.split(/\s+/)[1], 10);
-      if (Number.isFinite(n) && n >= 1 && n <= saved.length) {
-        saved.splice(n-1, 1);
-        setSavedMaps(saved);
-        logyq.selection.showToast("Deleted", 900);
-      }
-      return;
-    }
-    const idx = parseInt(s, 10) - 1;
-    if (!Number.isFinite(idx) || !saved[idx]) return;
-    const rec = saved[idx];
-    state.root = d3.hierarchy(utils.deepClone(rec.data));
-    utils.assignIds(state.root);
-    logyq.selection.setSelected(null);
-    logyq.treeManager.layoutAndRender(false);
-    logyq.treeManager.autoFit();
-    logyq.selection.showToast("Loaded " + rec.name, 1200);
-  }
-
-
   attach('mix', {
     randomizeTree,
     onNodeContextMenu,
-    saveCurrentMap,
-    openMapsMenu,
   });
 /* ======================= TREE MANAGER ======================= */
 const treeManager = {
@@ -4952,9 +4766,6 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
   }
 });
 
-elements.saveBtn && elements.saveBtn.addEventListener("click", logyq.mix.saveCurrentMap);
-elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMapsMenu);
-
     setupSettings();
     /* [patch] help-init start */
     setupHelp();
@@ -4975,18 +4786,6 @@ elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMap
     try{ logyq.dock.updateDockBounds(); }catch(_e){}
     /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
-
-    try{
-      const key="logyq_ashley_user_v1";
-      let stored=localStorage.getItem(key);
-      if(!stored){
-        const u={ username:"Ashley", created:Date.now() };
-        localStorage.setItem(key, JSON.stringify(u));
-        stored=JSON.stringify(u);
-      }
-      const u=JSON.parse(stored||"{}");
-      if(elements.userBadge) elements.userBadge.textContent = u.username ? ("Logged in as "+u.username) : "";
-    }catch(_e){}
   },
 
   renderEmpty(){
@@ -5064,7 +4863,6 @@ const nEnter = selNodes.enter()
 
 
 
-    nEnter.on("dblclick", (event,d)=>{ event.stopPropagation(); logyq.editing.openNodeEditor(d); });
     /* [patch] grabzone-behind start */
     nEnter.insert("rect",":first-child")
       .attr("class","grabzone")
