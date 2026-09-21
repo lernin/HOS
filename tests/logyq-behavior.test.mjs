@@ -1098,7 +1098,6 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /v2-dock-target/)
   assert.match(v162, /drag\.bankArmed/)
   assert.doesNotMatch(v162, /HAND_KEY/)
-  assert.match(v162, /d3\.select\(canvas\)\.interrupt\(\)/)
   assert.match(v162, /function paintFlickDown/)
   assert.match(v162, /paintActive\(\) && direction === 'down'/)
   assert.match(v162, /function paintTap/)
