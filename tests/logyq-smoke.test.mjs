@@ -247,7 +247,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(ghost.transform, originTransform)
   assert.equal(ghost.otherOpacity, '1')
   assert.equal(ghost.handed, 'right')
-  assert.deepEqual(ghost.offset, { x: -38, y: -57 })
+  assert.deepEqual(ghost.offset, { x: -38, y: -85.5 })
   await touch('pointermove', hold.x + 4, hold.y + 4, 42)
   assert.equal(await page.locator('g.node').count(), holdCount)
   assert.equal(await page.evaluate(() => {
@@ -258,14 +258,23 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   await page.waitForFunction(() => !document.body.classList.contains('v2-branch-drag'))
 
   const edit = await nodeCenter('Node 08')
+  const beforeEdit = await page.evaluate(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { x: t.x, y: t.y, k: t.k }
+  })
   await touch('pointerdown', edit.x, edit.y, 43)
   await touch('pointerup', edit.x, edit.y, 43)
   await touch('pointerdown', edit.x, edit.y, 44)
   await touch('pointerup', edit.x, edit.y, 44)
   await page.waitForSelector('.node-edit-input')
+  await page.waitForFunction(() => window.d3.zoomTransform(document.getElementById('canvas')).k >= 1.34)
   await page.locator('.node-edit-input').fill('Tapped 08')
   await page.locator('.node-edit-input').press('Enter')
   await page.waitForFunction(() => Array.from(document.querySelectorAll('g.node')).some((node) => node.textContent.includes('Tapped 08')))
+  await page.waitForFunction((prev) => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return Math.abs(t.k - prev.k) < 0.06 && Math.hypot(t.x - prev.x, t.y - prev.y) < 24
+  }, beforeEdit)
 
   assert.deepEqual(errors, [])
   await context.close()

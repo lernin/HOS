@@ -138,8 +138,10 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - Direct flick calls `selectByUid` + `createRelative`, then arms `#logyq-v162-action` on the blank card. It must not start `MediaRecorder` until she taps MIC. Header mic remains a separate voice path into the type-or-speak field.
 - Phone pinch/wheel floor is `scaleExtent([0.02, 2.4])` on `logyq.state.zoom`. Do not restore the v161 `0.4` floor.
 - Finger hold-drag must keep the tree standing: `v2-branch-origin-ghost` on the source branch, `is-others` opacity 1 while `body.v2-branch-drag`. Do not let desktop `dragging-mode` hide the rest of the map. Do not restyle drop-target/caret (Ashley’s magnetic indicator).
-- Finger drag offset is `LOGYQPreview.gestures.fingerOffset()` from `logyq_handedness_v1` (`right` default / `left`). Mouse path must not use it.
+- Finger drag offset is `LOGYQPreview.gestures.fingerOffset()` from `logyq_handedness_v1` (`right` default / `left`). Up is **2.25cm**, side 1cm, at 38px/cm (right: −38x / −85.5y). Mouse path must not use it.
 - Edge auto-pan is `LOGYQPreview.gestures.edgePan` (v162 `v2.js`: zone 84, step 14). Detect from the **finger**; feed drop mousemove at the **visual** point.
+- Phone double-tap edit uses `logyq.camera.flyEditFocusToUID` (center in the visual viewport, k at least 1.35). `openNodeEditor` copies `prevZoom`; Enter/blur/Escape restore it unless `editUserZoom` (user pinched/panned). Flick `createRelative` still closes the editor in the same turn so the delayed focus fly does not run.
+- Hold-drag Word Bank: finger must be **inside a chip with 8px inset** to bank (`sendSubtreeToWordBank`). Finger over the dock slack (16px) cancels the tree drop instead of adopting through the ribbon. Chip→tree HTML5 drops are unchanged.
 
 ### Must not do
 
