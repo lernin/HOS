@@ -249,6 +249,11 @@ test('normalizeToTree preserves v161 array, node, and plain-object rules', () =>
     name: 'Map',
     children: [{ name: 'Child' }],
   })
+  assert.deepEqual(normalizeToTree({ name: 'Painted', color: '#fde68a', children: [{ name: 'Kid', color: '#bfdbfe' }] }), {
+    name: 'Painted',
+    color: '#fde68a',
+    children: [{ name: 'Kid', color: '#bfdbfe' }],
+  })
   assert.equal(normalizeToTree('leaf').name, 'leaf')
 })
 
@@ -593,6 +598,41 @@ test('randomizeTree keeps the root label, records randomize history, and clears 
   assert.deepEqual(logyq.state.wordBank, [])
   assert.deepEqual(history.at(-1).nextBank, [])
   assert.equal(logyq.state.repositionMode, 'mix')
+})
+
+test('randomizeTree and snapshot keep each card color', () => {
+  const { logyq, randomizeTree } = loadMix()
+  const tree = {
+    name: 'Root',
+    color: '#fecaca',
+    children: [
+      { name: 'A', color: '#fde68a' },
+      { name: 'B', color: '#bfdbfe' },
+      { name: 'C' },
+    ],
+  }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  randomizeTree(false)
+
+  const bag = []
+  const walk = (node) => {
+    bag.push(`${node.name}:${node.color || ''}`)
+    for (const child of node.children || []) walk(child)
+  }
+  walk(logyq.state.root.data)
+  assert.deepEqual(bag.sort(), ['A:#fde68a', 'B:#bfdbfe', 'C:', 'Root:#fecaca'].sort())
+  assert.equal(logyq.state.root.data.name, 'Root')
+  assert.equal(logyq.state.root.data.color, '#fecaca')
+
+  const snap = logyq.utils.deepClone(logyq.state.root.data)
+  const again = []
+  const walkSnap = (node) => {
+    again.push(`${node.name}:${node.color || ''}`)
+    for (const child of node.children || []) walkSnap(child)
+  }
+  walkSnap(snap)
+  assert.deepEqual(again.sort(), bag.sort())
 })
 
 test('context-menu Word Dock dumps still join names with newlines', () => {

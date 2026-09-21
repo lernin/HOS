@@ -4079,7 +4079,9 @@ function normalizeToTree(value) {
           const norm = x.children.map(toNode).filter(Boolean);
           kids = norm.length ? norm : null;
         }
-        return kids ? { name, children: kids } : { name };
+        const node = kids ? { name, children: kids } : { name };
+        if (x.color) node.color = x.color;
+        return node;
       }
 
       // Plain object: turn its keys into children
@@ -4413,32 +4415,54 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     normalizeToTree,
   });
   /* ======================= RANDOMIZE ======================= */
+function mixCard(name, color){
+  const node = { name: String(name ?? '') };
+  if (color) node.color = color;
+  return node;
+}
+
 function randomizeTree(includeBank){
   const { state, utils } = logyq
   try{
     const prevTree = state.root ? utils.deepClone(state.root.data) : null;
     const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
-    let labels = [];
-    if (state.root){ labels = state.root.descendants().map(n => n.data?.name || "").filter(Boolean); }
-    if (includeBank && prevBank.length) labels = labels.concat(prevBank);
-    if (!labels.length){ logyq.selection.showToast("Nothing to mix"); return; }
+    // Keep paint with each card. Mix used to shuffle names into `{ name }`
+    // only, which wiped `data.color` and then saved that bare tree.
+    const cards = [];
+    if (state.root){
+      for (const n of state.root.descendants()) {
+        const name = n.data?.name || "";
+        if (!name) continue;
+        cards.push(mixCard(name, n.data?.color));
+      }
+    }
+    if (includeBank && prevBank.length) {
+      for (const word of prevBank) {
+        if (word) cards.push(mixCard(word, null));
+      }
+    }
+    if (!cards.length){ logyq.selection.showToast("Nothing to mix"); return; }
 
-    const rootLabel = (state.root && state.root.data?.name) ? state.root.data.name : labels[0];
-    let pool = labels.slice();
-    const rmIdx = pool.indexOf(rootLabel); if (rmIdx > -1) pool.splice(rmIdx, 1);
+    const rootLabel = (state.root && state.root.data?.name) ? state.root.data.name : cards[0].name;
+    const rootColor = state.root?.data?.color || null;
+    let pool = cards.slice();
+    const rmIdx = pool.findIndex((card) => card.name === rootLabel);
+    if (rmIdx > -1) pool.splice(rmIdx, 1);
     for (let i = pool.length - 1; i > 0; i--){
       const j = (Math.random() * (i + 1)) | 0;
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     function ri(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
-    const root = { name: rootLabel, children: [] };
+    const root = mixCard(rootLabel, rootColor);
+    root.children = [];
     let q = [{ node: root, cap: ri(1,3), used: 0 }], k = 0;
     while (k < pool.length){
       if (!q.length) q.push({ node: root, cap: ri(1,3), used: 0 });
       const p = q[0];
       if (p.used >= p.cap){ q.shift(); continue; }
-      const child = { name: pool[k++] };
+      const child = mixCard(pool[k].name, pool[k].color);
+      k++;
       p.node.children = p.node.children || [];
       p.node.children.push(child);
       p.used++;

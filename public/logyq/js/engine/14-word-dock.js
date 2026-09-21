@@ -132,7 +132,9 @@ function normalizeToTree(value) {
           const norm = x.children.map(toNode).filter(Boolean);
           kids = norm.length ? norm : null;
         }
-        return kids ? { name, children: kids } : { name };
+        const node = kids ? { name, children: kids } : { name };
+        if (x.color) node.color = x.color;
+        return node;
       }
 
       // Plain object: turn its keys into children

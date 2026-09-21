@@ -79,6 +79,7 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Tap paints one card.** Short stationary pointer (move ≤ 11px) with an active color calls `paintUid`. Pan (touch+move) is not a paint tap.
 - **Flick-down paints the branch.** Same flick detector as create (52px / 340ms / 1.45 ratio). **Only `direction === 'down'` while paint is active** steals create-flick. Left / right / up still create. Hold-to-drag is unchanged (not paint).
 - **Color is node data.** `data.color` on the tree; snapshot / maps / reload keep it. Undo is `replace-root`. Card shape (rx, stroke chrome) is unchanged; only fill changes.
+- **Mix and save keep paint.** `randomizeTree` used to shuffle names into new `{ name }` objects, dropping `data.color`. After Mix the snapshot (and therefore `logyq_maps_v1` / reopen) had no paint. Mix now carries each card’s color through the shuffle; GIQ `normalizeToTree` also keeps `color`. Snapshot / `loadMap` already JSON-clone the full node. Paint UX is unchanged.
 
 ## Fearless-delete wave
 
