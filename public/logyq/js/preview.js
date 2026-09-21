@@ -215,7 +215,7 @@
         #logiq-voice-bar.is-visible{display:flex}
         #logiq-voice-stop{border:0;border-radius:999px;background:#ef4444;color:#fff;padding:8px 13px;font-weight:800}
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
-        body.logyq-mobile-v162 svg#canvas g.node{pointer-events:none!important}
+        body.logyq-mobile-v162 svg#canvas g.node,body.logyq-mobile-v162 svg#canvas g.node *{pointer-events:none!important}
         #logyq-v162-action{position:fixed;z-index:3950;display:none;place-items:center;width:40px;height:40px;padding:0;border:2px solid #fff;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 7px 20px rgba(15,23,42,.26);font:800 10px/1 system-ui;touch-action:none}
         #logyq-v162-action.show{display:grid}#logyq-v162-action.rec{background:#ef4444}
         #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
@@ -643,6 +643,7 @@
       active: new Set(),
       pointers: new Map(),
       hold: null,
+      pan: null,
       drag: null,
       feedbackRaf: 0,
     }
@@ -656,7 +657,7 @@
     flickState.mic = mic
 
     win.addEventListener('pointerdown', (event) => onHoldDown(event, doc, win, canvas, holdState), true)
-    win.addEventListener('pointermove', (event) => onHoldMove(event, win, holdState), true)
+    win.addEventListener('pointermove', (event) => onHoldMove(event, doc, win, holdState), true)
     win.addEventListener('pointerup', (event) => onHoldUp(event, doc, win, canvas, holdState), true)
     win.addEventListener('pointercancel', (event) => onHoldCancel(event, doc, win, holdState), true)
     win.addEventListener('contextmenu', (event) => {
@@ -680,6 +681,7 @@
     if (alreadyActive) {
       state.pointers.forEach((pointer) => { pointer.multi = true })
       cancelHold(win, state)
+      endCardPan(win, state)
       if (state.drag) yieldNodeDrag(doc, win, canvas, state)
     }
 
@@ -701,19 +703,27 @@
     const hold = { pointerId: event.pointerId, ...pointer, timer: 0 }
     hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     state.hold = hold
+    win.__logyqHoldArming = true
   }
 
-  function onHoldMove(event, win, state) {
+  function onHoldMove(event, doc, win, state) {
     const pointer = state.pointers.get(event.pointerId)
     if (!pointer) return
     pointer.lastX = event.clientX
     pointer.lastY = event.clientY
 
+    if (state.pan?.pointerId === event.pointerId) {
+      applyFingerPan(doc, win, state.pan, event.clientX, event.clientY)
+      return
+    }
+
     if (state.hold?.pointerId === event.pointerId) {
       state.hold.lastX = event.clientX
       state.hold.lastY = event.clientY
+      // Early slide past slop: map pan, not card-drag. Flick still
+      // decides on pointerup (restoreView if it was ballistic).
       if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) > v162Constants().HOLD_SLOP) {
-        cancelHold(win, state)
+        beginCardPan(doc, win, state, state.hold, event.clientX, event.clientY)
       }
       return
     }
@@ -731,6 +741,7 @@
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
+    if (state.pan?.pointerId === event.pointerId) endCardPan(win, state)
 
     const drag = state.drag
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -773,6 +784,7 @@
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
+    if (state.pan?.pointerId === event.pointerId) endCardPan(win, state)
 
     const drag = state.drag
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -790,6 +802,7 @@
 
     state.hold = null
     if (hold.timer) win.clearTimeout(hold.timer)
+    win.__logyqHoldArming = false
 
     const source = nodeByUid(doc, hold.uid) || hold.source
     const hierarchy = source?.__data__
@@ -1180,6 +1193,37 @@
     if (!hold) return
     if (hold.timer) win.clearTimeout(hold.timer)
     state.hold = null
+    if (!state.pan) win.__logyqHoldArming = false
+  }
+
+  function beginCardPan(doc, win, state, hold, x, y) {
+    const originX = hold.x
+    const originY = hold.y
+    const pointerId = hold.pointerId
+    cancelHold(win, state)
+    state.pan = { pointerId, lastX: originX, lastY: originY }
+    win.__logyqHoldArming = false
+    applyFingerPan(doc, win, state.pan, x, y)
+  }
+
+  function endCardPan(win, state) {
+    state.pan = null
+    if (!state.hold) win.__logyqHoldArming = false
+  }
+
+  function applyFingerPan(doc, win, pan, x, y) {
+    const svg = doc.getElementById('canvas')
+    if (!svg || !win.d3 || !pan) return
+    const dx = x - pan.lastX
+    const dy = y - pan.lastY
+    pan.lastX = x
+    pan.lastY = y
+    if (!dx && !dy) return
+    const t = win.d3.zoomTransform(svg)
+    const next = win.d3.zoomIdentity.translate(t.x + dx, t.y + dy).scale(t.k)
+    svg.__zoom = next
+    const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+    if (root) root.setAttribute('transform', next.toString())
   }
 
   function dispatchPointerCancel(canvas, win, pointerId, x, y) {
@@ -1542,6 +1586,8 @@
     preview.gestures.edgePan = edgePan
     preview.gestures.centerPanVector = centerPanVector
     preview.gestures.clampPanToContent = clampPanToContent
+    preview.gestures.applyFingerPan = applyFingerPan
+    preview.gestures.beginCardPan = beginCardPan
     preview.gestures.fingerOffset = fingerOffset
     preview.gestures.visualPoint = visualPoint
     preview.gestures.fingerMovedFromLatch = fingerMovedFromLatch

@@ -19,8 +19,11 @@ if (typeof state.isPanning === "undefined") state.isPanning = false;
 state.zoom = d3.zoom()
   .scaleExtent([0.02, 2.4])
   .filter((event) => {
-    // Allow wheel-zoom anywhere; block drags that start on nodes
+    // Allow wheel-zoom anywhere; block drags that start on nodes.
+    // Phone: also ignore the gesture while a card hold is arming or
+    // latched so d3.zoom does not steal the still-wait / card-drag.
     if (event.type === "wheel") return true;
+    if (typeof window !== "undefined" && (window.__logyqHoldArming || window.__logyqHoldDragSession)) return false;
     const t = event.target;
     const onNode = !!(t && t.closest && t.closest("g.node"));
     return !onNode;

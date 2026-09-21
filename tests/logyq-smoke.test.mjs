@@ -325,6 +325,45 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.actionUid), true)
   await page.waitForTimeout(400)
 
+  const panCard = await nodeCenter('Node 12')
+  const panOrigin = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 12')
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return {
+      transform: node?.getAttribute('transform') || '',
+      x: t.x,
+      y: t.y,
+      nodes: document.querySelectorAll('g.node').length,
+    }
+  })
+  await touch('pointerdown', panCard.x, panCard.y, 81)
+  await touch('pointermove', panCard.x + 24, panCard.y + 18, 81)
+  await page.waitForTimeout(20)
+  assert.equal(await page.evaluate(() => document.body.classList.contains('v2-branch-drag')), false, 'early slide must not lift the card')
+  assert.equal(await page.evaluate(() => !!window.__logyqHoldArming), false)
+  await page.waitForTimeout(400)
+  await touch('pointermove', panCard.x + 88, panCard.y + 54, 81)
+  const panDuring = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 12')
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return {
+      drag: document.body.classList.contains('v2-branch-drag'),
+      transform: node?.getAttribute('transform') || '',
+      x: t.x,
+      y: t.y,
+    }
+  })
+  assert.equal(panDuring.drag, false)
+  assert.equal(panDuring.transform, panOrigin.transform, 'card stays put while the map pans')
+  assert.ok(Math.hypot(panDuring.x - panOrigin.x, panDuring.y - panOrigin.y) > 40, `map should follow an early card slide, before=${panOrigin.x},${panOrigin.y} during=${panDuring.x},${panDuring.y}`)
+  await touch('pointerup', panCard.x + 88, panCard.y + 54, 81)
+  const panAfter = await page.evaluate(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { x: t.x, y: t.y, nodes: document.querySelectorAll('g.node').length }
+  })
+  assert.equal(panAfter.nodes, panOrigin.nodes, 'sustained card slide is not a flick-create')
+  assert.ok(Math.hypot(panAfter.x - panOrigin.x, panAfter.y - panOrigin.y) > 40, 'card-start pan must stick after release')
+
   const hold = await nodeCenter('Node 03')
   const holdCount = await page.locator('svg#canvas g.node').count()
   const bankBefore = await page.locator('#Dock .chip').count()

@@ -83,7 +83,7 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 ## Hold-drag latch (PR 112)
 
-- **Faster hold-to-lift.** `HOLD_MS` **280 → 160**. Still-hold slop (8px), flick 52px / 340ms / 1.45, double-tap 360ms, and bank dwell 480ms stay put so a tap or flick does not become a drag.
+- **Mercedes-window on a card.** Finger on a card is not immediately a card-drag. **Still for `HOLD_MS` 160 (was 280) + ≤8px slop** → lift / ghost / magnetic drop. **Slide past 8px before that beat** → map pan (card stays put). Empty space still pans. A short ballistic flick (52px / 340ms / 1.45) + release still creates (view is restored). Tap / double-tap / paint unchanged. Desktop `d3.drag` no longer starts on a real phone touch; only the latch’s synthetic mouse does.
 
 ## Hold-drag camera (PR 112)
 

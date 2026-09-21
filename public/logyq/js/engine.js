@@ -3324,6 +3324,13 @@ behavior(){
   return d3.drag()
     .filter((event) => {
       if (logyq.input.isTextField(event.target)) return false;
+      const se = event.sourceEvent || event;
+      if (typeof document !== "undefined" && document.body?.classList?.contains("logyq-mobile-v162")) {
+        const kind = se.pointerType || (typeof se.type === "string" && se.type.startsWith("touch") ? "touch" : "");
+        // Real finger must not start desktop card-drag. The v162 latch
+        // feeds a synthetic mouse event after the hold beat.
+        if (kind && kind !== "mouse") return false;
+      }
       return event.button === 0;         // left button only (Shift allowed now)
     })
     .on("start", this.start)
@@ -4861,8 +4868,11 @@ if (typeof state.isPanning === "undefined") state.isPanning = false;
 state.zoom = d3.zoom()
   .scaleExtent([0.02, 2.4])
   .filter((event) => {
-    // Allow wheel-zoom anywhere; block drags that start on nodes
+    // Allow wheel-zoom anywhere; block drags that start on nodes.
+    // Phone: also ignore the gesture while a card hold is arming or
+    // latched so d3.zoom does not steal the still-wait / card-drag.
     if (event.type === "wheel") return true;
+    if (typeof window !== "undefined" && (window.__logyqHoldArming || window.__logyqHoldDragSession)) return false;
     const t = event.target;
     const onNode = !!(t && t.closest && t.closest("g.node"));
     return !onNode;

@@ -1,13 +1,17 @@
 # LOGYQ mobile hold-drag states
 
-Phone only (`logyq-mobile-v162`). Finger grammar: flick create / 160ms hold-drag / 360ms double-tap edit. This page is hold-drag only.
+Phone only (`logyq-mobile-v162`). Finger grammar: flick create / 160ms hold-drag / slide-to-pan / 360ms double-tap edit.
 
 ```mermaid
 stateDiagram-v2
   [*] --> Idle
   Idle --> Arming: pointerdown on a card
-  Arming --> Idle: move > 8px slop / cancel / second finger
-  Arming --> Latched: hold 160ms still
+  Idle --> MapPan: pointerdown on empty space
+  Arming --> CardPan: move > 8px before 160ms
+  Arming --> Latched: still 160ms (≤8px)
+  Arming --> Idle: release as tap / flick
+  CardPan --> Idle: release (flick restores view)
+  MapPan --> Idle: release
   Latched --> Still: finger within 16px of latch
   Latched --> Moved: finger leaves 16px
   Still --> Moved: finger leaves 16px
@@ -22,15 +26,16 @@ idle
   │ pointerdown on card
   ▼
 arming (160ms, 8px slop)
-  │ hold still 160ms
-  ▼
-latched  ──clone lifts 1.1cm; origin ghost; layout frozen──
-  ├─ still (≤16px) ──release / cancel / 2nd finger──► idle
-  │                    no splice, no bank, map unmoved
-  └─ moved (>16px)
-       ├─ release on map ──────── commitTree ──► idle
-       ├─ chip inner 44% + 480ms ─ bank after cleanup ──► idle
-       └─ cancel / 2nd finger / dock-near ──► idle (no commit)
+  ├─ slide >8px before 160ms ──► card-pan (map follows finger; card stays)
+  │                                release: flick (52/340/1.45) restores + create
+  │                                else pan sticks
+  ├─ release ≤11px ─────────────── tap / double-tap / paint
+  └─ still 160ms ────────────────► latched (clone lifts 1.1cm; ghost; freeze)
+       ├─ still (≤16px) ──release──► idle (no splice, no bank)
+       └─ moved (>16px)
+            ├─ release on map ──────── commitTree
+            ├─ chip inner 44% + 480ms ─ bank
+            └─ cancel / 2nd finger ─── idle
 ```
 
 ## Invariants
@@ -42,6 +47,7 @@ latched  ──clone lifts 1.1cm; origin ghost; layout frozen──
 | Map does not jump on latch | No `shiftMapOnLatch`. Clone uses `fingerOffset` `{0, -1.1cm}`; d3 is not fed that offset until the finger leaves `STILL_PX`. |
 | 1.1cm lift is clone-only | `#logyq-v162-branch-preview` follows the finger + lift. Live `g.node` stays in its cell as a dashed ghost (`v2-branch-origin-ghost`). |
 | Hold-drag pan is center-offset | Finger offset from the viewport center, after a 56px dead zone. Content leash leaves ~⅓ viewport empty on the leading edge. |
+| Early card slide pans the map | Move >8px before `HOLD_MS` 160 cancels arming and runs `applyFingerPan`. Card stays. Flick on release still restores + create. |
 
 ## Thresholds
 

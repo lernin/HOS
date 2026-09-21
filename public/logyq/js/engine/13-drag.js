@@ -83,6 +83,13 @@ behavior(){
   return d3.drag()
     .filter((event) => {
       if (logyq.input.isTextField(event.target)) return false;
+      const se = event.sourceEvent || event;
+      if (typeof document !== "undefined" && document.body?.classList?.contains("logyq-mobile-v162")) {
+        const kind = se.pointerType || (typeof se.type === "string" && se.type.startsWith("touch") ? "touch" : "");
+        // Real finger must not start desktop card-drag. The v162 latch
+        // feeds a synthetic mouse event after the hold beat.
+        if (kind && kind !== "mouse") return false;
+      }
       return event.button === 0;         // left button only (Shift allowed now)
     })
     .on("start", this.start)

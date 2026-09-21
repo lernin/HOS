@@ -974,6 +974,9 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /function edgePan/)
   assert.match(v162, /function centerPanVector/)
   assert.match(v162, /function clampPanToContent/)
+  assert.match(v162, /function beginCardPan/)
+  assert.match(v162, /function applyFingerPan/)
+  assert.match(v162, /__logyqHoldArming/)
   assert.match(v162, /PAN_DEAD_PX: 56/)
   assert.match(v162, /PAN_STEP: 16/)
   assert.doesNotMatch(v162, /EDGE_ZONE: 84/)
@@ -1123,4 +1126,47 @@ test('hold-drag pan is center-offset with a third-viewport content leash', () =>
   const noYank = helpers.clampPanToContent(already, -50, 0, wide, view)
   assert.equal(noYank.dx, 0, 'already at the leading bound: do not shove further or yank to the far side')
   assert.deepEqual(helpers.clampPanToContent(t, -20, -20, null, view), { dx: 0, dy: 0 })
+})
+
+test('early card slide pans via applyFingerPan and keep the 160ms hold latch', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  assert.match(source, /HOLD_MS: 160/)
+  assert.match(source, /HOLD_SLOP: 8/)
+  assert.match(source, /FLICK_MAX_MS: 340/)
+  const start = source.indexOf('function applyFingerPan(doc, win, pan, x, y) {')
+  const end = source.indexOf('function dispatchPointerCancel(canvas, win, pointerId, x, y) {', start)
+  assert.ok(start >= 0 && end > start)
+  const helpers = new Function(`${source.slice(start, end)}; return { applyFingerPan };`)()
+  const g = { tagName: 'g', transform: '', setAttribute(_name, value) { this.transform = value } }
+  const svg = { children: [g], __zoom: null }
+  const win = {
+    d3: {
+      zoomTransform: (node) => node.__zoom || { x: 10, y: 20, k: 1.5 },
+      zoomIdentity: {
+        translate(x, y) {
+          return {
+            scale(k) {
+              return { x, y, k, toString() { return `translate(${x},${y}) scale(${k})` } }
+            },
+          }
+        },
+      },
+    },
+  }
+  const doc = { getElementById: () => svg }
+  const pan = { lastX: 100, lastY: 80 }
+  helpers.applyFingerPan(doc, win, pan, 140, 50)
+  assert.equal(pan.lastX, 140)
+  assert.equal(pan.lastY, 50)
+  assert.equal(svg.__zoom.x, 50)
+  assert.equal(svg.__zoom.y, -10)
+  assert.equal(svg.__zoom.k, 1.5)
+  assert.match(g.transform, /translate\(50,-10\)/)
+
+  const drag = readFileSync(new URL('../public/logyq/js/engine/13-drag.js', import.meta.url), 'utf8')
+  assert.match(drag, /logyq-mobile-v162/)
+  assert.match(drag, /kind !== "mouse"/)
+  const zoom = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
+  assert.match(zoom, /__logyqHoldArming/)
+  assert.match(zoom, /__logyqHoldDragSession/)
 })
