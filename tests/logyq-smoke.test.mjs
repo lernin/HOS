@@ -326,16 +326,49 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
     const CONFIG = window.LOGYQBridge.core.config
     const pick = window.LOGYQBridge.core.detectors.pick
     const origin = held?.data?._uid || ''
-    const sibling = byName('Node 04')?.__data__
-    const cousinA = byName('Node 06')?.__data__
-    const cousinB = byName('Node 07')?.__data__
+    const originSet = new Set((held?.descendants?.() || []).map((item) => item.data?._uid).filter(Boolean))
+    const row = Array.from(document.querySelectorAll('svg#canvas g.node'))
+      .map((element) => element.__data__)
+      .filter((node) => node && node.depth === held.depth)
+      .sort((a, b) => a.x - b.x)
+    const heldIndex = row.findIndex((node) => node.data?._uid === origin)
+    const neighbor = row[heldIndex + 1] || row[heldIndex - 1] || other
+    const childRow = Array.from(document.querySelectorAll('svg#canvas g.node'))
+      .map((element) => element.__data__)
+      .filter((node) => node && node.depth === (held.depth || 0) + 1)
+      .sort((a, b) => a.x - b.x)
+    let cousinPair = null
+    for (let i = 0; i < childRow.length - 1; i++) {
+      const left = childRow[i]
+      const right = childRow[i + 1]
+      const leftGhost = originSet.has(left.data?._uid)
+      const rightGhost = originSet.has(right.data?._uid)
+      if (leftGhost !== rightGhost) {
+        cousinPair = { left, right, live: leftGhost ? right : left }
+        break
+      }
+    }
     const besideGhost = pick({ x: held.x + CONFIG.CARD_WIDTH / 2 + 10, y: held.y })
     const onGhost = pick({ x: held.x, y: held.y })
     const besideOther = other ? pick({ x: other.x + CONFIG.CARD_WIDTH / 2 + 10, y: other.y }) : null
-    const underSibling = sibling ? pick({ x: sibling.x, y: sibling.y }) : null
-    const besideSibling = sibling ? pick({ x: sibling.x - CONFIG.CARD_WIDTH / 2 - 4, y: sibling.y }) : null
-    const betweenCousins = (cousinA && cousinB)
-      ? pick({ x: (cousinA.x + cousinB.x) / 2, y: cousinA.y })
+    const underNeighbor = neighbor ? pick({ x: neighbor.x, y: neighbor.y }) : null
+    const towardNeighbor = neighbor
+      ? pick({ x: held.x + (neighbor.x - held.x) * 0.72, y: held.y })
+      : null
+    const betweenCousins = cousinPair
+      ? pick({
+        x: (() => {
+          const mid = (cousinPair.left.x + cousinPair.right.x) / 2
+          return mid + (cousinPair.live.x - mid) * 0.3
+        })(),
+        y: cousinPair.live.y,
+      })
+      : null
+    const besideCousin = cousinPair
+      ? pick({
+        x: cousinPair.live.x + (cousinPair.live === cousinPair.left ? 1 : -1) * (CONFIG.CARD_WIDTH / 2 + 8),
+        y: cousinPair.live.y,
+      })
       : null
     return {
       origin,
@@ -347,13 +380,20 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
       besideOtherUid: besideOther?.targetUid || null,
       besideOtherPrev: besideOther?.prevUid || null,
       besideOtherNext: besideOther?.nextUid || null,
-      underSiblingType: underSibling?.type || null,
-      underSiblingUid: underSibling?.targetUid || null,
-      siblingUid: sibling?.data?._uid || null,
-      besideSiblingType: besideSibling?.type || null,
-      besideSiblingUid: besideSibling?.targetUid || null,
-      besideSiblingPrev: besideSibling?.prevUid || null,
-      besideSiblingNext: besideSibling?.nextUid || null,
+      neighborUid: neighbor?.data?._uid || null,
+      underNeighborType: underNeighbor?.type || null,
+      underNeighborUid: underNeighbor?.targetUid || null,
+      towardNeighborType: towardNeighbor?.type || null,
+      towardNeighborUid: towardNeighbor?.targetUid || null,
+      towardNeighborPrev: towardNeighbor?.prevUid || null,
+      towardNeighborNext: towardNeighbor?.nextUid || null,
+      towardNeighborHit: towardNeighbor?._hit?.kind || null,
+      besideCousinType: besideCousin?.type || null,
+      besideCousinUid: besideCousin?.targetUid || null,
+      besideCousinPrev: besideCousin?.prevUid || null,
+      besideCousinNext: besideCousin?.nextUid || null,
+      besideCousinHit: besideCousin?._hit?.kind || null,
+      liveCousinUid: cousinPair?.live?.data?._uid || null,
       betweenType: betweenCousins?.type || null,
       betweenUid: betweenCousins?.targetUid || null,
       betweenPrev: betweenCousins?.prevUid || null,
@@ -365,11 +405,14 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(ghostPick.besideGhostType, 'node', 'beside the origin ghost must arm put-back, not a side-insert caret')
   assert.equal(ghostPick.besideGhostUid, ghostPick.origin)
   assert.notEqual(ghostPick.besideOtherUid, ghostPick.origin, 'side-insert / adopt beside another card must not remap to the ghost')
-  assert.equal(ghostPick.underSiblingType, 'node', 'dropping under a sibling/cousin must still adopt')
-  assert.equal(ghostPick.underSiblingUid, ghostPick.siblingUid)
-  assert.equal(ghostPick.besideSiblingType, 'gap', 'across the channel, the sibling/cousin side-insert must stay live')
-  assert.notEqual(ghostPick.besideSiblingUid, ghostPick.origin)
-  assert.ok(ghostPick.besideSiblingPrev || ghostPick.besideSiblingNext, 'cousin/sibling side-insert must keep gap ownership')
+  assert.equal(ghostPick.underNeighborType, 'node', 'dropping under a sibling/cousin must still adopt')
+  assert.equal(ghostPick.underNeighborUid, ghostPick.neighborUid)
+  assert.equal(ghostPick.towardNeighborType, 'gap', 'across the channel, the sibling side-insert must stay live')
+  assert.notEqual(ghostPick.towardNeighborUid, ghostPick.origin)
+  assert.ok(ghostPick.towardNeighborPrev || ghostPick.towardNeighborNext, 'sibling side-insert must keep gap ownership')
+  assert.equal(ghostPick.besideCousinType, 'gap', 'beside a cousin across the channel must keep side-insert')
+  assert.notEqual(ghostPick.besideCousinUid, ghostPick.origin)
+  assert.ok(ghostPick.besideCousinPrev || ghostPick.besideCousinNext, 'cousin side-insert must keep gap ownership')
   assert.equal(ghostPick.betweenType, 'gap', 'the gap/dot between two cousins must stay a between-insert')
   assert.notEqual(ghostPick.betweenUid, ghostPick.origin)
   assert.ok(ghostPick.betweenPrev && ghostPick.betweenNext, 'between-cousin insert must keep both neighbors')
