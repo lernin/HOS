@@ -556,26 +556,29 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   assert.equal(findNode(snapshot, 'Node 08').color, '#fde68a')
   assert.equal(findNode(snapshot, 'Node 02').color, '#fde68a')
 
-  const colorBag = (rows) => rows.map((row) => `${row.name}\0${row.color || ''}`).sort()
-  const colorsBeforeMix = await page.evaluate(() => Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => ({
-    name: node.__data__?.data?.name,
-    color: node.__data__?.data?.color || null,
-  })).filter((row) => row.name))
+  const colorBagFromTree = (tree) => {
+    const rows = []
+    const walk = (node) => {
+      if (!node?.name) return
+      rows.push(`${node.name}\0${node.color || ''}`)
+      for (const child of node.children || []) walk(child)
+    }
+    walk(tree)
+    return rows.sort()
+  }
+  const beforeMix = await page.evaluate(() => window.LOGYQBridge.snapshot().tree)
   await page.evaluate(() => window.LOGYQBridge.mix(false))
-  const colorsAfterMix = await page.evaluate(() => Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => ({
-    name: node.__data__?.data?.name,
-    color: node.__data__?.data?.color || null,
-  })).filter((row) => row.name))
-  assert.deepEqual(colorBag(colorsAfterMix), colorBag(colorsBeforeMix), 'Mix must keep each card color')
+  const afterMix = await page.evaluate(() => window.LOGYQBridge.snapshot().tree)
+  assert.deepEqual(colorBagFromTree(afterMix), colorBagFromTree(beforeMix), 'Mix must keep each card color')
   const saved = await page.evaluate(() => window.LOGYQBridge.snapshot())
   assert.equal(findNode(saved.tree, 'Node 08').color, '#fde68a')
   await page.evaluate((snap) => window.LOGYQBridge.loadMap(snap.tree, snap.wordBank), saved)
-  await page.waitForFunction(() => document.querySelectorAll('svg#canvas g.node').length >= 30)
-  const colorsAfterLoad = await page.evaluate(() => Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => ({
-    name: node.__data__?.data?.name,
-    color: node.__data__?.data?.color || null,
-  })).filter((row) => row.name))
-  assert.deepEqual(colorBag(colorsAfterLoad), colorBag(colorsBeforeMix), 'save/load must keep each card color')
+  const afterLoad = await page.evaluate(() => window.LOGYQBridge.snapshot().tree)
+  assert.deepEqual(colorBagFromTree(afterLoad), colorBagFromTree(beforeMix), 'save/load must keep each card color')
+  await page.waitForFunction(() => {
+    const live = window.LOGYQBridge.core.state.root?.descendants().length || 0
+    return live > 0 && document.querySelectorAll('svg#canvas g.node').length === live
+  })
 
   const beforeCreate = await page.locator('svg#canvas g.node').count()
   const side = await nodeCenter('Node 04')
