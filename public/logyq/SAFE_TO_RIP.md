@@ -27,6 +27,7 @@ Live mobile grammar: flick / 280ms hold-drag / 360ms double-tap on `LOGYQBridge`
 | `window.__addChildBelowSelectedAndEdit` (and elder/younger/insert-parent aliases) | Never read; flick uses `logyq.keyboard.*` via `LOGYQBridge.createRelative` | `17-keyboard.js` |
 | `elements.mapsBtn` field | Engine never read it after the prompt-maps listener died | `#mapsBtn` HTML **stays**; preview capture opens the library |
 | Trailing `e` after `</html>` | Accidental leftover, not markup | `index.html` |
+| Bottom arrow bar (`#logiq-mobile-context`) | Ashley: never needed; raced selection chrome | Preview DOM/CSS/JS; Dock no longer reserves 66px |
 
 ## Keep (load-bearing — deleting these is not fearless)
 
@@ -40,16 +41,19 @@ Do **not** delete because fingers on phone do not press the key. Gestures and th
 - Tab-hold (desktop modifier; do not synthesize Tab on touch)
 - SVG `dblclick` **mute** (edit is pointer double-tap or E)
 - Preview maps library (`logyq_maps_v1`) and header-mic `/api/transcribe` with `logyq_lab_pin_v1`
+- Flick tap-to-MIC chip (`#logyq-v162-action`) — record only after tap
 - Dock hide via `logyq.dock.setSide` / `cycleDockSide` (CSS class, not `style.display`)
 - `#mapsBtn` in HTML (preview capture-phase click opens `logyq_maps_v1`)
 - Zoom still calls `logyq.layout.refreshLaneOnZoom` (no-op, but the call is live)
+- `d3.zoom` `scaleExtent([0.02, 2.4])` — do not restore `0.4`
 
 ## Can she delete X without fear?
 
 | X | Verdict |
 |---|---|
-| Phone header / context bar / maps modal | **Not yet.** Still the live shell. Redesign is a later UX track; bind `LOGYQPreview.gestures.bindV162` rather than copying listeners. |
-| Keyboard arrows / E / T / D / W | **No.** Desktop still uses them; context buttons dispatch arrows; E is the edit fallback. |
+| Phone header / maps modal | **Not yet.** Still the live shell. Redesign is a later UX track; bind `LOGYQPreview.gestures.bindV162` rather than copying listeners. |
+| Bottom arrow bar | **Gone.** Do not put `#logiq-mobile-context` back. |
+| Keyboard arrows / E / T / D / W | **No.** Desktop still uses them; E is the edit fallback; flick still calls the create helpers. |
 | `refreshLaneOnZoom` | **Almost.** Zoom calls it every pan/zoom; the body is empty. Delete the stub **and** the zoom call together, then drop the architecture pin. |
 | `#mapsBtn` HTML | **No.** Preview intercepts it for the device library. |
 | `exportGIQ` | **Almost.** No UI caller; one unit test pins the GIQ string. Safe to delete only with that test. |

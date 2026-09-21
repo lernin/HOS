@@ -44,6 +44,13 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Storage stays `logyq_*`.** No production LOGiQ maps/PIN writes. Engine `logyq_saved_maps_v1` / fake `logyq_ashley_user_v1` are gone; maps live in preview `logyq_maps_v1`.
 - **Deferred:** pull-to-copy, Working Lock, drag-watchdog, clutch two-hand, full mobile chrome redesign, ES modules, further bag splits.
 
+## Ashley phone-poke fixes
+
+- **Bottom arrow bar gone.** `#logiq-mobile-context` (← ↑ ↓ → Edit / Delete) plus its CSS and `updateContextActions` listeners were deleted. Word Dock no longer reserves 66px for that strip.
+- **Canvas is full-bleed on phone.** `svg#canvas` is `position:fixed; inset:0; width:100%; height:100dvh; overflow:visible`. Trash stays hidden. Dock sits at `bottom: max(8px, env(safe-area-inset-bottom))`.
+- **Pinch floor is 0.02.** Engine `d3.zoom().scaleExtent` was `[0.4, 2.4]` (v161). LOGYQ is `[0.02, 2.4]` so a phone can pinch much smaller. No working-lock script in-repo used 0.02; Ashley asked to match that looser known-good.
+- **Flick shows a tap-to-MIC chip, not auto-record.** Ported from `public/logiq-v162-mobile/direct-flick.js` (`revealBlankCardAction`) + `v2.js` (`#logiq-v2-action` / `actionLoop` / `startRecording`). LOGYQ uses `#logyq-v162-action`. Flick still only `createRelative`; recording starts only if she taps MIC. Header mic still fills the type-or-speak field.
+
 ## Fearless-delete wave
 
 See `SAFE_TO_RIP.md`. Spawn-puck, retired bind no-ops, engine prompt-maps, fake user badge, never-shown Hint, unused `startInlineEdit` / `zoomToNodeCenter` / `getSelectionUids` / `copySubtreeToClipboard` / `createFirstCardAndEdit`, the muted node `dblclick` bind, the dead swim-lane pin branch plus `showLaneAtY`/`hideLane`, unused `window.__add*` create aliases, and the unread `elements.mapsBtn` field were deleted. Keyboard create/edit/drag/selection verbs remain. Zoom still calls no-op `refreshLaneOnZoom`.

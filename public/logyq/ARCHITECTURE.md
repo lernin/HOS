@@ -77,9 +77,9 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `00-boot.js` | Bridge guard, `LOGYQPreview` bag, storage keys, boot sequence |
 | `01-helpers.js` | JSON/localStorage helpers |
 | `02-styles.js` | Injected preview/mobile CSS, including v162 hold-drag ghost styles |
-| `03-ui.js` | Maps library chrome, phone header/context. Does **not** bind spawn-puck or old tap-capture. |
-| `04-gestures.js` | Header-mic voice only. |
-| `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag, ~360ms double-tap edit. |
+| `03-ui.js` | Maps library chrome, phone header. No spawn-puck, no bottom arrow bar. |
+| `04-gestures.js` | Header-mic voice only (fills type-or-speak). |
+| `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag, ~360ms double-tap edit, tap-to-MIC on a blank card. |
 | `06-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
 
 ## Shared state (explicit `logyq` bag)
@@ -111,7 +111,7 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 ### Depend on these
 
 - `LOGYQBridge` methods (`selectByUid`, `createRelative`, `editSelected`, `deleteSelection`, `mix`, `fit`, `loadMap`, `subscribe`/`notifyChange`, `cycleDock`, `setDockSide`, `getSelectedUid`, `renameNode`)
-- `window.LOGYQPreview.gestures` (`bindV162`, `constants`, header-mic `startVoiceCapture`/`stopVoiceCapture`)
+- `window.LOGYQPreview.gestures` (`bindV162`, `constants`, `armBlankCardMic`, header-mic `startVoiceCapture`/`stopVoiceCapture`)
 - Bag clusters: `logyq.selection` (`getSelectedUid`), `logyq.editing`, `logyq.treeOps`, `logyq.drag`, `logyq.wordDock`, `logyq.input`, `logyq.dock` (`setSide` / `cycleDockSide` / `applyDockSide` / `sideLabel` / `updateDockBounds`), `logyq.camera`, `logyq.structure`, `logyq.layout`, `logyq.detectors` (`build`/`pick`/`draw` only), `logyq.treeManager.layoutAndRender` / `autoFit`
 - `logyq.input.isTextField` before stealing keys or pointer
 - Preview persistence (`logyq_*` storage keys) and `/api/transcribe` PIN header — already isolated from LOGiQ maps
@@ -129,14 +129,14 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 ### Known footguns for mobile
 
 - **Tab-hold** is a desktop modifier. Do not synthesize Tab on touch; it will `preventDefault` and set `state.tabHold`.
-- **Suppressed SVG dblclick** — do **not** unmute it. Phone edit is v162 pointer double-tap (~360ms) → `LOGYQBridge.editSelected()`, or keyboard `E` / the context Edit button.
+- **Suppressed SVG dblclick** — do **not** unmute it. Phone edit is v162 pointer double-tap (~360ms) → `LOGYQBridge.editSelected()`, or keyboard `E`.
 - **Sticky-nav `setSelectionSet`** is undefined; the try/catch swallows it. Do not "fix" it from a mobile overlay without an intentional delta.
 - **`keyDispatcher` runs at initialize()** before `attach('keyboard')`; the bind is `logyq.keyboard?.keyDispatcher`. Keep that late lookup.
 - Concatenate+IIFE remains; do not import fragments as ES modules from a mobile shell.
-- Preview still has a window-capture `keydown` that only refreshes context chrome (`updateContextActions`). Do not add a second capture keydown for the same job.
 - v162 gestures bind once from `05-v162-gestures.js` when the coarse/no-hover ≤1200px query matches. Mouse is ignored so desktop drag stays native. Cards use geometric hit-test (`pointer-events: none` on `g.node`) so pan/pinch still work over them.
 - Hold (~280ms, 8px slop) latches through synthetic `mousedown`/`mousemove`/`mouseup` into existing `d3.drag()` (`shiftKey: false`). Flick and double-tap must not start that drag.
-- Direct flick calls `selectByUid` + `createRelative` only. It must not start `MediaRecorder` / `startVoiceCapture`. Header mic remains the voice path.
+- Direct flick calls `selectByUid` + `createRelative`, then arms `#logyq-v162-action` on the blank card. It must not start `MediaRecorder` until she taps MIC. Header mic remains a separate voice path into the type-or-speak field.
+- Phone pinch/wheel floor is `scaleExtent([0.02, 2.4])` on `logyq.state.zoom`. Do not restore the v161 `0.4` floor.
 
 ### Must not do
 
@@ -155,4 +155,4 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - Mix newline `addWords` vs comma split
 - PNG export, help HTML mismatches, zoom-time `refreshLaneOnZoom` no-op
 - History/tree-ops/editing still use some ambient `showToast` / `utils` names inside their own fragments (same IIFE)
-- Existing injected phone header/context chrome (v161 DOM ids). Spawn-puck DOM is gone. A later chrome redesign should keep `LOGYQPreview.gestures.bindV162` rather than copying capture listeners.
+- Existing injected phone header chrome (v161 DOM ids). Spawn-puck and the bottom arrow bar (`#logiq-mobile-context`) are gone. A later chrome redesign should keep `LOGYQPreview.gestures.bindV162` rather than copying capture listeners.
