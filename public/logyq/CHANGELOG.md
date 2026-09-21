@@ -89,6 +89,11 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 - **Center-offset pan, not edge bands.** Hold-drag auto-pan uses the finger’s offset from the viewport center (dead zone 56px, quadratic step 16). Up/down matches left/right; near-center does not creep. The content leash is sign-aware on the **leading** edge (`dx>0` → left on `minX`, `dx<0` → right on `maxX`, same for y) and does not yank if already past. After `ba35d2f` the leading inset was ½ card and felt choked against the bezel; it is now ~⅓ of the viewport empty on the side she is panning toward (tree in the opposite ~⅔). Diagonals apply both axes.
 
+## Double-tap edits the card under the finger (PR 112)
+
+- **Wrong-card rename after flick-create.** Flick-down creates a blank via `createRelative` → `addChildBelowSelectedAndEdit` (opens editor on the new uid, then immediately closes it). Double-tap then called `editSelected()` with **no uid**, so a stale `selectedUid` (the flick origin / parent) won if `selectByUid` missed. Meanwhile `layoutAndRender` tweens the parent for 260ms over the new child’s final slot, and `hitNode` used the whole `g.node` box (downward grabzone). Equal-size overlaps picked the earlier DOM node — the parent. She typed “cat” onto the wrong card.
+- **Fix.** Double-tap calls `editSelected({ uid })` for the exact hit. Hit-test prefers the visual card face (`rect:not(.grabzone)`), then the deepest / closest card. Flick-create interrupts `g.node` tweens so the new blank is immediately the only card under the finger. Named-card double-tap is unchanged.
+
 ## Library-first open + no blank shells (PR 112)
 
 - **The slap** was `createMap({ edit: true })` on boot / New / last-delete: `editSelected({ wipe: true })` opened a forced empty-card editor (keyboard wall), then `queueAutosave` POSTed an untitled empty-root row into `logiq_maps`.

@@ -910,3 +910,103 @@ test('LOGYQ library lists recents and New opens a calm one-card canvas', async (
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ flick-created blank double-tap renames only that card', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+
+  async function faceCenter(predicate) {
+    return page.evaluate((fn) => {
+      const match = new Function(`return (${fn})`)()
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find(match)
+      const face = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = face.getBoundingClientRect()
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        uid: node?.__data__?.data?._uid || '',
+        name: node?.__data__?.data?.name || '',
+      }
+    }, predicate)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const canvas = document.getElementById('canvas')
+      canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const origin = await faceCenter('(node) => node.__data__?.data?.name === "Node 10"')
+  const before = await page.locator('svg#canvas g.node').count()
+  await touch('pointerdown', origin.x, origin.y, 71)
+  await touch('pointerup', origin.x, origin.y + 70, 71)
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before)
+
+  const blank = await faceCenter(`(node) => {
+    const data = node.__data__
+    return data?.parent?.data?.name === 'Node 10' && !(data?.data?.name || '').trim()
+  }`)
+  assert.ok(blank.uid, 'flick-down should create a blank child under Node 10')
+  assert.notEqual(blank.uid, origin.uid)
+
+  await touch('pointerdown', blank.x, blank.y, 72)
+  await touch('pointerup', blank.x, blank.y, 72)
+  await touch('pointerdown', blank.x, blank.y, 73)
+  await touch('pointerup', blank.x, blank.y, 73)
+  await page.waitForSelector('.node-edit-input')
+  const editing = await page.evaluate(() => window.LOGYQBridge.core.state.editingUid)
+  assert.equal(editing, blank.uid, 'editor must bind to the flick-created blank, not the origin')
+  await page.locator('.node-edit-input').fill('cat')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('svg#canvas g.node')).some((node) => node.__data__?.data?.name === 'cat'))
+
+  const afterBlank = await page.evaluate(() => {
+    const names = Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => node.__data__?.data?.name)
+    const cat = Array.from(document.querySelectorAll('svg#canvas g.node')).find((node) => node.__data__?.data?.name === 'cat')
+    return {
+      names,
+      catParent: cat?.__data__?.parent?.data?.name || null,
+      node10: names.filter((name) => name === 'Node 10').length,
+    }
+  })
+  assert.equal(afterBlank.names.filter((name) => name === 'cat').length, 1)
+  assert.equal(afterBlank.catParent, 'Node 10')
+  assert.equal(afterBlank.node10, 1)
+
+  const named = await faceCenter('(node) => node.__data__?.data?.name === "Node 08"')
+  await touch('pointerdown', named.x, named.y, 74)
+  await touch('pointerup', named.x, named.y, 74)
+  await touch('pointerdown', named.x, named.y, 75)
+  await touch('pointerup', named.x, named.y, 75)
+  await page.waitForSelector('.node-edit-input')
+  await page.locator('.node-edit-input').fill('Tapped 08')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('svg#canvas g.node')).some((node) => node.__data__?.data?.name === 'Tapped 08'))
+  assert.equal(await page.evaluate(() => {
+    const names = Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => node.__data__?.data?.name)
+    return names.filter((name) => name === 'cat').length === 1 && names.includes('Tapped 08') && names.includes('Node 10')
+  }), true)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})

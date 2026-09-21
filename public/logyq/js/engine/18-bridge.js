@@ -94,10 +94,12 @@
       const node = logyq.state.root?.descendants().find((item) => item.data?.name === name);
       return node?.parent?.data?.name || null;
     },
-    editSelected({ wipe = false } = {}) {
-      if (!logyq.state.selectedUid) return false;
-      const node = logyq.state.root?.descendants().find((item) => item.data?._uid === logyq.state.selectedUid);
+    editSelected({ wipe = false, uid = null } = {}) {
+      const targetUid = uid || logyq.state.selectedUid;
+      if (!targetUid) return false;
+      const node = logyq.state.root?.descendants().find((item) => item.data?._uid === targetUid);
       if (!node) return false;
+      logyq.selection.selectSingle(targetUid);
       logyq.editing.openNodeEditor(node);
       if (wipe && logyq.state.editorEl) logyq.state.editorEl.value = '';
       return true;
@@ -115,6 +117,7 @@
       if (direction === 'right') logyq.keyboard.addYoungerSiblingRightAndEdit();
       const created = logyq.state.selectedUid && logyq.state.selectedUid !== before ? logyq.state.selectedUid : null;
       if (created && logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
+      try { logyq.elements.gNodes?.selectAll('g.node').interrupt(); } catch (_error) {}
       emitChange();
       return created;
     },

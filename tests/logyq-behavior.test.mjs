@@ -978,7 +978,9 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /FLICK_MIN: 52/)
   assert.match(v162, /__logyqV2ConsumedPointers/)
   assert.match(v162, /bridge\.createRelative\(direction\)/)
-  assert.match(v162, /bridge\.editSelected\(\)/)
+  assert.match(v162, /bridge\.editSelected\(\{ uid \}\)/)
+  assert.match(v162, /function rankCardHits/)
+  assert.match(v162, /rect:not\(\.grabzone\)/)
   assert.match(v162, /function bindV162Gestures/)
   assert.match(v162, /bindV162Gestures\(\)/)
   assert.match(v162, /function armBlankCardMic/)
@@ -1221,4 +1223,18 @@ test('card contact race classifies hold vs slow pan vs flick-speed', () => {
     { t: 140, x: 0, y: 70 },
   ]
   assert.ok(helpers.recentSpeedPxPerMs(whip, 140) > helpers.flickFastSpeed(C))
+})
+
+test('card hit-test prefers the visual face and the deepest overlapping card', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function rankCardHits(hits, x, y) {')
+  const end = source.indexOf('function hitNode(doc, x, y) {', start)
+  assert.ok(start >= 0 && end > start)
+  const rankCardHits = new Function(`${source.slice(start, end)}; return rankCardHits;`)()
+  const parent = { id: 'parent', onFace: false, onBox: true, depth: 1, cx: 100, cy: 80 }
+  const child = { id: 'child', onFace: true, onBox: true, depth: 2, cx: 100, cy: 140 }
+  const sibling = { id: 'sib', onFace: true, onBox: true, depth: 2, cx: 180, cy: 140 }
+  assert.equal(rankCardHits([parent, child], 100, 140)[0].id, 'child')
+  assert.equal(rankCardHits([parent], 100, 90)[0].id, 'parent', 'grabzone-only fallback still finds the parent')
+  assert.equal(rankCardHits([child, sibling], 110, 140)[0].id, 'child')
 })

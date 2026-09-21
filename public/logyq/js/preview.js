@@ -1420,7 +1420,10 @@
         const createdUid = bridge.createRelative(direction)
         if (!createdUid) return
         const canvas = doc.getElementById('canvas')
-        if (win.d3 && canvas) win.d3.select(canvas).interrupt()
+        if (win.d3 && canvas) {
+          win.d3.select(canvas).interrupt()
+          win.d3.select(canvas).selectAll('g.node').interrupt()
+        }
         restoreView(doc, win, candidate.view)
         bridge.selectByUid(createdUid)
         armBlankCardMic(state.mic, doc, createdUid)
@@ -1450,8 +1453,7 @@
     if (state.lastTap?.uid === uid && now - state.lastTap.time <= v162Constants().DOUBLE_TAP_MS) {
       state.lastTap = null
       clearCardMic(state.mic)
-      bridge.selectByUid(uid)
-      bridge.editSelected()
+      bridge.editSelected({ uid })
       return
     }
 
@@ -1506,17 +1508,44 @@
     return Array.from(doc.querySelectorAll('svg#canvas g.node')).find((node) => nodeUid(node) === uid) || null
   }
 
+  function cardFaceRect(node) {
+    const vis = node?.querySelector?.('rect:not(.grabzone)')
+    return vis?.getBoundingClientRect?.() || node?.getBoundingClientRect?.() || null
+  }
+
+  function pointInRect(rect, x, y) {
+    return !!rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+  }
+
+  function rankCardHits(hits, x, y) {
+    const rows = (hits || []).filter((hit) => hit && (hit.onFace || hit.onBox))
+    const pool = rows.some((hit) => hit.onFace) ? rows.filter((hit) => hit.onFace) : rows
+    return pool.slice().sort((a, b) => {
+      const depth = (b.depth || 0) - (a.depth || 0)
+      if (depth) return depth
+      const ad = Math.hypot(x - (a.cx || 0), y - (a.cy || 0))
+      const bd = Math.hypot(x - (b.cx || 0), y - (b.cy || 0))
+      return ad - bd
+    })
+  }
+
   function hitNode(doc, x, y) {
-    return Array.from(doc.querySelectorAll('svg#canvas g.node'))
-      .filter((node) => {
-        const rect = node.getBoundingClientRect()
-        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-      })
-      .sort((a, b) => {
-        const ar = a.getBoundingClientRect()
-        const br = b.getBoundingClientRect()
-        return ar.width * ar.height - br.width * br.height
-      })[0] || null
+    const scored = Array.from(doc.querySelectorAll('svg#canvas g.node')).map((node) => {
+      const face = cardFaceRect(node)
+      const box = node.getBoundingClientRect()
+      const onFace = pointInRect(face, x, y)
+      const onBox = pointInRect(box, x, y)
+      if (!onFace && !onBox) return null
+      return {
+        node,
+        onFace,
+        onBox,
+        depth: node.__data__?.depth ?? 0,
+        cx: face ? (face.left + face.right) / 2 : 0,
+        cy: face ? (face.top + face.bottom) / 2 : 0,
+      }
+    }).filter(Boolean)
+    return rankCardHits(scored, x, y)[0]?.node || null
   }
 
   function cardText(node) {
@@ -1724,6 +1753,9 @@
     preview.gestures.paintFlickDown = paintFlickDown
     preview.gestures.paintTap = paintTap
     preview.gestures.flickDirection = flickDirection
+    preview.gestures.hitNode = hitNode
+    preview.gestures.rankCardHits = rankCardHits
+    preview.gestures.cardFaceRect = cardFaceRect
   }
   function setSaveState(state) {
     const text = state === 'saving' ? 'Saving' : state === 'offline' ? 'Offline' : 'Saved'
