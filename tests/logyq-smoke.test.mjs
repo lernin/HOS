@@ -326,9 +326,17 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
     const CONFIG = window.LOGYQBridge.core.config
     const pick = window.LOGYQBridge.core.detectors.pick
     const origin = held?.data?._uid || ''
+    const sibling = byName('Node 04')?.__data__
+    const cousinA = byName('Node 06')?.__data__
+    const cousinB = byName('Node 07')?.__data__
     const besideGhost = pick({ x: held.x + CONFIG.CARD_WIDTH / 2 + 10, y: held.y })
     const onGhost = pick({ x: held.x, y: held.y })
     const besideOther = other ? pick({ x: other.x + CONFIG.CARD_WIDTH / 2 + 10, y: other.y }) : null
+    const underSibling = sibling ? pick({ x: sibling.x, y: sibling.y }) : null
+    const besideSibling = sibling ? pick({ x: sibling.x - CONFIG.CARD_WIDTH / 2 - 12, y: sibling.y }) : null
+    const betweenCousins = (cousinA && cousinB)
+      ? pick({ x: (cousinA.x + cousinB.x) / 2, y: cousinA.y })
+      : null
     return {
       origin,
       onGhostType: onGhost?.type || null,
@@ -339,6 +347,17 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
       besideOtherUid: besideOther?.targetUid || null,
       besideOtherPrev: besideOther?.prevUid || null,
       besideOtherNext: besideOther?.nextUid || null,
+      underSiblingType: underSibling?.type || null,
+      underSiblingUid: underSibling?.targetUid || null,
+      siblingUid: sibling?.data?._uid || null,
+      besideSiblingType: besideSibling?.type || null,
+      besideSiblingUid: besideSibling?.targetUid || null,
+      besideSiblingPrev: besideSibling?.prevUid || null,
+      besideSiblingNext: besideSibling?.nextUid || null,
+      betweenType: betweenCousins?.type || null,
+      betweenUid: betweenCousins?.targetUid || null,
+      betweenPrev: betweenCousins?.prevUid || null,
+      betweenNext: betweenCousins?.nextUid || null,
     }
   })
   assert.equal(ghostPick.onGhostType, 'node')
@@ -346,6 +365,14 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(ghostPick.besideGhostType, 'node', 'beside the origin ghost must arm put-back, not a side-insert caret')
   assert.equal(ghostPick.besideGhostUid, ghostPick.origin)
   assert.notEqual(ghostPick.besideOtherUid, ghostPick.origin, 'side-insert / adopt beside another card must not remap to the ghost')
+  assert.equal(ghostPick.underSiblingType, 'node', 'dropping under a sibling/cousin must still adopt')
+  assert.equal(ghostPick.underSiblingUid, ghostPick.siblingUid)
+  assert.equal(ghostPick.besideSiblingType, 'gap', 'across the channel, the sibling/cousin side-insert must stay live')
+  assert.notEqual(ghostPick.besideSiblingUid, ghostPick.origin)
+  assert.ok(ghostPick.besideSiblingPrev || ghostPick.besideSiblingNext, 'cousin/sibling side-insert must keep gap ownership')
+  assert.equal(ghostPick.betweenType, 'gap', 'the gap/dot between two cousins must stay a between-insert')
+  assert.notEqual(ghostPick.betweenUid, ghostPick.origin)
+  assert.ok(ghostPick.betweenPrev && ghostPick.betweenNext, 'between-cousin insert must keep both neighbors')
   await page.evaluate(({ x, y }) => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     node?.dispatchEvent(new MouseEvent('contextmenu', {

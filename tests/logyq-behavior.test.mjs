@@ -220,24 +220,41 @@ test('insertNodeAtDrop places a node in a sibling gap or under a target', () => 
   assert.equal(tree.children[0].children[0].name, 'leaf')
 })
 
-test('hold-drag remaps side-insert beside the origin ghost to put-back', () => {
+test('hold-drag remaps only the origin ghost side, not cousin/sibling sides', () => {
   const source = readFileSync(new URL('../public/logyq/js/engine/08-detectors.js', import.meta.url), 'utf8')
-  const start = source.indexOf('function remapHoldDragGhostDrop(drop, originUid, ghostUids){')
+  const start = source.indexOf('function putBackGhost(drop, originUid){')
   const end = source.indexOf('function holdDragGhostContext(){', start)
   assert.ok(start >= 0 && end > start)
   const remapHoldDragGhostDrop = new Function(`${source.slice(start, end)}; return remapHoldDragGhostDrop;`)()
   const origin = 'ghost-1'
   const ghosts = new Set([origin, 'ghost-kid'])
-  assert.deepEqual(
-    remapHoldDragGhostDrop({ type: 'gap', prevUid: origin, nextUid: 'sib', parentUid: 'p' }, origin, ghosts),
-    { type: 'node', targetUid: origin, _hit: undefined },
-  )
-  assert.deepEqual(
-    remapHoldDragGhostDrop({ type: 'gap', prevUid: null, nextUid: origin, parentUid: 'p' }, origin, ghosts),
-    { type: 'node', targetUid: origin, _hit: undefined },
-  )
-  const other = { type: 'gap', prevUid: 'left', nextUid: 'right', parentUid: 'p' }
-  assert.equal(remapHoldDragGhostDrop(other, origin, ghosts), other)
+  const back = (hit) => ({ type: 'node', targetUid: origin, _hit: hit })
+
+  const ghostEdge = { type: 'gap', prevUid: origin, nextUid: null, parentUid: 'p', _hit: { kind: 'edgeSibling' } }
+  assert.deepEqual(remapHoldDragGhostDrop(ghostEdge, origin, ghosts), back(ghostEdge._hit))
+
+  const ghostLeftCousin = { type: 'gap', prevUid: origin, nextUid: 'cousin', parentUid: 'p', _hit: { kind: 'leftCousin' } }
+  assert.deepEqual(remapHoldDragGhostDrop(ghostLeftCousin, origin, ghosts), back(ghostLeftCousin._hit))
+
+  const cousinRight = { type: 'gap', prevUid: origin, nextUid: 'cousin', parentUid: 'q', _hit: { kind: 'rightCousin' } }
+  assert.equal(remapHoldDragGhostDrop(cousinRight, origin, ghosts), cousinRight)
+
+  const cousinLeft = { type: 'gap', prevUid: 'cousin', nextUid: origin, parentUid: 'q', _hit: { kind: 'leftCousin' } }
+  assert.equal(remapHoldDragGhostDrop(cousinLeft, origin, ghosts), cousinLeft)
+
+  const ghostRightCousin = { type: 'gap', prevUid: 'cousin', nextUid: origin, parentUid: 'p', _hit: { kind: 'rightCousin' } }
+  assert.deepEqual(remapHoldDragGhostDrop(ghostRightCousin, origin, ghosts), back(ghostRightCousin._hit))
+
+  const bothGhost = { type: 'gap', prevUid: origin, nextUid: 'ghost-kid', parentUid: 'p', _hit: { kind: 'sibling', centerX: 0 } }
+  assert.deepEqual(remapHoldDragGhostDrop(bothGhost, origin, ghosts), back(bothGhost._hit))
+
+  const sibHit = { kind: 'sibling', centerX: 100 }
+  const ghostSib = { type: 'gap', prevUid: origin, nextUid: 'sib', parentUid: 'p', _hit: sibHit }
+  assert.deepEqual(remapHoldDragGhostDrop(ghostSib, origin, ghosts, { x: 80 }), back(sibHit))
+  assert.equal(remapHoldDragGhostDrop(ghostSib, origin, ghosts, { x: 130 }), ghostSib)
+
+  const twoCousins = { type: 'gap', prevUid: 'left', nextUid: 'right', parentUid: 'p', _hit: { kind: 'leftCousin' } }
+  assert.equal(remapHoldDragGhostDrop(twoCousins, origin, ghosts), twoCousins)
   const adopt = { type: 'node', targetUid: 'other' }
   assert.equal(remapHoldDragGhostDrop(adopt, origin, ghosts), adopt)
 })

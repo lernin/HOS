@@ -153,16 +153,45 @@
 
     function contains(d, x, y){ return (x>=d.x && x<=d.x+d.width && y>=d.y && y<=d.y+d.height); }
 
-    // Hold-drag origin ghost is put-back. Sibling / edge / cousin slots
-    // attached to that ghost are the same home — do not arm side-insert.
-    // Side-insert beside any other card is unchanged.
-    function remapHoldDragGhostDrop(drop, originUid, ghostUids){
+    // Hold-drag: mute side-insert only on the origin ghost (and gaps
+    // whose both sides are the ghosted subtree). A ghost↔neighbor
+    // channel is put-back on the ghost's half and side-insert on the
+    // neighbor's — cousin/sibling/edge on other cards stay live.
+    function putBackGhost(drop, originUid){
+      return { type: 'node', targetUid: originUid, _hit: drop._hit };
+    }
+
+    function remapHoldDragGhostDrop(drop, originUid, ghostUids, point){
       if (!drop || drop.type !== 'gap' || !originUid) return drop;
       const ids = ghostUids instanceof Set ? ghostUids : new Set(ghostUids || []);
       if (!ids.size) ids.add(originUid);
-      if (ids.has(drop.prevUid) || ids.has(drop.nextUid)) {
-        return { type: 'node', targetUid: originUid, _hit: drop._hit };
+      const prevGhost = ids.has(drop.prevUid);
+      const nextGhost = ids.has(drop.nextUid);
+      if (!prevGhost && !nextGhost) return drop;
+      if (prevGhost && nextGhost) return putBackGhost(drop, originUid);
+
+      const hit = drop._hit || {};
+      const kind = hit.kind;
+
+      // Outer edge of a ghosted card — no neighbor owns that slot.
+      if (kind === 'edgeSibling') return putBackGhost(drop, originUid);
+
+      // Cousin detectors are side-owned: leftCousin → L, rightCousin → R.
+      if (kind === 'leftCousin') return prevGhost ? putBackGhost(drop, originUid) : drop;
+      if (kind === 'rightCousin') return nextGhost ? putBackGhost(drop, originUid) : drop;
+
+      // Sibling hole: closer to the ghost is home; closer to the
+      // neighbor keeps between-insert. Midpoint ties go home.
+      const mid = Number.isFinite(hit.centerX)
+        ? hit.centerX
+        : (Number.isFinite(hit.x) && Number.isFinite(hit.width) ? hit.x + hit.width / 2 : null);
+      const x = point?.x;
+      if (mid != null && Number.isFinite(x)) {
+        const onGhostSide = prevGhost ? x <= mid : x >= mid;
+        return onGhostSide ? putBackGhost(drop, originUid) : drop;
       }
+
+      // No geometry: do not steal the neighbor's side-insert.
       return drop;
     }
 
@@ -202,7 +231,7 @@
       else if (top.kind==='node') result = { type:'node', targetUid: top.targetUid, _hit: top };
       else result = { type:'gap', parentUid: top.parentUid||null, prevUid: top.prevUid||null, nextUid: top.nextUid||null, _hit: top };
       const ghost = holdDragGhostContext();
-      return ghost ? remapHoldDragGhostDrop(result, ghost.originUid, ghost.ghostUids) : result;
+      return ghost ? remapHoldDragGhostDrop(result, ghost.originUid, ghost.ghostUids, point) : result;
     }
 
     function draw(){

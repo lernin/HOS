@@ -85,6 +85,7 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 - **No trash FOUC on mobile load.** `#trash` is hidden in first-paint `#logyq-phone-boot` CSS and the matching `app.css` phone media query. Preview JS still hides it later; that is no longer the first hide. Desktop trash stays visible.
 - **Ghost put-back swallows side-insert.** During hold-drag, a gap / edge / cousin slot whose `prevUid` or `nextUid` is the origin ghost (or its ghosted subtree) remaps to put-back on the ghost. Green side carets still light beside other cards.
+- **Cousin side-insert stays live.** Mute is only the origin ghost’s own side (edge, ghost-owned cousin half, sibling half closer to the ghost) and gaps whose **both** sides are the ghosted subtree. Across the channel, the neighbor’s side-insert and the gap/dot between two non-ghost cousins stay armed. Under/adopt on another card is unchanged.
 
 ## Persistence contract + Lab scaffold
 
