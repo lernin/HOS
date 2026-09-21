@@ -38,9 +38,14 @@ const CONFIG_FLY = {
   moatDelayMs:    90    // small debounce for mote helper
 };
 
+attach('config', CONFIG)
+attach('moat', CONFIG_MOAT)
+attach('fly', CONFIG_FLY)
+
 
 // === Nearest-wall % (single source of truth) ===
 function computeNearestWallPct(){
+  const { elements, state } = logyq
   if (!elements?.svg || !elements?.gRoot || !state?.root) return null;
 
   const uid =
@@ -71,13 +76,15 @@ function computeNearestWallPct(){
 
 // Current single selection (or null)
 function __selectedUid(){
+  const { state } = logyq
   return state.selectedUid
       || (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null)
       || null;
 }
 
 /* Smoothly pan to a node's center, preserving current zoom. */
-function flyCenterToUID(uid, { duration = CONFIG_FLY.hotkeyDuration } = {}){
+function flyCenterToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
+  const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
 
@@ -104,7 +111,7 @@ function flyCenterToUID(uid, { duration = CONFIG_FLY.hotkeyDuration } = {}){
 }
 
 /* Center the *current* selection with a given duration (no zoom). */
-function centerOnSelected({ duration = CONFIG_FLY.hotkeyDuration } = {}){
+function centerOnSelected({ duration = logyq.fly.hotkeyDuration } = {}){
   const uid = __selectedUid();
   if (!uid) return;
   flyCenterToUID(uid, { duration });
@@ -116,9 +123,9 @@ function centerOnSelected({ duration = CONFIG_FLY.hotkeyDuration } = {}){
 /// Debounced center-on-selected (no zoom), mirrors autoFitSoon style
 function centerOnSelectedSoon(delay){
   try { clearTimeout(window.__centerSoonT); } catch (_e) {}
-  const d = Number.isFinite(delay) ? delay : CONFIG_FLY.moatDelayMs;
+  const d = Number.isFinite(delay) ? delay : logyq.fly.moatDelayMs;
   window.__centerSoonT = setTimeout(() => {
-    try { centerOnSelected({ duration: CONFIG_FLY.moatDuration }); } catch (_e) {}
+    try { centerOnSelected({ duration: logyq.fly.moatDuration }); } catch (_e) {}
   }, d);
 }
 
@@ -127,11 +134,9 @@ function centerOnSelectedSoon(delay){
 
 
 
-
-
-
 // keep the name, change the behavior to "center on selected"
 function checkMoatAndAutoFit(sourceTag = 'kbd'){
+  const { state, moat } = logyq
 
       // Don’t run the moat while the user is dragging/panning the map
   if (state.isPanning) return;
@@ -147,19 +152,19 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
 
  
 
-  if (!CONFIG_MOAT?.enabled) return;
-  const threshold = CONFIG_MOAT.moatPct ?? 0.10;  // e.g., 10%
+  if (!moat?.enabled) return;
+  const threshold = moat.moatPct ?? 0.10;  // e.g., 10%
   if (pct >= threshold) return;
 
   const now = Date.now();
-  const cooldown = CONFIG_MOAT.cooldownMs ?? 500;
+  const cooldown = moat.cooldownMs ?? 500;
   if (now - (state._lastMoat || 0) < cooldown) return;
 
   // ✅ Center on selected (not fit)
   if (typeof centerOnSelectedSoon === 'function'){
     centerOnSelectedSoon(120);
-  } else if (window.treeManager?.centerOnSelected){
-    treeManager.centerOnSelected();
+  } else if (logyq.treeManager?.centerOnSelected){
+    logyq.treeManager.centerOnSelected();
   } else if (state?.selectedUids?.size === 1){
     // last-resort fallback
     const uid = [...state.selectedUids][0];
@@ -168,13 +173,5 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
 
   state._lastMoat = now;
 }
-
-
-
-
-
-
-
-
 
 

@@ -1,4 +1,34 @@
 (() => {
+  /* ======================= LOGYQ API ======================= */
+  // Mutable bag fragments register onto. Clusters should read shared
+  // state and late-bound managers through `logyq` instead of hoping a
+  // same-scope `const` exists. Unconverted fragments still use ambient
+  // bindings; attach() keeps both views pointing at the same objects.
+  const logyq = {
+    config: null,
+    moat: null,
+    fly: null,
+    state: null,
+    elements: null,
+    utils: null,
+    export: null,
+    history: null,
+    data: null,
+    visual: null,
+    detectors: null,
+    editing: null,
+    selection: null,
+    treeOps: null,
+    drag: null,
+    treeManager: null,
+    keyboard: null,
+  }
+
+  function attach(name, value) {
+    logyq[name] = value
+    return value
+  }
+
   /* ======================= CONFIG ======================= */
   const CONFIG = {
     CARD_WIDTH:140, CARD_HEIGHT:63, FONT_SIZE:18,
@@ -39,9 +69,14 @@ const CONFIG_FLY = {
   moatDelayMs:    90    // small debounce for mote helper
 };
 
+attach('config', CONFIG)
+attach('moat', CONFIG_MOAT)
+attach('fly', CONFIG_FLY)
+
 
 // === Nearest-wall % (single source of truth) ===
 function computeNearestWallPct(){
+  const { elements, state } = logyq
   if (!elements?.svg || !elements?.gRoot || !state?.root) return null;
 
   const uid =
@@ -72,13 +107,15 @@ function computeNearestWallPct(){
 
 // Current single selection (or null)
 function __selectedUid(){
+  const { state } = logyq
   return state.selectedUid
       || (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null)
       || null;
 }
 
 /* Smoothly pan to a node's center, preserving current zoom. */
-function flyCenterToUID(uid, { duration = CONFIG_FLY.hotkeyDuration } = {}){
+function flyCenterToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
+  const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
 
@@ -105,7 +142,7 @@ function flyCenterToUID(uid, { duration = CONFIG_FLY.hotkeyDuration } = {}){
 }
 
 /* Center the *current* selection with a given duration (no zoom). */
-function centerOnSelected({ duration = CONFIG_FLY.hotkeyDuration } = {}){
+function centerOnSelected({ duration = logyq.fly.hotkeyDuration } = {}){
   const uid = __selectedUid();
   if (!uid) return;
   flyCenterToUID(uid, { duration });
@@ -117,9 +154,9 @@ function centerOnSelected({ duration = CONFIG_FLY.hotkeyDuration } = {}){
 /// Debounced center-on-selected (no zoom), mirrors autoFitSoon style
 function centerOnSelectedSoon(delay){
   try { clearTimeout(window.__centerSoonT); } catch (_e) {}
-  const d = Number.isFinite(delay) ? delay : CONFIG_FLY.moatDelayMs;
+  const d = Number.isFinite(delay) ? delay : logyq.fly.moatDelayMs;
   window.__centerSoonT = setTimeout(() => {
-    try { centerOnSelected({ duration: CONFIG_FLY.moatDuration }); } catch (_e) {}
+    try { centerOnSelected({ duration: logyq.fly.moatDuration }); } catch (_e) {}
   }, d);
 }
 
@@ -128,11 +165,9 @@ function centerOnSelectedSoon(delay){
 
 
 
-
-
-
 // keep the name, change the behavior to "center on selected"
 function checkMoatAndAutoFit(sourceTag = 'kbd'){
+  const { state, moat } = logyq
 
       // Don’t run the moat while the user is dragging/panning the map
   if (state.isPanning) return;
@@ -148,19 +183,19 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
 
  
 
-  if (!CONFIG_MOAT?.enabled) return;
-  const threshold = CONFIG_MOAT.moatPct ?? 0.10;  // e.g., 10%
+  if (!moat?.enabled) return;
+  const threshold = moat.moatPct ?? 0.10;  // e.g., 10%
   if (pct >= threshold) return;
 
   const now = Date.now();
-  const cooldown = CONFIG_MOAT.cooldownMs ?? 500;
+  const cooldown = moat.cooldownMs ?? 500;
   if (now - (state._lastMoat || 0) < cooldown) return;
 
   // ✅ Center on selected (not fit)
   if (typeof centerOnSelectedSoon === 'function'){
     centerOnSelectedSoon(120);
-  } else if (window.treeManager?.centerOnSelected){
-    treeManager.centerOnSelected();
+  } else if (logyq.treeManager?.centerOnSelected){
+    logyq.treeManager.centerOnSelected();
   } else if (state?.selectedUids?.size === 1){
     // last-resort fallback
     const uid = [...state.selectedUids][0];
@@ -169,14 +204,6 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
 
   state._lastMoat = now;
 }
-
-
-
-
-
-
-
-
 
 
 /* ======================= STATE & ELEMENTS ======================= */
@@ -196,6 +223,7 @@ const state = {
   vHold: false, /* V-hold focus-only visuals */
  isPanning: false,
 };
+attach('state', state)
 
 
 
@@ -260,6 +288,7 @@ function keyIsNav(e){
     dragMiniG:null, dragMiniRect:null, dragMiniTitle:null,
     caretDot:null
   };
+attach('elements', elements)
 
 
 
@@ -499,6 +528,7 @@ applyDockSide();
     const clamp=(v,lo,hi)=> Math.max(lo, Math.min(hi, v));
     return { assignUids, deepClone, pathToUid, findByPath, findByUid, uidInSubtree, assignIds, clamp };
   })();
+  attach('utils', utils)
 
   /* ======================= PNG EXPORTER ======================= */
   const PngExport = (() => {
@@ -660,6 +690,7 @@ applyDockSide();
       /* [patch] png-bg-fix end */          ctx.drawImage(img,0,0); const out=c.toDataURL("image/png"); const a=document.createElement("a");          a.download = filename || ("tree-full-"+new Date().toISOString().replace(/[:.]/g,"-")+".png"); a.href=out; document.body.appendChild(a); a.click(); a.remove();          showToast("Full PNG exported",1100); } finally { URL.revokeObjectURL(url); } };        img.onerror = ()=>{ URL.revokeObjectURL(url); alert("Sorry, full-map PNG export failed."); };        img.src = url;      }      function exportSVG(opts){        opts = opts||{}; const pad = (opts.pad!=null?opts.pad:24); const filename = opts.filename;        const svgEl = elements.svg.node(); if(!svgEl) return; const bbox = getContentBBox(pad) || {x:0,y:0,width:svgEl.clientWidth||1000,height:svgEl.clientHeight||800};        const clone = svgEl.cloneNode(true); clone.removeAttribute("id"); const g=clone.querySelector("svg > g"); if(g) g.setAttribute("transform","translate(0,0) scale(1)");        copyInlineStylesRecursive(svgEl, clone);        const titled = injectTitleIntoClone(clone, bbox, opts);        clone.setAttribute("width", String(Math.max(1,titled.vbW))); clone.setAttribute("height", String(Math.max(1,titled.vbH)));        clone.setAttribute("viewBox", titled.vbX+" "+titled.vbY+" "+titled.vbW+" "+titled.vbH);        clone.setAttribute("xmlns","http://www.w3.org/2000/svg"); clone.setAttribute("xmlns:xlink","http://www.w3.org/1999/xlink");        const str = svgString(clone); const blob = new Blob([str], { type:"image/svg+xml;charset=utf-8" }); const url = URL.createObjectURL(blob);        const a=document.createElement("a"); a.download = filename || ("tree-"+new Date().toISOString().replace(/[:.]/g,"-")+".svg"); a.href=url; document.body.appendChild(a); a.click(); a.remove();        setTimeout(()=>URL.revokeObjectURL(url),0); showToast("SVG exported (vector)",1100);      }      /* [patch] full-export-fns end */
     return { exportCurrentView, exportFullPNG, exportSVG, getContentBBox };
   })();
+  attach('export', PngExport)
 
   /* ======================= HISTORY ======================= */
   function pushHistory(action){
@@ -767,6 +798,8 @@ function autoFitSoon(delay){
     }
   }
 
+  attach('history', { pushHistory, undo, autoFitSoon })
+
   /* ======================= SAMPLE DATA ======================= */
   const dataManager = {
     generateTree(n=30){
@@ -800,6 +833,8 @@ function autoFitSoon(delay){
       elements.dragMiniTitle.text(title).attr("x", w/2).attr("y", CONFIG.CARD_HEIGHT/2).style("font-size", `${CONFIG.FONT_SIZE}px`);
     }
   };
+  attach('data', dataManager)
+  attach('visual', visual)
 
   /* ======================= LABEL WRAP ======================= */
   const LabelWrap = (() => {
@@ -1592,6 +1627,7 @@ if (dir === +1){
 
     return { build, pick, draw };
   })();
+  attach('detectors', Detectors)
 
   /* ======================= EDITOR ======================= */
  function updateNodeEditorPosition(){
@@ -4001,6 +4037,7 @@ state.dragState.drop = null;
     dragManager.clear(); treeManager.layoutAndRender(false);
   }
 };
+attach('drag', dragManager)
 
 
 function getSelectionUids(){
@@ -5328,6 +5365,7 @@ elements.svg.interrupt()
   .call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
  }
 };
+attach('treeManager', treeManager)
 
 
 
@@ -6307,8 +6345,8 @@ function getSelectedUid(){
   });
 
   const snapshot = () => ({
-    tree: state.root ? utils.deepClone(state.root.data) : null,
-    wordBank: Array.isArray(state.wordBank) ? state.wordBank.slice() : []
+    tree: logyq.state.root ? logyq.utils.deepClone(logyq.state.root.data) : null,
+    wordBank: Array.isArray(logyq.state.wordBank) ? logyq.state.wordBank.slice() : []
   });
 
   const emitChange = () => {
@@ -6328,6 +6366,7 @@ function getSelectedUid(){
 
   window.LOGYQBridge = Object.freeze({
     version: 'logyq-isolated',
+    core: logyq,
     snapshot,
     subscribe(listener) {
       changeListeners.add(listener);

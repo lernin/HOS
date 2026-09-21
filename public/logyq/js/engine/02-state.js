@@ -15,6 +15,7 @@ const state = {
   vHold: false, /* V-hold focus-only visuals */
  isPanning: false,
 };
+attach('state', state)
 
 
 
@@ -79,6 +80,7 @@ function keyIsNav(e){
     dragMiniG:null, dragMiniRect:null, dragMiniTitle:null,
     caretDot:null
   };
+attach('elements', elements)
 
 
 

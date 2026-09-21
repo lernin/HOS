@@ -186,4 +186,5 @@
 
     return { build, pick, draw };
   })();
+  attach('detectors', Detectors)
 

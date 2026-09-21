@@ -63,6 +63,7 @@ test('LOGYQ desktop boot preserves the 30-node tree, edit, undo, dock, and repar
   assert.equal(await page.locator('#trash').isVisible(), true)
   assert.equal(await page.evaluate(() => typeof window.LOGYQBridge), 'object')
   assert.equal(await page.evaluate(() => window.LOGiQBridge), undefined)
+  assert.equal(await page.evaluate(() => !!window.LOGYQBridge.core?.state && !!window.LOGYQBridge.core?.utils), true)
 
   assert.equal(await page.evaluate(() => window.LOGYQBridge.selectByName('Node 05')), true)
   await page.keyboard.press('e')

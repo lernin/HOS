@@ -750,6 +750,7 @@ state.dragState.drop = null;
     dragManager.clear(); treeManager.layoutAndRender(false);
   }
 };
+attach('drag', dragManager)
 
 
 function getSelectionUids(){

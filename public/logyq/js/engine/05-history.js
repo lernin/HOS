@@ -104,3 +104,5 @@ function autoFitSoon(delay){
     }
   }
 
+  attach('history', { pushHistory, undo, autoFitSoon })
+

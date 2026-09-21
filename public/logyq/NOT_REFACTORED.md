@@ -26,4 +26,4 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 
 ## Extraction method (intentional)
 
-Fragments are concatenated back into the original IIFEs. They are not ES modules, do not take an explicit context object, and do not invert control through a command bus. Doing that next would require threading `state`/`elements` through hundreds of free-variable references and is the main remaining maintainability risk.
+Fragments still concatenate into the original IIFEs. A `logyq` API bag now holds shared objects; clusters should take dependencies from that bag. They are not yet independently imported ES modules. Remaining ambient free-variable use is being removed cluster by cluster rather than in one rewrite.

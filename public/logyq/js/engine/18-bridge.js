@@ -15,8 +15,8 @@
   });
 
   const snapshot = () => ({
-    tree: state.root ? utils.deepClone(state.root.data) : null,
-    wordBank: Array.isArray(state.wordBank) ? state.wordBank.slice() : []
+    tree: logyq.state.root ? logyq.utils.deepClone(logyq.state.root.data) : null,
+    wordBank: Array.isArray(logyq.state.wordBank) ? logyq.state.wordBank.slice() : []
   });
 
   const emitChange = () => {
@@ -36,6 +36,7 @@
 
   window.LOGYQBridge = Object.freeze({
     version: 'logyq-isolated',
+    core: logyq,
     snapshot,
     subscribe(listener) {
       changeListeners.add(listener);

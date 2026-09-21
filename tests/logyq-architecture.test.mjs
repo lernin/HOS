@@ -92,6 +92,26 @@ test('LOGYQ preview persists maps locally and does not call production LOGiQ RPC
   assert.doesNotMatch(engine, /["']ashleyUser["']/)
 })
 
+test('engine exposes a shared logyq API bag that fragments register onto', () => {
+  const engine = engineSource()
+  assert.match(engine, /const logyq = \{/)
+  assert.match(engine, /function attach\(name, value\)/)
+  assert.match(engine, /core: logyq/)
+  for (const call of [
+    "attach('config', CONFIG)",
+    "attach('state', state)",
+    "attach('elements', elements)",
+    "attach('utils', utils)",
+    "attach('history', { pushHistory, undo, autoFitSoon })",
+    "attach('detectors', Detectors)",
+    "attach('drag', dragManager)",
+    "attach('treeManager', treeManager)",
+  ]) assert.ok(engine.includes(call), call)
+  const config = readFileSync(join(logyqDir, 'js/engine/01-config.js'), 'utf8')
+  assert.match(config, /const \{ elements, state \} = logyq/)
+  assert.match(config, /const \{ state, moat \} = logyq/)
+})
+
 test('copied engine script parses', () => {
   assert.doesNotThrow(() => new Function(engineSource()))
   assert.ok(statSync(join(logyqDir, 'logos/LOGO_GREEN_Q.svg')).isFile())
@@ -109,12 +129,13 @@ test('theme styles live in the extracted stylesheet', () => {
 
 test('engine fragments concatenate to the served IIFE without edits', () => {
   const assembled = assembleLogyqEngine()
-  assert.equal(assembled.names.length, 20)
+  assert.equal(assembled.names.length, 21)
   assert.deepEqual(assembled.names[0], '00-iife-open.js')
+  assert.deepEqual(assembled.names[1], '00-api.js')
   assert.deepEqual(assembled.names.at(-1), '19-iife-close.js')
   assert.equal(assembled.source, engineSource())
   for (const name of [
-    '01-config.js', '03-utils.js', '05-history.js', '08-detectors.js',
+    '00-api.js', '01-config.js', '03-utils.js', '05-history.js', '08-detectors.js',
     '10-selection.js', '13-drag.js', '16-tree-manager.js', '17-keyboard.js', '18-bridge.js',
   ]) assert.ok(assembled.names.includes(name), name)
 })

@@ -49,7 +49,8 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 
 | File | Responsibility |
 |---|---|
-| `01-config.js` | `CONFIG`, moat/fly config, camera helpers |
+| `00-api.js` | Shared `logyq` bag and `attach()` registry |
+| `01-config.js` | `CONFIG`, moat/fly config, camera helpers (reads `logyq` for state/elements) |
 | `02-state.js` | Shared `state`, `elements`, word-input, dock bounds |
 | `03-utils.js` | UID/clone/path helpers |
 | `04-png-export.js` | PNG/SVG export |
@@ -79,9 +80,11 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `04-gestures.js` | Tap-to-select, spawn puck, voice capture |
 | `05-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
 
-## Shared state (still one closure)
+## Shared state (explicit `logyq` bag)
 
-The engine is still one IIFE. Almost every fragment reads and writes the same `state`, `elements`, `utils`, `treeManager`, and `dragManager` bindings. That coupling is why fragments concatenate instead of importing each other. Hidden communication that remains:
+Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. `LOGYQBridge.core` exposes that bag for tests and later cluster extractions.
+
+Unconverted fragments still use ambient `state`, `elements`, `utils`, and friends; `attach()` makes those the same object references as `logyq.*`. Hidden communication that remains:
 
 - DOM class names (`is-outlined`, Dock chips) as selection/chip state
 - Capture-phase keyboard listeners racing `keyDispatcher`

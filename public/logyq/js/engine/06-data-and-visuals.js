@@ -31,4 +31,6 @@
       elements.dragMiniTitle.text(title).attr("x", w/2).attr("y", CONFIG.CARD_HEIGHT/2).style("font-size", `${CONFIG.FONT_SIZE}px`);
     }
   };
+  attach('data', dataManager)
+  attach('visual', visual)
 

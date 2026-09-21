@@ -397,6 +397,7 @@ elements.svg.interrupt()
   .call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
  }
 };
+attach('treeManager', treeManager)
 
 
 

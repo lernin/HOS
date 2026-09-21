@@ -10,4 +10,5 @@
     const clamp=(v,lo,hi)=> Math.max(lo, Math.min(hi, v));
     return { assignUids, deepClone, pathToUid, findByPath, findByUid, uidInSubtree, assignIds, clamp };
   })();
+  attach('utils', utils)
 

@@ -5,7 +5,7 @@ import { engineSource, extractBlock } from './logyq-source.mjs'
 
 function loadUtils() {
   const block = readFileSync(new URL('../public/logyq/js/engine/03-utils.js', import.meta.url), 'utf8')
-  return new Function(`${block}; return utils;`)()
+  return new Function(`const logyq = {}; function attach(name, value) { logyq[name] = value; return value; }; ${block}; return utils;`)()
 }
 
 function loadTreeHelpers() {
