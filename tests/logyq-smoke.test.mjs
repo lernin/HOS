@@ -322,7 +322,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   const ghostPick = await page.evaluate(() => {
     const byName = (label) => Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === label)
     const held = byName('Node 03')?.__data__
-    const other = byName('Node 08')?.__data__
+    const other = byName('Node 05')?.__data__
     const CONFIG = window.LOGYQBridge.core.config
     const pick = window.LOGYQBridge.core.detectors.pick
     const origin = held?.data?._uid || ''
