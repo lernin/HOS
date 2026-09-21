@@ -3,6 +3,7 @@
       FLICK_MIN: 52,
       FLICK_MAX_MS: 340,
       FLICK_RATIO: 1.45,
+      FLICK_FAST_MS: 180,
       HOLD_MS: 160,
       HOLD_SLOP: 8,
       TAP_MOVE: 11,
@@ -43,6 +44,7 @@
       pointers: new Map(),
       hold: null,
       pan: null,
+      race: null,
       drag: null,
       feedbackRaf: 0,
     }
@@ -81,6 +83,7 @@
       state.pointers.forEach((pointer) => { pointer.multi = true })
       cancelHold(win, state)
       endCardPan(win, state)
+      clearCardRace(win, state)
       if (state.drag) yieldNodeDrag(doc, win, canvas, state)
     }
 
@@ -97,12 +100,16 @@
       multi: alreadyActive,
     }
     state.pointers.set(event.pointerId, pointer)
-    if (alreadyActive || !uid) return
+    if (alreadyActive || !uid) {
+      clearCardRace(win, state)
+      return
+    }
 
     const hold = { pointerId: event.pointerId, ...pointer, timer: 0 }
     hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     state.hold = hold
     win.__logyqHoldArming = true
+    beginCardRace(doc, win, state, event)
   }
 
   function onHoldMove(event, doc, win, state) {
@@ -111,23 +118,24 @@
     pointer.lastX = event.clientX
     pointer.lastY = event.clientY
 
-    if (state.pan?.pointerId === event.pointerId) {
-      applyFingerPan(doc, win, state.pan, event.clientX, event.clientY)
-      return
-    }
-
     if (state.hold?.pointerId === event.pointerId) {
       state.hold.lastX = event.clientX
       state.hold.lastY = event.clientY
-      // Early slide: drop the hold so the in-flight d3.zoom pan
-      // (same path as empty space) keeps going. Flick still decides
-      // on pointerup (restoreView if it was ballistic).
       if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) > v162Constants().HOLD_SLOP) {
-        const armed = state.hold
         cancelHold(win, state)
-        const svg = doc.getElementById('canvas')
-        if (!svg?.__zooming) beginCardPan(doc, win, state, armed, event.clientX, event.clientY)
       }
+    }
+
+    if (state.race?.pointerId === event.pointerId) {
+      resolveCardRace(doc, win, state, event)
+      if (state.pan?.pointerId === event.pointerId) {
+        applyFingerPan(doc, win, state.pan, event.clientX, event.clientY)
+      }
+      return
+    }
+
+    if (state.pan?.pointerId === event.pointerId) {
+      applyFingerPan(doc, win, state.pan, event.clientX, event.clientY)
       return
     }
 
@@ -145,6 +153,7 @@
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
     if (state.pan?.pointerId === event.pointerId) endCardPan(win, state)
+    if (state.race?.pointerId === event.pointerId) clearCardRace(win, state)
 
     const drag = state.drag
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -188,6 +197,7 @@
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
     if (state.pan?.pointerId === event.pointerId) endCardPan(win, state)
+    if (state.race?.pointerId === event.pointerId) clearCardRace(win, state)
 
     const drag = state.drag
     if (!drag || drag.pointerId !== event.pointerId) return
@@ -206,6 +216,7 @@
     state.hold = null
     if (hold.timer) win.clearTimeout(hold.timer)
     win.__logyqHoldArming = false
+    clearCardRace(win, state)
     stopZoomGesture(doc)
 
     const source = nodeByUid(doc, hold.uid) || hold.source
@@ -590,6 +601,80 @@
     state.feedbackRaf = 0
     if (state.drag === drag) state.drag = null
     win.setTimeout(() => win.__logyqV2ConsumedPointers.delete(drag.pointerId), 400)
+  }
+
+  function flickFastSpeed(C) {
+    const cfg = C || v162Constants()
+    return cfg.FLICK_MIN / cfg.FLICK_FAST_MS
+  }
+
+  function recentSpeedPxPerMs(samples, now, windowMs = 80) {
+    if (!samples?.length) return 0
+    const last = samples[samples.length - 1]
+    let first = last
+    for (let i = samples.length - 1; i >= 0; i -= 1) {
+      first = samples[i]
+      if (now - samples[i].t > windowMs) break
+    }
+    const dt = last.t - first.t
+    if (dt < 16) return 0
+    return Math.hypot(last.x - first.x, last.y - first.y) / dt
+  }
+
+  // excited → hold / pan / flickish. Flick-speed strokes stay gated so
+  // d3.zoom never applies; slow/medium slides become pan; still 160ms is hold.
+  function classifyCardIntent(dist, elapsed, speed, sawFast, C) {
+    const cfg = C || v162Constants()
+    if (dist <= cfg.HOLD_SLOP) return 'excited'
+    if (elapsed >= cfg.FLICK_MAX_MS) return 'pan'
+    if (sawFast || speed >= flickFastSpeed(cfg)) return 'flickish'
+    if (elapsed >= 48) return 'pan'
+    return 'excited'
+  }
+
+  function beginCardRace(doc, win, state, event) {
+    const now = win.performance.now()
+    state.race = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      t0: now,
+      samples: [{ t: now, x: event.clientX, y: event.clientY }],
+      mode: 'excited',
+      sawFast: false,
+    }
+    win.__logyqSuppressZoom = true
+    stopZoomGesture(doc)
+  }
+
+  function resolveCardRace(doc, win, state, event) {
+    const race = state.race
+    if (!race || race.mode === 'pan' || race.mode === 'drag') return
+    const now = win.performance.now()
+    race.samples.push({ t: now, x: event.clientX, y: event.clientY })
+    if (race.samples.length > 24) race.samples.splice(0, race.samples.length - 24)
+    const dist = Math.hypot(event.clientX - race.x, event.clientY - race.y)
+    const elapsed = now - race.t0
+    const speed = recentSpeedPxPerMs(race.samples, now)
+    if (speed >= flickFastSpeed()) race.sawFast = true
+    const intent = classifyCardIntent(dist, elapsed, speed, race.sawFast)
+    if (intent === 'flickish') {
+      race.mode = 'flickish'
+      win.__logyqSuppressZoom = true
+      stopZoomGesture(doc)
+      return
+    }
+    if (intent !== 'pan') return
+    race.mode = 'pan'
+    win.__logyqSuppressZoom = false
+    win.__logyqHoldArming = false
+    cancelHold(win, state)
+    state.pan = { pointerId: race.pointerId, lastX: event.clientX, lastY: event.clientY }
+  }
+
+  function clearCardRace(win, state) {
+    state.race = null
+    win.__logyqSuppressZoom = false
   }
 
   function cancelHold(win, state) {
@@ -1006,6 +1091,9 @@
     preview.gestures.applyFingerPan = applyFingerPan
     preview.gestures.beginCardPan = beginCardPan
     preview.gestures.stopZoomGesture = stopZoomGesture
+    preview.gestures.classifyCardIntent = classifyCardIntent
+    preview.gestures.flickFastSpeed = flickFastSpeed
+    preview.gestures.recentSpeedPxPerMs = recentSpeedPxPerMs
     preview.gestures.fingerOffset = fingerOffset
     preview.gestures.visualPoint = visualPoint
     preview.gestures.fingerMovedFromLatch = fingerMovedFromLatch

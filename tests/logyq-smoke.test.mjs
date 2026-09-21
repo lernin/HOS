@@ -314,9 +314,26 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
 
   const before = await page.locator('g.node').count()
   const flick = await nodeCenter('Node 10')
+  const flickView = await page.evaluate(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { x: t.x, y: t.y, k: t.k }
+  })
   await touch('pointerdown', flick.x, flick.y)
+  await touch('pointermove', flick.x, flick.y + 36)
+  await touch('pointermove', flick.x, flick.y + 70)
+  const flickMid = await page.evaluate(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { x: t.x, y: t.y, drag: document.body.classList.contains('v2-branch-drag') }
+  })
+  assert.equal(flickMid.drag, false)
+  assert.ok(Math.hypot(flickMid.x - flickView.x, flickMid.y - flickView.y) < 2, `flick stroke must not pan, before=${flickView.x},${flickView.y} mid=${flickMid.x},${flickMid.y}`)
   await touch('pointerup', flick.x, flick.y + 70)
   await page.waitForFunction((count) => document.querySelectorAll('g.node').length > count, before)
+  const flickAfter = await page.evaluate(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { x: t.x, y: t.y }
+  })
+  assert.ok(Math.hypot(flickAfter.x - flickView.x, flickAfter.y - flickView.y) < 2, 'flick create must leave the camera where it was')
   assert.equal(await page.locator('#logiq-voice-bar.is-visible').count(), 0)
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.app?.recorder), false)
   await page.waitForSelector('#logyq-v162-action.show')
@@ -337,12 +354,11 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
     }
   })
   await touch('pointerdown', panCard.x, panCard.y, 81)
-  await touch('pointermove', panCard.x + 24, panCard.y + 18, 81)
-  await page.waitForTimeout(20)
-  assert.equal(await page.evaluate(() => document.body.classList.contains('v2-branch-drag')), false, 'early slide must not lift the card')
-  assert.equal(await page.evaluate(() => !!window.__logyqHoldArming), false)
-  await page.waitForTimeout(400)
-  await touch('pointermove', panCard.x + 88, panCard.y + 54, 81)
+  for (const step of [12, 24, 36, 48, 64, 88]) {
+    await page.waitForTimeout(60)
+    await touch('pointermove', panCard.x + step, panCard.y + Math.round(step * 0.6), 81)
+  }
+  assert.equal(await page.evaluate(() => document.body.classList.contains('v2-branch-drag')), false, 'slow slide must not lift the card')
   const panDuring = await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 12')
     const t = window.d3.zoomTransform(document.getElementById('canvas'))

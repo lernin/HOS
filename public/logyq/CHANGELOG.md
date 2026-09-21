@@ -83,7 +83,7 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 ## Hold-drag latch (PR 112)
 
-- **Mercedes-window on a card.** Finger on a card is not immediately a card-drag. **Still for `HOLD_MS` 160 (was 280) + ≤8px slop** → end the in-flight `d3.zoom` gesture, then lift / ghost / magnetic drop. **Slide past 8px before that beat** → the same `d3.zoom` pan as empty space (card stays put). Empty space still pans. A short ballistic flick (52px / 340ms / 1.45) + release still creates (view is restored). Tap / double-tap / paint unchanged. Desktop `d3.drag` cannot start until `__logyqHoldDragSession`.
+- **3-way race on a card.** Contact is excited (zoom suppressed). **Still `HOLD_MS` 160 / ≤8px** → card hold-drag. **Slow/medium slide** (past slop, below flick-speed `52px/180ms`, after 48ms) → map pan from *now* (no backfill). **Flick-speed whip** (recent or peak ≥ that gate, or 52px / ≤340ms / 1.45 on release) → create; camera never moves. A settle-then-whip stays gated so flick does not jerk the map. Empty space still pans immediately. Desktop `d3.drag` cannot start until `__logyqHoldDragSession`.
 
 ## Hold-drag camera (PR 112)
 

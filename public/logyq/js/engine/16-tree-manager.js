@@ -23,7 +23,7 @@ state.zoom = d3.zoom()
     // card (that's a drag). Phone: a card finger uses this same zoom
     // pan until a still hold latches (`__logyqHoldDragSession`).
     if (event.type === "wheel") return true;
-    if (typeof window !== "undefined" && window.__logyqHoldDragSession) return false;
+    if (typeof window !== "undefined" && (window.__logyqHoldDragSession || window.__logyqSuppressZoom)) return false;
     const mobile = typeof document !== "undefined"
       && document.body?.classList?.contains("logyq-mobile-v162");
     if (mobile) return true;

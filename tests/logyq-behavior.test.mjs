@@ -977,6 +977,9 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /function beginCardPan/)
   assert.match(v162, /function applyFingerPan/)
   assert.match(v162, /function stopZoomGesture/)
+  assert.match(v162, /function classifyCardIntent/)
+  assert.match(v162, /__logyqSuppressZoom/)
+  assert.match(v162, /FLICK_FAST_MS: 180/)
   assert.match(v162, /__logyqHoldArming/)
   assert.match(v162, /PAN_DEAD_PX: 56/)
   assert.match(v162, /PAN_STEP: 16/)
@@ -1172,5 +1175,36 @@ test('early card slide pans via applyFingerPan and keep the 160ms hold latch', (
   assert.match(zoom, /__logyqHoldDragSession/)
   assert.match(zoom, /logyq-mobile-v162/)
   assert.match(source, /function stopZoomGesture/)
+  assert.match(source, /function classifyCardIntent/)
   assert.match(source, /svg\?\.\_\_zooming/)
+  const zoomSrc = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
+  assert.match(zoomSrc, /__logyqSuppressZoom/)
+})
+
+test('card contact race classifies hold vs slow pan vs flick-speed', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function flickFastSpeed(C) {')
+  const end = source.indexOf('function beginCardRace(doc, win, state, event) {', start)
+  assert.ok(start >= 0 && end > start)
+  const helpers = new Function(`${source.slice(start, end)}; function v162Constants() { return { FLICK_MIN: 52, FLICK_MAX_MS: 340, FLICK_RATIO: 1.45, FLICK_FAST_MS: 180, HOLD_MS: 160, HOLD_SLOP: 8, TAP_MOVE: 11 }; } return { classifyCardIntent, flickFastSpeed, recentSpeedPxPerMs };`)()
+  const C = { FLICK_MIN: 52, FLICK_MAX_MS: 340, FLICK_RATIO: 1.45, FLICK_FAST_MS: 180, HOLD_MS: 160, HOLD_SLOP: 8 }
+  assert.ok(Math.abs(helpers.flickFastSpeed(C) - (52 / 180)) < 1e-6)
+  assert.equal(helpers.classifyCardIntent(4, 80, 0, false, C), 'excited', 'inside slop stays excited')
+  assert.equal(helpers.classifyCardIntent(20, 30, 0.1, false, C), 'excited', 'too early to call a slow pan')
+  assert.equal(helpers.classifyCardIntent(24, 80, 0.12, false, C), 'pan', 'slow/medium slide becomes pan')
+  assert.equal(helpers.classifyCardIntent(70, 80, 0.5, false, C), 'flickish', 'high recent speed stays gated')
+  assert.equal(helpers.classifyCardIntent(70, 100, 0.05, true, C), 'flickish', 'a prior whip stays flickish inside the window')
+  assert.equal(helpers.classifyCardIntent(70, 360, 0.5, true, C), 'pan', 'after 340ms a held stroke may pan from now')
+  const samples = [
+    { t: 0, x: 0, y: 0 },
+    { t: 40, x: 0, y: 4 },
+    { t: 80, x: 0, y: 10 },
+  ]
+  assert.ok(helpers.recentSpeedPxPerMs(samples, 80) < helpers.flickFastSpeed(C))
+  const whip = [
+    { t: 0, x: 0, y: 0 },
+    { t: 80, x: 0, y: 0 },
+    { t: 140, x: 0, y: 70 },
+  ]
+  assert.ok(helpers.recentSpeedPxPerMs(whip, 140) > helpers.flickFastSpeed(C))
 })
