@@ -47,7 +47,7 @@ arming (160ms, 8px slop)
 | Map does not jump on latch | No `shiftMapOnLatch`. Clone uses `fingerOffset` `{0, -1.1cm}`; d3 is not fed that offset until the finger leaves `STILL_PX`. |
 | 1.1cm lift is clone-only | `#logyq-v162-branch-preview` follows the finger + lift. Live `g.node` stays in its cell as a dashed ghost (`v2-branch-origin-ghost`). |
 | Hold-drag pan is center-offset | Finger offset from the viewport center, after a 56px dead zone. Content leash leaves ~⅓ viewport empty on the leading edge. |
-| Early card slide pans the map | Move >8px before `HOLD_MS` 160 cancels arming and runs `applyFingerPan`. Card stays. Flick on release still restores + create. |
+| Early card slide pans the map | Phone `d3.zoom` starts on the card the same as empty space. Move >8px before `HOLD_MS` 160 cancels the hold (zoom keeps panning). Still 160ms calls `stopZoomGesture` then lifts. |
 
 ## Thresholds
 

@@ -119,10 +119,14 @@
     if (state.hold?.pointerId === event.pointerId) {
       state.hold.lastX = event.clientX
       state.hold.lastY = event.clientY
-      // Early slide past slop: map pan, not card-drag. Flick still
-      // decides on pointerup (restoreView if it was ballistic).
+      // Early slide: drop the hold so the in-flight d3.zoom pan
+      // (same path as empty space) keeps going. Flick still decides
+      // on pointerup (restoreView if it was ballistic).
       if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) > v162Constants().HOLD_SLOP) {
-        beginCardPan(doc, win, state, state.hold, event.clientX, event.clientY)
+        const armed = state.hold
+        cancelHold(win, state)
+        const svg = doc.getElementById('canvas')
+        if (!svg?.__zooming) beginCardPan(doc, win, state, armed, event.clientX, event.clientY)
       }
       return
     }
@@ -202,6 +206,7 @@
     state.hold = null
     if (hold.timer) win.clearTimeout(hold.timer)
     win.__logyqHoldArming = false
+    stopZoomGesture(doc)
 
     const source = nodeByUid(doc, hold.uid) || hold.source
     const hierarchy = source?.__data__
@@ -610,6 +615,19 @@
     if (!state.hold) win.__logyqHoldArming = false
   }
 
+  function stopZoomGesture(doc) {
+    const svg = doc.getElementById('canvas')
+    const gesture = svg?.__zooming
+    if (!gesture) return
+    try {
+      gesture.active = 1
+      gesture.end()
+    } catch (_error) {
+      try { delete svg.__zooming } catch (_inner) {}
+    }
+    if (bridge.core?.state) bridge.core.state.isPanning = false
+  }
+
   function applyFingerPan(doc, win, pan, x, y) {
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3 || !pan) return
@@ -987,6 +1005,7 @@
     preview.gestures.clampPanToContent = clampPanToContent
     preview.gestures.applyFingerPan = applyFingerPan
     preview.gestures.beginCardPan = beginCardPan
+    preview.gestures.stopZoomGesture = stopZoomGesture
     preview.gestures.fingerOffset = fingerOffset
     preview.gestures.visualPoint = visualPoint
     preview.gestures.fingerMovedFromLatch = fingerMovedFromLatch

@@ -19,11 +19,14 @@ if (typeof state.isPanning === "undefined") state.isPanning = false;
 state.zoom = d3.zoom()
   .scaleExtent([0.02, 2.4])
   .filter((event) => {
-    // Allow wheel-zoom anywhere; block drags that start on nodes.
-    // Phone: also ignore the gesture while a card hold is arming or
-    // latched so d3.zoom does not steal the still-wait / card-drag.
+    // Allow wheel-zoom anywhere. Desktop: block pans that start on a
+    // card (that's a drag). Phone: a card finger uses this same zoom
+    // pan until a still hold latches (`__logyqHoldDragSession`).
     if (event.type === "wheel") return true;
-    if (typeof window !== "undefined" && (window.__logyqHoldArming || window.__logyqHoldDragSession)) return false;
+    if (typeof window !== "undefined" && window.__logyqHoldDragSession) return false;
+    const mobile = typeof document !== "undefined"
+      && document.body?.classList?.contains("logyq-mobile-v162");
+    if (mobile) return true;
     const t = event.target;
     const onNode = !!(t && t.closest && t.closest("g.node"));
     return !onNode;
