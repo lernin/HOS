@@ -92,6 +92,11 @@ async function loadSampleTree(page) {
   })
   await waitForTree(page)
   await page.waitForFunction(() => document.querySelectorAll('.node-edit-input').length === 0)
+  await page.waitForFunction(() => {
+    const live = window.LOGYQBridge.core.state.root?.descendants().length || 0
+    return live === 30 && document.querySelectorAll('svg#canvas g.nodes g.node').length === 30
+  })
+  await page.waitForTimeout(450)
 }
 
 async function assertNoChooser(page) {
@@ -828,6 +833,10 @@ test('LOGYQ library lists recents and New opens a one-card editor', async () => 
   await page.locator('#logiq-new-map').click()
   await page.waitForFunction(() => !document.getElementById('logiq-library')?.classList.contains('is-open'))
   await page.waitForSelector('.node-edit-input')
+  await page.waitForFunction(() => {
+    const live = window.LOGYQBridge.core.state.root?.descendants().length || 0
+    return live === 1 && document.querySelectorAll('svg#canvas g.nodes g.node').length === 1
+  })
   assert.equal(await page.locator('svg#canvas g.nodes g.node').count(), 1)
   assert.equal(await page.locator('.node-edit-input').count(), 1)
   await assertNoChooser(page)
