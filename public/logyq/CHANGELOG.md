@@ -81,6 +81,13 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Color is node data.** `data.color` on the tree; snapshot / maps / reload keep it. Undo is `replace-root`. Card shape (rx, stroke chrome) is unchanged; only fill changes.
 - **Mix and save keep paint.** `randomizeTree` used to shuffle names into new `{ name }` objects, dropping `data.color`. After Mix the snapshot (and therefore `logyq_maps_v1` / reopen) had no paint. Mix now carries each card’s color through the shuffle; GIQ `normalizeToTree` also keeps `color`. Snapshot / `loadMap` already JSON-clone the full node. Paint UX is unchanged.
 
+## Persistence contract + Lab scaffold
+
+- **Card fields that round-trip.** UI writes `name` (label) and `color` (paint). Mix / GIQ `normalizeToTree` / snapshot / `loadMap` also keep `label` / `text` / `title` / `value` if they are already on the node (`cardText` fallbacks; nothing in paint/edit writes them). `_uid` is session identity — Mix reassigns. `children` is the tree. Word Bank stays `string[]`. Contract: `PERSISTENCE.md`.
+- **Hold-drag one-pager.** `GESTURE_STATES.md` — idle → arming → latch → still vs moved → drop / cancel / second-finger / chip-dwell. Invariants: origin slot until commit, stay-still never banks, map no jump, 1.1cm lift clone-only.
+- **Fearless-delete (small).** `#showCarets` HTML + unwired `if (s.showCarets)` deleted together. Settings ✕ (`#settingsClose`) now calls the same `close()` as backdrop / Escape. `refreshLaneOnZoom` and `exportGIQ` stay listed in `SAFE_TO_RIP.md`, not deleted.
+- **Lab tab LOGYQ is live.** Root `index.html` injects `#logyq-hub-card` after `#logiq-v161-hub-card` → `/logyq/`. LOGiQ v161 card stays. Notes: `LAB_TAB.md`.
+
 ## Fearless-delete wave
 
 See `SAFE_TO_RIP.md`. Spawn-puck, retired bind no-ops, engine prompt-maps, fake user badge, never-shown Hint, unused `startInlineEdit` / `zoomToNodeCenter` / `getSelectionUids` / `copySubtreeToClipboard` / `createFirstCardAndEdit`, the muted node `dblclick` bind, the dead swim-lane pin branch plus `showLaneAtY`/`hideLane`, unused `window.__add*` create aliases, and the unread `elements.mapsBtn` field were deleted. Keyboard create/edit/drag/selection verbs remain. Zoom still calls no-op `refreshLaneOnZoom`.
