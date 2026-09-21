@@ -88,6 +88,7 @@
   function onDown(event, doc, win, canvas, state) {
     if (event.pointerType === 'mouse') return
     if (!(event.target === canvas || canvas.contains(event.target))) return
+    canvas.setPointerCapture?.(event.pointerId)
 
     const alreadyActive = state.active.size > 0
     if (alreadyActive) {
@@ -195,7 +196,7 @@
 
     const branch = typeof hierarchy.descendants === 'function' ? hierarchy.descendants() : [hierarchy]
     const uids = branch.map(item => item?.data?._uid).filter(Boolean)
-    const preview = makeBranchPreview(doc, win, branch, hold.uid)
+    const preview = makeBranchPreview(doc, win, [hierarchy], hold.uid)
     if (!preview) return
 
     const bridge = win.LOGiQBridge
@@ -207,7 +208,7 @@
     bridge?.clearFocusSelection?.()
     bridge?.selectByUid?.(hold.uid)
 
-    for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
+    nodeByUid(doc, hold.uid)?.classList.add('v2-branch-origin-ghost')
 
     state.drag = {
       pointerId: hold.pointerId,
@@ -401,6 +402,8 @@
 
   function cleanup(doc, win, state, drag) {
     if (!drag) return
+    const canvas = doc.getElementById('canvas')
+    canvas?.releasePointerCapture?.(drag.pointerId)
     drag.preview?.remove?.()
     for (const uid of drag.uids || []) nodeByUid(doc, uid)?.classList.remove('v2-branch-origin-ghost')
     doc.body.classList.remove('v2-branch-drag')
