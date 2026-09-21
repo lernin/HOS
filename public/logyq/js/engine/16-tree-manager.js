@@ -246,6 +246,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     const scratch = d3.hierarchy(state.root.data)
     utils.assignIds(scratch)
     this.applyLayout(scratch)
+    state.root = scratch
     this.syncHitSlots(scratch.descendants())
     this.ensureCreateNodes(scratch.descendants())
   },

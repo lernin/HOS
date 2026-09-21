@@ -1089,6 +1089,10 @@ test('LOGYQ flick left/right/up create as calmly as down-on-leaf', async () => {
     await touch('pointerdown', origin.x, origin.y, pointerId)
     await touch('pointerup', origin.x + dx, origin.y + dy, pointerId)
     await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before)
+    await page.waitForFunction(() => {
+      const uid = window.LOGYQBridge.core.state.selectedUid
+      return !!uid && !!window.LOGYQBridge.core.state.root?.descendants().find((item) => item.data?._uid === uid)
+    })
     const after = await page.evaluate(() => {
       const t = window.d3.zoomTransform(document.getElementById('canvas'))
       const selected = window.LOGYQBridge.core.state.selectedUid
@@ -1893,6 +1897,10 @@ test('LOGYQ flick left/right reserve non-overlapping sibling slots', async () =>
   assert.ok(leftUid)
   assert.ok(rightUid)
   assert.notEqual(leftUid, rightUid)
+  await page.waitForFunction(() => {
+    const state = window.LOGYQBridge.core.state
+    return !state.layoutSettling && !state.layoutFlushQueued
+  })
 
   async function layoutFaces() {
     return page.evaluate(() => {
