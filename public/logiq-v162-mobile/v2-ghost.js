@@ -82,7 +82,7 @@
         #logiq-v2-drag-card.v2-valid-drop{border-color:#22c55e;box-shadow:0 12px 30px rgba(34,197,94,.24)}
         body.logiq-mobile-v2 g.node.v2-drop-target rect:not(.grabzone){fill:#22c55e!important;stroke:#22c55e!important;filter:drop-shadow(0 0 7px rgba(34,197,94,.32))}
         body.logiq-mobile-v2 g.node.v2-drop-target text{fill:#fff!important}
-        body.logiq-mobile-v2 .v2-drop-caret{fill:#f59e0b;stroke:#fff;stroke-width:2px;filter:drop-shadow(0 1px 2px rgba(15,23,42,.35));pointer-events:none}
+        body.logiq-mobile-v2 .v2-drop-caret{fill:#22c55e;stroke:#fff;stroke-width:2px;filter:drop-shadow(0 1px 2px rgba(15,23,42,.35));pointer-events:none}
         body.logiq-mobile-v2.v2-cancel #logiq-v2-drag-card{border-color:#ef4444;box-shadow:0 12px 30px rgba(239,68,68,.24)}
         body.logiq-mobile-v2.v2-cancel g.node.v2-origin-ghost rect:not(.grabzone){stroke:#ef4444!important}
         @media (orientation:landscape){
@@ -306,7 +306,7 @@
     state.gesture = {
       pointerId:hold.pointerId, uid:hold.uid, node,
       x:hold.x, y:hold.y, lastX:hold.lastX, lastY:hold.lastY,
-      before:hold.before, cancel:false, preview, caret:makeDropCaret(doc),
+      before:hold.before, cancel:false, preview, caret:makeDropCaret(doc), bridge,
       ghostUids,
       grabX:Math.max(0,hold.x-rect.left), grabY:Math.max(0,hold.y-rect.top),
     }
@@ -355,7 +355,11 @@
     g.preview?.classList.remove('v2-valid-drop')
     g.caret?.setAttribute('opacity','0')
 
-    const hint = findDropHint(doc,win,g,x,y)
+    const previewRect = g.preview?.getBoundingClientRect()
+    if (!previewRect) return
+    const centerX = previewRect.left + previewRect.width/2
+    const centerY = previewRect.top + previewRect.height/2
+    const hint = g.bridge?.pickDropAtViewport?.(centerX,centerY,g.uid)
     if (!hint) return
 
     if (hint.type === 'node') {
@@ -366,34 +370,11 @@
       return
     }
 
-    if (!Number.isFinite(hint.x) || !Number.isFinite(hint.y)) return
-    g.caret?.setAttribute('cx',String(hint.x))
-    g.caret?.setAttribute('cy',String(hint.y))
+    if (!Number.isFinite(hint.caretX) || !Number.isFinite(hint.caretY)) return
+    g.caret?.setAttribute('cx',String(hint.caretX))
+    g.caret?.setAttribute('cy',String(hint.caretY))
     g.caret?.setAttribute('opacity','1')
     g.preview?.classList.add('v2-valid-drop')
-  }
-
-  function findDropHint(doc,win,g,x,y) {
-    const target = hitNode(doc,x,y)
-    if (target && !g.ghostUids?.includes(nodeUid(target))) return {type:'node',targetUid:nodeUid(target)}
-
-    const candidates = Array.from(doc.querySelectorAll('g.node'))
-      .filter(node => !g.ghostUids?.includes(nodeUid(node)))
-      .map(node => ({rect:node.getBoundingClientRect()}))
-      .filter(({rect}) => x >= rect.left-18 && x <= rect.right+18)
-      .map(({rect}) => ({rect,distance:Math.min(Math.abs(y-rect.top),Math.abs(y-rect.bottom))}))
-      .sort((a,b) => a.distance-b.distance)
-    if (!candidates[0] || candidates[0].distance > 24) return null
-
-    const graph = screenToGraph(doc,win,x,y)
-    return graph ? {type:'gap',x:graph.x,y:graph.y} : null
-  }
-
-  function screenToGraph(doc,win,x,y) {
-    const svg = doc.getElementById('canvas'), rect = svg?.getBoundingClientRect(), zoom = svg && win.d3?.zoomTransform(svg)
-    if (!rect || !zoom?.invert) return null
-    const [xInGraph,yInGraph] = zoom.invert([x-rect.left,y-rect.top])
-    return {x:xInGraph,y:yInGraph}
   }
 
   function cancelHold(win,state) {
