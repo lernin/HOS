@@ -64,6 +64,8 @@
     const { state, elements, utils } = logyq
     if(!state.editingUid) return;
     const uid = state.editingUid; const el = state.editorEl;
+    if (state._editFocusTimer) { try { clearTimeout(state._editFocusTimer); } catch (_e) {} state._editFocusTimer = 0; }
+    if (typeof state._editViewportOff === 'function') { try { state._editViewportOff(); } catch (_e) {} state._editViewportOff = null; }
     state.editingUid = null; state.editorEl = null;
     if(el && el.parentNode) el.parentNode.removeChild(el);
     if(apply){
@@ -81,12 +83,17 @@
         }
       }
     }
-    if(restoreZoom && state.prevZoom){
+    const svg = elements.svg?.node?.();
+    if (svg) d3.select(svg).interrupt();
+    const shouldRestore = state.prevZoom && (restoreZoom || state.editFocusArmed) && !state.editUserZoom;
+    if(shouldRestore){
       const t = state.prevZoom;
-      elements.svg.transition().duration(360).call(state.zoom.transform, t);
-      state.prevZoom = null;
-      setTimeout(updateNodeEditorPosition, 20);
+      elements.svg.transition().duration(360).ease(d3.easeCubicOut).call(state.zoom.transform, t);
     }
+    state.prevZoom = null;
+    state.editZoom = null;
+    state.editFocusArmed = false;
+    state.editUserZoom = false;
   }
 
 
@@ -96,7 +103,11 @@
     try{ closeNodeEditor(false,false); }catch(_e){}
     if(!d) return;
     state.editingUid = d.data._uid;
-    state.prevZoom = d3.zoomTransform(elements.svg.node());
+    const current = d3.zoomTransform(elements.svg.node());
+    state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
+    state.editZoom = null;
+    state.editFocusArmed = false;
+    state.editUserZoom = false;
     const input = document.createElement("input");
     input.type = "text"; input.className = "node-edit-input";
     input.value = (d.data && d.data.name) ? d.data.name : "";
@@ -119,7 +130,7 @@
     }
   } else if (e.key === "Escape"){
     e.preventDefault();
-    closeNodeEditor(false, false);
+    closeNodeEditor(false, true);
   }
 });
 
@@ -128,9 +139,25 @@
 
 
 
-    input.addEventListener("blur", function(){ closeNodeEditor(true, false); });
+    input.addEventListener("blur", function(){ closeNodeEditor(true, true); });
     updateNodeEditorPosition();
     setTimeout(function(){ try{ input.focus(); var L=input.value.length; input.setSelectionRange(L,L); }catch(_e){} }, 0);
+    if (document.body.classList.contains('logyq-mobile-v162')) {
+      const uid = d.data._uid;
+      state._editFocusTimer = setTimeout(() => {
+        if (state.editingUid !== uid) return;
+        state.editFocusArmed = true;
+        logyq.camera.flyEditFocusToUID(uid);
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const onResize = () => {
+          if (state.editingUid !== uid || state.editUserZoom) return;
+          logyq.camera.flyEditFocusToUID(uid, { duration: 220 });
+        };
+        vv.addEventListener('resize', onResize);
+        state._editViewportOff = () => vv.removeEventListener('resize', onResize);
+      }, 0);
+    }
   }
 
 // --- Auto-fit + sticky-multiselect when nav keys move focus ---

@@ -113,6 +113,48 @@ function flyCenterToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
     .call(state.zoom.transform, target);
 }
 
+function copyZoom(t){
+  if (!t) return null
+  return d3.zoomIdentity.translate(t.x, t.y).scale(t.k)
+}
+
+/* Phone inline-edit: center the card in the remaining visual viewport and
+   magnify at least to a readable scale. Never zoom out. */
+function flyEditFocusToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
+  const { elements, state } = logyq
+  const svg = elements.svg?.node();
+  if (!svg || !state.root || !uid) return;
+
+  const h = state.root.descendants().find(n => n?.data?._uid === uid);
+  if (!h) return;
+
+  const t = d3.zoomTransform(svg);
+  const vv = window.visualViewport;
+  const W = (vv && vv.width) || svg.clientWidth;
+  const H = (vv && vv.height) || svg.clientHeight;
+  const ox = (vv && vv.offsetLeft) || 0;
+  const oy = (vv && vv.offsetTop) || 0;
+  const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1];
+  const k = Math.min(maxK, Math.max(t.k, 1.35));
+  const target = d3.zoomIdentity
+    .translate(ox + W / 2, oy + H * 0.32)
+    .scale(k)
+    .translate(-h.x, -h.y);
+
+  d3.select(svg).interrupt();
+  d3.select(elements.gRoot?.node()).interrupt?.();
+
+  elements.svg
+    .transition()
+    .duration(duration)
+    .ease(d3.easeCubicOut)
+    .call(state.zoom.transform, target)
+    .on('end', () => {
+      state.editZoom = copyZoom(d3.zoomTransform(svg));
+      logyq.editing?.updateNodeEditorPosition?.();
+    });
+}
+
 /* Center the *current* selection with a given duration (no zoom). */
 function centerOnSelected({ duration = logyq.fly.hotkeyDuration } = {}){
   const uid = __selectedUid();
@@ -171,6 +213,7 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   attach('camera', {
     computeNearestWallPct,
     flyCenterToUID,
+    flyEditFocusToUID,
     centerOnSelected,
     centerOnSelectedSoon,
     checkMoatAndAutoFit,

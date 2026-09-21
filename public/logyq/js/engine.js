@@ -152,6 +152,48 @@ function flyCenterToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
     .call(state.zoom.transform, target);
 }
 
+function copyZoom(t){
+  if (!t) return null
+  return d3.zoomIdentity.translate(t.x, t.y).scale(t.k)
+}
+
+/* Phone inline-edit: center the card in the remaining visual viewport and
+   magnify at least to a readable scale. Never zoom out. */
+function flyEditFocusToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
+  const { elements, state } = logyq
+  const svg = elements.svg?.node();
+  if (!svg || !state.root || !uid) return;
+
+  const h = state.root.descendants().find(n => n?.data?._uid === uid);
+  if (!h) return;
+
+  const t = d3.zoomTransform(svg);
+  const vv = window.visualViewport;
+  const W = (vv && vv.width) || svg.clientWidth;
+  const H = (vv && vv.height) || svg.clientHeight;
+  const ox = (vv && vv.offsetLeft) || 0;
+  const oy = (vv && vv.offsetTop) || 0;
+  const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1];
+  const k = Math.min(maxK, Math.max(t.k, 1.35));
+  const target = d3.zoomIdentity
+    .translate(ox + W / 2, oy + H * 0.32)
+    .scale(k)
+    .translate(-h.x, -h.y);
+
+  d3.select(svg).interrupt();
+  d3.select(elements.gRoot?.node()).interrupt?.();
+
+  elements.svg
+    .transition()
+    .duration(duration)
+    .ease(d3.easeCubicOut)
+    .call(state.zoom.transform, target)
+    .on('end', () => {
+      state.editZoom = copyZoom(d3.zoomTransform(svg));
+      logyq.editing?.updateNodeEditorPosition?.();
+    });
+}
+
 /* Center the *current* selection with a given duration (no zoom). */
 function centerOnSelected({ duration = logyq.fly.hotkeyDuration } = {}){
   const uid = __selectedUid();
@@ -210,6 +252,7 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   attach('camera', {
     computeNearestWallPct,
     flyCenterToUID,
+    flyEditFocusToUID,
     centerOnSelected,
     centerOnSelectedSoon,
     checkMoatAndAutoFit,
@@ -1641,6 +1684,8 @@ if (dir === +1){
     const { state, elements, utils } = logyq
     if(!state.editingUid) return;
     const uid = state.editingUid; const el = state.editorEl;
+    if (state._editFocusTimer) { try { clearTimeout(state._editFocusTimer); } catch (_e) {} state._editFocusTimer = 0; }
+    if (typeof state._editViewportOff === 'function') { try { state._editViewportOff(); } catch (_e) {} state._editViewportOff = null; }
     state.editingUid = null; state.editorEl = null;
     if(el && el.parentNode) el.parentNode.removeChild(el);
     if(apply){
@@ -1658,12 +1703,17 @@ if (dir === +1){
         }
       }
     }
-    if(restoreZoom && state.prevZoom){
+    const svg = elements.svg?.node?.();
+    if (svg) d3.select(svg).interrupt();
+    const shouldRestore = state.prevZoom && (restoreZoom || state.editFocusArmed) && !state.editUserZoom;
+    if(shouldRestore){
       const t = state.prevZoom;
-      elements.svg.transition().duration(360).call(state.zoom.transform, t);
-      state.prevZoom = null;
-      setTimeout(updateNodeEditorPosition, 20);
+      elements.svg.transition().duration(360).ease(d3.easeCubicOut).call(state.zoom.transform, t);
     }
+    state.prevZoom = null;
+    state.editZoom = null;
+    state.editFocusArmed = false;
+    state.editUserZoom = false;
   }
 
 
@@ -1673,7 +1723,11 @@ if (dir === +1){
     try{ closeNodeEditor(false,false); }catch(_e){}
     if(!d) return;
     state.editingUid = d.data._uid;
-    state.prevZoom = d3.zoomTransform(elements.svg.node());
+    const current = d3.zoomTransform(elements.svg.node());
+    state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
+    state.editZoom = null;
+    state.editFocusArmed = false;
+    state.editUserZoom = false;
     const input = document.createElement("input");
     input.type = "text"; input.className = "node-edit-input";
     input.value = (d.data && d.data.name) ? d.data.name : "";
@@ -1696,7 +1750,7 @@ if (dir === +1){
     }
   } else if (e.key === "Escape"){
     e.preventDefault();
-    closeNodeEditor(false, false);
+    closeNodeEditor(false, true);
   }
 });
 
@@ -1705,9 +1759,25 @@ if (dir === +1){
 
 
 
-    input.addEventListener("blur", function(){ closeNodeEditor(true, false); });
+    input.addEventListener("blur", function(){ closeNodeEditor(true, true); });
     updateNodeEditorPosition();
     setTimeout(function(){ try{ input.focus(); var L=input.value.length; input.setSelectionRange(L,L); }catch(_e){} }, 0);
+    if (document.body.classList.contains('logyq-mobile-v162')) {
+      const uid = d.data._uid;
+      state._editFocusTimer = setTimeout(() => {
+        if (state.editingUid !== uid) return;
+        state.editFocusArmed = true;
+        logyq.camera.flyEditFocusToUID(uid);
+        const vv = window.visualViewport;
+        if (!vv) return;
+        const onResize = () => {
+          if (state.editingUid !== uid || state.editUserZoom) return;
+          logyq.camera.flyEditFocusToUID(uid, { duration: 220 });
+        };
+        vv.addEventListener('resize', onResize);
+        state._editViewportOff = () => vv.removeEventListener('resize', onResize);
+      }, 0);
+    }
   }
 
 // --- Auto-fit + sticky-multiselect when nav keys move focus ---
@@ -4640,6 +4710,7 @@ state.zoom = d3.zoom()
   .on("zoom", (e) => {
     elements.gRoot.attr("transform", e.transform);
     if (state.editingUid) logyq.editing.updateNodeEditorPosition();
+    if (state.editingUid && e.sourceEvent) state.editUserZoom = true;
     logyq.layout.refreshLaneOnZoom();
     logyq.detectors.draw();
 

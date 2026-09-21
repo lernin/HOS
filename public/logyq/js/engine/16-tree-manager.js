@@ -39,6 +39,7 @@ state.zoom = d3.zoom()
   .on("zoom", (e) => {
     elements.gRoot.attr("transform", e.transform);
     if (state.editingUid) logyq.editing.updateNodeEditorPosition();
+    if (state.editingUid && e.sourceEvent) state.editUserZoom = true;
     logyq.layout.refreshLaneOnZoom();
     logyq.detectors.draw();
 
