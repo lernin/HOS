@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import { engineSource, extractBlock } from './logyq-source.mjs'
 
 function loadUtils() {
-  const source = engineSource()
-  const block = extractBlock(source, '  const utils = (() => {', '  /* ======================= PNG EXPORTER ======================= */')
+  const block = readFileSync(new URL('../public/logyq/js/engine/03-utils.js', import.meta.url), 'utf8')
   return new Function(`${block}; return utils;`)()
 }
 

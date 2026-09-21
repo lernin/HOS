@@ -1,0 +1,180 @@
+  /* ======================= CONFIG ======================= */
+  const CONFIG = {
+    CARD_WIDTH:140, CARD_HEIGHT:63, FONT_SIZE:18,
+    HORIZONTAL_GAP:20, VERTICAL_GAP:78,
+    LINK_INSET:30, CARET_DOT_RADIUS:8,
+    HISTORY_LIMIT:50,
+    DRAG_START_PX: 4,
+    DETECTOR_OVERLAP_PX: 2,           // pixel seatbelt overlap
+    DETECTOR_DEPTH_FACTOR: 10,       // >=1; broken? extend downward for easier hover from above
+    SIBLING_SHARE_THRESHOLD: 0.60,
+    COUSIN_SHARE_THRESHOLD:  0.66,
+    FAMILY_MIN_LEVER: 2,              // famMin = cardWidth / lever  (siblings)
+    COUSIN_MIN_LEVER: 2,              // cousins:  min = cardWidth / lever
+    LAPEL_LEVER: 4,                   // lapelPad = cardWidth / lever
+    EDGE_SIBLING_LEVER: 1.5,          // width in card widths
+    SHOW_DETECTORS: false,
+    DRAG_PROXY_MODE: "dot", /* [patch] drag-proxy-knob */
+    DRAG_LATCH_PX: 5,      // distance before the proxy is allowed to move
+    DRAG_SNAP_MS: 120,     // how quickly the proxy catches up once released
+
+      };
+
+
+
+const CONFIG_MOAT = {
+  enabled: true,
+  moatPct: 0.08,    // 10% band per side mote trigger
+  cooldownMs: 500,
+  durationMin: 260,
+  durationMax: 650
+};
+
+
+// Smooth flight config (center only, no zoom)
+const CONFIG_FLY = {
+  hotkeyDuration: 420,  // Ctrl/Shift+F
+  moatDuration:   360,  // when mote triggers
+  moatDelayMs:    90    // small debounce for mote helper
+};
+
+
+// === Nearest-wall % (single source of truth) ===
+function computeNearestWallPct(){
+  if (!elements?.svg || !elements?.gRoot || !state?.root) return null;
+
+  const uid =
+    state.selectedUid
+    || (state.selectedUids && state.selectedUids.size ? [...state.selectedUids][0] : null)
+    || (state.root?.data?._uid ?? null);
+  if (!uid) return null;
+
+  const h = state.root.descendants().find(n => n?.data?._uid === uid);
+  if (!h) return null;
+
+  const m = elements.gRoot?.node()?.getScreenCTM();
+  if (!m) return null;
+  const p = new DOMPoint(h.x, h.y).matrixTransform(m);
+
+  const svgEl = elements.svg.node();
+  const W = svgEl?.clientWidth || 0, H = svgEl?.clientHeight || 0;
+  if (!W || !H) return null;
+
+  const leftPct   =  p.x / W;
+  const rightPct  = (W - p.x) / W;
+  const topPct    =  p.y / H;
+  const bottomPct = (H - p.y) / H;
+
+  return Math.min(leftPct, rightPct, topPct, bottomPct); // 0..0.5
+}
+
+
+// Current single selection (or null)
+function __selectedUid(){
+  return state.selectedUid
+      || (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null)
+      || null;
+}
+
+/* Smoothly pan to a node's center, preserving current zoom. */
+function flyCenterToUID(uid, { duration = CONFIG_FLY.hotkeyDuration } = {}){
+  const svg = elements.svg?.node();
+  if (!svg || !state.root || !uid) return;
+
+  const h = state.root.descendants().find(n => n?.data?._uid === uid);
+  if (!h) return;
+
+  // Keep current zoom; only translate
+  const t = d3.zoomTransform(svg);
+  const W = svg.clientWidth, H = svg.clientHeight;
+  const target = d3.zoomIdentity
+    .translate(W/2, H/2)
+    .scale(t.k)
+    .translate(-h.x, -h.y);
+
+  // Cancel any in-flight tweens before ours
+  d3.select(svg).interrupt();
+  d3.select(elements.gRoot?.node()).interrupt?.();
+
+  elements.svg
+    .transition()
+    .duration(duration)
+    .ease(d3.easeCubicOut)
+    .call(state.zoom.transform, target);
+}
+
+/* Center the *current* selection with a given duration (no zoom). */
+function centerOnSelected({ duration = CONFIG_FLY.hotkeyDuration } = {}){
+  const uid = __selectedUid();
+  if (!uid) return;
+  flyCenterToUID(uid, { duration });
+}
+
+
+
+
+/// Debounced center-on-selected (no zoom), mirrors autoFitSoon style
+function centerOnSelectedSoon(delay){
+  try { clearTimeout(window.__centerSoonT); } catch (_e) {}
+  const d = Number.isFinite(delay) ? delay : CONFIG_FLY.moatDelayMs;
+  window.__centerSoonT = setTimeout(() => {
+    try { centerOnSelected({ duration: CONFIG_FLY.moatDuration }); } catch (_e) {}
+  }, d);
+}
+
+
+
+
+
+
+
+
+
+// keep the name, change the behavior to "center on selected"
+function checkMoatAndAutoFit(sourceTag = 'kbd'){
+
+      // Don’t run the moat while the user is dragging/panning the map
+  if (state.isPanning) return;
+
+  // Keep the header readout fresh
+  const pct = computeNearestWallPct();
+  const el = document.getElementById('moatReadout');
+
+  if (pct == null){
+    if (el){ el.textContent = ''; el.style.display = 'none'; }
+    return;
+  }
+
+ 
+
+  if (!CONFIG_MOAT?.enabled) return;
+  const threshold = CONFIG_MOAT.moatPct ?? 0.10;  // e.g., 10%
+  if (pct >= threshold) return;
+
+  const now = Date.now();
+  const cooldown = CONFIG_MOAT.cooldownMs ?? 500;
+  if (now - (state._lastMoat || 0) < cooldown) return;
+
+  // ✅ Center on selected (not fit)
+  if (typeof centerOnSelectedSoon === 'function'){
+    centerOnSelectedSoon(120);
+  } else if (window.treeManager?.centerOnSelected){
+    treeManager.centerOnSelected();
+  } else if (state?.selectedUids?.size === 1){
+    // last-resort fallback
+    const uid = [...state.selectedUids][0];
+    zoomToNodeCenter(uid, 1.5);
+  }
+
+  state._lastMoat = now;
+}
+
+
+
+
+
+
+
+
+
+

@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { assembleLogyqEngine } from '../scripts/assemble-logyq.mjs'
 import { engineSource, logyqDir } from './logyq-source.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
@@ -89,4 +90,16 @@ test('theme styles live in the extracted stylesheet', () => {
   for (const marker of ['#trash', '#Dock', 'g.node', '.global-no-cursor', '--card-color']) {
     assert.ok(css.includes(marker), `missing css marker: ${marker}`)
   }
+})
+
+test('engine fragments concatenate to the served IIFE without edits', () => {
+  const assembled = assembleLogyqEngine()
+  assert.equal(assembled.names.length, 20)
+  assert.deepEqual(assembled.names[0], '00-iife-open.js')
+  assert.deepEqual(assembled.names.at(-1), '19-iife-close.js')
+  assert.equal(assembled.source, engineSource())
+  for (const name of [
+    '01-config.js', '03-utils.js', '05-history.js', '08-detectors.js',
+    '10-selection.js', '13-drag.js', '16-tree-manager.js', '17-keyboard.js', '18-bridge.js',
+  ]) assert.ok(assembled.names.includes(name), name)
 })
