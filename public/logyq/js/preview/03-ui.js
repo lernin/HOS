@@ -22,10 +22,6 @@
           <button data-tool="dock">Word Dock</button><button data-tool="help">Help</button>
         </div>
       </section>
-      <nav id="logiq-mobile-context" aria-label="Selected node actions">
-        <button data-action="left" aria-label="Previous node">←</button><button data-action="up" aria-label="Parent node">↑</button><button data-action="down" aria-label="Child node">↓</button><button data-action="right" aria-label="Next node">→</button>
-        <button data-action="edit">Edit</button><button data-action="delete">Delete</button>
-      </nav>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
       <div class="logiq-backdrop" id="logiq-library" aria-hidden="true">
         <section class="logiq-modal" role="dialog" aria-modal="true" aria-labelledby="logiq-library-title">
@@ -43,7 +39,6 @@
       menuButton: document.getElementById('logiq-mobile-menu-btn'),
       mobilePanel: document.getElementById('logiq-mobile-panel'),
       mobileInput: document.getElementById('logiq-mobile-word-input'),
-      mobileContext: document.getElementById('logiq-mobile-context'),
       voiceBar: document.getElementById('logiq-voice-bar'),
       voiceStatus: document.getElementById('logiq-voice-status'),
       library: document.getElementById('logiq-library'),
@@ -92,15 +87,6 @@
       commitMobileInput(event.shiftKey)
     })
 
-    ui.mobileContext.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action]')
-      if (!button) return
-      const action = button.dataset.action
-      if (['left', 'up', 'down', 'right'].includes(action)) navigate(action)
-      if (action === 'edit') bridge.editSelected()
-      if (action === 'delete' && window.confirm('Delete the selected node or subtree?')) bridge.deleteSelection()
-    })
-
     ui.mapList.addEventListener('click', handleMapAction)
     ui.pin.addEventListener('click', (event) => { if (event.target === ui.pin) finishPin(null) })
     document.getElementById('logiq-pin-cancel').addEventListener('click', () => finishPin(null))
@@ -135,17 +121,6 @@
   function closeMobilePanel() {
     ui.mobilePanel.classList.remove('is-open')
     ui.menuButton.setAttribute('aria-expanded', 'false')
-  }
-
-  function navigate(direction) {
-    const key = `Arrow${direction[0].toUpperCase()}${direction.slice(1)}`
-    bridge.dispatchKey(key)
-  }
-
-  function updateContextActions() {
-    const selectedUid = bridge.getSelectedUid()
-    const selected = selectedUid || bridge.getSelectedUids().length
-    ui.mobileContext.classList.toggle('is-visible', !!selected)
   }
 
   function updateMapName() {

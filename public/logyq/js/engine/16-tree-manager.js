@@ -17,7 +17,7 @@ const treeManager = {
 if (typeof state.isPanning === "undefined") state.isPanning = false;
 
 state.zoom = d3.zoom()
-  .scaleExtent([0.4, 2.4])
+  .scaleExtent([0.02, 2.4])
   .filter((event) => {
     // Allow wheel-zoom anywhere; block drags that start on nodes
     if (event.type === "wheel") return true;

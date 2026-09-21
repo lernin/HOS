@@ -59,17 +59,6 @@
     })
   }
 
-  const nodeLayer = document.querySelector('g.nodes')
-  if (nodeLayer) {
-    new MutationObserver(() => requestAnimationFrame(updateContextActions)).observe(nodeLayer, {
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class'],
-    })
-  }
-  window.addEventListener('keydown', () => requestAnimationFrame(updateContextActions), true)
-  window.addEventListener('resize', () => requestAnimationFrame(updateContextActions))
   window.addEventListener('online', retryPending)
-  updateContextActions()
   if (recovered) setTimeout(retryPending, 500)
 

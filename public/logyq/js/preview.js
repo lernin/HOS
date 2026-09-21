@@ -59,18 +59,7 @@
     })
   }
 
-  const nodeLayer = document.querySelector('g.nodes')
-  if (nodeLayer) {
-    new MutationObserver(() => requestAnimationFrame(updateContextActions)).observe(nodeLayer, {
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['class'],
-    })
-  }
-  window.addEventListener('keydown', () => requestAnimationFrame(updateContextActions), true)
-  window.addEventListener('resize', () => requestAnimationFrame(updateContextActions))
   window.addEventListener('online', retryPending)
-  updateContextActions()
   if (recovered) setTimeout(retryPending, 500)
 
   function readJson(key, fallback) {
@@ -132,15 +121,16 @@
       .logiq-pin-card h2,.logiq-pin-card p{margin:0}.logiq-pin-card p{font-size:13px;color:#64748b}
       .logiq-pin-actions{display:flex;justify-content:flex-end;gap:8px}
       .logiq-pin-error{display:none;color:#dc2626;font-size:12px}.logiq-pin-error.is-visible{display:block}
-      #logiq-mobile-header,#logiq-mobile-panel,#logiq-mobile-context,#logiq-voice-bar{display:none}
+      #logiq-mobile-header,#logiq-mobile-panel,#logiq-voice-bar{display:none}
 
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+        html,body{width:100%;max-width:100%;overflow:hidden}
         body>header{display:none!important}
-        svg#canvas{height:100dvh;touch-action:none}
-        #trash{display:none!important}
-        #Dock{left:8px;right:8px;bottom:66px;padding:0 4px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
-        #Dock.dock-left{top:54px;bottom:66px;width:min(220px,72vw);padding:8px}
-        #Toast{bottom:122px;max-width:calc(100vw - 36px);text-align:center}
+        svg#canvas{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;touch-action:none;overflow:visible;z-index:0}
+        #trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
+        #Dock{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));padding:0 4px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
+        #Dock.dock-left{top:54px;bottom:max(8px,env(safe-area-inset-bottom));left:8px;right:auto;width:min(220px,72vw);padding:8px}
+        #Toast{bottom:72px;max-width:calc(100vw - 36px);text-align:center}
         #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px)}
         #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto}
         .logiq-mobile-entry{height:36px;min-width:66px;flex:1;border:1px solid #dbe3ec;border-radius:10px;padding:0 9px;font:inherit;font-size:14px;background:rgba(255,255,255,.9)}
@@ -151,16 +141,15 @@
         #logiq-mobile-panel{position:fixed;display:none;z-index:3100;top:54px;right:8px;left:8px;padding:12px;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
         #logiq-mobile-panel.is-open{display:block}
         .logiq-mobile-tools{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.logiq-mobile-tools button{min-height:42px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-weight:650}
-        #logiq-mobile-context{position:fixed;display:none;z-index:3000;left:8px;right:8px;bottom:8px;min-height:52px;padding:6px;background:rgba(255,255,255,.96);border:1px solid #e2e8f0;border-radius:15px;box-shadow:0 12px 36px rgba(15,23,42,.2);backdrop-filter:blur(8px);grid-template-columns:repeat(6,1fr);gap:5px}
-        #logiq-mobile-context.is-visible{display:grid}
-        #logiq-mobile-context button{min-width:0;height:40px;border:1px solid #e2e8f0;border-radius:9px;background:#fff;color:#334155;font-size:12px;font-weight:700;padding:2px}
-        #logiq-mobile-context button[data-action="delete"]{color:#dc2626}
-        #logiq-mobile-context button.is-active{background:#dcfce7;border-color:#22c55e;color:#166534}
         #logiq-voice-bar{position:fixed;z-index:3300;left:50%;bottom:70px;transform:translateX(-50%);align-items:center;gap:9px;max-width:calc(100vw - 20px);padding:8px 9px 8px 13px;border-radius:999px;background:#111827;color:#fff;box-shadow:0 12px 34px rgba(15,23,42,.35);font-size:13px;font-weight:700;white-space:nowrap}
         #logiq-voice-bar.is-visible{display:flex}
         #logiq-voice-stop{border:0;border-radius:999px;background:#ef4444;color:#fff;padding:8px 13px;font-weight:800}
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
         body.logyq-mobile-v162 svg#canvas g.node{pointer-events:none!important}
+        #logyq-v162-action{position:fixed;z-index:3950;display:none;place-items:center;width:40px;height:40px;padding:0;border:2px solid #fff;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 7px 20px rgba(15,23,42,.26);font:800 10px/1 system-ui;touch-action:none}
+        #logyq-v162-action.show{display:grid}#logyq-v162-action.rec{background:#ef4444}
+        #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
+        @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
       }
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
@@ -187,7 +176,6 @@
       @media (hover:none) and (pointer:coarse) and (max-height:500px){
         #logiq-mobile-header{height:44px;padding-top:4px;padding-bottom:4px}
         #logiq-mobile-panel{top:48px;left:auto;width:min(310px,calc(100vw - 16px))}
-        #logiq-mobile-context{left:auto;width:min(360px,calc(100vw - 16px))}
         #logiq-voice-bar{bottom:62px}
       }
     `
@@ -218,10 +206,6 @@
           <button data-tool="dock">Word Dock</button><button data-tool="help">Help</button>
         </div>
       </section>
-      <nav id="logiq-mobile-context" aria-label="Selected node actions">
-        <button data-action="left" aria-label="Previous node">←</button><button data-action="up" aria-label="Parent node">↑</button><button data-action="down" aria-label="Child node">↓</button><button data-action="right" aria-label="Next node">→</button>
-        <button data-action="edit">Edit</button><button data-action="delete">Delete</button>
-      </nav>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
       <div class="logiq-backdrop" id="logiq-library" aria-hidden="true">
         <section class="logiq-modal" role="dialog" aria-modal="true" aria-labelledby="logiq-library-title">
@@ -239,7 +223,6 @@
       menuButton: document.getElementById('logiq-mobile-menu-btn'),
       mobilePanel: document.getElementById('logiq-mobile-panel'),
       mobileInput: document.getElementById('logiq-mobile-word-input'),
-      mobileContext: document.getElementById('logiq-mobile-context'),
       voiceBar: document.getElementById('logiq-voice-bar'),
       voiceStatus: document.getElementById('logiq-voice-status'),
       library: document.getElementById('logiq-library'),
@@ -288,15 +271,6 @@
       commitMobileInput(event.shiftKey)
     })
 
-    ui.mobileContext.addEventListener('click', (event) => {
-      const button = event.target.closest('[data-action]')
-      if (!button) return
-      const action = button.dataset.action
-      if (['left', 'up', 'down', 'right'].includes(action)) navigate(action)
-      if (action === 'edit') bridge.editSelected()
-      if (action === 'delete' && window.confirm('Delete the selected node or subtree?')) bridge.deleteSelection()
-    })
-
     ui.mapList.addEventListener('click', handleMapAction)
     ui.pin.addEventListener('click', (event) => { if (event.target === ui.pin) finishPin(null) })
     document.getElementById('logiq-pin-cancel').addEventListener('click', () => finishPin(null))
@@ -331,17 +305,6 @@
   function closeMobilePanel() {
     ui.mobilePanel.classList.remove('is-open')
     ui.menuButton.setAttribute('aria-expanded', 'false')
-  }
-
-  function navigate(direction) {
-    const key = `Arrow${direction[0].toUpperCase()}${direction.slice(1)}`
-    bridge.dispatchKey(key)
-  }
-
-  function updateContextActions() {
-    const selectedUid = bridge.getSelectedUid()
-    const selected = selectedUid || bridge.getSelectedUids().length
-    ui.mobileContext.classList.toggle('is-visible', !!selected)
   }
 
   function updateMapName() {
@@ -409,7 +372,6 @@
       showMobileToast('Could not transcribe. Type the card instead.')
     } finally {
       ui.voiceBar.classList.remove('is-visible')
-      requestAnimationFrame(updateContextActions)
     }
   }
 
@@ -456,6 +418,9 @@
       candidates: new Map(),
       lastTap: null,
     }
+    const mic = ensureCardMic(doc, win)
+    holdState.mic = mic
+    flickState.mic = mic
 
     win.addEventListener('pointerdown', (event) => onHoldDown(event, doc, win, canvas, holdState), true)
     win.addEventListener('pointermove', (event) => onHoldMove(event, win, holdState), true)
@@ -581,6 +546,7 @@
     for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
 
     win.__logyqV2ConsumedPointers.add(hold.pointerId)
+    clearCardMic(state.mic)
     state.drag = {
       pointerId: hold.pointerId,
       uid: hold.uid,
@@ -756,6 +722,7 @@
         const createdUid = bridge.createRelative(direction)
         if (!createdUid) return
         bridge.selectByUid(createdUid)
+        armBlankCardMic(state.mic, doc, createdUid)
         win.navigator.vibrate?.(16)
       })
       return
@@ -770,12 +737,14 @@
     const uid = nodeUid(node)
     if (!uid || uid !== candidate.uid) {
       state.lastTap = null
+      clearCardMic(state.mic)
       return
     }
 
     const now = win.performance.now()
     if (state.lastTap?.uid === uid && now - state.lastTap.time <= v162Constants().DOUBLE_TAP_MS) {
       state.lastTap = null
+      clearCardMic(state.mic)
       bridge.selectByUid(uid)
       bridge.editSelected()
       return
@@ -783,7 +752,8 @@
 
     bridge.selectByUid(uid)
     state.lastTap = { uid, time: now }
-    requestAnimationFrame(updateContextActions)
+    if (blank(node)) armBlankCardMic(state.mic, doc, uid)
+    else clearCardMic(state.mic)
   }
 
   function onFlickClear(event, win, state) {
@@ -832,6 +802,137 @@
       .trim()
   }
 
+  function blank(node) {
+    const text = cardText(node).toLowerCase()
+    return !text || ['new', 'new card', 'untitled', '…', '...'].includes(text)
+  }
+
+  function ensureCardMic(doc, win) {
+    if (preview.gestures?.cardMic) return preview.gestures.cardMic
+    const button = doc.createElement('button')
+    button.id = 'logyq-v162-action'
+    button.type = 'button'
+    button.textContent = 'MIC'
+    button.setAttribute('aria-label', 'Record card')
+    doc.body.appendChild(button)
+    const mic = {
+      button,
+      actionUid: null,
+      recorder: null,
+      recordingUid: null,
+      recordingStream: null,
+      chunks: [],
+      raf: 0,
+    }
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }, { passive: false })
+    button.addEventListener('click', async (event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (!mic.actionUid) return
+      if (mic.recorder) stopCardRecording(mic)
+      else await startCardRecording(win, mic, mic.actionUid)
+    })
+    const tick = () => {
+      const uid = mic.recordingUid || mic.actionUid
+      const node = uid ? nodeByUid(doc, uid) : null
+      const rect = node?.getBoundingClientRect()
+      const editing = !!doc.querySelector('.node-edit-input')
+      const onScreen = rect && rect.width > 1 && rect.height > 1 && rect.right > 0 && rect.left < win.innerWidth && rect.bottom > 0 && rect.top < win.innerHeight
+      if (onScreen && !editing) {
+        const fitsRight = rect.right + 46 <= win.innerWidth
+        const left = fitsRight ? rect.right + 5 : rect.left - 45
+        button.style.left = `${Math.max(4, Math.min(win.innerWidth - 44, left))}px`
+        button.style.top = `${Math.max(4, Math.min(win.innerHeight - 44, rect.top + Math.max(0, (rect.height - 40) / 2)))}px`
+        button.classList.add('show')
+        button.classList.toggle('rec', !!mic.recorder)
+        button.textContent = mic.recorder ? '■' : 'MIC'
+        button.setAttribute('aria-label', mic.recorder ? 'Stop recording' : 'Record card')
+      } else {
+        button.classList.remove('show')
+      }
+      mic.raf = win.requestAnimationFrame(tick)
+    }
+    mic.raf = win.requestAnimationFrame(tick)
+    if (preview.gestures) preview.gestures.cardMic = mic
+    return mic
+  }
+
+  function armBlankCardMic(mic, doc, uid) {
+    if (!mic || !uid) return
+    const node = nodeByUid(doc, uid)
+    if (node && !blank(node)) {
+      if (!mic.recorder) mic.actionUid = null
+      return
+    }
+    mic.actionUid = uid
+  }
+
+  function clearCardMic(mic) {
+    if (!mic || mic.recorder) return
+    mic.actionUid = null
+  }
+
+  async function startCardRecording(win, mic, uid) {
+    if (mic.recorder || app.recorder) return
+    if (!win.navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      showMobileToast('Voice recording is unavailable')
+      return
+    }
+    const pin = await getPin(true)
+    if (!pin) return
+    try {
+      const stream = await win.navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      mic.recorder = recorder
+      mic.recordingUid = uid
+      mic.recordingStream = stream
+      mic.chunks = []
+      recorder.addEventListener('dataavailable', (event) => { if (event.data?.size) mic.chunks.push(event.data) })
+      recorder.addEventListener('stop', () => transcribeCardRecording(win, mic, recorder, pin), { once: true })
+      recorder.start()
+      win.navigator.vibrate?.(10)
+      showMobileToast('Recording… tap MIC to stop')
+    } catch (_error) {
+      showMobileToast('Microphone permission is needed')
+    }
+  }
+
+  function stopCardRecording(mic) {
+    if (mic.recorder && mic.recorder.state !== 'inactive') mic.recorder.stop()
+  }
+
+  async function transcribeCardRecording(win, mic, recorder, pin) {
+    const uid = mic.recordingUid
+    const chunks = mic.chunks.slice()
+    mic.recordingStream?.getTracks?.().forEach((track) => track.stop())
+    mic.recordingStream = null
+    mic.chunks = []
+    try {
+      const audio = new win.Blob(chunks, { type: recorder?.mimeType || 'audio/webm' })
+      const form = new win.FormData()
+      form.append('audio', audio, 'logyq-card.webm')
+      const response = await win.fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin }, body: form })
+      const result = await response.json()
+      if (!response.ok || !result?.text?.trim()) {
+        if (response.status === 401 || response.status === 403) win.sessionStorage.removeItem(PIN_KEY)
+        throw new Error('transcribe')
+      }
+      const text = result.text.trim()
+      bridge.renameNode(uid, text)
+      mic.actionUid = null
+      showMobileToast(`Added “${text}”`)
+    } catch (_error) {
+      mic.actionUid = uid
+      showMobileToast('Could not transcribe — card left blank')
+    } finally {
+      mic.recorder = null
+      mic.recordingUid = null
+    }
+  }
+
   function captureView(doc, win) {
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3) return null
@@ -870,6 +971,7 @@
   if (preview.gestures) {
     preview.gestures.constants = v162Constants()
     preview.gestures.bindV162 = bindV162Gestures
+    preview.gestures.armBlankCardMic = armBlankCardMic
   }
   function setSaveState(state) {
     const text = state === 'saving' ? 'Saving' : state === 'offline' ? 'Offline' : 'Saved'

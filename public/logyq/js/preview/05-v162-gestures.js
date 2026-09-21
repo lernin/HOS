@@ -37,6 +37,9 @@
       candidates: new Map(),
       lastTap: null,
     }
+    const mic = ensureCardMic(doc, win)
+    holdState.mic = mic
+    flickState.mic = mic
 
     win.addEventListener('pointerdown', (event) => onHoldDown(event, doc, win, canvas, holdState), true)
     win.addEventListener('pointermove', (event) => onHoldMove(event, win, holdState), true)
@@ -162,6 +165,7 @@
     for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
 
     win.__logyqV2ConsumedPointers.add(hold.pointerId)
+    clearCardMic(state.mic)
     state.drag = {
       pointerId: hold.pointerId,
       uid: hold.uid,
@@ -337,6 +341,7 @@
         const createdUid = bridge.createRelative(direction)
         if (!createdUid) return
         bridge.selectByUid(createdUid)
+        armBlankCardMic(state.mic, doc, createdUid)
         win.navigator.vibrate?.(16)
       })
       return
@@ -351,12 +356,14 @@
     const uid = nodeUid(node)
     if (!uid || uid !== candidate.uid) {
       state.lastTap = null
+      clearCardMic(state.mic)
       return
     }
 
     const now = win.performance.now()
     if (state.lastTap?.uid === uid && now - state.lastTap.time <= v162Constants().DOUBLE_TAP_MS) {
       state.lastTap = null
+      clearCardMic(state.mic)
       bridge.selectByUid(uid)
       bridge.editSelected()
       return
@@ -364,7 +371,8 @@
 
     bridge.selectByUid(uid)
     state.lastTap = { uid, time: now }
-    requestAnimationFrame(updateContextActions)
+    if (blank(node)) armBlankCardMic(state.mic, doc, uid)
+    else clearCardMic(state.mic)
   }
 
   function onFlickClear(event, win, state) {
@@ -413,6 +421,137 @@
       .trim()
   }
 
+  function blank(node) {
+    const text = cardText(node).toLowerCase()
+    return !text || ['new', 'new card', 'untitled', '…', '...'].includes(text)
+  }
+
+  function ensureCardMic(doc, win) {
+    if (preview.gestures?.cardMic) return preview.gestures.cardMic
+    const button = doc.createElement('button')
+    button.id = 'logyq-v162-action'
+    button.type = 'button'
+    button.textContent = 'MIC'
+    button.setAttribute('aria-label', 'Record card')
+    doc.body.appendChild(button)
+    const mic = {
+      button,
+      actionUid: null,
+      recorder: null,
+      recordingUid: null,
+      recordingStream: null,
+      chunks: [],
+      raf: 0,
+    }
+    button.addEventListener('pointerdown', (event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }, { passive: false })
+    button.addEventListener('click', async (event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (!mic.actionUid) return
+      if (mic.recorder) stopCardRecording(mic)
+      else await startCardRecording(win, mic, mic.actionUid)
+    })
+    const tick = () => {
+      const uid = mic.recordingUid || mic.actionUid
+      const node = uid ? nodeByUid(doc, uid) : null
+      const rect = node?.getBoundingClientRect()
+      const editing = !!doc.querySelector('.node-edit-input')
+      const onScreen = rect && rect.width > 1 && rect.height > 1 && rect.right > 0 && rect.left < win.innerWidth && rect.bottom > 0 && rect.top < win.innerHeight
+      if (onScreen && !editing) {
+        const fitsRight = rect.right + 46 <= win.innerWidth
+        const left = fitsRight ? rect.right + 5 : rect.left - 45
+        button.style.left = `${Math.max(4, Math.min(win.innerWidth - 44, left))}px`
+        button.style.top = `${Math.max(4, Math.min(win.innerHeight - 44, rect.top + Math.max(0, (rect.height - 40) / 2)))}px`
+        button.classList.add('show')
+        button.classList.toggle('rec', !!mic.recorder)
+        button.textContent = mic.recorder ? '■' : 'MIC'
+        button.setAttribute('aria-label', mic.recorder ? 'Stop recording' : 'Record card')
+      } else {
+        button.classList.remove('show')
+      }
+      mic.raf = win.requestAnimationFrame(tick)
+    }
+    mic.raf = win.requestAnimationFrame(tick)
+    if (preview.gestures) preview.gestures.cardMic = mic
+    return mic
+  }
+
+  function armBlankCardMic(mic, doc, uid) {
+    if (!mic || !uid) return
+    const node = nodeByUid(doc, uid)
+    if (node && !blank(node)) {
+      if (!mic.recorder) mic.actionUid = null
+      return
+    }
+    mic.actionUid = uid
+  }
+
+  function clearCardMic(mic) {
+    if (!mic || mic.recorder) return
+    mic.actionUid = null
+  }
+
+  async function startCardRecording(win, mic, uid) {
+    if (mic.recorder || app.recorder) return
+    if (!win.navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      showMobileToast('Voice recording is unavailable')
+      return
+    }
+    const pin = await getPin(true)
+    if (!pin) return
+    try {
+      const stream = await win.navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      mic.recorder = recorder
+      mic.recordingUid = uid
+      mic.recordingStream = stream
+      mic.chunks = []
+      recorder.addEventListener('dataavailable', (event) => { if (event.data?.size) mic.chunks.push(event.data) })
+      recorder.addEventListener('stop', () => transcribeCardRecording(win, mic, recorder, pin), { once: true })
+      recorder.start()
+      win.navigator.vibrate?.(10)
+      showMobileToast('Recording… tap MIC to stop')
+    } catch (_error) {
+      showMobileToast('Microphone permission is needed')
+    }
+  }
+
+  function stopCardRecording(mic) {
+    if (mic.recorder && mic.recorder.state !== 'inactive') mic.recorder.stop()
+  }
+
+  async function transcribeCardRecording(win, mic, recorder, pin) {
+    const uid = mic.recordingUid
+    const chunks = mic.chunks.slice()
+    mic.recordingStream?.getTracks?.().forEach((track) => track.stop())
+    mic.recordingStream = null
+    mic.chunks = []
+    try {
+      const audio = new win.Blob(chunks, { type: recorder?.mimeType || 'audio/webm' })
+      const form = new win.FormData()
+      form.append('audio', audio, 'logyq-card.webm')
+      const response = await win.fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin }, body: form })
+      const result = await response.json()
+      if (!response.ok || !result?.text?.trim()) {
+        if (response.status === 401 || response.status === 403) win.sessionStorage.removeItem(PIN_KEY)
+        throw new Error('transcribe')
+      }
+      const text = result.text.trim()
+      bridge.renameNode(uid, text)
+      mic.actionUid = null
+      showMobileToast(`Added “${text}”`)
+    } catch (_error) {
+      mic.actionUid = uid
+      showMobileToast('Could not transcribe — card left blank')
+    } finally {
+      mic.recorder = null
+      mic.recordingUid = null
+    }
+  }
+
   function captureView(doc, win) {
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3) return null
@@ -451,4 +590,5 @@
   if (preview.gestures) {
     preview.gestures.constants = v162Constants()
     preview.gestures.bindV162 = bindV162Gestures
+    preview.gestures.armBlankCardMic = armBlankCardMic
   }

@@ -59,7 +59,6 @@
       showMobileToast('Could not transcribe. Type the card instead.')
     } finally {
       ui.voiceBar.classList.remove('is-visible')
-      requestAnimationFrame(updateContextActions)
     }
   }
 
