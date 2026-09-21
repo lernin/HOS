@@ -89,9 +89,16 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 - **Center-offset pan, not edge bands.** Hold-drag auto-pan uses the finger’s offset from the viewport center (dead zone 56px, quadratic step 16). Up/down matches left/right; near-center does not creep. The content leash is sign-aware on the **leading** edge (`dx>0` → left on `minX`, `dx<0` → right on `maxX`, same for y) and does not yank if already past. After `ba35d2f` the leading inset was ½ card and felt choked against the bezel; it is now ~⅓ of the viewport empty on the side she is panning toward (tree in the opposite ~⅔). Diagonals apply both axes.
 
+## Library-first open + no blank shells (PR 112)
+
+- **The slap** was `createMap({ edit: true })` on boot / New / last-delete: `editSelected({ wipe: true })` opened a forced empty-card editor (keyboard wall), then `queueAutosave` POSTed an untitled empty-root row into `logiq_maps`.
+- **Open (Drive / consultant).** Earlier PERSISTENCE / LAB_TAB / ARCHITECTURE notes said 0 maps → one-card already editing. That *was* the square. Library is now home for **0 and 1+** maps. Editor only after she taps a row or **+ New**. No two-door chooser. No first-run coaching.
+- **Calm New.** One normal blank root card — no wipe-edit, no autofocus keyboard. Maps / back returns to the library and drops an untouched draft so the close chrome does not pretend a map is open.
+- **No junk shells.** Unsaved drafts with an empty/untitled root, no children, and no word bank are not queued or POSTed until she types or builds. Last-map delete and boot errors stay on the empty library. Leftover blank pending snapshots are discarded on boot.
+
 ## Live maps + Drive-style open (PR 112)
 
-- **No two-door chooser.** Empty library opens the editor on one blank root card, already editing. One or more maps opens a recents library (name + relative time) with **+ New**. Maps icon / Trees returns to the library; close does not dump you onto an empty canvas. No first-run coaching.
+- **No two-door chooser.** Recents library (name + relative time) with **+ New** is home. Maps icon / Trees returns to the library; close does not dump you onto an empty canvas. No first-run coaching. (0-maps used to force a one-card editor; that law was replaced above.)
 - **Live `logiq_maps` / GIQ.** Same Procedia project and PIN RPCs as LOGiQ (`logiq_map_list` / `logiq_map_save` / `logiq_map_delete`). No `logiq-*` edits. A row’s `tree` is the GIQ JSON tree (`exportGIQ`’s first part); `word_bank` is the `###` section. `formatVersion: 2` is a root-only extra field — not a `{formatVersion, root}` wrapper. `color` and unknown JSON fields JSON-clone through. Old maps without `formatVersion` still load.
 
 ## Phone polish (PR 112)

@@ -25,6 +25,18 @@
     }
   }
 
+  function isBlankDraft({ id, name, tree, wordBank } = {}) {
+    if (id) return false
+    const rootName = String(tree?.name ?? '').trim().toLowerCase()
+    const title = String(name ?? '').trim().toLowerCase()
+    const children = Array.isArray(tree?.children) ? tree.children : []
+    const bank = Array.isArray(wordBank) ? wordBank : []
+    if (children.length || bank.length) return false
+    if (tree?.color) return false
+    const untitled = (value) => !value || value === DEFAULT_NAME.toLowerCase() || ['new', 'new card', 'untitled', 'untitled map', '…', '...'].includes(value)
+    return untitled(rootName) && untitled(title)
+  }
+
   function formatUpdatedAt(iso) {
     const stamp = iso ? new Date(iso).getTime() : NaN
     if (!Number.isFinite(stamp)) return ''
@@ -42,6 +54,7 @@
     encodeMapTree,
     decodeMapTree,
     encodeMapRecord,
+    isBlankDraft,
     formatUpdatedAt,
   }
 

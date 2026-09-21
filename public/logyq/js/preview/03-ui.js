@@ -212,7 +212,7 @@
 
     document.getElementById('logiq-library-close').addEventListener('click', closeLibrary)
     ui.library.addEventListener('click', (event) => { if (event.target === ui.library) closeLibrary() })
-    document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: true }))
+    document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: false }))
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool

@@ -80,6 +80,20 @@ test('LOGYQ map encode stamps GIQ-compatible formatVersion and keeps color', () 
   assert.equal(decoded.extra, 'keep-me')
 })
 
+test('LOGYQ blank drafts are untitled empty roots with no children', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/01-helpers.js', import.meta.url), 'utf8')
+  const preview = {}
+  const maps = new Function('preview', 'DEFAULT_NAME', `${source}; return preview.maps;`)(preview, 'Untitled map')
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '', formatVersion: 2 }, wordBank: [] }), true)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '   ' }, wordBank: [] }), true)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: 'untitled' }, wordBank: [] }), true)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: 'Sky' }, wordBank: [] }), false)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '', children: [{ name: 'Kid' }] }, wordBank: [] }), false)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '' }, wordBank: ['alpha'] }), false)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '', color: '#fde68a' }, wordBank: [] }), false)
+  assert.equal(maps.isBlankDraft({ id: 'saved', name: 'Untitled map', tree: { name: '' }, wordBank: [] }), false)
+}))
+
 test('GIQ and JSON import parsing keep v161 normalization rules', () => {
   const { tryParsePureJSON, tryParseGIQ, parseIncoming } = loadTreeHelpers()
   assert.deepEqual(tryParsePureJSON('{"name":"Root","children":[{"name":"Child"}]}'), {

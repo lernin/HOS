@@ -124,9 +124,9 @@ test('LOGYQ desktop boot preserves the 30-node tree, edit, undo, dock, and repar
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
   await waitForBoot(page)
   await assertNoChooser(page)
-  assert.equal(await page.locator('#logiq-library.is-open').count(), 0)
-  assert.equal(await page.locator('g.node').count(), 1)
-  assert.equal(await page.locator('.node-edit-input').count(), 1)
+  assert.equal(await page.locator('#logiq-library.is-open').count(), 1)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  assert.ok(requests.every((request) => request.name !== 'logiq_map_save'))
   await loadSampleTree(page)
 
   assert.equal(await page.locator('g.node').count(), 30)
@@ -835,25 +835,31 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   await context.close()
 })
 
-test('LOGYQ empty library opens a one-card editor, not a chooser', async () => {
+test('LOGYQ empty library stays a library, not a chooser or editor', async () => {
+  const capture = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
-  await stubMaps(context)
+  await stubMaps(context, { capture })
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
   await waitForBoot(page)
   await assertNoChooser(page)
-  assert.equal(await page.locator('#logiq-library.is-open').count(), 0)
-  assert.equal(await page.locator('g.node').count(), 1)
-  assert.equal(await page.locator('.node-edit-input').count(), 1)
+  await page.waitForSelector('#logiq-library.is-open')
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  assert.equal(await page.locator('#logiq-new-map').count(), 1)
+  assert.match((await page.locator('#logiq-map-list').innerText()), /No maps yet/)
+  await page.waitForTimeout(950)
+  assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
   assert.deepEqual(errors, [])
   await context.close()
 })
 
-test('LOGYQ library lists recents and New opens a one-card editor', async () => {
+test('LOGYQ library lists recents and New opens a calm one-card canvas', async () => {
+  const capture = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context, {
+    capture,
     maps: [
       {
         id: 'old',
@@ -883,17 +889,23 @@ test('LOGYQ library lists recents and New opens a one-card editor', async () => 
   await page.waitForFunction(() => !document.getElementById('logiq-library')?.classList.contains('is-open'))
   assert.equal(await page.locator('g.node').count(), 1)
   assert.equal(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.color), '#fde68a')
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
   await page.locator('#logyq-home-btn').click()
   await page.waitForSelector('#logiq-library.is-open')
   await page.locator('#logiq-new-map').click()
   await page.waitForFunction(() => !document.getElementById('logiq-library')?.classList.contains('is-open'))
-  await page.waitForSelector('.node-edit-input')
   await page.waitForFunction(() => {
     const live = window.LOGYQBridge.core.state.root?.descendants().length || 0
     return live === 1 && document.querySelectorAll('svg#canvas g.nodes g.node').length === 1
   })
   assert.equal(await page.locator('svg#canvas g.nodes g.node').count(), 1)
-  assert.equal(await page.locator('.node-edit-input').count(), 1)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  await page.waitForTimeout(950)
+  assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
+  await page.locator('#logyq-home-btn').click()
+  await page.waitForSelector('#logiq-library.is-open')
+  assert.deepEqual(await page.locator('.logiq-map-name').allTextContents(), ['Recent sky', 'Older map'])
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-map-open')), false)
   await assertNoChooser(page)
   assert.deepEqual(errors, [])
   await context.close()

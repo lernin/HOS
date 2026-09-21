@@ -86,6 +86,18 @@
     }
   }
 
+  function isBlankDraft({ id, name, tree, wordBank } = {}) {
+    if (id) return false
+    const rootName = String(tree?.name ?? '').trim().toLowerCase()
+    const title = String(name ?? '').trim().toLowerCase()
+    const children = Array.isArray(tree?.children) ? tree.children : []
+    const bank = Array.isArray(wordBank) ? wordBank : []
+    if (children.length || bank.length) return false
+    if (tree?.color) return false
+    const untitled = (value) => !value || value === DEFAULT_NAME.toLowerCase() || ['new', 'new card', 'untitled', 'untitled map', '…', '...'].includes(value)
+    return untitled(rootName) && untitled(title)
+  }
+
   function formatUpdatedAt(iso) {
     const stamp = iso ? new Date(iso).getTime() : NaN
     if (!Number.isFinite(stamp)) return ''
@@ -103,6 +115,7 @@
     encodeMapTree,
     decodeMapTree,
     encodeMapRecord,
+    isBlankDraft,
     formatUpdatedAt,
   }
 
@@ -166,6 +179,8 @@
       .logiq-inline-rename.is-open{display:grid}
       .logiq-inline-rename input,.logiq-pin-card input{height:38px;border:1px solid #cbd5e1;border-radius:9px;padding:0 10px;font:inherit}
       .logiq-empty{padding:28px;text-align:center;color:#64748b;border:1px dashed #cbd5e1;border-radius:12px}
+      .logiq-empty p{margin:0 0 14px}
+      .logiq-empty .logiq-primary{min-width:148px}
       .logiq-pin-card{width:min(360px,100%);padding:20px;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(15,23,42,.24);display:grid;gap:12px;color:#334155}
       .logiq-pin-card h2,.logiq-pin-card p{margin:0}.logiq-pin-card p{font-size:13px;color:#64748b}
       .logiq-pin-actions{display:flex;justify-content:flex-end;gap:8px}
@@ -465,7 +480,7 @@
 
     document.getElementById('logiq-library-close').addEventListener('click', closeLibrary)
     ui.library.addEventListener('click', (event) => { if (event.target === ui.library) closeLibrary() })
-    document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: true }))
+    document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: false }))
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool
@@ -1756,6 +1771,17 @@
 
   function queueAutosave(snapshot) {
     if (!app.hasOpenMap) return
+    if (isBlankDraft({
+      id: app.current.id,
+      name: app.current.name,
+      tree: snapshot?.tree,
+      wordBank: snapshot?.wordBank,
+    })) {
+      localStorage.removeItem(PENDING_KEY)
+      clearTimeout(app.timer)
+      setSaveState('saved')
+      return
+    }
     const encoded = encodeMapRecord({
       name: app.current.name || DEFAULT_NAME,
       tree: snapshot?.tree,
@@ -1788,6 +1814,15 @@
     }
     const pending = readJson(PENDING_KEY, null)
     if (!pending) return setSaveState('saved')
+    if (isBlankDraft({
+      id: pending.id,
+      name: pending.name,
+      tree: pending.tree,
+      wordBank: pending.word_bank,
+    })) {
+      localStorage.removeItem(PENDING_KEY)
+      return setSaveState('saved')
+    }
     if (!navigator.onLine) return setSaveState('offline')
 
     const pin = await getPin(true)
@@ -1865,8 +1900,34 @@
     ui.library.setAttribute('aria-hidden', 'true')
   }
 
+  function abandonBlankDraft() {
+    if (!app.hasOpenMap || app.current.id) return
+    const snapshot = bridge.snapshot()
+    if (!isBlankDraft({
+      id: app.current.id,
+      name: app.current.name,
+      tree: snapshot?.tree,
+      wordBank: snapshot?.wordBank,
+    })) return
+    app.hasOpenMap = false
+    document.body.classList.remove('logyq-map-open')
+    app.current = { id: null, name: DEFAULT_NAME }
+    app.lastSnapshot = ''
+    localStorage.removeItem(PENDING_KEY)
+    updateMapName()
+    setSaveState('saved')
+  }
+
+  function openHomeLibrary() {
+    app.hasOpenMap = false
+    document.body.classList.remove('logyq-map-open')
+    showLibrary()
+    renderLibrary()
+  }
+
   async function openLibrary() {
     closeMobilePanel()
+    abandonBlankDraft()
     showLibrary()
     ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
     await refreshLibrary()
@@ -1902,7 +1963,7 @@
   function renderLibrary() {
     const rows = Array.isArray(app.libraryRows) ? app.libraryRows : []
     if (!rows.length) {
-      ui.mapList.innerHTML = '<div class="logiq-empty">No maps yet.</div>'
+      ui.mapList.innerHTML = '<div class="logiq-empty"><p>No maps yet.</p><button type="button" class="logiq-primary" data-empty-new>+ New</button></div>'
       return
     }
     ui.mapList.innerHTML = rows.map((row) => {
@@ -1917,6 +1978,10 @@
   }
 
   async function handleMapAction(event) {
+    if (event.target.closest('[data-empty-new]')) {
+      createMap({ edit: false })
+      return
+    }
     const rowElement = event.target.closest('.logiq-map-row')
     if (!rowElement) return
     const row = app.libraryRows.find((item) => item.id === rowElement.dataset.id)
@@ -1968,7 +2033,7 @@
     enterEditor(row, { edit: false })
   }
 
-  function createMap({ edit = true } = {}) {
+  function createMap({ edit = false } = {}) {
     app.current = { id: null, name: DEFAULT_NAME }
     const tree = encodeMapTree({ name: '' })
     app.hasOpenMap = true
@@ -1982,7 +2047,6 @@
       bridge.selectByUid(uid)
       bridge.editSelected({ wipe: true })
     }
-    queueAutosave(bridge.snapshot())
   }
 
   async function renameMap(row, name) {
@@ -2028,7 +2092,7 @@
         updateMapName()
       }
       renderLibrary()
-      if (!app.libraryRows.length) createMap({ edit: true })
+      if (!app.libraryRows.length) openHomeLibrary()
     } catch (error) {
       if (error.auth) sessionStorage.removeItem(PIN_KEY)
       setSaveState('offline')
@@ -2037,7 +2101,12 @@
 
   async function bootSession() {
     const recovered = readJson(PENDING_KEY, null)
-    if (recovered?.tree) {
+    if (recovered?.tree && !isBlankDraft({
+      id: recovered.id || null,
+      name: recovered.name,
+      tree: recovered.tree,
+      wordBank: recovered.word_bank || [],
+    })) {
       enterEditor({
         id: recovered.id || null,
         name: recovered.name || DEFAULT_NAME,
@@ -2048,17 +2117,14 @@
       setTimeout(retryPending, 500)
       return
     }
+    if (recovered) localStorage.removeItem(PENDING_KEY)
     try {
       const rows = await listLiveMaps()
       app.libraryRows = rows
-      if (!rows.length) createMap({ edit: true })
-      else {
-        app.hasOpenMap = false
-        showLibrary()
-        renderLibrary()
-      }
+      openHomeLibrary()
     } catch (_error) {
-      createMap({ edit: true })
+      app.libraryRows = readCachedLibrary()
+      openHomeLibrary()
     }
     app.booted = true
   }

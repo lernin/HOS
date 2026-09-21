@@ -19,4 +19,4 @@ No `src/main.tsx` change. No `logiq-*` production logic. No merge, no deploy.
 
 Open The Lab hub → **LOGYQ** (Y) sits under **LOGiQ v161** (Q) → Go loads `/logyq/`.
 
-Empty live library → one card, already editing. Maps already there → recents list + **+ New**. Grid icon returns to the library.
+Empty live library → recents list with dominant **+ New** (no forced editor). Maps already there → same list + **+ New**. Grid icon returns to the library. New is a calm one-card canvas; blank abandon does not write a row.

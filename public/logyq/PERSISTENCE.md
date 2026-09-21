@@ -58,6 +58,10 @@ Word Bank is `string[]` (`word_bank`). Palette last-color is `logyq_paint_color_
 
 ## Open (Drive-style)
 
-- **0 maps:** editor, one blank root card, already editing (keyboard up). No chooser. No first-run coaching / gamification.
-- **1+ maps:** library, recent first (`updated_at` desc), **+ New**. Tap a row to open. Maps icon / Trees returns to the library.
+Prior consultant notes said 0 maps should drop into a one-card editor already editing. That forced wipe-edit was the “big square slap” (keyboard wall on a blank root). Library is now home for both empty and populated accounts.
+
+- **0 maps:** recents library, empty state + dominant **+ New**. No chooser. No first-run coaching / gamification. No forced editor.
+- **1+ maps:** same library, recent first (`updated_at` desc), **+ New**. Tap a row to open. Maps icon / Trees returns to the library.
+- **New / +:** one normal blank root card, not already editing. Double-tap / E still edits after she is in the canvas.
 - Close does not dump you onto an empty canvas if no map is open.
+- **Blank drafts do not persist.** An unsaved map with an empty/untitled root, no children, and no word bank is not queued or POSTed until she types a name or builds. Abandon / back from New leaves no `logiq_maps` row.

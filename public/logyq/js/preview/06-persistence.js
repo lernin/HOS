@@ -44,6 +44,17 @@
 
   function queueAutosave(snapshot) {
     if (!app.hasOpenMap) return
+    if (isBlankDraft({
+      id: app.current.id,
+      name: app.current.name,
+      tree: snapshot?.tree,
+      wordBank: snapshot?.wordBank,
+    })) {
+      localStorage.removeItem(PENDING_KEY)
+      clearTimeout(app.timer)
+      setSaveState('saved')
+      return
+    }
     const encoded = encodeMapRecord({
       name: app.current.name || DEFAULT_NAME,
       tree: snapshot?.tree,
@@ -76,6 +87,15 @@
     }
     const pending = readJson(PENDING_KEY, null)
     if (!pending) return setSaveState('saved')
+    if (isBlankDraft({
+      id: pending.id,
+      name: pending.name,
+      tree: pending.tree,
+      wordBank: pending.word_bank,
+    })) {
+      localStorage.removeItem(PENDING_KEY)
+      return setSaveState('saved')
+    }
     if (!navigator.onLine) return setSaveState('offline')
 
     const pin = await getPin(true)
@@ -153,8 +173,34 @@
     ui.library.setAttribute('aria-hidden', 'true')
   }
 
+  function abandonBlankDraft() {
+    if (!app.hasOpenMap || app.current.id) return
+    const snapshot = bridge.snapshot()
+    if (!isBlankDraft({
+      id: app.current.id,
+      name: app.current.name,
+      tree: snapshot?.tree,
+      wordBank: snapshot?.wordBank,
+    })) return
+    app.hasOpenMap = false
+    document.body.classList.remove('logyq-map-open')
+    app.current = { id: null, name: DEFAULT_NAME }
+    app.lastSnapshot = ''
+    localStorage.removeItem(PENDING_KEY)
+    updateMapName()
+    setSaveState('saved')
+  }
+
+  function openHomeLibrary() {
+    app.hasOpenMap = false
+    document.body.classList.remove('logyq-map-open')
+    showLibrary()
+    renderLibrary()
+  }
+
   async function openLibrary() {
     closeMobilePanel()
+    abandonBlankDraft()
     showLibrary()
     ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
     await refreshLibrary()
@@ -190,7 +236,7 @@
   function renderLibrary() {
     const rows = Array.isArray(app.libraryRows) ? app.libraryRows : []
     if (!rows.length) {
-      ui.mapList.innerHTML = '<div class="logiq-empty">No maps yet.</div>'
+      ui.mapList.innerHTML = '<div class="logiq-empty"><p>No maps yet.</p><button type="button" class="logiq-primary" data-empty-new>+ New</button></div>'
       return
     }
     ui.mapList.innerHTML = rows.map((row) => {
@@ -205,6 +251,10 @@
   }
 
   async function handleMapAction(event) {
+    if (event.target.closest('[data-empty-new]')) {
+      createMap({ edit: false })
+      return
+    }
     const rowElement = event.target.closest('.logiq-map-row')
     if (!rowElement) return
     const row = app.libraryRows.find((item) => item.id === rowElement.dataset.id)
@@ -256,7 +306,7 @@
     enterEditor(row, { edit: false })
   }
 
-  function createMap({ edit = true } = {}) {
+  function createMap({ edit = false } = {}) {
     app.current = { id: null, name: DEFAULT_NAME }
     const tree = encodeMapTree({ name: '' })
     app.hasOpenMap = true
@@ -270,7 +320,6 @@
       bridge.selectByUid(uid)
       bridge.editSelected({ wipe: true })
     }
-    queueAutosave(bridge.snapshot())
   }
 
   async function renameMap(row, name) {
@@ -316,7 +365,7 @@
         updateMapName()
       }
       renderLibrary()
-      if (!app.libraryRows.length) createMap({ edit: true })
+      if (!app.libraryRows.length) openHomeLibrary()
     } catch (error) {
       if (error.auth) sessionStorage.removeItem(PIN_KEY)
       setSaveState('offline')
@@ -325,7 +374,12 @@
 
   async function bootSession() {
     const recovered = readJson(PENDING_KEY, null)
-    if (recovered?.tree) {
+    if (recovered?.tree && !isBlankDraft({
+      id: recovered.id || null,
+      name: recovered.name,
+      tree: recovered.tree,
+      wordBank: recovered.word_bank || [],
+    })) {
       enterEditor({
         id: recovered.id || null,
         name: recovered.name || DEFAULT_NAME,
@@ -336,17 +390,14 @@
       setTimeout(retryPending, 500)
       return
     }
+    if (recovered) localStorage.removeItem(PENDING_KEY)
     try {
       const rows = await listLiveMaps()
       app.libraryRows = rows
-      if (!rows.length) createMap({ edit: true })
-      else {
-        app.hasOpenMap = false
-        showLibrary()
-        renderLibrary()
-      }
+      openHomeLibrary()
     } catch (_error) {
-      createMap({ edit: true })
+      app.libraryRows = readCachedLibrary()
+      openHomeLibrary()
     }
     app.booted = true
   }

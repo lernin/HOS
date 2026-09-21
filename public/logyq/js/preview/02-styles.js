@@ -33,6 +33,8 @@
       .logiq-inline-rename.is-open{display:grid}
       .logiq-inline-rename input,.logiq-pin-card input{height:38px;border:1px solid #cbd5e1;border-radius:9px;padding:0 10px;font:inherit}
       .logiq-empty{padding:28px;text-align:center;color:#64748b;border:1px dashed #cbd5e1;border-radius:12px}
+      .logiq-empty p{margin:0 0 14px}
+      .logiq-empty .logiq-primary{min-width:148px}
       .logiq-pin-card{width:min(360px,100%);padding:20px;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(15,23,42,.24);display:grid;gap:12px;color:#334155}
       .logiq-pin-card h2,.logiq-pin-card p{margin:0}.logiq-pin-card p{font-size:13px;color:#64748b}
       .logiq-pin-actions{display:flex;justify-content:flex-end;gap:8px}
