@@ -10,7 +10,7 @@
       EDGE_ZONE: 84,
       EDGE_STEP: 14,
       PX_PER_CM: 38,
-      OFFSET_UP_CM: 1.75,
+      OFFSET_UP_CM: 1.45,
       OFFSET_SIDE_CM: 0,
     }
   }
@@ -166,7 +166,7 @@
     const branch = typeof hierarchy.descendants === 'function' ? hierarchy.descendants() : [hierarchy]
     const uids = branch.map((item) => item?.data?._uid).filter(Boolean)
     freezeTreeLayout(doc, win)
-    const previewHost = makeBranchPreview(doc, win, branch, hold.uid)
+    const previewHost = makeBranchPreview(doc, win, hold.uid)
     if (!previewHost) return
 
     for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
@@ -197,57 +197,46 @@
     win.navigator.vibrate?.(12)
   }
 
-  function makeBranchPreview(doc, win, branch, rootUid) {
-    const nodes = []
-    const centers = new Map()
+  function makeBranchPreview(doc, win, rootUid) {
+    const node = nodeByUid(doc, rootUid)
+    if (!node) return null
+    const vis = node.querySelector('rect:not(.grabzone)') || node
+    const screen = vis.getBoundingClientRect()
+    if (screen.width < 1 || screen.height < 1) return null
 
-    for (const item of branch) {
-      const uid = item?.data?._uid
-      const node = uid ? nodeByUid(doc, uid) : null
-      if (!node) continue
-      const rect = node.getBoundingClientRect()
-      if (rect.width < 1 || rect.height < 1) continue
-      nodes.push({ item, uid, node, rect })
-      centers.set(uid, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
-    }
-    if (!nodes.length) return null
+    const clone = node.cloneNode(true)
+    clone.removeAttribute('transform')
+    clone.removeAttribute('id')
+    clone.classList.remove(
+      'v2-branch-origin-ghost',
+      'is-subtree',
+      'is-others',
+      'drop-target',
+      'hover-adopt',
+      'hover-adopt-sub',
+      'is-focus-vhold',
+    )
+    clone.querySelectorAll('.grabzone').forEach((el) => el.remove())
 
     const host = doc.createElement('div')
     host.id = 'logyq-v162-branch-preview'
     const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
     svg.setAttribute('aria-hidden', 'true')
+    svg.style.left = `${screen.left}px`
+    svg.style.top = `${screen.top}px`
+    svg.style.width = `${screen.width}px`
+    svg.style.height = `${screen.height}px`
+    svg.appendChild(clone)
     host.appendChild(svg)
-
-    for (const entry of nodes) {
-      const parentUid = entry.item?.parent?.data?._uid
-      if (!parentUid || !centers.has(parentUid)) continue
-      const a = centers.get(parentUid)
-      const b = centers.get(entry.uid)
-      const line = doc.createElementNS('http://www.w3.org/2000/svg', 'line')
-      line.setAttribute('x1', String(a.x)); line.setAttribute('y1', String(a.y))
-      line.setAttribute('x2', String(b.x)); line.setAttribute('y2', String(b.y))
-      svg.appendChild(line)
-    }
-
-    for (const entry of nodes) {
-      const card = doc.createElement('div')
-      card.className = `v2-float-node${entry.uid === rootUid ? ' is-root' : ''}`
-      card.dataset.uid = entry.uid
-      card.textContent = cardText(entry.node) || ' '
-      card.style.left = `${entry.rect.left}px`
-      card.style.top = `${entry.rect.top}px`
-      card.style.width = `${entry.rect.width}px`
-      card.style.height = `${entry.rect.height}px`
-      const text = entry.node.querySelector('text')
-      if (text) {
-        const computed = win.getComputedStyle(text)
-        if (computed.fontSize) card.style.fontSize = computed.fontSize
-        if (computed.fontWeight) card.style.fontWeight = computed.fontWeight
-      }
-      host.appendChild(card)
-    }
-
     doc.body.appendChild(host)
+
+    let bbox = null
+    try { bbox = (clone.querySelector('rect') || clone).getBBox() } catch (_error) { bbox = null }
+    if (!bbox || bbox.width < 1 || bbox.height < 1) {
+      host.remove()
+      return null
+    }
+    svg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`)
     return host
   }
 

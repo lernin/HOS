@@ -173,11 +173,8 @@
         body.logyq-mobile-v162 #logiq-v2-drag-card,body.logyq-mobile-v162 .drag-mini,body.logyq-mobile-v162 g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
         body.logyq-mobile-v162.v2-branch-drag .drag-mini{display:none!important;opacity:0!important}
         #logyq-v162-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
-        #logyq-v162-branch-preview svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-        #logyq-v162-branch-preview line{stroke:#cfcfcf;stroke-width:2;stroke-linecap:round}
-        #logyq-v162-branch-preview .v2-float-node{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:0 8px;border:2px solid #fff;border-radius:10px;background:#fff;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24);font:600 14px/1.15 Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:none!important}
-        #logyq-v162-branch-preview .v2-float-node.is-root{border-color:#22c55e!important;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24)!important}
-        body.logyq-mobile-v162.v2-cancel #logyq-v162-branch-preview .v2-float-node.is-root{border-color:#ef4444!important;box-shadow:0 8px 22px rgba(239,68,68,.2)}
+        #logyq-v162-branch-preview svg{position:absolute;overflow:visible;pointer-events:none}
+        body.logyq-mobile-v162.v2-cancel #logyq-v162-branch-preview g.node rect:not(.grabzone){stroke:#ef4444!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost{opacity:.44!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost text{fill:#64748b!important;opacity:.82!important}
@@ -206,7 +203,8 @@
     desktopState.setAttribute('aria-live', 'polite')
     document.querySelector('header .controls')?.prepend(desktopState)
 
-    document.body.insertAdjacentHTML('beforeend', `
+    if (!document.getElementById('logiq-mobile-header')) {
+      document.body.insertAdjacentHTML('afterbegin', `
       <div id="logiq-mobile-header">
         <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGiQ">
         <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
@@ -215,7 +213,10 @@
         <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
         <span class="logiq-save-state" role="status" aria-live="polite"></span>
         <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
-      </div>
+      </div>`)
+    }
+
+    document.body.insertAdjacentHTML('beforeend', `
       <section id="logiq-mobile-panel" aria-label="LOGiQ controls">
         <div class="logiq-mobile-tools">
           <button data-tool="add">Add typed words</button><button data-tool="add-child">Add to selected</button>
@@ -413,7 +414,7 @@
       EDGE_ZONE: 84,
       EDGE_STEP: 14,
       PX_PER_CM: 38,
-      OFFSET_UP_CM: 1.75,
+      OFFSET_UP_CM: 1.45,
       OFFSET_SIDE_CM: 0,
     }
   }
@@ -569,7 +570,7 @@
     const branch = typeof hierarchy.descendants === 'function' ? hierarchy.descendants() : [hierarchy]
     const uids = branch.map((item) => item?.data?._uid).filter(Boolean)
     freezeTreeLayout(doc, win)
-    const previewHost = makeBranchPreview(doc, win, branch, hold.uid)
+    const previewHost = makeBranchPreview(doc, win, hold.uid)
     if (!previewHost) return
 
     for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
@@ -600,57 +601,46 @@
     win.navigator.vibrate?.(12)
   }
 
-  function makeBranchPreview(doc, win, branch, rootUid) {
-    const nodes = []
-    const centers = new Map()
+  function makeBranchPreview(doc, win, rootUid) {
+    const node = nodeByUid(doc, rootUid)
+    if (!node) return null
+    const vis = node.querySelector('rect:not(.grabzone)') || node
+    const screen = vis.getBoundingClientRect()
+    if (screen.width < 1 || screen.height < 1) return null
 
-    for (const item of branch) {
-      const uid = item?.data?._uid
-      const node = uid ? nodeByUid(doc, uid) : null
-      if (!node) continue
-      const rect = node.getBoundingClientRect()
-      if (rect.width < 1 || rect.height < 1) continue
-      nodes.push({ item, uid, node, rect })
-      centers.set(uid, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
-    }
-    if (!nodes.length) return null
+    const clone = node.cloneNode(true)
+    clone.removeAttribute('transform')
+    clone.removeAttribute('id')
+    clone.classList.remove(
+      'v2-branch-origin-ghost',
+      'is-subtree',
+      'is-others',
+      'drop-target',
+      'hover-adopt',
+      'hover-adopt-sub',
+      'is-focus-vhold',
+    )
+    clone.querySelectorAll('.grabzone').forEach((el) => el.remove())
 
     const host = doc.createElement('div')
     host.id = 'logyq-v162-branch-preview'
     const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
     svg.setAttribute('aria-hidden', 'true')
+    svg.style.left = `${screen.left}px`
+    svg.style.top = `${screen.top}px`
+    svg.style.width = `${screen.width}px`
+    svg.style.height = `${screen.height}px`
+    svg.appendChild(clone)
     host.appendChild(svg)
-
-    for (const entry of nodes) {
-      const parentUid = entry.item?.parent?.data?._uid
-      if (!parentUid || !centers.has(parentUid)) continue
-      const a = centers.get(parentUid)
-      const b = centers.get(entry.uid)
-      const line = doc.createElementNS('http://www.w3.org/2000/svg', 'line')
-      line.setAttribute('x1', String(a.x)); line.setAttribute('y1', String(a.y))
-      line.setAttribute('x2', String(b.x)); line.setAttribute('y2', String(b.y))
-      svg.appendChild(line)
-    }
-
-    for (const entry of nodes) {
-      const card = doc.createElement('div')
-      card.className = `v2-float-node${entry.uid === rootUid ? ' is-root' : ''}`
-      card.dataset.uid = entry.uid
-      card.textContent = cardText(entry.node) || ' '
-      card.style.left = `${entry.rect.left}px`
-      card.style.top = `${entry.rect.top}px`
-      card.style.width = `${entry.rect.width}px`
-      card.style.height = `${entry.rect.height}px`
-      const text = entry.node.querySelector('text')
-      if (text) {
-        const computed = win.getComputedStyle(text)
-        if (computed.fontSize) card.style.fontSize = computed.fontSize
-        if (computed.fontWeight) card.style.fontWeight = computed.fontWeight
-      }
-      host.appendChild(card)
-    }
-
     doc.body.appendChild(host)
+
+    let bbox = null
+    try { bbox = (clone.querySelector('rect') || clone).getBBox() } catch (_error) { bbox = null }
+    if (!bbox || bbox.width < 1 || bbox.height < 1) {
+      host.remove()
+      return null
+    }
+    svg.setAttribute('viewBox', `${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}`)
     return host
   }
 
