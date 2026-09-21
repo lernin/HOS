@@ -565,6 +565,7 @@
 
     const branch = typeof hierarchy.descendants === 'function' ? hierarchy.descendants() : [hierarchy]
     const uids = branch.map((item) => item?.data?._uid).filter(Boolean)
+    freezeTreeLayout(doc, win)
     const previewHost = makeBranchPreview(doc, win, branch, hold.uid)
     if (!previewHost) return
 
@@ -684,6 +685,13 @@
 
   function stampOriginGhost(doc, uids) {
     for (const uid of uids || []) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
+  }
+
+  function freezeTreeLayout(doc, win) {
+    if (!win.d3) return
+    const svg = doc.getElementById('canvas')
+    if (!svg) return
+    win.d3.select(svg).selectAll('g.node, path.link').interrupt()
   }
 
   function captureOriginLayout(doc, uids) {

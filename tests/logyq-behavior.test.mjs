@@ -818,6 +818,7 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /function yieldNodeDrag/)
   assert.match(v162, /function stampOriginGhost/)
   assert.match(v162, /function restoreOriginLayout/)
+  assert.match(v162, /function freezeTreeLayout/)
   assert.match(v162, /HAND_KEY/)
   assert.match(v162, /d3\.select\(canvas\)\.interrupt\(\)/)
   assert.match(boot, /logyq_handedness_v1/)

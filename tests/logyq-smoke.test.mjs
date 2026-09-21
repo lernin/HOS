@@ -219,6 +219,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.locator('#logyq-v162-action').textContent(), 'MIC')
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.recorder), false)
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.actionUid), true)
+  await page.waitForTimeout(400)
 
   const hold = await nodeCenter('Node 03')
   const holdCount = await page.locator('g.node').count()
