@@ -83,3 +83,54 @@ test('undo history is capped at CONFIG.HISTORY_LIMIT of 50', () => {
   assert.equal(state.history[0].i, 10)
   assert.equal(elements.undoBtn.disabled, false)
 })
+
+test('group moves ignore descendants whose ancestor is also selected', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/10-selection.js', import.meta.url), 'utf8')
+  const block = extractBlock(source, 'function topLevelSelection(uids){', 'function clearFocus(){')
+  const make = (uid, x, parent = null) => {
+    const node = { data: { _uid: uid }, x, parent, children: [] }
+    if (parent) parent.children.push(node)
+    return node
+  }
+  const root = make('root', 0)
+  const a = make('a', 10, root)
+  const b = make('b', 40, root)
+  const aChild = make('a-child', 12, a)
+  const collect = []
+  const walk = (node) => { collect.push(node); node.children.forEach(walk) }
+  walk(root)
+  root.descendants = () => collect
+  const topLevelSelection = new Function('state', `${block}; return topLevelSelection;`)({ root })
+  assert.deepEqual(topLevelSelection(new Set(['a', 'a-child', 'b'])), ['a', 'b'])
+})
+
+test('normalizeToTree preserves v161 array, node, and plain-object rules', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/14-word-dock.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function normalizeToTree(value) {')
+  const end = source.indexOf('return node || null;', start)
+  assert.ok(start >= 0 && end > start)
+  const block = `${source.slice(start, end)}return node || null;\n}`
+  const normalizeToTree = new Function(`${block}; return normalizeToTree;`)()
+  assert.deepEqual(normalizeToTree(['alpha', 'beta']), {
+    name: 'Root',
+    children: [{ name: 'alpha' }, { name: 'beta' }],
+  })
+  assert.deepEqual(normalizeToTree({ name: 'Map', children: [{ name: 'Child' }] }), {
+    name: 'Map',
+    children: [{ name: 'Child' }],
+  })
+  assert.equal(normalizeToTree('leaf').name, 'leaf')
+})
+
+test('undo still recognizes the original action types', () => {
+  const history = readFileSync(new URL('../public/logyq/js/engine/05-history.js', import.meta.url), 'utf8')
+  for (const type of ['delete', 'move', 'add', 'rename', 'randomize', 'delete-root', 'add-root', 'replace-root']) {
+    assert.ok(history.includes(`'${type}'`), type)
+  }
+})
+
+test('duplicate Word Dock drop helper remains in place', () => {
+  const source = engineSource()
+  const matches = source.match(/function dropSelectedToWordBank/g) || []
+  assert.equal(matches.length, 2)
+})

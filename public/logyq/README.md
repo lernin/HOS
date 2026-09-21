@@ -6,4 +6,6 @@ Isolated maintainability experiment. This is **not** LOGiQ and is **not** for pr
 - **Not used as baseline:** `public/logiq-v162-mobile/` (iframe overlay on v161; does not contain the tree engine)
 - **Immutable source of truth for LOGiQ:** `public/logiq-v161-legacy/` (untouched; LOGYQ must never edit any `logiq-*` path)
 
-This directory starts as a path-remapped copy of v161. Later commits extract modules in place. Existing LOGiQ files stay read-only.
+Open `/logyq/` in the Lab. Rebuild assembled files with `npm run assemble:logyq`. Run `npm run test:logyq`.
+
+See `ARCHITECTURE.md` for modules and `NOT_REFACTORED.md` for internals left intact.

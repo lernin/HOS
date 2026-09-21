@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -114,4 +115,18 @@ test('preview fragments concatenate to the served enhancement without edits', ()
   assert.match(assembled.source, /function queueAutosave/)
   assert.match(assembled.source, /function beginSpawnGesture/)
   assert.match(assembled.source, /function injectStyles/)
+})
+
+test('this branch does not modify existing logiq-* files', () => {
+  const names = execFileSync('git', ['diff', '--name-only', 'origin/main...HEAD'], { encoding: 'utf8' })
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+  const dirty = execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' })
+  const touched = [
+    ...names,
+    ...dirty.split('\n').map((line) => line.slice(3).trim()),
+  ].filter(Boolean)
+  const forbidden = touched.filter((name) => /(^|\/)logiq/i.test(name) && !name.startsWith('public/logyq/'))
+  assert.deepEqual(forbidden, [])
 })
