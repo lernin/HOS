@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test:logiq": "node --test tests/logiq-v161-baseline.test.mjs tests/logiq-v162-mobile.test.mjs",
+    "test:logyq": "node --test tests/logyq-architecture.test.mjs tests/logyq-behavior.test.mjs",
     "test:viewer": "node --test tests/thekonym-viewer.test.mjs",
     "dev": "vite --host",
     "build": "tsc -b && vite build",
