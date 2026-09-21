@@ -4,7 +4,7 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 
 ## Engine internals
 
-- **`dragManager` drop cases** (subtree / solo / group, Trash, root-above). Order of detector priority and fallbacks is load-bearing.
+- **`dragManager` drop cases** (subtree / solo / group, Trash, root-above). Order of detector priority and fallbacks is load-bearing. Group+rootAbove is still explicitly unsupported. Drag inlines its own top-level-selection filter instead of calling `topLevelSelection`. `window.DRAG_SLOP_PX || 10` is the live slop check; the `const DRAG_SLOP_PX` in `12-tree-ops.js` is not assigned to `window` and is unused by drag.
 - **Detector geometry** (`Detectors.build` / `pick`). Pixel overlap, cousin/sibling thresholds, and overlay flags are tuned empirically.
 - **`keyDispatcher` plus extra capture listeners** (V-hold, Shift+I, Tab-hold, Dock Shift+A). Duplicate handlers and capture/bubble order are part of the product. V-hold, G/Shift+G, and V-paste still register from `10-selection.js`, not `17-keyboard.js`.
 - **Sticky-nav `setSelectionSet`.** The nav-key listener in `09-editing.js` still calls `setSelectionSet(merged)` inside try/catch. That helper was never defined in v161, so sticky restore throws and `checkMoatAndAutoFit('kbd')` in the same try does not run. Left as copied behavior.

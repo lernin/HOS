@@ -3362,6 +3362,7 @@ const DRAG_SLOP_PX = 10;
 const dragManager = {
   // Highlight subtree (or just this node in solo mode)
   markForDrag(d){
+    const { state, elements } = logyq
     const subIds = new Set((state.dragState && state.dragState.solo) ? [d.id] : d.descendants().map(n=>n.id));
     elements.svg.classed("dragging-mode", true);
 
@@ -3390,6 +3391,7 @@ const dragManager = {
 
   // Reset all drag UI / state
   clear(){
+    const { state, elements } = logyq
 elements.svg.classed("dragging-mode delete-intent", false);
 elements.gNodes.selectAll("g.node")
   .classed("is-subtree is-others dragging drop-target hover-adopt hover-adopt-sub", false);
@@ -3418,6 +3420,7 @@ elements.gLinks.selectAll("path.link").classed("is-sub-link is-parent-link", fal
 
   // Where is the pointer relative to the trash
   zone(cx,cy){
+    const { state } = logyq
     const r = document.getElementById("trash").getBoundingClientRect();
     const expand=(R,p)=>({left:R.left-p,right:R.right+p,top:R.top-p,bottom:R.bottom+p});
     const inside=(R,x,y)=>x>=R.left&&x<=R.right&&y>=R.top&&y<=R.bottom;
@@ -3457,6 +3460,7 @@ behavior(){
 
 
 start(event, d){
+  const { state, elements, config: CONFIG } = logyq
   document.body.classList.add("global-no-cursor");
 
   // Shift+LEFT = "abandonment" (solo) mode
@@ -3498,7 +3502,7 @@ state.dragState.groupAbandon = isShiftLeft; // Ctrl+Left drag => abandon-childre
     state.dragState.anchorTopLeftX=d.x - CONFIG.CARD_WIDTH/2;
     state.dragState.anchorTopLeftY=d.y - CONFIG.CARD_HEIGHT/2;
 
-    visual.layoutMini(d.data?.name||"Node");
+    logyq.visual.layoutMini(d.data?.name||"Node");
     elements.dragMiniG
       .style("display", null)
       .attr("transform",`translate(${state.dragState.anchorTopLeftX},${state.dragState.anchorTopLeftY})`)
@@ -3519,6 +3523,7 @@ state.dragState.groupAbandon = isShiftLeft; // Ctrl+Left drag => abandon-childre
 
 
   drag(event,d){
+    const { state, elements, config: CONFIG } = logyq
     const [px,py]=d3.pointer(event, elements.svg.node());
     const t=d3.zoomTransform(elements.svg.node());
     const [gx,gy]=t.invert([px,py]);
@@ -3541,7 +3546,7 @@ elements.dragMiniG.attr("transform",
     // hit test at virtual card center
     const centerX = state.dragState.anchorTopLeftX + dx + CONFIG.CARD_WIDTH/2;
     const centerY = state.dragState.anchorTopLeftY + dy + CONFIG.CARD_HEIGHT/2;
-    let drop = Detectors.pick({ x: centerX, y: centerY });
+    let drop = logyq.detectors.pick({ x: centerX, y: centerY });
 
     // Never allow rootAbove while dragging the current root
     if (drop && drop.type === "rootAbove" && !d.parent) drop = null;
@@ -3580,7 +3585,7 @@ state.dragState.drop = null;
     if(drop){
       if(drop.type==='gap'){
         const hit = drop._hit;
-        const [cx2, cy2] = caretXYFromHit(hit);
+        const [cx2, cy2] = logyq.selection.caretXYFromHit(hit);
         elements.caretDot.attr("cx", cx2).attr("cy", cy2).attr("r", CONFIG.CARET_DOT_RADIUS).style("opacity",1);
         state.dragState.drop = { type:'gap', parentUid: drop.parentUid, prevUid: drop.prevUid, nextUid: drop.nextUid };
      
@@ -3608,7 +3613,7 @@ state.dragState.drop = null;
     
     
     } else if(drop.type==='rootAbove'){
-        const [cx2, cy2] = caretXYFromHit(drop._hit);
+        const [cx2, cy2] = logyq.selection.caretXYFromHit(drop._hit);
         elements.caretDot.attr("cx", cx2).attr("cy", cy2).attr("r", CONFIG.CARET_DOT_RADIUS).style("opacity",1);
         state.dragState.drop = { type:'rootAbove' };
       }
@@ -3616,6 +3621,7 @@ state.dragState.drop = null;
   },
 
   end(event,d){
+    const { state, utils } = logyq
     document.body.classList.remove('global-no-cursor');
 
 
@@ -3635,18 +3641,18 @@ state.dragState.drop = null;
 
       if (state.dragState.multiUids && state.dragState.multiUids.length > 1){
         deleteNodesToTrash(state.dragState.multiUids);
-        dragManager.clear(); treeManager.layoutAndRender(true, true); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(true, true); return;
       }
       // Single delete
       if(!d.parent){
-        pushHistory({ type: 'delete-root', subtree: utils.deepClone(d.data) });
+        logyq.history.pushHistory({ type: 'delete-root', subtree: utils.deepClone(d.data) });
         state.root = null; state.lastNodes = [];
-        dragManager.clear(); treeManager.renderEmpty(); return;
+        dragManager.clear(); logyq.treeManager.renderEmpty(); return;
       }
       const parentData = d.parent.data;
       const siblings = parentData.children || [];
       const idx = siblings.findIndex(c=>c._uid===d.data._uid);
-      pushHistory({
+      logyq.history.pushHistory({
         type:'delete',
         parentPath: utils.pathToUid(state.root.data, parentData._uid),
         index: idx,
@@ -3658,12 +3664,12 @@ state.dragState.drop = null;
         if(hi>=0) d.parent.children.splice(hi,1);
         if(d.parent.children.length===0) d.parent.children=null;
       }
-      dragManager.clear(); treeManager.layoutAndRender(true,true); return;
+      dragManager.clear(); logyq.treeManager.layoutAndRender(true,true); return;
     }
 
     // 2) Valid drop?
     const drop = state.dragState.drop;
-    if (!drop){ dragManager.clear(); treeManager.layoutAndRender(false); return; }
+    if (!drop){ dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
 
     /* ========= Helpers used below ========= */
     function detach(uid){
@@ -3713,7 +3719,7 @@ state.dragState.drop = null;
 
       if (drop.type === 'node'){
         const target = utils.findByUid(state.root.data, drop.targetUid);
-        if (!target){ dragManager.clear(); treeManager.layoutAndRender(false); return; }
+        if (!target){ dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
         target.children = target.children || [];
 
         for (const uid of topLevel){
@@ -3730,7 +3736,7 @@ state.dragState.drop = null;
           if (groupAbandon || intoOwn) abandonChildrenInPlace(moving, info);
 
           target.children.push(moving);
-          pushHistory({
+          logyq.history.pushHistory({
             type: 'move',
             uid,
             fromParentPath: info.fromParentPath,
@@ -3741,14 +3747,14 @@ state.dragState.drop = null;
         }
 
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false);
-        if (topLevel.length) flashMoved(topLevel[topLevel.length - 1]);
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false);
+        if (topLevel.length) logyq.selection.flashMoved(topLevel[topLevel.length - 1]);
         return;
       }
 
       if (drop.type === 'gap'){
         const parent = utils.findByUid(state.root.data, drop.parentUid);
-        if (!parent){ dragManager.clear(); treeManager.layoutAndRender(false); return; }
+        if (!parent){ dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
         parent.children = parent.children || [];
 
         const findIdx = (arr, uid) => Array.isArray(arr) ? arr.findIndex(c => c && c._uid === uid) : -1;
@@ -3774,7 +3780,7 @@ state.dragState.drop = null;
           if (groupAbandon || intoOwn) abandonChildrenInPlace(moving, info);
 
           parent.children.splice(insertAt, 0, moving);
-          pushHistory({
+          logyq.history.pushHistory({
             type: 'move',
             uid,
             fromParentPath: info.fromParentPath,
@@ -3787,13 +3793,13 @@ state.dragState.drop = null;
         }
 
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false);
-        if (topLevel.length) flashMoved(topLevel[topLevel.length - 1]);
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false);
+        if (topLevel.length) logyq.selection.flashMoved(topLevel[topLevel.length - 1]);
         return;
       }
 
       // (group + rootAbove not supported yet)
-      dragManager.clear(); treeManager.layoutAndRender(false); return;
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
     }
 
     /* ========= B) SOLO MOVE (Shift held): move only this node; children stay with old parent ========= */
@@ -3803,8 +3809,8 @@ state.dragState.drop = null;
         const prevTree = utils.deepClone(state.root.data);
         const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
         if (!kidsH.length){
-          showToast("Root has no child to promote");
-          dragManager.clear(); treeManager.layoutAndRender(false); return;
+          logyq.selection.showToast("Root has no child to promote");
+          dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
         }
         const newRootData = kidsH[0].data;
         const others = kidsH.slice(1).map(h=>h.data);
@@ -3816,21 +3822,21 @@ state.dragState.drop = null;
         if (idx>-1) prevTree.children.splice(idx,1);
         newRootData.children = (newRootData.children || []).concat(others);
 
-        pushHistory({ type:'replace-root', prev: prevTree });
+        logyq.history.pushHistory({ type:'replace-root', prev: prevTree });
         state.root = d3.hierarchy(newRootData); utils.assignIds(state.root);
 
         // Insert the old root at drop
-        const res = insertNodeAtDrop(moving, drop);
+        const res = logyq.selection.insertNodeAtDrop(moving, drop);
         if (res === 'ROOT_DONE') return;
         if (res){
-          pushHistory({ type:'add',
+          logyq.history.pushHistory({ type:'add',
             parentPath: utils.pathToUid(state.root.data, res.toParentUid),
             uid: moving._uid, index: res.toIndex
           });
           state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-          dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(moving._uid); return;
+          dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(moving._uid); return;
         }
-        dragManager.clear(); treeManager.layoutAndRender(false); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
       }
 
       // B2) Non-root solo move: promote children into current parent, then move node
@@ -3847,7 +3853,7 @@ state.dragState.drop = null;
       // Self-drop safeguard (solo): dropping onto own node = NO-OP
       if (drop.type === 'node' && drop.targetUid === moving._uid){
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
       }
 
       if (drop.type === 'rootAbove'){
@@ -3855,14 +3861,14 @@ state.dragState.drop = null;
         const newRoot = moving;
         newRoot.children = newRoot.children || [];
         newRoot.children.push(prev);
-        pushHistory({ type:'replace-root', prev });
+        logyq.history.pushHistory({ type:'replace-root', prev });
         state.root = d3.hierarchy(newRoot); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(newRoot._uid); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(newRoot._uid); return;
       }
 
-      const res = insertNodeAtDrop(moving, drop);
+      const res = logyq.selection.insertNodeAtDrop(moving, drop);
       if (res){
-        pushHistory({
+        logyq.history.pushHistory({
           type:'move',
           uid: moving._uid,
           fromParentPath,
@@ -3871,18 +3877,18 @@ state.dragState.drop = null;
           toIndex: res.toIndex
         });
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(moving._uid); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(moving._uid); return;
       }
 
       // If insert failed, just redraw cleanly
-      dragManager.clear(); treeManager.layoutAndRender(false); return;
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
     }
 
     /* ========= C) NORMAL (subtree) SINGLE MOVE (no Shift, not group) ========= */
 
     // Self-drop safeguard (normal): dropping onto own node = NO-OP
     if (drop.type === 'node' && drop.targetUid === d.data._uid){
-      dragManager.clear(); treeManager.layoutAndRender(false); return;
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
     }
 
     // C1) Drop above root (make moving the new root)
@@ -3900,9 +3906,9 @@ state.dragState.drop = null;
       newRoot.children = newRoot.children || [];
       newRoot.children.push(state.root.data);
 
-      pushHistory({ type:"replace-root", prev });
+      logyq.history.pushHistory({ type:"replace-root", prev });
       state.root = d3.hierarchy(newRoot); utils.assignIds(state.root);
-      dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(newRoot._uid);
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(newRoot._uid);
       return;
     }
 
@@ -3911,7 +3917,7 @@ state.dragState.drop = null;
       const moving = d.data;
       const movingUid = moving._uid;
       const targetParent = utils.findByUid(state.root.data, drop.parentUid);
-      if (!targetParent) { dragManager.clear(); treeManager.layoutAndRender(false); return; }
+      if (!targetParent) { dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
 
       const droppingIntoOwnSubtree = utils.uidInSubtree(moving, drop.parentUid);
 
@@ -3919,7 +3925,7 @@ state.dragState.drop = null;
       if (!d.parent && droppingIntoOwnSubtree) {
         const prevTree = utils.deepClone(state.root.data);
         const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
-        if (!kidsH.length) { dragManager.clear(); treeManager.layoutAndRender(false); return; }
+        if (!kidsH.length) { dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
 
         const newRootData = kidsH[0].data;
         const others = kidsH.slice(1).map(h=>h.data);
@@ -3931,7 +3937,7 @@ state.dragState.drop = null;
         if (idx > -1) prevTree.children.splice(idx, 1);
         newRootData.children = (newRootData.children || []).concat(others);
 
-        pushHistory({ type: 'replace-root', prev: prevTree });
+        logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
         state.root = d3.hierarchy(newRootData); utils.assignIds(state.root);
 
         // insert old root at the gap
@@ -3943,7 +3949,7 @@ state.dragState.drop = null;
         if (nIdx !== -1) insertAt = nIdx;
         if (pIdx !== -1) insertAt = pIdx + 1;
 
-        pushHistory({
+        logyq.history.pushHistory({
           type: 'add',
           parentPath: utils.pathToUid(state.root.data, targetParent._uid),
           uid: oldRootData._uid,
@@ -3952,7 +3958,7 @@ state.dragState.drop = null;
         targetParent.children.splice(insertAt, 0, oldRootData);
 
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(oldRootData._uid); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(oldRootData._uid); return;
       }
 
       // Non-root: if dropping into own subtree, promote children first
@@ -3973,7 +3979,7 @@ state.dragState.drop = null;
         if (nIdx !== -1) insertAt = nIdx;
         if (pIdx !== -1) insertAt = pIdx + 1;
 
-        pushHistory({
+        logyq.history.pushHistory({
           type: 'move',
           uid: movingUid,
           fromParentPath,
@@ -3984,7 +3990,7 @@ state.dragState.drop = null;
         targetParent.children.splice(insertAt, 0, moving);
 
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(movingUid); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(movingUid); return;
       }
 
       // Otherwise normal: remove from old, insert at gap
@@ -4002,7 +4008,7 @@ state.dragState.drop = null;
         if (nIdx !== -1) insertAt = nIdx;
         if (pIdx !== -1) insertAt = pIdx + 1;
 
-        pushHistory({
+        logyq.history.pushHistory({
           type: 'move',
           uid: movingUid,
           fromParentPath: utils.pathToUid(state.root.data, oldParent._uid),
@@ -4013,14 +4019,14 @@ state.dragState.drop = null;
         destArr.splice(insertAt, 0, moving);
 
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(movingUid); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(movingUid); return;
       }
     }
 
     // C3) Drop onto a node (append under it)
     if (drop.type === 'node') {
       const target = utils.findByUid(state.root.data, drop.targetUid);
-      if (!target) { dragManager.clear(); treeManager.layoutAndRender(false); return; }
+      if (!target) { dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
 
       const moving = d.data;
       const movingUid = moving._uid;
@@ -4030,7 +4036,7 @@ state.dragState.drop = null;
       if (!d.parent && droppingIntoOwnSubtree) {
         const prevTree = utils.deepClone(state.root.data);
         const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
-        if (!kidsH.length) { dragManager.clear(); treeManager.layoutAndRender(false); return; }
+        if (!kidsH.length) { dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
 
         const newRootData = kidsH[0].data;
         const others = kidsH.slice(1).map(h=>h.data);
@@ -4042,11 +4048,11 @@ state.dragState.drop = null;
         if (idx > -1) prevTree.children.splice(idx, 1);
         newRootData.children = (newRootData.children || []).concat(others);
 
-        pushHistory({ type: 'replace-root', prev: prevTree });
+        logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
         state.root = d3.hierarchy(newRootData); utils.assignIds(state.root);
 
         target.children = target.children || [];
-        pushHistory({
+        logyq.history.pushHistory({
           type: 'add',
           parentPath: utils.pathToUid(state.root.data, target._uid),
           uid: oldRootData._uid,
@@ -4055,7 +4061,7 @@ state.dragState.drop = null;
         target.children.push(oldRootData);
 
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(oldRootData._uid); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(oldRootData._uid); return;
       }
 
       // Non-root: if into own subtree, promote children first
@@ -4069,7 +4075,7 @@ state.dragState.drop = null;
         moving.children = null;
 
         target.children = target.children || [];
-        pushHistory({
+        logyq.history.pushHistory({
           type: 'move',
           uid: movingUid,
           fromParentPath,
@@ -4080,7 +4086,7 @@ state.dragState.drop = null;
         target.children.push(moving);
 
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(movingUid); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(movingUid); return;
       }
 
       // Otherwise normal reparent under target
@@ -4090,7 +4096,7 @@ state.dragState.drop = null;
         const oldIdx = oldArr.findIndex(c => c._uid === movingUid);
         if (oldIdx >= 0) oldArr.splice(oldIdx, 1);
 
-        pushHistory({
+        logyq.history.pushHistory({
           type: 'move',
           uid: movingUid,
           fromParentPath: utils.pathToUid(state.root.data, oldParent._uid),
@@ -4102,18 +4108,19 @@ state.dragState.drop = null;
         destArr.push(moving);
 
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        dragManager.clear(); treeManager.layoutAndRender(false); flashMoved(movingUid); return;
+        dragManager.clear(); logyq.treeManager.layoutAndRender(false); logyq.selection.flashMoved(movingUid); return;
       }
     }
 
     // Fallback
-    dragManager.clear(); treeManager.layoutAndRender(false);
+    dragManager.clear(); logyq.treeManager.layoutAndRender(false);
   }
 };
 attach('drag', dragManager)
 
 
 function getSelectionUids(){
+  const { state } = logyq
   return state.selectedUids ? Array.from(state.selectedUids) : [];
 }
 

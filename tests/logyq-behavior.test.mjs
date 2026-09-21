@@ -337,3 +337,21 @@ test('addSiblingRightOf on the root falls back to addChildOf', () => {
   addSiblingRightOf(tree._uid, 'kid')
   assert.equal(tree.children.at(-1).name, 'kid')
 })
+
+test('drag drop handling keeps group, solo, then subtree order', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/13-drag.js', import.meta.url), 'utf8')
+  const group = source.indexOf('/* ========= A) GROUP MOVE ========= */')
+  const solo = source.indexOf('/* ========= B) SOLO MOVE (Shift held): move only this node; children stay with old parent ========= */')
+  const subtree = source.indexOf('/* ========= C) NORMAL (subtree) SINGLE MOVE (no Shift, not group) ========= */')
+  assert.ok(group > 0 && solo > group && subtree > solo)
+  assert.match(source, /group \+ rootAbove not supported yet/)
+  assert.match(source, /Never allow rootAbove while dragging the current root/)
+})
+
+test('getSelectionUids reads the group set from the logyq bag', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/13-drag.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function getSelectionUids(){')
+  const fn = new Function('logyq', `${source.slice(start)}; return getSelectionUids;`)
+  assert.deepEqual(fn({ state: { selectedUids: new Set(['b', 'a']) } })().sort(), ['a', 'b'])
+  assert.deepEqual(fn({ state: { selectedUids: null } })(), [])
+})
