@@ -96,7 +96,7 @@ test('LOGYQ persistence, gesture, and Lab-tab docs stay with the copy', () => {
   assert.match(persist, /logiq_map_list/)
   assert.match(persist, /0 maps/)
   assert.match(persist, /No first-run coaching/)
-  assert.match(persist, /not wrapped as `\{ formatVersion, root \}`/)
+  assert.match(persist, /\*\*not\*\* wrapped as `\{ formatVersion, root \}`/)
   assert.match(gestures, /Idle --> Arming/)
   assert.match(gestures, /1\.1cm/)
   assert.match(labTab, /#logyq-hub-card/)
