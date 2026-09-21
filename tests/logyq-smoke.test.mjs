@@ -246,6 +246,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   const hold = await nodeCenter('Node 03')
   const holdCount = await page.locator('svg#canvas g.node').count()
   const bankBefore = await page.locator('#Dock .chip').count()
+  const bankWordsBefore = await page.evaluate(() => (window.LOGYQBridge.core.state.wordBank || []).slice())
   const originTransform = await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     return node?.getAttribute('transform') || ''
@@ -308,6 +309,17 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.locator('#logyq-v162-branch-preview .v2-float-node').count(), 0)
   assert.equal(await page.locator('#logyq-v162-branch-preview g.node').count(), 1)
   assert.equal(await page.locator('#logyq-v162-branch-preview line').count(), 0)
+  await page.evaluate(({ x, y }) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    node?.dispatchEvent(new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: x,
+      clientY: y,
+      button: 2,
+    }))
+  }, hold)
   await page.waitForTimeout(520)
   const still = await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
@@ -338,6 +350,8 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.match(still.previewText, /Node 03/, `floating clone must keep the card label, got "${still.previewText}"`)
   assert.equal(still.banked, false, 'still hold must not dump the card into the Word Bank')
   assert.equal(await page.locator('#Dock .chip').count(), bankBefore)
+  assert.deepEqual(await page.evaluate(() => (window.LOGYQBridge.core.state.wordBank || []).slice()), bankWordsBefore, 'still hold / long-press contextmenu must not copy into Word Bank')
+  assert.equal(await page.evaluate(() => !!window.LOGYQBridge.core?.holdDrag?.blocksBank?.()), true)
   assert.ok(Number(still.opacity) > 0.2, `origin ghost opacity vanished: ${still.opacity}`)
   assert.ok(still.width > 8 && still.height > 8, `origin ghost box collapsed: ${still.width}x${still.height}`)
   assert.ok(Math.abs(still.y - beforeHold.y) < 2, `map must stay put while holding still, before=${beforeHold.y} during=${still.y}`)
@@ -393,6 +407,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   await page.waitForFunction(() => !document.body.classList.contains('v2-branch-drag'))
   assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
   assert.equal(await page.locator('#Dock .chip').count(), bankBefore)
+  assert.deepEqual(await page.evaluate(() => (window.LOGYQBridge.core.state.wordBank || []).slice()), bankWordsBefore)
   assert.equal(await page.evaluate(() => {
     return Array.from(document.querySelectorAll('svg#canvas g.node')).some((element) => element.__data__?.data?.name === 'Node 03')
   }), true)

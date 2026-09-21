@@ -246,8 +246,20 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
       return false
     }
   }
+  // Stay-still / in-flight hold must never chip a copy into Word Bank.
+  // Only an explicit allow-bank commit (moved past STILL_PX + chip dwell)
+  // may write the dock. Layout freeze stays independent of this gate.
+  function holdDragBlocksBank(){
+    try {
+      if (window.__logyqHoldDragAllowBank) return false
+      return !!(window.__logyqHoldDragSession || document.body?.classList?.contains('v2-branch-drag'))
+    } catch (_e) {
+      return false
+    }
+  }
   window.__logyqHoldDragFrozen = holdDragFrozen
-  attach('holdDrag', { frozen: holdDragFrozen })
+  window.__logyqHoldDragBlocksBank = holdDragBlocksBank
+  attach('holdDrag', { frozen: holdDragFrozen, blocksBank: holdDragBlocksBank })
 
 
 

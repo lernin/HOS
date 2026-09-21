@@ -286,8 +286,20 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
       return false
     }
   }
+  // Stay-still / in-flight hold must never chip a copy into Word Bank.
+  // Only an explicit allow-bank commit (moved past STILL_PX + chip dwell)
+  // may write the dock. Layout freeze stays independent of this gate.
+  function holdDragBlocksBank(){
+    try {
+      if (window.__logyqHoldDragAllowBank) return false
+      return !!(window.__logyqHoldDragSession || document.body?.classList?.contains('v2-branch-drag'))
+    } catch (_e) {
+      return false
+    }
+  }
   window.__logyqHoldDragFrozen = holdDragFrozen
-  attach('holdDrag', { frozen: holdDragFrozen })
+  window.__logyqHoldDragBlocksBank = holdDragBlocksBank
+  attach('holdDrag', { frozen: holdDragFrozen, blocksBank: holdDragBlocksBank })
 
 
 
@@ -2924,6 +2936,7 @@ function __namesFromSubtree(nodeData){
 function dropSelectedToWordBank({ onlyNode = false } = {}) {
   const { state, utils } = logyq
   if (window.__logyqHoldDragFrozen?.()) return;
+  if (window.__logyqHoldDragBlocksBank?.()) return;
   if (!state.root) { showToast('Nothing to drop'); return; }
   const count = state.selectedUids ? state.selectedUids.size : 0;
   if (count === 0) { showToast('Select node(s) to return'); return; }
@@ -3057,6 +3070,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
 function sendSubtreeToWordBank(h){
   const { state, utils } = logyq
   if (window.__logyqHoldDragFrozen?.()) return;
+  if (window.__logyqHoldDragBlocksBank?.()) return;
   try{
     const labels = (h?.descendants?.() || []).map(n => n?.data?.name).filter(Boolean);
     if (labels.length){labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));  // one chip per label
@@ -3094,6 +3108,8 @@ function sendSubtreeToWordBank(h){
 
 function sendNodeToWordBank_abandon(h){
   const { state, utils } = logyq
+  if (window.__logyqHoldDragFrozen?.()) return;
+  if (window.__logyqHoldDragBlocksBank?.()) return;
   try{
     const label = h?.data?.name;
     if (label) logyq.wordDock.addWords(label, 'bank');
@@ -3993,6 +4009,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
 
   function addWords(raw, to){
     const { state, utils } = logyq
+    if (window.__logyqHoldDragBlocksBank?.()) return;
     const text = (raw || '').trim(); if(!text) return;
     const words = text.split(/[;,]+/).map(s => s.trim()).filter(Boolean);
     if(!words.length) return;
@@ -4460,6 +4477,10 @@ function randomizeTree(includeBank){
   // Don’t show the browser menu or bubble to zoom
   event.preventDefault();
   event.stopPropagation();
+  // Phone long-press hold-drag synthesizes contextmenu. That path
+  // addWords-copies labels, then splices data; layout freeze hid the
+  // splice so Ashley saw a Word Bank copy while the origin slot stayed.
+  if (window.__logyqHoldDragFrozen?.() || window.__logyqHoldDragBlocksBank?.()) return;
 
   if (!d || !state.root) return;
   const uid = d?.data?._uid;

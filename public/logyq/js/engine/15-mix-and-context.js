@@ -63,6 +63,10 @@ function randomizeTree(includeBank){
   // Don’t show the browser menu or bubble to zoom
   event.preventDefault();
   event.stopPropagation();
+  // Phone long-press hold-drag synthesizes contextmenu. That path
+  // addWords-copies labels, then splices data; layout freeze hid the
+  // splice so Ashley saw a Word Bank copy while the origin slot stayed.
+  if (window.__logyqHoldDragFrozen?.() || window.__logyqHoldDragBlocksBank?.()) return;
 
   if (!d || !state.root) return;
   const uid = d?.data?._uid;

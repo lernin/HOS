@@ -58,6 +58,11 @@
     win.addEventListener('pointermove', (event) => onHoldMove(event, win, holdState), true)
     win.addEventListener('pointerup', (event) => onHoldUp(event, doc, win, canvas, holdState), true)
     win.addEventListener('pointercancel', (event) => onHoldCancel(event, doc, win, holdState), true)
+    win.addEventListener('contextmenu', (event) => {
+      if (!(holdState.drag || win.__logyqHoldDragSession || doc.body.classList.contains('v2-branch-drag'))) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+    }, true)
 
     canvas.addEventListener('pointerdown', (event) => onFlickDown(event, doc, win, flickState), true)
     canvas.addEventListener('pointerup', (event) => onFlickUp(event, doc, win, flickState), true)
@@ -158,6 +163,8 @@
       if (armedBank) sendDragToWordBank(doc, drag)
     } finally {
       win.__logyqHoldDragCommit = false
+      win.__logyqHoldDragAllowBank = false
+      endHoldDragSession(win, state)
     }
   }
 
@@ -172,6 +179,7 @@
     mouse(win, win, 'mousemove', drag.x, drag.y, 1)
     mouse(win, win, 'mouseup', drag.x, drag.y, 0)
     cleanupDrag(doc, win, state, drag)
+    endHoldDragSession(win, state)
   }
 
   function latchHold(doc, win, state, hold) {
@@ -195,6 +203,8 @@
     for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
 
     win.__logyqV2ConsumedPointers.add(hold.pointerId)
+    win.__logyqHoldDragSession = true
+    win.__logyqHoldDragAllowBank = false
     clearCardMic(state.mic)
     state.drag = {
       pointerId: hold.pointerId,
@@ -310,6 +320,7 @@
     mouse(win, win, 'mouseup', drag.x, drag.y, 0)
     cleanupDrag(doc, win, state, drag)
     dispatchPointerCancel(canvas, win, drag.pointerId, drag.lastX, drag.lastY)
+    endHoldDragSession(win, state)
   }
 
   function stampOriginGhost(doc, uids) {
@@ -467,8 +478,21 @@
     const node = nodeByUid(doc, drag?.uid)
     const hierarchy = node?.__data__
     if (!hierarchy || !bridge.core?.treeOps?.sendSubtreeToWordBank) return
-    bridge.selectByUid(drag.uid)
-    bridge.core.treeOps.sendSubtreeToWordBank(hierarchy)
+    const win = doc.defaultView || window
+    win.__logyqHoldDragAllowBank = true
+    try {
+      bridge.selectByUid(drag.uid)
+      bridge.core.treeOps.sendSubtreeToWordBank(hierarchy)
+    } finally {
+      win.__logyqHoldDragAllowBank = false
+    }
+  }
+
+  function endHoldDragSession(win, state) {
+    win.__logyqHoldDragAllowBank = false
+    win.setTimeout(() => {
+      if (!state?.drag) win.__logyqHoldDragSession = false
+    }, 400)
   }
 
   function cleanupDrag(doc, win, state, drag) {
@@ -479,7 +503,7 @@
     if (state.feedbackRaf) win.cancelAnimationFrame(state.feedbackRaf)
     state.feedbackRaf = 0
     if (state.drag === drag) state.drag = null
-    win.setTimeout(() => win.__logyqV2ConsumedPointers.delete(drag.pointerId), 0)
+    win.setTimeout(() => win.__logyqV2ConsumedPointers.delete(drag.pointerId), 400)
   }
 
   function cancelHold(win, state) {
@@ -856,6 +880,7 @@
     preview.gestures.dockDropKind = dockDropKind
     preview.gestures.activeDockKind = activeDockKind
     preview.gestures.paintCloneCard = paintCloneCard
+    preview.gestures.endHoldDragSession = endHoldDragSession
     preview.gestures.hitBankChip = hitBankChip
     preview.gestures.paintFlickDown = paintFlickDown
     preview.gestures.paintTap = paintTap
