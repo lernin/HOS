@@ -2832,7 +2832,7 @@ function exportGIQ(){
     exportGIQ,
   });
 function addChildOf(parentUid, newName = '', opts = {}) {
-  const { noEdit = false, select = true } = opts;
+  const { noEdit = false, select = true, immediate = false } = opts;
   const { state, utils } = logyq
 
   const parent = utils.findByUid(state.root?.data, parentUid);
@@ -2854,7 +2854,7 @@ function addChildOf(parentUid, newName = '', opts = {}) {
   // rebuild + render
   state.root = d3.hierarchy(state.root.data);
   utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(false);
+  logyq.treeManager.layoutAndRender(false, { immediate: !!opts.immediate });
 
   // focus new node (unless caller opts out)
   if (select) logyq.selection.setSelected(newNode._uid);
@@ -2899,7 +2899,7 @@ function insertSibling(uid, newName = '', opts = {}){
 
   parent.children.splice(side === 'left' ? ix : Math.max(0, ix) + 1, 0, newNode);
   state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(false);
+  logyq.treeManager.layoutAndRender(false, { immediate: !!opts.immediate });
   if (select) logyq.selection.setSelected(newNode._uid);
 
   if (!noEdit) {
@@ -2930,7 +2930,7 @@ function insertParentAbove(uid, newName = '', opts = {}){
 
   state.root = d3.hierarchy(state.root.data);
   utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(false);
+  logyq.treeManager.layoutAndRender(false, { immediate: !!opts.immediate });
   if (select) logyq.selection.setSelected(newParent._uid);
 
   if (!noEdit) {
@@ -5087,8 +5087,29 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     logyq.detectors.draw();
   },
 
-  layoutAndRender(isDelete=false){
+  snapLaidOutNodes(){
+    const { elements } = logyq
+    const sel = elements.gNodes?.selectAll("g.node");
+    if (sel) {
+      sel.interrupt();
+      sel.attr("transform", function(d){
+        if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return this.getAttribute("transform");
+        return `translate(${d.x},${d.y})`;
+      });
+    }
+    const links = elements.gLinks?.selectAll("path.link");
+    if (links) {
+      links.interrupt();
+      links.attr("d", function(d){
+        if (!d?.source || !d?.target) return this.getAttribute("d");
+        return logyq.visual.vLink(d);
+      });
+    }
+  },
+
+  layoutAndRender(isDelete=false, opts={}){
     const { state, config: CONFIG } = logyq
+    const immediate = !!(opts && opts.immediate);
     if (window.__logyqHoldDragFrozen?.()) return;
     if (!state.root) { this.renderEmpty(); return; }
     state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
@@ -5099,7 +5120,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       return Math.max(0.1, base+inc+bonus);
     });
     state.layout(state.root);
-    this.render(isDelete);
+    this.render(isDelete, immediate);
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */
       (function(){
         /* wait for render transitions to finish, then fit using final bbox */
@@ -5113,7 +5134,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     logyq.detectors.draw();
   },
 
-  render(isDelete=false){
+  render(isDelete=false, immediate=false){
     const { state, elements, config: CONFIG } = logyq
     const nodes=state.root.descendants();
     const links=state.root.links();
@@ -5170,7 +5191,11 @@ const nEnter = selNodes.enter()
     nEnter.merge(selNodes).select("rect:not(.grabzone)")
       .style("fill", d => d.data.color || null);
 
-    selNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
+    if (immediate) {
+      this.snapLaidOutNodes();
+    } else {
+      selNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
+    }
     selNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
@@ -6059,17 +6084,22 @@ elements.svg.on("contextmenu", (event) => {
       return true;
     },
     selectByName(name) {
-      const node = logyq.state.root?.descendants().find((item) => item.data?.name === name);
+      const label = String(name ?? '').trim();
+      if (!label) return false;
+      const node = logyq.state.root?.descendants().find((item) => item.data?.name === label);
       if (!node) return false;
       logyq.selection.selectSingle(node.data._uid);
       return true;
     },
     getParentName(name) {
-      const node = logyq.state.root?.descendants().find((item) => item.data?.name === name);
+      const label = String(name ?? '').trim();
+      if (!label) return null;
+      const node = logyq.state.root?.descendants().find((item) => item.data?.name === label);
       return node?.parent?.data?.name || null;
     },
     editSelected({ wipe = false, uid = null } = {}) {
-      const targetUid = uid || logyq.state.selectedUid;
+      const explicitUid = (uid != null && String(uid).trim() !== '');
+      const targetUid = explicitUid ? uid : logyq.state.selectedUid;
       if (!targetUid) return false;
       const node = logyq.state.root?.descendants().find((item) => item.data?._uid === targetUid);
       if (!node) return false;
@@ -6085,7 +6115,7 @@ elements.svg.on("contextmenu", (event) => {
     createRelative(direction) {
       const origin = logyq.state.selectedUid;
       if (!origin) return null;
-      const calm = { noEdit: true, select: true, rootAsChild: false };
+      const calm = { noEdit: true, select: true, rootAsChild: false, immediate: true };
       const created =
         direction === 'down' ? logyq.treeOps.addChildOf(origin, '', calm) :
         direction === 'right' ? logyq.treeOps.addSiblingRightOf(origin, '', calm) :
@@ -6093,7 +6123,7 @@ elements.svg.on("contextmenu", (event) => {
         direction === 'up' ? logyq.treeOps.insertParentAbove(origin, '', calm) :
         null;
       if (logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
-      try { logyq.elements.gNodes?.selectAll('g.node').interrupt(); } catch (_error) {}
+      try { logyq.treeManager.snapLaidOutNodes(); } catch (_error) {}
       if (created) logyq.selection.selectSingle(created);
       emitChange();
       return created || null;

@@ -194,8 +194,29 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     logyq.detectors.draw();
   },
 
-  layoutAndRender(isDelete=false){
+  snapLaidOutNodes(){
+    const { elements } = logyq
+    const sel = elements.gNodes?.selectAll("g.node");
+    if (sel) {
+      sel.interrupt();
+      sel.attr("transform", function(d){
+        if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return this.getAttribute("transform");
+        return `translate(${d.x},${d.y})`;
+      });
+    }
+    const links = elements.gLinks?.selectAll("path.link");
+    if (links) {
+      links.interrupt();
+      links.attr("d", function(d){
+        if (!d?.source || !d?.target) return this.getAttribute("d");
+        return logyq.visual.vLink(d);
+      });
+    }
+  },
+
+  layoutAndRender(isDelete=false, opts={}){
     const { state, config: CONFIG } = logyq
+    const immediate = !!(opts && opts.immediate);
     if (window.__logyqHoldDragFrozen?.()) return;
     if (!state.root) { this.renderEmpty(); return; }
     state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
@@ -206,7 +227,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       return Math.max(0.1, base+inc+bonus);
     });
     state.layout(state.root);
-    this.render(isDelete);
+    this.render(isDelete, immediate);
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */
       (function(){
         /* wait for render transitions to finish, then fit using final bbox */
@@ -220,7 +241,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     logyq.detectors.draw();
   },
 
-  render(isDelete=false){
+  render(isDelete=false, immediate=false){
     const { state, elements, config: CONFIG } = logyq
     const nodes=state.root.descendants();
     const links=state.root.links();
@@ -277,7 +298,11 @@ const nEnter = selNodes.enter()
     nEnter.merge(selNodes).select("rect:not(.grabzone)")
       .style("fill", d => d.data.color || null);
 
-    selNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
+    if (immediate) {
+      this.snapLaidOutNodes();
+    } else {
+      selNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
+    }
     selNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 

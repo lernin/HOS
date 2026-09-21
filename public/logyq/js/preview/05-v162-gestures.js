@@ -804,11 +804,7 @@
         bridge.selectByUid(candidate.uid)
         const createdUid = bridge.createRelative(direction)
         if (!createdUid) return
-        const canvas = doc.getElementById('canvas')
-        if (win.d3 && canvas) {
-          win.d3.select(canvas).interrupt()
-          win.d3.select(canvas).selectAll('g.node').interrupt()
-        }
+        try { bridge.core?.treeManager?.snapLaidOutNodes?.() } catch (_error) {}
         restoreView(doc, win, candidate.view)
         bridge.selectByUid(createdUid)
         clearCardMic(state.mic)

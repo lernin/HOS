@@ -1129,3 +1129,217 @@ test('LOGYQ flick left/right/up create as calmly as down-on-leaf', async () => {
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ two blank cards edit by uid, not empty name', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.selectByName('')), false)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.selectByName('   ')), false)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.getParentName('')), null)
+
+  async function faceOf(uid) {
+    return page.evaluate((id) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?._uid === id)
+      const face = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = face?.getBoundingClientRect()
+      return {
+        uid: id,
+        name: node?.__data__?.data?.name || '',
+        x: rect ? rect.left + rect.width / 2 : 0,
+        y: rect ? rect.top + rect.height / 2 : 0,
+      }
+    }, uid)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      document.getElementById('canvas').dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const decoy = await page.evaluate(() => {
+    window.LOGYQBridge.selectByName('Node 05')
+    return window.LOGYQBridge.createRelative('down')
+  })
+  const origin = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 10')
+    const face = node?.querySelector('rect:not(.grabzone)') || node
+    const rect = face.getBoundingClientRect()
+    return {
+      uid: node.__data__.data._uid,
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    }
+  })
+  const before = await page.locator('svg#canvas g.node').count()
+  await touch('pointerdown', origin.x, origin.y, 91)
+  await touch('pointerup', origin.x, origin.y + 70, 91)
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before)
+
+  const targetUid = await page.evaluate(() => window.LOGYQBridge.core.state.selectedUid)
+  assert.ok(decoy)
+  assert.ok(targetUid)
+  assert.notEqual(targetUid, decoy)
+  assert.notEqual(targetUid, origin.uid)
+
+  const target = await faceOf(targetUid)
+  await touch('pointerdown', target.x, target.y, 92)
+  await touch('pointerup', target.x, target.y, 92)
+  await touch('pointerdown', target.x, target.y, 93)
+  await touch('pointerup', target.x, target.y, 93)
+  await page.waitForSelector('.node-edit-input')
+  const firstEdit = await page.evaluate(() => window.LOGYQBridge.core.state.editingUid)
+  assert.equal(firstEdit, targetUid, 'double-tap must edit the flicked blank, not the first empty name')
+  assert.notEqual(firstEdit, decoy)
+  await page.locator('.node-edit-input').fill('cat')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?._uid === uid)
+    return node?.__data__?.data?.name === 'cat'
+  }, targetUid)
+
+  const decoyFace = await faceOf(decoy)
+  await touch('pointerdown', decoyFace.x, decoyFace.y, 94)
+  await touch('pointerup', decoyFace.x, decoyFace.y, 94)
+  await touch('pointerdown', decoyFace.x, decoyFace.y, 95)
+  await touch('pointerup', decoyFace.x, decoyFace.y, 95)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), decoy)
+  await page.locator('.node-edit-input').fill('dog')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?._uid === uid)
+    return node?.__data__?.data?.name === 'dog'
+  }, decoy)
+
+  const names = await page.evaluate(({ targetUid, decoy }) => {
+    const byUid = (uid) => Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?._uid === uid)?.__data__?.data?.name
+    return {
+      target: byUid(targetUid),
+      decoy: byUid(decoy),
+      node10: Array.from(document.querySelectorAll('svg#canvas g.node')).some((element) => element.__data__?.data?.name === 'Node 10'),
+    }
+  }, { targetUid, decoy })
+  assert.equal(names.target, 'cat')
+  assert.equal(names.decoy, 'dog')
+  assert.equal(names.node10, true)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ flick left/right reserve non-overlapping sibling slots', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+
+  async function faceCenter(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === label)
+      const face = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = face.getBoundingClientRect()
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        uid: node?.__data__?.data?._uid || '',
+      }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      document.getElementById('canvas').dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function flick(name, dx, dy, pointerId) {
+    const origin = await faceCenter(name)
+    const before = await page.locator('svg#canvas g.node').count()
+    await touch('pointerdown', origin.x, origin.y, pointerId)
+    await touch('pointerup', origin.x + dx, origin.y + dy, pointerId)
+    await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before)
+    return page.evaluate(() => window.LOGYQBridge.core.state.selectedUid)
+  }
+
+  function overlaps(a, b) {
+    return !(a.right <= b.left + 1 || b.right <= a.left + 1 || a.bottom <= b.top + 1 || b.bottom <= a.top + 1)
+  }
+
+  async function faces() {
+    return page.evaluate(() => Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => {
+      const face = node.querySelector('rect:not(.grabzone)') || node
+      const rect = face.getBoundingClientRect()
+      return {
+        uid: node.__data__?.data?._uid || '',
+        name: node.__data__?.data?.name || '',
+        left: rect.left,
+        right: rect.right,
+        top: rect.top,
+        bottom: rect.bottom,
+      }
+    }))
+  }
+
+  const leftUid = await flick('Node 10', -70, 0, 101)
+  const rightUid = await flick('Node 12', 70, 0, 102)
+  assert.ok(leftUid)
+  assert.ok(rightUid)
+  assert.notEqual(leftUid, rightUid)
+
+  const boxes = await faces()
+  const created = boxes.filter((box) => box.uid === leftUid || box.uid === rightUid)
+  assert.equal(created.length, 2)
+  for (const card of created) {
+    const hits = boxes.filter((other) => other.uid !== card.uid && overlaps(card, other))
+    assert.deepEqual(hits, [], `${card.uid} must not overlap ${hits.map((hit) => hit.name || hit.uid).join(', ')}`)
+  }
+  assert.equal(overlaps(created[0], created[1]), false)
+
+  const left = boxes.find((box) => box.uid === leftUid)
+  await touch('pointerdown', (left.left + left.right) / 2, (left.top + left.bottom) / 2, 103)
+  await touch('pointerup', (left.left + left.right) / 2, (left.top + left.bottom) / 2, 103)
+  await touch('pointerdown', (left.left + left.right) / 2, (left.top + left.bottom) / 2, 104)
+  await touch('pointerup', (left.left + left.right) / 2, (left.top + left.bottom) / 2, 104)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), leftUid)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})

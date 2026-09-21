@@ -20,6 +20,17 @@ function loadTreeHelpers() {
   return new Function('utils', `${dataBlock}\n${parseBlock}\nreturn { dataManager, tryParsePureJSON, tryParseGIQ, parseIncoming };`)(utils)
 }
 
+test('utils assign unique uids even when labels are blank', () => {
+  const utils = loadUtils()
+  const a = { name: '' }
+  const b = { name: '' }
+  utils.assignUids(a)
+  utils.assignUids(b)
+  assert.ok(a._uid)
+  assert.ok(b._uid)
+  assert.notEqual(a._uid, b._uid)
+})
+
 test('utils assign stable uids, clone trees, and resolve paths', () => {
   const utils = loadUtils()
   const tree = { name: 'root', children: [{ name: 'a' }, { name: 'b', children: [{ name: 'c' }] }] }
@@ -311,6 +322,11 @@ test('inline edit goes through openNodeEditor, not a second helper', () => {
   assert.match(editing, /closeNodeEditor\(true, true\)/)
   assert.match(keyboard, /logyq\.editing\.openNodeEditor\(h\)/)
   assert.match(bridge, /logyq\.editing\.openNodeEditor\(node\)/)
+  assert.match(bridge, /item\.data\?\.\_uid === targetUid/)
+  assert.match(bridge, /if \(!label\) return false/)
+  assert.match(bridge, /explicitUid/)
+  assert.match(editing, /utils\.findByUid\(state\.root\.data, uid\)/)
+  assert.match(editing, /state\.editingUid = d\.data\._uid/)
 })
 
 test('normalizeToTree preserves v161 array, node, and plain-object rules', () => {
@@ -999,6 +1015,8 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /__logyqV2ConsumedPointers/)
   assert.match(v162, /bridge\.createRelative\(direction\)/)
   assert.match(v162, /bridge\.editSelected\(\{ uid \}\)/)
+  assert.match(v162, /snapLaidOutNodes/)
+  assert.doesNotMatch(v162, /selectAll\('g\.node'\)\.interrupt\(\)/)
   assert.doesNotMatch(v162, /armBlankCardMic\(state\.mic, doc, createdUid\)/)
   assert.match(v162, /function rankCardHits/)
   assert.match(v162, /rect:not\(\.grabzone\)/)

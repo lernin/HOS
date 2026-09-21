@@ -85,17 +85,22 @@
       return true;
     },
     selectByName(name) {
-      const node = logyq.state.root?.descendants().find((item) => item.data?.name === name);
+      const label = String(name ?? '').trim();
+      if (!label) return false;
+      const node = logyq.state.root?.descendants().find((item) => item.data?.name === label);
       if (!node) return false;
       logyq.selection.selectSingle(node.data._uid);
       return true;
     },
     getParentName(name) {
-      const node = logyq.state.root?.descendants().find((item) => item.data?.name === name);
+      const label = String(name ?? '').trim();
+      if (!label) return null;
+      const node = logyq.state.root?.descendants().find((item) => item.data?.name === label);
       return node?.parent?.data?.name || null;
     },
     editSelected({ wipe = false, uid = null } = {}) {
-      const targetUid = uid || logyq.state.selectedUid;
+      const explicitUid = (uid != null && String(uid).trim() !== '');
+      const targetUid = explicitUid ? uid : logyq.state.selectedUid;
       if (!targetUid) return false;
       const node = logyq.state.root?.descendants().find((item) => item.data?._uid === targetUid);
       if (!node) return false;
@@ -111,7 +116,7 @@
     createRelative(direction) {
       const origin = logyq.state.selectedUid;
       if (!origin) return null;
-      const calm = { noEdit: true, select: true, rootAsChild: false };
+      const calm = { noEdit: true, select: true, rootAsChild: false, immediate: true };
       const created =
         direction === 'down' ? logyq.treeOps.addChildOf(origin, '', calm) :
         direction === 'right' ? logyq.treeOps.addSiblingRightOf(origin, '', calm) :
@@ -119,7 +124,7 @@
         direction === 'up' ? logyq.treeOps.insertParentAbove(origin, '', calm) :
         null;
       if (logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
-      try { logyq.elements.gNodes?.selectAll('g.node').interrupt(); } catch (_error) {}
+      try { logyq.treeManager.snapLaidOutNodes(); } catch (_error) {}
       if (created) logyq.selection.selectSingle(created);
       emitChange();
       return created || null;
