@@ -128,7 +128,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(drag, /logyq\.selection\.insertNodeAtDrop/)
   assert.match(drag, /window\.DRAG_SLOP_PX \|\| 10/)
   const keyboard = readFileSync(join(logyqDir, 'js/engine/17-keyboard.js'), 'utf8')
-  assert.match(keyboard, /attach\('keyboard'/)
+  assert.match(keyboard, /attach\('keyboard', \{[\s\S]*?\}\);/)
   assert.match(keyboard, /const \{ state, elements, utils \} = logyq/)
   assert.match(keyboard, /if \(window\.startInlineEdit\) startInlineEdit/)
   assert.match(editing, /const \{ state, elements, config: CONFIG \} = logyq/)

@@ -6422,7 +6422,7 @@ function getSelectedUid(){
     addElderSiblingLeftAndEdit,
     addYoungerSiblingRightAndEdit,
     insertParentAboveSelectedAndEdit,
-  })
+  });
 /* LOGYQ preview integration seam.
    Keep the copied engine above intact; mobile UI and persistence live in
    js/preview.js and use only this deliberately small bridge. */

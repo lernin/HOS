@@ -701,4 +701,4 @@ function getSelectedUid(){
     addElderSiblingLeftAndEdit,
     addYoungerSiblingRightAndEdit,
     insertParentAboveSelectedAndEdit,
-  })
+  });

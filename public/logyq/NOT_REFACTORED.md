@@ -30,4 +30,4 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 
 ## Extraction method (intentional)
 
-Fragments still concatenate into the original IIFEs. A `logyq` API bag now holds shared objects; extracted clusters take dependencies from that bag. They are not yet independently imported ES modules. Mix, deletion, Word Dock, and layout/structure still use ambient bindings. Detectors already register on the bag; they were not internally rewritten.
+Fragments still concatenate into the original IIFEs. A `logyq` API bag now holds shared objects; extracted clusters take dependencies from that bag. They are not yet independently imported ES modules. Mix, deletion, Word Dock, and layout/structure still use ambient bindings. Detectors already register on the bag; they were not internally rewritten. `attach('keyboard')` is semicolon-terminated so the following `18-bridge.js` IIFE is not parsed as `attach(...)()`.
