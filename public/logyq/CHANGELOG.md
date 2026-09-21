@@ -83,7 +83,7 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 ## Hold-drag camera (PR 112)
 
-- **Center-offset pan, not edge bands.** Hold-drag auto-pan uses the finger’s offset from the viewport center (dead zone 56px, quadratic step 16). Up/down matches left/right; near-center does not creep. A content leash keeps ~½ card of the tree overlapping the viewport so she cannot scroll into endless void.
+- **Center-offset pan, not edge bands.** Hold-drag auto-pan uses the finger’s offset from the viewport center (dead zone 56px, quadratic step 16). Up/down matches left/right; near-center does not creep. The content leash keeps ~½ card of the tree inset from the **leading** edge (the edge she is scrolling toward). After `a2c70d8` the overlap test used the trailing AABB edge and pinned the tree to the opposite side; clamp is now sign-aware (`dx>0` → left inset on `minX`, `dx<0` → right inset on `maxX`, same for y) and does not yank if already past.
 
 ## Live maps + Drive-style open (PR 112)
 

@@ -1088,16 +1088,29 @@ test('hold-drag pan is center-offset with a half-card content leash', () => {
   const farther = helpers.centerPanVector(195, 820, view, C)
   assert.ok(Math.abs(farther.dy) > Math.abs(down.dy), 'further from center is stronger')
 
-  const bounds = { minX: 0, maxX: 140, minY: 0, maxY: 63, cardW: 140, cardH: 63 }
-  const t = { x: 100, y: 200, k: 1 }
-  const free = helpers.clampPanToContent(t, -20, 0, bounds, view)
-  assert.equal(free.dx, -20)
-  const offLeft = helpers.clampPanToContent(t, -400, 0, bounds, view)
-  const nextRight = bounds.maxX * t.k + t.x + offLeft.dx
-  assert.ok(nextRight >= view.left + bounds.cardW / 2 - 0.01, '½ card stays on the incoming edge')
-  assert.ok(offLeft.dx > -400, 'leash stops endless horizontal pan')
-  const offUp = helpers.clampPanToContent(t, 0, -800, bounds, view)
-  const nextBottom = bounds.maxY * t.k + t.y + offUp.dy
-  assert.ok(nextBottom >= view.top + bounds.cardH / 2 - 0.01, '½ card stays on the incoming vertical edge')
+  const wide = { minX: -400, maxX: 800, minY: -200, maxY: 1200, cardW: 140, cardH: 63 }
+  const t = { x: 200, y: 300, k: 1 }
+  const halfW = wide.cardW / 2
+  const halfH = wide.cardH / 2
+  const free = helpers.clampPanToContent(t, -40, 0, wide, view)
+  assert.equal(free.dx, -40, 'wide tree can still slide toward the leading edge')
+  const fingerRight = helpers.clampPanToContent(t, -2000, 0, wide, view)
+  const rightEdge = wide.maxX * t.k + t.x + fingerRight.dx
+  assert.ok(Math.abs(rightEdge - (view.right - halfW)) < 0.5, 'finger-right / pan-right stops with ½ card at the right/leading edge')
+  assert.ok(rightEdge > view.left + 100, 'must not crush the AABB onto the opposite (left) side')
+  const fingerLeft = helpers.clampPanToContent(t, 2000, 0, wide, view)
+  const leftEdge = wide.minX * t.k + t.x + fingerLeft.dx
+  assert.ok(Math.abs(leftEdge - (view.left + halfW)) < 0.5, 'finger-left / pan-left stops with ½ card at the left/leading edge')
+  assert.ok(leftEdge < view.right - 100, 'must not crush the AABB onto the opposite (right) side')
+  const fingerDown = helpers.clampPanToContent(t, 0, -2000, wide, view)
+  const bottomEdge = wide.maxY * t.k + t.y + fingerDown.dy
+  assert.ok(Math.abs(bottomEdge - (view.bottom - halfH)) < 0.5, 'finger-below / pan-down stops with ½ card at the bottom/leading edge')
+  const fingerUp = helpers.clampPanToContent(t, 0, 2000, wide, view)
+  const topEdge = wide.minY * t.k + t.y + fingerUp.dy
+  assert.ok(Math.abs(topEdge - (view.top + halfH)) < 0.5, 'finger-above / pan-up stops with ½ card at the top/leading edge')
+  const already = { x: 200, y: 300, k: 1 }
+  already.x = view.right - halfW - wide.maxX
+  const noYank = helpers.clampPanToContent(already, -50, 0, wide, view)
+  assert.equal(noYank.dx, 0, 'already at the leading bound: do not shove further or yank to the far side')
   assert.deepEqual(helpers.clampPanToContent(t, -20, -20, null, view), { dx: 0, dy: 0 })
 })

@@ -994,24 +994,35 @@
     return { minX, maxX, minY, maxY, cardW, cardH }
   }
 
-  // Keep ~½ card of the tree overlapping the viewport. Stops endless
-  // empty scrolling; wide lower branches do not open a void leash.
+  // Leash to the *leading* viewport edge (the edge in the pan
+  // direction). Keep ~½ card of live tree inset from that edge.
+  // Do not pin the AABB to the opposite / trailing side.
   function clampPanToContent(transform, dx, dy, bounds, view) {
     if (!bounds || !view) return { dx: 0, dy: 0 }
     const k = transform?.k || 1
     const halfW = (bounds.cardW * k) / 2
     const halfH = (bounds.cardH * k) / 2
-    let nx = (transform?.x || 0) + dx
-    let ny = (transform?.y || 0) + dy
-    const left = bounds.minX * k + nx
-    const right = bounds.maxX * k + nx
-    const top = bounds.minY * k + ny
-    const bottom = bounds.maxY * k + ny
-    if (right < view.left + halfW) nx += (view.left + halfW) - right
-    if (left > view.right - halfW) nx -= left - (view.right - halfW)
-    if (bottom < view.top + halfH) ny += (view.top + halfH) - bottom
-    if (top > view.bottom - halfH) ny -= top - (view.bottom - halfH)
-    return { dx: nx - (transform?.x || 0), dy: ny - (transform?.y || 0) }
+    const x0 = transform?.x || 0
+    const y0 = transform?.y || 0
+    let nx = x0 + dx
+    let ny = y0 + dy
+    // Finger-right / content-left → leading edge is the right.
+    if (dx < 0) {
+      const minNx = view.right - halfW - bounds.maxX * k
+      nx = Math.max(nx, Math.min(x0, minNx))
+    } else if (dx > 0) {
+      // Finger-left / content-right → leading edge is the left.
+      const maxNx = view.left + halfW - bounds.minX * k
+      nx = Math.min(nx, Math.max(x0, maxNx))
+    }
+    if (dy < 0) {
+      const minNy = view.bottom - halfH - bounds.maxY * k
+      ny = Math.max(ny, Math.min(y0, minNy))
+    } else if (dy > 0) {
+      const maxNy = view.top + halfH - bounds.minY * k
+      ny = Math.min(ny, Math.max(y0, maxNy))
+    }
+    return { dx: nx - x0, dy: ny - y0 }
   }
 
   function viewRect(doc, win) {

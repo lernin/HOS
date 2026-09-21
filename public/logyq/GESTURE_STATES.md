@@ -41,7 +41,7 @@ latched  ──clone lifts 1.1cm; origin ghost; layout frozen──
 | Stay-still never banks | `activeDockKind` is `none` until `STILL_PX` (16). `addWords` / contextmenu no-op unless `__logyqHoldDragAllowBank`. That flag is set only for move + chip + 480ms dwell. |
 | Map does not jump on latch | No `shiftMapOnLatch`. Clone uses `fingerOffset` `{0, -1.1cm}`; d3 is not fed that offset until the finger leaves `STILL_PX`. |
 | 1.1cm lift is clone-only | `#logyq-v162-branch-preview` follows the finger + lift. Live `g.node` stays in its cell as a dashed ghost (`v2-branch-origin-ghost`). |
-| Hold-drag pan is center-offset | Finger offset from the viewport center, after a 56px dead zone. Content leash keeps ~½ card of the tree on screen. |
+| Hold-drag pan is center-offset | Finger offset from the viewport center, after a 56px dead zone. Content leash keeps ~½ card inset from the leading edge. |
 
 ## Thresholds
 
