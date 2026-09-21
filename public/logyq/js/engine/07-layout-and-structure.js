@@ -2,6 +2,7 @@
   const LabelWrap = (() => {
     let measureEl = null;
     function measureText(s){
+      const { elements, config: CONFIG } = logyq
       try{
         if(!measureEl){
           measureEl = elements.gOverlay.append("text").attr("class","__measure").style("visibility","hidden").style("font-size", CONFIG.FONT_SIZE + "px").node();
@@ -48,6 +49,7 @@
       return [line1, line2];
     }
     function apply(){
+      const { config: CONFIG } = logyq
       const pad = 20, maxW = CONFIG.CARD_WIDTH - pad;
       d3.selectAll("g.node text.label").each(function(d){
         const el = d3.select(this);
@@ -69,6 +71,7 @@
 /* Compute per-depth row stats from current layout.
    We only need centers and a reasonable row height for detectors/carets. */
 function __rowStats() {
+  const { state, config: CONFIG } = logyq
   if (!state.root) return new Map();
   const byDepth = new Map();
   state.root.descendants().forEach(n => {
@@ -91,6 +94,7 @@ function __rowStats() {
 /* Return the vertical center for a given depth.
    Fallback: derive from root using nominal row spacing. */
 function laneYForDepth(depth) {
+  const { state, config: CONFIG } = logyq
   const rows = __rowStats();
   if (rows.has(depth)) return rows.get(depth).center;
   const base = state.root ? state.root.y : 0;
@@ -101,6 +105,7 @@ function laneYForDepth(depth) {
 /* Return the row height (distance to next row center).
    Fallback to nominal card+gap if next row is missing. */
 function laneHeightForDepth(depth) {
+  const { config: CONFIG } = logyq
   const rows = __rowStats();
   if (rows.has(depth) && rows.has(depth + 1)) {
     const a = rows.get(depth).center;
@@ -114,6 +119,15 @@ function laneHeightForDepth(depth) {
 function showLaneAtY(_y) { /* no visuals */ }
 function hideLane() { /* no visuals */ }
 function refreshLaneOnZoom() { /* no visuals */ }
+
+  attach('layout', {
+    LabelWrap,
+    laneYForDepth,
+    laneHeightForDepth,
+    showLaneAtY,
+    hideLane,
+    refreshLaneOnZoom,
+  });
 
 
 

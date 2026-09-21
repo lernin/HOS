@@ -332,9 +332,9 @@ test('duplicate Word Dock drop helper remains in place', () => {
 })
 
 function fakeHierarchy(data) {
-  const wrap = (node, parent = null) => {
-    const h = { data: node, parent, children: [] }
-    h.children = (node.children || []).map((child) => wrap(child, h))
+  const wrap = (node, parent = null, depth = 0) => {
+    const h = { data: node, parent, children: [], depth, x: 0, y: depth * 141 }
+    h.children = (node.children || []).map((child) => wrap(child, h, depth + 1))
     return h
   }
   const root = wrap(data)
@@ -592,4 +592,60 @@ test('context-menu Word Dock dumps still join names with newlines', () => {
   assert.match(source, /logyq\.wordDock\.addWords\(names\.join\('\\n'\), 'bank'\)/)
   const treeManager = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
   assert.equal((treeManager.match(/mixBtn\.addEventListener\('contextmenu'/g) || []).length, 2)
+})
+
+function loadLayout() {
+  const source = readFileSync(new URL('../public/logyq/js/engine/07-layout-and-structure.js', import.meta.url), 'utf8')
+  const attachAt = source.indexOf("attach('layout'")
+  const end = source.indexOf('});', attachAt) + 3
+  const cut = source.slice(0, end)
+  const logyq = {
+    config: { CARD_WIDTH: 140, CARD_HEIGHT: 63, VERTICAL_GAP: 78, FONT_SIZE: 18 },
+    state: { root: null },
+    elements: {
+      gOverlay: {
+        append() {
+          return {
+            attr() { return this },
+            style() { return this },
+            node() { return { style: {}, textContent: '' } },
+          }
+        },
+      },
+    },
+  }
+  const fns = new Function(
+    'logyq',
+    'd3',
+    'attach',
+    `${cut}; return { laneYForDepth, laneHeightForDepth, __rowStats, LabelWrap };`,
+  )(logyq, { selectAll() { return { each() {} } } }, (name, value) => { logyq[name] = value; return value })
+  return { logyq, ...fns }
+}
+
+test('laneYForDepth falls back to nominal spacing and uses row centers when laid out', () => {
+  const { logyq, laneYForDepth, laneHeightForDepth, __rowStats } = loadLayout()
+  assert.equal(laneYForDepth(2), 282)
+  assert.equal(laneHeightForDepth(0), 141)
+
+  const tree = { name: 'root', children: [{ name: 'a' }, { name: 'b' }] }
+  logyq.state.root = fakeHierarchy(tree)
+  logyq.state.root.children[0].y = 100
+  logyq.state.root.children[1].y = 300
+  logyq.state.root.y = 0
+  assert.equal(__rowStats().get(0).center, 0)
+  assert.equal(__rowStats().get(1).center, 200)
+  assert.equal(laneYForDepth(0), 0)
+  assert.equal(laneYForDepth(1), 200)
+  assert.equal(laneHeightForDepth(0), 200)
+  assert.equal(laneHeightForDepth(1), 141)
+})
+
+test('lane stubs stay no-ops and LabelWrap is registered on the layout bag', () => {
+  const { logyq } = loadLayout()
+  assert.equal(typeof logyq.layout.showLaneAtY, 'function')
+  assert.equal(logyq.layout.showLaneAtY(12), undefined)
+  assert.equal(logyq.layout.hideLane(), undefined)
+  assert.equal(logyq.layout.refreshLaneOnZoom(), undefined)
+  assert.equal(typeof logyq.layout.LabelWrap.apply, 'function')
 })

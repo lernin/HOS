@@ -260,7 +260,7 @@ function setSelected(uid){
     /* [patch] cousin-caret end */
       return [cx, cy];
     }
-    const cy = (hit && hit.rowY != null) ? hit.rowY : (laneYForDepth((hit?.depth||0)+1) ?? (hit.y + hit.height));
+    const cy = (hit && hit.rowY != null) ? hit.rowY : (logyq.layout.laneYForDepth((hit?.depth||0)+1) ?? (hit.y + hit.height));
     let cx = hit.x + hit.width/2;
 
     if(hit.kind==='sibling' && 'centerX' in hit){

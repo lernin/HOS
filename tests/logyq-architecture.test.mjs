@@ -104,6 +104,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('utils', utils)",
     "attach('history', { pushHistory, undo, autoFitSoon })",
     "attach('detectors', Detectors)",
+    "attach('layout', {",
     "attach('editing', {",
     "attach('selection', {",
     "attach('treeOps', {",
@@ -129,6 +130,17 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(deletion, /attach\('deletion', \{[\s\S]*?\}\);/)
   assert.match(deletion, /const \{ state, utils \} = logyq/)
   assert.match(deletion, /logyq\.history\.pushHistory/)
+  const layout = readFileSync(join(logyqDir, 'js/engine/07-layout-and-structure.js'), 'utf8')
+  assert.match(layout, /attach\('layout', \{[\s\S]*?\}\);/)
+  assert.match(layout, /const \{ state, config: CONFIG \} = logyq/)
+  assert.doesNotMatch(layout, /attach\('structure'/)
+  const detectors = readFileSync(join(logyqDir, 'js/engine/08-detectors.js'), 'utf8')
+  assert.match(detectors, /logyq\.layout\.laneYForDepth/)
+  assert.match(detectors, /logyq\.layout\.laneHeightForDepth/)
+  assert.match(selection, /logyq\.layout\.laneYForDepth/)
+  const treeManager = readFileSync(join(logyqDir, 'js/engine/16-tree-manager.js'), 'utf8')
+  assert.match(treeManager, /logyq\.layout\.LabelWrap\.apply/)
+  assert.match(treeManager, /logyq\.layout\.refreshLaneOnZoom/)
   const wordDock = readFileSync(join(logyqDir, 'js/engine/14-word-dock.js'), 'utf8')
   assert.match(wordDock, /attach\('wordDock', \{[\s\S]*?\}\);/)
   assert.match(wordDock, /const \{ state, elements, utils \} = logyq/)
@@ -150,7 +162,6 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(keyboard, /logyq\.wordDock\.clearChipSelection/)
   assert.match(keyboard, /logyq\.wordDock\.getSelectedChipNames/)
   assert.match(keyboard, /logyq\.mix\.randomizeTree/)
-  const treeManager = readFileSync(join(logyqDir, 'js/engine/16-tree-manager.js'), 'utf8')
   assert.match(treeManager, /logyq\.wordDock\.render/)
   assert.match(treeManager, /logyq\.mix\.randomizeTree/)
   assert.match(treeManager, /logyq\.mix\.onNodeContextMenu/)

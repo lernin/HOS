@@ -38,7 +38,7 @@ state.zoom = d3.zoom()
   .on("zoom", (e) => {
     elements.gRoot.attr("transform", e.transform);
     if (state.editingUid) updateNodeEditorPosition();
-    refreshLaneOnZoom();
+    logyq.layout.refreshLaneOnZoom();
     Detectors.draw();
 
     // Run moat check after paint, but not while panning
@@ -358,7 +358,7 @@ const nEnter = selNodes.enter()
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
     state.lastNodes=state.root.descendants();
-    LabelWrap.apply();
+    logyq.layout.LabelWrap.apply();
   },
 
 
@@ -449,8 +449,8 @@ attach('treeManager', treeManager)
             y = h ? h.y : y;
           }
           state.laneLastY = y;
-          showLaneAtY(y);
-        } else hideLane();
+          logyq.layout.showLaneAtY(y);
+        } else logyq.layout.hideLane();
         setText();
       });
     }

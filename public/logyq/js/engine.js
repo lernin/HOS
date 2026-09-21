@@ -16,6 +16,8 @@
     data: null,
     visual: null,
     detectors: null,
+    layout: null,
+    structure: null,
     editing: null,
     selection: null,
     treeOps: null,
@@ -843,6 +845,7 @@ function autoFitSoon(delay){
   const LabelWrap = (() => {
     let measureEl = null;
     function measureText(s){
+      const { elements, config: CONFIG } = logyq
       try{
         if(!measureEl){
           measureEl = elements.gOverlay.append("text").attr("class","__measure").style("visibility","hidden").style("font-size", CONFIG.FONT_SIZE + "px").node();
@@ -889,6 +892,7 @@ function autoFitSoon(delay){
       return [line1, line2];
     }
     function apply(){
+      const { config: CONFIG } = logyq
       const pad = 20, maxW = CONFIG.CARD_WIDTH - pad;
       d3.selectAll("g.node text.label").each(function(d){
         const el = d3.select(this);
@@ -910,6 +914,7 @@ function autoFitSoon(delay){
 /* Compute per-depth row stats from current layout.
    We only need centers and a reasonable row height for detectors/carets. */
 function __rowStats() {
+  const { state, config: CONFIG } = logyq
   if (!state.root) return new Map();
   const byDepth = new Map();
   state.root.descendants().forEach(n => {
@@ -932,6 +937,7 @@ function __rowStats() {
 /* Return the vertical center for a given depth.
    Fallback: derive from root using nominal row spacing. */
 function laneYForDepth(depth) {
+  const { state, config: CONFIG } = logyq
   const rows = __rowStats();
   if (rows.has(depth)) return rows.get(depth).center;
   const base = state.root ? state.root.y : 0;
@@ -942,6 +948,7 @@ function laneYForDepth(depth) {
 /* Return the row height (distance to next row center).
    Fallback to nominal card+gap if next row is missing. */
 function laneHeightForDepth(depth) {
+  const { config: CONFIG } = logyq
   const rows = __rowStats();
   if (rows.has(depth) && rows.has(depth + 1)) {
     const a = rows.get(depth).center;
@@ -955,6 +962,15 @@ function laneHeightForDepth(depth) {
 function showLaneAtY(_y) { /* no visuals */ }
 function hideLane() { /* no visuals */ }
 function refreshLaneOnZoom() { /* no visuals */ }
+
+  attach('layout', {
+    LabelWrap,
+    laneYForDepth,
+    laneHeightForDepth,
+    showLaneAtY,
+    hideLane,
+    refreshLaneOnZoom,
+  });
 
 
 
@@ -1474,8 +1490,8 @@ if (dir === +1){
 
       for(const [depth, nodes] of byDepth){
         const sorted = nodes.slice().sort((a,b)=>a.x-b.x);
-        const laneY = laneYForDepth(depth);
-        const laneH = laneHeightForDepth(depth);
+        const laneY = logyq.layout.laneYForDepth(depth);
+        const laneH = logyq.layout.laneHeightForDepth(depth);
 
         // anchor detectors to lane top so they can extend downward by factor
         const rectY = laneY - (CONFIG.CARD_HEIGHT/2) + (CONFIG.LANE_Y_OFFSET||11);
@@ -2153,7 +2169,7 @@ function setSelected(uid){
     /* [patch] cousin-caret end */
       return [cx, cy];
     }
-    const cy = (hit && hit.rowY != null) ? hit.rowY : (laneYForDepth((hit?.depth||0)+1) ?? (hit.y + hit.height));
+    const cy = (hit && hit.rowY != null) ? hit.rowY : (logyq.layout.laneYForDepth((hit?.depth||0)+1) ?? (hit.y + hit.height));
     let cx = hit.x + hit.width/2;
 
     if(hit.kind==='sibling' && 'centerX' in hit){
@@ -5128,7 +5144,7 @@ state.zoom = d3.zoom()
   .on("zoom", (e) => {
     elements.gRoot.attr("transform", e.transform);
     if (state.editingUid) updateNodeEditorPosition();
-    refreshLaneOnZoom();
+    logyq.layout.refreshLaneOnZoom();
     Detectors.draw();
 
     // Run moat check after paint, but not while panning
@@ -5448,7 +5464,7 @@ const nEnter = selNodes.enter()
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
     state.lastNodes=state.root.descendants();
-    LabelWrap.apply();
+    logyq.layout.LabelWrap.apply();
   },
 
 
@@ -5539,8 +5555,8 @@ attach('treeManager', treeManager)
             y = h ? h.y : y;
           }
           state.laneLastY = y;
-          showLaneAtY(y);
-        } else hideLane();
+          logyq.layout.showLaneAtY(y);
+        } else logyq.layout.hideLane();
         setText();
       });
     }

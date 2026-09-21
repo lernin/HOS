@@ -15,6 +15,8 @@
     data: null,
     visual: null,
     detectors: null,
+    layout: null,
+    structure: null,
     editing: null,
     selection: null,
     treeOps: null,

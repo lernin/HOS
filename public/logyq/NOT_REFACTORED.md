@@ -16,6 +16,7 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 - **Two `dropSelectedToWordBank` implementations.** The later declaration wins; the earlier one is inside a “Maybe broken?” comment but the `function dropSelectedToWordBank` text is kept so source order stays identical. The live copy now reads through `logyq`; the commented copy still uses ambient names.
 - **Suppressed double-click editor.** A node dblclick handler exists; a later capture listener still swallows SVG double-clicks. Keyboard `E` remains the reliable edit path.
 - **Help text vs code mismatches** (Ctrl vs Shift, double-click rename). Comments and help HTML are unchanged.
+- **Lane API is geometry-only.** `showLaneAtY` / `hideLane` / `refreshLaneOnZoom` are no-op stubs. Swim-lane pin still calls them. `LabelWrap` measures via a hidden overlay text node and falls back to `length * 8` if SVG measure throws.
 - **Mix (`randomizeTree`)** and its undo snapshot, including Word Dock include/clear rules. Context-menu dumps still call `addWords(names.join('\n'), 'bank')`; Word Dock splits on commas/semicolons, not newlines. Duplicate Mix button `contextmenu` listeners remain. `onNodeLeftDown` / `onNodeRightButtonDown` are unused leftovers; the live node mousedown is `onNodeMouseDown` in selection. `onNodeRightButtonDown` still reads undeclared `ctrl`. `flyToXY` ignores its `duration`/`ease` arguments and hard-codes 1200ms `easeExpOut`.
 - **PNG/SVG export** (`PngExport` and export modal wiring).
 - **Legacy `dataManager` local maps / prompt UI.** Trees opens the preview library instead; local save helpers remain in the copied engine.
@@ -31,4 +32,4 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 
 ## Extraction method (intentional)
 
-Fragments still concatenate into the original IIFEs. A `logyq` API bag now holds shared objects; extracted clusters take dependencies from that bag. They are not yet independently imported ES modules. Layout/structure still use ambient bindings. Detectors already register on the bag; they were not internally rewritten. `attach('keyboard')` is semicolon-terminated so the following `18-bridge.js` IIFE is not parsed as `attach(...)()`.
+Fragments still concatenate into the original IIFEs. A `logyq` API bag now holds shared objects; extracted clusters take dependencies from that bag. They are not yet independently imported ES modules. V-hold structural moves and the D3 layout pass in `treeManager` still use ambient bindings. Detectors already register on the bag; they were not internally rewritten except to call `logyq.layout` for lane geometry. `attach('keyboard')` is semicolon-terminated so the following `18-bridge.js` IIFE is not parsed as `attach(...)()`.

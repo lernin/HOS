@@ -56,7 +56,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `04-png-export.js` | PNG/SVG export |
 | `05-history.js` | `pushHistory` / `undo` |
 | `06-data-and-visuals.js` | 30-node sample tree, link drawing |
-| `07-layout-and-structure.js` | Label wrap, lane API, V-hold structural moves |
+| `07-layout-and-structure.js` | Label wrap, lane API, V-hold structural moves. Registers `logyq.layout` for wrap/lanes. Structure moves still use ambient bindings until that cut. |
 | `08-detectors.js` | Invisible drop hit regions |
 | `09-editing.js` | Inline node editor. Registers `logyq.editing`. Reads shared state through the bag. |
 | `10-selection.js` | Focus/group selection, toasts, drop insert, reparent helpers. Registers `logyq.selection`. |
@@ -82,7 +82,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 
 ## Shared state (explicit `logyq` bag)
 
-Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), tree ops (`12-tree-ops.js`), deletion (`11-deletion.js`), drag (`13-drag.js`), Word Dock (`14-word-dock.js`), Mix (`15-mix-and-context.js`), and keyboard (`17-keyboard.js`) register cluster APIs on the bag and take shared state/managers from it. `LOGYQBridge` selection, edit, add-child, create-relative, delete-selection, Word Dock render, and Mix methods go through those APIs. `LOGYQBridge.core` exposes the bag for tests.
+Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), tree ops (`12-tree-ops.js`), deletion (`11-deletion.js`), drag (`13-drag.js`), Word Dock (`14-word-dock.js`), Mix (`15-mix-and-context.js`), layout (`07-layout-and-structure.js` wrap/lanes), and keyboard (`17-keyboard.js`) register cluster APIs on the bag and take shared state/managers from it. `LOGYQBridge` selection, edit, add-child, create-relative, delete-selection, Word Dock render, and Mix methods go through those APIs. `LOGYQBridge.core` exposes the bag for tests.
 
 Unconverted fragments still use ambient `state`, `elements`, `utils`, and friends; `attach()` makes those the same object references as `logyq.*`. Hidden communication that remains:
 
@@ -90,6 +90,7 @@ Unconverted fragments still use ambient `state`, `elements`, `utils`, and friend
 - Capture-phase keyboard listeners racing `keyDispatcher`, including V-hold / G / paste listeners that still live in `10-selection.js`
 - Editing Shift+Enter still calls later `addSiblingRightOf` by ambient name
 - Mix still joins Word Dock dumps with newlines (`addWords(names.join('\n'), 'bank')`); Word Dock `addWords` splits on `/[;,]+/`, so those dumps land as one chip unless a comma/semicolon is present
+- `caretXYFromHit` still uses `laneYForDepth(...) ?? (hit.y + hit.height)`; `laneYForDepth` always returns a number, so the `??` fallback never runs
 - `treeManager.layoutAndRender` patched by the bridge to emit autosave
 - Word Dock `MutationObserver` in preview calling `notifyChange`
 

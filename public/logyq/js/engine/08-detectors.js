@@ -30,8 +30,8 @@
 
       for(const [depth, nodes] of byDepth){
         const sorted = nodes.slice().sort((a,b)=>a.x-b.x);
-        const laneY = laneYForDepth(depth);
-        const laneH = laneHeightForDepth(depth);
+        const laneY = logyq.layout.laneYForDepth(depth);
+        const laneH = logyq.layout.laneHeightForDepth(depth);
 
         // anchor detectors to lane top so they can extend downward by factor
         const rectY = laneY - (CONFIG.CARD_HEIGHT/2) + (CONFIG.LANE_Y_OFFSET||11);
