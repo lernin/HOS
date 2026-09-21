@@ -66,7 +66,29 @@
         #logiq-voice-bar.is-visible{display:flex}
         #logiq-voice-stop{border:0;border-radius:999px;background:#ef4444;color:#fff;padding:8px 13px;font-weight:800}
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
+        body.logyq-mobile-v162 svg#canvas g.node{pointer-events:none!important}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
+      }
+      @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
+        body.logyq-mobile-v162 #logiq-v2-drag-card,body.logyq-mobile-v162 .drag-mini,body.logyq-mobile-v162 g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
+        body.logyq-mobile-v162.v2-branch-drag .drag-mini{display:none!important;opacity:0!important}
+        #logyq-v162-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
+        #logyq-v162-branch-preview svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+        #logyq-v162-branch-preview line{stroke:#cfcfcf;stroke-width:2;stroke-linecap:round}
+        #logyq-v162-branch-preview .v2-float-node{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:0 8px;border:2px solid #fff;border-radius:10px;background:#fff;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24);font:600 14px/1.15 Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:none!important}
+        #logyq-v162-branch-preview .v2-float-node.is-root{border-color:#22c55e!important;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24)!important}
+        body.logyq-mobile-v162.v2-cancel #logyq-v162-branch-preview .v2-float-node.is-root{border-color:#ef4444!important;box-shadow:0 8px 22px rgba(239,68,68,.2)}
+        body.logyq-mobile-v162 .v2-branch-origin-ghost{opacity:.44!important}
+        body.logyq-mobile-v162 .v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
+        body.logyq-mobile-v162 .v2-branch-origin-ghost text{fill:#64748b!important;opacity:.82!important}
+        body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.nodes g.node.is-others{opacity:1!important}
+        body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
+        body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
+        body.logyq-mobile-v162.v2-branch-drag{--det-node:transparent!important;--det-sib:transparent!important;--det-cousin-l:transparent!important;--det-cousin-r:transparent!important;--det-edge:transparent!important}
+        body.logyq-mobile-v162.v2-branch-drag g.node.drop-target rect:not(.grabzone){fill:#22c55e!important;stroke:#22c55e!important;filter:drop-shadow(0 0 7px rgba(34,197,94,.28))!important}
+        body.logyq-mobile-v162.v2-branch-drag g.node.drop-target text{fill:#fff!important;opacity:1!important}
+        body.logyq-mobile-v162.v2-branch-drag .caret-dot{fill:#22c55e!important}
+        body.logyq-mobile-v162.v2-branch-drag #trash{display:block!important;position:fixed!important;left:-10000px!important;right:auto!important;top:-10000px!important;bottom:auto!important}
       }
       @media (hover:none) and (pointer:coarse) and (max-height:500px){
         #logiq-mobile-header{height:44px;padding-top:4px;padding-bottom:4px}

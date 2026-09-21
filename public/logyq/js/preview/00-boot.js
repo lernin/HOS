@@ -4,7 +4,7 @@
   const bridge = window.LOGYQBridge
   if (!bridge) return
 
-  // Preview bag: spawn-puck / tap-vs-pan live here, not on the engine `logyq` bag.
+  // Preview bag: v162 mobile gestures + header-mic voice live here, not on the engine `logyq` bag.
   const preview = {
     app: null,
     ui: null,

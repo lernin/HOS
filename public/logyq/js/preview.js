@@ -4,7 +4,7 @@
   const bridge = window.LOGYQBridge
   if (!bridge) return
 
-  // Preview bag: spawn-puck / tap-vs-pan live here, not on the engine `logyq` bag.
+  // Preview bag: v162 mobile gestures + header-mic voice live here, not on the engine `logyq` bag.
   const preview = {
     app: null,
     ui: null,
@@ -169,7 +169,29 @@
         #logiq-voice-bar.is-visible{display:flex}
         #logiq-voice-stop{border:0;border-radius:999px;background:#ef4444;color:#fff;padding:8px 13px;font-weight:800}
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
+        body.logyq-mobile-v162 svg#canvas g.node{pointer-events:none!important}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
+      }
+      @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
+        body.logyq-mobile-v162 #logiq-v2-drag-card,body.logyq-mobile-v162 .drag-mini,body.logyq-mobile-v162 g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
+        body.logyq-mobile-v162.v2-branch-drag .drag-mini{display:none!important;opacity:0!important}
+        #logyq-v162-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
+        #logyq-v162-branch-preview svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+        #logyq-v162-branch-preview line{stroke:#cfcfcf;stroke-width:2;stroke-linecap:round}
+        #logyq-v162-branch-preview .v2-float-node{position:absolute;box-sizing:border-box;display:flex;align-items:center;justify-content:center;padding:0 8px;border:2px solid #fff;border-radius:10px;background:#fff;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24);font:600 14px/1.15 Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transform:none!important}
+        #logyq-v162-branch-preview .v2-float-node.is-root{border-color:#22c55e!important;box-shadow:0 1px 3px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.24)!important}
+        body.logyq-mobile-v162.v2-cancel #logyq-v162-branch-preview .v2-float-node.is-root{border-color:#ef4444!important;box-shadow:0 8px 22px rgba(239,68,68,.2)}
+        body.logyq-mobile-v162 .v2-branch-origin-ghost{opacity:.44!important}
+        body.logyq-mobile-v162 .v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
+        body.logyq-mobile-v162 .v2-branch-origin-ghost text{fill:#64748b!important;opacity:.82!important}
+        body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.nodes g.node.is-others{opacity:1!important}
+        body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
+        body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
+        body.logyq-mobile-v162.v2-branch-drag{--det-node:transparent!important;--det-sib:transparent!important;--det-cousin-l:transparent!important;--det-cousin-r:transparent!important;--det-edge:transparent!important}
+        body.logyq-mobile-v162.v2-branch-drag g.node.drop-target rect:not(.grabzone){fill:#22c55e!important;stroke:#22c55e!important;filter:drop-shadow(0 0 7px rgba(34,197,94,.28))!important}
+        body.logyq-mobile-v162.v2-branch-drag g.node.drop-target text{fill:#fff!important;opacity:1!important}
+        body.logyq-mobile-v162.v2-branch-drag .caret-dot{fill:#22c55e!important}
+        body.logyq-mobile-v162.v2-branch-drag #trash{display:block!important;position:fixed!important;left:-10000px!important;right:auto!important;top:-10000px!important;bottom:auto!important}
       }
       @media (hover:none) and (pointer:coarse) and (max-height:500px){
         #logiq-mobile-header{height:44px;padding-top:4px;padding-bottom:4px}
@@ -288,8 +310,8 @@
       if (action === 'delete' && window.confirm('Delete the selected node or subtree?')) bridge.deleteSelection()
     })
 
-    bindSpawnGestures(ui.spawnPuck)
-    bindCanvasGestures(document.getElementById('canvas'))
+    // Direct-flick / hold-drag / double-tap bind themselves from 05-v162-gestures.js.
+    // Do not reattach bindCanvasGestures / bindSpawnGestures; those race the v162 layer.
 
     ui.mapList.addEventListener('click', handleMapAction)
     ui.pin.addEventListener('click', (event) => { if (event.target === ui.pin) finishPin(null) })
@@ -336,18 +358,8 @@
     const selectedUid = bridge.getSelectedUid()
     const selected = selectedUid || bridge.getSelectedUids().length
     ui.mobileContext.classList.toggle('is-visible', !!selected)
-    ui.spawnPuck.classList.toggle('is-visible', !!selectedUid && isPhoneUi())
-    if (!selectedUid || !isPhoneUi()) return
-    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?._uid === selectedUid)
-    const rect = node?.getBoundingClientRect()
-    if (!rect || rect.width < 1 || rect.height < 1) {
-      ui.spawnPuck.classList.remove('is-visible')
-      return
-    }
-    const left = Math.min(window.innerWidth - 43, Math.max(5, rect.right + 7))
-    const top = Math.min(window.innerHeight - 58, Math.max(51, rect.top + rect.height / 2 - 19))
-    ui.spawnPuck.style.left = `${left}px`
-    ui.spawnPuck.style.top = `${top}px`
+    ui.spawnPuck.classList.remove('is-visible')
+    ui.spawnGhost.classList.remove('is-visible')
   }
 
   function updateMapName() {
@@ -358,130 +370,12 @@
     return window.matchMedia('(max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px)').matches
   }
 
-  const GESTURE = {
-    TAP_MOVE_PX: 9,
-    TAP_MAX_MS: 450,
-    SPAWN_AIM_PX: 22,
-    SPAWN_COMMIT_PX: 48,
-    SPAWN_MAX_MS: 850,
+  function bindCanvasGestures(_canvas) {
+    // Retired. Old tap-vs-pan capture raced the v162 layer. Header-mic voice stays below.
   }
 
-  function bindCanvasGestures(canvas) {
-    if (!canvas) return
-    canvas.addEventListener('pointerdown', beginCanvasPointer, true)
-    canvas.addEventListener('pointermove', moveCanvasPointer, true)
-    canvas.addEventListener('pointerup', finishCanvasPointer, true)
-    canvas.addEventListener('pointercancel', cancelCanvasPointer, true)
-  }
-
-  function bindSpawnGestures(puck) {
-    if (!puck) return
-    puck.addEventListener('pointerdown', beginSpawnGesture)
-    puck.addEventListener('pointermove', moveSpawnGesture)
-    puck.addEventListener('pointerup', finishSpawnGesture)
-    puck.addEventListener('pointercancel', cancelSpawnGesture)
-  }
-
-  function beginCanvasPointer(event) {
-    if (!isPhoneUi() || event.target.closest?.('g.node.is-outlined')) return
-    app.canvasPointers.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-      started: performance.now(),
-      moved: false,
-      multi: app.canvasPointers.size > 0,
-    })
-    if (app.canvasPointers.size > 1) app.canvasPointers.forEach((pointer) => { pointer.multi = true })
-  }
-
-  function moveCanvasPointer(event) {
-    const pointer = app.canvasPointers.get(event.pointerId)
-    if (!pointer) return
-    if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > GESTURE.TAP_MOVE_PX) pointer.moved = true
-  }
-
-  function finishCanvasPointer(event) {
-    const pointer = app.canvasPointers.get(event.pointerId)
-    app.canvasPointers.delete(event.pointerId)
-    if (!pointer || pointer.multi || pointer.moved || performance.now() - pointer.started > GESTURE.TAP_MAX_MS) return
-    const candidates = Array.from(document.querySelectorAll('g.node')).filter((node) => {
-      const rect = node.getBoundingClientRect()
-      return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
-    }).sort((a, b) => {
-      const ar = a.getBoundingClientRect()
-      const br = b.getBoundingClientRect()
-      return ar.width * ar.height - br.width * br.height
-    })
-    const uid = candidates[0]?.__data__?.data?._uid
-    if (uid) bridge.selectByUid(uid)
-    else bridge.clearFocusSelection()
-    requestAnimationFrame(updateContextActions)
-  }
-
-  function cancelCanvasPointer(event) {
-    app.canvasPointers.delete(event.pointerId)
-  }
-
-  function directionFromDelta(dx, dy) {
-    if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'left' : 'right'
-    return dy < 0 ? 'up' : 'down'
-  }
-
-  function directionLabel(direction) {
-    return ({ up: '↑ Insert parent', left: '← Older sibling', down: '↓ Add child', right: 'Younger sibling →' })[direction]
-  }
-
-  function beginSpawnGesture(event) {
-    if (app.recorder || !bridge.getSelectedUid()) return
-    event.preventDefault()
-    try { ui.spawnPuck.setPointerCapture?.(event.pointerId) } catch (_error) {}
-    app.spawnGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, started: performance.now(), direction: null }
-    ui.spawnPuck.classList.add('is-dragging')
-  }
-
-  function moveSpawnGesture(event) {
-    const gesture = app.spawnGesture
-    if (!gesture || gesture.pointerId !== event.pointerId) return
-    event.preventDefault()
-    const dx = event.clientX - gesture.x
-    const dy = event.clientY - gesture.y
-    const distance = Math.hypot(dx, dy)
-    if (distance < GESTURE.SPAWN_AIM_PX) return
-    gesture.direction = directionFromDelta(dx, dy)
-    ui.spawnGhost.textContent = directionLabel(gesture.direction)
-    ui.spawnGhost.style.left = `${event.clientX}px`
-    ui.spawnGhost.style.top = `${event.clientY}px`
-    ui.spawnGhost.classList.add('is-visible')
-    if (!gesture.threshold && distance >= GESTURE.SPAWN_COMMIT_PX) {
-      gesture.threshold = true
-      navigator.vibrate?.(18)
-    }
-  }
-
-  async function finishSpawnGesture(event) {
-    const gesture = app.spawnGesture
-    if (!gesture || gesture.pointerId !== event.pointerId) return
-    const distance = Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y)
-    const elapsed = performance.now() - gesture.started
-    const direction = gesture.direction
-    cancelSpawnGesture()
-    if (!direction || distance < GESTURE.SPAWN_COMMIT_PX || elapsed > GESTURE.SPAWN_MAX_MS) {
-      showMobileToast('Flick the + toward parent, sibling, or child')
-      return
-    }
-    const uid = bridge.createRelative(direction)
-    if (!uid) {
-      showMobileToast(direction === 'up' || direction === 'left' || direction === 'right' ? 'The root card cannot have a sibling or inserted parent' : 'Could not create card')
-      return
-    }
-    requestAnimationFrame(updateContextActions)
-    await startVoiceCapture(uid)
-  }
-
-  function cancelSpawnGesture() {
-    app.spawnGesture = null
-    ui.spawnPuck.classList.remove('is-dragging')
-    ui.spawnGhost.classList.remove('is-visible')
+  function bindSpawnGestures(_puck) {
+    // Retired. Spawn-puck auto-voice raced direct-flick createRelative.
   }
 
   function showMobileToast(message) {
@@ -562,21 +456,466 @@
   }
 
   attach('gestures', {
-    constants: GESTURE,
+    constants: null,
     bindCanvas: bindCanvasGestures,
     bindSpawn: bindSpawnGestures,
-    beginCanvasPointer,
-    moveCanvasPointer,
-    finishCanvasPointer,
-    cancelCanvasPointer,
-    beginSpawnGesture,
-    moveSpawnGesture,
-    finishSpawnGesture,
-    cancelSpawnGesture,
     startVoiceCapture,
     stopVoiceCapture,
   });
+  function v162Constants() {
+    return {
+      FLICK_MIN: 52,
+      FLICK_MAX_MS: 340,
+      FLICK_RATIO: 1.45,
+      HOLD_MS: 280,
+      HOLD_SLOP: 8,
+      TAP_MOVE: 11,
+      DOUBLE_TAP_MS: 360,
+    }
+  }
 
+  function v162Mobile(win) {
+    const target = win || window
+    return target.matchMedia('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px))').matches
+  }
+
+  function bindV162Gestures() {
+    const win = window
+    const doc = document
+    if (!v162Mobile(win) || !bridge) return
+    const canvas = doc.getElementById('canvas')
+    if (!canvas || canvas.dataset.logyqV162 === '1') return
+    canvas.dataset.logyqV162 = '1'
+    doc.body.classList.add('logyq-mobile-v162')
+    win.__logyqV2ConsumedPointers ||= new Set()
+
+    const holdState = {
+      active: new Set(),
+      pointers: new Map(),
+      hold: null,
+      drag: null,
+      feedbackRaf: 0,
+    }
+    const flickState = {
+      active: new Set(),
+      candidates: new Map(),
+      lastTap: null,
+    }
+
+    win.addEventListener('pointerdown', (event) => onHoldDown(event, doc, win, canvas, holdState), true)
+    win.addEventListener('pointermove', (event) => onHoldMove(event, win, holdState), true)
+    win.addEventListener('pointerup', (event) => onHoldUp(event, doc, win, canvas, holdState), true)
+    win.addEventListener('pointercancel', (event) => onHoldCancel(event, doc, win, holdState), true)
+
+    canvas.addEventListener('pointerdown', (event) => onFlickDown(event, doc, win, flickState), true)
+    canvas.addEventListener('pointerup', (event) => onFlickUp(event, doc, win, flickState), true)
+    canvas.addEventListener('pointercancel', (event) => onFlickClear(event, win, flickState), true)
+  }
+
+  function onHoldDown(event, doc, win, canvas, state) {
+    if (event.pointerType === 'mouse') return
+    if (!(event.target === canvas || canvas.contains(event.target))) return
+    if (bridge.core?.input?.isTextField?.(event.target)) return
+    if (doc.querySelector('.logiq-backdrop.is-open')) return
+
+    const alreadyActive = state.active.size > 0
+    if (alreadyActive) {
+      state.pointers.forEach((pointer) => { pointer.multi = true })
+      cancelHold(win, state)
+      if (state.drag) {
+        state.drag.multi = true
+        doc.body.classList.add('v2-cancel')
+      }
+    }
+
+    state.active.add(event.pointerId)
+    const source = hitNode(doc, event.clientX, event.clientY)
+    const uid = nodeUid(source)
+    const pointer = {
+      x: event.clientX,
+      y: event.clientY,
+      lastX: event.clientX,
+      lastY: event.clientY,
+      uid,
+      source,
+      multi: alreadyActive,
+    }
+    state.pointers.set(event.pointerId, pointer)
+    if (alreadyActive || !uid) return
+
+    const hold = { pointerId: event.pointerId, ...pointer, timer: 0 }
+    hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
+    state.hold = hold
+  }
+
+  function onHoldMove(event, win, state) {
+    const pointer = state.pointers.get(event.pointerId)
+    if (!pointer) return
+    pointer.lastX = event.clientX
+    pointer.lastY = event.clientY
+
+    if (state.hold?.pointerId === event.pointerId) {
+      state.hold.lastX = event.clientX
+      state.hold.lastY = event.clientY
+      if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) > v162Constants().HOLD_SLOP) {
+        cancelHold(win, state)
+      }
+      return
+    }
+
+    const drag = state.drag
+    if (!drag || drag.pointerId !== event.pointerId) return
+    drag.lastX = event.clientX
+    drag.lastY = event.clientY
+    movePreview(drag, event.clientX, event.clientY)
+    mouse(win, win, 'mousemove', event.clientX, event.clientY, 1)
+  }
+
+  function onHoldUp(event, doc, win, canvas, state) {
+    state.active.delete(event.pointerId)
+    state.pointers.delete(event.pointerId)
+    if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
+
+    const drag = state.drag
+    if (!drag || drag.pointerId !== event.pointerId) return
+
+    event.preventDefault()
+    event.stopImmediatePropagation()
+
+    const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
+    const endX = canceled ? drag.x : event.clientX
+    const endY = canceled ? drag.y : event.clientY
+
+    if (canceled) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+    mouse(win, win, 'mouseup', endX, endY, 0)
+
+    cleanupDrag(doc, win, state, drag)
+    dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
+  }
+
+  function onHoldCancel(event, doc, win, state) {
+    state.active.delete(event.pointerId)
+    state.pointers.delete(event.pointerId)
+    if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
+
+    const drag = state.drag
+    if (!drag || drag.pointerId !== event.pointerId) return
+
+    mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+    mouse(win, win, 'mouseup', drag.x, drag.y, 0)
+    cleanupDrag(doc, win, state, drag)
+  }
+
+  function latchHold(doc, win, state, hold) {
+    if (state.hold !== hold) return
+    const pointer = state.pointers.get(hold.pointerId)
+    if (!pointer || pointer.multi || state.active.size !== 1) return cancelHold(win, state)
+
+    state.hold = null
+    if (hold.timer) win.clearTimeout(hold.timer)
+
+    const source = nodeByUid(doc, hold.uid) || hold.source
+    const hierarchy = source?.__data__
+    if (!source || !hierarchy) return
+
+    const branch = typeof hierarchy.descendants === 'function' ? hierarchy.descendants() : [hierarchy]
+    const uids = branch.map((item) => item?.data?._uid).filter(Boolean)
+    const previewHost = makeBranchPreview(doc, win, branch, hold.uid)
+    if (!previewHost) return
+
+    for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
+
+    win.__logyqV2ConsumedPointers.add(hold.pointerId)
+    state.drag = {
+      pointerId: hold.pointerId,
+      uid: hold.uid,
+      uids,
+      x: hold.x,
+      y: hold.y,
+      lastX: hold.lastX,
+      lastY: hold.lastY,
+      preview: previewHost,
+      multi: false,
+    }
+
+    doc.body.classList.add('v2-branch-drag')
+    bridge.selectByUid(hold.uid)
+    mouse(source, win, 'mousedown', hold.x, hold.y, 1)
+    mouse(win, win, 'mousemove', hold.lastX, hold.lastY, 1)
+    movePreview(state.drag, hold.lastX, hold.lastY)
+    startFeedbackLoop(win, state)
+    win.navigator.vibrate?.(12)
+  }
+
+  function makeBranchPreview(doc, win, branch, rootUid) {
+    const nodes = []
+    const centers = new Map()
+
+    for (const item of branch) {
+      const uid = item?.data?._uid
+      const node = uid ? nodeByUid(doc, uid) : null
+      if (!node) continue
+      const rect = node.getBoundingClientRect()
+      if (rect.width < 1 || rect.height < 1) continue
+      nodes.push({ item, uid, node, rect })
+      centers.set(uid, { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 })
+    }
+    if (!nodes.length) return null
+
+    const host = doc.createElement('div')
+    host.id = 'logyq-v162-branch-preview'
+    const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    svg.setAttribute('aria-hidden', 'true')
+    host.appendChild(svg)
+
+    for (const entry of nodes) {
+      const parentUid = entry.item?.parent?.data?._uid
+      if (!parentUid || !centers.has(parentUid)) continue
+      const a = centers.get(parentUid)
+      const b = centers.get(entry.uid)
+      const line = doc.createElementNS('http://www.w3.org/2000/svg', 'line')
+      line.setAttribute('x1', String(a.x)); line.setAttribute('y1', String(a.y))
+      line.setAttribute('x2', String(b.x)); line.setAttribute('y2', String(b.y))
+      svg.appendChild(line)
+    }
+
+    for (const entry of nodes) {
+      const card = doc.createElement('div')
+      card.className = `v2-float-node${entry.uid === rootUid ? ' is-root' : ''}`
+      card.dataset.uid = entry.uid
+      card.textContent = cardText(entry.node) || ' '
+      card.style.left = `${entry.rect.left}px`
+      card.style.top = `${entry.rect.top}px`
+      card.style.width = `${entry.rect.width}px`
+      card.style.height = `${entry.rect.height}px`
+      const text = entry.node.querySelector('text')
+      if (text) {
+        const computed = win.getComputedStyle(text)
+        if (computed.fontSize) card.style.fontSize = computed.fontSize
+        if (computed.fontWeight) card.style.fontWeight = computed.fontWeight
+      }
+      host.appendChild(card)
+    }
+
+    doc.body.appendChild(host)
+    return host
+  }
+
+  function movePreview(drag, x, y) {
+    if (!drag?.preview) return
+    const dx = x - drag.x
+    const dy = y - drag.y
+    drag.preview.style.transform = `translate3d(${dx}px,${dy}px,0)`
+  }
+
+  function startFeedbackLoop(win, state) {
+    if (state.feedbackRaf) win.cancelAnimationFrame(state.feedbackRaf)
+    const tick = () => {
+      const drag = state.drag
+      if (!drag) { state.feedbackRaf = 0; return }
+      mouse(win, win, 'mousemove', drag.lastX, drag.lastY, 1)
+      state.feedbackRaf = win.requestAnimationFrame(tick)
+    }
+    state.feedbackRaf = win.requestAnimationFrame(tick)
+  }
+
+  function cleanupDrag(doc, win, state, drag) {
+    if (!drag) return
+    drag.preview?.remove?.()
+    for (const uid of drag.uids || []) nodeByUid(doc, uid)?.classList.remove('v2-branch-origin-ghost')
+    doc.body.classList.remove('v2-branch-drag', 'v2-cancel')
+    if (state.feedbackRaf) win.cancelAnimationFrame(state.feedbackRaf)
+    state.feedbackRaf = 0
+    if (state.drag === drag) state.drag = null
+    win.setTimeout(() => win.__logyqV2ConsumedPointers.delete(drag.pointerId), 0)
+  }
+
+  function cancelHold(win, state) {
+    const hold = state.hold
+    if (!hold) return
+    if (hold.timer) win.clearTimeout(hold.timer)
+    state.hold = null
+  }
+
+  function dispatchPointerCancel(canvas, win, pointerId, x, y) {
+    try {
+      canvas.dispatchEvent(new win.PointerEvent('pointercancel', {
+        bubbles: true,
+        cancelable: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        clientX: x,
+        clientY: y,
+      }))
+    } catch (_error) {}
+  }
+
+  function onFlickDown(event, doc, win, state) {
+    if (event.pointerType === 'mouse') return
+
+    const alreadyActive = state.active.size > 0
+    if (alreadyActive) state.candidates.forEach((candidate) => { candidate.multi = true })
+    state.active.add(event.pointerId)
+
+    const node = hitNode(doc, event.clientX, event.clientY)
+    const uid = nodeUid(node)
+    state.candidates.set(event.pointerId, {
+      uid,
+      x: event.clientX,
+      y: event.clientY,
+      started: win.performance.now(),
+      multi: alreadyActive,
+      moved: false,
+      view: captureView(doc, win),
+    })
+  }
+
+  function onFlickUp(event, doc, win, state) {
+    state.active.delete(event.pointerId)
+    const candidate = state.candidates.get(event.pointerId)
+    state.candidates.delete(event.pointerId)
+
+    if (win.__logyqV2ConsumedPointers.has(event.pointerId)) {
+      win.__logyqV2ConsumedPointers.delete(event.pointerId)
+      return
+    }
+    if (!candidate || candidate.multi) {
+      state.lastTap = null
+      return
+    }
+
+    const dx = event.clientX - candidate.x
+    const dy = event.clientY - candidate.y
+    const elapsed = win.performance.now() - candidate.started
+    if (Math.hypot(dx, dy) > v162Constants().TAP_MOVE) candidate.moved = true
+
+    if (candidate.uid && isFlick(dx, dy, elapsed)) {
+      const direction = Math.abs(dx) > Math.abs(dy)
+        ? (dx < 0 ? 'left' : 'right')
+        : (dy < 0 ? 'up' : 'down')
+      state.lastTap = null
+      win.requestAnimationFrame(() => {
+        restoreView(doc, win, candidate.view)
+        bridge.selectByUid(candidate.uid)
+        const createdUid = bridge.createRelative(direction)
+        if (!createdUid) return
+        bridge.selectByUid(createdUid)
+        win.navigator.vibrate?.(16)
+      })
+      return
+    }
+
+    if (candidate.moved) {
+      state.lastTap = null
+      return
+    }
+
+    const node = hitNode(doc, event.clientX, event.clientY)
+    const uid = nodeUid(node)
+    if (!uid || uid !== candidate.uid) {
+      state.lastTap = null
+      return
+    }
+
+    const now = win.performance.now()
+    if (state.lastTap?.uid === uid && now - state.lastTap.time <= v162Constants().DOUBLE_TAP_MS) {
+      state.lastTap = null
+      bridge.selectByUid(uid)
+      bridge.editSelected()
+      return
+    }
+
+    bridge.selectByUid(uid)
+    state.lastTap = { uid, time: now }
+    requestAnimationFrame(updateContextActions)
+  }
+
+  function onFlickClear(event, win, state) {
+    state.active.delete(event.pointerId)
+    state.candidates.delete(event.pointerId)
+    win.__logyqV2ConsumedPointers.delete(event.pointerId)
+  }
+
+  function isFlick(dx, dy, elapsed) {
+    const C = v162Constants()
+    const major = Math.max(Math.abs(dx), Math.abs(dy))
+    const minor = Math.max(1, Math.min(Math.abs(dx), Math.abs(dy)))
+    return elapsed <= C.FLICK_MAX_MS && Math.hypot(dx, dy) >= C.FLICK_MIN && major / minor >= C.FLICK_RATIO
+  }
+
+  function nodeUid(node) {
+    return node?.__data__?.data?._uid || null
+  }
+
+  function nodeByUid(doc, uid) {
+    return Array.from(doc.querySelectorAll('g.node')).find((node) => nodeUid(node) === uid) || null
+  }
+
+  function hitNode(doc, x, y) {
+    return Array.from(doc.querySelectorAll('g.node'))
+      .filter((node) => {
+        const rect = node.getBoundingClientRect()
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+      })
+      .sort((a, b) => {
+        const ar = a.getBoundingClientRect()
+        const br = b.getBoundingClientRect()
+        return ar.width * ar.height - br.width * br.height
+      })[0] || null
+  }
+
+  function cardText(node) {
+    const data = node?.__data__?.data || {}
+    for (const key of ['label', 'text', 'name', 'title', 'value']) {
+      if (typeof data[key] === 'string' && data[key].trim()) return data[key].trim()
+    }
+    return Array.from(node?.querySelectorAll?.('text') || [])
+      .map((element) => element.textContent?.trim() || '')
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+  }
+
+  function captureView(doc, win) {
+    const svg = doc.getElementById('canvas')
+    if (!svg || !win.d3) return null
+    const transform = win.d3.zoomTransform(svg)
+    return { x: transform.x, y: transform.y, k: transform.k }
+  }
+
+  function restoreView(doc, win, view) {
+    if (!view || !win.d3) return
+    const svg = doc.getElementById('canvas')
+    if (!svg) return
+    const transform = win.d3.zoomIdentity.translate(view.x, view.y).scale(view.k)
+    svg.__zoom = transform
+    const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+    if (root) root.setAttribute('transform', transform.toString())
+  }
+
+  function mouse(target, win, type, x, y, buttons) {
+    try {
+      target.dispatchEvent(new win.MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        view: win,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+        button: 0,
+        buttons,
+        shiftKey: false,
+      }))
+    } catch (_error) {}
+  }
+
+  bindV162Gestures()
+  if (preview.gestures) {
+    preview.gestures.constants = v162Constants()
+    preview.gestures.bindV162 = bindV162Gestures
+  }
   function setSaveState(state) {
     const text = state === 'saving' ? 'Saving' : state === 'offline' ? 'Offline' : 'Saved'
     ui.saveStates.forEach((element) => {

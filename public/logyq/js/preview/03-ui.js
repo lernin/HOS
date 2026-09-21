@@ -105,8 +105,8 @@
       if (action === 'delete' && window.confirm('Delete the selected node or subtree?')) bridge.deleteSelection()
     })
 
-    bindSpawnGestures(ui.spawnPuck)
-    bindCanvasGestures(document.getElementById('canvas'))
+    // Direct-flick / hold-drag / double-tap bind themselves from 05-v162-gestures.js.
+    // Do not reattach bindCanvasGestures / bindSpawnGestures; those race the v162 layer.
 
     ui.mapList.addEventListener('click', handleMapAction)
     ui.pin.addEventListener('click', (event) => { if (event.target === ui.pin) finishPin(null) })
@@ -153,18 +153,8 @@
     const selectedUid = bridge.getSelectedUid()
     const selected = selectedUid || bridge.getSelectedUids().length
     ui.mobileContext.classList.toggle('is-visible', !!selected)
-    ui.spawnPuck.classList.toggle('is-visible', !!selectedUid && isPhoneUi())
-    if (!selectedUid || !isPhoneUi()) return
-    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?._uid === selectedUid)
-    const rect = node?.getBoundingClientRect()
-    if (!rect || rect.width < 1 || rect.height < 1) {
-      ui.spawnPuck.classList.remove('is-visible')
-      return
-    }
-    const left = Math.min(window.innerWidth - 43, Math.max(5, rect.right + 7))
-    const top = Math.min(window.innerHeight - 58, Math.max(51, rect.top + rect.height / 2 - 19))
-    ui.spawnPuck.style.left = `${left}px`
-    ui.spawnPuck.style.top = `${top}px`
+    ui.spawnPuck.classList.remove('is-visible')
+    ui.spawnGhost.classList.remove('is-visible')
   }
 
   function updateMapName() {

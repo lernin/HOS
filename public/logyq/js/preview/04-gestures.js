@@ -1,127 +1,9 @@
-  const GESTURE = {
-    TAP_MOVE_PX: 9,
-    TAP_MAX_MS: 450,
-    SPAWN_AIM_PX: 22,
-    SPAWN_COMMIT_PX: 48,
-    SPAWN_MAX_MS: 850,
+  function bindCanvasGestures(_canvas) {
+    // Retired. Old tap-vs-pan capture raced the v162 layer. Header-mic voice stays below.
   }
 
-  function bindCanvasGestures(canvas) {
-    if (!canvas) return
-    canvas.addEventListener('pointerdown', beginCanvasPointer, true)
-    canvas.addEventListener('pointermove', moveCanvasPointer, true)
-    canvas.addEventListener('pointerup', finishCanvasPointer, true)
-    canvas.addEventListener('pointercancel', cancelCanvasPointer, true)
-  }
-
-  function bindSpawnGestures(puck) {
-    if (!puck) return
-    puck.addEventListener('pointerdown', beginSpawnGesture)
-    puck.addEventListener('pointermove', moveSpawnGesture)
-    puck.addEventListener('pointerup', finishSpawnGesture)
-    puck.addEventListener('pointercancel', cancelSpawnGesture)
-  }
-
-  function beginCanvasPointer(event) {
-    if (!isPhoneUi() || event.target.closest?.('g.node.is-outlined')) return
-    app.canvasPointers.set(event.pointerId, {
-      x: event.clientX,
-      y: event.clientY,
-      started: performance.now(),
-      moved: false,
-      multi: app.canvasPointers.size > 0,
-    })
-    if (app.canvasPointers.size > 1) app.canvasPointers.forEach((pointer) => { pointer.multi = true })
-  }
-
-  function moveCanvasPointer(event) {
-    const pointer = app.canvasPointers.get(event.pointerId)
-    if (!pointer) return
-    if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > GESTURE.TAP_MOVE_PX) pointer.moved = true
-  }
-
-  function finishCanvasPointer(event) {
-    const pointer = app.canvasPointers.get(event.pointerId)
-    app.canvasPointers.delete(event.pointerId)
-    if (!pointer || pointer.multi || pointer.moved || performance.now() - pointer.started > GESTURE.TAP_MAX_MS) return
-    const candidates = Array.from(document.querySelectorAll('g.node')).filter((node) => {
-      const rect = node.getBoundingClientRect()
-      return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
-    }).sort((a, b) => {
-      const ar = a.getBoundingClientRect()
-      const br = b.getBoundingClientRect()
-      return ar.width * ar.height - br.width * br.height
-    })
-    const uid = candidates[0]?.__data__?.data?._uid
-    if (uid) bridge.selectByUid(uid)
-    else bridge.clearFocusSelection()
-    requestAnimationFrame(updateContextActions)
-  }
-
-  function cancelCanvasPointer(event) {
-    app.canvasPointers.delete(event.pointerId)
-  }
-
-  function directionFromDelta(dx, dy) {
-    if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 'left' : 'right'
-    return dy < 0 ? 'up' : 'down'
-  }
-
-  function directionLabel(direction) {
-    return ({ up: '↑ Insert parent', left: '← Older sibling', down: '↓ Add child', right: 'Younger sibling →' })[direction]
-  }
-
-  function beginSpawnGesture(event) {
-    if (app.recorder || !bridge.getSelectedUid()) return
-    event.preventDefault()
-    try { ui.spawnPuck.setPointerCapture?.(event.pointerId) } catch (_error) {}
-    app.spawnGesture = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, started: performance.now(), direction: null }
-    ui.spawnPuck.classList.add('is-dragging')
-  }
-
-  function moveSpawnGesture(event) {
-    const gesture = app.spawnGesture
-    if (!gesture || gesture.pointerId !== event.pointerId) return
-    event.preventDefault()
-    const dx = event.clientX - gesture.x
-    const dy = event.clientY - gesture.y
-    const distance = Math.hypot(dx, dy)
-    if (distance < GESTURE.SPAWN_AIM_PX) return
-    gesture.direction = directionFromDelta(dx, dy)
-    ui.spawnGhost.textContent = directionLabel(gesture.direction)
-    ui.spawnGhost.style.left = `${event.clientX}px`
-    ui.spawnGhost.style.top = `${event.clientY}px`
-    ui.spawnGhost.classList.add('is-visible')
-    if (!gesture.threshold && distance >= GESTURE.SPAWN_COMMIT_PX) {
-      gesture.threshold = true
-      navigator.vibrate?.(18)
-    }
-  }
-
-  async function finishSpawnGesture(event) {
-    const gesture = app.spawnGesture
-    if (!gesture || gesture.pointerId !== event.pointerId) return
-    const distance = Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y)
-    const elapsed = performance.now() - gesture.started
-    const direction = gesture.direction
-    cancelSpawnGesture()
-    if (!direction || distance < GESTURE.SPAWN_COMMIT_PX || elapsed > GESTURE.SPAWN_MAX_MS) {
-      showMobileToast('Flick the + toward parent, sibling, or child')
-      return
-    }
-    const uid = bridge.createRelative(direction)
-    if (!uid) {
-      showMobileToast(direction === 'up' || direction === 'left' || direction === 'right' ? 'The root card cannot have a sibling or inserted parent' : 'Could not create card')
-      return
-    }
-    requestAnimationFrame(updateContextActions)
-    await startVoiceCapture(uid)
-  }
-
-  function cancelSpawnGesture() {
-    app.spawnGesture = null
-    ui.spawnPuck.classList.remove('is-dragging')
-    ui.spawnGhost.classList.remove('is-visible')
+  function bindSpawnGestures(_puck) {
+    // Retired. Spawn-puck auto-voice raced direct-flick createRelative.
   }
 
   function showMobileToast(message) {
@@ -202,18 +84,9 @@
   }
 
   attach('gestures', {
-    constants: GESTURE,
+    constants: null,
     bindCanvas: bindCanvasGestures,
     bindSpawn: bindSpawnGestures,
-    beginCanvasPointer,
-    moveCanvasPointer,
-    finishCanvasPointer,
-    cancelCanvasPointer,
-    beginSpawnGesture,
-    moveSpawnGesture,
-    finishSpawnGesture,
-    cancelSpawnGesture,
     startVoiceCapture,
     stopVoiceCapture,
   });
-
