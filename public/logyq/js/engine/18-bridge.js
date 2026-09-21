@@ -75,8 +75,8 @@
       return true;
     },
     addChild() {
-      if (!state.selectedUid) return false;
-      return !!addChildOf(state.selectedUid, '', { noEdit: false });
+      if (!logyq.state.selectedUid) return false;
+      return !!logyq.treeOps.addChildOf(logyq.state.selectedUid, '', { noEdit: false });
     },
     createRelative(direction) {
       if (!state.selectedUid) return null;

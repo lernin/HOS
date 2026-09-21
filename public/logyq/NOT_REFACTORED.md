@@ -11,7 +11,7 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 - **Two Escape listeners.** Purple Esc in `09-editing.js` clears group+focus; `keyDispatcher` Esc closes the inline editor. Order and the “editor-open, skip group clear” guard are load-bearing.
 - **`caretXYFromHit` stacked edgeSibling patches.** The first nextUid/prevUid return wins; the later parent-edge formula only runs when those uids are missing. Duplicate cousin comments are unchanged.
 - **`insertNodeAtDrop` / `removeNode` live in the selection fragment.** Drag, paste, and later tree ops still call them by ambient name. They are not moved into `12-tree-ops.js` in this wave.
-- **Two `dropSelectedToWordBank` implementations.** The later declaration wins; the earlier one is dead but kept so source order stays identical.
+- **Two `dropSelectedToWordBank` implementations.** The later declaration wins; the earlier one is inside a “Maybe broken?” comment but the `function dropSelectedToWordBank` text is kept so source order stays identical. The live copy now reads through `logyq`; the commented copy still uses ambient names.
 - **Suppressed double-click editor.** A node dblclick handler exists; a later capture listener still swallows SVG double-clicks. Keyboard `E` remains the reliable edit path.
 - **Unreachable Shift+W clear-WordBank branch.** The earlier `W` handler returns first. Documented v161 mismatch; not “fixed.”
 - **Help text vs code mismatches** (Ctrl vs Shift, double-click rename). Comments and help HTML are unchanged.

@@ -2818,6 +2818,7 @@ function createFirstCardAndEdit(){
  */
 function addChildOf(parentUid, newName = '', opts = {}) {
   const { noEdit = false, select = true } = opts;
+  const { state, utils } = logyq
 
   const parent = utils.findByUid(state.root?.data, parentUid);
   if (!parent) return null;
@@ -2827,7 +2828,7 @@ function addChildOf(parentUid, newName = '', opts = {}) {
   utils.assignUids(newNode);
 
   // record history so Undo removes this node
-  pushHistory({
+  logyq.history.pushHistory({
     type: 'add',
     parentPath: utils.pathToUid(state.root.data, parentUid),
     uid: newNode._uid
@@ -2838,15 +2839,15 @@ function addChildOf(parentUid, newName = '', opts = {}) {
   // rebuild + render
   state.root = d3.hierarchy(state.root.data);
   utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
+  logyq.treeManager.layoutAndRender(false);
 
   // focus new node (unless caller opts out)
-  if (select) setSelected(newNode._uid);
+  if (select) logyq.selection.setSelected(newNode._uid);
 
   // open inline editor unless suppressed
   if (!noEdit) {
     const h = state.root.descendants().find(n => n.data._uid === newNode._uid);
-    if (h) openNodeEditor(h);
+    if (h) logyq.editing.openNodeEditor(h);
   }
 
   return newNode._uid;
@@ -2854,6 +2855,7 @@ function addChildOf(parentUid, newName = '', opts = {}) {
 
 
 function addSiblingRightOf(uid, newName = ''){
+  const { state, utils } = logyq
   if (!state.root) return null;
   const path = utils.pathToUid(state.root.data, uid);
   if (!path || path.length < 2){
@@ -2869,21 +2871,22 @@ function addSiblingRightOf(uid, newName = ''){
   const newNode = { name: newName };
   utils.assignUids(newNode);
 
-  pushHistory({ type: 'add', parentPath: utils.pathToUid(state.root.data, parentUid), uid: newNode._uid });
+  logyq.history.pushHistory({ type: 'add', parentPath: utils.pathToUid(state.root.data, parentUid), uid: newNode._uid });
 
   parent.children.splice(Math.max(0, ix) + 1, 0, newNode);
   state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
-  setSelected(newNode._uid);
+  logyq.treeManager.layoutAndRender(false);
+  logyq.selection.setSelected(newNode._uid);
 
   const h = state.root.descendants().find(n => n.data._uid === newNode._uid);
-  if (h) openNodeEditor(h);
+  if (h) logyq.editing.openNodeEditor(h);
   return newNode._uid;
 }
 
 
 /* ---------- add SUBTREE (object with {name, children}) as rightmost child ---------- */
 function addSubtreeChildOf(parentUid, subtreeData){
+  const { state, utils } = logyq
   if (!subtreeData) return null;
 
   // ensure every node has a _uid
@@ -2894,10 +2897,10 @@ function addSubtreeChildOf(parentUid, subtreeData){
 
   // CASE 1: no tree yet → make this the root
   if (!state.root){
-    pushHistory({ type: 'add-root' });
+    logyq.history.pushHistory({ type: 'add-root' });
     state.root = d3.hierarchy(subtreeData); utils.assignIds(state.root);
-    treeManager.layoutAndRender(true);
-    selectSingle(state.root.data._uid);
+    logyq.treeManager.layoutAndRender(true);
+    logyq.selection.selectSingle(state.root.data._uid);
     return state.root.data._uid;
   }
 
@@ -2908,10 +2911,10 @@ function addSubtreeChildOf(parentUid, subtreeData){
     parent.children = parent.children || [];
     parent.children.push(subtreeData);
 
-    pushHistory({ type: 'add', parentPath: utils.pathToUid(state.root.data, parentUid), uid: subtreeData._uid });
+    logyq.history.pushHistory({ type: 'add', parentPath: utils.pathToUid(state.root.data, parentUid), uid: subtreeData._uid });
     state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
-    setSelected(subtreeData._uid);
+    logyq.treeManager.layoutAndRender(false);
+    logyq.selection.setSelected(subtreeData._uid);
     return subtreeData._uid;
   }
 
@@ -2978,6 +2981,7 @@ function __namesFromSubtree(nodeData){
 
 /* Maybe broken? better below?
 function dropSelectedToWordBank({ onlyNode = false } = {}) {
+  const { state, utils } = logyq
   if (!state.root) { showToast('Nothing to drop'); return; }
   const count = state.selectedUids ? state.selectedUids.size : 0;
   if (count === 0) { showToast('Select node(s) to return'); return; }
@@ -3115,6 +3119,7 @@ clearGroup();
 
 
 function dropSelectedToWordBank({ onlyNode = false } = {}) {
+  const { state, utils } = logyq
   if (!state.root) { showToast('Nothing to drop'); return; }
   const count = state.selectedUids ? state.selectedUids.size : 0;
   if (count === 0) { showToast('Select node(s) to return'); return; }
@@ -3154,8 +3159,8 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
       if (!h.parent) {
         // Dropping the root removes entire map
         state.root = null;
-        clearSelection();
-        treeManager.renderEmpty();
+        logyq.selection.clearSelection();
+        logyq.treeManager.renderEmpty();
         return 'ROOT_REMOVED';
       } else {
         // Remove this subtree from its parent
@@ -3175,8 +3180,8 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
         const kids = (h.children || []).slice();
         if (!kids.length) {
           state.root = null;
-          clearSelection();
-          treeManager.renderEmpty();
+          logyq.selection.clearSelection();
+          logyq.treeManager.renderEmpty();
           return 'ROOT_REMOVED';
         }
         const newRootData = kids[0].data;
@@ -3185,9 +3190,9 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
 
         state.root = d3.hierarchy(newRootData);
         utils.assignIds(state.root);
-        clearSelection();
-        selectSingle(state.root.data._uid);
-        treeManager.layoutAndRender(false);
+        logyq.selection.clearSelection();
+        logyq.selection.selectSingle(state.root.data._uid);
+        logyq.treeManager.layoutAndRender(false);
         return 'ROOT_REPLACED';
       }
 
@@ -3205,7 +3210,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
   };
 
   // One undo entry for the whole op (tree + bank)
-  pushHistory({ type: 'replace-root', prev: prevTree, prevBank });
+  logyq.history.pushHistory({ type: 'replace-root', prev: prevTree, prevBank });
 
   // Execute
   topLevel.forEach(uid => {
@@ -3216,13 +3221,13 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
   // Rebuild hierarchy & redraw
   state.root = state.root ? d3.hierarchy(state.root.data) : null;
   if (state.root) utils.assignIds(state.root);
-  clearSelection();
+  logyq.selection.clearSelection();
 
   if (state.root) {
     render?.();
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
   } else {
-    treeManager.renderEmpty();
+    logyq.treeManager.renderEmpty();
   }
 
   showToast(onlyNode ? 'Returned label(s) to WordBank' : 'Returned subtree(s) to WordBank', 900);
@@ -3246,6 +3251,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
 
 
 function sendSubtreeToWordBank(h){
+  const { state, utils } = logyq
   try{
     const labels = (h?.descendants?.() || []).map(n => n?.data?.name).filter(Boolean);
     if (labels.length){labels.forEach(lbl => addWords(lbl, 'bank'));  // one chip per label
@@ -3255,18 +3261,18 @@ function sendSubtreeToWordBank(h){
     // Remove subtree (with history)
     if (!h.parent){
       // Deleting the root means clear the tree
-      pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data) });
+      logyq.history.pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data) });
       state.root = null;
       state.lastNodes = [];
-      dragManager.clear?.();
-      treeManager.renderEmpty();
+      logyq.drag?.clear?.();
+      logyq.treeManager.renderEmpty();
       showToast(`Saved ${labels.length} to Word Dock`);
       return;
     }
 
     const parentData = h.parent.data;
     const idx = (parentData.children || []).findIndex(c => c && c._uid === h.data._uid);
-    pushHistory({
+    logyq.history.pushHistory({
       type: 'delete',
       parentPath: utils.pathToUid(state.root.data, parentData._uid),
       index: idx,
@@ -3276,12 +3282,13 @@ function sendSubtreeToWordBank(h){
     if (parentData.children && parentData.children.length === 0) parentData.children = null;
 
     state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-    treeManager.layoutAndRender(true, true);
+    logyq.treeManager.layoutAndRender(true, true);
     showToast(`Saved ${labels.length} to Word Dock`);
   }catch(_e){}
 }
 
 function sendNodeToWordBank_abandon(h){
+  const { state, utils } = logyq
   try{
     const label = h?.data?.name;
     if (label) addWords(label, 'bank');
@@ -3303,9 +3310,9 @@ function sendNodeToWordBank_abandon(h){
       if (idx > -1) prevTree.children.splice(idx, 1);
       newRootData.children = (newRootData.children || []).concat(others);
 
-      pushHistory({ type: 'replace-root', prev: prevTree });
+      logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
       state.root = d3.hierarchy(newRootData); utils.assignIds(state.root);
-      treeManager.layoutAndRender(false);
+      logyq.treeManager.layoutAndRender(false);
       showToast(`Saved "${label}" to Word Dock`);
       return;
     }
@@ -3321,7 +3328,7 @@ function sendNodeToWordBank_abandon(h){
     if (fromIndex >= 0) parentData.children.splice(fromIndex, 1, ...orphans);
     moving.children = null;
 
-    pushHistory({
+    logyq.history.pushHistory({
       type: 'delete',
       parentPath: fromParentPath,
       index: fromIndex,
@@ -3329,7 +3336,7 @@ function sendNodeToWordBank_abandon(h){
     });
 
     state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
     showToast(`Saved "${label}" to Word Dock`);
   }catch(_e){}
 }
@@ -3337,6 +3344,18 @@ function sendNodeToWordBank_abandon(h){
 
 // Click/drag slop (px) before drag actually starts
 const DRAG_SLOP_PX = 10;
+
+  attach('treeOps', {
+    addChildOf,
+    addSiblingRightOf,
+    addSubtreeChildOf,
+    tryParsePureJSON,
+    tryParseGIQ,
+    parseIncoming,
+    dropSelectedToWordBank,
+    sendSubtreeToWordBank,
+    sendNodeToWordBank_abandon,
+  })
 
 
 /* ======================= DRAG MANAGER (rewritten) ======================= */
@@ -6459,8 +6478,8 @@ function getSelectedUid(){
       return true;
     },
     addChild() {
-      if (!state.selectedUid) return false;
-      return !!addChildOf(state.selectedUid, '', { noEdit: false });
+      if (!logyq.state.selectedUid) return false;
+      return !!logyq.treeOps.addChildOf(logyq.state.selectedUid, '', { noEdit: false });
     },
     createRelative(direction) {
       if (!state.selectedUid) return null;

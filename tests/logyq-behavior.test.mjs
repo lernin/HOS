@@ -265,3 +265,75 @@ test('duplicate Word Dock drop helper remains in place', () => {
   const matches = source.match(/function dropSelectedToWordBank/g) || []
   assert.equal(matches.length, 2)
 })
+
+function fakeHierarchy(data) {
+  const wrap = (node, parent = null) => {
+    const h = { data: node, parent, children: [] }
+    h.children = (node.children || []).map((child) => wrap(child, h))
+    return h
+  }
+  const root = wrap(data)
+  const collect = []
+  const visit = (n) => { collect.push(n); n.children.forEach(visit) }
+  visit(root)
+  root.descendants = () => collect
+  return root
+}
+
+function loadTreeOps() {
+  const utils = loadUtils()
+  const source = readFileSync(new URL('../public/logyq/js/engine/12-tree-ops.js', import.meta.url), 'utf8')
+  const history = []
+  const logyq = {
+    utils,
+    state: { root: null, wordBank: [], selectedUid: null, selectedUids: new Set() },
+    history: { pushHistory: (action) => history.push(action) },
+    treeManager: { layoutAndRender() {}, renderEmpty() {} },
+    selection: {
+      setSelected(uid) { logyq.state.selectedUid = uid },
+      selectSingle(uid) { logyq.state.selectedUid = uid },
+      clearSelection() { logyq.state.selectedUid = null },
+      clearGroup() { logyq.state.selectedUids = new Set() },
+    },
+    editing: { openNodeEditor(node) { logyq._opened = node } },
+    drag: { clear() {} },
+  }
+  const fns = new Function(
+    'logyq',
+    'd3',
+    'showToast',
+    'render',
+    'addWords',
+    'attach',
+    `${source}; return { addChildOf, addSiblingRightOf, addSubtreeChildOf };`,
+  )(logyq, { hierarchy: fakeHierarchy }, () => {}, () => {}, () => {}, (name, value) => { logyq[name] = value; return value })
+  return { logyq, history, ...fns }
+}
+
+test('addChildOf appends a child and addSiblingRightOf inserts after the target', () => {
+  const { logyq, history, addChildOf, addSiblingRightOf } = loadTreeOps()
+  const tree = { name: 'root', children: [{ name: 'a' }, { name: 'c' }] }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+
+  const childUid = addChildOf(tree._uid, 'd', { noEdit: true })
+  assert.equal(tree.children.at(-1).name, 'd')
+  assert.equal(tree.children.at(-1)._uid, childUid)
+  assert.equal(history[0].type, 'add')
+  assert.equal(logyq.state.selectedUid, childUid)
+  assert.equal(logyq._opened, undefined)
+
+  const siblingUid = addSiblingRightOf(tree.children[0]._uid, 'b')
+  assert.deepEqual(tree.children.map((child) => child.name), ['a', 'b', 'c', 'd'])
+  assert.equal(siblingUid, tree.children[1]._uid)
+  assert.equal(logyq._opened.data._uid, siblingUid)
+})
+
+test('addSiblingRightOf on the root falls back to addChildOf', () => {
+  const { logyq, addSiblingRightOf } = loadTreeOps()
+  const tree = { name: 'root', children: [{ name: 'a' }] }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  addSiblingRightOf(tree._uid, 'kid')
+  assert.equal(tree.children.at(-1).name, 'kid')
+})

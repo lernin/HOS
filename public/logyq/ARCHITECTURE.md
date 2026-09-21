@@ -61,7 +61,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `09-editing.js` | Inline node editor. Registers `logyq.editing`. Reads shared state through the bag. |
 | `10-selection.js` | Focus/group selection, toasts, drop insert, reparent helpers. Registers `logyq.selection`. |
 | `11-deletion.js` | Trash/delete and related create/export helpers still adjacent in source |
-| `12-tree-ops.js` | Add child/sibling, GIQ/JSON parse, Word Dock transfer |
+| `12-tree-ops.js` | Add child/sibling, GIQ/JSON parse, Word Dock transfer. Registers `logyq.treeOps`. `DRAG_SLOP_PX` still lives at the bottom of this fragment because drag is concatenated later. |
 | `13-drag.js` | Subtree / node-only / group drag |
 | `14-word-dock.js` | Chip render, chip drag, `normalizeToTree` |
 | `15-mix-and-context.js` | Mix and node context-menu Word Dock actions |
@@ -82,7 +82,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 
 ## Shared state (explicit `logyq` bag)
 
-Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`) and selection (`10-selection.js`) register `logyq.editing` / `logyq.selection` and take `state`, `elements`, `utils`, `history`, and `treeManager` from that bag. `LOGYQBridge` selection/edit methods go through those registered APIs. `LOGYQBridge.core` exposes the bag for tests and later cluster extractions.
+Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), and tree ops (`12-tree-ops.js`) register `logyq.editing` / `logyq.selection` / `logyq.treeOps` and take `state`, `elements`, `utils`, `history`, and `treeManager` from that bag. `LOGYQBridge` selection/edit/add-child methods go through those registered APIs. `LOGYQBridge.core` exposes the bag for tests and later cluster extractions.
 
 Unconverted fragments still use ambient `state`, `elements`, `utils`, and friends; `attach()` makes those the same object references as `logyq.*`. Hidden communication that remains:
 

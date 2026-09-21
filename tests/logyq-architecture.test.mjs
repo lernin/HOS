@@ -106,6 +106,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('detectors', Detectors)",
     "attach('editing', {",
     "attach('selection', {",
+    "attach('treeOps', {",
     "attach('drag', dragManager)",
     "attach('treeManager', treeManager)",
   ]) assert.ok(engine.includes(call), call)
@@ -116,6 +117,10 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(config, /const \{ state, moat \} = logyq/)
   assert.match(editing, /attach\('editing'/)
   assert.match(selection, /attach\('selection'/)
+  const treeOps = readFileSync(join(logyqDir, 'js/engine/12-tree-ops.js'), 'utf8')
+  assert.match(treeOps, /attach\('treeOps'/)
+  assert.match(treeOps, /logyq\.history\.pushHistory/)
+  assert.match(treeOps, /logyq\.selection\.setSelected/)
   assert.match(editing, /const \{ state, elements, config: CONFIG \} = logyq/)
   assert.match(selection, /const \{ state, elements \} = logyq/)
   assert.match(editing, /setSelectionSet\(merged\)/)
