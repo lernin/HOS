@@ -60,11 +60,11 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `08-detectors.js` | Invisible drop hit regions |
 | `09-editing.js` | Inline node editor. Registers `logyq.editing`. Reads shared state through the bag. |
 | `10-selection.js` | Focus/group selection, toasts, drop insert, reparent helpers. Registers `logyq.selection`. |
-| `11-deletion.js` | Trash/delete helpers plus adjacent create/export helpers (`exportGIQ`, `createFirstCardAndEdit`). Registers `logyq.deletion`. Orphan add-child JSDoc at the file end is leftover v161 text; the real add helpers live in `12-tree-ops.js`. |
+| `11-deletion.js` | Trash/delete helpers plus adjacent create/export helpers (`exportGIQ`, `createFirstCardAndEdit`). Registers `logyq.deletion`. |
 | `12-tree-ops.js` | Add child/sibling, GIQ/JSON parse, Word Dock transfer. Registers `logyq.treeOps`. `DRAG_SLOP_PX` still lives at the bottom of this fragment because drag is concatenated later. |
 | `13-drag.js` | Subtree / node-only / group drag. Registers `logyq.drag`. Drop-case order is unchanged: group, then Shift-solo, then subtree. |
 | `14-word-dock.js` | Chip render, chip drag, `parseGIQ` / `normalizeToTree`. Registers `logyq.wordDock`. |
-| `15-mix-and-context.js` | Mix, node context-menu Word Dock actions, leftover `onNodeLeftDown` / `onNodeRightButtonDown` / `flyToXY`. Registers `logyq.mix`. |
+| `15-mix-and-context.js` | Mix, node context-menu Word Dock actions, leftover engine local-maps prompt UI. Registers `logyq.mix`. |
 | `16-tree-manager.js` | D3 zoom/layout/render and control wiring. Reads layout/detectors/camera/drag/mix through the bag. `centerOnSelected` delegates to `logyq.camera`. Keyboard bind is `logyq.keyboard?.keyDispatcher` (looked up at event time because `initialize()` runs before `attach('keyboard')`). |
 | `17-keyboard.js` | `keyDispatcher` and extra hotkeys. Registers `logyq.keyboard`. Capture-phase Shift+I/J/K/L listeners stay in this fragment. |
 | `18-bridge.js` | `LOGYQBridge` seam used by the preview layer |
@@ -93,8 +93,7 @@ Unconverted fragments still use ambient `state`, `elements`, `utils`, and friend
 - Editing Shift+Enter still calls later `addSiblingRightOf` by ambient name
 - Mix still joins Word Dock dumps with newlines (`addWords(names.join('\n'), 'bank')`); Word Dock `addWords` splits on `/[;,]+/`, so those dumps land as one chip unless a comma/semicolon is present
 - V-hold I/J/K/L listeners still live in `10-selection.js` and call `logyq.structure`; `keyDispatcher` still bails while `state.vHold` is set
-- Nested Tab-hold listeners inside `treeManager.initialize` plus file-level Tab-hold in `16-tree-manager.js` (both capture)
-- `isTextField` / `applyDockSide` / `commitWordInput` / `updateDockBounds` still ambient from `02-state.js`
+- File-level Tab-hold in `16-tree-manager.js` (capture). Nested initialize Tab-hold that always refocused `#wordInput` was removed.
 - Detector internals still read ambient `CONFIG` / `state` / `elements` (lane geometry already goes through `logyq.layout`)
 - `logyq.treeManager.layoutAndRender` patched by the bridge to emit autosave
 - Word Dock `MutationObserver` in preview calling `notifyChange`

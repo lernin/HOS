@@ -325,10 +325,10 @@ test('undo still recognizes the original action types', () => {
   }
 })
 
-test('duplicate Word Dock drop helper remains in place', () => {
+test('only one live dropSelectedToWordBank remains', () => {
   const source = engineSource()
   const matches = source.match(/function dropSelectedToWordBank/g) || []
-  assert.equal(matches.length, 2)
+  assert.equal(matches.length, 1)
 })
 
 function fakeHierarchy(data) {
@@ -592,7 +592,9 @@ test('context-menu Word Dock dumps still join names with newlines', () => {
   assert.match(source, /logyq\.wordDock\.addWords\(namesToBank\.join\('\\n'\), 'bank'\)/)
   assert.match(source, /logyq\.wordDock\.addWords\(names\.join\('\\n'\), 'bank'\)/)
   const treeManager = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
-  assert.equal((treeManager.match(/mixBtn\.addEventListener\('contextmenu'/g) || []).length, 2)
+  assert.equal((treeManager.match(/mixBtn\.addEventListener\('contextmenu'/g) || []).length, 1)
+  assert.doesNotMatch(treeManager, /Tab-hold \(preserved\)/)
+  assert.equal((treeManager.match(/addWordBtn\.addEventListener\('contextmenu'/g) || []).length, 0)
 })
 
 function loadLayout() {

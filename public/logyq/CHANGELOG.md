@@ -19,3 +19,9 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 ## Wave 5
 
 - **Input and dock chrome on the bag.** `logyq.input` (`isTextField`, `keyIsNav`, `commitWordInput`, `handleAddBox`) and `logyq.dock` (`applyDockSide`, `cycleDockSide`, `updateDockBounds`). Keyboard, selection, drag, Mix leftovers, history, and tree-manager call those slots instead of ambient helpers. W-key dock cycling uses `cycleDockSide` once (no double-step).
+- **Dead Mix leftovers deleted.** `onNodeLeftDown`, `onNodeRightButtonDown` (read undeclared `ctrl`), and unused `flyToXY` were never bound; live node mousedown is `selection.onNodeMouseDown`.
+- **Duplicate Mix wiring deleted.** Right-click Mix now randomizes once (was twice). Duplicate save/maps click listeners removed.
+- **Duplicate Add-button contextmenu deleted** from `treeManager.initialize`. `02-state.js` already commits with `forceToSelected: true`. The extra listener was re-committing an empty box and toasting "Type something first".
+- **Nested initialize Tab-hold deleted.** File-level Tab-hold remains. Tab release no longer always refocuses `#wordInput` (that nested listener stole focus and would pop a mobile keyboard).
+- **Commented `dropSelectedToWordBank` deleted.** One live implementation remains (last-wins already). Unused `const DRAG_SLOP_PX` in tree-ops is gone; drag still uses `window.DRAG_SLOP_PX || 10`.
+- **Orphan add-child JSDoc** at the end of `11-deletion.js` is gone.

@@ -152,22 +152,7 @@ window.addEventListener('keydown', (e) => {
     elements.fitBtn.addEventListener('click', ()=> this.autoFit());
     elements.undoBtn.addEventListener('click', logyq.history.undo);
 
-    
-    
-    
-    
-
-    // Right-click Add → funnel into the same logic as Enter/Shift+Enter
-elements.addWordBtn.addEventListener('contextmenu', (e) => {
-  e.preventDefault();
-  logyq.input.commitWordInput(e);
-});
-
-
     /* ========== Mix / Save / Maps ========== */
-
-
-/* ========== Mix / Save / Maps ========== */
 // Fire Mix on press instead of click
 elements.mixBtn && elements.mixBtn.addEventListener('pointerdown', (e) => {
   // Left mouse press (or any touch/pen) triggers; ignore right/middle mouse
@@ -193,46 +178,10 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
 elements.saveBtn && elements.saveBtn.addEventListener("click", logyq.mix.saveCurrentMap);
 elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMapsMenu);
 
-
-
-
-
-    elements.mixBtn && elements.mixBtn.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      // Right-click forces include WordBank
-      logyq.mix.randomizeTree(true);
-    });
-    elements.saveBtn && elements.saveBtn.addEventListener("click", logyq.mix.saveCurrentMap);
-    elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMapsMenu);
-
-    
-
     setupSettings();
     /* [patch] help-init start */
     setupHelp();
     /* [/patch] help-init end */
-
-    /* ========== Tab-hold (preserved) ========== */
-    function tabDown(e){
-  const { state, elements } = logyq
-      if (e.key !== 'Tab') return;
-      e.preventDefault();
-      state.tabHold = true;
-    }
-    function tabUp(e){
-  const { state } = logyq
-      if (e.key !== 'Tab') return;
-      e.preventDefault();
-      state.tabHold = false;
-      // Return focus to the input
-      if (elements.wordInput) {
-        elements.wordInput.focus();
-        const L = elements.wordInput.value.length;
-        elements.wordInput.setSelectionRange?.(L, L);
-      }
-    }
-    window.addEventListener('keydown', tabDown, true);
-    window.addEventListener('keyup', tabUp, true);
 
     // Other global keys. Look up at event time: initialize() runs
     // before attach('keyboard') in 17-keyboard.js.

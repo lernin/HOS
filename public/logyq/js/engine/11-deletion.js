@@ -292,17 +292,6 @@ function createFirstCardAndEdit(){
 
 
 
-/* ---------- add-node helpers (sibling/right + child) ---------- */
-/**
- * Add a child node under `parentUid`.
- * @param {string} parentUid  - target parent UID
- * @param {string} [newName]  - node label (default: '')
- * @param {Object} [opts]
- * @param {boolean} [opts.noEdit=false]  - if true, do NOT open the inline editor
- * @param {boolean} [opts.select=true]   - if true, select/focus the new node
- * @returns {string|null} The new node's UID, or null on failure.
- */
-
   attach('deletion', {
     deleteNodesToTrash,
     deleteSelectedNodeOnly,

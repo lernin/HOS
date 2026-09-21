@@ -2743,17 +2743,6 @@ function createFirstCardAndEdit(){
 
 
 
-/* ---------- add-node helpers (sibling/right + child) ---------- */
-/**
- * Add a child node under `parentUid`.
- * @param {string} parentUid  - target parent UID
- * @param {string} [newName]  - node label (default: '')
- * @param {Object} [opts]
- * @param {boolean} [opts.noEdit=false]  - if true, do NOT open the inline editor
- * @param {boolean} [opts.select=true]   - if true, select/focus the new node
- * @returns {string|null} The new node's UID, or null on failure.
- */
-
   attach('deletion', {
     deleteNodesToTrash,
     deleteSelectedNodeOnly,
@@ -2924,144 +2913,6 @@ function __namesFromSubtree(nodeData){
   })(nodeData);
   return out;
 }
-
-/* Maybe broken? better below?
-function dropSelectedToWordBank({ onlyNode = false } = {}) {
-  const { state, utils } = logyq
-  if (!state.root) { showToast('Nothing to drop'); return; }
-  const count = state.selectedUids ? state.selectedUids.size : 0;
-  if (count === 0) { showToast('Select node(s) to return'); return; }
-
-  const prevTree = utils.deepClone(state.root.data);
-  const prevBank = state.wordBank.slice();
-
-  // Build list of selected UIDs and filter to top-level ones
-  const selected = Array.from(state.selectedUids || []);
-  const byUid = new Map(state.root.descendants().map(n => [n.data._uid, n]));
-
-  const topLevel = selected.filter(uid => {
-    const h = byUid.get(uid);
-    if (!h) return false;
-    // exclude nodes whose ancestor is also selected
-    let p = h.parent;
-    while (p) {
-      if (selected.includes(p.data._uid)) return false;
-      p = p.parent;
-    }
-    return true;
-  });
-
-  // Process deeper nodes first so indices stay sane
-  topLevel.sort((a, b) => {
-    const da = (byUid.get(a)?.depth ?? 0);
-    const db = (byUid.get(b)?.depth ?? 0);
-    return db - da;
-  });
-
-  // Helpers we reuse from elsewhere in your file:
-  // - __namesFromSubtree(nodeData)
-  // - render(), treeManager.layoutAndRender(...)
-  // - utils.assignIds, selectSingle, clearSelection
-
-  const handleOne = (h) => {
-    if (!onlyNode) {
-      // Full subtree → WordBank
-      const words = __namesFromSubtree(h.data);
-      state.wordBank = words.concat(state.wordBank);
-
-      if (!h.parent) {
-        // Dropping the root removes entire map
-        state.root = null;
-        clearSelection();
-        treeManager.renderEmpty();
-        return 'ROOT_REMOVED';
-      } else {
-        // Remove this subtree from its parent
-        const parentData = h.parent.data;
-        const arr = parentData.children || (parentData.children = []);
-        const idx = arr.findIndex(c => c && c._uid === h.data._uid);
-        if (idx > -1) arr.splice(idx, 1);
-        if (arr.length === 0) parentData.children = null;
-      }
-    } else {
-      // Node only → WordBank; abandon children in place
-      const name = String(h.data?.name ?? '');
-      if (name) state.wordBank.unshift(name);
-
-      if (!h.parent) {
-        // Root: promote first child as new root
-        const kids = (h.children || []).slice();
-        if (!kids.length) {
-          state.root = null;
-          clearSelection();
-          treeManager.renderEmpty();
-          return 'ROOT_REMOVED';
-        }
-        const newRootData = kids[0].data;
-        const others = kids.slice(1).map(c => c.data);
-        newRootData.children = (newRootData.children || []).concat(others);
-
-        state.root = d3.hierarchy(newRootData);
-        utils.assignIds(state.root);
-        clearSelection();
-        selectSingle(state.root.data._uid);
-        treeManager.layoutAndRender(false);
-        return 'ROOT_REPLACED';
-      }
-
-      // Non-root: splice out node, promote its children into parent
-      const parentData = h.parent.data;
-      const arr = parentData.children || (parentData.children = []);
-      const idx = arr.findIndex(c => c && c._uid === h.data._uid);
-      const kids = (h.data.children || []).slice();
-      if (idx > -1) {
-        arr.splice(idx, 1, ...kids);
-        if (arr.length === 0) parentData.children = null;
-      }
-    }
-    return 'OK';
-  };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  // Do the work
-  for (const uid of topLevel) {
-    if (!state.root) break; // root may have been removed above
-    const h = byUid.get(uid);
-    if (!h) continue;
-
-    const res = handleOne(h);
-    if (res === 'ROOT_REMOVED' || res === 'ROOT_REPLACED') {
-      // state.root was rebuilt inside handleOne
-      continue;
-    }
-
-    // Rebuild hierarchy after each change to keep references valid
-    state.root = d3.hierarchy(state.root.data);
-    utils.assignIds(state.root);
-  }
-
-  // One history entry covering the whole multi-op
-  pushHistory({ type: 'replace-root', prev: prevTree, prevBank });
-clearGroup();
-  clearSelection();
-  if (state.root) treeManager.layoutAndRender(false);
-  render();
-}
-*/
-
 
 
 function dropSelectedToWordBank({ onlyNode = false } = {}) {
@@ -3288,8 +3139,6 @@ function sendNodeToWordBank_abandon(h){
 }
 
 
-// Click/drag slop (px) before drag actually starts
-const DRAG_SLOP_PX = 10;
 
   attach('treeOps', {
     addChildOf,
@@ -4853,60 +4702,6 @@ if (event.shiftKey && !event.metaKey) {
 
 
 
-/* [patch] left-mousedown selection (no collapse of multi-set) */
-function onNodeLeftDown(event, d){
-  const { state } = logyq
-  // Only left button
-  if (event.button !== 0) return;
-
-  // Don’t interfere with text inputs/inline editor
-  if (logyq.input.isTextField(event.target)) return;
-
-  // Keep it local to the node
-  event.stopPropagation();
-
-  const uid = d?.data?._uid;
-  if (!uid) return;
-
-  // Ensure the set exists
-  state.selectedUids = state.selectedUids || new Set();
-  const set = state.selectedUids;
-
-  // SHIFT = multi-toggle membership
-  if (event.shiftKey){
-    // add/remove this node in the set (no other changes)
-    logyq.selection.toggleNodeSelection(uid);
-    return;
-  }
-
-  // No SHIFT:
-  // If a multi-set exists AND this node is already in it: do nothing (so you can drag the whole set)
-  if (set.size > 1 && set.has(uid)){
-    return;
-  }
-
-  // If a multi-set exists AND this node is NOT in it: clear and select only this node
-  if (set.size > 1 && !set.has(uid)){
-    logyq.selection.selectSingle(uid);
-    return;
-  }
-
-  // No multi-set active → plain toggle of this one
-  if (set.has(uid)){
-    logyq.selection.clearSelection();      // toggle off
-  } else {
-    logyq.selection.selectSingle(uid);     // toggle on
-  }
-}
-
-
-
-
-
-
-
-
-
   /* [patch] saved-maps start */
   const SAVED_KEY = "logyq_saved_maps_v1";
   function getSavedMaps(){ try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); } catch(_e){ return []; } }
@@ -4953,66 +4748,9 @@ function onNodeLeftDown(event, d){
   }
 
 
-function onNodeRightButtonDown(event, d){
-  // We use pointerdown on nodes
-  const btn  = event.button;         // 0=left, 2=right (on mouse pointers)
-  const meta = !!event.metaKey;
-
-  // Treat Ctrl+Left as a plain "right click" (Mac emulation), but reserve Ctrl+Right for abandonment
-  const isRightLike = (btn === 2) || (btn === 0 && ctrl && !meta);
-  if (!isRightLike) return;
-
-  // Don’t let selection/drag/zoom or native menu fire
-  event.preventDefault();
-  event.stopPropagation();
-  const killOnce = (e) => { e.preventDefault(); e.stopPropagation(); };
-  window.addEventListener("contextmenu", killOnce, { once: true, capture: true });
-
-  if (btn === 2 && ctrl) {
-    // Shift+Right: send ONLY this node to Word Dock (abandonment)
-    logyq.treeOps.sendNodeToWordBank_abandon(d);
-  } else {
-    // Right (or Ctrl+Left on Mac): send whole subtree to Word Dock
-    logyq.treeOps.sendSubtreeToWordBank(d);
-  }
-}
-
-
-
-
-
-// Smooth "curling" camera flight
-function flyToXY(x, y, { scale=null, duration=null, ease=d3.easeCubicInOut } = {}) {
-  const { state, elements } = logyq
-  const svg = elements.svg, zoom = state.zoom;
-  const el = svg?.node?.(); if (!el || !zoom) return;
-  const { clientWidth:w, clientHeight:h } = el;
-
-  const t0 = d3.zoomTransform(el);
-  const k1 = (scale ?? t0.k);
-
-  // target translate to center (x,y)
-  const tx1 = w/2 - k1 * x;
-  const ty1 = h/2 - k1 * y;
-
-  // distance-based timing (gives accel → glide → decel feel)
-  const dx = tx1 - t0.x, dy = ty1 - t0.y, dk = Math.abs(k1 - t0.k);
-  const dist = Math.hypot(dx, dy) + dk * 600;
-  const ms = duration ?? Math.max(280, Math.min(1100, dist * 0.55));
-
-  svg.interrupt()
-     .transition()
-     .duration(1200) //ctrl f flight speed
-     .ease(d3.easeExpOut)
-     .call(zoom.transform, d3.zoomIdentity.translate(tx1, ty1).scale(k1));
-}
-
   attach('mix', {
     randomizeTree,
     onNodeContextMenu,
-    onNodeLeftDown,
-    onNodeRightButtonDown,
-    flyToXY,
     saveCurrentMap,
     openMapsMenu,
   });
@@ -5170,22 +4908,7 @@ window.addEventListener('keydown', (e) => {
     elements.fitBtn.addEventListener('click', ()=> this.autoFit());
     elements.undoBtn.addEventListener('click', logyq.history.undo);
 
-    
-    
-    
-    
-
-    // Right-click Add → funnel into the same logic as Enter/Shift+Enter
-elements.addWordBtn.addEventListener('contextmenu', (e) => {
-  e.preventDefault();
-  logyq.input.commitWordInput(e);
-});
-
-
     /* ========== Mix / Save / Maps ========== */
-
-
-/* ========== Mix / Save / Maps ========== */
 // Fire Mix on press instead of click
 elements.mixBtn && elements.mixBtn.addEventListener('pointerdown', (e) => {
   // Left mouse press (or any touch/pen) triggers; ignore right/middle mouse
@@ -5211,46 +4934,10 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
 elements.saveBtn && elements.saveBtn.addEventListener("click", logyq.mix.saveCurrentMap);
 elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMapsMenu);
 
-
-
-
-
-    elements.mixBtn && elements.mixBtn.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      // Right-click forces include WordBank
-      logyq.mix.randomizeTree(true);
-    });
-    elements.saveBtn && elements.saveBtn.addEventListener("click", logyq.mix.saveCurrentMap);
-    elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMapsMenu);
-
-    
-
     setupSettings();
     /* [patch] help-init start */
     setupHelp();
     /* [/patch] help-init end */
-
-    /* ========== Tab-hold (preserved) ========== */
-    function tabDown(e){
-  const { state, elements } = logyq
-      if (e.key !== 'Tab') return;
-      e.preventDefault();
-      state.tabHold = true;
-    }
-    function tabUp(e){
-  const { state } = logyq
-      if (e.key !== 'Tab') return;
-      e.preventDefault();
-      state.tabHold = false;
-      // Return focus to the input
-      if (elements.wordInput) {
-        elements.wordInput.focus();
-        const L = elements.wordInput.value.length;
-        elements.wordInput.setSelectionRange?.(L, L);
-      }
-    }
-    window.addEventListener('keydown', tabDown, true);
-    window.addEventListener('keyup', tabUp, true);
 
     // Other global keys. Look up at event time: initialize() runs
     // before attach('keyboard') in 17-keyboard.js.

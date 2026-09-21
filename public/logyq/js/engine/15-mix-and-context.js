@@ -313,60 +313,6 @@ if (event.shiftKey && !event.metaKey) {
 
 
 
-/* [patch] left-mousedown selection (no collapse of multi-set) */
-function onNodeLeftDown(event, d){
-  const { state } = logyq
-  // Only left button
-  if (event.button !== 0) return;
-
-  // Don’t interfere with text inputs/inline editor
-  if (logyq.input.isTextField(event.target)) return;
-
-  // Keep it local to the node
-  event.stopPropagation();
-
-  const uid = d?.data?._uid;
-  if (!uid) return;
-
-  // Ensure the set exists
-  state.selectedUids = state.selectedUids || new Set();
-  const set = state.selectedUids;
-
-  // SHIFT = multi-toggle membership
-  if (event.shiftKey){
-    // add/remove this node in the set (no other changes)
-    logyq.selection.toggleNodeSelection(uid);
-    return;
-  }
-
-  // No SHIFT:
-  // If a multi-set exists AND this node is already in it: do nothing (so you can drag the whole set)
-  if (set.size > 1 && set.has(uid)){
-    return;
-  }
-
-  // If a multi-set exists AND this node is NOT in it: clear and select only this node
-  if (set.size > 1 && !set.has(uid)){
-    logyq.selection.selectSingle(uid);
-    return;
-  }
-
-  // No multi-set active → plain toggle of this one
-  if (set.has(uid)){
-    logyq.selection.clearSelection();      // toggle off
-  } else {
-    logyq.selection.selectSingle(uid);     // toggle on
-  }
-}
-
-
-
-
-
-
-
-
-
   /* [patch] saved-maps start */
   const SAVED_KEY = "logyq_saved_maps_v1";
   function getSavedMaps(){ try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); } catch(_e){ return []; } }
@@ -413,66 +359,9 @@ function onNodeLeftDown(event, d){
   }
 
 
-function onNodeRightButtonDown(event, d){
-  // We use pointerdown on nodes
-  const btn  = event.button;         // 0=left, 2=right (on mouse pointers)
-  const meta = !!event.metaKey;
-
-  // Treat Ctrl+Left as a plain "right click" (Mac emulation), but reserve Ctrl+Right for abandonment
-  const isRightLike = (btn === 2) || (btn === 0 && ctrl && !meta);
-  if (!isRightLike) return;
-
-  // Don’t let selection/drag/zoom or native menu fire
-  event.preventDefault();
-  event.stopPropagation();
-  const killOnce = (e) => { e.preventDefault(); e.stopPropagation(); };
-  window.addEventListener("contextmenu", killOnce, { once: true, capture: true });
-
-  if (btn === 2 && ctrl) {
-    // Shift+Right: send ONLY this node to Word Dock (abandonment)
-    logyq.treeOps.sendNodeToWordBank_abandon(d);
-  } else {
-    // Right (or Ctrl+Left on Mac): send whole subtree to Word Dock
-    logyq.treeOps.sendSubtreeToWordBank(d);
-  }
-}
-
-
-
-
-
-// Smooth "curling" camera flight
-function flyToXY(x, y, { scale=null, duration=null, ease=d3.easeCubicInOut } = {}) {
-  const { state, elements } = logyq
-  const svg = elements.svg, zoom = state.zoom;
-  const el = svg?.node?.(); if (!el || !zoom) return;
-  const { clientWidth:w, clientHeight:h } = el;
-
-  const t0 = d3.zoomTransform(el);
-  const k1 = (scale ?? t0.k);
-
-  // target translate to center (x,y)
-  const tx1 = w/2 - k1 * x;
-  const ty1 = h/2 - k1 * y;
-
-  // distance-based timing (gives accel → glide → decel feel)
-  const dx = tx1 - t0.x, dy = ty1 - t0.y, dk = Math.abs(k1 - t0.k);
-  const dist = Math.hypot(dx, dy) + dk * 600;
-  const ms = duration ?? Math.max(280, Math.min(1100, dist * 0.55));
-
-  svg.interrupt()
-     .transition()
-     .duration(1200) //ctrl f flight speed
-     .ease(d3.easeExpOut)
-     .call(zoom.transform, d3.zoomIdentity.translate(tx1, ty1).scale(k1));
-}
-
   attach('mix', {
     randomizeTree,
     onNodeContextMenu,
-    onNodeLeftDown,
-    onNodeRightButtonDown,
-    flyToXY,
     saveCurrentMap,
     openMapsMenu,
   });
