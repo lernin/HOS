@@ -1067,7 +1067,7 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.doesNotMatch(v162, /dblclick/)
 })
 
-test('hold-drag pan is center-offset with a half-card content leash', () => {
+test('hold-drag pan is center-offset with a third-viewport content leash', () => {
   const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
   const start = source.indexOf('function centerPanVector(x, y, view, C) {')
   const end = source.indexOf('function viewRect(doc, win) {', start)
@@ -1090,26 +1090,36 @@ test('hold-drag pan is center-offset with a half-card content leash', () => {
 
   const wide = { minX: -400, maxX: 800, minY: -400, maxY: 1200, cardW: 140, cardH: 63 }
   const t = { x: 200, y: 200, k: 1 }
-  const halfW = wide.cardW / 2
-  const halfH = wide.cardH / 2
+  const marginX = view.width / 3
+  const marginY = view.height / 3
   const free = helpers.clampPanToContent(t, -40, 0, wide, view)
   assert.equal(free.dx, -40, 'wide tree can still slide toward the leading edge')
   const fingerRight = helpers.clampPanToContent(t, -2000, 0, wide, view)
   const rightEdge = wide.maxX * t.k + t.x + fingerRight.dx
-  assert.ok(Math.abs(rightEdge - (view.right - halfW)) < 0.5, 'finger-right / pan-right stops with ½ card at the right/leading edge')
+  assert.ok(Math.abs(rightEdge - (view.right - marginX)) < 0.5, 'finger-right stops with ~⅓ viewport empty on the right')
   assert.ok(rightEdge > view.left + 100, 'must not crush the AABB onto the opposite (left) side')
   const fingerLeft = helpers.clampPanToContent(t, 2000, 0, wide, view)
   const leftEdge = wide.minX * t.k + t.x + fingerLeft.dx
-  assert.ok(Math.abs(leftEdge - (view.left + halfW)) < 0.5, 'finger-left / pan-left stops with ½ card at the left/leading edge')
+  assert.ok(Math.abs(leftEdge - (view.left + marginX)) < 0.5, 'finger-left stops with ~⅓ viewport empty on the left')
   assert.ok(leftEdge < view.right - 100, 'must not crush the AABB onto the opposite (right) side')
   const fingerDown = helpers.clampPanToContent(t, 0, -2000, wide, view)
   const bottomEdge = wide.maxY * t.k + t.y + fingerDown.dy
-  assert.ok(Math.abs(bottomEdge - (view.bottom - halfH)) < 0.5, 'finger-below / pan-down stops with ½ card at the bottom/leading edge')
+  assert.ok(Math.abs(bottomEdge - (view.bottom - marginY)) < 0.5, 'finger-below stops with ~⅓ viewport empty on the bottom')
   const fingerUp = helpers.clampPanToContent(t, 0, 2000, wide, view)
   const topEdge = wide.minY * t.k + t.y + fingerUp.dy
-  assert.ok(Math.abs(topEdge - (view.top + halfH)) < 0.5, 'finger-above / pan-up stops with ½ card at the top/leading edge')
+  assert.ok(Math.abs(topEdge - (view.top + marginY)) < 0.5, 'finger-above stops with ~⅓ viewport empty on the top')
+  const se = helpers.clampPanToContent(t, -2000, -2000, wide, view)
+  const seRight = wide.maxX * t.k + t.x + se.dx
+  const seBottom = wide.maxY * t.k + t.y + se.dy
+  assert.ok(Math.abs(seRight - (view.right - marginX)) < 0.5, 'SE diagonal opens the right third')
+  assert.ok(Math.abs(seBottom - (view.bottom - marginY)) < 0.5, 'SE diagonal opens the bottom third')
+  const nw = helpers.clampPanToContent(t, 2000, 2000, wide, view)
+  const nwLeft = wide.minX * t.k + t.x + nw.dx
+  const nwTop = wide.minY * t.k + t.y + nw.dy
+  assert.ok(Math.abs(nwLeft - (view.left + marginX)) < 0.5, 'NW diagonal opens the left third')
+  assert.ok(Math.abs(nwTop - (view.top + marginY)) < 0.5, 'NW diagonal opens the top third')
   const already = { x: 200, y: 200, k: 1 }
-  already.x = view.right - halfW - wide.maxX
+  already.x = view.right - marginX - wide.maxX
   const noYank = helpers.clampPanToContent(already, -50, 0, wide, view)
   assert.equal(noYank.dx, 0, 'already at the leading bound: do not shove further or yank to the far side')
   assert.deepEqual(helpers.clampPanToContent(t, -20, -20, null, view), { dx: 0, dy: 0 })

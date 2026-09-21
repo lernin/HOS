@@ -394,31 +394,32 @@
   }
 
   // Leash to the *leading* viewport edge (the edge in the pan
-  // direction). Keep ~½ card of live tree inset from that edge.
+  // direction). Stop when that side’s empty band is ~⅓ of the
+  // viewport so a drop near the bezel has breathing room.
   // Do not pin the AABB to the opposite / trailing side.
   function clampPanToContent(transform, dx, dy, bounds, view) {
     if (!bounds || !view) return { dx: 0, dy: 0 }
     const k = transform?.k || 1
-    const halfW = (bounds.cardW * k) / 2
-    const halfH = (bounds.cardH * k) / 2
+    const marginX = Math.max(0, (view.width || (view.right - view.left) || 0) / 3)
+    const marginY = Math.max(0, (view.height || (view.bottom - view.top) || 0) / 3)
     const x0 = transform?.x || 0
     const y0 = transform?.y || 0
     let nx = x0 + dx
     let ny = y0 + dy
     // Finger-right / content-left → leading edge is the right.
     if (dx < 0) {
-      const minNx = view.right - halfW - bounds.maxX * k
+      const minNx = view.right - marginX - bounds.maxX * k
       nx = Math.max(nx, Math.min(x0, minNx))
     } else if (dx > 0) {
       // Finger-left / content-right → leading edge is the left.
-      const maxNx = view.left + halfW - bounds.minX * k
+      const maxNx = view.left + marginX - bounds.minX * k
       nx = Math.min(nx, Math.max(x0, maxNx))
     }
     if (dy < 0) {
-      const minNy = view.bottom - halfH - bounds.maxY * k
+      const minNy = view.bottom - marginY - bounds.maxY * k
       ny = Math.max(ny, Math.min(y0, minNy))
     } else if (dy > 0) {
-      const maxNy = view.top + halfH - bounds.minY * k
+      const maxNy = view.top + marginY - bounds.minY * k
       ny = Math.min(ny, Math.max(y0, maxNy))
     }
     return { dx: nx - x0, dy: ny - y0 }
