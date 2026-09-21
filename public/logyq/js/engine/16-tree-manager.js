@@ -175,26 +175,26 @@ elements.addWordBtn.addEventListener('contextmenu', (e) => {
 elements.mixBtn && elements.mixBtn.addEventListener('pointerdown', (e) => {
   // Left mouse press (or any touch/pen) triggers; ignore right/middle mouse
   if (e.pointerType === 'mouse' && e.button !== 0) return;
-  randomizeTree(!!e.shiftKey);   // Shift = include WordBank
+  logyq.mix.randomizeTree(!!e.shiftKey);   // Shift = include WordBank
   e.preventDefault();            // avoid follow-up click / selection jitter
 }, { passive: false });
 
 elements.mixBtn && elements.mixBtn.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   // Right-click forces include WordBank
-  randomizeTree(true);
+  logyq.mix.randomizeTree(true);
 });
 
 // Keep keyboard accessibility (Enter/Space on the focused button)
 elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' || e.key === ' ') {
     e.preventDefault();
-    randomizeTree(!!e.shiftKey);
+    logyq.mix.randomizeTree(!!e.shiftKey);
   }
 });
 
-elements.saveBtn && elements.saveBtn.addEventListener("click", saveCurrentMap);
-elements.mapsBtn && elements.mapsBtn.addEventListener("click", openMapsMenu);
+elements.saveBtn && elements.saveBtn.addEventListener("click", logyq.mix.saveCurrentMap);
+elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMapsMenu);
 
 
 
@@ -203,10 +203,10 @@ elements.mapsBtn && elements.mapsBtn.addEventListener("click", openMapsMenu);
     elements.mixBtn && elements.mixBtn.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       // Right-click forces include WordBank
-      randomizeTree(true);
+      logyq.mix.randomizeTree(true);
     });
-    elements.saveBtn && elements.saveBtn.addEventListener("click", saveCurrentMap);
-    elements.mapsBtn && elements.mapsBtn.addEventListener("click", openMapsMenu);
+    elements.saveBtn && elements.saveBtn.addEventListener("click", logyq.mix.saveCurrentMap);
+    elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMapsMenu);
 
     
 
@@ -320,7 +320,7 @@ const nodeDrag = dragManager.behavior();
 
 // —— UPDATE selection (existing nodes): bind/refresh all handlers ——
 selNodes
-  .on("contextmenu", onNodeContextMenu)  // right-click menu on existing nodes
+  .on("contextmenu", logyq.mix.onNodeContextMenu)  // right-click menu on existing nodes
   .on("mousedown",  onNodeMouseDown)     // left-click selection on existing nodes
   .call(nodeDrag);                       // drag on existing nodes
 
@@ -329,7 +329,7 @@ const nEnter = selNodes.enter()
   .append("g").attr("class","node")
   .attr("transform", d => `translate(${d.x},${d.y})`)
   .style("opacity", 1)
-  .on("contextmenu", onNodeContextMenu)  // right-click menu on new nodes
+  .on("contextmenu", logyq.mix.onNodeContextMenu)  // right-click menu on new nodes
   .on("mousedown",  onNodeMouseDown)     // left-click selection on new nodes
   .call(nodeDrag);                       // drag on new nodes
 
@@ -367,7 +367,7 @@ centerOnSelected(opts = {}) {
   if (!uid) { showToast?.('Select a node first'); return; }
   const n = (state.lastNodes || []).find(d => d.data._uid === uid);
   if (!n) return;
-  flyToXY(n.x, n.y, opts); // keeps current zoom; pass {scale:1.0} to also zoom
+  logyq.mix.flyToXY(n.x, n.y, opts); // keeps current zoom; pass {scale:1.0} to also zoom
 },
 
 

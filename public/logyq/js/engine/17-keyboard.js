@@ -41,7 +41,7 @@ function keyDispatcher(e){
     if (lower === 'f' && !e.shiftKey){ e.preventDefault(); logyq.treeManager.autoFit(); return; }
     if (lower === 'f' && e.shiftKey) { e.preventDefault(); centerOnSelected(); return; }
     if (lower === 'a')               { e.preventDefault(); elements.wordInput.focus(); const L = elements.wordInput.value.length; elements.wordInput.setSelectionRange?.(L,L); return; }
-    if (lower === 'm')               { e.preventDefault(); randomizeTree(!!e.shiftKey); return; }
+    if (lower === 'm')               { e.preventDefault(); logyq.mix.randomizeTree(!!e.shiftKey); return; }
     if (lower === 'w')               { e.preventDefault(); toggleDock(); return; }
     if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}

@@ -119,7 +119,7 @@
       return true;
     },
     undo() { undo(); },
-    mix(includeBank = false) { randomizeTree(!!includeBank); },
+    mix(includeBank = false) { logyq.mix.randomizeTree(!!includeBank); },
     fit() { treeManager.autoFit(); },
     loadMap(tree, wordBank = []) {
       const next = utils.deepClone(tree || { name: 'New map' });

@@ -1,12 +1,13 @@
   /* ======================= RANDOMIZE ======================= */
 function randomizeTree(includeBank){
+  const { state, utils } = logyq
   try{
     const prevTree = state.root ? utils.deepClone(state.root.data) : null;
     const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
     let labels = [];
     if (state.root){ labels = state.root.descendants().map(n => n.data?.name || "").filter(Boolean); }
     if (includeBank && prevBank.length) labels = labels.concat(prevBank);
-    if (!labels.length){ showToast("Nothing to mix"); return; }
+    if (!labels.length){ logyq.selection.showToast("Nothing to mix"); return; }
 
     const rootLabel = (state.root && state.root.data?.name) ? state.root.data.name : labels[0];
     let pool = labels.slice();
@@ -32,7 +33,7 @@ function randomizeTree(includeBank){
     }
 
     utils.assignUids(root);
-    pushHistory({
+    logyq.history.pushHistory({
       type: 'randomize',
       prev: prevTree,
       next: utils.deepClone(root),
@@ -43,21 +44,22 @@ function randomizeTree(includeBank){
 
     state.root = d3.hierarchy(root);
     utils.assignIds(state.root);
-    setSelected(null);
+    logyq.selection.setSelected(null);
 
     // Remix instantly with stable root
     state.repositionMode = "mix"; /* [patch] mix-reposition-activate */
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
 
 
     //showToast(includeBank ? "Mixed everything (bank used)" : "Tree mixed");
-    render();
+    logyq.wordDock.render();
   }catch(_e){}
 }
 
 
   /* ======================= CONTEXT MENU ======================= */
   function onNodeContextMenu(event, d){
+  const { state, utils } = logyq
   // Don’t show the browser menu or bubble to zoom
   event.preventDefault();
   event.stopPropagation();
@@ -127,7 +129,7 @@ if (event.shiftKey && !event.metaKey) {
 
     const nm = (moving?.name || '').trim();
     if (nm) {
-      if (typeof addWords === 'function') addWords(nm, 'bank');
+      if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(nm, 'bank');
       else {
         state.wordBank = state.wordBank || [];
         state.wordBank.push(nm);
@@ -135,11 +137,11 @@ if (event.shiftKey && !event.metaKey) {
     }
   }
 
-  pushHistory?.({ type: 'replace-root', prev });  // snapshot once for whole operation
+  logyq.history.pushHistory?.({ type: 'replace-root', prev });  // snapshot once for whole operation
   state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-  clearSelection?.();
-  treeManager.layoutAndRender(false);
-  showToast?.(`Sent ${victims.length} node(s) to Word Dock (children stayed)`);
+  logyq.selection.clearSelection?.();
+  logyq.treeManager.layoutAndRender(false);
+  logyq.selection.showToast?.(`Sent ${victims.length} node(s) to Word Dock (children stayed)`);
   return;
 }
 
@@ -165,7 +167,7 @@ if (event.shiftKey && !event.metaKey) {
 
 
   // 2) If chips are selected → paste chips as children under this node
-  const selectedNames = getSelectedChipNames?.() || [];
+  const selectedNames = logyq.wordDock.getSelectedChipNames?.() || [];
   if (selectedNames.length){
     const targetData = d.data;
     targetData.children = targetData.children || [];
@@ -173,7 +175,7 @@ if (event.shiftKey && !event.metaKey) {
       const node = { name: nm };
       utils.assignUids(node);
       targetData.children.push(node);
-      pushHistory({
+      logyq.history.pushHistory({
         type: 'add',
         parentPath: utils.pathToUid(state.root.data, targetData._uid),
         uid: node._uid,
@@ -182,10 +184,10 @@ if (event.shiftKey && !event.metaKey) {
     }
     state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
     state.wordBank = (state.wordBank || []).filter(w => !selectedNames.includes(w));
-    clearChipSelection?.();
-    render?.();
-    treeManager.layoutAndRender(false);
-    showToast?.(`Added ${selectedNames.length} to "${targetData.name}"`);
+    logyq.wordDock.clearChipSelection?.();
+    logyq.wordDock.render?.();
+    logyq.treeManager.layoutAndRender(false);
+    logyq.selection.showToast?.(`Added ${selectedNames.length} to "${targetData.name}"`);
     return;
   }
 
@@ -233,7 +235,7 @@ if (event.shiftKey && !event.metaKey) {
         const parentData = h.parent.data;
         const arr = parentData.children || (parentData.children = []);
         const idx = arr.findIndex(c => c && c._uid === u);
-        pushHistory?.({
+        logyq.history.pushHistory?.({
           type: 'delete',
           parentPath: utils.pathToUid(state.root.data, parentData._uid),
           index: idx,
@@ -245,8 +247,8 @@ if (event.shiftKey && !event.metaKey) {
 
       // shove all collected names to the Word Bank
       if (namesToBank.length) {
-        if (typeof addWords === 'function') {
-          addWords(namesToBank.join('\n'), 'bank');
+        if (typeof logyq.wordDock?.addWords === 'function') {
+          logyq.wordDock.addWords(namesToBank.join('\n'), 'bank');
         } else {
           state.wordBank = state.wordBank || [];
           state.wordBank.push(...namesToBank);
@@ -255,9 +257,9 @@ if (event.shiftKey && !event.metaKey) {
 
       // rebuild & redraw
       state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-      clearSelection?.();
-      treeManager.layoutAndRender(true, true);
-      showToast?.(`Sent ${namesToBank.length} items to Word Dock`);
+      logyq.selection.clearSelection?.();
+      logyq.treeManager.layoutAndRender(true, true);
+      logyq.selection.showToast?.(`Sent ${namesToBank.length} items to Word Dock`);
       return;
     }
   }
@@ -265,7 +267,7 @@ if (event.shiftKey && !event.metaKey) {
   // --- SINGLE (fallback): your original single-subtree → Word Bank behavior
   const names = d.descendants().map(n => n?.data?.name).filter(Boolean);
   if (names.length){
-    if (typeof addWords === 'function') addWords(names.join('\n'), 'bank');
+    if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(names.join('\n'), 'bank');
     else {
       state.wordBank = state.wordBank || [];
       state.wordBank.push(...names);
@@ -274,11 +276,11 @@ if (event.shiftKey && !event.metaKey) {
 
   if (!d.parent){
     // whole tree
-    pushHistory?.({ type: 'delete-root', subtree: utils.deepClone(d.data) });
+    logyq.history.pushHistory?.({ type: 'delete-root', subtree: utils.deepClone(d.data) });
     state.root = null; state.lastNodes = [];
-    dragManager.clear?.();
-    treeManager.renderEmpty();
-    showToast?.("Sent whole tree to Word Dock");
+    logyq.drag.clear?.();
+    logyq.treeManager.renderEmpty();
+    logyq.selection.showToast?.("Sent whole tree to Word Dock");
     return;
   }
 
@@ -286,7 +288,7 @@ if (event.shiftKey && !event.metaKey) {
   const parentData = d.parent.data;
   const sibs = parentData.children || (parentData.children = []);
   const idx = sibs.findIndex(c => c && c._uid === uid);
-  pushHistory?.({
+  logyq.history.pushHistory?.({
     type: 'delete',
     parentPath: utils.pathToUid(state.root.data, parentData._uid),
     index: idx,
@@ -296,8 +298,8 @@ if (event.shiftKey && !event.metaKey) {
 
   // Rebuild from data; no need to mutate d.parent.children when we rebuild
   state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-  treeManager.layoutAndRender(true, true);
-  showToast?.("Sent subtree to Word Dock");
+  logyq.treeManager.layoutAndRender(true, true);
+  logyq.selection.showToast?.("Sent subtree to Word Dock");
   return;
 }
 
@@ -313,6 +315,7 @@ if (event.shiftKey && !event.metaKey) {
 
 /* [patch] left-mousedown selection (no collapse of multi-set) */
 function onNodeLeftDown(event, d){
+  const { state } = logyq
   // Only left button
   if (event.button !== 0) return;
 
@@ -332,7 +335,7 @@ function onNodeLeftDown(event, d){
   // SHIFT = multi-toggle membership
   if (event.shiftKey){
     // add/remove this node in the set (no other changes)
-    toggleNodeSelection(uid);
+    logyq.selection.toggleNodeSelection(uid);
     return;
   }
 
@@ -344,15 +347,15 @@ function onNodeLeftDown(event, d){
 
   // If a multi-set exists AND this node is NOT in it: clear and select only this node
   if (set.size > 1 && !set.has(uid)){
-    selectSingle(uid);
+    logyq.selection.selectSingle(uid);
     return;
   }
 
   // No multi-set active → plain toggle of this one
   if (set.has(uid)){
-    clearSelection();      // toggle off
+    logyq.selection.clearSelection();      // toggle off
   } else {
-    selectSingle(uid);     // toggle on
+    logyq.selection.selectSingle(uid);     // toggle on
   }
 }
 
@@ -369,15 +372,17 @@ function onNodeLeftDown(event, d){
   function getSavedMaps(){ try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); } catch(_e){ return []; } }
   function setSavedMaps(arr){ try { localStorage.setItem(SAVED_KEY, JSON.stringify(arr || [])); } catch(_e){} }
   function saveCurrentMap(){
-    if (!state.root) { showToast("Nothing to save"); return; }
+    const { state, utils } = logyq
+    if (!state.root) { logyq.selection.showToast("Nothing to save"); return; }
     const saved = getSavedMaps();
     const defaultName = "Map " + (saved.length + 1);
     const name = (prompt("Save map as:", defaultName) || defaultName).trim();
     saved.push({ name, data: utils.deepClone(state.root.data) });
     setSavedMaps(saved);
-    showToast("Saved " + name, 1200);
+    logyq.selection.showToast("Saved " + name, 1200);
   }
   function openMapsMenu(){
+    const { state, utils } = logyq
     const saved = getSavedMaps();
     if (!saved.length) { alert("No saved maps yet."); return; }
     const list = saved.map((m,i)=> (i+1) + ". " + m.name).join("\n");
@@ -392,7 +397,7 @@ function onNodeLeftDown(event, d){
       if (Number.isFinite(n) && n >= 1 && n <= saved.length) {
         saved.splice(n-1, 1);
         setSavedMaps(saved);
-        showToast("Deleted", 900);
+        logyq.selection.showToast("Deleted", 900);
       }
       return;
     }
@@ -401,10 +406,10 @@ function onNodeLeftDown(event, d){
     const rec = saved[idx];
     state.root = d3.hierarchy(utils.deepClone(rec.data));
     utils.assignIds(state.root);
-    setSelected(null);
-    treeManager.layoutAndRender(false);
-    treeManager.autoFit();
-    showToast("Loaded " + rec.name, 1200);
+    logyq.selection.setSelected(null);
+    logyq.treeManager.layoutAndRender(false);
+    logyq.treeManager.autoFit();
+    logyq.selection.showToast("Loaded " + rec.name, 1200);
   }
 
 
@@ -425,10 +430,10 @@ function onNodeRightButtonDown(event, d){
 
   if (btn === 2 && ctrl) {
     // Shift+Right: send ONLY this node to Word Dock (abandonment)
-    sendNodeToWordBank_abandon(d);
+    logyq.treeOps.sendNodeToWordBank_abandon(d);
   } else {
     // Right (or Ctrl+Left on Mac): send whole subtree to Word Dock
-    sendSubtreeToWordBank(d);
+    logyq.treeOps.sendSubtreeToWordBank(d);
   }
 }
 
@@ -438,6 +443,7 @@ function onNodeRightButtonDown(event, d){
 
 // Smooth "curling" camera flight
 function flyToXY(x, y, { scale=null, duration=null, ease=d3.easeCubicInOut } = {}) {
+  const { state, elements } = logyq
   const svg = elements.svg, zoom = state.zoom;
   const el = svg?.node?.(); if (!el || !zoom) return;
   const { clientWidth:w, clientHeight:h } = el;
@@ -461,5 +467,12 @@ function flyToXY(x, y, { scale=null, duration=null, ease=d3.easeCubicInOut } = {
      .call(zoom.transform, d3.zoomIdentity.translate(tx1, ty1).scale(k1));
 }
 
-
-
+  attach('mix', {
+    randomizeTree,
+    onNodeContextMenu,
+    onNodeLeftDown,
+    onNodeRightButtonDown,
+    flyToXY,
+    saveCurrentMap,
+    openMapsMenu,
+  });

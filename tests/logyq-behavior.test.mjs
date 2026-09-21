@@ -523,3 +523,73 @@ test('getSelectedUid prefers the helper, then focus, then a singleton group', ()
   assert.equal(factory({ state: { selectedUid: null, selectedUids: new Set(['only']) } }, null)(), 'only')
   assert.equal(factory({ state: { selectedUid: null, selectedUids: new Set(['a', 'b']) } }, null)(), null)
 })
+
+function loadMix() {
+  const utils = loadUtils()
+  const history = []
+  const toasts = []
+  const added = []
+  let rendered = 0
+  const logyq = {
+    utils,
+    state: { root: null, wordBank: [], selectedUid: null, selectedUids: new Set() },
+    history: { pushHistory: (action) => history.push(action) },
+    treeManager: { layoutAndRender() {}, renderEmpty() {}, autoFit() {} },
+    selection: {
+      setSelected(uid) { logyq.state.selectedUid = uid },
+      showToast(msg) { toasts.push(msg) },
+    },
+    wordDock: {
+      addWords(raw, to) { added.push([raw, to]) },
+      render() { rendered += 1 },
+      getSelectedChipNames() { return [] },
+      clearChipSelection() {},
+    },
+    drag: { clear() {} },
+    treeOps: {},
+  }
+  const fns = new Function(
+    'logyq',
+    'd3',
+    'attach',
+    `${sourceMix()}; return { randomizeTree, onNodeContextMenu };`,
+  )(logyq, { hierarchy: fakeHierarchy }, (name, value) => { logyq[name] = value; return value })
+  return { logyq, history, toasts, added, rendered: () => rendered, ...fns }
+}
+
+function sourceMix() {
+  return readFileSync(new URL('../public/logyq/js/engine/15-mix-and-context.js', import.meta.url), 'utf8')
+}
+
+test('randomizeTree keeps the root label, records randomize history, and clears the bank only when asked', () => {
+  const { logyq, history, toasts, randomizeTree, rendered } = loadMix()
+  randomizeTree(false)
+  assert.equal(logyq.state.root, null)
+  assert.equal(toasts[0], 'Nothing to mix')
+
+  const tree = { name: 'Root', children: [{ name: 'A' }, { name: 'B' }] }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  logyq.state.wordBank = ['C']
+  randomizeTree(false)
+  assert.equal(logyq.state.root.data.name, 'Root')
+  assert.deepEqual(logyq.state.wordBank, ['C'])
+  assert.equal(history[0].type, 'randomize')
+  assert.deepEqual(history[0].nextBank, ['C'])
+  assert.equal(history[0].prevBank[0], 'C')
+  assert.equal(rendered(), 1)
+
+  randomizeTree(true)
+  assert.equal(logyq.state.root.data.name, 'Root')
+  assert.deepEqual(logyq.state.wordBank, [])
+  assert.deepEqual(history.at(-1).nextBank, [])
+  assert.equal(logyq.state.repositionMode, 'mix')
+})
+
+test('context-menu Word Dock dumps still join names with newlines', () => {
+  const source = sourceMix()
+  assert.match(source, /logyq\.wordDock\.addWords\(namesToBank\.join\('\\n'\), 'bank'\)/)
+  assert.match(source, /logyq\.wordDock\.addWords\(names\.join\('\\n'\), 'bank'\)/)
+  const treeManager = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
+  assert.equal((treeManager.match(/mixBtn\.addEventListener\('contextmenu'/g) || []).length, 2)
+})

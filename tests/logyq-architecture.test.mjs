@@ -109,6 +109,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('treeOps', {",
     "attach('deletion', {",
     "attach('wordDock', {",
+    "attach('mix', {",
     "attach('drag', dragManager)",
     "attach('treeManager', treeManager)",
     "attach('keyboard', {",
@@ -139,16 +140,23 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   const stateFrag = readFileSync(join(logyqDir, 'js/engine/02-state.js'), 'utf8')
   assert.match(stateFrag, /logyq\.wordDock\.addWords/)
   const mix = readFileSync(join(logyqDir, 'js/engine/15-mix-and-context.js'), 'utf8')
-  assert.match(mix, /typeof addWords === 'function'/)
-  assert.doesNotMatch(mix, /logyq\.wordDock/)
-  assert.doesNotMatch(mix, /attach\('mix'/)
+  assert.match(mix, /attach\('mix', \{[\s\S]*?\}\);/)
+  assert.match(mix, /const \{ state, utils \} = logyq/)
+  assert.match(mix, /typeof logyq\.wordDock\?\.addWords === 'function'/)
+  assert.match(mix, /logyq\.wordDock\.addWords\(namesToBank\.join\('\\n'\), 'bank'\)/)
+  assert.match(mix, /logyq\.wordDock\.addWords\(names\.join\('\\n'\), 'bank'\)/)
+  assert.match(mix, /btn === 0 && ctrl && !meta/)
   const keyboard = readFileSync(join(logyqDir, 'js/engine/17-keyboard.js'), 'utf8')
   assert.match(keyboard, /logyq\.wordDock\.clearChipSelection/)
   assert.match(keyboard, /logyq\.wordDock\.getSelectedChipNames/)
+  assert.match(keyboard, /logyq\.mix\.randomizeTree/)
   const treeManager = readFileSync(join(logyqDir, 'js/engine/16-tree-manager.js'), 'utf8')
   assert.match(treeManager, /logyq\.wordDock\.render/)
+  assert.match(treeManager, /logyq\.mix\.randomizeTree/)
+  assert.match(treeManager, /logyq\.mix\.onNodeContextMenu/)
   const bridge = readFileSync(join(logyqDir, 'js/engine/18-bridge.js'), 'utf8')
   assert.match(bridge, /logyq\.wordDock\.render/)
+  assert.match(bridge, /logyq\.mix\.randomizeTree/)
   const drag = readFileSync(join(logyqDir, 'js/engine/13-drag.js'), 'utf8')
   assert.match(drag, /const \{ state, elements \} = logyq/)
   assert.match(drag, /logyq\.detectors\.pick/)
