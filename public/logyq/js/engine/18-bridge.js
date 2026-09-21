@@ -101,7 +101,8 @@
     editSelected({ wipe = false, uid = undefined } = {}) {
       if (uid == null || String(uid) === '') return false;
       const targetUid = uid;
-      const node = logyq.state.root?.descendants().find((item) => item.data?._uid === targetUid);
+      let node = logyq.state.root?.descendants().find((item) => item.data?._uid === targetUid);
+      if (!node) node = logyq.treeManager.ensureUidLayout?.(targetUid) || null;
       if (!node) return false;
       logyq.selection.selectSingle(targetUid);
       logyq.editing.openNodeEditor(node);
@@ -112,9 +113,9 @@
       if (!logyq.state.selectedUid) return false;
       return !!logyq.treeOps.addChildOf(logyq.state.selectedUid, '', { noEdit: false });
     },
-    createRelative(direction) {
-      const origin = logyq.state.selectedUid;
-      if (!origin) return null;
+    createRelative(direction, originUid) {
+      if (originUid == null || String(originUid) === '') return null;
+      const origin = originUid;
       const calm = { noEdit: true, select: true, rootAsChild: false };
       const created =
         direction === 'down' ? logyq.treeOps.addChildOf(origin, '', calm) :
@@ -123,7 +124,10 @@
         direction === 'up' ? logyq.treeOps.insertParentAbove(origin, '', calm) :
         null;
       if (logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
-      if (created) logyq.selection.selectSingle(created);
+      if (created) {
+        logyq.state.lastCreatedUid = created;
+        logyq.selection.selectSingle(created);
+      }
       emitChange();
       return created || null;
     },

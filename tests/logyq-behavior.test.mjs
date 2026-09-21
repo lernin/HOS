@@ -1044,7 +1044,7 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /DOUBLE_TAP_MS: 360/)
   assert.match(v162, /FLICK_MIN: 52/)
   assert.match(v162, /__logyqV2ConsumedPointers/)
-  assert.match(v162, /bridge\.createRelative\(direction\)/)
+  assert.match(v162, /bridge\.createRelative\(direction, candidate\.uid\)/)
   assert.match(v162, /function hardClearBackground/)
   assert.match(v162, /hardClearBackground\(doc, win/)
   assert.match(v162, /bridge\.editSelected\(\{ uid \}\)/)

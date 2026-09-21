@@ -824,8 +824,7 @@
       clearCardMic(state.mic)
       win.requestAnimationFrame(() => {
         restoreView(doc, win, candidate.view)
-        bridge.selectByUid(candidate.uid)
-        const createdUid = bridge.createRelative(direction)
+        const createdUid = bridge.createRelative(direction, candidate.uid)
         if (!createdUid) return
         restoreView(doc, win, candidate.view)
         bridge.selectByUid(createdUid)

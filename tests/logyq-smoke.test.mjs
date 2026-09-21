@@ -1204,7 +1204,7 @@ test('LOGYQ two blank cards edit by uid, not empty name', async () => {
 
   const decoy = await page.evaluate(() => {
     window.LOGYQBridge.selectByName('Node 05')
-    return window.LOGYQBridge.createRelative('down')
+    return window.LOGYQBridge.createRelative('down', window.LOGYQBridge.getSelectedUid())
   })
   const origin = await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 10')
@@ -1272,6 +1272,162 @@ test('LOGYQ two blank cards edit by uid, not empty name', async () => {
   await context.close()
 })
 
+test('LOGYQ labeling never moves the root when a flicked blank is edited', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.createRelative('down')), null)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.createRelative('down', '')), null)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.editSelected()), false)
+
+  async function tapFace(uid, pointerId) {
+    await page.evaluate(({ uid, pointerId }) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?._uid === uid)
+      const face = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = face.getBoundingClientRect()
+      const x = rect.left + rect.width / 2
+      const y = rect.top + rect.height / 2
+      for (const type of ['pointerdown', 'pointerup']) {
+        face.dispatchEvent(new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerType: 'touch',
+          pointerId,
+          isPrimary: true,
+          button: 0,
+          buttons: type === 'pointerdown' ? 1 : 0,
+          clientX: x,
+          clientY: y,
+          screenX: x,
+          screenY: y,
+        }))
+      }
+    }, { uid, pointerId })
+  }
+
+  const rootName = await page.evaluate(() => window.LOGYQBridge.core.state.root?.data?.name)
+  const rootUid = await page.evaluate(() => window.LOGYQBridge.core.state.root?.data?._uid)
+
+  const empty = await page.evaluate(() => {
+    const canvas = document.getElementById('canvas')
+    const rect = canvas.getBoundingClientRect()
+    const slots = Array.from(document.querySelectorAll('svg#canvas g.hit-slot, svg#canvas g.node'))
+    for (let y = rect.top + 8; y < rect.bottom - 8; y += 20) {
+      for (let x = rect.left + 8; x < rect.right - 8; x += 20) {
+        const hit = slots.some((node) => {
+          const box = node.getBoundingClientRect()
+          return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
+        })
+        if (!hit) return { x, y }
+      }
+    }
+    return { x: rect.left + 8, y: rect.top + 8 }
+  })
+  await page.evaluate(({ x, y }) => {
+    const canvas = document.getElementById('canvas')
+    for (const type of ['pointerdown', 'pointerup']) {
+      canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId: 301,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }
+  }, empty)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.getSelectedUid()), null)
+
+  const made = await page.evaluate(() => {
+    const origin = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 05')
+    const originUid = origin.__data__.data._uid
+    const newUid = window.LOGYQBridge.createRelative('down', originUid)
+    return { originUid, newUid, lastCreated: window.LOGYQBridge.core.state.lastCreatedUid }
+  })
+  assert.ok(made.newUid)
+  assert.equal(made.lastCreated, made.newUid)
+  assert.notEqual(made.newUid, rootUid)
+  assert.notEqual(made.newUid, made.originUid)
+
+  await tapFace(made.newUid, 302)
+  await tapFace(made.newUid, 303)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), made.newUid)
+  assert.notEqual(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), rootUid)
+
+  await page.locator('.node-edit-input').fill('cat')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'cat'
+  }, made.newUid)
+
+  const afterCat = await page.evaluate((ids) => {
+    const byUid = (uid) => window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)
+    return {
+      child: byUid(ids.newUid)?.name,
+      root: byUid(ids.rootUid)?.name,
+      origin: byUid(ids.originUid)?.name,
+    }
+  }, { ...made, rootUid })
+  assert.equal(afterCat.child, 'cat')
+  assert.equal(afterCat.root, rootName)
+  assert.equal(afterCat.origin, 'Node 05')
+
+  await tapFace(made.newUid, 304)
+  await tapFace(made.newUid, 305)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), made.newUid)
+  await page.locator('.node-edit-input').fill('')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === ''
+  }, made.newUid)
+  assert.equal(await page.evaluate((id) => window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, id)?.name, rootUid), rootName)
+
+  const other = await page.evaluate(() => {
+    const origin = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 12')
+    return window.LOGYQBridge.createRelative('down', origin.__data__.data._uid)
+  })
+  await tapFace(other, 306)
+  await tapFace(other, 307)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), other)
+  assert.notEqual(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), rootUid)
+  assert.notEqual(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), made.newUid)
+  await page.locator('.node-edit-input').fill('dog')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'dog'
+  }, other)
+
+  const final = await page.evaluate((ids) => {
+    const byUid = (uid) => window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)
+    return {
+      first: byUid(ids.first)?.name,
+      second: byUid(ids.second)?.name,
+      root: byUid(ids.rootUid)?.name,
+    }
+  }, { first: made.newUid, second: other, rootUid })
+  assert.equal(final.first, '')
+  assert.equal(final.second, 'dog')
+  assert.equal(final.root, rootName)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ flick-down child edit binds newUid not root, then clear stays on that uid', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)
@@ -1286,7 +1442,7 @@ test('LOGYQ flick-down child edit binds newUid not root, then clear stays on tha
     const rootUid = window.LOGYQBridge.core.state.root?.data?._uid
     window.LOGYQBridge.selectByName('Node 05')
     const originUid = window.LOGYQBridge.getSelectedUid()
-    const newUid = window.LOGYQBridge.createRelative('down')
+    const newUid = window.LOGYQBridge.createRelative('down', originUid)
     return { rootUid, originUid, newUid }
   })
   assert.ok(ids.rootUid)
@@ -1499,7 +1655,7 @@ test('LOGYQ sequential flick-downs after background clear and pan do not overlap
     const genBefore = window.LOGYQBridge.core.state.layoutGeneration || 0
     const overlapBefore = window.LOGYQBridge.core.state.layoutOverlapCount || 0
     window.LOGYQBridge.selectByName('Node 12')
-    const second = window.LOGYQBridge.createRelative('down')
+    const second = window.LOGYQBridge.createRelative('down', window.LOGYQBridge.getSelectedUid())
     return {
       second,
       queued: !!window.LOGYQBridge.core.state.layoutFlushQueued,

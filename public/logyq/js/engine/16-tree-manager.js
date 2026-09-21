@@ -218,10 +218,47 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     }
     if (state.layoutSettling) {
       state.layoutFlushQueued = true
+      this.syncCreateHitSlots()
       return 'queued'
     }
     this.flushCreateLayout()
     return 'ran'
+  },
+
+  applyLayout(root){
+    const { state, config: CONFIG } = logyq
+    if (!root || !state.layout) return root
+    state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
+      let A=a,B=b; while(A.depth>B.depth)A=A.parent; while(B.depth>A.depth)B=B.parent; while(A!==B){A=A.parent;B=B.parent;}
+      const l=A.depth, up=Math.max(1,a.depth-l);
+      const base=(up===1)?0.9:0.75, inc=(up>1)?0.35*(up-1):0;
+      const bonus=0.2*Math.max(0,(a.children?.length??0)-1)+0.2*Math.max(0,(b.children?.length??0)-1);
+      return Math.max(0.1, base+inc+bonus);
+    });
+    state.layout(root);
+    return root;
+  },
+
+  syncCreateHitSlots(){
+    const { state, utils } = logyq
+    if (!state.root?.data || !state.layout) return
+    const scratch = d3.hierarchy(state.root.data)
+    utils.assignIds(scratch)
+    this.applyLayout(scratch)
+    this.syncHitSlots(scratch.descendants())
+  },
+
+  ensureUidLayout(uid){
+    const { state, utils } = logyq
+    if (!uid) return null
+    let node = state.root?.descendants().find((item) => item.data?._uid === uid)
+    if (node) return node
+    if (!utils.findByUid(state.root?.data, uid)) return null
+    state.root = d3.hierarchy(state.root.data)
+    utils.assignIds(state.root)
+    this.applyLayout(state.root)
+    this.syncHitSlots(state.root.descendants())
+    return state.root.descendants().find((item) => item.data?._uid === uid) || null
   },
 
   flushCreateLayout(){
@@ -270,18 +307,11 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
   },
 
   layoutAndRender(isDelete=false){
-    const { state, config: CONFIG } = logyq
+    const { state } = logyq
     if (window.__logyqHoldDragFrozen?.()) return;
     if (state.layoutSettling) state.layoutOverlapCount = (state.layoutOverlapCount || 0) + 1
     if (!state.root) { this.renderEmpty(); return; }
-    state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
-      let A=a,B=b; while(A.depth>B.depth)A=A.parent; while(B.depth>A.depth)B=B.parent; while(A!==B){A=A.parent;B=B.parent;}
-      const l=A.depth, up=Math.max(1,a.depth-l);
-      const base=(up===1)?0.9:0.75, inc=(up>1)?0.35*(up-1):0;
-      const bonus=0.2*Math.max(0,(a.children?.length??0)-1)+0.2*Math.max(0,(b.children?.length??0)-1);
-      return Math.max(0.1, base+inc+bonus);
-    });
-    state.layout(state.root);
+    this.applyLayout(state.root);
     this.render(isDelete);
     this.armLayoutSettle();
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */

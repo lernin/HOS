@@ -20,6 +20,7 @@ const state = {
   layoutOverlapCount: 0,
   layoutSettleTimer: 0,
   layoutAfterFlush: null,
+  lastCreatedUid: null,
 };
 attach('state', state)
 
