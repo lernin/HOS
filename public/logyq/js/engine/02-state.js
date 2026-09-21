@@ -14,6 +14,12 @@ const state = {
    dockSide: 'bottom',   /* 'bottom' | 'left' | 'hidden' */
   vHold: false, /* V-hold focus-only visuals */
  isPanning: false,
+  layoutSettling: false,
+  layoutFlushQueued: false,
+  layoutGeneration: 0,
+  layoutOverlapCount: 0,
+  layoutSettleTimer: 0,
+  layoutAfterFlush: null,
 };
 attach('state', state)
 

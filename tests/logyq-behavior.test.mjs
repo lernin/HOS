@@ -564,7 +564,16 @@ function loadTreeOps() {
     utils,
     state: { root: null, wordBank: [], selectedUid: null, selectedUids: new Set() },
     history: { pushHistory: (action) => history.push(action) },
-    treeManager: { layoutAndRender() {}, renderEmpty() {} },
+    treeManager: {
+      layoutAndRender() {},
+      renderEmpty() {},
+      requestCreateLayout(after) {
+        if (logyq.state.root?.data) logyq.state.root = fakeHierarchy(logyq.state.root.data)
+        this.layoutAndRender()
+        after?.()
+      },
+      isLayoutSettling() { return false },
+    },
     selection: {
       setSelected(uid) { logyq.state.selectedUid = uid },
       selectSingle(uid) { logyq.state.selectedUid = uid },
@@ -631,6 +640,22 @@ test('left sibling and insert-parent stay calm when noEdit is set', () => {
   assert.equal(logyq.state.selectedUid, parentUid)
   assert.equal(logyq._opened, undefined)
   assert.equal(insertParentAbove(tree._uid, '', { noEdit: true }), null)
+})
+
+test('create inserts go through requestCreateLayout instead of overlapping layoutAndRender', () => {
+  const treeOps = readFileSync(new URL('../public/logyq/js/engine/12-tree-ops.js', import.meta.url), 'utf8')
+  const treeManager = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
+  const v162 = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  assert.match(treeOps, /function commitCreatedNode/)
+  assert.match(treeOps, /requestCreateLayout/)
+  assert.match(treeOps, /parent\.children\.push\(newNode\);\s*return commitCreatedNode/)
+  assert.match(treeManager, /requestCreateLayout/)
+  assert.match(treeManager, /layoutFlushQueued/)
+  assert.match(treeManager, /CREATE_SETTLE_MS: 260/)
+  assert.match(treeManager, /if \(state\.layoutSettling\) state\.layoutOverlapCount/)
+  assert.doesNotMatch(treeManager, /selectAll\('g\.node'\)\.interrupt\(\)/)
+  assert.match(v162, /function hardClearBackground/)
+  assert.match(v162, /bridge\.clearFocusSelection/)
 })
 
 test('drag drop handling keeps group, solo, then subtree order', () => {
@@ -1020,6 +1045,8 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /FLICK_MIN: 52/)
   assert.match(v162, /__logyqV2ConsumedPointers/)
   assert.match(v162, /bridge\.createRelative\(direction\)/)
+  assert.match(v162, /function hardClearBackground/)
+  assert.match(v162, /hardClearBackground\(doc, win/)
   assert.match(v162, /bridge\.editSelected\(\{ uid \}\)/)
   assert.match(v162, /function uidFromEvent/)
   assert.match(v162, /function uidFromVisualPoint/)

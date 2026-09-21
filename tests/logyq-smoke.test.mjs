@@ -1400,6 +1400,200 @@ test('LOGYQ rename then delete all characters persists empty name on that uid', 
   await context.close()
 })
 
+test('LOGYQ sequential flick-downs after background clear and pan do not overlap settle', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+
+  async function emptyPoint() {
+    return page.evaluate(() => {
+      const canvas = document.getElementById('canvas')
+      const rect = canvas.getBoundingClientRect()
+      const slots = Array.from(document.querySelectorAll('svg#canvas g.hit-slot, svg#canvas g.node'))
+      for (let y = rect.top + 8; y < rect.bottom - 8; y += 20) {
+        for (let x = rect.left + 8; x < rect.right - 8; x += 20) {
+          const hit = slots.some((node) => {
+            const box = node.getBoundingClientRect()
+            return x >= box.left && x <= box.right && y >= box.top && y <= box.bottom
+          })
+          if (!hit) return { x, y }
+        }
+      }
+      return { x: rect.left + 8, y: rect.top + 8 }
+    })
+  }
+
+  async function faceCenter(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === label)
+      const face = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = face.getBoundingClientRect()
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        uid: node?.__data__?.data?._uid || '',
+      }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      document.getElementById('canvas').dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const empty = await emptyPoint()
+  await touch('pointerdown', empty.x, empty.y, 201)
+  await touch('pointerup', empty.x, empty.y, 201)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.getSelectedUid()), null)
+
+  const view0 = await page.evaluate(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { x: t.x, y: t.y, k: t.k }
+  })
+  const origin = await faceCenter('Node 05')
+  const before = await page.locator('svg#canvas g.node').count()
+  await touch('pointerdown', origin.x, origin.y, 202)
+  await touch('pointerup', origin.x, origin.y + 70, 202)
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before)
+
+  const after1 = await page.evaluate((view0) => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return {
+      dx: t.x - view0.x,
+      dy: t.y - view0.y,
+      overlap: window.LOGYQBridge.core.state.layoutOverlapCount || 0,
+      selected: window.LOGYQBridge.getSelectedUid(),
+      rootUid: window.LOGYQBridge.core.state.root?.data?._uid,
+      editors: document.querySelectorAll('.node-edit-input').length,
+      settling: !!window.LOGYQBridge.core.state.layoutSettling,
+      generation: window.LOGYQBridge.core.state.layoutGeneration || 0,
+    }
+  }, view0)
+  assert.ok(Math.hypot(after1.dx, after1.dy) < 2, 'first flick must leave the camera')
+  assert.equal(after1.editors, 0)
+  assert.equal(after1.overlap, 0)
+  assert.ok(after1.selected)
+  assert.notEqual(after1.selected, after1.rootUid)
+  const firstUid = after1.selected
+
+  const queued = await page.evaluate(() => {
+    const genBefore = window.LOGYQBridge.core.state.layoutGeneration || 0
+    const overlapBefore = window.LOGYQBridge.core.state.layoutOverlapCount || 0
+    window.LOGYQBridge.selectByName('Node 12')
+    const second = window.LOGYQBridge.createRelative('down')
+    return {
+      second,
+      queued: !!window.LOGYQBridge.core.state.layoutFlushQueued,
+      settling: !!window.LOGYQBridge.core.state.layoutSettling,
+      generation: window.LOGYQBridge.core.state.layoutGeneration || 0,
+      overlap: window.LOGYQBridge.core.state.layoutOverlapCount || 0,
+      genBefore,
+      overlapBefore,
+    }
+  })
+  assert.ok(queued.second)
+  assert.equal(queued.overlap, queued.overlapBefore, 'second create must not start an overlapping layout pass')
+  if (queued.settling) {
+    assert.equal(queued.generation, queued.genBefore)
+    assert.equal(queued.queued, true)
+  }
+
+  await page.waitForFunction((uid) => {
+    const live = window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).some((element) => element.__data__?.data?._uid === uid)
+    return !!live && node && !window.LOGYQBridge.core.state.layoutFlushQueued
+  }, queued.second)
+
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.layoutSettling)
+
+  const panned = await page.evaluate(() => {
+    const svg = document.getElementById('canvas')
+    const t = window.d3.zoomTransform(svg)
+    const next = window.d3.zoomIdentity.translate(t.x - 80, t.y - 60).scale(t.k)
+    svg.__zoom = next
+    const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+    if (root) root.setAttribute('transform', next.toString())
+    return { x: next.x, y: next.y, k: next.k }
+  })
+
+  const empty2 = await emptyPoint()
+  await touch('pointerdown', empty2.x, empty2.y, 203)
+  await touch('pointerup', empty2.x, empty2.y, 203)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.getSelectedUid()), null)
+
+  const origin2 = await faceCenter('Node 18')
+  const before2 = await page.locator('svg#canvas g.node').count()
+  await touch('pointerdown', origin2.x, origin2.y, 204)
+  await touch('pointerup', origin2.x, origin2.y + 70, 204)
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before2)
+
+  const after2 = await page.evaluate((panned) => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    const selected = window.LOGYQBridge.getSelectedUid()
+    return {
+      dx: t.x - panned.x,
+      dy: t.y - panned.y,
+      overlap: window.LOGYQBridge.core.state.layoutOverlapCount || 0,
+      selected,
+      rootUid: window.LOGYQBridge.core.state.root?.data?._uid,
+      editors: document.querySelectorAll('.node-edit-input').length,
+    }
+  }, panned)
+  assert.ok(Math.hypot(after2.dx, after2.dy) < 2, 'second flick after pan must leave the camera')
+  assert.equal(after2.editors, 0)
+  assert.equal(after2.overlap, 0)
+  assert.ok(after2.selected)
+  assert.notEqual(after2.selected, after2.rootUid)
+  assert.notEqual(after2.selected, firstUid)
+
+  assert.equal(await page.evaluate((uid) => window.LOGYQBridge.editSelected({ uid }), after2.selected), true)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), after2.selected)
+  await page.locator('.node-edit-input').fill('cat')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'cat'
+  }, after2.selected)
+
+  assert.equal(await page.evaluate((uid) => window.LOGYQBridge.editSelected({ uid }), after2.selected), true)
+  await page.locator('.node-edit-input').fill('')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === ''
+  }, after2.selected)
+
+  const names = await page.evaluate((ids) => {
+    const byUid = (uid) => window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
+    return {
+      first: byUid(ids.firstUid),
+      second: byUid(ids.second),
+      root: byUid(ids.rootUid),
+    }
+  }, { firstUid, second: after2.selected, rootUid: after2.rootUid })
+  assert.equal(names.second, '')
+  assert.notEqual(names.root, 'cat')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ flick left/right reserve non-overlapping sibling slots', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)

@@ -47,6 +47,8 @@ excited (HOLD_MS 160, HOLD_SLOP 8)
 | 1.1cm lift is clone-only | `#logyq-v162-branch-preview` follows the finger + lift. Live `g.node` stays in its cell as a dashed ghost (`v2-branch-origin-ghost`). |
 | Hold-drag pan is center-offset | Finger offset from the viewport center, after a 56px dead zone. Content leash leaves ~⅓ viewport empty on the leading edge. |
 | Card race does not jerk on flick | Zoom is suppressed until the stroke is classified. Flick-speed never applies pan. Slow/medium pan starts from the current finger (no backfill). Hold latch still calls `stopZoomGesture`. |
+| Two creates never overlap a layout tween | `requestCreateLayout` runs one 260ms settle at a time. A second insert mutates data only and queues a flush. `layoutAndRender` is not called again until the in-flight node/link transition ends. No `interrupt()` on create. Camera is not written. |
+| Background tap is a hard clear | Empty-canvas pointerdown/tap clears `selectedUid` / group, `lastTap`, hold arming, and the card race. Phone `svg.click` cannot do this — hit-slots eat the target. |
 
 ## Thresholds
 

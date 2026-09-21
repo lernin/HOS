@@ -193,7 +193,60 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     elements.gNodes.selectAll("g.node").remove();
     state.lastNodes = [];
     state.detectors=[];
+    state.layoutSettling = false
+    state.layoutFlushQueued = false
+    state.layoutAfterFlush = null
+    try { clearTimeout(state.layoutSettleTimer) } catch (_e) {}
+    state.layoutSettleTimer = 0
     logyq.detectors.draw();
+  },
+
+  CREATE_SETTLE_MS: 260,
+
+  isLayoutSettling(){
+    return !!logyq.state.layoutSettling
+  },
+
+  requestCreateLayout(after){
+    const { state } = logyq
+    if (typeof after === 'function') {
+      const prev = state.layoutAfterFlush
+      state.layoutAfterFlush = () => {
+        try { prev?.() } catch (_e) {}
+        try { after() } catch (_e) {}
+      }
+    }
+    if (state.layoutSettling) {
+      state.layoutFlushQueued = true
+      return 'queued'
+    }
+    this.flushCreateLayout()
+    return 'ran'
+  },
+
+  flushCreateLayout(){
+    const { state, utils } = logyq
+    if (!state.root?.data) return
+    state.layoutFlushQueued = false
+    const after = state.layoutAfterFlush
+    state.layoutAfterFlush = null
+    state.root = d3.hierarchy(state.root.data)
+    utils.assignIds(state.root)
+    this.layoutAndRender(false)
+    try { after?.() } catch (_e) {}
+  },
+
+  armLayoutSettle(){
+    const { state } = logyq
+    const delay = this.CREATE_SETTLE_MS || 260
+    state.layoutSettling = true
+    state.layoutGeneration = (state.layoutGeneration || 0) + 1
+    try { clearTimeout(state.layoutSettleTimer) } catch (_e) {}
+    state.layoutSettleTimer = setTimeout(() => {
+      state.layoutSettling = false
+      state.layoutSettleTimer = 0
+      if (state.layoutFlushQueued) this.flushCreateLayout()
+    }, delay)
   },
 
   syncHitSlots(nodes){
@@ -219,6 +272,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
   layoutAndRender(isDelete=false){
     const { state, config: CONFIG } = logyq
     if (window.__logyqHoldDragFrozen?.()) return;
+    if (state.layoutSettling) state.layoutOverlapCount = (state.layoutOverlapCount || 0) + 1
     if (!state.root) { this.renderEmpty(); return; }
     state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
       let A=a,B=b; while(A.depth>B.depth)A=A.parent; while(B.depth>A.depth)B=B.parent; while(A!==B){A=A.parent;B=B.parent;}
@@ -229,6 +283,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     });
     state.layout(state.root);
     this.render(isDelete);
+    this.armLayoutSettle();
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */
       (function(){
         /* wait for render transitions to finish, then fit using final bbox */

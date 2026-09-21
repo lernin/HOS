@@ -70,6 +70,28 @@
     canvas.addEventListener('pointerdown', (event) => onFlickDown(event, doc, win, flickState), true)
     canvas.addEventListener('pointerup', (event) => onFlickUp(event, doc, win, flickState), true)
     canvas.addEventListener('pointercancel', (event) => onFlickClear(event, win, flickState), true)
+    if (preview.gestures) preview.gestures.session = { hold: holdState, flick: flickState }
+  }
+
+  function hardClearBackground(doc, win, { keepStroke = false } = {}) {
+    bridge.clearFocusSelection?.()
+    const hold = preview.gestures?.session?.hold
+    const flick = preview.gestures?.session?.flick
+    if (hold) {
+      cancelHold(win, hold)
+      clearCardRace(win, hold)
+      if (hold.pan) endCardPan(win, hold)
+    }
+    if (flick) {
+      flick.lastTap = null
+      if (!keepStroke) {
+        flick.candidates.clear()
+        flick.active.clear()
+      }
+      clearCardMic(flick.mic)
+    }
+    win.__logyqHoldArming = false
+    if (!win.__logyqHoldDragSession) win.__logyqSuppressZoom = false
   }
 
   function onHoldDown(event, doc, win, canvas, state) {
@@ -753,6 +775,7 @@
 
     const node = hitNode(doc, event.clientX, event.clientY, event)
     const uid = nodeUid(node)
+    if (!uid) hardClearBackground(doc, win, { keepStroke: true })
     state.candidates.set(event.pointerId, {
       uid,
       x: event.clientX,
@@ -824,8 +847,7 @@
     const uid = hitEditUid(doc, event.clientX, event.clientY, event)
     const node = uid ? nodeByUid(doc, uid) : null
     if (!uid) {
-      state.lastTap = null
-      clearCardMic(state.mic)
+      hardClearBackground(doc, win, { keepStroke: true })
       return
     }
 
@@ -1225,6 +1247,7 @@
   if (preview.gestures) {
     preview.gestures.constants = v162Constants()
     preview.gestures.bindV162 = bindV162Gestures
+    preview.gestures.hardClearBackground = hardClearBackground
     preview.gestures.armBlankCardMic = armBlankCardMic
     preview.gestures.edgePan = edgePan
     preview.gestures.centerPanVector = centerPanVector

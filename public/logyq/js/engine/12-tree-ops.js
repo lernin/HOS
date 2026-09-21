@@ -1,5 +1,24 @@
+function commitCreatedNode(uid, { noEdit = false, select = true, layout = true } = {}) {
+  const { state } = logyq
+  if (select) logyq.selection.setSelected(uid)
+  if (layout === false) return uid
+  const after = !noEdit ? () => {
+    const h = state.root?.descendants().find(n => n.data._uid === uid)
+    if (h) logyq.editing.openNodeEditor(h)
+  } : null
+  if (typeof logyq.treeManager.requestCreateLayout === 'function') {
+    logyq.treeManager.requestCreateLayout(after)
+  } else {
+    state.root = d3.hierarchy(state.root.data)
+    logyq.utils.assignIds(state.root)
+    logyq.treeManager.layoutAndRender(false)
+    try { after?.() } catch (_e) {}
+  }
+  return uid
+}
+
 function addChildOf(parentUid, newName = '', opts = {}) {
-  const { noEdit = false, select = true } = opts;
+  const { noEdit = false, select = true, layout = true } = opts;
   const { state, utils } = logyq
 
   const parent = utils.findByUid(state.root?.data, parentUid);
@@ -17,22 +36,7 @@ function addChildOf(parentUid, newName = '', opts = {}) {
   });
 
   parent.children.push(newNode);
-
-  // rebuild + render
-  state.root = d3.hierarchy(state.root.data);
-  utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(false);
-
-  // focus new node (unless caller opts out)
-  if (select) logyq.selection.setSelected(newNode._uid);
-
-  // open inline editor unless suppressed
-  if (!noEdit) {
-    const h = state.root.descendants().find(n => n.data._uid === newNode._uid);
-    if (h) logyq.editing.openNodeEditor(h);
-  }
-
-  return newNode._uid;
+  return commitCreatedNode(newNode._uid, { noEdit, select, layout });
 }
 
 
@@ -65,15 +69,7 @@ function insertSibling(uid, newName = '', opts = {}){
   logyq.history.pushHistory({ type: 'add', parentPath: utils.pathToUid(state.root.data, parentUid), uid: newNode._uid });
 
   parent.children.splice(side === 'left' ? ix : Math.max(0, ix) + 1, 0, newNode);
-  state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(false);
-  if (select) logyq.selection.setSelected(newNode._uid);
-
-  if (!noEdit) {
-    const h = state.root.descendants().find(n => n.data._uid === newNode._uid);
-    if (h) logyq.editing.openNodeEditor(h);
-  }
-  return newNode._uid;
+  return commitCreatedNode(newNode._uid, { noEdit, select, layout: opts.layout !== false });
 }
 
 function insertParentAbove(uid, newName = '', opts = {}){
@@ -94,17 +90,7 @@ function insertParentAbove(uid, newName = '', opts = {}){
   const newParent = { name: newName, children: [h.data] };
   utils.assignUids(newParent);
   parentData.children.splice(idx, 1, newParent);
-
-  state.root = d3.hierarchy(state.root.data);
-  utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(false);
-  if (select) logyq.selection.setSelected(newParent._uid);
-
-  if (!noEdit) {
-    const nh = state.root.descendants().find(n => n.data._uid === newParent._uid);
-    if (nh) logyq.editing.openNodeEditor(nh);
-  }
-  return newParent._uid;
+  return commitCreatedNode(newParent._uid, { noEdit, select, layout: opts.layout !== false });
 }
 
 

@@ -95,6 +95,11 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **L/R/Up were AndEdit keyboard helpers.** Those opened the editor, flew the camera, then `createRelative` slammed the editor shut — the blip / bad focus. All four directions now use the same calm `treeOps` settle: `noEdit`, no fly, select the new uid, one 260ms layout tween.
 - **No MIC on flick.** Nursery / recording is later. Flick does not arm `#logyq-v162-action`. Header mic is unchanged. Double-tap still edits **that** new blank.
 
+## Sequential flick-create settle (PR 112)
+
+- **Why create #2 jerked after she moved.** Create #1 starts a 260ms node+link transition. Going somewhere else (pan) often happens *during* that settle, or a leftover `__transition` is still on the cards. Create #2 called `layoutAndRender` again, which starts a new `.transition()` on the same elements and **interrupts** the first tween. Interrupted SVG `translate(...)` snaps, then the whole map eases toward a new packing — the jerk. A slower second stroke can also dip into the Mercedes pan window; `restoreView` then snaps the camera as layout starts. Background tap did **not** clear `selectedUid` (phone `click` only fires when `target === svg`, but hit-slots steal that), so a miss after navigation could create off the previous blank and re-pack under the wrong origin.
+- **Invariant.** At most one create-layout settle is in flight. Inserts during settle mutate data only and queue one flush. Every create (1st / 2nd / nth) is the same path: unique `_uid` → one layout pass → one uninterrupted 260ms settle → camera unchanged. Background contact hard-clears selection and gesture arming. Blank double-tap still binds that `_uid`; empty name still persists.
+
 ## Empty name + uid-only blank edit (PR 112)
 
 - **Bug A — cannot clear a name.** `closeNodeEditor` treated `""` as falsy (`(trim || prev)`), so select-all + delete snapped the previous label back. `renameNode` also bailed on `if (!target || !next)`. Empty / whitespace-only commit now persists `name: ""` on that `_uid` only. Map titles still coerce to Untitled; card labels may be blank.
