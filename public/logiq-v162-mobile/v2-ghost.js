@@ -53,6 +53,8 @@
         body.logiq-mobile-v2 #logiq-mobile-context,
         body.logiq-mobile-v2 #logiq-voice-bar{display:none!important}
         body.logiq-mobile-v2 svg#canvas g.node{pointer-events:none!important}
+        body.logiq-mobile-v2 g.node.is-outlined rect:not(.grabzone),
+        body.logiq-mobile-v2 g.node.is-filled rect:not(.grabzone){transform:none!important;transition:none!important}
         body.logiq-mobile-v2 #Dock{bottom:8px}
         body.logiq-mobile-v2 #Hint{bottom:16px}
         body.logiq-mobile-v2 #Toast{display:none!important}
@@ -68,7 +70,7 @@
         #logiq-v2-action.show{display:grid}#logiq-v2-action.rec{background:#ef4444}
         #logiq-v2-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:v2pulse 1.05s ease-out infinite}
         @keyframes v2pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
-        #logiq-v2-editor{position:fixed;z-index:3975;display:none;box-sizing:border-box;min-width:120px;height:44px;border:2px solid #22c55e;border-radius:10px;background:#fff;color:#0f172a;box-shadow:0 10px 28px rgba(15,23,42,.2);padding:0 10px;font:650 16px/1 system-ui;outline:none}
+        #logiq-v2-editor{position:fixed;z-index:3975;display:none;box-sizing:border-box;min-width:0;border:2px solid #22c55e;border-radius:10px;background:#fff;color:#0f172a;box-shadow:0 10px 28px rgba(15,23,42,.2);padding:0 10px;font:650 16px/1 system-ui;outline:none}
         #logiq-v2-editor.show{display:block}
         #logiq-v2-toast{position:fixed;z-index:4000;left:50%;bottom:max(16px,env(safe-area-inset-bottom));transform:translateX(-50%) translateY(8px);max-width:calc(100vw - 28px);padding:8px 11px;border-radius:999px;background:rgba(15,23,42,.92);color:#fff;font:700 12px/1.25 system-ui;opacity:0;pointer-events:none;transition:.16s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         #logiq-v2-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -448,8 +450,8 @@
 
   function openEditor(win,bridge,state,node,uid) {
     state.editorUid=uid; state.actionUid=null; bridge.selectByUid(uid)
-    const r=node.getBoundingClientRect(), input=state.editor, width=Math.max(128,Math.min(win.innerWidth-16,Math.max(r.width,160)))
-    input.value=cardText(node); input.style.width=`${width}px`; input.style.left=`${Math.max(8,Math.min(win.innerWidth-width-8,r.left))}px`; input.style.top=`${Math.max(8,Math.min(win.innerHeight-52,r.top+Math.max(0,(r.height-44)/2)))}px`; input.classList.add('show')
+    const r=node.getBoundingClientRect(), input=state.editor, width=Math.max(96,Math.min(win.innerWidth-16,r.width)), height=Math.max(36,Math.min(64,r.height)), centerX = Math.round(win.innerWidth / 2)
+    input.value=cardText(node); input.style.width=`${width}px`; input.style.height=`${height}px`; input.style.left=`${Math.max(8,centerX-width/2)}px`; input.style.top=`${Math.max(8,Math.min(win.innerHeight-height-8,r.top+Math.max(0,(r.height-height)/2)))}px`; input.classList.add('show')
     win.requestAnimationFrame(()=>{input.focus();input.setSelectionRange?.(input.value.length,input.value.length)})
   }
 
