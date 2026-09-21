@@ -3,20 +3,26 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const index = await readFile(new URL('../public/logiq-v162-mobile/index.html', import.meta.url), 'utf8')
+const core = await readFile(new URL('../public/logiq-v161/index.html', import.meta.url), 'utf8')
+const preview = await readFile(new URL('../public/logiq-v161/logiq-preview.js', import.meta.url), 'utf8')
 const js = await readFile(new URL('../public/logiq-v162-mobile/v2-ghost.js', import.meta.url), 'utf8')
 const branchAffordance = await readFile(new URL('../public/logiq-v162-mobile/v2-branch-affordance.js', import.meta.url), 'utf8')
+const branchGeometry = await readFile(new URL('../public/logiq-v162-mobile/branch-geometry.js', import.meta.url), 'utf8')
 const dragVisualFix = await readFile(new URL('../public/logiq-v162-mobile/v2-drag-visual-fix.js', import.meta.url), 'utf8')
 const chrome = await readFile(new URL('../public/logiq-v162-mobile/orientation-chrome.js', import.meta.url), 'utf8')
 const flick = await readFile(new URL('../public/logiq-v162-mobile/direct-flick.js', import.meta.url), 'utf8')
 const undoFix = await readFile(new URL('../public/logiq-v162-mobile/undo-bank-fix.js', import.meta.url), 'utf8')
+const lockZoom = await readFile(new URL('../public/logiq-v162-mobile/working-lock-zoom.js', import.meta.url), 'utf8')
 
 test('mobile v2 shell stays isolated from the released v161 route', () => {
   assert.match(index, /src="\/logiq-v161\/"/)
   assert.match(index, /\.\/v2-ghost\.js/)
   assert.match(index, /\.\/v2-branch-affordance\.js/)
+  assert.match(index, /\.\/branch-geometry\.js/)
   assert.match(index, /\.\/v2-drag-visual-fix\.js/)
   assert.match(index, /\.\/orientation-chrome\.js/)
   assert.match(index, /\.\/undo-bank-fix\.js/)
+  assert.match(index, /\.\/working-lock-zoom\.js/)
   assert.match(index, /\.\/direct-flick\.js/)
   assert.doesNotMatch(index, /<script src="\.\/v2\.js"><\/script>/)
 })
@@ -61,13 +67,13 @@ test('held-card drag keeps a ghost origin and defers the V2 fallback transaction
 test('mobile drag preview keeps exact card sizes and carries the whole subtree', () => {
   assert.match(branchAffordance, /hierarchy\.descendants\(\)/)
   assert.match(branchAffordance, /v2-branch-origin-ghost/)
-  assert.match(branchAffordance, /logiq-v2-branch-preview/)
-  assert.match(branchAffordance, /card\.style\.width = `\$\{entry\.rect\.width\}px`/)
-  assert.match(branchAffordance, /card\.style\.height = `\$\{entry\.rect\.height\}px`/)
+  assert.match(branchAffordance, /LOGiQBranchGeometry\?\.createPreview/)
+  assert.match(branchGeometry, /card\.style\.width = `\$\{entry\.rect\.width\}px`/)
+  assert.match(branchGeometry, /card\.style\.height = `\$\{entry\.rect\.height\}px`/)
   assert.match(branchAffordance, /#logiq-v2-drag-card\{display:none!important\}/)
   assert.match(branchAffordance, /transform:none!important/)
   assert.doesNotMatch(branchAffordance, /scale\(1\.0?2\)/)
-  assert.match(branchAffordance, /parentUid = entry\.item\?\.parent\?\.data\?\._uid/)
+  assert.match(branchGeometry, /parentUid = entry\.item\?\.parent\?\.data\?\._uid/)
 })
 
 test('mobile held drag drives the real desktop drag feedback engine', () => {
@@ -111,6 +117,42 @@ test('Word Bank deletion is converted to one atomic tree+bank undo entry', () =>
   assert.match(undoFix, /prevBank: transaction\.beforeBank/)
 })
 
+test('working lock is per-map, defaults cleanly, blocks structural mutation, and still permits rename', () => {
+  assert.match(lockZoom, /LOCK_PREFIX = 'logiq_working_lock_v2:'/)
+  assert.match(lockZoom, /map\.id \? `id:\$\{map\.id\}`/)
+  assert.match(lockZoom, /claimedSameMap/)
+  assert.match(lockZoom, /localStorage\.removeItem\(lockKey\(state\.mapKey\)\)/)
+  assert.match(lockZoom, /win\.__logiqWorkingLocked = state\.locked/)
+  assert.match(lockZoom, /logiq-working-locked/)
+  assert.match(lockZoom, /sameStructure\(before, now\)/)
+  assert.match(lockZoom, /rename\/text edit is intentional/)
+  assert.match(lockZoom, /bridge\.loadMap\(before\.tree, before\.wordBank \|\| \[\]\)/)
+  assert.match(lockZoom, /Structure is locked/)
+  assert.match(js, /win\.__logiqWorkingLocked/)
+  assert.match(branchAffordance, /win\.__logiqWorkingLocked/)
+  assert.match(flick, /win\.__logiqWorkingLocked/)
+})
+
+test('working lock has distinct locked and unlocked line icons on desktop and mobile', () => {
+  assert.match(lockZoom, /ICON_LOCKED/)
+  assert.match(lockZoom, /ICON_UNLOCKED/)
+  assert.match(lockZoom, /data-lock-state/)
+  assert.match(lockZoom, /header \.controls/)
+  assert.match(lockZoom, /logiq-mobile-menu-btn/)
+  assert.match(lockZoom, /#logiq-v2-rail \.divider/)
+})
+
+test('fit-scale zoom continuity patches the real D3 behavior below the legacy 0.4 floor', () => {
+  assert.match(preview, /ZOOM_MIN = 0\.02/)
+  assert.match(preview, /bridge\.setZoomExtent\(\[ZOOM_MIN, 2\.4\]\)/)
+  assert.match(preview, /bridge\.scaleZoomTo\(value\)/)
+  assert.match(core, /getZoomExtent\(\)/)
+  assert.match(core, /setZoomExtent\(extent\)/)
+  assert.match(core, /getZoomScale\(\)/)
+  assert.match(core, /scaleZoomTo\(value\)/)
+  assert.doesNotMatch(preview, /\bstate\.zoom\b|\belements\.svg\b/)
+})
+
 test('mobile v2 keeps local blank-card voice and double-tap edit', () => {
   assert.match(js, /state\.lastTap\?\.uid === uid/)
   assert.match(js, /openEditor\(win,bridge,state,live,uid\)/)
@@ -125,4 +167,5 @@ test('mobile v2 scripts parse', () => {
   assert.doesNotThrow(() => new Function(chrome))
   assert.doesNotThrow(() => new Function(flick))
   assert.doesNotThrow(() => new Function(undoFix))
+  assert.doesNotThrow(() => new Function(lockZoom))
 })

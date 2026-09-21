@@ -4,6 +4,18 @@
   const bridge = window.LOGiQBridge
   if (!bridge) return
 
+  const ZOOM_MIN = 0.02
+  try {
+    bridge.setZoomExtent([ZOOM_MIN, 2.4])
+    window.LOGiQZoom = Object.freeze({
+      extent: () => bridge.getZoomExtent(),
+      scale: () => bridge.getZoomScale(),
+      scaleTo: value => bridge.scaleZoomTo(value),
+    })
+  } catch (error) {
+    window.LOGiQZoomError = String(error?.message || error)
+  }
+
   const SUPABASE_URL = 'https://jzaghifuhinkzzhiojre.supabase.co'
   const SUPABASE_KEY = 'sb_publishable_rQDzA5bYlbzvaTjyo-uTXw_LiiIAddI'
   const PIN_KEY = 'logiq_lab_pin_v1'
