@@ -194,6 +194,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
 
   layoutAndRender(isDelete=false){
     const { state, config: CONFIG } = logyq
+    if (window.__logyqHoldDragFrozen?.()) return;
     if (!state.root) { this.renderEmpty(); return; }
     state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
       let A=a,B=b; while(A.depth>B.depth)A=A.parent; while(B.depth>A.depth)B=B.parent; while(A!==B){A=A.parent;B=B.parent;}

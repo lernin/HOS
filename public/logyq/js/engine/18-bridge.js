@@ -56,6 +56,7 @@
 
   const originalLayoutAndRender = logyq.treeManager.layoutAndRender.bind(logyq.treeManager);
   logyq.treeManager.layoutAndRender = (...args) => {
+    if (window.__logyqHoldDragFrozen?.()) return;
     const result = originalLayoutAndRender(...args);
     queueMicrotask(emitChange);
     return result;

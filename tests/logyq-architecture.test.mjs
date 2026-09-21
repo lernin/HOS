@@ -131,6 +131,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('mix', {",
     "attach('drag', dragManager)",
     "attach('treeManager', treeManager)",
+    "attach('holdDrag', {",
     "attach('keyboard', {",
   ]) assert.ok(engine.includes(call), call)
   const config = readFileSync(join(logyqDir, 'js/engine/01-config.js'), 'utf8')
@@ -145,6 +146,12 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(config, /if \(phoneNoFollowCamera\(\)\) return;/)
   assert.match(config, /flyEditFocusToUID,/)
   assert.match(config, /phoneNoFollowCamera,/)
+  assert.match(config, /function holdDragFrozen/)
+  assert.match(config, /window\.__logyqHoldDragFrozen = holdDragFrozen/)
+  assert.match(config, /v2-branch-drag/)
+  assert.match(config, /__logyqHoldDragCommit/)
+  const apiBag = readFileSync(join(logyqDir, 'js/engine/00-api.js'), 'utf8')
+  assert.match(apiBag, /holdDrag: null/)
   assert.match(config, /centerOnSelectedSoon\(120\)/)
   assert.doesNotMatch(config, /typeof centerOnSelectedSoon/)
   assert.match(editing, /attach\('editing'/)
@@ -251,6 +258,11 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(drag, /logyq\.selection\.insertNodeAtDrop/)
   assert.match(drag, /window\.DRAG_SLOP_PX \|\| 10/)
   assert.match(drag, /logyq\.input\.isTextField/)
+  assert.match(drag, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\)/)
+  assert.match(drag, /dragManager\.clear\(\);/)
+  assert.match(treeOps, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\) return;/)
+  assert.match(treeManager, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\) return;/)
+  assert.match(bridge, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\) return;/)
   assert.match(keyboard, /logyq\.input\.isTextField/)
   assert.match(selection, /logyq\.input\.isTextField/)
   assert.match(treeManager, /logyq\.input\.isTextField/)
@@ -354,6 +366,8 @@ test('preview fragments concatenate to the served enhancement without edits', ()
   assert.match(assembled.source, /function paintFlickDown/)
   assert.match(assembled.source, /bridge\.paintBranch/)
   assert.match(assembled.source, /bridge\.paintUid/)
+  assert.match(assembled.source, /__logyqHoldDragCommit/)
+  assert.match(assembled.source, /const commitTree/)
   assert.doesNotMatch(assembled.source, /logyq_handedness_v1/)
 })
 

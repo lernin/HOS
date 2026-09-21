@@ -29,6 +29,7 @@
     mix: null,
     treeManager: null,
     keyboard: null,
+    holdDrag: null,
   }
 
   function attach(name, value) {

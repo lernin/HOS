@@ -30,6 +30,7 @@
     mix: null,
     treeManager: null,
     keyboard: null,
+    holdDrag: null,
   }
 
   function attach(name, value) {
@@ -273,6 +274,20 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
     centerOnSelectedSoon,
     checkMoatAndAutoFit,
   });
+
+  // Hold-drag layout reservation: while a finger hold is latched, the
+  // origin uid must stay in the hierarchy with its pre-latch metrics.
+  // Dashed ghost is paint-only. Mutate + relayout only after an explicit
+  // commit (real move drop or intentional Word Bank).
+  function holdDragFrozen(){
+    try {
+      return !!(document.body?.classList?.contains('v2-branch-drag') && !window.__logyqHoldDragCommit)
+    } catch (_e) {
+      return false
+    }
+  }
+  window.__logyqHoldDragFrozen = holdDragFrozen
+  attach('holdDrag', { frozen: holdDragFrozen })
 
 
 
@@ -2908,6 +2923,7 @@ function __namesFromSubtree(nodeData){
 
 function dropSelectedToWordBank({ onlyNode = false } = {}) {
   const { state, utils } = logyq
+  if (window.__logyqHoldDragFrozen?.()) return;
   if (!state.root) { showToast('Nothing to drop'); return; }
   const count = state.selectedUids ? state.selectedUids.size : 0;
   if (count === 0) { showToast('Select node(s) to return'); return; }
@@ -3040,6 +3056,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
 
 function sendSubtreeToWordBank(h){
   const { state, utils } = logyq
+  if (window.__logyqHoldDragFrozen?.()) return;
   try{
     const labels = (h?.descendants?.() || []).map(n => n?.data?.name).filter(Boolean);
     if (labels.length){labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));  // one chip per label
@@ -3408,6 +3425,13 @@ state.dragState.drop = null;
 
   end(event,d){
     const { state, utils } = logyq
+    if (window.__logyqHoldDragFrozen?.()) {
+      // Hold is still reserving the origin slot. Drop the d3 chrome
+      // (mini card, is-others) without splicing or relayout.
+      document.body.classList.remove('global-no-cursor');
+      dragManager.clear();
+      return;
+    }
     document.body.classList.remove('global-no-cursor');
 
 
@@ -4886,6 +4910,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
 
   layoutAndRender(isDelete=false){
     const { state, config: CONFIG } = logyq
+    if (window.__logyqHoldDragFrozen?.()) return;
     if (!state.root) { this.renderEmpty(); return; }
     state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
       let A=a,B=b; while(A.depth>B.depth)A=A.parent; while(B.depth>A.depth)B=B.parent; while(A!==B){A=A.parent;B=B.parent;}
@@ -5832,6 +5857,7 @@ elements.svg.on("contextmenu", (event) => {
 
   const originalLayoutAndRender = logyq.treeManager.layoutAndRender.bind(logyq.treeManager);
   logyq.treeManager.layoutAndRender = (...args) => {
+    if (window.__logyqHoldDragFrozen?.()) return;
     const result = originalLayoutAndRender(...args);
     queueMicrotask(emitChange);
     return result;

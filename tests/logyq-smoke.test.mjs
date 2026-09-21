@@ -250,6 +250,28 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     return node?.getAttribute('transform') || ''
   })
+  const slotBefore = await page.evaluate(() => {
+    const nodes = Array.from(document.querySelectorAll('svg#canvas g.node'))
+    const held = nodes.find((element) => element.__data__?.data?.name === 'Node 03')
+    const kids = held?.__data__?.parent?.children || []
+    return {
+      uid: held?.__data__?.data?._uid || '',
+      x: held?.__data__?.x ?? null,
+      y: held?.__data__?.y ?? null,
+      inTree: !!(held?.__data__?.data?._uid && window.LOGYQBridge.core.state.root.descendants()
+        .some((item) => item.data?._uid === held.__data__.data._uid)),
+      row: kids.map((child) => {
+        const node = nodes.find((element) => element.__data__?.data?._uid === child.data._uid)
+        return {
+          name: child.data.name,
+          uid: child.data._uid,
+          x: child.x,
+          y: child.y,
+          transform: node?.getAttribute('transform') || '',
+        }
+      }),
+    }
+  })
   const beforeHold = await page.evaluate(() => {
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return { x: t.x, y: t.y, k: t.k }
@@ -320,6 +342,36 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.ok(still.width > 8 && still.height > 8, `origin ghost box collapsed: ${still.width}x${still.height}`)
   assert.ok(Math.abs(still.y - beforeHold.y) < 2, `map must stay put while holding still, before=${beforeHold.y} during=${still.y}`)
   assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
+  const slotStill = await page.evaluate(() => {
+    const nodes = Array.from(document.querySelectorAll('svg#canvas g.node'))
+    const held = nodes.find((element) => element.__data__?.data?.name === 'Node 03')
+    const kids = held?.__data__?.parent?.children || []
+    return {
+      uid: held?.__data__?.data?._uid || '',
+      x: held?.__data__?.x ?? null,
+      y: held?.__data__?.y ?? null,
+      frozen: !!window.LOGYQBridge.core?.holdDrag?.frozen?.(),
+      inTree: !!(held?.__data__?.data?._uid && window.LOGYQBridge.core.state.root.descendants()
+        .some((item) => item.data?._uid === held.__data__.data._uid)),
+      row: kids.map((child) => {
+        const node = nodes.find((element) => element.__data__?.data?._uid === child.data._uid)
+        return {
+          name: child.data.name,
+          uid: child.data._uid,
+          x: child.x,
+          y: child.y,
+          transform: node?.getAttribute('transform') || '',
+        }
+      }),
+    }
+  })
+  assert.equal(slotStill.frozen, true, 'hold-drag must freeze layout reservation while latched')
+  assert.equal(slotStill.inTree, true, 'origin uid must stay in the hierarchy during hold-drag')
+  assert.equal(slotStill.uid, slotBefore.uid)
+  assert.equal(slotStill.x, slotBefore.x)
+  assert.equal(slotStill.y, slotBefore.y)
+  assert.ok(slotBefore.row.length >= 2, `Node 03 must share a row so sibling slot reservation is testable, got ${slotBefore.row.length}`)
+  assert.deepEqual(slotStill.row, slotBefore.row, 'sibling layout slots must stay put while the origin is held')
   await touch('pointermove', hold.x + 4, hold.y + 4, 42)
   assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
   assert.equal(await page.evaluate(() => {

@@ -138,16 +138,27 @@
       ? 'none'
       : activeDockKind(doc, drag, event.clientX, event.clientY)
     const armedBank = !canceled && !releasedAtOrigin && drag.moved && dockKind === 'bank' && drag.bankArmed
+    // Only a real move-drop mutates the tree. Stay-still, cancel, dock-near,
+    // and second-finger yield keep the origin uid in the hierarchy so the
+    // row cannot pack into the reserved slot. Word Bank is an explicit
+    // post-cleanup call, not a side effect of d3.drag.end.
+    const commitTree = !canceled && !releasedAtOrigin && dockKind === 'none'
+      && fingerMovedFromLatch(drag, event.clientX, event.clientY)
     const end = (canceled || dockKind !== 'none' || releasedAtOrigin)
       ? { x: drag.x, y: drag.y }
       : visualPoint(event.clientX, event.clientY)
 
-    if (canceled || dockKind !== 'none' || releasedAtOrigin) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
-    mouse(win, win, 'mouseup', end.x, end.y, 0)
+    if (commitTree) win.__logyqHoldDragCommit = true
+    try {
+      if (canceled || dockKind !== 'none' || releasedAtOrigin) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+      mouse(win, win, 'mouseup', end.x, end.y, 0)
 
-    cleanupDrag(doc, win, state, drag)
-    dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
-    if (armedBank) sendDragToWordBank(doc, drag)
+      cleanupDrag(doc, win, state, drag)
+      dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
+      if (armedBank) sendDragToWordBank(doc, drag)
+    } finally {
+      win.__logyqHoldDragCommit = false
+    }
   }
 
   function onHoldCancel(event, doc, win, state) {

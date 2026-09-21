@@ -164,6 +164,7 @@ function __namesFromSubtree(nodeData){
 
 function dropSelectedToWordBank({ onlyNode = false } = {}) {
   const { state, utils } = logyq
+  if (window.__logyqHoldDragFrozen?.()) return;
   if (!state.root) { showToast('Nothing to drop'); return; }
   const count = state.selectedUids ? state.selectedUids.size : 0;
   if (count === 0) { showToast('Select node(s) to return'); return; }
@@ -296,6 +297,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
 
 function sendSubtreeToWordBank(h){
   const { state, utils } = logyq
+  if (window.__logyqHoldDragFrozen?.()) return;
   try{
     const labels = (h?.descendants?.() || []).map(n => n?.data?.name).filter(Boolean);
     if (labels.length){labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));  // one chip per label

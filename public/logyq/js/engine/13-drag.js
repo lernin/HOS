@@ -262,6 +262,13 @@ state.dragState.drop = null;
 
   end(event,d){
     const { state, utils } = logyq
+    if (window.__logyqHoldDragFrozen?.()) {
+      // Hold is still reserving the origin slot. Drop the d3 chrome
+      // (mini card, is-others) without splicing or relayout.
+      document.body.classList.remove('global-no-cursor');
+      dragManager.clear();
+      return;
+    }
     document.body.classList.remove('global-no-cursor');
 
 

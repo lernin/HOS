@@ -235,5 +235,19 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
     checkMoatAndAutoFit,
   });
 
+  // Hold-drag layout reservation: while a finger hold is latched, the
+  // origin uid must stay in the hierarchy with its pre-latch metrics.
+  // Dashed ghost is paint-only. Mutate + relayout only after an explicit
+  // commit (real move drop or intentional Word Bank).
+  function holdDragFrozen(){
+    try {
+      return !!(document.body?.classList?.contains('v2-branch-drag') && !window.__logyqHoldDragCommit)
+    } catch (_e) {
+      return false
+    }
+  }
+  window.__logyqHoldDragFrozen = holdDragFrozen
+  attach('holdDrag', { frozen: holdDragFrozen })
+
 
 
