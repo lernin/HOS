@@ -10,8 +10,8 @@
       EDGE_ZONE: 84,
       EDGE_STEP: 14,
       PX_PER_CM: 38,
-      OFFSET_UP_CM: 2.25,
-      OFFSET_SIDE_CM: 1,
+      OFFSET_UP_CM: 1.75,
+      OFFSET_SIDE_CM: 0,
     }
   }
 
@@ -365,8 +365,7 @@
   function fingerOffset() {
     const C = v162Constants()
     const up = C.OFFSET_UP_CM * C.PX_PER_CM
-    const side = C.OFFSET_SIDE_CM * C.PX_PER_CM
-    return getHandedness() === 'left' ? { x: side, y: -up } : { x: -side, y: -up }
+    return { x: 0, y: -up }
   }
 
   function visualPoint(x, y) {

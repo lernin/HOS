@@ -247,7 +247,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(ghost.transform, originTransform)
   assert.equal(ghost.otherOpacity, '1')
   assert.equal(ghost.handed, 'right')
-  assert.deepEqual(ghost.offset, { x: -38, y: -85.5 })
+  assert.deepEqual(ghost.offset, { x: 0, y: -66.5 })
   await touch('pointermove', hold.x + 4, hold.y + 4, 42)
   assert.equal(await page.locator('g.node').count(), holdCount)
   assert.equal(await page.evaluate(() => {

@@ -55,11 +55,12 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 - **Ghost-hold restored.** Desktop `dragging-mode` still hides `is-others` (`opacity: 0`) — that is the “tree collapsed around the moving card” look. Finger hold-drag now keeps the live map in place and stamps `v2-branch-origin-ghost` on the source branch (v162 `v2-drag-visual-fix.js` / `v2-branch-affordance.js`). CSS is **not** media-query gated so a coarse-pointer miss cannot drop back to collapse. In-flight layout tweens are interrupted on latch, and origin transforms are re-stamped every feedback frame. Magnetic drop/caret CSS was left as the existing drop-target/caret path — not redesigned.
 - **Edge auto-pan.** Ported from `public/logiq-v162-mobile/v2.js` `edgePan` (same math in `v2-ghost.js` and clutch). Zone 84 / quadratic step 14. Finger toward an edge pans the map the opposite way. Re-feeds drop `mousemove` at the handedness visual point.
-- **Handedness drag offset.** Settings “Finger drag hand” radios + phone ⋮ “Drag hand”. Finger (not mouse) hold-drag offsets the ghost ~**2.25cm up** and ~1cm to the side (38px/cm → 85.5px / 38px). Right-handed default: up+left; left-handed: up+right. Desktop mouse drag is unchanged. Persists in `logyq_handedness_v1`.
+- **Handedness drag offset.** Settings “Finger drag hand” radios + phone ⋮ “Drag hand” still persist `logyq_handedness_v1`, but the ghost offset is the same for both: **1.75cm up**, **no side offset** (38px/cm → `{x:0,y:-66.5}`). Desktop mouse drag is unchanged.
 - **Second finger yields.** A second pointer during hold-drag calls `yieldNodeDrag` (mouseup at origin) so pinch/pan can take over instead of fighting d3.drag.
 
 ## Phone poke revisions
 
+- **Ghost offset retune.** Finger-drag ghost is **1.75cm up** (was 2.25cm) with **no horizontal offset**. Same for both handedness settings. Desktop mouse stays unoffset.
 - **Edit zoom.** Mobile `openNodeEditor` (double-tap / E) delays `flyEditFocusToUID`: pan to ~32% of the visual viewport height and magnify to at least k=1.35 (never zoom out). Enter / blur / Escape animate back to a **copied** pre-edit transform. If the user pinches or pans mid-edit (`zoom` `sourceEvent`), restore is skipped.
 - **Word Bank hit is strict.** v162 has no node→dock drop; accidental banks were tree adopts through the bottom dock overlay (finger on the ribbon, visual/ghost still on a detector). Finger contact must land **inside a chip inset 8px** to call `sendSubtreeToWordBank`. Finger in the dock slack (16px) cancels the tree drop. Chip→tree drops stay.
 
