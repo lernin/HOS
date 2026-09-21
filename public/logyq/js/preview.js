@@ -134,6 +134,7 @@
       body.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
       body.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
       body.v2-branch-drag .drag-mini,body.v2-branch-drag g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
+      body.v2-branch-drag.v2-dock-target #Dock{outline:3px solid #22c55e;outline-offset:2px;background:rgba(220,252,231,.72)}
 
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
         html,body{width:100%;max-width:100%;overflow:hidden}
@@ -412,7 +413,7 @@
       EDGE_ZONE: 84,
       EDGE_STEP: 14,
       PX_PER_CM: 38,
-      OFFSET_UP_CM: 1.5,
+      OFFSET_UP_CM: 2.25,
       OFFSET_SIDE_CM: 1,
     }
   }
@@ -527,15 +528,17 @@
     event.stopImmediatePropagation()
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
-    const end = canceled
+    const dockKind = canceled ? 'none' : dockDropKind(doc, event.clientX, event.clientY)
+    const end = (canceled || dockKind !== 'none')
       ? { x: drag.x, y: drag.y }
       : visualPoint(event.clientX, event.clientY)
 
-    if (canceled) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+    if (canceled || dockKind !== 'none') mouse(win, win, 'mousemove', drag.x, drag.y, 1)
     mouse(win, win, 'mouseup', end.x, end.y, 0)
 
     cleanupDrag(doc, win, state, drag)
     dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
+    if (dockKind === 'bank') sendDragToWordBank(doc, drag)
   }
 
   function onHoldCancel(event, doc, win, state) {
@@ -665,9 +668,15 @@
       const drag = state.drag
       if (!drag) { state.feedbackRaf = 0; return }
       restoreOriginLayout(doc, drag.originLayout)
-      edgePan(doc, win, drag.lastX, drag.lastY)
-      const visual = visualPoint(drag.lastX, drag.lastY)
-      mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+      const dockKind = dockDropKind(doc, drag.lastX, drag.lastY)
+      doc.body.classList.toggle('v2-dock-target', dockKind === 'bank')
+      if (dockKind === 'none') {
+        edgePan(doc, win, drag.lastX, drag.lastY)
+        const visual = visualPoint(drag.lastX, drag.lastY)
+        mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+      } else {
+        mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+      }
       movePreview(drag, drag.lastX, drag.lastY)
       state.feedbackRaf = win.requestAnimationFrame(tick)
     }
@@ -788,11 +797,38 @@
     })
   }
 
+  function dockDropKind(doc, x, y) {
+    const dock = doc.getElementById('Dock')
+    if (!dock || dock.classList.contains('dock-hidden')) return 'none'
+    const chipInset = 8
+    const chips = Array.from(dock.querySelectorAll('.chip'))
+    for (const chip of chips) {
+      const rect = chip.getBoundingClientRect()
+      if (rect.width < 12 || rect.height < 12) continue
+      if (x >= rect.left + chipInset && x <= rect.right - chipInset && y >= rect.top + chipInset && y <= rect.bottom - chipInset) {
+        return 'bank'
+      }
+    }
+    const rect = dock.getBoundingClientRect()
+    if (rect.width < 8 || rect.height < 8) return 'none'
+    const slack = 16
+    if (x >= rect.left - slack && x <= rect.right + slack && y >= rect.top - slack && y <= rect.bottom + slack) return 'near'
+    return 'none'
+  }
+
+  function sendDragToWordBank(doc, drag) {
+    const node = nodeByUid(doc, drag?.uid)
+    const hierarchy = node?.__data__
+    if (!hierarchy || !bridge.core?.treeOps?.sendSubtreeToWordBank) return
+    bridge.selectByUid(drag.uid)
+    bridge.core.treeOps.sendSubtreeToWordBank(hierarchy)
+  }
+
   function cleanupDrag(doc, win, state, drag) {
     if (!drag) return
     drag.preview?.remove?.()
     for (const uid of drag.uids || []) nodeByUid(doc, uid)?.classList.remove('v2-branch-origin-ghost')
-    doc.body.classList.remove('v2-branch-drag', 'v2-cancel')
+    doc.body.classList.remove('v2-branch-drag', 'v2-cancel', 'v2-dock-target')
     if (state.feedbackRaf) win.cancelAnimationFrame(state.feedbackRaf)
     state.feedbackRaf = 0
     if (state.drag === drag) state.drag = null
@@ -1134,6 +1170,7 @@
     preview.gestures.getHandedness = getHandedness
     preview.gestures.setHandedness = setHandedness
     preview.gestures.yieldNodeDrag = yieldNodeDrag
+    preview.gestures.dockDropKind = dockDropKind
   }
   function setSaveState(state) {
     const text = state === 'saving' ? 'Saving' : state === 'offline' ? 'Offline' : 'Saved'
