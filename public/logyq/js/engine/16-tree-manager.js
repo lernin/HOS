@@ -352,23 +352,6 @@ attach('treeManager', treeManager)
     s.gapReset && s.gapReset.addEventListener("click", ()=>{ CONFIG.VERTICAL_GAP=defaultGap; renderVal(); logyq.treeManager.layoutAndRender(false); });
     renderVal();
 
-    if(s.lanePinBtn){
-      const setText = ()=> s.lanePinBtn.textContent = (state.lanePinned ? "Hide swim lane" : "Show swim lane");
-      setText();
-      s.lanePinBtn.addEventListener("click", ()=>{
-        state.lanePinned = !state.lanePinned;
-        if(state.lanePinned){
-          let y = state.root ? (state.root.y || 0) : 0;
-          if(state.selectedUid && state.root){
-            const h = state.root.descendants().find(n=>n.data._uid===state.selectedUid);
-            y = h ? h.y : y;
-          }
-          state.laneLastY = y;
-          logyq.layout.showLaneAtY(y);
-        } else logyq.layout.hideLane();
-        setText();
-      });
-    }
     if(s.showCarets){
       s.showCarets.checked = !!CONFIG.SHOW_CARETS;
       s.showCarets.addEventListener("change", (e)=>{

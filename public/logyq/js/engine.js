@@ -264,7 +264,6 @@ function keyIsNav(e){
     undoBtn: document.getElementById("undoBtn"),
     fitBtn: document.getElementById("fitBtn"),
     mixBtn: document.getElementById("mixBtn"),
-    mapsBtn: document.getElementById("mapsBtn"),
     wordInput: document.getElementById("wordInput"),
     addWordBtn: document.getElementById("addWordBtn"),
     Dock: document.getElementById("Dock"),
@@ -996,17 +995,13 @@ function laneHeightForDepth(depth) {
   return CONFIG.CARD_HEIGHT + CONFIG.VERTICAL_GAP;
 }
 
-/* No-op stubs so existing calls are safe. */
-function showLaneAtY(_y) { /* no visuals */ }
-function hideLane() { /* no visuals */ }
+/* Zoom still calls this; visuals were never drawn. */
 function refreshLaneOnZoom() { /* no visuals */ }
 
   attach('layout', {
     LabelWrap,
     laneYForDepth,
     laneHeightForDepth,
-    showLaneAtY,
-    hideLane,
     refreshLaneOnZoom,
   });
 
@@ -4958,23 +4953,6 @@ attach('treeManager', treeManager)
     s.gapReset && s.gapReset.addEventListener("click", ()=>{ CONFIG.VERTICAL_GAP=defaultGap; renderVal(); logyq.treeManager.layoutAndRender(false); });
     renderVal();
 
-    if(s.lanePinBtn){
-      const setText = ()=> s.lanePinBtn.textContent = (state.lanePinned ? "Hide swim lane" : "Show swim lane");
-      setText();
-      s.lanePinBtn.addEventListener("click", ()=>{
-        state.lanePinned = !state.lanePinned;
-        if(state.lanePinned){
-          let y = state.root ? (state.root.y || 0) : 0;
-          if(state.selectedUid && state.root){
-            const h = state.root.descendants().find(n=>n.data._uid===state.selectedUid);
-            y = h ? h.y : y;
-          }
-          state.laneLastY = y;
-          logyq.layout.showLaneAtY(y);
-        } else logyq.layout.hideLane();
-        setText();
-      });
-    }
     if(s.showCarets){
       s.showCarets.checked = !!CONFIG.SHOW_CARETS;
       s.showCarets.addEventListener("change", (e)=>{
@@ -5671,11 +5649,6 @@ elements.svg.on("contextmenu", (event) => {
 
   // Capture so I/J/K/L-nav in keyDispatcher never sees the shifted create keys.
   window.addEventListener('keydown', onRelativeCreateHotkeys, { capture: true });
-
-  window.__addChildBelowSelectedAndEdit = addChildBelowSelectedAndEdit;
-  window.__addElderSiblingLeftAndEdit = addElderSiblingLeftAndEdit;
-  window.__addYoungerSiblingRightAndEdit = addYoungerSiblingRightAndEdit;
-  window.__insertParentAboveSelectedAndEdit = insertParentAboveSelectedAndEdit;
 
   attach('keyboard', {
     keyDispatcher,

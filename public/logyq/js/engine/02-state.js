@@ -45,7 +45,6 @@ function keyIsNav(e){
     undoBtn: document.getElementById("undoBtn"),
     fitBtn: document.getElementById("fitBtn"),
     mixBtn: document.getElementById("mixBtn"),
-    mapsBtn: document.getElementById("mapsBtn"),
     wordInput: document.getElementById("wordInput"),
     addWordBtn: document.getElementById("addWordBtn"),
     Dock: document.getElementById("Dock"),

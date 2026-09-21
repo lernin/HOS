@@ -115,17 +115,13 @@ function laneHeightForDepth(depth) {
   return CONFIG.CARD_HEIGHT + CONFIG.VERTICAL_GAP;
 }
 
-/* No-op stubs so existing calls are safe. */
-function showLaneAtY(_y) { /* no visuals */ }
-function hideLane() { /* no visuals */ }
+/* Zoom still calls this; visuals were never drawn. */
 function refreshLaneOnZoom() { /* no visuals */ }
 
   attach('layout', {
     LabelWrap,
     laneYForDepth,
     laneHeightForDepth,
-    showLaneAtY,
-    hideLane,
     refreshLaneOnZoom,
   });
 

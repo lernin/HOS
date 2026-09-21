@@ -254,6 +254,12 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.doesNotMatch(engine, /function getSelectionUids/)
   assert.doesNotMatch(engine, /function copySubtreeToClipboard/)
   assert.doesNotMatch(treeManager, /nEnter\.on\("dblclick"/)
+  assert.doesNotMatch(treeManager, /lanePinBtn/)
+  assert.doesNotMatch(layout, /function showLaneAtY/)
+  assert.doesNotMatch(layout, /function hideLane/)
+  assert.match(layout, /function refreshLaneOnZoom/)
+  assert.doesNotMatch(keyboard, /window\.__addChildBelowSelectedAndEdit/)
+  assert.doesNotMatch(stateFrag, /mapsBtn:/)
 })
 
 test('copied engine script parses', () => {

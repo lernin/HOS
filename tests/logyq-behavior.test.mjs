@@ -643,11 +643,11 @@ test('laneYForDepth falls back to nominal spacing and uses row centers when laid
   assert.equal(laneHeightForDepth(1), 141)
 })
 
-test('lane stubs stay no-ops and LabelWrap is registered on the layout bag', () => {
+test('refreshLaneOnZoom stays a no-op and LabelWrap is registered on the layout bag', () => {
   const { logyq } = loadLayout()
-  assert.equal(typeof logyq.layout.showLaneAtY, 'function')
-  assert.equal(logyq.layout.showLaneAtY(12), undefined)
-  assert.equal(logyq.layout.hideLane(), undefined)
+  assert.equal(logyq.layout.showLaneAtY, undefined)
+  assert.equal(logyq.layout.hideLane, undefined)
+  assert.equal(typeof logyq.layout.refreshLaneOnZoom, 'function')
   assert.equal(logyq.layout.refreshLaneOnZoom(), undefined)
   assert.equal(typeof logyq.layout.LabelWrap.apply, 'function')
 })

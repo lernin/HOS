@@ -575,11 +575,6 @@ elements.svg.on("contextmenu", (event) => {
   // Capture so I/J/K/L-nav in keyDispatcher never sees the shifted create keys.
   window.addEventListener('keydown', onRelativeCreateHotkeys, { capture: true });
 
-  window.__addChildBelowSelectedAndEdit = addChildBelowSelectedAndEdit;
-  window.__addElderSiblingLeftAndEdit = addElderSiblingLeftAndEdit;
-  window.__addYoungerSiblingRightAndEdit = addYoungerSiblingRightAndEdit;
-  window.__insertParentAboveSelectedAndEdit = insertParentAboveSelectedAndEdit;
-
   attach('keyboard', {
     keyDispatcher,
     addChildBelowSelectedAndEdit,
