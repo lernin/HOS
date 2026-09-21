@@ -66,7 +66,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `14-word-dock.js` | Chip render, chip drag, `normalizeToTree` |
 | `15-mix-and-context.js` | Mix and node context-menu Word Dock actions |
 | `16-tree-manager.js` | D3 zoom/layout/render and control wiring |
-| `17-keyboard.js` | `keyDispatcher` and extra hotkeys |
+| `17-keyboard.js` | `keyDispatcher` and extra hotkeys. Registers `logyq.keyboard`. Capture-phase Shift+I/J/K/L listeners stay in this fragment. |
 | `18-bridge.js` | `LOGYQBridge` seam used by the preview layer |
 
 ## Preview fragments
@@ -82,7 +82,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 
 ## Shared state (explicit `logyq` bag)
 
-Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), tree ops (`12-tree-ops.js`), and drag (`13-drag.js`) register `logyq.editing` / `logyq.selection` / `logyq.treeOps` / `logyq.drag` and take `state`, `elements`, `utils`, `history`, `detectors`, and `treeManager` from that bag. `LOGYQBridge` selection/edit/add-child methods go through those registered APIs. `LOGYQBridge.core` exposes the bag for tests and later cluster extractions.
+Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), tree ops (`12-tree-ops.js`), drag (`13-drag.js`), and keyboard (`17-keyboard.js`) register cluster APIs on the bag and take shared state/managers from it. `LOGYQBridge` selection, edit, add-child, and create-relative methods go through those APIs. `LOGYQBridge.core` exposes the bag for tests.
 
 Unconverted fragments still use ambient `state`, `elements`, `utils`, and friends; `attach()` makes those the same object references as `logyq.*`. Hidden communication that remains:
 

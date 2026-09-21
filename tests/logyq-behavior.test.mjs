@@ -355,3 +355,22 @@ test('getSelectionUids reads the group set from the logyq bag', () => {
   assert.deepEqual(fn({ state: { selectedUids: new Set(['b', 'a']) } })().sort(), ['a', 'b'])
   assert.deepEqual(fn({ state: { selectedUids: null } })(), [])
 })
+
+test('keyboard still handles W before the unreachable Shift+W WordBank branch', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/17-keyboard.js', import.meta.url), 'utf8')
+  const w = source.indexOf("if (lower === 'w')")
+  const shiftW = source.indexOf("if ((lower === 'w' && e.shiftKey)")
+  assert.ok(w > 0 && shiftW > w)
+  assert.equal((source.match(/function getSelectedUid\(\)/g) || []).length, 4)
+})
+
+test('getSelectedUid prefers the helper, then focus, then a singleton group', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/17-keyboard.js', import.meta.url), 'utf8')
+  const start = source.lastIndexOf('function getSelectedUid(){')
+  const end = source.indexOf('function insertParentAboveSelectedAndEdit()', start)
+  const factory = new Function('logyq', '__selectedUid', `${source.slice(start, end)}; return getSelectedUid;`)
+  assert.equal(factory({ state: { selectedUid: 'focus' } }, () => 'from-helper')(), 'from-helper')
+  assert.equal(factory({ state: { selectedUid: 'focus', selectedUids: new Set(['a']) } }, null)(), 'focus')
+  assert.equal(factory({ state: { selectedUid: null, selectedUids: new Set(['only']) } }, null)(), 'only')
+  assert.equal(factory({ state: { selectedUid: null, selectedUids: new Set(['a', 'b']) } }, null)(), null)
+})

@@ -79,13 +79,13 @@
       return !!logyq.treeOps.addChildOf(logyq.state.selectedUid, '', { noEdit: false });
     },
     createRelative(direction) {
-      if (!state.selectedUid) return null;
-      const before = state.selectedUid;
-      if (direction === 'up') insertParentAboveSelectedAndEdit();
-      if (direction === 'left') addElderSiblingLeftAndEdit();
-      if (direction === 'down') addChildBelowSelectedAndEdit();
-      if (direction === 'right') addYoungerSiblingRightAndEdit();
-      const created = state.selectedUid && state.selectedUid !== before ? state.selectedUid : null;
+      if (!logyq.state.selectedUid) return null;
+      const before = logyq.state.selectedUid;
+      if (direction === 'up') logyq.keyboard.insertParentAboveSelectedAndEdit();
+      if (direction === 'left') logyq.keyboard.addElderSiblingLeftAndEdit();
+      if (direction === 'down') logyq.keyboard.addChildBelowSelectedAndEdit();
+      if (direction === 'right') logyq.keyboard.addYoungerSiblingRightAndEdit();
+      const created = logyq.state.selectedUid && logyq.state.selectedUid !== before ? logyq.state.selectedUid : null;
       if (created && logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
       emitChange();
       return created;

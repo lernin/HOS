@@ -109,6 +109,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('treeOps', {",
     "attach('drag', dragManager)",
     "attach('treeManager', treeManager)",
+    "attach('keyboard', {",
   ]) assert.ok(engine.includes(call), call)
   const config = readFileSync(join(logyqDir, 'js/engine/01-config.js'), 'utf8')
   const editing = readFileSync(join(logyqDir, 'js/engine/09-editing.js'), 'utf8')
@@ -126,6 +127,10 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(drag, /logyq\.detectors\.pick/)
   assert.match(drag, /logyq\.selection\.insertNodeAtDrop/)
   assert.match(drag, /window\.DRAG_SLOP_PX \|\| 10/)
+  const keyboard = readFileSync(join(logyqDir, 'js/engine/17-keyboard.js'), 'utf8')
+  assert.match(keyboard, /attach\('keyboard'/)
+  assert.match(keyboard, /const \{ state, elements, utils \} = logyq/)
+  assert.match(keyboard, /if \(window\.startInlineEdit\) startInlineEdit/)
   assert.match(editing, /const \{ state, elements, config: CONFIG \} = logyq/)
   assert.match(selection, /const \{ state, elements \} = logyq/)
   assert.match(editing, /setSelectionSet\(merged\)/)

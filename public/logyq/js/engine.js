@@ -5721,6 +5721,7 @@ function enforceMoatForSelected(){
 
 /* ======================= KEYBOARD ======================= */
 function keyDispatcher(e){
+  const { state, elements, utils } = logyq
   // Only block hotkeys while typing *unless* Tab is being held
   if (isTextField(e.target) && !state.tabHold) return;
   const modalOpen = elements.settings.backdrop && elements.settings.backdrop.classList.contains("show");
@@ -5743,7 +5744,7 @@ function keyDispatcher(e){
   if (k === 'Escape'){
     if (state.editingUid){
       e.preventDefault();
-      closeNodeEditor(false,false);
+      logyq.editing.closeNodeEditor(false,false);
     }
     return;
   }
@@ -5758,12 +5759,12 @@ function keyDispatcher(e){
   if (typing && !state.tabHold) return;
 
  // 🔑 Hotkeys
-    if (lower === 'f' && !e.shiftKey){ e.preventDefault(); treeManager.autoFit(); return; }
+    if (lower === 'f' && !e.shiftKey){ e.preventDefault(); logyq.treeManager.autoFit(); return; }
     if (lower === 'f' && e.shiftKey) { e.preventDefault(); centerOnSelected(); return; }
     if (lower === 'a')               { e.preventDefault(); elements.wordInput.focus(); const L = elements.wordInput.value.length; elements.wordInput.setSelectionRange?.(L,L); return; }
     if (lower === 'm')               { e.preventDefault(); randomizeTree(!!e.shiftKey); return; }
     if (lower === 'w')               { e.preventDefault(); toggleDock(); return; }
-    if (lower === 'u')               { e.preventDefault(); undo(); return; }
+    if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}
 
 /* [patch] edit hotkeys start */
@@ -5778,10 +5779,10 @@ if (lower === 'e' && !e.metaKey){
     uid = state.selectedUid;
   }
 
-  if (!uid) { showToast('Select a node to edit'); return; }
+  if (!uid) { logyq.selection.showToast('Select a node to edit'); return; }
   const h = state.root?.descendants().find(n => n.data?._uid === uid);
-  if (!h) { showToast('Select a node to edit'); return; }
-  openNodeEditor(h);
+  if (!h) { logyq.selection.showToast('Select a node to edit'); return; }
+  logyq.editing.openNodeEditor(h);
 
   // Extra: clear contents on Shift+E
   if (e.shiftKey && state.editorEl) {
@@ -5796,7 +5797,7 @@ if (lower === 'e' && !e.metaKey){
 if ((lower === 'w' && e.shiftKey) && !e.metaKey){
   e.preventDefault();
   if (!state.wordBank || state.wordBank.length === 0){
-    showToast('WordBank is empty');
+    logyq.selection.showToast('WordBank is empty');
     return;
   }
 
@@ -5807,7 +5808,7 @@ if ((lower === 'w' && e.shiftKey) && !e.metaKey){
   state.trash = state.trash || [];
   state.trash.push(...moved);
 
-  showToast(`Moved ${moved.length} items to Trash`);
+  logyq.selection.showToast(`Moved ${moved.length} items to Trash`);
   renderWordBank?.();
   renderTrash?.();
   return;
@@ -5828,7 +5829,7 @@ if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey) {
     ? Array.from(state.selectedUids)
     : (state.selectedUid ? [state.selectedUid] : []);
 
-  if (!selected.length) { showToast('Select a node'); return; }
+  if (!selected.length) { logyq.selection.showToast('Select a node'); return; }
 
   // --- Compute which parent to focus *before* we mutate the tree
   let focusAfter = null;
@@ -5857,22 +5858,22 @@ if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey) {
   }
 
   // --- Refresh visuals
-  try { dragManager?.clear?.(); } catch(_) {}
-  treeManager?.layoutAndRender?.(true, true);
+  try { logyq.drag?.clear?.(); } catch(_) {}
+  logyq.treeManager?.layoutAndRender?.(true, true);
 
   // --- Clear group to avoid selected fill  "is-filled"
   state.selectedUids = new Set();
-  applySelectionStyles?.();
+  logyq.selection.applySelectionStyles?.();
 
   // --- Restore focus: parent if it still exists, else root, else nothing
   if (focusAfter && state.root && utils.findByUid(state.root.data, focusAfter)) {
-    selectSingle(focusAfter);
+    logyq.selection.selectSingle(focusAfter);
 
   } else if (state.root) {
-    selectSingle(state.root.data._uid);
+    logyq.selection.selectSingle(state.root.data._uid);
 
   } else {
-    clearSelection?.();
+    logyq.selection.clearSelection?.();
   }
 
   return;
@@ -5895,7 +5896,7 @@ if (!e.ctrlKey && !e.metaKey) {
       ? Array.from(state.selectedUids)
       : (state.selectedUid ? [state.selectedUid] : []);
 
-    if (!selected.length || !state.root) { showToast('Select a node'); return; }
+    if (!selected.length || !state.root) { logyq.selection.showToast('Select a node'); return; }
 
     // Keep only top-level selections (don’t duplicate work if an ancestor is also selected)
     const set = new Set(selected);
@@ -5942,18 +5943,18 @@ if (!e.ctrlKey && !e.metaKey) {
     state.selectedUid = null;
 
     if (parentToFocus === '__ROOT__') {
-      if (state.root) selectSingle(state.root.data._uid); // if a root still exists
+      if (state.root) logyq.selection.selectSingle(state.root.data._uid); // if a root still exists
     } else if (parentToFocus) {
-      selectSingle(parentToFocus);
+      logyq.selection.selectSingle(parentToFocus);
     } else {
-      clearSelection?.();
+      logyq.selection.clearSelection?.();
     }
 
-    applySelectionStyles?.();
+    logyq.selection.applySelectionStyles?.();
 
     // Refresh visuals and gently center on the new selection
-    try { dragManager?.clear?.(); } catch(_) {}
-    treeManager?.layoutAndRender?.(true, true);
+    try { logyq.drag?.clear?.(); } catch(_) {}
+    logyq.treeManager?.layoutAndRender?.(true, true);
 
     return;
   }
@@ -5999,20 +6000,20 @@ function deepestRow(){
       const row = deepestRow(); if (!row.length) return;
       const cx = state.root.x || 0; let best = row[0], bd = Math.abs(row[0].x - cx);
       for (let i=1;i<row.length;i++){ const dd = Math.abs(row[i].x - cx); if (dd < bd){ bd = dd; best = row[i]; } }
-      setSelected(best.data._uid); return;
+      logyq.selection.setSelected(best.data._uid); return;
     }
-    if (isDown || isLeft || isRight){ setSelected(state.root.data._uid); return; }
+    if (isDown || isLeft || isRight){ logyq.selection.setSelected(state.root.data._uid); return; }
     return;
   }
 
   const h = state.root.descendants().find(n => n.data._uid === state.selectedUid); if (!h) return;
 
-  if (isUp){ if (h.parent) setSelected(h.parent.data._uid); else setSelected(null); return; }
+  if (isUp){ if (h.parent) logyq.selection.setSelected(h.parent.data._uid); else logyq.selection.setSelected(null); return; }
   if (isDown){
     if (h.children && h.children.length){
       const kids = h.children.slice().sort((a,b)=>a.x-b.x);
       const idx = Math.floor((kids.length-1)/2);
-      setSelected(kids[idx].data._uid); return;
+      logyq.selection.setSelected(kids[idx].data._uid); return;
     }
     const nodes = state.root.descendants(), maxDepth = nodes.reduce((m,n)=>Math.max(m,n.depth),0);
     for (let d=h.depth+1; d<=maxDepth; d++){
@@ -6020,10 +6021,10 @@ function deepestRow(){
       if (row.length){
         let best=row[0], bd=Math.abs(row[0].x - h.x);
         for (let i=1;i<row.length;i++){ const dd=Math.abs(row[i].x - h.x); if (dd < bd){ bd = dd; best = row[i]; } }
-        setSelected(best.data._uid); return;
+        logyq.selection.setSelected(best.data._uid); return;
       }
     }
-    setSelected(null); return;
+    logyq.selection.setSelected(null); return;
   }
 
 
@@ -6032,12 +6033,12 @@ function deepestRow(){
     const row = rowAtDepth(h.depth);
     if (row.length === 1 && h.children && h.children.length){
       const kids = h.children.slice().sort((a,b)=>a.x-b.x);
-      setSelected((isLeft ? kids[0] : kids[kids.length-1]).data._uid); return;
+      logyq.selection.setSelected((isLeft ? kids[0] : kids[kids.length-1]).data._uid); return;
     }
     const idx = row.findIndex(n => n === h);
     if (idx === -1 || !row.length) return;
     const to = (isLeft ? (idx>0 ? idx-1 : row.length-1) : (idx<row.length-1 ? idx+1 : 0));
-    setSelected(row[to].data._uid);
+    logyq.selection.setSelected(row[to].data._uid);
   }
 
 
@@ -6055,7 +6056,7 @@ function deepestRow(){
 
 
   /* ======================= DOCK TOGGLE ======================= */
-  function toggleDock(){ const dock = elements.Dock; const hidden = (dock.style.display === 'none'); dock.style.display = hidden ? '' : 'none'; elements.Hint.style.display = hidden ? 'none' : 'inline-flex'; }
+  function toggleDock(){ const { elements } = logyq; const dock = elements.Dock; const hidden = (dock.style.display === 'none'); dock.style.display = hidden ? '' : 'none'; elements.Hint.style.display = hidden ? 'none' : 'inline-flex'; }
 
 
 
@@ -6143,7 +6144,7 @@ elements.trash.addEventListener('contextmenu', (e)=>{
 
 
   /* ======================= BOOT ======================= */
-  const TreeVisualization = { init: ()=>treeManager.initialize() };
+  const TreeVisualization = { init: ()=>logyq.treeManager.initialize() };
   window.TreeVisualization = TreeVisualization;
   TreeVisualization.init();
 
@@ -6154,6 +6155,7 @@ elements.svg.on("contextmenu", (event) => {
   /* ======================= BOOT ======================= */
 
   function getSelectedUid(){
+    const { state } = logyq
     if (typeof __selectedUid === 'function') return __selectedUid();
     if (state?.selectedUid) return state.selectedUid;
     if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
@@ -6161,11 +6163,12 @@ elements.svg.on("contextmenu", (event) => {
   }
 
   function addChildBelowSelectedAndEdit(){
+    const { state, utils } = logyq
     const uid = getSelectedUid();
-    if (!state?.root || !uid){ showToast('Select one node'); return; }
+    if (!state?.root || !uid){ logyq.selection.showToast('Select one node'); return; }
 
     const h = state.root.descendants().find(n => n?.data?._uid === uid);
-    if (!h){ showToast('Could not find selected node'); return; }
+    if (!h){ logyq.selection.showToast('Could not find selected node'); return; }
 
     const child = { name: '' };
     utils?.assignUids?.(child);
@@ -6173,18 +6176,18 @@ elements.svg.on("contextmenu", (event) => {
     h.data.children = h.data.children || [];
     h.data.children.push(child); // rightmost child
 
-    pushHistory({ type:'add', parentPath: utils.pathToUid(state.root.data, uid), uid: child._uid });
+    logyq.history.pushHistory({ type:'add', parentPath: utils.pathToUid(state.root.data, uid), uid: child._uid });
 
     state.root = d3.hierarchy(state.root.data);
     utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
 
-    selectSingle(child._uid);
+    logyq.selection.selectSingle(child._uid);
     (window.flyCenterToUID && flyCenterToUID(child._uid)) || (window.zoomToNodeCenter && zoomToNodeCenter(child._uid, 1.5));
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === child._uid);
-      if (nh){ openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
+      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
     }
   }
 
@@ -6205,6 +6208,7 @@ elements.svg.on("contextmenu", (event) => {
   window.__addChildBelowSelectedAndEdit = addChildBelowSelectedAndEdit;
 
 function getSelectedUid(){
+    const { state } = logyq
     if (typeof __selectedUid === 'function') return __selectedUid();
     if (state?.selectedUid) return state.selectedUid;
     if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
@@ -6212,13 +6216,14 @@ function getSelectedUid(){
   }
 
   function addElderSiblingLeftAndEdit(){
+    const { state, utils } = logyq
     if (!state?.root) return;
 
     const uid = getSelectedUid();
-    if (!uid) { showToast('Select one node'); return; }
+    if (!uid) { logyq.selection.showToast('Select one node'); return; }
 
     const h = state.root.descendants().find(n => n?.data?._uid === uid);
-    if (!h) { showToast('Node not found'); return; }
+    if (!h) { logyq.selection.showToast('Node not found'); return; }
     if (!h.parent) return; // root: no effect
 
     const parentData = h.parent.data;
@@ -6232,7 +6237,7 @@ function getSelectedUid(){
     parentData.children.splice(idx, 0, sib);
 
     // history for Undo
-    pushHistory({
+    logyq.history.pushHistory({
       type: 'add',
       parentPath: utils.pathToUid(state.root.data, h.parent.data._uid),
       uid: sib._uid
@@ -6241,16 +6246,16 @@ function getSelectedUid(){
     // rebuild + render
     state.root = d3.hierarchy(state.root.data);
     utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
 
     // select & edit the new sibling
-    selectSingle(sib._uid);
+    logyq.selection.selectSingle(sib._uid);
     (window.flyCenterToUID && flyCenterToUID(sib._uid)) ||
     (window.zoomToNodeCenter && zoomToNodeCenter(sib._uid, 1.5));
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
-      if (nh){ openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
+      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
     }
   }
 
@@ -6273,6 +6278,7 @@ function getSelectedUid(){
 
 
  function getSelectedUid(){
+    const { state } = logyq
     if (typeof __selectedUid === 'function') return __selectedUid();
     if (state?.selectedUid) return state.selectedUid;
     if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
@@ -6280,10 +6286,11 @@ function getSelectedUid(){
   }
 
   function addYoungerSiblingRightAndEdit(){
+    const { state, utils } = logyq
     if (!state?.root) return;
 
     const uid = getSelectedUid();
-    if (!uid){ showToast('Select one node'); return; }
+    if (!uid){ logyq.selection.showToast('Select one node'); return; }
 
     const h = state.root.descendants().find(n => n?.data?._uid === uid);
     if (!h || !h.parent) return; // root: no effect
@@ -6299,7 +6306,7 @@ function getSelectedUid(){
     parentData.children.splice(idx + 1, 0, sib);
 
     // Undo history
-    pushHistory({
+    logyq.history.pushHistory({
       type: 'add',
       parentPath: utils.pathToUid(state.root.data, h.parent.data._uid),
       uid: sib._uid
@@ -6308,16 +6315,16 @@ function getSelectedUid(){
     // Rebuild + render
     state.root = d3.hierarchy(state.root.data);
     utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
 
     // Select & edit
-    selectSingle(sib._uid);
+    logyq.selection.selectSingle(sib._uid);
     (window.flyCenterToUID && flyCenterToUID(sib._uid)) ||
     (window.zoomToNodeCenter && zoomToNodeCenter(sib._uid, 1.5));
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
-      if (nh){ openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
+      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
     }
   }
 
@@ -6339,6 +6346,7 @@ function getSelectedUid(){
 /*========== insert parent above selected (adopt selected as child) ==========*/
 
   function getSelectedUid(){
+    const { state } = logyq
     if (typeof __selectedUid === 'function') return __selectedUid();
     if (state?.selectedUid) return state.selectedUid;
     if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
@@ -6346,13 +6354,14 @@ function getSelectedUid(){
   }
 
   function insertParentAboveSelectedAndEdit(){
+    const { state, utils } = logyq
     if (!state?.root) return;
 
     const uid = getSelectedUid();
-    if (!uid){ showToast('Select one node'); return; }
+    if (!uid){ logyq.selection.showToast('Select one node'); return; }
 
     const h = state.root.descendants().find(n => n?.data?._uid === uid);
-    if (!h) { showToast('Node not found'); return; }
+    if (!h) { logyq.selection.showToast('Node not found'); return; }
     if (!h.parent) return; // root: no effect
 
     const parentData = h.parent.data;
@@ -6362,7 +6371,7 @@ function getSelectedUid(){
 
     // Snapshot for easy Undo
     const prevTree = utils.deepClone(state.root.data);
-    pushHistory({ type: 'replace-root', prev: prevTree });
+    logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
 
     // Create the new parent and adopt the selected node
     const newParent = { name: '' };
@@ -6379,16 +6388,16 @@ function getSelectedUid(){
     // Rebuild + render
     state.root = d3.hierarchy(state.root.data);
     utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
 
     // Select & edit the new parent
-    selectSingle(newParent._uid);
+    logyq.selection.selectSingle(newParent._uid);
     (window.flyCenterToUID && flyCenterToUID(newParent._uid)) ||
     (window.zoomToNodeCenter && zoomToNodeCenter(newParent._uid, 1.5));
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === newParent._uid);
-      if (nh){ openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
+      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
     }
   }
 
@@ -6406,8 +6415,14 @@ function getSelectedUid(){
 
   window.__insertParentAboveSelectedAndEdit = insertParentAboveSelectedAndEdit;
 
-
-
+  attach('keyboard', {
+    keyDispatcher,
+    toggleDock,
+    addChildBelowSelectedAndEdit,
+    addElderSiblingLeftAndEdit,
+    addYoungerSiblingRightAndEdit,
+    insertParentAboveSelectedAndEdit,
+  })
 /* LOGYQ preview integration seam.
    Keep the copied engine above intact; mobile UI and persistence live in
    js/preview.js and use only this deliberately small bridge. */
@@ -6489,13 +6504,13 @@ function getSelectedUid(){
       return !!logyq.treeOps.addChildOf(logyq.state.selectedUid, '', { noEdit: false });
     },
     createRelative(direction) {
-      if (!state.selectedUid) return null;
-      const before = state.selectedUid;
-      if (direction === 'up') insertParentAboveSelectedAndEdit();
-      if (direction === 'left') addElderSiblingLeftAndEdit();
-      if (direction === 'down') addChildBelowSelectedAndEdit();
-      if (direction === 'right') addYoungerSiblingRightAndEdit();
-      const created = state.selectedUid && state.selectedUid !== before ? state.selectedUid : null;
+      if (!logyq.state.selectedUid) return null;
+      const before = logyq.state.selectedUid;
+      if (direction === 'up') logyq.keyboard.insertParentAboveSelectedAndEdit();
+      if (direction === 'left') logyq.keyboard.addElderSiblingLeftAndEdit();
+      if (direction === 'down') logyq.keyboard.addChildBelowSelectedAndEdit();
+      if (direction === 'right') logyq.keyboard.addYoungerSiblingRightAndEdit();
+      const created = logyq.state.selectedUid && logyq.state.selectedUid !== before ? logyq.state.selectedUid : null;
       if (created && logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
       emitChange();
       return created;

@@ -6,14 +6,14 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 
 - **`dragManager` drop cases** (subtree / solo / group, Trash, root-above). Order of detector priority and fallbacks is load-bearing. Group+rootAbove is still explicitly unsupported. Drag inlines its own top-level-selection filter instead of calling `topLevelSelection`. `window.DRAG_SLOP_PX || 10` is the live slop check; the `const DRAG_SLOP_PX` in `12-tree-ops.js` is not assigned to `window` and is unused by drag.
 - **Detector geometry** (`Detectors.build` / `pick`). Pixel overlap, cousin/sibling thresholds, and overlay flags are tuned empirically.
-- **`keyDispatcher` plus extra capture listeners** (V-hold, Shift+I, Tab-hold, Dock Shift+A). Duplicate handlers and capture/bubble order are part of the product. V-hold, G/Shift+G, and V-paste still register from `10-selection.js`, not `17-keyboard.js`.
+- **`keyDispatcher` plus extra capture listeners** (V-hold, Shift+I, Tab-hold, Dock Shift+A). Duplicate handlers and capture/bubble order are part of the product. V-hold, G/Shift+G, and V-paste still register from `10-selection.js`, not `17-keyboard.js`. Four copies of `getSelectedUid` remain; the last declaration wins. Relative-create helpers still check `window.startInlineEdit` / `window.flyCenterToUID` / `window.zoomToNodeCenter`, which are not assigned, so they fall through to `openNodeEditor`.
+- **Unreachable Shift+W clear-WordBank branch.** The earlier `W` handler returns first. Documented v161 mismatch; not “fixed.”
 - **Sticky-nav `setSelectionSet`.** The nav-key listener in `09-editing.js` still calls `setSelectionSet(merged)` inside try/catch. That helper was never defined in v161, so sticky restore throws and `checkMoatAndAutoFit('kbd')` in the same try does not run. Left as copied behavior.
 - **Two Escape listeners.** Purple Esc in `09-editing.js` clears group+focus; `keyDispatcher` Esc closes the inline editor. Order and the “editor-open, skip group clear” guard are load-bearing.
 - **`caretXYFromHit` stacked edgeSibling patches.** The first nextUid/prevUid return wins; the later parent-edge formula only runs when those uids are missing. Duplicate cousin comments are unchanged.
-- **`insertNodeAtDrop` / `removeNode` live in the selection fragment.** Drag, paste, and later tree ops still call them by ambient name. They are not moved into `12-tree-ops.js` in this wave.
+- **`insertNodeAtDrop` / `removeNode` live in the selection fragment.** Drag now calls them through `logyq.selection`; they were not moved into `12-tree-ops.js`.
 - **Two `dropSelectedToWordBank` implementations.** The later declaration wins; the earlier one is inside a “Maybe broken?” comment but the `function dropSelectedToWordBank` text is kept so source order stays identical. The live copy now reads through `logyq`; the commented copy still uses ambient names.
 - **Suppressed double-click editor.** A node dblclick handler exists; a later capture listener still swallows SVG double-clicks. Keyboard `E` remains the reliable edit path.
-- **Unreachable Shift+W clear-WordBank branch.** The earlier `W` handler returns first. Documented v161 mismatch; not “fixed.”
 - **Help text vs code mismatches** (Ctrl vs Shift, double-click rename). Comments and help HTML are unchanged.
 - **Mix (`randomizeTree`)** and its undo snapshot, including Word Dock include/clear rules.
 - **PNG/SVG export** (`PngExport` and export modal wiring).
@@ -30,4 +30,4 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 
 ## Extraction method (intentional)
 
-Fragments still concatenate into the original IIFEs. A `logyq` API bag now holds shared objects; clusters should take dependencies from that bag. They are not yet independently imported ES modules. Remaining ambient free-variable use is being removed cluster by cluster rather than in one rewrite.
+Fragments still concatenate into the original IIFEs. A `logyq` API bag now holds shared objects; extracted clusters take dependencies from that bag. They are not yet independently imported ES modules. Mix, deletion, Word Dock, and layout/structure still use ambient bindings. Detectors already register on the bag; they were not internally rewritten.
