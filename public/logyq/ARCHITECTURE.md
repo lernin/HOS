@@ -77,9 +77,9 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `00-boot.js` | Bridge guard, `LOGYQPreview` bag, storage keys, boot sequence |
 | `01-helpers.js` | JSON/localStorage helpers |
 | `02-styles.js` | Injected preview/mobile CSS, including v162 hold-drag ghost styles |
-| `03-ui.js` | Maps library chrome, phone header. No spawn-puck, no bottom arrow bar. |
+| `03-ui.js` | Maps library chrome, phone header, ⋮ “Drag hand” buttons. No spawn-puck, no bottom arrow bar. |
 | `04-gestures.js` | Header-mic voice only (fills type-or-speak). |
-| `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag, ~360ms double-tap edit, tap-to-MIC on a blank card. |
+| `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag with origin ghost + edge auto-pan, ~360ms double-tap edit, tap-to-MIC, finger handedness offset. |
 | `06-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
 
 ## Shared state (explicit `logyq` bag)
@@ -137,6 +137,9 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - Hold (~280ms, 8px slop) latches through synthetic `mousedown`/`mousemove`/`mouseup` into existing `d3.drag()` (`shiftKey: false`). Flick and double-tap must not start that drag.
 - Direct flick calls `selectByUid` + `createRelative`, then arms `#logyq-v162-action` on the blank card. It must not start `MediaRecorder` until she taps MIC. Header mic remains a separate voice path into the type-or-speak field.
 - Phone pinch/wheel floor is `scaleExtent([0.02, 2.4])` on `logyq.state.zoom`. Do not restore the v161 `0.4` floor.
+- Finger hold-drag must keep the tree standing: `v2-branch-origin-ghost` on the source branch, `is-others` opacity 1 while `body.v2-branch-drag`. Do not let desktop `dragging-mode` hide the rest of the map. Do not restyle drop-target/caret (Ashley’s magnetic indicator).
+- Finger drag offset is `LOGYQPreview.gestures.fingerOffset()` from `logyq_handedness_v1` (`right` default / `left`). Mouse path must not use it.
+- Edge auto-pan is `LOGYQPreview.gestures.edgePan` (v162 `v2.js`: zone 84, step 14). Detect from the **finger**; feed drop mousemove at the **visual** point.
 
 ### Must not do
 

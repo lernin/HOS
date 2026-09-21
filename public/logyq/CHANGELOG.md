@@ -49,7 +49,14 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Bottom arrow bar gone.** `#logiq-mobile-context` (← ↑ ↓ → Edit / Delete) plus its CSS and `updateContextActions` listeners were deleted. Word Dock no longer reserves 66px for that strip.
 - **Canvas is full-bleed on phone.** `svg#canvas` is `position:fixed; inset:0; width:100%; height:100dvh; overflow:visible`. Trash stays hidden. Dock sits at `bottom: max(8px, env(safe-area-inset-bottom))`.
 - **Pinch floor is 0.02.** Engine `d3.zoom().scaleExtent` was `[0.4, 2.4]` (v161). LOGYQ is `[0.02, 2.4]` so a phone can pinch much smaller. No working-lock script in-repo used 0.02; Ashley asked to match that looser known-good.
-- **Flick shows a tap-to-MIC chip, not auto-record.** Ported from `public/logiq-v162-mobile/direct-flick.js` (`revealBlankCardAction`) + `v2.js` (`#logiq-v2-action` / `actionLoop` / `startRecording`). LOGYQ uses `#logyq-v162-action`. Flick still only `createRelative`; recording starts only if she taps MIC. Header mic still fills the type-or-speak field.
+- **Flick shows a tap-to-MIC chip, not auto-record.** Ported from `public/logiq-v162-mobile/direct-flick.js` (`revealBlankCardAction`) + `v2.js` (`#logiq-v2-action` / `actionLoop` / `startRecording`). LOGYQ uses `#logyq-v162-action`. Flick still only `createRelative`; recording starts only if she taps MIC. Header mic still fills the type-or-speak field. After flick, `createRelative`’s `flyCenterToUID` is interrupted and the pre-flick view restored so the new card + MIC stay on-screen.
+
+## Phone drag follow-ups (PR 112)
+
+- **Ghost-hold restored.** Desktop `dragging-mode` still hides `is-others` (`opacity: 0`) — that is the “tree collapsed around the moving card” look. Finger hold-drag now keeps the live map in place and stamps `v2-branch-origin-ghost` on the source branch (v162 `v2-drag-visual-fix.js` / `v2-branch-affordance.js`). CSS is **not** media-query gated so a coarse-pointer miss cannot drop back to collapse. Origin transforms are re-stamped every feedback frame. Magnetic drop/caret CSS was left as the existing drop-target/caret path — not redesigned.
+- **Edge auto-pan.** Ported from `public/logiq-v162-mobile/v2.js` `edgePan` (same math in `v2-ghost.js` and clutch). Zone 84 / quadratic step 14. Finger toward an edge pans the map the opposite way. Re-feeds drop `mousemove` at the handedness visual point.
+- **Handedness drag offset.** Settings “Finger drag hand” radios + phone ⋮ “Drag hand”. Finger (not mouse) hold-drag offsets the ghost ~1.5cm up and ~1cm to the side (38px/cm → 57px / 38px). Right-handed default: up+left; left-handed: up+right. Desktop mouse drag is unchanged. Persists in `logyq_handedness_v1`.
+- **Second finger yields.** A second pointer during hold-drag calls `yieldNodeDrag` (mouseup at origin) so pinch/pan can take over instead of fighting d3.drag.
 
 ## Fearless-delete wave
 

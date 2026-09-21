@@ -42,6 +42,9 @@ Do **not** delete because fingers on phone do not press the key. Gestures and th
 - SVG `dblclick` **mute** (edit is pointer double-tap or E)
 - Preview maps library (`logyq_maps_v1`) and header-mic `/api/transcribe` with `logyq_lab_pin_v1`
 - Flick tap-to-MIC chip (`#logyq-v162-action`) — record only after tap
+- Finger hold-drag origin ghost (`v2-branch-origin-ghost` + `is-others` stay visible). Desktop `dragging-mode` hide is load-bearing for mouse; do not delete it, only override during `v2-branch-drag`
+- `logyq_handedness_v1` + Settings/⋮ Drag hand controls
+- Edge auto-pan (`edgePan`, zone 84 / step 14) on the hold-drag feedback loop
 - Dock hide via `logyq.dock.setSide` / `cycleDockSide` (CSS class, not `style.display`)
 - `#mapsBtn` in HTML (preview capture-phase click opens `logyq_maps_v1`)
 - Zoom still calls `logyq.layout.refreshLaneOnZoom` (no-op, but the call is live)

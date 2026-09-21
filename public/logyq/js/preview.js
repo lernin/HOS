@@ -21,6 +21,7 @@
   const CURRENT_KEY = 'logyq_current_map_v1'
   const PENDING_KEY = 'logyq_pending_save_v1'
   const LIBRARY_KEY = 'logyq_maps_v1'
+  const HAND_KEY = 'logyq_handedness_v1'
   const DEFAULT_NAME = 'Untitled map'
 
   const app = {
@@ -123,6 +124,17 @@
       .logiq-pin-error{display:none;color:#dc2626;font-size:12px}.logiq-pin-error.is-visible{display:block}
       #logiq-mobile-header,#logiq-mobile-panel,#logiq-voice-bar{display:none}
 
+      /* Ghost-hold is not media-query gated: desktop drag-mode hides is-others (opacity:0),
+         which makes the tree look like it collapsed around the moving card. While a finger
+         hold-drag is latched, keep the live map in place and ghost the origin branch. */
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.is-others{opacity:1!important;visibility:visible!important}
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost{opacity:.44!important;visibility:visible!important}
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost text{fill:#64748b!important;opacity:.82!important}
+      body.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
+      body.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
+      body.v2-branch-drag .drag-mini,body.v2-branch-drag g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
+
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
         html,body{width:100%;max-width:100%;overflow:hidden}
         body>header{display:none!important}
@@ -141,6 +153,10 @@
         #logiq-mobile-panel{position:fixed;display:none;z-index:3100;top:54px;right:8px;left:8px;padding:12px;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
         #logiq-mobile-panel.is-open{display:block}
         .logiq-mobile-tools{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.logiq-mobile-tools button{min-height:42px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-weight:650}
+        .logyq-handedness{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0}
+        .logyq-handedness span{width:100%;font-size:12px;font-weight:700;color:#64748b}
+        .logyq-handedness button{flex:1;min-height:40px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-weight:650}
+        .logyq-handedness button.is-active{background:#dcfce7;border-color:#22c55e;color:#166534}
         #logiq-voice-bar{position:fixed;z-index:3300;left:50%;bottom:70px;transform:translateX(-50%);align-items:center;gap:9px;max-width:calc(100vw - 20px);padding:8px 9px 8px 13px;border-radius:999px;background:#111827;color:#fff;box-shadow:0 12px 34px rgba(15,23,42,.35);font-size:13px;font-weight:700;white-space:nowrap}
         #logiq-voice-bar.is-visible{display:flex}
         #logiq-voice-stop{border:0;border-radius:999px;background:#ef4444;color:#fff;padding:8px 13px;font-weight:800}
@@ -204,6 +220,11 @@
           <button data-tool="add">Add typed words</button><button data-tool="add-child">Add to selected</button>
           <button data-tool="library">Maps</button><button data-tool="mix">Mix</button>
           <button data-tool="dock">Word Dock</button><button data-tool="help">Help</button>
+        </div>
+        <div class="logyq-handedness" role="group" aria-label="Finger drag hand">
+          <span>Drag hand</span>
+          <button type="button" data-hand="right">Right-handed</button>
+          <button type="button" data-hand="left">Left-handed</button>
         </div>
       </section>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
@@ -388,6 +409,11 @@
       HOLD_SLOP: 8,
       TAP_MOVE: 11,
       DOUBLE_TAP_MS: 360,
+      EDGE_ZONE: 84,
+      EDGE_STEP: 14,
+      PX_PER_CM: 38,
+      OFFSET_UP_CM: 1.5,
+      OFFSET_SIDE_CM: 1,
     }
   }
 
@@ -442,10 +468,7 @@
     if (alreadyActive) {
       state.pointers.forEach((pointer) => { pointer.multi = true })
       cancelHold(win, state)
-      if (state.drag) {
-        state.drag.multi = true
-        doc.body.classList.add('v2-cancel')
-      }
+      if (state.drag) yieldNodeDrag(doc, win, canvas, state)
     }
 
     state.active.add(event.pointerId)
@@ -487,8 +510,9 @@
     if (!drag || drag.pointerId !== event.pointerId) return
     drag.lastX = event.clientX
     drag.lastY = event.clientY
+    const visual = visualPoint(event.clientX, event.clientY)
     movePreview(drag, event.clientX, event.clientY)
-    mouse(win, win, 'mousemove', event.clientX, event.clientY, 1)
+    mouse(win, win, 'mousemove', visual.x, visual.y, 1)
   }
 
   function onHoldUp(event, doc, win, canvas, state) {
@@ -503,11 +527,12 @@
     event.stopImmediatePropagation()
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
-    const endX = canceled ? drag.x : event.clientX
-    const endY = canceled ? drag.y : event.clientY
+    const end = canceled
+      ? { x: drag.x, y: drag.y }
+      : visualPoint(event.clientX, event.clientY)
 
     if (canceled) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
-    mouse(win, win, 'mouseup', endX, endY, 0)
+    mouse(win, win, 'mouseup', end.x, end.y, 0)
 
     cleanupDrag(doc, win, state, drag)
     dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
@@ -561,10 +586,13 @@
 
     doc.body.classList.add('v2-branch-drag')
     bridge.selectByUid(hold.uid)
+    const visual = visualPoint(hold.x, hold.y)
     mouse(source, win, 'mousedown', hold.x, hold.y, 1)
-    mouse(win, win, 'mousemove', hold.lastX, hold.lastY, 1)
+    stampOriginGhost(doc, uids)
+    state.drag.originLayout = captureOriginLayout(doc, uids)
+    mouse(win, win, 'mousemove', visual.x, visual.y, 1)
     movePreview(state.drag, hold.lastX, hold.lastY)
-    startFeedbackLoop(win, state)
+    startFeedbackLoop(doc, win, state)
     win.navigator.vibrate?.(12)
   }
 
@@ -624,20 +652,132 @@
 
   function movePreview(drag, x, y) {
     if (!drag?.preview) return
-    const dx = x - drag.x
-    const dy = y - drag.y
+    const offset = fingerOffset()
+    const dx = (x - drag.x) + offset.x
+    const dy = (y - drag.y) + offset.y
     drag.preview.style.transform = `translate3d(${dx}px,${dy}px,0)`
   }
 
-  function startFeedbackLoop(win, state) {
+  function startFeedbackLoop(doc, win, state) {
     if (state.feedbackRaf) win.cancelAnimationFrame(state.feedbackRaf)
     const tick = () => {
       const drag = state.drag
       if (!drag) { state.feedbackRaf = 0; return }
-      mouse(win, win, 'mousemove', drag.lastX, drag.lastY, 1)
+      restoreOriginLayout(doc, drag.originLayout)
+      edgePan(doc, win, drag.lastX, drag.lastY)
+      const visual = visualPoint(drag.lastX, drag.lastY)
+      mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+      movePreview(drag, drag.lastX, drag.lastY)
       state.feedbackRaf = win.requestAnimationFrame(tick)
     }
     state.feedbackRaf = win.requestAnimationFrame(tick)
+  }
+
+  function yieldNodeDrag(doc, win, canvas, state) {
+    const drag = state.drag
+    if (!drag) return
+    mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+    mouse(win, win, 'mouseup', drag.x, drag.y, 0)
+    cleanupDrag(doc, win, state, drag)
+    dispatchPointerCancel(canvas, win, drag.pointerId, drag.lastX, drag.lastY)
+  }
+
+  function stampOriginGhost(doc, uids) {
+    for (const uid of uids || []) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
+  }
+
+  function captureOriginLayout(doc, uids) {
+    return (uids || []).map((uid) => {
+      const node = nodeByUid(doc, uid)
+      return { uid, transform: node?.getAttribute('transform') || '' }
+    })
+  }
+
+  function restoreOriginLayout(doc, layout) {
+    for (const entry of layout || []) {
+      const node = nodeByUid(doc, entry.uid)
+      if (!node) continue
+      if (entry.transform) node.setAttribute('transform', entry.transform)
+      node.classList.add('v2-branch-origin-ghost')
+    }
+  }
+
+  // Ported from public/logiq-v162-mobile/v2.js edgePan (also v2-ghost.js / clutch).
+  // Finger toward an edge pans the map the opposite way so drop targets off-screen can be reached.
+  function edgePan(doc, win, x, y) {
+    const svg = doc.getElementById('canvas')
+    if (!svg || !win.d3) return false
+    const portrait = win.matchMedia('(orientation:portrait)').matches
+    const leftInset = portrait ? 4 : 54
+    const topInset = portrait ? 54 : 4
+    const C = v162Constants()
+    const step = (p, min, max) => {
+      if (p < min + C.EDGE_ZONE) {
+        const q = Math.max(0, Math.min(1, (min + C.EDGE_ZONE - p) / C.EDGE_ZONE))
+        return C.EDGE_STEP * q * q
+      }
+      if (p > max - C.EDGE_ZONE) {
+        const q = Math.max(0, Math.min(1, (p - (max - C.EDGE_ZONE)) / C.EDGE_ZONE))
+        return -C.EDGE_STEP * q * q
+      }
+      return 0
+    }
+    const dx = step(x, leftInset, win.innerWidth)
+    const dy = step(y, topInset, win.innerHeight - 4)
+    if (!dx && !dy) return false
+    const t = win.d3.zoomTransform(svg)
+    const next = win.d3.zoomIdentity.translate(t.x + dx, t.y + dy).scale(t.k)
+    svg.__zoom = next
+    const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+    if (root) root.setAttribute('transform', next.toString())
+    return true
+  }
+
+  function getHandedness() {
+    try {
+      return localStorage.getItem(HAND_KEY) === 'left' ? 'left' : 'right'
+    } catch (_error) {
+      return 'right'
+    }
+  }
+
+  function setHandedness(value) {
+    const next = value === 'left' ? 'left' : 'right'
+    try { localStorage.setItem(HAND_KEY, next) } catch (_error) {}
+    syncHandednessUi(next)
+    return next
+  }
+
+  function fingerOffset() {
+    const C = v162Constants()
+    const up = C.OFFSET_UP_CM * C.PX_PER_CM
+    const side = C.OFFSET_SIDE_CM * C.PX_PER_CM
+    return getHandedness() === 'left' ? { x: side, y: -up } : { x: -side, y: -up }
+  }
+
+  function visualPoint(x, y) {
+    const offset = fingerOffset()
+    return { x: x + offset.x, y: y + offset.y }
+  }
+
+  function syncHandednessUi(value) {
+    const hand = value === 'left' ? 'left' : 'right'
+    const right = document.getElementById('logyqHandRight')
+    const left = document.getElementById('logyqHandLeft')
+    if (right) right.checked = hand === 'right'
+    if (left) left.checked = hand === 'left'
+    document.querySelectorAll('[data-hand]').forEach((button) => {
+      button.classList.toggle('is-active', button.dataset.hand === hand)
+    })
+  }
+
+  function bindHandednessUi() {
+    syncHandednessUi(getHandedness())
+    document.getElementById('logyqHandRight')?.addEventListener('change', () => setHandedness('right'))
+    document.getElementById('logyqHandLeft')?.addEventListener('change', () => setHandedness('left'))
+    document.querySelectorAll('[data-hand]').forEach((button) => {
+      button.addEventListener('click', () => setHandedness(button.dataset.hand))
+    })
   }
 
   function cleanupDrag(doc, win, state, drag) {
@@ -721,8 +861,15 @@
         bridge.selectByUid(candidate.uid)
         const createdUid = bridge.createRelative(direction)
         if (!createdUid) return
+        const canvas = doc.getElementById('canvas')
+        if (win.d3 && canvas) win.d3.select(canvas).interrupt()
+        restoreView(doc, win, candidate.view)
         bridge.selectByUid(createdUid)
         armBlankCardMic(state.mic, doc, createdUid)
+        win.requestAnimationFrame(() => {
+          restoreView(doc, win, candidate.view)
+          armBlankCardMic(state.mic, doc, createdUid)
+        })
         win.navigator.vibrate?.(16)
       })
       return
@@ -968,10 +1115,17 @@
   }
 
   bindV162Gestures()
+  bindHandednessUi()
   if (preview.gestures) {
     preview.gestures.constants = v162Constants()
     preview.gestures.bindV162 = bindV162Gestures
     preview.gestures.armBlankCardMic = armBlankCardMic
+    preview.gestures.edgePan = edgePan
+    preview.gestures.fingerOffset = fingerOffset
+    preview.gestures.visualPoint = visualPoint
+    preview.gestures.getHandedness = getHandedness
+    preview.gestures.setHandedness = setHandedness
+    preview.gestures.yieldNodeDrag = yieldNodeDrag
   }
   function setSaveState(state) {
     const text = state === 'saving' ? 'Saving' : state === 'offline' ? 'Offline' : 'Saved'

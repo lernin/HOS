@@ -21,6 +21,11 @@
           <button data-tool="library">Maps</button><button data-tool="mix">Mix</button>
           <button data-tool="dock">Word Dock</button><button data-tool="help">Help</button>
         </div>
+        <div class="logyq-handedness" role="group" aria-label="Finger drag hand">
+          <span>Drag hand</span>
+          <button type="button" data-hand="right">Right-handed</button>
+          <button type="button" data-hand="left">Left-handed</button>
+        </div>
       </section>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
       <div class="logiq-backdrop" id="logiq-library" aria-hidden="true">

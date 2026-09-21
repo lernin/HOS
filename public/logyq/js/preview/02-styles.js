@@ -34,6 +34,17 @@
       .logiq-pin-error{display:none;color:#dc2626;font-size:12px}.logiq-pin-error.is-visible{display:block}
       #logiq-mobile-header,#logiq-mobile-panel,#logiq-voice-bar{display:none}
 
+      /* Ghost-hold is not media-query gated: desktop drag-mode hides is-others (opacity:0),
+         which makes the tree look like it collapsed around the moving card. While a finger
+         hold-drag is latched, keep the live map in place and ghost the origin branch. */
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.is-others{opacity:1!important;visibility:visible!important}
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost{opacity:.44!important;visibility:visible!important}
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost text{fill:#64748b!important;opacity:.82!important}
+      body.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
+      body.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
+      body.v2-branch-drag .drag-mini,body.v2-branch-drag g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
+
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
         html,body{width:100%;max-width:100%;overflow:hidden}
         body>header{display:none!important}
@@ -52,6 +63,10 @@
         #logiq-mobile-panel{position:fixed;display:none;z-index:3100;top:54px;right:8px;left:8px;padding:12px;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
         #logiq-mobile-panel.is-open{display:block}
         .logiq-mobile-tools{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.logiq-mobile-tools button{min-height:42px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-weight:650}
+        .logyq-handedness{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0}
+        .logyq-handedness span{width:100%;font-size:12px;font-weight:700;color:#64748b}
+        .logyq-handedness button{flex:1;min-height:40px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-weight:650}
+        .logyq-handedness button.is-active{background:#dcfce7;border-color:#22c55e;color:#166534}
         #logiq-voice-bar{position:fixed;z-index:3300;left:50%;bottom:70px;transform:translateX(-50%);align-items:center;gap:9px;max-width:calc(100vw - 20px);padding:8px 9px 8px 13px;border-radius:999px;background:#111827;color:#fff;box-shadow:0 12px 34px rgba(15,23,42,.35);font-size:13px;font-weight:700;white-space:nowrap}
         #logiq-voice-bar.is-visible{display:flex}
         #logiq-voice-stop{border:0;border-radius:999px;background:#ef4444;color:#fff;padding:8px 13px;font-weight:800}

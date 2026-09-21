@@ -7,6 +7,11 @@
       HOLD_SLOP: 8,
       TAP_MOVE: 11,
       DOUBLE_TAP_MS: 360,
+      EDGE_ZONE: 84,
+      EDGE_STEP: 14,
+      PX_PER_CM: 38,
+      OFFSET_UP_CM: 1.5,
+      OFFSET_SIDE_CM: 1,
     }
   }
 
@@ -61,10 +66,7 @@
     if (alreadyActive) {
       state.pointers.forEach((pointer) => { pointer.multi = true })
       cancelHold(win, state)
-      if (state.drag) {
-        state.drag.multi = true
-        doc.body.classList.add('v2-cancel')
-      }
+      if (state.drag) yieldNodeDrag(doc, win, canvas, state)
     }
 
     state.active.add(event.pointerId)
@@ -106,8 +108,9 @@
     if (!drag || drag.pointerId !== event.pointerId) return
     drag.lastX = event.clientX
     drag.lastY = event.clientY
+    const visual = visualPoint(event.clientX, event.clientY)
     movePreview(drag, event.clientX, event.clientY)
-    mouse(win, win, 'mousemove', event.clientX, event.clientY, 1)
+    mouse(win, win, 'mousemove', visual.x, visual.y, 1)
   }
 
   function onHoldUp(event, doc, win, canvas, state) {
@@ -122,11 +125,12 @@
     event.stopImmediatePropagation()
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
-    const endX = canceled ? drag.x : event.clientX
-    const endY = canceled ? drag.y : event.clientY
+    const end = canceled
+      ? { x: drag.x, y: drag.y }
+      : visualPoint(event.clientX, event.clientY)
 
     if (canceled) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
-    mouse(win, win, 'mouseup', endX, endY, 0)
+    mouse(win, win, 'mouseup', end.x, end.y, 0)
 
     cleanupDrag(doc, win, state, drag)
     dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
@@ -180,10 +184,13 @@
 
     doc.body.classList.add('v2-branch-drag')
     bridge.selectByUid(hold.uid)
+    const visual = visualPoint(hold.x, hold.y)
     mouse(source, win, 'mousedown', hold.x, hold.y, 1)
-    mouse(win, win, 'mousemove', hold.lastX, hold.lastY, 1)
+    stampOriginGhost(doc, uids)
+    state.drag.originLayout = captureOriginLayout(doc, uids)
+    mouse(win, win, 'mousemove', visual.x, visual.y, 1)
     movePreview(state.drag, hold.lastX, hold.lastY)
-    startFeedbackLoop(win, state)
+    startFeedbackLoop(doc, win, state)
     win.navigator.vibrate?.(12)
   }
 
@@ -243,20 +250,132 @@
 
   function movePreview(drag, x, y) {
     if (!drag?.preview) return
-    const dx = x - drag.x
-    const dy = y - drag.y
+    const offset = fingerOffset()
+    const dx = (x - drag.x) + offset.x
+    const dy = (y - drag.y) + offset.y
     drag.preview.style.transform = `translate3d(${dx}px,${dy}px,0)`
   }
 
-  function startFeedbackLoop(win, state) {
+  function startFeedbackLoop(doc, win, state) {
     if (state.feedbackRaf) win.cancelAnimationFrame(state.feedbackRaf)
     const tick = () => {
       const drag = state.drag
       if (!drag) { state.feedbackRaf = 0; return }
-      mouse(win, win, 'mousemove', drag.lastX, drag.lastY, 1)
+      restoreOriginLayout(doc, drag.originLayout)
+      edgePan(doc, win, drag.lastX, drag.lastY)
+      const visual = visualPoint(drag.lastX, drag.lastY)
+      mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+      movePreview(drag, drag.lastX, drag.lastY)
       state.feedbackRaf = win.requestAnimationFrame(tick)
     }
     state.feedbackRaf = win.requestAnimationFrame(tick)
+  }
+
+  function yieldNodeDrag(doc, win, canvas, state) {
+    const drag = state.drag
+    if (!drag) return
+    mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+    mouse(win, win, 'mouseup', drag.x, drag.y, 0)
+    cleanupDrag(doc, win, state, drag)
+    dispatchPointerCancel(canvas, win, drag.pointerId, drag.lastX, drag.lastY)
+  }
+
+  function stampOriginGhost(doc, uids) {
+    for (const uid of uids || []) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
+  }
+
+  function captureOriginLayout(doc, uids) {
+    return (uids || []).map((uid) => {
+      const node = nodeByUid(doc, uid)
+      return { uid, transform: node?.getAttribute('transform') || '' }
+    })
+  }
+
+  function restoreOriginLayout(doc, layout) {
+    for (const entry of layout || []) {
+      const node = nodeByUid(doc, entry.uid)
+      if (!node) continue
+      if (entry.transform) node.setAttribute('transform', entry.transform)
+      node.classList.add('v2-branch-origin-ghost')
+    }
+  }
+
+  // Ported from public/logiq-v162-mobile/v2.js edgePan (also v2-ghost.js / clutch).
+  // Finger toward an edge pans the map the opposite way so drop targets off-screen can be reached.
+  function edgePan(doc, win, x, y) {
+    const svg = doc.getElementById('canvas')
+    if (!svg || !win.d3) return false
+    const portrait = win.matchMedia('(orientation:portrait)').matches
+    const leftInset = portrait ? 4 : 54
+    const topInset = portrait ? 54 : 4
+    const C = v162Constants()
+    const step = (p, min, max) => {
+      if (p < min + C.EDGE_ZONE) {
+        const q = Math.max(0, Math.min(1, (min + C.EDGE_ZONE - p) / C.EDGE_ZONE))
+        return C.EDGE_STEP * q * q
+      }
+      if (p > max - C.EDGE_ZONE) {
+        const q = Math.max(0, Math.min(1, (p - (max - C.EDGE_ZONE)) / C.EDGE_ZONE))
+        return -C.EDGE_STEP * q * q
+      }
+      return 0
+    }
+    const dx = step(x, leftInset, win.innerWidth)
+    const dy = step(y, topInset, win.innerHeight - 4)
+    if (!dx && !dy) return false
+    const t = win.d3.zoomTransform(svg)
+    const next = win.d3.zoomIdentity.translate(t.x + dx, t.y + dy).scale(t.k)
+    svg.__zoom = next
+    const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+    if (root) root.setAttribute('transform', next.toString())
+    return true
+  }
+
+  function getHandedness() {
+    try {
+      return localStorage.getItem(HAND_KEY) === 'left' ? 'left' : 'right'
+    } catch (_error) {
+      return 'right'
+    }
+  }
+
+  function setHandedness(value) {
+    const next = value === 'left' ? 'left' : 'right'
+    try { localStorage.setItem(HAND_KEY, next) } catch (_error) {}
+    syncHandednessUi(next)
+    return next
+  }
+
+  function fingerOffset() {
+    const C = v162Constants()
+    const up = C.OFFSET_UP_CM * C.PX_PER_CM
+    const side = C.OFFSET_SIDE_CM * C.PX_PER_CM
+    return getHandedness() === 'left' ? { x: side, y: -up } : { x: -side, y: -up }
+  }
+
+  function visualPoint(x, y) {
+    const offset = fingerOffset()
+    return { x: x + offset.x, y: y + offset.y }
+  }
+
+  function syncHandednessUi(value) {
+    const hand = value === 'left' ? 'left' : 'right'
+    const right = document.getElementById('logyqHandRight')
+    const left = document.getElementById('logyqHandLeft')
+    if (right) right.checked = hand === 'right'
+    if (left) left.checked = hand === 'left'
+    document.querySelectorAll('[data-hand]').forEach((button) => {
+      button.classList.toggle('is-active', button.dataset.hand === hand)
+    })
+  }
+
+  function bindHandednessUi() {
+    syncHandednessUi(getHandedness())
+    document.getElementById('logyqHandRight')?.addEventListener('change', () => setHandedness('right'))
+    document.getElementById('logyqHandLeft')?.addEventListener('change', () => setHandedness('left'))
+    document.querySelectorAll('[data-hand]').forEach((button) => {
+      button.addEventListener('click', () => setHandedness(button.dataset.hand))
+    })
   }
 
   function cleanupDrag(doc, win, state, drag) {
@@ -340,8 +459,15 @@
         bridge.selectByUid(candidate.uid)
         const createdUid = bridge.createRelative(direction)
         if (!createdUid) return
+        const canvas = doc.getElementById('canvas')
+        if (win.d3 && canvas) win.d3.select(canvas).interrupt()
+        restoreView(doc, win, candidate.view)
         bridge.selectByUid(createdUid)
         armBlankCardMic(state.mic, doc, createdUid)
+        win.requestAnimationFrame(() => {
+          restoreView(doc, win, candidate.view)
+          armBlankCardMic(state.mic, doc, createdUid)
+        })
         win.navigator.vibrate?.(16)
       })
       return
@@ -587,8 +713,15 @@
   }
 
   bindV162Gestures()
+  bindHandednessUi()
   if (preview.gestures) {
     preview.gestures.constants = v162Constants()
     preview.gestures.bindV162 = bindV162Gestures
     preview.gestures.armBlankCardMic = armBlankCardMic
+    preview.gestures.edgePan = edgePan
+    preview.gestures.fingerOffset = fingerOffset
+    preview.gestures.visualPoint = visualPoint
+    preview.gestures.getHandedness = getHandedness
+    preview.gestures.setHandedness = setHandedness
+    preview.gestures.yieldNodeDrag = yieldNodeDrag
   }
