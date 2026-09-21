@@ -72,6 +72,29 @@
         window.addEventListener('popstate', () => setTimeout(addLogiqCard, 0));
         setTimeout(addLogiqCard, 0);
       })();
+
+      // LOGYQ is the isolated maintainability copy. Sibling Lab card only —
+      // do not replace or remove the LOGiQ v161 baseline card above.
+      (() => {
+        const addLogyqCard = () => {
+          const grid = document.querySelector('.experience-grid');
+          if (!grid || document.getElementById('logyq-hub-card')) return;
+
+          const card = document.createElement('article');
+          card.className = 'experience-card';
+          card.id = 'logyq-hub-card';
+          card.innerHTML = '<span class="experience-icon">Y</span><span class="experience-copy"><strong>LOGYQ</strong><small>Isolated LOGYQ tree workspace. Experiment here without changing the LOGiQ v161 baseline.</small></span><button class="experience-go" type="button">Go</button>';
+          card.querySelector('button')?.addEventListener('click', () => { window.location.href = '/logyq/'; });
+
+          const logiqCard = document.getElementById('logiq-v161-hub-card');
+          if (logiqCard) logiqCard.after(card); else grid.append(card);
+        };
+
+        const root = document.getElementById('root');
+        if (root) new MutationObserver(addLogyqCard).observe(root, { childList: true, subtree: true });
+        window.addEventListener('popstate', () => setTimeout(addLogyqCard, 0));
+        setTimeout(addLogyqCard, 0);
+      })();
     </script>
   </body>
 </html>

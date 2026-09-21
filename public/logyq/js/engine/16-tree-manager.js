@@ -352,6 +352,7 @@ attach('treeManager', treeManager)
 
 
     s.backdrop && s.backdrop.addEventListener('click', (e)=>{ if(e.target===s.backdrop) close(); });
+    s.close && s.close.addEventListener('click', close);
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
 
     if(s.vGap){
@@ -378,13 +379,6 @@ attach('treeManager', treeManager)
     s.gapReset && s.gapReset.addEventListener("click", ()=>{ CONFIG.VERTICAL_GAP=defaultGap; renderVal(); logyq.treeManager.layoutAndRender(false); });
     renderVal();
 
-    if(s.showCarets){
-      s.showCarets.checked = !!CONFIG.SHOW_CARETS;
-      s.showCarets.addEventListener("change", (e)=>{
-        CONFIG.SHOW_CARETS = !!e.target.checked;
-        if(!CONFIG.SHOW_CARETS && elements.caretDot){ elements.caretDot.style("opacity",0); }
-      });
-    }
     if(s.showDetectors){
       if(s.detDepth){
         const seed = Number(CONFIG.DETECTOR_DEPTH_FACTOR)||1.2;

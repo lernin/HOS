@@ -4081,6 +4081,9 @@ function normalizeToTree(value) {
         }
         const node = kids ? { name, children: kids } : { name };
         if (x.color) node.color = x.color;
+        for (const key of ['label', 'text', 'title', 'value']) {
+          if (typeof x[key] === 'string' && x[key].trim()) node[key] = x[key];
+        }
         return node;
       }
 
@@ -4415,9 +4418,25 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     normalizeToTree,
   });
   /* ======================= RANDOMIZE ======================= */
-function mixCard(name, color){
+function cardLabel(data){
+  if (data == null) return '';
+  if (typeof data === 'string' || typeof data === 'number') return String(data);
+  for (const key of ['name', 'label', 'text', 'title', 'value']) {
+    if (typeof data[key] === 'string' && data[key].trim()) return data[key].trim();
+  }
+  return String(data.name ?? '');
+}
+
+function mixCard(name, extras){
   const node = { name: String(name ?? '') };
+  const src = (extras && typeof extras === 'object' && !Array.isArray(extras)) ? extras : null;
+  const color = src ? src.color : extras;
   if (color) node.color = color;
+  if (src) {
+    for (const key of ['label', 'text', 'title', 'value']) {
+      if (typeof src[key] === 'string' && src[key].trim()) node[key] = src[key];
+    }
+  }
   return node;
 }
 
@@ -4426,14 +4445,15 @@ function randomizeTree(includeBank){
   try{
     const prevTree = state.root ? utils.deepClone(state.root.data) : null;
     const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
-    // Keep paint with each card. Mix used to shuffle names into `{ name }`
-    // only, which wiped `data.color` and then saved that bare tree.
+    // Keep painted/annotated card fields with each shuffle. Mix used to
+    // rebuild `{ name }` only, which wiped `data.color` (and any label
+    // aliases) before snapshot / `logyq_maps_v1` saved that bare tree.
     const cards = [];
     if (state.root){
       for (const n of state.root.descendants()) {
-        const name = n.data?.name || "";
+        const name = cardLabel(n.data);
         if (!name) continue;
-        cards.push(mixCard(name, n.data?.color));
+        cards.push(mixCard(name, n.data));
       }
     }
     if (includeBank && prevBank.length) {
@@ -4443,8 +4463,7 @@ function randomizeTree(includeBank){
     }
     if (!cards.length){ logyq.selection.showToast("Nothing to mix"); return; }
 
-    const rootLabel = (state.root && state.root.data?.name) ? state.root.data.name : cards[0].name;
-    const rootColor = state.root?.data?.color || null;
+    const rootLabel = cardLabel(state.root?.data) || cards[0].name;
     let pool = cards.slice();
     const rmIdx = pool.findIndex((card) => card.name === rootLabel);
     if (rmIdx > -1) pool.splice(rmIdx, 1);
@@ -4454,14 +4473,14 @@ function randomizeTree(includeBank){
     }
     function ri(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
-    const root = mixCard(rootLabel, rootColor);
+    const root = mixCard(rootLabel, state.root?.data);
     root.children = [];
     let q = [{ node: root, cap: ri(1,3), used: 0 }], k = 0;
     while (k < pool.length){
       if (!q.length) q.push({ node: root, cap: ri(1,3), used: 0 });
       const p = q[0];
       if (p.used >= p.cap){ q.shift(); continue; }
-      const child = mixCard(pool[k].name, pool[k].color);
+      const child = mixCard(pool[k].name, pool[k]);
       k++;
       p.node.children = p.node.children || [];
       p.node.children.push(child);
@@ -5113,6 +5132,7 @@ attach('treeManager', treeManager)
 
 
     s.backdrop && s.backdrop.addEventListener('click', (e)=>{ if(e.target===s.backdrop) close(); });
+    s.close && s.close.addEventListener('click', close);
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
 
     if(s.vGap){
@@ -5139,13 +5159,6 @@ attach('treeManager', treeManager)
     s.gapReset && s.gapReset.addEventListener("click", ()=>{ CONFIG.VERTICAL_GAP=defaultGap; renderVal(); logyq.treeManager.layoutAndRender(false); });
     renderVal();
 
-    if(s.showCarets){
-      s.showCarets.checked = !!CONFIG.SHOW_CARETS;
-      s.showCarets.addEventListener("change", (e)=>{
-        CONFIG.SHOW_CARETS = !!e.target.checked;
-        if(!CONFIG.SHOW_CARETS && elements.caretDot){ elements.caretDot.style("opacity",0); }
-      });
-    }
     if(s.showDetectors){
       if(s.detDepth){
         const seed = Number(CONFIG.DETECTOR_DEPTH_FACTOR)||1.2;

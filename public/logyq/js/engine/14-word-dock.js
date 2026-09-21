@@ -134,6 +134,9 @@ function normalizeToTree(value) {
         }
         const node = kids ? { name, children: kids } : { name };
         if (x.color) node.color = x.color;
+        for (const key of ['label', 'text', 'title', 'value']) {
+          if (typeof x[key] === 'string' && x[key].trim()) node[key] = x[key];
+        }
         return node;
       }
 
