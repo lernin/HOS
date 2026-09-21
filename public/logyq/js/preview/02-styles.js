@@ -89,6 +89,8 @@
         body.logyq-mobile-v162.v2-branch-drag .drag-mini{display:none!important;opacity:0!important}
         #logyq-v162-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
         #logyq-v162-branch-preview svg{position:absolute;overflow:visible;pointer-events:none}
+        #logyq-v162-branch-preview g.node text,#logyq-v162-branch-preview g.node text.label{fill:#374151!important;opacity:1!important}
+        #logyq-v162-branch-preview g.node rect:not(.grabzone){opacity:1!important}
         body.logyq-mobile-v162.v2-cancel #logyq-v162-branch-preview g.node rect:not(.grabzone){stroke:#ef4444!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost{opacity:.44!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
@@ -97,8 +99,8 @@
         body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
         body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
         body.logyq-mobile-v162.v2-branch-drag{--det-node:transparent!important;--det-sib:transparent!important;--det-cousin-l:transparent!important;--det-cousin-r:transparent!important;--det-edge:transparent!important}
-        body.logyq-mobile-v162.v2-branch-drag g.node.drop-target rect:not(.grabzone){fill:#22c55e!important;stroke:#22c55e!important;filter:drop-shadow(0 0 7px rgba(34,197,94,.28))!important}
-        body.logyq-mobile-v162.v2-branch-drag g.node.drop-target text{fill:#fff!important;opacity:1!important}
+        body.logyq-mobile-v162.v2-branch-drag svg#canvas g.node.drop-target rect:not(.grabzone){fill:#22c55e!important;stroke:#22c55e!important;filter:drop-shadow(0 0 7px rgba(34,197,94,.28))!important}
+        body.logyq-mobile-v162.v2-branch-drag svg#canvas g.node.drop-target text{fill:#fff!important;opacity:1!important}
         body.logyq-mobile-v162.v2-branch-drag .caret-dot{fill:#22c55e!important}
         body.logyq-mobile-v162.v2-branch-drag #trash{display:block!important;position:fixed!important;left:-10000px!important;right:auto!important;top:-10000px!important;bottom:auto!important}
       }

@@ -179,6 +179,8 @@
         body.logyq-mobile-v162.v2-branch-drag .drag-mini{display:none!important;opacity:0!important}
         #logyq-v162-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
         #logyq-v162-branch-preview svg{position:absolute;overflow:visible;pointer-events:none}
+        #logyq-v162-branch-preview g.node text,#logyq-v162-branch-preview g.node text.label{fill:#374151!important;opacity:1!important}
+        #logyq-v162-branch-preview g.node rect:not(.grabzone){opacity:1!important}
         body.logyq-mobile-v162.v2-cancel #logyq-v162-branch-preview g.node rect:not(.grabzone){stroke:#ef4444!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost{opacity:.44!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
@@ -187,8 +189,8 @@
         body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
         body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.logyq-mobile-v162.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
         body.logyq-mobile-v162.v2-branch-drag{--det-node:transparent!important;--det-sib:transparent!important;--det-cousin-l:transparent!important;--det-cousin-r:transparent!important;--det-edge:transparent!important}
-        body.logyq-mobile-v162.v2-branch-drag g.node.drop-target rect:not(.grabzone){fill:#22c55e!important;stroke:#22c55e!important;filter:drop-shadow(0 0 7px rgba(34,197,94,.28))!important}
-        body.logyq-mobile-v162.v2-branch-drag g.node.drop-target text{fill:#fff!important;opacity:1!important}
+        body.logyq-mobile-v162.v2-branch-drag svg#canvas g.node.drop-target rect:not(.grabzone){fill:#22c55e!important;stroke:#22c55e!important;filter:drop-shadow(0 0 7px rgba(34,197,94,.28))!important}
+        body.logyq-mobile-v162.v2-branch-drag svg#canvas g.node.drop-target text{fill:#fff!important;opacity:1!important}
         body.logyq-mobile-v162.v2-branch-drag .caret-dot{fill:#22c55e!important}
         body.logyq-mobile-v162.v2-branch-drag #trash{display:block!important;position:fixed!important;left:-10000px!important;right:auto!important;top:-10000px!important;bottom:auto!important}
       }
@@ -678,9 +680,11 @@
     event.stopImmediatePropagation()
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
-    const dockKind = canceled ? 'none' : dockDropKind(doc, event.clientX, event.clientY)
-    const armedBank = !canceled && dockKind === 'bank' && drag.bankArmed
     const releasedAtOrigin = Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= v162Constants().STILL_PX
+    const dockKind = (canceled || releasedAtOrigin)
+      ? 'none'
+      : activeDockKind(doc, drag, event.clientX, event.clientY)
+    const armedBank = !canceled && !releasedAtOrigin && drag.moved && dockKind === 'bank' && drag.bankArmed
     const end = (canceled || dockKind !== 'none' || releasedAtOrigin)
       ? { x: drag.x, y: drag.y }
       : visualPoint(event.clientX, event.clientY)
@@ -778,6 +782,7 @@
       'is-focus-vhold',
     )
     clone.querySelectorAll('.grabzone').forEach((el) => el.remove())
+    paintCloneCard(clone, node)
 
     const host = doc.createElement('div')
     host.id = 'logyq-v162-branch-preview'
@@ -816,16 +821,14 @@
       if (!drag) { state.feedbackRaf = 0; return }
       restoreOriginLayout(doc, drag.originLayout)
       stampOriginGhost(doc, drag.uids)
-      const dockKind = dockDropKind(doc, drag.lastX, drag.lastY)
+      const dockKind = activeDockKind(doc, drag, drag.lastX, drag.lastY)
       armBankHover(win, drag, dockKind, doc)
       doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
       if (dockKind === 'none') {
-        const panned = edgePan(doc, win, drag.lastX, drag.lastY)
         if (fingerMovedFromLatch(drag, drag.lastX, drag.lastY)) {
+          edgePan(doc, win, drag.lastX, drag.lastY)
           const visual = visualPoint(drag.lastX, drag.lastY)
           mouse(win, win, 'mousemove', visual.x, visual.y, 1)
-        } else if (panned) {
-          mouse(win, win, 'mousemove', drag.x, drag.y, 1)
         }
       } else {
         mouse(win, win, 'mousemove', drag.x, drag.y, 1)
@@ -864,9 +867,11 @@
   }
 
   function restoreOriginLayout(doc, layout) {
+    const win = doc.defaultView
     for (const entry of layout || []) {
       const node = nodeByUid(doc, entry.uid)
       if (!node) continue
+      try { win?.d3?.select(node).interrupt() } catch (_error) {}
       if (entry.transform) node.setAttribute('transform', entry.transform)
       node.classList.add('v2-branch-origin-ghost')
     }
@@ -933,6 +938,27 @@
     return visualPoint(x, y)
   }
 
+  function activeDockKind(doc, drag, x, y) {
+    if (!fingerMovedFromLatch(drag, x, y)) return 'none'
+    return dockDropKind(doc, x, y)
+  }
+
+  function paintCloneCard(clone, source) {
+    const label = cardText(source) || source?.__data__?.data?.name || ''
+    const color = source?.__data__?.data?.color
+    const text = clone.querySelector('text.label') || clone.querySelector('text')
+    if (text) {
+      if (label) text.textContent = label
+      text.style.fill = '#374151'
+      text.style.opacity = '1'
+    }
+    clone.querySelectorAll('rect:not(.grabzone)').forEach((rect) => {
+      rect.style.fill = color || '#ffffff'
+      rect.style.stroke = '#e2e8f0'
+      rect.style.opacity = '1'
+    })
+  }
+
   function hitBankChip(doc, x, y) {
     const dock = doc.getElementById('Dock')
     if (!dock || dock.classList.contains('dock-hidden')) return null
@@ -973,6 +999,7 @@
   }
 
   function sendDragToWordBank(doc, drag) {
+    if (!drag?.moved || !fingerMovedFromLatch(drag, drag.lastX, drag.lastY)) return
     const node = nodeByUid(doc, drag?.uid)
     const hierarchy = node?.__data__
     if (!hierarchy || !bridge.core?.treeOps?.sendSubtreeToWordBank) return
@@ -1363,6 +1390,8 @@
     preview.gestures.liftPx = liftPx
     preview.gestures.yieldNodeDrag = yieldNodeDrag
     preview.gestures.dockDropKind = dockDropKind
+    preview.gestures.activeDockKind = activeDockKind
+    preview.gestures.paintCloneCard = paintCloneCard
     preview.gestures.hitBankChip = hitBankChip
     preview.gestures.paintFlickDown = paintFlickDown
     preview.gestures.paintTap = paintTap

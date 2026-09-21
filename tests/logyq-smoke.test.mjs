@@ -245,6 +245,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
 
   const hold = await nodeCenter('Node 03')
   const holdCount = await page.locator('svg#canvas g.node').count()
+  const bankBefore = await page.locator('#Dock .chip').count()
   const originTransform = await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     return node?.getAttribute('transform') || ''
@@ -294,6 +295,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
       : null
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     const box = node?.getBoundingClientRect()
+    const preview = document.getElementById('logyq-v162-branch-preview')
     return {
       ghost: node?.classList.contains('v2-branch-origin-ghost'),
       transform: node?.getAttribute('transform') || '',
@@ -301,7 +303,9 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
       width: box?.width || 0,
       height: box?.height || 0,
       parentDrop: !!parent?.classList.contains('drop-target'),
-      preview: !!document.getElementById('logyq-v162-branch-preview'),
+      preview: !!preview,
+      previewText: (preview?.textContent || '').replace(/\s+/g, ' ').trim(),
+      banked: Array.from(document.querySelectorAll('#Dock .chip')).some((chip) => chip.textContent.trim() === 'Node 03'),
       y: t.y,
     }
   })
@@ -309,6 +313,9 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(still.transform, originTransform)
   assert.equal(still.parentDrop, false, 'still hold must not arm the parent as a magnetic drop')
   assert.equal(still.preview, true)
+  assert.match(still.previewText, /Node 03/, `floating clone must keep the card label, got "${still.previewText}"`)
+  assert.equal(still.banked, false, 'still hold must not dump the card into the Word Bank')
+  assert.equal(await page.locator('#Dock .chip').count(), bankBefore)
   assert.ok(Number(still.opacity) > 0.2, `origin ghost opacity vanished: ${still.opacity}`)
   assert.ok(still.width > 8 && still.height > 8, `origin ghost box collapsed: ${still.width}x${still.height}`)
   assert.ok(Math.abs(still.y - beforeHold.y) < 2, `map must stay put while holding still, before=${beforeHold.y} during=${still.y}`)
@@ -332,6 +339,11 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   await touch('pointermove', hold.x + 4, hold.y + 4, 42)
   await touch('pointerup', hold.x + 4, hold.y + 4, 42)
   await page.waitForFunction(() => !document.body.classList.contains('v2-branch-drag'))
+  assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
+  assert.equal(await page.locator('#Dock .chip').count(), bankBefore)
+  assert.equal(await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('svg#canvas g.node')).some((element) => element.__data__?.data?.name === 'Node 03')
+  }), true)
   await page.waitForFunction((prev) => {
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return Math.abs(t.y - prev.y) < 3

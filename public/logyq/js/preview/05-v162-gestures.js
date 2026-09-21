@@ -133,9 +133,11 @@
     event.stopImmediatePropagation()
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
-    const dockKind = canceled ? 'none' : dockDropKind(doc, event.clientX, event.clientY)
-    const armedBank = !canceled && dockKind === 'bank' && drag.bankArmed
     const releasedAtOrigin = Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= v162Constants().STILL_PX
+    const dockKind = (canceled || releasedAtOrigin)
+      ? 'none'
+      : activeDockKind(doc, drag, event.clientX, event.clientY)
+    const armedBank = !canceled && !releasedAtOrigin && drag.moved && dockKind === 'bank' && drag.bankArmed
     const end = (canceled || dockKind !== 'none' || releasedAtOrigin)
       ? { x: drag.x, y: drag.y }
       : visualPoint(event.clientX, event.clientY)
@@ -233,6 +235,7 @@
       'is-focus-vhold',
     )
     clone.querySelectorAll('.grabzone').forEach((el) => el.remove())
+    paintCloneCard(clone, node)
 
     const host = doc.createElement('div')
     host.id = 'logyq-v162-branch-preview'
@@ -271,16 +274,14 @@
       if (!drag) { state.feedbackRaf = 0; return }
       restoreOriginLayout(doc, drag.originLayout)
       stampOriginGhost(doc, drag.uids)
-      const dockKind = dockDropKind(doc, drag.lastX, drag.lastY)
+      const dockKind = activeDockKind(doc, drag, drag.lastX, drag.lastY)
       armBankHover(win, drag, dockKind, doc)
       doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
       if (dockKind === 'none') {
-        const panned = edgePan(doc, win, drag.lastX, drag.lastY)
         if (fingerMovedFromLatch(drag, drag.lastX, drag.lastY)) {
+          edgePan(doc, win, drag.lastX, drag.lastY)
           const visual = visualPoint(drag.lastX, drag.lastY)
           mouse(win, win, 'mousemove', visual.x, visual.y, 1)
-        } else if (panned) {
-          mouse(win, win, 'mousemove', drag.x, drag.y, 1)
         }
       } else {
         mouse(win, win, 'mousemove', drag.x, drag.y, 1)
@@ -319,9 +320,11 @@
   }
 
   function restoreOriginLayout(doc, layout) {
+    const win = doc.defaultView
     for (const entry of layout || []) {
       const node = nodeByUid(doc, entry.uid)
       if (!node) continue
+      try { win?.d3?.select(node).interrupt() } catch (_error) {}
       if (entry.transform) node.setAttribute('transform', entry.transform)
       node.classList.add('v2-branch-origin-ghost')
     }
@@ -388,6 +391,27 @@
     return visualPoint(x, y)
   }
 
+  function activeDockKind(doc, drag, x, y) {
+    if (!fingerMovedFromLatch(drag, x, y)) return 'none'
+    return dockDropKind(doc, x, y)
+  }
+
+  function paintCloneCard(clone, source) {
+    const label = cardText(source) || source?.__data__?.data?.name || ''
+    const color = source?.__data__?.data?.color
+    const text = clone.querySelector('text.label') || clone.querySelector('text')
+    if (text) {
+      if (label) text.textContent = label
+      text.style.fill = '#374151'
+      text.style.opacity = '1'
+    }
+    clone.querySelectorAll('rect:not(.grabzone)').forEach((rect) => {
+      rect.style.fill = color || '#ffffff'
+      rect.style.stroke = '#e2e8f0'
+      rect.style.opacity = '1'
+    })
+  }
+
   function hitBankChip(doc, x, y) {
     const dock = doc.getElementById('Dock')
     if (!dock || dock.classList.contains('dock-hidden')) return null
@@ -428,6 +452,7 @@
   }
 
   function sendDragToWordBank(doc, drag) {
+    if (!drag?.moved || !fingerMovedFromLatch(drag, drag.lastX, drag.lastY)) return
     const node = nodeByUid(doc, drag?.uid)
     const hierarchy = node?.__data__
     if (!hierarchy || !bridge.core?.treeOps?.sendSubtreeToWordBank) return
@@ -818,6 +843,8 @@
     preview.gestures.liftPx = liftPx
     preview.gestures.yieldNodeDrag = yieldNodeDrag
     preview.gestures.dockDropKind = dockDropKind
+    preview.gestures.activeDockKind = activeDockKind
+    preview.gestures.paintCloneCard = paintCloneCard
     preview.gestures.hitBankChip = hitBankChip
     preview.gestures.paintFlickDown = paintFlickDown
     preview.gestures.paintTap = paintTap
