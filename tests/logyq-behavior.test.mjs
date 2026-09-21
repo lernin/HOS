@@ -846,6 +846,7 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /if \(paintTap\(\)\)/)
   assert.doesNotMatch(boot, /logyq_handedness_v1/)
   assert.match(boot, /logyq_paint_color_v1/)
+  assert.match(ui, /function paintSwatches/)
   assert.match(ui, /id="logyq-paint-btn"/)
   assert.match(ui, /data-tool="paint"/)
   assert.match(ui, /function paintFlickDown|logyq-paint-strip/)

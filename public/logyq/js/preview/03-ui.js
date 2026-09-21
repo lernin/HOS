@@ -57,17 +57,19 @@
     }
   }
 
-  const PAINT_SWATCHES = [
-    { id: 'off', value: 'off', label: 'Off' },
-    { id: 'clear', value: 'clear', label: 'Clear' },
-    { id: 'sun', value: '#fde68a', label: 'Sun' },
-    { id: 'peach', value: '#fed7aa', label: 'Peach' },
-    { id: 'rose', value: '#fecdd3', label: 'Rose' },
-    { id: 'lilac', value: '#e9d5ff', label: 'Lilac' },
-    { id: 'sky', value: '#bae6fd', label: 'Sky' },
-    { id: 'mint', value: '#bbf7d0', label: 'Mint' },
-    { id: 'sage', value: '#d9f99d', label: 'Sage' },
-  ]
+  function paintSwatches() {
+    return [
+      { id: 'off', value: 'off', label: 'Off' },
+      { id: 'clear', value: 'clear', label: 'Clear' },
+      { id: 'sun', value: '#fde68a', label: 'Sun' },
+      { id: 'peach', value: '#fed7aa', label: 'Peach' },
+      { id: 'rose', value: '#fecdd3', label: 'Rose' },
+      { id: 'lilac', value: '#e9d5ff', label: 'Lilac' },
+      { id: 'sky', value: '#bae6fd', label: 'Sky' },
+      { id: 'mint', value: '#bbf7d0', label: 'Mint' },
+      { id: 'sage', value: '#d9f99d', label: 'Sage' },
+    ]
+  }
 
   function readPaintColor() {
     const stored = localStorage.getItem(PAINT_KEY)
@@ -91,7 +93,7 @@
     strip.id = 'logyq-paint-strip'
     strip.setAttribute('role', 'listbox')
     strip.setAttribute('aria-label', 'Paint colors')
-    strip.innerHTML = PAINT_SWATCHES.map((swatch) => {
+    strip.innerHTML = paintSwatches().map((swatch) => {
       const tone = swatch.value === 'off' || swatch.value === 'clear' ? '' : ` style="background:${swatch.value}"`
       return `<button type="button" class="logyq-swatch" role="option" data-paint="${swatch.value}" aria-label="${swatch.label}"${tone}>${swatch.value === 'off' ? '×' : swatch.value === 'clear' ? '○' : ''}</button>`
     }).join('')
@@ -148,7 +150,7 @@
     const last = readPaintColor()
     preview.paint = {
       key: PAINT_KEY,
-      swatches: PAINT_SWATCHES,
+      swatches: paintSwatches(),
       last,
       color: last,
       active: false,
