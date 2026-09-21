@@ -34,18 +34,14 @@
     recorder: null,
     recordingStream: null,
     recordingChunks: [],
+    hasOpenMap: false,
+    booted: false,
   }
   preview.app = app
 
   injectStyles()
   const ui = buildUi()
   preview.ui = ui
-  const recovered = readJson(PENDING_KEY, null)
-  if (recovered?.tree) {
-    app.current = { id: recovered.id || null, name: recovered.name || DEFAULT_NAME }
-    app.lastSnapshot = stableSnapshot({ tree: recovered.tree, wordBank: recovered.word_bank || [] })
-    bridge.loadMap(recovered.tree, recovered.word_bank || [])
-  }
   bindUi()
   updateMapName()
   setSaveState(localStorage.getItem(PENDING_KEY) ? 'offline' : 'saved')
@@ -61,7 +57,54 @@
   }
 
   window.addEventListener('online', retryPending)
-  if (recovered) setTimeout(retryPending, 500)
+  bootSession()
+
+  const SUPABASE_URL = 'https://jzaghifuhinkzzhiojre.supabase.co'
+  const SUPABASE_KEY = 'sb_publishable_rQDzA5bYlbzvaTjyo-uTXw_LiiIAddI'
+  const MAP_FORMAT_VERSION = 2
+
+  function clonePreserving(value) {
+    if (value == null) return value
+    try { return JSON.parse(JSON.stringify(value)) } catch (_error) { return value }
+  }
+
+  function encodeMapTree(tree) {
+    const next = clonePreserving(tree) || { name: '' }
+    if (next && typeof next === 'object' && !Array.isArray(next)) next.formatVersion = MAP_FORMAT_VERSION
+    return next
+  }
+
+  function decodeMapTree(tree) {
+    return clonePreserving(tree) || { name: '' }
+  }
+
+  function encodeMapRecord({ name, tree, wordBank } = {}) {
+    return {
+      name: String(name || DEFAULT_NAME).trim() || DEFAULT_NAME,
+      tree: encodeMapTree(tree),
+      word_bank: Array.isArray(wordBank) ? wordBank.slice() : [],
+    }
+  }
+
+  function formatUpdatedAt(iso) {
+    const stamp = iso ? new Date(iso).getTime() : NaN
+    if (!Number.isFinite(stamp)) return ''
+    const delta = Date.now() - stamp
+    if (delta < 45_000) return 'Just now'
+    if (delta < 3_600_000) return `${Math.max(1, Math.round(delta / 60_000))}m ago`
+    if (delta < 86_400_000) return `${Math.max(1, Math.round(delta / 3_600_000))}h ago`
+    return new Date(stamp).toLocaleDateString()
+  }
+
+  preview.maps = {
+    SUPABASE_URL,
+    MAP_FORMAT_VERSION,
+    clonePreserving,
+    encodeMapTree,
+    decodeMapTree,
+    encodeMapRecord,
+    formatUpdatedAt,
+  }
 
   function readJson(key, fallback) {
     try {
@@ -100,6 +143,11 @@
       .logiq-backdrop{position:fixed;inset:0;z-index:5000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(15,23,42,.36);backdrop-filter:blur(4px)}
       .logiq-backdrop.is-open{display:flex}
       .logiq-modal{width:min(680px,100%);max-height:min(760px,calc(100dvh - 36px));overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 70px rgba(15,23,42,.24);color:#334155}
+      body.logyq-home #logiq-library{display:flex;align-items:stretch;justify-content:stretch;padding:0;background:#f8fafc;z-index:4500}
+      body.logyq-home #logiq-library .logiq-modal{width:100%;max-width:none;max-height:none;height:100%;border:0;border-radius:0;box-shadow:none}
+      body.logyq-home:not(.logyq-map-open) #logiq-library-close{display:none}
+      #logyq-home-btn svg{width:18px;height:18px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.8}
+      .logyq-choice-card,.logyq-chooser{display:none!important}
       .logiq-modal-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:16px;background:rgba(255,255,255,.96);border-bottom:1px solid #e2e8f0}
       .logiq-modal-head h2{font-size:18px;margin:0;flex:1}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
@@ -107,7 +155,7 @@
       .logiq-library-body{padding:12px 16px 18px}
       .logiq-library-note{margin:0 0 12px;color:#64748b;font-size:13px}
       .logiq-map-list{display:grid;gap:9px}
-      .logiq-map-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff}
+      .logiq-map-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;cursor:pointer}
       .logiq-map-row.is-current{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.12)}
       .logiq-map-name{font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .logiq-map-time{font-size:12px;color:#94a3b8;margin-top:3px}
@@ -213,7 +261,8 @@
     if (!document.getElementById('logiq-mobile-header')) {
       document.body.insertAdjacentHTML('afterbegin', `
       <div id="logiq-mobile-header">
-        <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGiQ">
+        <button class="logiq-icon-btn" id="logyq-home-btn" type="button" aria-label="Your maps"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></button>
+        <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGYQ">
         <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
         <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
         <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
@@ -234,14 +283,14 @@
         </div>
       </section>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
-      <div class="logiq-backdrop" id="logiq-library" aria-hidden="true">
+      <div class="logiq-backdrop logyq-home-screen" id="logiq-library" aria-hidden="true">
         <section class="logiq-modal" role="dialog" aria-modal="true" aria-labelledby="logiq-library-title">
-          <header class="logiq-modal-head"><h2 id="logiq-library-title">Maps</h2><button class="logiq-primary" id="logiq-new-map">New map</button><button class="logiq-icon-btn" id="logiq-library-close" aria-label="Close maps">×</button></header>
-          <div class="logiq-library-body"><p class="logiq-library-note">Maps save automatically on this device. They are not written to production LOGiQ storage.</p><div class="logiq-map-list" id="logiq-map-list"></div></div>
+          <header class="logiq-modal-head"><h2 id="logiq-library-title">Your maps</h2><button class="logiq-primary" id="logiq-new-map" type="button">+ New</button><button class="logiq-icon-btn" id="logiq-library-close" aria-label="Back to map">×</button></header>
+          <div class="logiq-library-body"><div class="logiq-map-list" id="logiq-map-list"></div></div>
         </section>
       </div>
       <div class="logiq-backdrop" id="logiq-pin" aria-hidden="true">
-        <form class="logiq-pin-card" id="logiq-pin-form"><h2>Connect for voice transcription</h2><p>Enter the Lab PIN once for this LOGYQ session. It is stored under a LOGYQ-only key and is not used to read or write production LOGiQ maps.</p><input id="logiq-pin-input" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Lab PIN" required><span class="logiq-pin-error">That PIN was not accepted.</span><div class="logiq-pin-actions"><button type="button" class="logiq-icon-btn" id="logiq-pin-cancel" aria-label="Cancel">×</button><button class="logiq-primary" type="submit">Connect</button></div></form>
+        <form class="logiq-pin-card" id="logiq-pin-form"><h2>Connect</h2><p>Enter the Lab PIN to open live maps. It stays in this LOGYQ session only.</p><input id="logiq-pin-input" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Lab PIN" required><span class="logiq-pin-error">That PIN was not accepted.</span><div class="logiq-pin-actions"><button type="button" class="logiq-icon-btn" id="logiq-pin-cancel" aria-label="Cancel">×</button><button class="logiq-primary" type="submit">Connect</button></div></form>
       </div>
     `)
 
@@ -408,10 +457,15 @@
       event.stopImmediatePropagation()
       openLibrary()
     }, true)
+    document.getElementById('logyq-home-btn')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      openLibrary()
+    })
 
     document.getElementById('logiq-library-close').addEventListener('click', closeLibrary)
     ui.library.addEventListener('click', (event) => { if (event.target === ui.library) closeLibrary() })
-    document.getElementById('logiq-new-map').addEventListener('click', createMap)
+    document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: true }))
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool
@@ -1442,42 +1496,59 @@
     })
   }
 
-  function newMapId() {
-    try {
-      if (globalThis.crypto?.randomUUID) return crypto.randomUUID()
-    } catch (_error) {}
-    return `logyq-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  function cacheLibrary(rows) {
+    try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(rows)) } catch (_error) {}
   }
 
-  function readLibrary() {
+  function readCachedLibrary() {
     const rows = readJson(LIBRARY_KEY, [])
     return Array.isArray(rows) ? rows : []
   }
 
-  function writeLibrary(rows) {
-    localStorage.setItem(LIBRARY_KEY, JSON.stringify(rows))
-  }
-
-  function upsertLibraryRecord(record) {
-    const rows = readLibrary()
-    const index = rows.findIndex((row) => row.id === record.id)
-    if (index >= 0) rows[index] = record
-    else rows.unshift(record)
-    writeLibrary(rows)
-    return record
+  async function rpc(name, body) {
+    let response
+    try {
+      response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      })
+    } catch (cause) {
+      throw Object.assign(new Error('Network unavailable'), { cause })
+    }
+    const text = await response.text()
+    let data = null
+    try { data = text ? JSON.parse(text) : null } catch (_error) { data = text }
+    if (!response.ok) {
+      const message = data?.message || data?.hint || `Request failed (${response.status})`
+      throw Object.assign(new Error(message), { status: response.status, auth: response.status < 500 })
+    }
+    return data
   }
 
   function queueAutosave(snapshot) {
-    const serialized = stableSnapshot(snapshot)
+    if (!app.hasOpenMap) return
+    const encoded = encodeMapRecord({
+      name: app.current.name || DEFAULT_NAME,
+      tree: snapshot?.tree,
+      wordBank: snapshot?.wordBank,
+    })
+    const serialized = stableSnapshot({ tree: encoded.tree, wordBank: encoded.word_bank })
     if (serialized === app.lastSnapshot) return
     app.lastSnapshot = serialized
     localStorage.setItem(PENDING_KEY, JSON.stringify({
       id: app.current.id,
-      name: app.current.name || DEFAULT_NAME,
-      ...JSON.parse(serialized),
+      name: encoded.name,
+      tree: encoded.tree,
+      word_bank: encoded.word_bank,
       updated_at: new Date().toISOString(),
     }))
-    setSaveState('saving')
+    setSaveState(navigator.onLine ? 'saving' : 'offline')
     clearTimeout(app.timer)
     app.timer = setTimeout(savePending, 850)
   }
@@ -1494,24 +1565,33 @@
     }
     const pending = readJson(PENDING_KEY, null)
     if (!pending) return setSaveState('saved')
+    if (!navigator.onLine) return setSaveState('offline')
+
+    const pin = await getPin(true)
+    if (!pin) return setSaveState('offline')
 
     app.saving = true
     setSaveState('saving')
     try {
-      const id = pending.id || newMapId()
-      upsertLibraryRecord({
-        id,
+      const payload = encodeMapRecord({
         name: pending.name || DEFAULT_NAME,
         tree: pending.tree,
-        word_bank: pending.word_bank || [],
-        updated_at: pending.updated_at || new Date().toISOString(),
+        wordBank: pending.word_bank,
       })
-      app.current = { id, name: pending.name || DEFAULT_NAME }
+      const id = await rpc('logiq_map_save', {
+        pin,
+        map_name: payload.name,
+        map_tree: payload.tree,
+        map_word_bank: payload.word_bank,
+        map_id: pending.id || null,
+      })
+      app.current = { id: typeof id === 'string' ? id : (id?.id || pending.id), name: payload.name }
       updateMapName()
       const latest = readJson(PENDING_KEY, null)
       if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
       setSaveState(localStorage.getItem(PENDING_KEY) ? 'saving' : 'saved')
-    } catch (_error) {
+    } catch (error) {
+      if (error.auth) sessionStorage.removeItem(PIN_KEY)
       setSaveState('offline')
     } finally {
       app.saving = false
@@ -1549,39 +1629,65 @@
     resolve(value)
   }
 
-  async function openLibrary() {
-    closeMobilePanel()
+  function showLibrary() {
+    document.body.classList.add('logyq-home')
+    document.body.classList.toggle('logyq-map-open', !!app.hasOpenMap)
     ui.library.classList.add('is-open')
     ui.library.setAttribute('aria-hidden', 'false')
+  }
+
+  function hideLibrary() {
+    document.body.classList.remove('logyq-home')
+    ui.library.classList.remove('is-open')
+    ui.library.setAttribute('aria-hidden', 'true')
+  }
+
+  async function openLibrary() {
+    closeMobilePanel()
+    showLibrary()
     ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
     await refreshLibrary()
   }
 
   function closeLibrary() {
-    ui.library.classList.remove('is-open')
-    ui.library.setAttribute('aria-hidden', 'true')
+    if (!app.hasOpenMap) return
+    hideLibrary()
+  }
+
+  async function listLiveMaps() {
+    const pin = await getPin(true)
+    if (!pin) return readCachedLibrary()
+    const rows = await rpc('logiq_map_list', { pin })
+    const list = Array.isArray(rows) ? rows.slice() : []
+    list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+    cacheLibrary(list)
+    return list
   }
 
   async function refreshLibrary() {
     try {
-      app.libraryRows = readLibrary()
+      app.libraryRows = await listLiveMaps()
       renderLibrary()
-    } catch (_error) {
-      ui.mapList.innerHTML = '<div class="logiq-empty">Could not read maps stored on this device.</div>'
+    } catch (error) {
+      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      app.libraryRows = readCachedLibrary()
+      if (app.libraryRows.length) renderLibrary()
+      else ui.mapList.innerHTML = `<div class="logiq-empty">${navigator.onLine ? 'Could not load maps. Check the Lab PIN.' : 'Offline. Saved changes will retry.'}</div>`
     }
   }
 
   function renderLibrary() {
-    if (!app.libraryRows.length) {
-      ui.mapList.innerHTML = '<div class="logiq-empty">No maps yet. Create one to begin.</div>'
+    const rows = Array.isArray(app.libraryRows) ? app.libraryRows : []
+    if (!rows.length) {
+      ui.mapList.innerHTML = '<div class="logiq-empty">No maps yet.</div>'
       return
     }
-    ui.mapList.innerHTML = app.libraryRows.map((row) => {
+    ui.mapList.innerHTML = rows.map((row) => {
       const current = row.id === app.current.id ? ' is-current' : ''
-      const when = row.updated_at ? new Date(row.updated_at).toLocaleString() : ''
+      const when = formatUpdatedAt(row.updated_at)
       return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
         <div><div class="logiq-map-name">${escapeHtml(row.name || DEFAULT_NAME)}</div><div class="logiq-map-time">${escapeHtml(when)}</div></div>
-        <div class="logiq-map-actions"><button data-map-action="open">Open</button><button data-map-action="rename">Rename</button><button class="danger" data-map-action="delete">Delete</button></div>
+        <div class="logiq-map-actions"><button type="button" data-map-action="rename">Rename</button><button type="button" class="danger" data-map-action="delete">Delete</button></div>
         <form class="logiq-inline-rename"><input value="${escapeHtml(row.name || DEFAULT_NAME)}" aria-label="Map name"><button>Done</button></form>
       </article>`
     }).join('')
@@ -1602,64 +1708,136 @@
     }
 
     const action = event.target.closest('[data-map-action]')?.dataset.mapAction
-    if (action === 'open') openMap(row)
     if (action === 'rename') {
       rowElement.querySelector('.logiq-inline-rename').classList.toggle('is-open')
       rowElement.querySelector('input').focus()
+      return
     }
-    if (action === 'delete' && window.confirm(`Delete “${row.name || DEFAULT_NAME}”?`)) await deleteMap(row)
+    if (action === 'delete' && window.confirm(`Delete “${row.name || DEFAULT_NAME}”?`)) {
+      await deleteMap(row)
+      return
+    }
+    if (!action) openMap(row)
+  }
+
+  function enterEditor(row, { edit = false } = {}) {
+    const tree = decodeMapTree(row.tree)
+    const wordBank = Array.isArray(row.word_bank) ? row.word_bank : (row.wordBank || [])
+    app.current = { id: row.id || null, name: row.name || DEFAULT_NAME }
+    app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    app.lastSnapshot = stableSnapshot({ tree, wordBank })
+    updateMapName()
+    hideLibrary()
+    bridge.loadMap(tree, wordBank)
+    if (edit) {
+      const uid = bridge.core?.state?.root?.data?._uid
+      if (uid) {
+        bridge.selectByUid(uid)
+        bridge.editSelected({ wipe: true })
+      }
+    }
+    setSaveState('saved')
   }
 
   function openMap(row) {
-    app.current = { id: row.id, name: row.name || DEFAULT_NAME }
-    app.lastSnapshot = stableSnapshot({ tree: row.tree, wordBank: row.word_bank || [] })
     localStorage.removeItem(PENDING_KEY)
-    updateMapName()
-    bridge.loadMap(row.tree, row.word_bank || [])
-    setSaveState('saved')
-    closeLibrary()
+    enterEditor(row, { edit: false })
   }
 
-  function createMap() {
+  function createMap({ edit = true } = {}) {
     app.current = { id: null, name: DEFAULT_NAME }
-    const snapshot = { tree: { name: 'New map' }, wordBank: [] }
+    const tree = encodeMapTree({ name: '' })
+    app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
     app.lastSnapshot = ''
     updateMapName()
-    bridge.loadMap(snapshot.tree, snapshot.wordBank)
+    hideLibrary()
+    bridge.loadMap(tree, [])
+    const uid = bridge.core?.state?.root?.data?._uid
+    if (uid && edit) {
+      bridge.selectByUid(uid)
+      bridge.editSelected({ wipe: true })
+    }
     queueAutosave(bridge.snapshot())
-    closeLibrary()
   }
 
   async function renameMap(row, name) {
+    const pin = await getPin(true)
+    if (!pin) return
     try {
-      row.name = name
-      upsertLibraryRecord({
-        ...row,
+      const payload = encodeMapRecord({
         name,
-        updated_at: new Date().toISOString(),
+        tree: row.tree,
+        wordBank: row.word_bank,
       })
+      await rpc('logiq_map_save', {
+        pin,
+        map_name: payload.name,
+        map_tree: payload.tree,
+        map_word_bank: payload.word_bank,
+        map_id: row.id,
+      })
+      row.name = payload.name
       if (row.id === app.current.id) {
-        app.current.name = name
+        app.current.name = payload.name
         updateMapName()
       }
       renderLibrary()
       setSaveState('saved')
-    } catch (_error) {
+    } catch (error) {
+      if (error.auth) sessionStorage.removeItem(PIN_KEY)
       setSaveState('offline')
     }
   }
 
   async function deleteMap(row) {
+    const pin = await getPin(true)
+    if (!pin) return
     try {
-      writeLibrary(readLibrary().filter((item) => item.id !== row.id))
+      await rpc('logiq_map_delete', { pin, map_id: row.id })
       app.libraryRows = app.libraryRows.filter((item) => item.id !== row.id)
+      cacheLibrary(app.libraryRows)
       if (app.current.id === row.id) {
         app.current = { id: null, name: DEFAULT_NAME }
+        app.hasOpenMap = false
+        document.body.classList.remove('logyq-map-open')
         updateMapName()
       }
       renderLibrary()
-    } catch (_error) {
+      if (!app.libraryRows.length) createMap({ edit: true })
+    } catch (error) {
+      if (error.auth) sessionStorage.removeItem(PIN_KEY)
       setSaveState('offline')
     }
   }
+
+  async function bootSession() {
+    const recovered = readJson(PENDING_KEY, null)
+    if (recovered?.tree) {
+      enterEditor({
+        id: recovered.id || null,
+        name: recovered.name || DEFAULT_NAME,
+        tree: recovered.tree,
+        word_bank: recovered.word_bank || [],
+      }, { edit: false })
+      app.booted = true
+      setTimeout(retryPending, 500)
+      return
+    }
+    try {
+      const rows = await listLiveMaps()
+      app.libraryRows = rows
+      if (!rows.length) createMap({ edit: true })
+      else {
+        app.hasOpenMap = false
+        showLibrary()
+        renderLibrary()
+      }
+    } catch (_error) {
+      createMap({ edit: true })
+    }
+    app.booted = true
+  }
 })()
+

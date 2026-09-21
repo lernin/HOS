@@ -34,18 +34,14 @@
     recorder: null,
     recordingStream: null,
     recordingChunks: [],
+    hasOpenMap: false,
+    booted: false,
   }
   preview.app = app
 
   injectStyles()
   const ui = buildUi()
   preview.ui = ui
-  const recovered = readJson(PENDING_KEY, null)
-  if (recovered?.tree) {
-    app.current = { id: recovered.id || null, name: recovered.name || DEFAULT_NAME }
-    app.lastSnapshot = stableSnapshot({ tree: recovered.tree, wordBank: recovered.word_bank || [] })
-    bridge.loadMap(recovered.tree, recovered.word_bank || [])
-  }
   bindUi()
   updateMapName()
   setSaveState(localStorage.getItem(PENDING_KEY) ? 'offline' : 'saved')
@@ -61,5 +57,5 @@
   }
 
   window.addEventListener('online', retryPending)
-  if (recovered) setTimeout(retryPending, 500)
+  bootSession()
 

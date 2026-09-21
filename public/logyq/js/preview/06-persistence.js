@@ -7,42 +7,59 @@
     })
   }
 
-  function newMapId() {
-    try {
-      if (globalThis.crypto?.randomUUID) return crypto.randomUUID()
-    } catch (_error) {}
-    return `logyq-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  function cacheLibrary(rows) {
+    try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(rows)) } catch (_error) {}
   }
 
-  function readLibrary() {
+  function readCachedLibrary() {
     const rows = readJson(LIBRARY_KEY, [])
     return Array.isArray(rows) ? rows : []
   }
 
-  function writeLibrary(rows) {
-    localStorage.setItem(LIBRARY_KEY, JSON.stringify(rows))
-  }
-
-  function upsertLibraryRecord(record) {
-    const rows = readLibrary()
-    const index = rows.findIndex((row) => row.id === record.id)
-    if (index >= 0) rows[index] = record
-    else rows.unshift(record)
-    writeLibrary(rows)
-    return record
+  async function rpc(name, body) {
+    let response
+    try {
+      response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+        method: 'POST',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      })
+    } catch (cause) {
+      throw Object.assign(new Error('Network unavailable'), { cause })
+    }
+    const text = await response.text()
+    let data = null
+    try { data = text ? JSON.parse(text) : null } catch (_error) { data = text }
+    if (!response.ok) {
+      const message = data?.message || data?.hint || `Request failed (${response.status})`
+      throw Object.assign(new Error(message), { status: response.status, auth: response.status < 500 })
+    }
+    return data
   }
 
   function queueAutosave(snapshot) {
-    const serialized = stableSnapshot(snapshot)
+    if (!app.hasOpenMap) return
+    const encoded = encodeMapRecord({
+      name: app.current.name || DEFAULT_NAME,
+      tree: snapshot?.tree,
+      wordBank: snapshot?.wordBank,
+    })
+    const serialized = stableSnapshot({ tree: encoded.tree, wordBank: encoded.word_bank })
     if (serialized === app.lastSnapshot) return
     app.lastSnapshot = serialized
     localStorage.setItem(PENDING_KEY, JSON.stringify({
       id: app.current.id,
-      name: app.current.name || DEFAULT_NAME,
-      ...JSON.parse(serialized),
+      name: encoded.name,
+      tree: encoded.tree,
+      word_bank: encoded.word_bank,
       updated_at: new Date().toISOString(),
     }))
-    setSaveState('saving')
+    setSaveState(navigator.onLine ? 'saving' : 'offline')
     clearTimeout(app.timer)
     app.timer = setTimeout(savePending, 850)
   }
@@ -59,24 +76,33 @@
     }
     const pending = readJson(PENDING_KEY, null)
     if (!pending) return setSaveState('saved')
+    if (!navigator.onLine) return setSaveState('offline')
+
+    const pin = await getPin(true)
+    if (!pin) return setSaveState('offline')
 
     app.saving = true
     setSaveState('saving')
     try {
-      const id = pending.id || newMapId()
-      upsertLibraryRecord({
-        id,
+      const payload = encodeMapRecord({
         name: pending.name || DEFAULT_NAME,
         tree: pending.tree,
-        word_bank: pending.word_bank || [],
-        updated_at: pending.updated_at || new Date().toISOString(),
+        wordBank: pending.word_bank,
       })
-      app.current = { id, name: pending.name || DEFAULT_NAME }
+      const id = await rpc('logiq_map_save', {
+        pin,
+        map_name: payload.name,
+        map_tree: payload.tree,
+        map_word_bank: payload.word_bank,
+        map_id: pending.id || null,
+      })
+      app.current = { id: typeof id === 'string' ? id : (id?.id || pending.id), name: payload.name }
       updateMapName()
       const latest = readJson(PENDING_KEY, null)
       if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
       setSaveState(localStorage.getItem(PENDING_KEY) ? 'saving' : 'saved')
-    } catch (_error) {
+    } catch (error) {
+      if (error.auth) sessionStorage.removeItem(PIN_KEY)
       setSaveState('offline')
     } finally {
       app.saving = false
@@ -114,39 +140,65 @@
     resolve(value)
   }
 
-  async function openLibrary() {
-    closeMobilePanel()
+  function showLibrary() {
+    document.body.classList.add('logyq-home')
+    document.body.classList.toggle('logyq-map-open', !!app.hasOpenMap)
     ui.library.classList.add('is-open')
     ui.library.setAttribute('aria-hidden', 'false')
+  }
+
+  function hideLibrary() {
+    document.body.classList.remove('logyq-home')
+    ui.library.classList.remove('is-open')
+    ui.library.setAttribute('aria-hidden', 'true')
+  }
+
+  async function openLibrary() {
+    closeMobilePanel()
+    showLibrary()
     ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
     await refreshLibrary()
   }
 
   function closeLibrary() {
-    ui.library.classList.remove('is-open')
-    ui.library.setAttribute('aria-hidden', 'true')
+    if (!app.hasOpenMap) return
+    hideLibrary()
+  }
+
+  async function listLiveMaps() {
+    const pin = await getPin(true)
+    if (!pin) return readCachedLibrary()
+    const rows = await rpc('logiq_map_list', { pin })
+    const list = Array.isArray(rows) ? rows.slice() : []
+    list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+    cacheLibrary(list)
+    return list
   }
 
   async function refreshLibrary() {
     try {
-      app.libraryRows = readLibrary()
+      app.libraryRows = await listLiveMaps()
       renderLibrary()
-    } catch (_error) {
-      ui.mapList.innerHTML = '<div class="logiq-empty">Could not read maps stored on this device.</div>'
+    } catch (error) {
+      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      app.libraryRows = readCachedLibrary()
+      if (app.libraryRows.length) renderLibrary()
+      else ui.mapList.innerHTML = `<div class="logiq-empty">${navigator.onLine ? 'Could not load maps. Check the Lab PIN.' : 'Offline. Saved changes will retry.'}</div>`
     }
   }
 
   function renderLibrary() {
-    if (!app.libraryRows.length) {
-      ui.mapList.innerHTML = '<div class="logiq-empty">No maps yet. Create one to begin.</div>'
+    const rows = Array.isArray(app.libraryRows) ? app.libraryRows : []
+    if (!rows.length) {
+      ui.mapList.innerHTML = '<div class="logiq-empty">No maps yet.</div>'
       return
     }
-    ui.mapList.innerHTML = app.libraryRows.map((row) => {
+    ui.mapList.innerHTML = rows.map((row) => {
       const current = row.id === app.current.id ? ' is-current' : ''
-      const when = row.updated_at ? new Date(row.updated_at).toLocaleString() : ''
+      const when = formatUpdatedAt(row.updated_at)
       return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
         <div><div class="logiq-map-name">${escapeHtml(row.name || DEFAULT_NAME)}</div><div class="logiq-map-time">${escapeHtml(when)}</div></div>
-        <div class="logiq-map-actions"><button data-map-action="open">Open</button><button data-map-action="rename">Rename</button><button class="danger" data-map-action="delete">Delete</button></div>
+        <div class="logiq-map-actions"><button type="button" data-map-action="rename">Rename</button><button type="button" class="danger" data-map-action="delete">Delete</button></div>
         <form class="logiq-inline-rename"><input value="${escapeHtml(row.name || DEFAULT_NAME)}" aria-label="Map name"><button>Done</button></form>
       </article>`
     }).join('')
@@ -167,64 +219,136 @@
     }
 
     const action = event.target.closest('[data-map-action]')?.dataset.mapAction
-    if (action === 'open') openMap(row)
     if (action === 'rename') {
       rowElement.querySelector('.logiq-inline-rename').classList.toggle('is-open')
       rowElement.querySelector('input').focus()
+      return
     }
-    if (action === 'delete' && window.confirm(`Delete “${row.name || DEFAULT_NAME}”?`)) await deleteMap(row)
+    if (action === 'delete' && window.confirm(`Delete “${row.name || DEFAULT_NAME}”?`)) {
+      await deleteMap(row)
+      return
+    }
+    if (!action) openMap(row)
+  }
+
+  function enterEditor(row, { edit = false } = {}) {
+    const tree = decodeMapTree(row.tree)
+    const wordBank = Array.isArray(row.word_bank) ? row.word_bank : (row.wordBank || [])
+    app.current = { id: row.id || null, name: row.name || DEFAULT_NAME }
+    app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    app.lastSnapshot = stableSnapshot({ tree, wordBank })
+    updateMapName()
+    hideLibrary()
+    bridge.loadMap(tree, wordBank)
+    if (edit) {
+      const uid = bridge.core?.state?.root?.data?._uid
+      if (uid) {
+        bridge.selectByUid(uid)
+        bridge.editSelected({ wipe: true })
+      }
+    }
+    setSaveState('saved')
   }
 
   function openMap(row) {
-    app.current = { id: row.id, name: row.name || DEFAULT_NAME }
-    app.lastSnapshot = stableSnapshot({ tree: row.tree, wordBank: row.word_bank || [] })
     localStorage.removeItem(PENDING_KEY)
-    updateMapName()
-    bridge.loadMap(row.tree, row.word_bank || [])
-    setSaveState('saved')
-    closeLibrary()
+    enterEditor(row, { edit: false })
   }
 
-  function createMap() {
+  function createMap({ edit = true } = {}) {
     app.current = { id: null, name: DEFAULT_NAME }
-    const snapshot = { tree: { name: 'New map' }, wordBank: [] }
+    const tree = encodeMapTree({ name: '' })
+    app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
     app.lastSnapshot = ''
     updateMapName()
-    bridge.loadMap(snapshot.tree, snapshot.wordBank)
+    hideLibrary()
+    bridge.loadMap(tree, [])
+    const uid = bridge.core?.state?.root?.data?._uid
+    if (uid && edit) {
+      bridge.selectByUid(uid)
+      bridge.editSelected({ wipe: true })
+    }
     queueAutosave(bridge.snapshot())
-    closeLibrary()
   }
 
   async function renameMap(row, name) {
+    const pin = await getPin(true)
+    if (!pin) return
     try {
-      row.name = name
-      upsertLibraryRecord({
-        ...row,
+      const payload = encodeMapRecord({
         name,
-        updated_at: new Date().toISOString(),
+        tree: row.tree,
+        wordBank: row.word_bank,
       })
+      await rpc('logiq_map_save', {
+        pin,
+        map_name: payload.name,
+        map_tree: payload.tree,
+        map_word_bank: payload.word_bank,
+        map_id: row.id,
+      })
+      row.name = payload.name
       if (row.id === app.current.id) {
-        app.current.name = name
+        app.current.name = payload.name
         updateMapName()
       }
       renderLibrary()
       setSaveState('saved')
-    } catch (_error) {
+    } catch (error) {
+      if (error.auth) sessionStorage.removeItem(PIN_KEY)
       setSaveState('offline')
     }
   }
 
   async function deleteMap(row) {
+    const pin = await getPin(true)
+    if (!pin) return
     try {
-      writeLibrary(readLibrary().filter((item) => item.id !== row.id))
+      await rpc('logiq_map_delete', { pin, map_id: row.id })
       app.libraryRows = app.libraryRows.filter((item) => item.id !== row.id)
+      cacheLibrary(app.libraryRows)
       if (app.current.id === row.id) {
         app.current = { id: null, name: DEFAULT_NAME }
+        app.hasOpenMap = false
+        document.body.classList.remove('logyq-map-open')
         updateMapName()
       }
       renderLibrary()
-    } catch (_error) {
+      if (!app.libraryRows.length) createMap({ edit: true })
+    } catch (error) {
+      if (error.auth) sessionStorage.removeItem(PIN_KEY)
       setSaveState('offline')
     }
   }
+
+  async function bootSession() {
+    const recovered = readJson(PENDING_KEY, null)
+    if (recovered?.tree) {
+      enterEditor({
+        id: recovered.id || null,
+        name: recovered.name || DEFAULT_NAME,
+        tree: recovered.tree,
+        word_bank: recovered.word_bank || [],
+      }, { edit: false })
+      app.booted = true
+      setTimeout(retryPending, 500)
+      return
+    }
+    try {
+      const rows = await listLiveMaps()
+      app.libraryRows = rows
+      if (!rows.length) createMap({ edit: true })
+      else {
+        app.hasOpenMap = false
+        showLibrary()
+        renderLibrary()
+      }
+    } catch (_error) {
+      createMap({ edit: true })
+    }
+    app.booted = true
+  }
 })()
+

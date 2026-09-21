@@ -54,6 +54,32 @@ test('sample tree generator still builds the known 30-node baseline', () => {
   assert.equal(new Set(names).size, 30)
 })
 
+test('LOGYQ map encode stamps GIQ-compatible formatVersion and keeps color', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/01-helpers.js', import.meta.url), 'utf8')
+  const preview = {}
+  const maps = new Function('preview', 'DEFAULT_NAME', `${source}; return preview.maps;`)(preview, 'Untitled map')
+  const encoded = maps.encodeMapTree({
+    name: 'Root',
+    color: '#fde68a',
+    extra: 'keep-me',
+    children: [{ name: 'Kid', color: '#bae6fd' }],
+  })
+  assert.equal(encoded.formatVersion, 2)
+  assert.equal(encoded.name, 'Root')
+  assert.equal(encoded.color, '#fde68a')
+  assert.equal(encoded.extra, 'keep-me')
+  assert.equal(encoded.children[0].color, '#bae6fd')
+  assert.equal(encoded.children[0].formatVersion, undefined)
+  assert.equal(encoded.root, undefined)
+  const record = maps.encodeMapRecord({ name: 'Mine', tree: encoded, wordBank: ['alpha'] })
+  assert.equal(record.tree.formatVersion, 2)
+  assert.equal(record.tree.name, 'Root')
+  assert.deepEqual(record.word_bank, ['alpha'])
+  const decoded = maps.decodeMapTree(record.tree)
+  assert.equal(decoded.color, '#fde68a')
+  assert.equal(decoded.extra, 'keep-me')
+})
+
 test('GIQ and JSON import parsing keep v161 normalization rules', () => {
   const { tryParsePureJSON, tryParseGIQ, parseIncoming } = loadTreeHelpers()
   assert.deepEqual(tryParsePureJSON('{"name":"Root","children":[{"name":"Child"}]}'), {

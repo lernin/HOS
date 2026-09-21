@@ -81,6 +81,11 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Color is node data.** `data.color` on the tree; snapshot / maps / reload keep it. Undo is `replace-root`. Card shape (rx, stroke chrome) is unchanged; only fill changes.
 - **Mix and save keep paint.** `randomizeTree` used to shuffle names into new `{ name }` objects, dropping `data.color`. After Mix the snapshot (and therefore `logyq_maps_v1` / reopen) had no paint. Mix now carries each card’s color through the shuffle; GIQ `normalizeToTree` also keeps `color`. Snapshot / `loadMap` already JSON-clone the full node. Paint UX is unchanged.
 
+## Live maps + Drive-style open (PR 112)
+
+- **No two-door chooser.** Empty library opens the editor on one blank root card, already editing. One or more maps opens a recents library (name + relative time) with **+ New**. Maps icon / Trees returns to the library; close does not dump you onto an empty canvas. No first-run coaching.
+- **Live `logiq_maps` / GIQ.** Same Procedia project and PIN RPCs as LOGiQ (`logiq_map_list` / `logiq_map_save` / `logiq_map_delete`). No `logiq-*` edits. A row’s `tree` is the GIQ JSON tree (`exportGIQ`’s first part); `word_bank` is the `###` section. `formatVersion: 2` is a root-only extra field — not a `{formatVersion, root}` wrapper. `color` and unknown JSON fields JSON-clone through. Old maps without `formatVersion` still load.
+
 ## Phone polish (PR 112)
 
 - **No trash FOUC on mobile load.** `#trash` is hidden in first-paint `#logyq-phone-boot` CSS and the matching `app.css` phone media query. Preview JS still hides it later; that is no longer the first hide. Desktop trash stays visible.

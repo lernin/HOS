@@ -128,12 +128,8 @@ window.addEventListener('keydown', (e) => {
     elements.svg.on("click", e=>{ if(e.target===elements.svg.node()){ logyq.selection.clearSelection(); logyq.wordDock.clearChipSelection(); } });
 
     state.layout=d3.tree();
-    const data=logyq.data.generateTree(30);
-    state.root=d3.hierarchy(data);
-    logyq.utils.assignIds(state.root);
-
-    this.layoutAndRender(false);
-    this.autoFit();
+    state.root = null;
+    this.renderEmpty();
 
     elements.fitBtn.addEventListener('click', ()=> this.autoFit());
     elements.undoBtn.addEventListener('click', logyq.history.undo);

@@ -18,3 +18,5 @@ No `src/main.tsx` change. No `logiq-*` production logic. No merge, no deploy.
 ## Phone check
 
 Open The Lab hub → **LOGYQ** (Y) sits under **LOGiQ v161** (Q) → Go loads `/logyq/`.
+
+Empty live library → one card, already editing. Maps already there → recents list + **+ New**. Grid icon returns to the library.

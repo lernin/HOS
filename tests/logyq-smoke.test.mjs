@@ -15,11 +15,42 @@ test.after(async () => {
   await browser?.close()
 })
 
-async function stubProduction(context, capture = []) {
+async function stubMaps(context, { maps = [], capture = [] } = {}) {
+  const store = { maps: maps.map((row) => ({ ...row })) }
   await context.route('https://jzaghifuhinkzzhiojre.supabase.co/**', async (route) => {
-    capture.push({ url: route.request().url(), method: route.request().method() })
-    await route.abort()
+    const url = route.request().url()
+    const name = url.includes('/rpc/') ? url.split('/rpc/')[1].split('?')[0] : ''
+    let body = {}
+    try { body = route.request().postDataJSON() || {} } catch (_error) {}
+    capture.push({ name, url, method: route.request().method(), body })
+    if (name === 'logiq_map_list') {
+      const rows = store.maps.slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) })
+      return
+    }
+    if (name === 'logiq_map_save') {
+      const id = body.map_id || `map-${store.maps.length + 1}`
+      const row = {
+        id,
+        name: body.map_name,
+        tree: body.map_tree,
+        word_bank: body.map_word_bank,
+        updated_at: new Date().toISOString(),
+      }
+      const index = store.maps.findIndex((item) => item.id === id)
+      if (index >= 0) store.maps[index] = { ...store.maps[index], ...row }
+      else store.maps.unshift(row)
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(id) })
+      return
+    }
+    if (name === 'logiq_map_delete') {
+      store.maps = store.maps.filter((item) => item.id !== body.map_id)
+      await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' })
+      return
+    }
+    await route.fulfill({ status: 404, body: 'not found' })
   })
+  return store
 }
 
 async function newContext(options = {}) {
@@ -33,9 +64,32 @@ async function newContext(options = {}) {
   return context
 }
 
+async function waitForBoot(page) {
+  await page.waitForFunction(() => window.LOGYQPreview?.app?.booted === true, null, { timeout: 10_000 })
+}
+
 async function waitForTree(page) {
   await page.waitForSelector('g.node', { timeout: 10_000 })
   await page.waitForFunction(() => document.querySelectorAll('g.node').length === 30)
+}
+
+async function loadSampleTree(page) {
+  await page.evaluate(() => {
+    const tree = window.LOGYQBridge.core.data.generateTree(30)
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    const library = document.getElementById('logiq-library')
+    library?.classList.remove('is-open')
+    library?.setAttribute('aria-hidden', 'true')
+    window.LOGYQBridge.loadMap(tree, [])
+  })
+  await waitForTree(page)
+}
+
+async function assertNoChooser(page) {
+  assert.equal(await page.locator('.logyq-chooser, .logyq-choice-card').count(), 0)
+  assert.equal(await page.evaluate(() => /New map OR/i.test(document.body.innerText)), false)
 }
 
 function findNode(tree, name) {
@@ -51,12 +105,17 @@ function findNode(tree, name) {
 test('LOGYQ desktop boot preserves the 30-node tree, edit, undo, dock, and reparent', async () => {
   const requests = []
   const context = await newContext({ viewport: { width: 1440, height: 900 } })
-  await stubProduction(context, requests)
+  await stubMaps(context, { maps: [], capture: requests })
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
-  await waitForTree(page)
+  await waitForBoot(page)
+  await assertNoChooser(page)
+  assert.equal(await page.locator('#logiq-library.is-open').count(), 0)
+  assert.equal(await page.locator('g.node').count(), 1)
+  assert.equal(await page.locator('.node-edit-input').count(), 1)
+  await loadSampleTree(page)
 
   assert.equal(await page.locator('g.node').count(), 30)
   assert.equal(await page.locator('#saveBtn').count(), 0)
@@ -76,9 +135,8 @@ test('LOGYQ desktop boot preserves the 30-node tree, edit, undo, dock, and repar
   await editor.press('Enter')
   await page.waitForFunction(() => document.querySelector('g.node.is-outlined')?.textContent.includes('Edited 05'))
   await page.waitForFunction(() => document.querySelector('.logiq-save-state')?.textContent === 'Saved', null, { timeout: 6000 })
-  assert.equal(requests.length, 0)
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('logyq_maps_v1') || '[]'))
-  assert.ok(Array.isArray(stored) && stored.some((row) => row?.tree))
+  assert.ok(requests.some((request) => request.name === 'logiq_map_list'))
+  assert.ok(requests.some((request) => request.name === 'logiq_map_save' && request.body?.map_tree?.formatVersion === 2))
   assert.equal(await page.evaluate(() => sessionStorage.getItem('logiq_lab_pin_v1')), null)
 
   await page.keyboard.press('u')
@@ -138,12 +196,13 @@ test('LOGYQ desktop boot preserves the 30-node tree, edit, undo, dock, and repar
 
 test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
-  await stubProduction(context)
+  await stubMaps(context)
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
-  await waitForTree(page)
+  await waitForBoot(page)
+  await loadSampleTree(page)
   await page.waitForTimeout(700)
 
   assert.equal(await page.evaluate(() => window.LOGYQPreview?.gestures?.bindCanvas), undefined)
@@ -205,12 +264,13 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
 
 test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap edits', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
-  await stubProduction(context)
+  await stubMaps(context)
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
-  await waitForTree(page)
+  await waitForBoot(page)
+  await loadSampleTree(page)
 
   async function nodeCenter(name) {
     return page.evaluate((label) => {
@@ -548,12 +608,13 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
 
 test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not re-center', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
-  await stubProduction(context)
+  await stubMaps(context)
   const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
-  await waitForTree(page)
+  await waitForBoot(page)
+  await loadSampleTree(page)
 
   async function nodeCenter(name) {
     return page.evaluate((label) => {
@@ -703,6 +764,65 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   await touch('pointerup', createDown.x, createDown.y + 70, 55)
   await page.waitForFunction((count) => document.querySelectorAll('g.node').length > count, beforeDownCreate)
 
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ empty library opens a one-card editor, not a chooser', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await assertNoChooser(page)
+  assert.equal(await page.locator('#logiq-library.is-open').count(), 0)
+  assert.equal(await page.locator('g.node').count(), 1)
+  assert.equal(await page.locator('.node-edit-input').count(), 1)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ library lists recents and New opens a one-card editor', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context, {
+    maps: [
+      {
+        id: 'old',
+        name: 'Older map',
+        tree: { name: 'Old root', formatVersion: 2 },
+        word_bank: [],
+        updated_at: '2026-09-20T12:00:00.000Z',
+      },
+      {
+        id: 'sky',
+        name: 'Recent sky',
+        tree: { name: 'Sky root', color: '#fde68a', formatVersion: 2 },
+        word_bank: [],
+        updated_at: '2026-09-21T18:00:00.000Z',
+      },
+    ],
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await assertNoChooser(page)
+  await page.waitForSelector('#logiq-library.is-open')
+  assert.deepEqual(await page.locator('.logiq-map-name').allTextContents(), ['Recent sky', 'Older map'])
+  await page.locator('.logiq-map-name', { hasText: 'Recent sky' }).click()
+  await page.waitForFunction(() => !document.getElementById('logiq-library')?.classList.contains('is-open'))
+  assert.equal(await page.locator('g.node').count(), 1)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.color), '#fde68a')
+  await page.locator('#logyq-home-btn').click()
+  await page.waitForSelector('#logiq-library.is-open')
+  await page.locator('#logiq-new-map').click()
+  await page.waitForFunction(() => !document.getElementById('logiq-library')?.classList.contains('is-open'))
+  assert.equal(await page.locator('g.node').count(), 1)
+  assert.equal(await page.locator('.node-edit-input').count(), 1)
+  await assertNoChooser(page)
   assert.deepEqual(errors, [])
   await context.close()
 })

@@ -16,9 +16,9 @@ v161 is the tree engine plus the small `LOGiQBridge` integration that `logiq-pre
 
 - Served at `/logyq/` with absolute asset paths under that prefix.
 - Application bridge is `window.LOGYQBridge` (not `LOGiQBridge`).
-- Map and PIN storage uses only `logyq_*` keys (`logyq_current_map_v1`, `logyq_pending_save_v1`, `logyq_maps_v1`, `logyq_lab_pin_v1`, `logyq_paint_color_v1`).
-- Maps autosave into `localStorage.logyq_maps_v1`. LOGYQ does not call `logiq_map_save`, `logiq_map_list`, or `logiq_map_delete`, and does not ship the production Supabase URL or key.
-- The Lab PIN is stored as `logyq_lab_pin_v1` and is used only for `/api/transcribe` (voice). Maps never prompt for a PIN.
+- Map and PIN storage uses `logyq_*` keys (`logyq_current_map_v1`, `logyq_pending_save_v1`, `logyq_maps_v1` cache, `logyq_lab_pin_v1`, `logyq_paint_color_v1`).
+- Live maps use the existing PIN RPCs `logiq_map_list` / `logiq_map_save` / `logiq_map_delete` on Procedia `jzaghifuhinkzzhiojre` (same publishable key as LOGiQ / `src/lib/supabase.ts`). Engine still does not call those RPCs.
+- The Lab PIN is `logyq_lab_pin_v1` for maps and `/api/transcribe`. Empty library opens a one-card editor; otherwise the recents library is the home.
 
 ### Remaining shared surfaces
 
@@ -153,7 +153,7 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - Do not put spawn-puck or v162 listeners on the engine `logyq` bag. That is preview (`LOGYQPreview.gestures`).
 - Do not reintroduce spawn-puck or a second canvas tap-capture. Those auto-voiced on create and fight flick/hold.
 - Do not mix clutch two-hand with v162 hold-flick.
-- Do not write production LOGiQ maps/PIN (`logiq_*` keys, `logiq_map_*` RPCs).
+- Do not write production LOGiQ storage keys (`logiq_*` PIN/maps keys). Preview uses the same `logiq_map_*` RPCs as LOGiQ; the engine must not.
 - Do not start from clutch or rebuild the hidden spawn-puck.
 
 ### Still ambient (OK to leave)
