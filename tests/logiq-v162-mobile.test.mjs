@@ -23,12 +23,25 @@ test('mobile v2 shell stays isolated from the released v161 route', () => {
 
 test('mobile v2 keeps navigation primary with portrait header and landscape rail', () => {
   assert.match(js, /svg#canvas g\.node\{pointer-events:none!important\}/)
+  assert.match(js, /#logiq-v2-rail\{[^}]*display:none/)
+  assert.match(js, /@media \(orientation:landscape\)[\s\S]*?#logiq-v2-rail\{[^}]*display:flex/)
   assert.match(chrome, /orientation:portrait/)
   assert.match(chrome, /#logiq-mobile-header\{display:flex!important\}/)
   assert.match(chrome, /#logiq-v2-rail\{display:none!important\}/)
   assert.match(chrome, /orientation:landscape/)
   assert.match(chrome, /#logiq-mobile-header\{display:none!important\}/)
   assert.match(chrome, /#logiq-v2-rail\{display:flex!important\}/)
+})
+
+test('mobile held drag survives control crossings and always cleans up', () => {
+  assert.match(js, /canvas\.setPointerCapture\?\.\(e\.pointerId\)/)
+  assert.match(js, /win\.addEventListener\('pointermove',move,true\)/)
+  assert.match(js, /win\.addEventListener\('pointerup',up,true\)/)
+  assert.match(js, /win\.addEventListener\('pointercancel',cancel,true\)/)
+  assert.match(js, /canvas\.addEventListener\('lostpointercapture',cancel,true\)/)
+  assert.match(js, /win\.addEventListener\('blur',cancelActiveDrag,true\)/)
+  assert.match(js, /doc\.addEventListener\('visibilitychange',cancelHiddenDrag,true\)/)
+  assert.match(js, /releasePointerCapture\?\.\(g\.pointerId\)/)
 })
 
 test('mobile v2 supports direct card flick creation without auto recording', () => {
@@ -79,8 +92,8 @@ test('held-card drag keeps the complete source branch ghosted until release', ()
 
 test('mobile drag preview keeps the held card at its exact rendered size', () => {
   assert.match(js, /function makeFloating/)
-  assert.match(js, /Math\.max\(54,rect\.width\)/)
-  assert.match(js, /Math\.max\(34,rect\.height\)/)
+  assert.match(js, /el\.style\.width = `\$\{Math\.max\(54,rect\.width\)\}px`/)
+  assert.match(js, /el\.style\.height = `\$\{Math\.max\(34,rect\.height\)\}px`/)
   assert.match(js, /#logiq-v2-drag-card\{[^}]*transform:none/)
 })
 
@@ -90,9 +103,9 @@ test('mobile selection preserves the card geometry instead of scaling its rectan
 
 test('mobile editor overlays the card and centers it horizontally', () => {
   assert.match(js, /centerX = Math\.round\(win\.innerWidth \/ 2\)/)
-  assert.match(js, /input\.style\.height=/)
-  assert.match(js, /input\.style\.left=/)
-  assert.match(js, /input\.style\.top=/)
+  assert.match(js, /input\.style\.height=`\$\{height\}px`/)
+  assert.match(js, /input\.style\.left=`\$\{Math\.max\(8,centerX-width\/2\)\}px`/)
+  assert.match(js, /input\.style\.top=`\$\{Math\.max\(8,Math\.min\(win\.innerHeight-height-8,r\.top\+Math\.max\(0,\(r\.height-height\)\/2\)\)\)\}px`/)
 })
 
 test('mobile held drag defers the desktop transaction until release', () => {
