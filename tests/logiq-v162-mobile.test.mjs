@@ -84,6 +84,7 @@ test('held-card drag keeps a ghost origin and defers the V2 fallback transaction
 test('mobile drag preview keeps the held card at its exact rendered size', () => {
   assert.match(branchAffordance, /hierarchy\.descendants\(\)/)
   assert.match(branchAffordance, /makeBranchPreview\(doc, win, \[hierarchy\], hold\.uid\)/)
+  assert.match(branchAffordance, /for \(const uid of uids\) nodeByUid\(doc, uid\)\?\.classList\.add\('v2-branch-origin-ghost'\)/)
   assert.match(branchAffordance, /v2-branch-origin-ghost/)
   assert.match(branchAffordance, /logiq-v2-branch-preview/)
   assert.match(branchAffordance, /card\.style\.width = `\$\{entry\.rect\.width\}px`/)
