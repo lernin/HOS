@@ -972,8 +972,12 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /logyq-v162-action/)
   assert.match(v162, /armBlankCardMic\(state\.mic, doc, createdUid\)/)
   assert.match(v162, /function edgePan/)
-  assert.match(v162, /EDGE_ZONE: 84/)
-  assert.match(v162, /EDGE_STEP: 14/)
+  assert.match(v162, /function centerPanVector/)
+  assert.match(v162, /function clampPanToContent/)
+  assert.match(v162, /PAN_DEAD_PX: 56/)
+  assert.match(v162, /PAN_STEP: 16/)
+  assert.doesNotMatch(v162, /EDGE_ZONE: 84/)
+  assert.doesNotMatch(v162, /EDGE_STEP: 14/)
   assert.match(v162, /function fingerOffset/)
   assert.match(v162, /OFFSET_UP_CM: 1\.1/)
   assert.match(v162, /OFFSET_SIDE_CM: 0/)
@@ -1061,4 +1065,39 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.doesNotMatch(v162, /startVoiceCapture/)
   assert.doesNotMatch(v162, /contentWindow/)
   assert.doesNotMatch(v162, /dblclick/)
+})
+
+test('hold-drag pan is center-offset with a half-card content leash', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function centerPanVector(x, y, view, C) {')
+  const end = source.indexOf('function viewRect(doc, win) {', start)
+  assert.ok(start >= 0 && end > start)
+  const helpers = new Function(`${source.slice(start, end)}; return { centerPanVector, treeContentBounds, clampPanToContent };`)()
+  const C = { PAN_DEAD_PX: 56, PAN_STEP: 16 }
+  const view = { left: 0, top: 0, right: 390, bottom: 844, width: 390, height: 844 }
+  assert.deepEqual(helpers.centerPanVector(195, 422, view, C), { dx: 0, dy: 0 })
+  assert.deepEqual(helpers.centerPanVector(195 + 40, 422, view, C), { dx: 0, dy: 0 })
+  const right = helpers.centerPanVector(360, 422, view, C)
+  assert.ok(right.dx < 0, 'finger right of center pans content left')
+  assert.equal(right.dy, 0)
+  const down = helpers.centerPanVector(195, 700, view, C)
+  assert.ok(down.dy < 0, 'finger below center pans content up')
+  assert.equal(down.dx, 0)
+  const up = helpers.centerPanVector(195, 80, view, C)
+  assert.ok(up.dy > 0, 'finger above center pans content down')
+  const farther = helpers.centerPanVector(195, 820, view, C)
+  assert.ok(Math.abs(farther.dy) > Math.abs(down.dy), 'further from center is stronger')
+
+  const bounds = { minX: 0, maxX: 140, minY: 0, maxY: 63, cardW: 140, cardH: 63 }
+  const t = { x: 100, y: 200, k: 1 }
+  const free = helpers.clampPanToContent(t, -20, 0, bounds, view)
+  assert.equal(free.dx, -20)
+  const offLeft = helpers.clampPanToContent(t, -400, 0, bounds, view)
+  const nextRight = bounds.maxX * t.k + t.x + offLeft.dx
+  assert.ok(nextRight >= view.left + bounds.cardW / 2 - 0.01, '½ card stays on the incoming edge')
+  assert.ok(offLeft.dx > -400, 'leash stops endless horizontal pan')
+  const offUp = helpers.clampPanToContent(t, 0, -800, bounds, view)
+  const nextBottom = bounds.maxY * t.k + t.y + offUp.dy
+  assert.ok(nextBottom >= view.top + bounds.cardH / 2 - 0.01, '½ card stays on the incoming vertical edge')
+  assert.deepEqual(helpers.clampPanToContent(t, -20, -20, null, view), { dx: 0, dy: 0 })
 })

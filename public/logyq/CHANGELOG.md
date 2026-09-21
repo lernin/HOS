@@ -81,6 +81,10 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Color is node data.** `data.color` on the tree; snapshot / maps / reload keep it. Undo is `replace-root`. Card shape (rx, stroke chrome) is unchanged; only fill changes.
 - **Mix and save keep paint.** `randomizeTree` used to shuffle names into new `{ name }` objects, dropping `data.color`. After Mix the snapshot (and therefore `logyq_maps_v1` / reopen) had no paint. Mix now carries each card’s color through the shuffle; GIQ `normalizeToTree` also keeps `color`. Snapshot / `loadMap` already JSON-clone the full node. Paint UX is unchanged.
 
+## Hold-drag camera (PR 112)
+
+- **Center-offset pan, not edge bands.** Hold-drag auto-pan uses the finger’s offset from the viewport center (dead zone 56px, quadratic step 16). Up/down matches left/right; near-center does not creep. A content leash keeps ~½ card of the tree overlapping the viewport so she cannot scroll into endless void.
+
 ## Live maps + Drive-style open (PR 112)
 
 - **No two-door chooser.** Empty library opens the editor on one blank root card, already editing. One or more maps opens a recents library (name + relative time) with **+ New**. Maps icon / Trees returns to the library; close does not dump you onto an empty canvas. No first-run coaching.

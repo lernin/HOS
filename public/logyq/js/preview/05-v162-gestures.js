@@ -7,8 +7,8 @@
       HOLD_SLOP: 8,
       TAP_MOVE: 11,
       DOUBLE_TAP_MS: 360,
-      EDGE_ZONE: 84,
-      EDGE_STEP: 14,
+      PAN_DEAD_PX: 56,
+      PAN_STEP: 16,
       PX_PER_CM: 38,
       OFFSET_UP_CM: 1.1,
       OFFSET_SIDE_CM: 0,
@@ -352,30 +352,86 @@
     }
   }
 
-  // Ported from public/logiq-v162-mobile/v2.js edgePan (also v2-ghost.js / clutch).
-  // Finger toward an edge pans the map the opposite way so drop targets off-screen can be reached.
+  // Hold-drag camera: pan from the finger's offset to the viewport
+  // center (not screen-edge bands). Further from center → faster.
+  // Dead zone near center so tiny motions do not creep.
+  function centerPanVector(x, y, view, C) {
+    const dead = C?.PAN_DEAD_PX ?? 56
+    const step = C?.PAN_STEP ?? 16
+    const cx = (view?.left || 0) + (view?.width || 0) / 2
+    const cy = (view?.top || 0) + (view?.height || 0) / 2
+    const axis = (offset, half) => {
+      const mag = Math.abs(offset)
+      if (!half || mag <= dead) return 0
+      const span = Math.max(1, half - dead)
+      const q = Math.max(0, Math.min(1, (mag - dead) / span))
+      return -Math.sign(offset) * step * q * q
+    }
+    return {
+      dx: axis(x - cx, (view?.width || 0) / 2),
+      dy: axis(y - cy, (view?.height || 0) / 2),
+    }
+  }
+
+  function treeContentBounds(doc, win) {
+    const core = win.LOGYQBridge?.core
+    const cardW = core?.config?.CARD_WIDTH || 140
+    const cardH = core?.config?.CARD_HEIGHT || 63
+    const nodes = core?.state?.root?.descendants?.() || []
+    let minX = Infinity
+    let maxX = -Infinity
+    let minY = Infinity
+    let maxY = -Infinity
+    for (const node of nodes) {
+      if (node?.x == null || node?.y == null) continue
+      minX = Math.min(minX, node.x - cardW / 2)
+      maxX = Math.max(maxX, node.x + cardW / 2)
+      minY = Math.min(minY, node.y - cardH / 2)
+      maxY = Math.max(maxY, node.y + cardH / 2)
+    }
+    if (!Number.isFinite(minX)) return null
+    return { minX, maxX, minY, maxY, cardW, cardH }
+  }
+
+  // Keep ~½ card of the tree overlapping the viewport. Stops endless
+  // empty scrolling; wide lower branches do not open a void leash.
+  function clampPanToContent(transform, dx, dy, bounds, view) {
+    if (!bounds || !view) return { dx: 0, dy: 0 }
+    const k = transform?.k || 1
+    const halfW = (bounds.cardW * k) / 2
+    const halfH = (bounds.cardH * k) / 2
+    let nx = (transform?.x || 0) + dx
+    let ny = (transform?.y || 0) + dy
+    const left = bounds.minX * k + nx
+    const right = bounds.maxX * k + nx
+    const top = bounds.minY * k + ny
+    const bottom = bounds.maxY * k + ny
+    if (right < view.left + halfW) nx += (view.left + halfW) - right
+    if (left > view.right - halfW) nx -= left - (view.right - halfW)
+    if (bottom < view.top + halfH) ny += (view.top + halfH) - bottom
+    if (top > view.bottom - halfH) ny -= top - (view.bottom - halfH)
+    return { dx: nx - (transform?.x || 0), dy: ny - (transform?.y || 0) }
+  }
+
+  function viewRect(doc, win) {
+    const box = doc.getElementById('canvas')?.getBoundingClientRect?.()
+    if (box && box.width && box.height) {
+      return { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height }
+    }
+    return { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight, width: win.innerWidth, height: win.innerHeight }
+  }
+
   function edgePan(doc, win, x, y) {
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3) return false
-    const portrait = win.matchMedia('(orientation:portrait)').matches
-    const leftInset = portrait ? 4 : 54
-    const topInset = portrait ? 54 : 4
-    const C = v162Constants()
-    const step = (p, min, max) => {
-      if (p < min + C.EDGE_ZONE) {
-        const q = Math.max(0, Math.min(1, (min + C.EDGE_ZONE - p) / C.EDGE_ZONE))
-        return C.EDGE_STEP * q * q
-      }
-      if (p > max - C.EDGE_ZONE) {
-        const q = Math.max(0, Math.min(1, (p - (max - C.EDGE_ZONE)) / C.EDGE_ZONE))
-        return -C.EDGE_STEP * q * q
-      }
-      return 0
-    }
-    const dx = step(x, leftInset, win.innerWidth)
-    const dy = step(y, topInset, win.innerHeight - 4)
+    const view = viewRect(doc, win)
+    let { dx, dy } = centerPanVector(x, y, view, v162Constants())
     if (!dx && !dy) return false
     const t = win.d3.zoomTransform(svg)
+    const nextStep = clampPanToContent(t, dx, dy, treeContentBounds(doc, win), view)
+    dx = nextStep.dx
+    dy = nextStep.dy
+    if (!dx && !dy) return false
     const next = win.d3.zoomIdentity.translate(t.x + dx, t.y + dy).scale(t.k)
     svg.__zoom = next
     const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
@@ -871,6 +927,8 @@
     preview.gestures.bindV162 = bindV162Gestures
     preview.gestures.armBlankCardMic = armBlankCardMic
     preview.gestures.edgePan = edgePan
+    preview.gestures.centerPanVector = centerPanVector
+    preview.gestures.clampPanToContent = clampPanToContent
     preview.gestures.fingerOffset = fingerOffset
     preview.gestures.visualPoint = visualPoint
     preview.gestures.fingerMovedFromLatch = fingerMovedFromLatch

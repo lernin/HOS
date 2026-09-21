@@ -46,7 +46,7 @@ Do **not** delete because fingers on phone do not press the key. Gestures and th
 - Finger hold-drag origin ghost (`v2-branch-origin-ghost` + `is-others` stay visible). Desktop `dragging-mode` hide is load-bearing for mouse; do not delete it, only override during `v2-branch-drag`
 - Hold-drag card-pop via `liftPx()` / `fingerOffset` (`OFFSET_UP_CM` 1.1cm, side 0). Map does not pan on latch. See `GESTURE_STATES.md`.
 - Origin-slot freeze (`holdDragFrozen`) and bank copy guards (`holdDragBlocksBank`) — stay-still must not splice or `addWords`
-- Edge auto-pan (`edgePan`, zone 84 / step 14) on the hold-drag feedback loop
+- Hold-drag auto-pan (`edgePan` / `centerPanVector` / `clampPanToContent`) on the feedback loop
 - Dock hide via `logyq.dock.setSide` / `cycleDockSide` (CSS class, not `style.display`)
 - `#mapsBtn` in HTML (preview capture-phase click opens `logyq_maps_v1`)
 - Zoom still calls `logyq.layout.refreshLaneOnZoom` (no-op, but the call is live; architecture + unit tests pin it)
