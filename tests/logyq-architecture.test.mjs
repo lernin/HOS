@@ -308,6 +308,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(treeManager, /ensureUidLayout/)
   assert.match(treeManager, /syncCreateHitSlots/)
   assert.match(treeManager, /bindUidStamp/)
+  assert.match(treeManager, /ensureCreateNodes/)
   assert.match(treeManager, /event\.__logyqUid/)
   assert.match(treeManager, /logyq-layout-settling/)
   assert.doesNotMatch(bridge, /addChildBelowSelectedAndEdit/)

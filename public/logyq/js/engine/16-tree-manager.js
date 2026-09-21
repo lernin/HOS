@@ -247,6 +247,49 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     utils.assignIds(scratch)
     this.applyLayout(scratch)
     this.syncHitSlots(scratch.descendants())
+    this.ensureCreateNodes(scratch.descendants())
+  },
+
+  ensureCreateNodes(nodes){
+    const { elements, config: CONFIG } = logyq
+    if (!elements.gNodes) return
+    const have = new Set()
+    elements.gNodes.selectAll('g.node').each(function(d){
+      if (d?.data?._uid) have.add(d.data._uid)
+    })
+    for (const d of nodes || []) {
+      const uid = d?.data?._uid
+      if (uid == null || String(uid) === '' || have.has(uid)) continue
+      const g = elements.gNodes.append('g')
+        .datum(d)
+        .attr('class', 'node')
+        .attr('data-uid', uid)
+        .attr('transform', `translate(${d.x},${d.y})`)
+        .style('opacity', 1)
+      g.insert('rect', ':first-child')
+        .attr('class', 'grabzone')
+        .attr('x', -CONFIG.CARD_WIDTH / 2)
+        .attr('y', -CONFIG.CARD_HEIGHT * 0.5)
+        .attr('width', CONFIG.CARD_WIDTH)
+        .attr('height', CONFIG.CARD_HEIGHT * 1.5)
+        .style('fill', 'transparent')
+        .style('pointer-events', 'all')
+      g.append('rect')
+        .attr('x', -CONFIG.CARD_WIDTH / 2)
+        .attr('y', -CONFIG.CARD_HEIGHT / 2)
+        .attr('width', CONFIG.CARD_WIDTH)
+        .attr('height', CONFIG.CARD_HEIGHT)
+        .attr('data-uid', uid)
+        .style('fill', d.data.color || null)
+      g.append('text')
+        .attr('class', 'label')
+        .attr('x', 0)
+        .attr('y', 0)
+        .style('font-size', `${CONFIG.FONT_SIZE}px`)
+        .text(d.data.name)
+      this.bindUidStamp(g)
+      have.add(uid)
+    }
   },
 
   ensureUidLayout(uid){

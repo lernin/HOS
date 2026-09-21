@@ -1289,7 +1289,9 @@ test('LOGYQ labeling never moves the root when a flicked blank is edited', async
   async function tapFace(uid, pointerId) {
     await page.evaluate(({ uid, pointerId }) => {
       const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?._uid === uid)
-      const face = node?.querySelector('rect:not(.grabzone)') || node
+        || Array.from(document.querySelectorAll('svg#canvas g.hit-slot')).find((element) => element.getAttribute('data-uid') === uid)
+      const face = node?.querySelector?.('rect:not(.grabzone)') || node
+      if (!face) throw new Error(`no face or hit-slot for ${uid}`)
       const rect = face.getBoundingClientRect()
       const x = rect.left + rect.width / 2
       const y = rect.top + rect.height / 2
@@ -1472,15 +1474,12 @@ test('LOGYQ double-tap keeps the pointerdown uid even if pointerup lands on root
     const child = nodeOf(ids.newUid) || slotOf(ids.newUid)
     const root = nodeOf(ids.rootUid)
     const childBox = child.getBoundingClientRect()
-    const rootBox = root.getBoundingClientRect()
     const cx = childBox.left + childBox.width / 2
     const cy = childBox.top + childBox.height / 2
-    const rx = rootBox.left + rootBox.width / 2
-    const ry = rootBox.top + rootBox.height / 2
     fire(child, 'pointerdown', 401, cx, cy)
-    fire(canvas, 'pointerup', 401, rx, ry)
+    fire(root, 'pointerup', 401, cx, cy)
     fire(child, 'pointerdown', 402, cx, cy)
-    fire(canvas, 'pointerup', 402, rx, ry)
+    fire(root, 'pointerup', 402, cx, cy)
   }, ids)
 
   await page.waitForSelector('.node-edit-input')
