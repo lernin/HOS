@@ -55,6 +55,14 @@ test('preview persistence targets only the existing production RPC surface', () 
   }
 })
 
+test('preview bridge exposes the legacy drop detector without starting a drag', () => {
+  const preview = readFileSync(loaderPath, 'utf8')
+  assert.match(preview, /pickDropAtViewport\(clientX, clientY, sourceUid = null\)/)
+  assert.match(preview, /Detectors\.pick\(\{ x: graphX, y: graphY \}\)/)
+  assert.match(preview, /caretXYFromHit\(drop\._hit\)/)
+  assert.match(preview, /source\.descendants\(\)/)
+})
+
 test('legacy inline script parses and retains the core architecture', () => {
   const html = readFileSync(legacyPath, 'utf8')
   const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
