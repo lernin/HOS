@@ -220,6 +220,28 @@ test('insertNodeAtDrop places a node in a sibling gap or under a target', () => 
   assert.equal(tree.children[0].children[0].name, 'leaf')
 })
 
+test('hold-drag remaps side-insert beside the origin ghost to put-back', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/08-detectors.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function remapHoldDragGhostDrop(drop, originUid, ghostUids){')
+  const end = source.indexOf('function holdDragGhostContext(){', start)
+  assert.ok(start >= 0 && end > start)
+  const remapHoldDragGhostDrop = new Function(`${source.slice(start, end)}; return remapHoldDragGhostDrop;`)()
+  const origin = 'ghost-1'
+  const ghosts = new Set([origin, 'ghost-kid'])
+  assert.deepEqual(
+    remapHoldDragGhostDrop({ type: 'gap', prevUid: origin, nextUid: 'sib', parentUid: 'p' }, origin, ghosts),
+    { type: 'node', targetUid: origin, _hit: undefined },
+  )
+  assert.deepEqual(
+    remapHoldDragGhostDrop({ type: 'gap', prevUid: null, nextUid: origin, parentUid: 'p' }, origin, ghosts),
+    { type: 'node', targetUid: origin, _hit: undefined },
+  )
+  const other = { type: 'gap', prevUid: 'left', nextUid: 'right', parentUid: 'p' }
+  assert.equal(remapHoldDragGhostDrop(other, origin, ghosts), other)
+  const adopt = { type: 'node', targetUid: 'other' }
+  assert.equal(remapHoldDragGhostDrop(adopt, origin, ghosts), adopt)
+})
+
 test('inline edit goes through openNodeEditor, not a second helper', () => {
   const editing = readFileSync(new URL('../public/logyq/js/engine/09-editing.js', import.meta.url), 'utf8')
   const keyboard = readFileSync(new URL('../public/logyq/js/engine/17-keyboard.js', import.meta.url), 'utf8')

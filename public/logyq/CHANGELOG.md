@@ -81,6 +81,11 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Color is node data.** `data.color` on the tree; snapshot / maps / reload keep it. Undo is `replace-root`. Card shape (rx, stroke chrome) is unchanged; only fill changes.
 - **Mix and save keep paint.** `randomizeTree` used to shuffle names into new `{ name }` objects, dropping `data.color`. After Mix the snapshot (and therefore `logyq_maps_v1` / reopen) had no paint. Mix now carries each card’s color through the shuffle; GIQ `normalizeToTree` also keeps `color`. Snapshot / `loadMap` already JSON-clone the full node. Paint UX is unchanged.
 
+## Phone polish (PR 112)
+
+- **No trash FOUC on mobile load.** `#trash` is hidden in first-paint `#logyq-phone-boot` CSS and the matching `app.css` phone media query. Preview JS still hides it later; that is no longer the first hide. Desktop trash stays visible.
+- **Ghost put-back swallows side-insert.** During hold-drag, a gap / edge / cousin slot whose `prevUid` or `nextUid` is the origin ghost (or its ghosted subtree) remaps to put-back on the ghost. Green side carets still light beside other cards.
+
 ## Persistence contract + Lab scaffold
 
 - **Card fields that round-trip.** UI writes `name` (label) and `color` (paint). Mix / GIQ `normalizeToTree` / snapshot / `loadMap` also keep `label` / `text` / `title` / `value` if they are already on the node (`cardText` fallbacks; nothing in paint/edit writes them). `_uid` is session identity — Mix reassigns. `children` is the tree. Word Bank stays `string[]`. Contract: `PERSISTENCE.md`.

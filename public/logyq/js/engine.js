@@ -1623,6 +1623,36 @@ if (dir === +1){
 
     function contains(d, x, y){ return (x>=d.x && x<=d.x+d.width && y>=d.y && y<=d.y+d.height); }
 
+    // Hold-drag origin ghost is put-back. Sibling / edge / cousin slots
+    // attached to that ghost are the same home — do not arm side-insert.
+    // Side-insert beside any other card is unchanged.
+    function remapHoldDragGhostDrop(drop, originUid, ghostUids){
+      if (!drop || drop.type !== 'gap' || !originUid) return drop;
+      const ids = ghostUids instanceof Set ? ghostUids : new Set(ghostUids || []);
+      if (!ids.size) ids.add(originUid);
+      if (ids.has(drop.prevUid) || ids.has(drop.nextUid)) {
+        return { type: 'node', targetUid: originUid, _hit: drop._hit };
+      }
+      return drop;
+    }
+
+    function holdDragGhostContext(){
+      const { state } = logyq
+      if (typeof document === 'undefined' || !document.body?.classList?.contains('v2-branch-drag')) return null;
+      const originUid = state.selectedUid;
+      if (!originUid) return null;
+      const origin = state.root?.descendants?.().find(n => n.data?._uid === originUid);
+      const ghostUids = new Set();
+      if (origin && typeof origin.descendants === 'function') {
+        for (const n of origin.descendants()) {
+          if (n?.data?._uid) ghostUids.add(n.data._uid);
+        }
+      } else {
+        ghostUids.add(originUid);
+      }
+      return { originUid, ghostUids };
+    }
+
     function pick(point){
       const { state } = logyq
       const x=point.x, y=point.y; const hits=[];
@@ -1637,9 +1667,12 @@ if (dir === +1){
         return Math.abs(x-ac) - Math.abs(x-bc); // closer center
       });
       const top = hits[0];
-      if (top.kind === "rootAbove") return { type:"rootAbove", _hit: top };
-      if (top.kind==='node') return { type:'node', targetUid: top.targetUid, _hit: top };
-      return { type:'gap', parentUid: top.parentUid||null, prevUid: top.prevUid||null, nextUid: top.nextUid||null, _hit: top };
+      let result;
+      if (top.kind === "rootAbove") result = { type:"rootAbove", _hit: top };
+      else if (top.kind==='node') result = { type:'node', targetUid: top.targetUid, _hit: top };
+      else result = { type:'gap', parentUid: top.parentUid||null, prevUid: top.prevUid||null, nextUid: top.nextUid||null, _hit: top };
+      const ghost = holdDragGhostContext();
+      return ghost ? remapHoldDragGhostDrop(result, ghost.originUid, ghost.ghostUids) : result;
     }
 
     function draw(){
@@ -1657,7 +1690,7 @@ if (dir === +1){
           d.kind==='rightCousin' ? 'det-cousin-r' : 'det-edge'}`);
     }
 
-    return { build, pick, draw };
+    return { build, pick, draw, remapHoldDragGhostDrop };
   })();
   attach('detectors', Detectors)
 

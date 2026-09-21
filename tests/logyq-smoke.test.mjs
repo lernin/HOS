@@ -164,6 +164,16 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   assert.ok(headerBox.height <= 52, `phone header height ${headerBox.height} should stay compact`)
   assert.ok(headerBox.y <= 1, `phone header y ${headerBox.y} should sit at the top`)
   assert.equal(await page.locator('#trash').isVisible(), false)
+  assert.equal(await page.evaluate(() => {
+    const boot = document.getElementById('logyq-phone-boot')?.textContent || ''
+    return /#trash\s*\{[^}]*display\s*:\s*none\s*!important/.test(boot)
+  }), true)
+  assert.equal(await page.evaluate(() => {
+    document.getElementById('logyq-preview-styles')?.remove()
+    const trash = document.getElementById('trash')
+    const style = trash ? getComputedStyle(trash) : null
+    return !!(style && style.display === 'none' && style.visibility === 'hidden')
+  }), true, 'trash must stay hidden from first-paint CSS after preview styles are removed')
   const canvasBox = await page.locator('svg#canvas').boundingBox()
   assert.ok(canvasBox, 'canvas should be laid out')
   assert.ok(canvasBox.width >= 388, `canvas width ${canvasBox.width} should fill the 390px phone viewport`)
@@ -309,6 +319,33 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.locator('#logyq-v162-branch-preview .v2-float-node').count(), 0)
   assert.equal(await page.locator('#logyq-v162-branch-preview g.node').count(), 1)
   assert.equal(await page.locator('#logyq-v162-branch-preview line').count(), 0)
+  const ghostPick = await page.evaluate(() => {
+    const byName = (label) => Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === label)
+    const held = byName('Node 03')?.__data__
+    const other = byName('Node 08')?.__data__
+    const CONFIG = window.LOGYQBridge.core.config
+    const pick = window.LOGYQBridge.core.detectors.pick
+    const origin = held?.data?._uid || ''
+    const besideGhost = pick({ x: held.x + CONFIG.CARD_WIDTH / 2 + 10, y: held.y })
+    const onGhost = pick({ x: held.x, y: held.y })
+    const besideOther = other ? pick({ x: other.x + CONFIG.CARD_WIDTH / 2 + 10, y: other.y }) : null
+    return {
+      origin,
+      onGhostType: onGhost?.type || null,
+      onGhostUid: onGhost?.targetUid || null,
+      besideGhostType: besideGhost?.type || null,
+      besideGhostUid: besideGhost?.targetUid || null,
+      besideOtherType: besideOther?.type || null,
+      besideOtherUid: besideOther?.targetUid || null,
+      besideOtherPrev: besideOther?.prevUid || null,
+      besideOtherNext: besideOther?.nextUid || null,
+    }
+  })
+  assert.equal(ghostPick.onGhostType, 'node')
+  assert.equal(ghostPick.onGhostUid, ghostPick.origin)
+  assert.equal(ghostPick.besideGhostType, 'node', 'beside the origin ghost must arm put-back, not a side-insert caret')
+  assert.equal(ghostPick.besideGhostUid, ghostPick.origin)
+  assert.notEqual(ghostPick.besideOtherUid, ghostPick.origin, 'side-insert / adopt beside another card must not remap to the ghost')
   await page.evaluate(({ x, y }) => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     node?.dispatchEvent(new MouseEvent('contextmenu', {
