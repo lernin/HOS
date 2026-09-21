@@ -6073,6 +6073,7 @@ elements.svg.on("contextmenu", (event) => {
     mix(includeBank = false) { logyq.mix.randomizeTree(!!includeBank); },
     fit() { logyq.treeManager.autoFit(); },
     loadMap(tree, wordBank = []) {
+      if (logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
       const next = utils.deepClone(tree || { name: 'New map' });
       utils.assignUids(next);
       state.root = d3.hierarchy(next);

@@ -75,16 +75,23 @@ async function waitForTree(page) {
 
 async function loadSampleTree(page) {
   await page.evaluate(() => {
-    const tree = window.LOGYQBridge.core.data.generateTree(30)
     window.LOGYQPreview.app.hasOpenMap = true
     document.body.classList.add('logyq-map-open')
     document.body.classList.remove('logyq-home')
     const library = document.getElementById('logiq-library')
     library?.classList.remove('is-open')
     library?.setAttribute('aria-hidden', 'true')
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    const tree = window.LOGYQBridge.core.data.generateTree(30)
     window.LOGYQBridge.loadMap(tree, [])
+    const snap = window.LOGYQBridge.snapshot()
+    window.LOGYQPreview.app.lastSnapshot = JSON.stringify({
+      tree: snap.tree,
+      word_bank: Array.isArray(snap.wordBank) ? snap.wordBank : [],
+    })
   })
   await waitForTree(page)
+  await page.waitForFunction(() => document.querySelectorAll('.node-edit-input').length === 0)
 }
 
 async function assertNoChooser(page) {
@@ -820,7 +827,8 @@ test('LOGYQ library lists recents and New opens a one-card editor', async () => 
   await page.waitForSelector('#logiq-library.is-open')
   await page.locator('#logiq-new-map').click()
   await page.waitForFunction(() => !document.getElementById('logiq-library')?.classList.contains('is-open'))
-  assert.equal(await page.locator('g.node').count(), 1)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.locator('svg#canvas g.nodes g.node').count(), 1)
   assert.equal(await page.locator('.node-edit-input').count(), 1)
   await assertNoChooser(page)
   assert.deepEqual(errors, [])
