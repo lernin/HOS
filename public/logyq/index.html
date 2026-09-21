@@ -13,6 +13,7 @@
 #logiq-mobile-header,#logiq-mobile-panel,#logiq-voice-bar{display:none}
 @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
   body>header{display:none!important}
+  svg#canvas{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;overflow:visible}
   #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);overflow:hidden;flex-wrap:nowrap}
   #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto}
   #logiq-mobile-header .logiq-mobile-entry{height:36px;min-width:0;flex:1;border:1px solid #dbe3ec;border-radius:10px;padding:0 9px;font:inherit;font-size:14px;background:rgba(255,255,255,.9)}
@@ -133,14 +134,6 @@
       <div style="display:flex;align-items:center;gap:8px;min-width:160px;">
         <input type="range" id="detDepth" min="1" max="3" step="0.1" value="1.2">
         <span id="detDepthVal">1.2x</span>
-      </div>
-    </div>
-    <div class="settings-row">
-      <label><strong>Finger drag hand</strong></label>
-      <p style="margin:0 0 8px;color:#64748b;font-size:13px;">Offsets the phone drag ghost so the card is not under your finger. Mouse drag on desktop is unchanged.</p>
-      <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-        <label style="display:flex;align-items:center;gap:6px;"><input type="radio" name="logyqHandedness" id="logyqHandRight" value="right" checked> Right-handed</label>
-        <label style="display:flex;align-items:center;gap:6px;"><input type="radio" name="logyqHandedness" id="logyqHandLeft" value="left"> Left-handed</label>
       </div>
     </div>
   </div>

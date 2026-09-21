@@ -12,6 +12,10 @@
       PX_PER_CM: 38,
       OFFSET_UP_CM: 1.45,
       OFFSET_SIDE_CM: 0,
+      // Experiment: pan the map north on latch instead of popping the card up.
+      // Set false to restore card-offset drag.
+      LATCH_MAP_SHIFT: true,
+      BANK_DWELL_MS: 480,
     }
   }
 
@@ -29,6 +33,11 @@
     canvas.dataset.logyqV162 = '1'
     doc.body.classList.add('logyq-mobile-v162')
     win.__logyqV2ConsumedPointers ||= new Set()
+    win.requestAnimationFrame(() => {
+      win.requestAnimationFrame(() => {
+        try { bridge.fit() } catch (_error) {}
+      })
+    })
 
     const holdState = {
       active: new Set(),
@@ -126,6 +135,7 @@
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
     const dockKind = canceled ? 'none' : dockDropKind(doc, event.clientX, event.clientY)
+    const armedBank = !canceled && dockKind === 'bank' && drag.bankArmed
     const end = (canceled || dockKind !== 'none')
       ? { x: drag.x, y: drag.y }
       : visualPoint(event.clientX, event.clientY)
@@ -135,7 +145,7 @@
 
     cleanupDrag(doc, win, state, drag)
     dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
-    if (dockKind === 'bank') sendDragToWordBank(doc, drag)
+    if (armedBank) sendDragToWordBank(doc, drag)
   }
 
   function onHoldCancel(event, doc, win, state) {
@@ -183,14 +193,19 @@
       lastY: hold.lastY,
       preview: previewHost,
       multi: false,
+      mapShiftY: 0,
+      bankChip: null,
+      bankSince: 0,
+      bankArmed: false,
     }
 
     doc.body.classList.add('v2-branch-drag')
     bridge.selectByUid(hold.uid)
-    const visual = visualPoint(hold.x, hold.y)
     mouse(source, win, 'mousedown', hold.x, hold.y, 1)
+    shiftMapOnLatch(doc, win, state.drag)
     stampOriginGhost(doc, uids)
     state.drag.originLayout = captureOriginLayout(doc, uids)
+    const visual = visualPoint(hold.x, hold.y)
     mouse(win, win, 'mousemove', visual.x, visual.y, 1)
     movePreview(state.drag, hold.lastX, hold.lastY)
     startFeedbackLoop(doc, win, state)
@@ -255,7 +270,8 @@
       if (!drag) { state.feedbackRaf = 0; return }
       restoreOriginLayout(doc, drag.originLayout)
       const dockKind = dockDropKind(doc, drag.lastX, drag.lastY)
-      doc.body.classList.toggle('v2-dock-target', dockKind === 'bank')
+      armBankHover(win, drag, dockKind, doc)
+      doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
       if (dockKind === 'none') {
         edgePan(doc, win, drag.lastX, drag.lastY)
         const visual = visualPoint(drag.lastX, drag.lastY)
@@ -336,23 +352,9 @@
     return true
   }
 
-  function getHandedness() {
-    try {
-      return localStorage.getItem(HAND_KEY) === 'left' ? 'left' : 'right'
-    } catch (_error) {
-      return 'right'
-    }
-  }
-
-  function setHandedness(value) {
-    const next = value === 'left' ? 'left' : 'right'
-    try { localStorage.setItem(HAND_KEY, next) } catch (_error) {}
-    syncHandednessUi(next)
-    return next
-  }
-
   function fingerOffset() {
     const C = v162Constants()
+    if (C.LATCH_MAP_SHIFT) return { x: 0, y: 0 }
     const up = C.OFFSET_UP_CM * C.PX_PER_CM
     return { x: 0, y: -up }
   }
@@ -362,41 +364,74 @@
     return { x: x + offset.x, y: y + offset.y }
   }
 
-  function syncHandednessUi(value) {
-    const hand = value === 'left' ? 'left' : 'right'
-    const right = document.getElementById('logyqHandRight')
-    const left = document.getElementById('logyqHandLeft')
-    if (right) right.checked = hand === 'right'
-    if (left) left.checked = hand === 'left'
-    document.querySelectorAll('[data-hand]').forEach((button) => {
-      button.classList.toggle('is-active', button.dataset.hand === hand)
-    })
+  function latchShiftPx() {
+    const C = v162Constants()
+    return C.OFFSET_UP_CM * C.PX_PER_CM
   }
 
-  function bindHandednessUi() {
-    syncHandednessUi(getHandedness())
-    document.getElementById('logyqHandRight')?.addEventListener('change', () => setHandedness('right'))
-    document.getElementById('logyqHandLeft')?.addEventListener('change', () => setHandedness('left'))
-    document.querySelectorAll('[data-hand]').forEach((button) => {
-      button.addEventListener('click', () => setHandedness(button.dataset.hand))
-    })
+  function applyZoomNow(doc, win, next) {
+    const svg = doc.getElementById('canvas')
+    if (!svg || !next) return
+    svg.__zoom = next
+    const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+    if (root) root.setAttribute('transform', next.toString())
+  }
+
+  function shiftMapOnLatch(doc, win, drag) {
+    if (!v162Constants().LATCH_MAP_SHIFT || !drag || !win.d3) return
+    const svg = doc.getElementById('canvas')
+    if (!svg) return
+    const dy = latchShiftPx()
+    const t = win.d3.zoomTransform(svg)
+    applyZoomNow(doc, win, win.d3.zoomIdentity.translate(t.x, t.y - dy).scale(t.k))
+    drag.mapShiftY = dy
+  }
+
+  function revertMapShift(doc, win, drag) {
+    const dy = drag?.mapShiftY
+    if (!dy || !win.d3) return
+    const svg = doc.getElementById('canvas')
+    if (!svg) return
+    const t = win.d3.zoomTransform(svg)
+    applyZoomNow(doc, win, win.d3.zoomIdentity.translate(t.x, t.y + dy).scale(t.k))
+    drag.mapShiftY = 0
+  }
+
+  function hitBankChip(doc, x, y) {
+    const dock = doc.getElementById('Dock')
+    if (!dock || dock.classList.contains('dock-hidden')) return null
+    const chips = Array.from(dock.querySelectorAll('.chip'))
+    for (const chip of chips) {
+      const rect = chip.getBoundingClientRect()
+      if (rect.width < 20 || rect.height < 16) continue
+      const insetX = Math.max(14, rect.width * 0.28)
+      const insetY = Math.max(10, rect.height * 0.28)
+      if (x >= rect.left + insetX && x <= rect.right - insetX && y >= rect.top + insetY && y <= rect.bottom - insetY) {
+        return chip
+      }
+    }
+    return null
+  }
+
+  function armBankHover(win, drag, dockKind, doc) {
+    const chip = dockKind === 'bank' ? hitBankChip(doc, drag.lastX, drag.lastY) : null
+    const now = win.performance?.now?.() || Date.now()
+    if (chip && chip === drag.bankChip) {
+      drag.bankArmed = (now - drag.bankSince) >= v162Constants().BANK_DWELL_MS
+      return
+    }
+    drag.bankChip = chip
+    drag.bankSince = chip ? now : 0
+    drag.bankArmed = false
   }
 
   function dockDropKind(doc, x, y) {
     const dock = doc.getElementById('Dock')
     if (!dock || dock.classList.contains('dock-hidden')) return 'none'
-    const chipInset = 8
-    const chips = Array.from(dock.querySelectorAll('.chip'))
-    for (const chip of chips) {
-      const rect = chip.getBoundingClientRect()
-      if (rect.width < 12 || rect.height < 12) continue
-      if (x >= rect.left + chipInset && x <= rect.right - chipInset && y >= rect.top + chipInset && y <= rect.bottom - chipInset) {
-        return 'bank'
-      }
-    }
+    if (hitBankChip(doc, x, y)) return 'bank'
     const rect = dock.getBoundingClientRect()
     if (rect.width < 8 || rect.height < 8) return 'none'
-    const slack = 16
+    const slack = 28
     if (x >= rect.left - slack && x <= rect.right + slack && y >= rect.top - slack && y <= rect.bottom + slack) return 'near'
     return 'none'
   }
@@ -411,6 +446,7 @@
 
   function cleanupDrag(doc, win, state, drag) {
     if (!drag) return
+    revertMapShift(doc, win, drag)
     drag.preview?.remove?.()
     for (const uid of drag.uids || []) nodeByUid(doc, uid)?.classList.remove('v2-branch-origin-ghost')
     doc.body.classList.remove('v2-branch-drag', 'v2-cancel', 'v2-dock-target')
@@ -744,7 +780,6 @@
   }
 
   bindV162Gestures()
-  bindHandednessUi()
   if (preview.gestures) {
     preview.gestures.constants = v162Constants()
     preview.gestures.bindV162 = bindV162Gestures
@@ -752,8 +787,8 @@
     preview.gestures.edgePan = edgePan
     preview.gestures.fingerOffset = fingerOffset
     preview.gestures.visualPoint = visualPoint
-    preview.gestures.getHandedness = getHandedness
-    preview.gestures.setHandedness = setHandedness
     preview.gestures.yieldNodeDrag = yieldNodeDrag
     preview.gestures.dockDropKind = dockDropKind
+    preview.gestures.hitBankChip = hitBankChip
+    preview.gestures.shiftMapOnLatch = shiftMapOnLatch
   }
