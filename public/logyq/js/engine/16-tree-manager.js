@@ -198,6 +198,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     state.layoutAfterFlush = null
     try { clearTimeout(state.layoutSettleTimer) } catch (_e) {}
     state.layoutSettleTimer = 0
+    try { document.body.classList.remove('logyq-layout-settling') } catch (_e) {}
     logyq.detectors.draw();
   },
 
@@ -278,12 +279,28 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     const delay = this.CREATE_SETTLE_MS || 260
     state.layoutSettling = true
     state.layoutGeneration = (state.layoutGeneration || 0) + 1
+    try { document.body.classList.add('logyq-layout-settling') } catch (_e) {}
     try { clearTimeout(state.layoutSettleTimer) } catch (_e) {}
     state.layoutSettleTimer = setTimeout(() => {
       state.layoutSettling = false
       state.layoutSettleTimer = 0
+      try { document.body.classList.remove('logyq-layout-settling') } catch (_e) {}
       if (state.layoutFlushQueued) this.flushCreateLayout()
     }, delay)
+  },
+
+  bindUidStamp(selection){
+    selection.each(function(d){
+      const el = this
+      const uid = d?.data?._uid
+      if (uid != null && String(uid) !== '') el.setAttribute('data-uid', uid)
+      if (el.__logyqUidStamp) return
+      el.__logyqUidStamp = true
+      el.addEventListener('pointerdown', function(event){
+        const next = this.__data__?.data?._uid || this.getAttribute('data-uid')
+        if (next != null && String(next) !== '') event.__logyqUid = next
+      }, true)
+    })
   },
 
   syncHitSlots(nodes){
@@ -300,9 +317,10 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       .attr("height", CONFIG.CARD_HEIGHT)
       .attr("fill", "transparent")
       .style("pointer-events", "all");
-    enter.merge(sel)
+    const slots = enter.merge(sel)
       .attr("data-uid", d => d.data._uid)
       .attr("transform", d => `translate(${d.x},${d.y})`);
+    this.bindUidStamp(slots)
     sel.exit().remove();
   },
 
@@ -385,7 +403,9 @@ const nEnter = selNodes.enter()
     const allNodes = nEnter.merge(selNodes);
     allNodes.attr("data-uid", d => d.data._uid);
     allNodes.select("rect:not(.grabzone)")
+      .attr("data-uid", d => d.data._uid)
       .style("fill", d => d.data.color || null);
+    this.bindUidStamp(allNodes);
     allNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
     allNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();

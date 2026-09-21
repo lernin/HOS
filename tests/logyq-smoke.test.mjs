@@ -1428,6 +1428,75 @@ test('LOGYQ labeling never moves the root when a flicked blank is edited', async
   await context.close()
 })
 
+test('LOGYQ double-tap keeps the pointerdown uid even if pointerup lands on root', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+
+  const ids = await page.evaluate(() => {
+    const rootUid = window.LOGYQBridge.core.state.root?.data?._uid
+    const rootName = window.LOGYQBridge.core.state.root?.data?.name
+    const origin = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 05')
+    const originUid = origin.__data__.data._uid
+    const newUid = window.LOGYQBridge.createRelative('down', originUid)
+    return { rootUid, rootName, originUid, newUid }
+  })
+  assert.ok(ids.newUid)
+  assert.notEqual(ids.newUid, ids.rootUid)
+
+  await page.evaluate((ids) => {
+    const nodeOf = (uid) => Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?._uid === uid)
+    const slotOf = (uid) => Array.from(document.querySelectorAll('svg#canvas g.hit-slot')).find((element) => element.getAttribute('data-uid') === uid)
+    const canvas = document.getElementById('canvas')
+    const fire = (target, type, pointerId, x, y) => {
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }
+    const child = nodeOf(ids.newUid) || slotOf(ids.newUid)
+    const root = nodeOf(ids.rootUid)
+    const childBox = child.getBoundingClientRect()
+    const rootBox = root.getBoundingClientRect()
+    const cx = childBox.left + childBox.width / 2
+    const cy = childBox.top + childBox.height / 2
+    const rx = rootBox.left + rootBox.width / 2
+    const ry = rootBox.top + rootBox.height / 2
+    fire(child, 'pointerdown', 401, cx, cy)
+    fire(canvas, 'pointerup', 401, rx, ry)
+    fire(child, 'pointerdown', 402, cx, cy)
+    fire(canvas, 'pointerup', 402, rx, ry)
+  }, ids)
+
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), ids.newUid)
+  assert.notEqual(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), ids.rootUid)
+  await page.locator('.node-edit-input').fill('cat')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'cat'
+  }, ids.newUid)
+  assert.equal(await page.evaluate((id) => window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, id)?.name, ids.rootUid), ids.rootName)
+  assert.notEqual(ids.rootName, 'cat')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ flick-down child edit binds newUid not root, then clear stays on that uid', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)

@@ -232,6 +232,7 @@
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
         body.logyq-mobile-v162 svg#canvas g.node,body.logyq-mobile-v162 svg#canvas g.node *{pointer-events:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
+        body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node *,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>text{pointer-events:none!important}
         #logyq-v162-action{position:fixed;z-index:3950;display:none;place-items:center;width:40px;height:40px;padding:0;border:2px solid #fff;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 7px 20px rgba(15,23,42,.26);font:800 10px/1 system-ui;touch-action:none}
         #logyq-v162-action.show{display:grid}#logyq-v162-action.rec{background:#ef4444}
         #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
@@ -1390,8 +1391,7 @@
     if (alreadyActive) state.candidates.forEach((candidate) => { candidate.multi = true })
     state.active.add(event.pointerId)
 
-    const node = hitNode(doc, event.clientX, event.clientY, event)
-    const uid = nodeUid(node)
+    const uid = uidFromTouchedNode(event) || nodeUid(hitNode(doc, event.clientX, event.clientY, event))
     if (!uid) hardClearBackground(doc, win, { keepStroke: true })
     state.candidates.set(event.pointerId, {
       uid,
@@ -1460,7 +1460,11 @@
       return
     }
 
-    const uid = hitEditUid(doc, event.clientX, event.clientY, event)
+    // Stationary tap keeps the pointerdown card. Re-hit on up is how a
+    // mid-tween parent/root visual stole the editor from a new blank.
+    const uid = (!candidate.moved && candidate.uid)
+      || uidFromTouchedNode(event)
+      || hitEditUid(doc, event.clientX, event.clientY, event)
     const node = uid ? nodeByUid(doc, uid) : null
     if (!uid) {
       hardClearBackground(doc, win, { keepStroke: true })
@@ -1548,20 +1552,29 @@
   }
 
   function uidFromHost(host) {
-    return host?.getAttribute?.('data-uid') || nodeUid(host) || null
+    return host?.__data__?.data?._uid || host?.getAttribute?.('data-uid') || nodeUid(host) || null
   }
 
-  function uidFromEvent(event) {
+  function uidFromTouchedNode(event) {
+    if (event?.__logyqUid != null && String(event.__logyqUid) !== '') return event.__logyqUid
     const path = typeof event?.composedPath === 'function' ? event.composedPath() : []
     const nodes = path.length ? path : (event?.target ? [event.target] : [])
     for (const item of nodes) {
       if (!item || item === item.window || item === item.document) continue
-      const host = item.closest?.('g.hit-slot, g.node')
-        || (item.classList?.contains?.('hit-slot') || item.classList?.contains?.('node') ? item : null)
+      const host = (item.classList?.contains?.('hit-slot') || item.classList?.contains?.('node'))
+        ? item
+        : item.closest?.('g.hit-slot, g.node')
       const uid = uidFromHost(host)
-      if (uid) return uid
+      if (uid != null && String(uid) !== '') {
+        event.__logyqUid = uid
+        return uid
+      }
     }
     return null
+  }
+
+  function uidFromEvent(event) {
+    return uidFromTouchedNode(event)
   }
 
   function uidFromPoint(doc, x, y) {
@@ -1574,10 +1587,9 @@
     return null
   }
 
-  // Cards are pointer-events:none on phone so the event target is often a
-  // reserved hit-slot *behind* a mid-tween visual. Prefer the painted
-  // g.node under the finger (elementsFromPoint still sees it) so a
-  // just-created blank keeps its own _uid even if she taps before settle.
+  // Mid-tween painted cards sit over reserved slots. Identity is the
+  // touched node's datum / data-uid, then the reserved layout slot —
+  // never a sliding parent/root visual under the finger.
   function uidFromVisualPoint(doc, x, y) {
     const stack = typeof doc.elementsFromPoint === 'function' ? doc.elementsFromPoint(x, y) : []
     for (const el of stack) {
@@ -1589,10 +1601,11 @@
   }
 
   function hitEditUid(doc, x, y, event) {
-    return uidFromVisualPoint(doc, x, y)
+    return uidFromTouchedNode(event)
       || uidFromEvent(event)
-      || uidFromPoint(doc, x, y)
       || nodeUid(hitLayoutSlot(doc, x, y))
+      || uidFromPoint(doc, x, y)
+      || uidFromVisualPoint(doc, x, y)
   }
 
   function canvasView(doc) {
@@ -1891,6 +1904,7 @@
     preview.gestures.hitNode = hitNode
     preview.gestures.rankCardHits = rankCardHits
     preview.gestures.cardFaceRect = cardFaceRect
+    preview.gestures.uidFromTouchedNode = uidFromTouchedNode
     preview.gestures.uidFromEvent = uidFromEvent
     preview.gestures.uidFromPoint = uidFromPoint
     preview.gestures.uidFromVisualPoint = uidFromVisualPoint
