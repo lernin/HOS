@@ -43,35 +43,35 @@
       return () => changeListeners.delete(listener);
     },
     notifyChange: emitChange,
-    getSelectedUid: () => state.selectedUid || null,
-    getSelectedUids: () => state.selectedUids ? Array.from(state.selectedUids) : [],
+    getSelectedUid: () => logyq.state.selectedUid || null,
+    getSelectedUids: () => logyq.state.selectedUids ? Array.from(logyq.state.selectedUids) : [],
     selectByUid(uid) {
-      const node = uid && state.root?.descendants().find((item) => item.data?._uid === uid);
+      const node = uid && logyq.state.root?.descendants().find((item) => item.data?._uid === uid);
       if (!node) return false;
-      selectSingle(uid);
+      logyq.selection.selectSingle(uid);
       return true;
     },
     clearFocusSelection() {
-      clearGroup();
-      clearSelection();
+      logyq.selection.clearGroup();
+      logyq.selection.clearSelection();
       return true;
     },
     selectByName(name) {
-      const node = state.root?.descendants().find((item) => item.data?.name === name);
+      const node = logyq.state.root?.descendants().find((item) => item.data?.name === name);
       if (!node) return false;
-      selectSingle(node.data._uid);
+      logyq.selection.selectSingle(node.data._uid);
       return true;
     },
     getParentName(name) {
-      const node = state.root?.descendants().find((item) => item.data?.name === name);
+      const node = logyq.state.root?.descendants().find((item) => item.data?.name === name);
       return node?.parent?.data?.name || null;
     },
     editSelected({ wipe = false } = {}) {
-      if (!state.selectedUid) return false;
-      const node = state.root?.descendants().find((item) => item.data?._uid === state.selectedUid);
+      if (!logyq.state.selectedUid) return false;
+      const node = logyq.state.root?.descendants().find((item) => item.data?._uid === logyq.state.selectedUid);
       if (!node) return false;
-      openNodeEditor(node);
-      if (wipe && state.editorEl) state.editorEl.value = '';
+      logyq.editing.openNodeEditor(node);
+      if (wipe && logyq.state.editorEl) logyq.state.editorEl.value = '';
       return true;
     },
     addChild() {
@@ -86,7 +86,7 @@
       if (direction === 'down') addChildBelowSelectedAndEdit();
       if (direction === 'right') addYoungerSiblingRightAndEdit();
       const created = state.selectedUid && state.selectedUid !== before ? state.selectedUid : null;
-      if (created && state.editingUid) closeNodeEditor(false, false);
+      if (created && logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
       emitChange();
       return created;
     },
@@ -101,7 +101,7 @@
       state.root = d3.hierarchy(state.root.data);
       utils.assignIds(state.root);
       treeManager.layoutAndRender(false);
-      selectSingle(uid);
+      logyq.selection.selectSingle(uid);
       emitChange();
       return true;
     },
@@ -129,8 +129,8 @@
       state.wordBank = Array.isArray(wordBank) ? wordBank.slice() : [];
       state.history = [];
       elements.undoBtn.disabled = true;
-      clearGroup();
-      clearSelection();
+      logyq.selection.clearGroup();
+      logyq.selection.clearSelection();
       render();
       treeManager.layoutAndRender(false);
       treeManager.autoFit();

@@ -2,6 +2,7 @@
 /* [patch] selection-helpers start */
 
 function applySelectionStyles(){
+  const { state, elements } = logyq
   if (!elements.gNodes) return;
 
   const hasGroup = !!(state.selectedUids && state.selectedUids.size > 0);
@@ -27,6 +28,7 @@ function applySelectionStyles(){
 
 
 function toggleGroupMembershipOf(uid){
+  const { state } = logyq
   if (!uid) return;
  
 
@@ -44,10 +46,11 @@ function toggleGroupMembershipOf(uid){
 
 // Move an entire group under the current focus
 function moveGroupToTarget(uids, targetUid, { abandon = false } = {}){
+  const { state, utils } = logyq
   if (!uids || uids.size === 0 || !targetUid) return;
 
   // Clone root for undo history
-  pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
+  logyq.history.pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
 
   // Remove all selected nodes from their parents
   const moving = [];
@@ -68,7 +71,7 @@ function moveGroupToTarget(uids, targetUid, { abandon = false } = {}){
   // Rebuild hierarchy + re-render
   state.root = d3.hierarchy(state.root.data);
   utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
+  logyq.treeManager.layoutAndRender(false);
 
   // Refresh selection: keep focus, clear group
   clearGroup();
@@ -81,6 +84,7 @@ function moveGroupToTarget(uids, targetUid, { abandon = false } = {}){
 
 // Keep only top-level selected nodes (drop any node whose ancestor is also selected)
 function topLevelSelection(uids){
+  const { state } = logyq
   if (!state.root || !uids || !uids.size) return [];
   const set = new Set(uids);
   const byUid = new Map(state.root.descendants().map(n => [n.data._uid, n]));
@@ -102,20 +106,23 @@ function topLevelSelection(uids){
 
 
 
-function clearFocus(){ state.selectedUid = null; applySelectionStyles(); }
+function clearFocus(){ const { state } = logyq; state.selectedUid = null; applySelectionStyles(); }
 
-function clearGroup(){ 
+function clearGroup(){
+  const { state } = logyq
   state.selectedUids = new Set(); 
   applySelectionStyles(); 
 }
 
 
 function clearSelection(){
+  const { state } = logyq
   state.selectedUid = null;
   applySelectionStyles();
 }
 
 function selectSingle(uid){
+  const { state } = logyq
   state.selectedUid = uid || null;
   applySelectionStyles();
 }
@@ -126,6 +133,7 @@ function selectSingle(uid){
 
 
 function onNodeMouseDown(event, d){
+  const { state, config: CONFIG } = logyq
   if (event.button !== 0) return;                  // left only
   if (isTextField?.(event.target)) return;
 
@@ -196,6 +204,7 @@ applySelectionStyles();
 
 
 function setSelected(uid){
+  const { state } = logyq
   state.selectedUid = uid || null;
   applySelectionStyles();           // no group reset here
 }
@@ -203,6 +212,7 @@ function setSelected(uid){
 
 
   function showToast(msg, ms){
+    const { elements } = logyq
     const el=elements.Toast; if(!el) return;
     el.textContent=msg||""; el.style.display="inline-flex";
     clearTimeout(showToast._t);
@@ -211,6 +221,7 @@ function setSelected(uid){
 
   /* ======================= DROP FLASH ======================= */
   function flashMoved(uid){
+    const { elements } = logyq
     try{
       const sel = elements.gNodes.selectAll("g.node").filter(n=> n && n.data && n.data._uid===uid);
       sel.classed("drop-flash", true);
@@ -220,6 +231,7 @@ function setSelected(uid){
 
   /* ======================= CARET POSITION ======================= */
   function caretXYFromHit(hit){
+    const { state, config: CONFIG } = logyq
     /* [patch] edgeSibling-caret-sibling start */
     if (hit && hit.kind === "edgeSibling" && state.root) {
       if (hit.nextUid) {
@@ -268,6 +280,7 @@ function setSelected(uid){
 
 
   function insertNodeAtDrop(movingData, drop){
+  const { state, utils } = logyq
   if (!drop) return false;
 
   if (drop.type === 'gap'){
@@ -312,7 +325,7 @@ function setSelected(uid){
     const newRoot = movingData;
     newRoot.children = newRoot.children || [];
     newRoot.children.push(prev);
-    pushHistory({ type:'replace-root', prev });
+    logyq.history.pushHistory({ type:'replace-root', prev });
     state.root = d3.hierarchy(newRoot); utils.assignIds(state.root);
     return 'ROOT_DONE';
   }
@@ -325,6 +338,7 @@ function setSelected(uid){
 // abandon=false => move full subtree
 // abandon=true  => move node-only (children stay/promote at source)
 function moveSelectionToTarget(targetUid, { abandon = false } = {}){
+  const { state, utils } = logyq
   if (!state.root) return;
   const group = state.selectedUids || new Set();
   if (!group.size) { showToast('Nothing selected', 1000); return; }
@@ -352,7 +366,7 @@ function moveSelectionToTarget(targetUid, { abandon = false } = {}){
   }
 
   // Single history snapshot covering all moves
-  pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
+  logyq.history.pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
 
   // Perform moves one-by-one into {type:'node', targetUid}
   // We rebuild the hierarchy once at the end for performance/stability.
@@ -388,7 +402,7 @@ function moveSelectionToTarget(targetUid, { abandon = false } = {}){
   clearGroup();
   if (tUid) selectSingle(tUid);
 
-  treeManager.layoutAndRender(false);
+  logyq.treeManager.layoutAndRender(false);
   showToast(abandon ? 'Abandonment paste' : 'Pasted', 1000);
 }
 
@@ -403,6 +417,7 @@ function moveSelectionToTarget(targetUid, { abandon = false } = {}){
 // - abandon=false: remove the whole node (subtree)
 // - abandon=true: remove ONLY the node; promote its children into its parent
 function removeNode(uid, { abandon = false } = {}){
+  const { state, utils } = logyq
   const path = utils.pathToUid(state.root.data, uid);
   if (!path) return null;
 
@@ -459,6 +474,7 @@ function removeNode(uid, { abandon = false } = {}){
 
 // --- V-hold handlers (focus-only visuals) ---
 window.addEventListener('keydown', (e) => {
+  const { state, elements } = logyq
   if (isTextField?.(e.target)) return;
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey){
     const noGroup = !(state.selectedUids && state.selectedUids.size > 0);
@@ -473,6 +489,7 @@ window.addEventListener('keydown', (e) => {
 
 // While V-hold and no group: immediate push with J/L or ArrowLeft/Right
 window.addEventListener('keydown', (e) => {
+  const { state } = logyq
   if (!state.vHold) return;
   if (isTextField?.(e.target)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -510,6 +527,7 @@ window.addEventListener('keydown', (e) => {
 
 
 window.addEventListener('keyup', (e) => {
+  const { state, elements } = logyq
   if (e.key === 'v' || e.key === 'V'){
     state.vHold = false;
     elements.svg?.classed?.('vhold-mode', false);
@@ -529,6 +547,7 @@ window.addEventListener('keyup', (e) => {
 // Hotkeys: G (group), V (paste), Shift+V (abandonment paste)
 // NOTE: Esc is handled elsewhere already; we don't handle Esc here to avoid duplicates.
 window.addEventListener('keydown', (e) => {
+  const { state } = logyq
   // Don’t steal keys from inputs
   if (typeof isTextField === 'function' && isTextField(e.target)) return;
 
@@ -585,6 +604,25 @@ window.addEventListener('keydown', (e) => {
 
 
 // ==========================================================================
+
+  attach('selection', {
+    applySelectionStyles,
+    toggleGroupMembershipOf,
+    moveGroupToTarget,
+    topLevelSelection,
+    clearFocus,
+    clearGroup,
+    clearSelection,
+    selectSingle,
+    onNodeMouseDown,
+    setSelected,
+    showToast,
+    flashMoved,
+    caretXYFromHit,
+    insertNodeAtDrop,
+    moveSelectionToTarget,
+    removeNode,
+  })
 
 
 

@@ -1,5 +1,6 @@
   /* ======================= EDITOR ======================= */
  function updateNodeEditorPosition(){
+  const { state, elements, config: CONFIG } = logyq
   if(!state.editingUid || !state.editorEl || !elements.gRoot) return;
   try{
     const h = state.root?.descendants().find(n => n.data?._uid === state.editingUid);
@@ -60,6 +61,7 @@
  
  
   function closeNodeEditor(apply, restoreZoom){
+    const { state, elements, utils } = logyq
     if(!state.editingUid) return;
     const uid = state.editingUid; const el = state.editorEl;
     state.editingUid = null; state.editorEl = null;
@@ -70,11 +72,11 @@
         const prev = target.name || "";
         let next = (el && typeof el.value==="string" ? el.value.trim() : prev) || prev;
         if(next !== prev){
-          pushHistory({ type:"rename", uid, prev, next });
+          logyq.history.pushHistory({ type:"rename", uid, prev, next });
           target.name = next;
           state.root = d3.hierarchy(state.root.data);
           utils.assignIds(state.root);
-          treeManager.layoutAndRender(false);
+          logyq.treeManager.layoutAndRender(false);
           setSelected(uid);
         }
       }
@@ -90,6 +92,7 @@
 
 
   function openNodeEditor(d){
+    const { state, elements } = logyq
     try{ closeNodeEditor(false,false); }catch(_e){}
     if(!d) return;
     state.editingUid = d.data._uid;
@@ -133,6 +136,7 @@
 
 /* [patch] edit-hotkey helpers start */
 function startInlineEdit({ wipe = false } = {}) {
+  const { state } = logyq
   if (!state.root) return;
 
   const count = state.selectedUids ? state.selectedUids.size : 0;
@@ -154,6 +158,7 @@ function startInlineEdit({ wipe = false } = {}) {
 
 // --- Auto-fit + sticky-multiselect when nav keys move focus ---
 window.addEventListener('keydown', (e) => { //red
+  const { state } = logyq
   // Ignore if not a nav key, or if user is typing in a field, or using modifiers
   if (!keyIsNav(e)) return;
 if (state.vHold) return; 
@@ -204,6 +209,7 @@ window.addEventListener('mousemove', () => {
 
 
 window.addEventListener('keydown', (e) => { //purple
+  const { state } = logyq
   if (e.key !== 'Escape') return;
 
   // If inline editor is open, let its own ESC logic run
@@ -230,6 +236,7 @@ window.addEventListener('keydown', (e) => { //purple
 
 
   function zoomToNodeCenter(uid, desired){
+    const { state, elements } = logyq
     if(!elements.svg || !elements.gRoot || !state.root) return;
     const h = state.root.descendants().find(n=>n.data._uid===uid); if(!h) return;
     const svgEl = elements.svg.node(); const W = svgEl.clientWidth, H = svgEl.clientHeight;
@@ -239,5 +246,14 @@ window.addEventListener('keydown', (e) => { //purple
     elements.svg.transition().duration(360).call(state.zoom.transform, d3.zoomIdentity.translate(tx,ty).scale(k));
     setTimeout(updateNodeEditorPosition, 20);
   }
+
+  attach('editing', {
+    updateNodeEditorPosition,
+    closeNodeEditor,
+    openNodeEditor,
+    startInlineEdit,
+    zoomToNodeCenter,
+  })
+
 
 

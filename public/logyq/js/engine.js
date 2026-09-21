@@ -1631,6 +1631,7 @@ if (dir === +1){
 
   /* ======================= EDITOR ======================= */
  function updateNodeEditorPosition(){
+  const { state, elements, config: CONFIG } = logyq
   if(!state.editingUid || !state.editorEl || !elements.gRoot) return;
   try{
     const h = state.root?.descendants().find(n => n.data?._uid === state.editingUid);
@@ -1691,6 +1692,7 @@ if (dir === +1){
  
  
   function closeNodeEditor(apply, restoreZoom){
+    const { state, elements, utils } = logyq
     if(!state.editingUid) return;
     const uid = state.editingUid; const el = state.editorEl;
     state.editingUid = null; state.editorEl = null;
@@ -1701,11 +1703,11 @@ if (dir === +1){
         const prev = target.name || "";
         let next = (el && typeof el.value==="string" ? el.value.trim() : prev) || prev;
         if(next !== prev){
-          pushHistory({ type:"rename", uid, prev, next });
+          logyq.history.pushHistory({ type:"rename", uid, prev, next });
           target.name = next;
           state.root = d3.hierarchy(state.root.data);
           utils.assignIds(state.root);
-          treeManager.layoutAndRender(false);
+          logyq.treeManager.layoutAndRender(false);
           setSelected(uid);
         }
       }
@@ -1721,6 +1723,7 @@ if (dir === +1){
 
 
   function openNodeEditor(d){
+    const { state, elements } = logyq
     try{ closeNodeEditor(false,false); }catch(_e){}
     if(!d) return;
     state.editingUid = d.data._uid;
@@ -1764,6 +1767,7 @@ if (dir === +1){
 
 /* [patch] edit-hotkey helpers start */
 function startInlineEdit({ wipe = false } = {}) {
+  const { state } = logyq
   if (!state.root) return;
 
   const count = state.selectedUids ? state.selectedUids.size : 0;
@@ -1785,6 +1789,7 @@ function startInlineEdit({ wipe = false } = {}) {
 
 // --- Auto-fit + sticky-multiselect when nav keys move focus ---
 window.addEventListener('keydown', (e) => { //red
+  const { state } = logyq
   // Ignore if not a nav key, or if user is typing in a field, or using modifiers
   if (!keyIsNav(e)) return;
 if (state.vHold) return; 
@@ -1835,6 +1840,7 @@ window.addEventListener('mousemove', () => {
 
 
 window.addEventListener('keydown', (e) => { //purple
+  const { state } = logyq
   if (e.key !== 'Escape') return;
 
   // If inline editor is open, let its own ESC logic run
@@ -1861,6 +1867,7 @@ window.addEventListener('keydown', (e) => { //purple
 
 
   function zoomToNodeCenter(uid, desired){
+    const { state, elements } = logyq
     if(!elements.svg || !elements.gRoot || !state.root) return;
     const h = state.root.descendants().find(n=>n.data._uid===uid); if(!h) return;
     const svgEl = elements.svg.node(); const W = svgEl.clientWidth, H = svgEl.clientHeight;
@@ -1871,11 +1878,21 @@ window.addEventListener('keydown', (e) => { //purple
     setTimeout(updateNodeEditorPosition, 20);
   }
 
+  attach('editing', {
+    updateNodeEditorPosition,
+    closeNodeEditor,
+    openNodeEditor,
+    startInlineEdit,
+    zoomToNodeCenter,
+  })
+
+
 
   /* ======================= SELECTION + TOAST ======================= */
 /* [patch] selection-helpers start */
 
 function applySelectionStyles(){
+  const { state, elements } = logyq
   if (!elements.gNodes) return;
 
   const hasGroup = !!(state.selectedUids && state.selectedUids.size > 0);
@@ -1901,6 +1918,7 @@ function applySelectionStyles(){
 
 
 function toggleGroupMembershipOf(uid){
+  const { state } = logyq
   if (!uid) return;
  
 
@@ -1918,10 +1936,11 @@ function toggleGroupMembershipOf(uid){
 
 // Move an entire group under the current focus
 function moveGroupToTarget(uids, targetUid, { abandon = false } = {}){
+  const { state, utils } = logyq
   if (!uids || uids.size === 0 || !targetUid) return;
 
   // Clone root for undo history
-  pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
+  logyq.history.pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
 
   // Remove all selected nodes from their parents
   const moving = [];
@@ -1942,7 +1961,7 @@ function moveGroupToTarget(uids, targetUid, { abandon = false } = {}){
   // Rebuild hierarchy + re-render
   state.root = d3.hierarchy(state.root.data);
   utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
+  logyq.treeManager.layoutAndRender(false);
 
   // Refresh selection: keep focus, clear group
   clearGroup();
@@ -1955,6 +1974,7 @@ function moveGroupToTarget(uids, targetUid, { abandon = false } = {}){
 
 // Keep only top-level selected nodes (drop any node whose ancestor is also selected)
 function topLevelSelection(uids){
+  const { state } = logyq
   if (!state.root || !uids || !uids.size) return [];
   const set = new Set(uids);
   const byUid = new Map(state.root.descendants().map(n => [n.data._uid, n]));
@@ -1976,20 +1996,23 @@ function topLevelSelection(uids){
 
 
 
-function clearFocus(){ state.selectedUid = null; applySelectionStyles(); }
+function clearFocus(){ const { state } = logyq; state.selectedUid = null; applySelectionStyles(); }
 
-function clearGroup(){ 
+function clearGroup(){
+  const { state } = logyq
   state.selectedUids = new Set(); 
   applySelectionStyles(); 
 }
 
 
 function clearSelection(){
+  const { state } = logyq
   state.selectedUid = null;
   applySelectionStyles();
 }
 
 function selectSingle(uid){
+  const { state } = logyq
   state.selectedUid = uid || null;
   applySelectionStyles();
 }
@@ -2000,6 +2023,7 @@ function selectSingle(uid){
 
 
 function onNodeMouseDown(event, d){
+  const { state, config: CONFIG } = logyq
   if (event.button !== 0) return;                  // left only
   if (isTextField?.(event.target)) return;
 
@@ -2070,6 +2094,7 @@ applySelectionStyles();
 
 
 function setSelected(uid){
+  const { state } = logyq
   state.selectedUid = uid || null;
   applySelectionStyles();           // no group reset here
 }
@@ -2077,6 +2102,7 @@ function setSelected(uid){
 
 
   function showToast(msg, ms){
+    const { elements } = logyq
     const el=elements.Toast; if(!el) return;
     el.textContent=msg||""; el.style.display="inline-flex";
     clearTimeout(showToast._t);
@@ -2085,6 +2111,7 @@ function setSelected(uid){
 
   /* ======================= DROP FLASH ======================= */
   function flashMoved(uid){
+    const { elements } = logyq
     try{
       const sel = elements.gNodes.selectAll("g.node").filter(n=> n && n.data && n.data._uid===uid);
       sel.classed("drop-flash", true);
@@ -2094,6 +2121,7 @@ function setSelected(uid){
 
   /* ======================= CARET POSITION ======================= */
   function caretXYFromHit(hit){
+    const { state, config: CONFIG } = logyq
     /* [patch] edgeSibling-caret-sibling start */
     if (hit && hit.kind === "edgeSibling" && state.root) {
       if (hit.nextUid) {
@@ -2142,6 +2170,7 @@ function setSelected(uid){
 
 
   function insertNodeAtDrop(movingData, drop){
+  const { state, utils } = logyq
   if (!drop) return false;
 
   if (drop.type === 'gap'){
@@ -2186,7 +2215,7 @@ function setSelected(uid){
     const newRoot = movingData;
     newRoot.children = newRoot.children || [];
     newRoot.children.push(prev);
-    pushHistory({ type:'replace-root', prev });
+    logyq.history.pushHistory({ type:'replace-root', prev });
     state.root = d3.hierarchy(newRoot); utils.assignIds(state.root);
     return 'ROOT_DONE';
   }
@@ -2199,6 +2228,7 @@ function setSelected(uid){
 // abandon=false => move full subtree
 // abandon=true  => move node-only (children stay/promote at source)
 function moveSelectionToTarget(targetUid, { abandon = false } = {}){
+  const { state, utils } = logyq
   if (!state.root) return;
   const group = state.selectedUids || new Set();
   if (!group.size) { showToast('Nothing selected', 1000); return; }
@@ -2226,7 +2256,7 @@ function moveSelectionToTarget(targetUid, { abandon = false } = {}){
   }
 
   // Single history snapshot covering all moves
-  pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
+  logyq.history.pushHistory({ type: 'replace-root', prev: utils.deepClone(state.root.data) });
 
   // Perform moves one-by-one into {type:'node', targetUid}
   // We rebuild the hierarchy once at the end for performance/stability.
@@ -2262,7 +2292,7 @@ function moveSelectionToTarget(targetUid, { abandon = false } = {}){
   clearGroup();
   if (tUid) selectSingle(tUid);
 
-  treeManager.layoutAndRender(false);
+  logyq.treeManager.layoutAndRender(false);
   showToast(abandon ? 'Abandonment paste' : 'Pasted', 1000);
 }
 
@@ -2277,6 +2307,7 @@ function moveSelectionToTarget(targetUid, { abandon = false } = {}){
 // - abandon=false: remove the whole node (subtree)
 // - abandon=true: remove ONLY the node; promote its children into its parent
 function removeNode(uid, { abandon = false } = {}){
+  const { state, utils } = logyq
   const path = utils.pathToUid(state.root.data, uid);
   if (!path) return null;
 
@@ -2333,6 +2364,7 @@ function removeNode(uid, { abandon = false } = {}){
 
 // --- V-hold handlers (focus-only visuals) ---
 window.addEventListener('keydown', (e) => {
+  const { state, elements } = logyq
   if (isTextField?.(e.target)) return;
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey){
     const noGroup = !(state.selectedUids && state.selectedUids.size > 0);
@@ -2347,6 +2379,7 @@ window.addEventListener('keydown', (e) => {
 
 // While V-hold and no group: immediate push with J/L or ArrowLeft/Right
 window.addEventListener('keydown', (e) => {
+  const { state } = logyq
   if (!state.vHold) return;
   if (isTextField?.(e.target)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
@@ -2384,6 +2417,7 @@ window.addEventListener('keydown', (e) => {
 
 
 window.addEventListener('keyup', (e) => {
+  const { state, elements } = logyq
   if (e.key === 'v' || e.key === 'V'){
     state.vHold = false;
     elements.svg?.classed?.('vhold-mode', false);
@@ -2403,6 +2437,7 @@ window.addEventListener('keyup', (e) => {
 // Hotkeys: G (group), V (paste), Shift+V (abandonment paste)
 // NOTE: Esc is handled elsewhere already; we don't handle Esc here to avoid duplicates.
 window.addEventListener('keydown', (e) => {
+  const { state } = logyq
   // Don’t steal keys from inputs
   if (typeof isTextField === 'function' && isTextField(e.target)) return;
 
@@ -2459,6 +2494,25 @@ window.addEventListener('keydown', (e) => {
 
 
 // ==========================================================================
+
+  attach('selection', {
+    applySelectionStyles,
+    toggleGroupMembershipOf,
+    moveGroupToTarget,
+    topLevelSelection,
+    clearFocus,
+    clearGroup,
+    clearSelection,
+    selectSingle,
+    onNodeMouseDown,
+    setSelected,
+    showToast,
+    flashMoved,
+    caretXYFromHit,
+    insertNodeAtDrop,
+    moveSelectionToTarget,
+    removeNode,
+  })
 
 
 
@@ -6373,35 +6427,35 @@ function getSelectedUid(){
       return () => changeListeners.delete(listener);
     },
     notifyChange: emitChange,
-    getSelectedUid: () => state.selectedUid || null,
-    getSelectedUids: () => state.selectedUids ? Array.from(state.selectedUids) : [],
+    getSelectedUid: () => logyq.state.selectedUid || null,
+    getSelectedUids: () => logyq.state.selectedUids ? Array.from(logyq.state.selectedUids) : [],
     selectByUid(uid) {
-      const node = uid && state.root?.descendants().find((item) => item.data?._uid === uid);
+      const node = uid && logyq.state.root?.descendants().find((item) => item.data?._uid === uid);
       if (!node) return false;
-      selectSingle(uid);
+      logyq.selection.selectSingle(uid);
       return true;
     },
     clearFocusSelection() {
-      clearGroup();
-      clearSelection();
+      logyq.selection.clearGroup();
+      logyq.selection.clearSelection();
       return true;
     },
     selectByName(name) {
-      const node = state.root?.descendants().find((item) => item.data?.name === name);
+      const node = logyq.state.root?.descendants().find((item) => item.data?.name === name);
       if (!node) return false;
-      selectSingle(node.data._uid);
+      logyq.selection.selectSingle(node.data._uid);
       return true;
     },
     getParentName(name) {
-      const node = state.root?.descendants().find((item) => item.data?.name === name);
+      const node = logyq.state.root?.descendants().find((item) => item.data?.name === name);
       return node?.parent?.data?.name || null;
     },
     editSelected({ wipe = false } = {}) {
-      if (!state.selectedUid) return false;
-      const node = state.root?.descendants().find((item) => item.data?._uid === state.selectedUid);
+      if (!logyq.state.selectedUid) return false;
+      const node = logyq.state.root?.descendants().find((item) => item.data?._uid === logyq.state.selectedUid);
       if (!node) return false;
-      openNodeEditor(node);
-      if (wipe && state.editorEl) state.editorEl.value = '';
+      logyq.editing.openNodeEditor(node);
+      if (wipe && logyq.state.editorEl) logyq.state.editorEl.value = '';
       return true;
     },
     addChild() {
@@ -6416,7 +6470,7 @@ function getSelectedUid(){
       if (direction === 'down') addChildBelowSelectedAndEdit();
       if (direction === 'right') addYoungerSiblingRightAndEdit();
       const created = state.selectedUid && state.selectedUid !== before ? state.selectedUid : null;
-      if (created && state.editingUid) closeNodeEditor(false, false);
+      if (created && logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
       emitChange();
       return created;
     },
@@ -6431,7 +6485,7 @@ function getSelectedUid(){
       state.root = d3.hierarchy(state.root.data);
       utils.assignIds(state.root);
       treeManager.layoutAndRender(false);
-      selectSingle(uid);
+      logyq.selection.selectSingle(uid);
       emitChange();
       return true;
     },
@@ -6459,8 +6513,8 @@ function getSelectedUid(){
       state.wordBank = Array.isArray(wordBank) ? wordBank.slice() : [];
       state.history = [];
       elements.undoBtn.disabled = true;
-      clearGroup();
-      clearSelection();
+      logyq.selection.clearGroup();
+      logyq.selection.clearSelection();
       render();
       treeManager.layoutAndRender(false);
       treeManager.autoFit();

@@ -104,12 +104,22 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('utils', utils)",
     "attach('history', { pushHistory, undo, autoFitSoon })",
     "attach('detectors', Detectors)",
+    "attach('editing', {",
+    "attach('selection', {",
     "attach('drag', dragManager)",
     "attach('treeManager', treeManager)",
   ]) assert.ok(engine.includes(call), call)
   const config = readFileSync(join(logyqDir, 'js/engine/01-config.js'), 'utf8')
+  const editing = readFileSync(join(logyqDir, 'js/engine/09-editing.js'), 'utf8')
+  const selection = readFileSync(join(logyqDir, 'js/engine/10-selection.js'), 'utf8')
   assert.match(config, /const \{ elements, state \} = logyq/)
   assert.match(config, /const \{ state, moat \} = logyq/)
+  assert.match(editing, /attach\('editing'/)
+  assert.match(selection, /attach\('selection'/)
+  assert.match(editing, /const \{ state, elements, config: CONFIG \} = logyq/)
+  assert.match(selection, /const \{ state, elements \} = logyq/)
+  assert.match(editing, /setSelectionSet\(merged\)/)
+  assert.doesNotMatch(engine, /function setSelectionSet/)
 })
 
 test('copied engine script parses', () => {

@@ -58,8 +58,8 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `06-data-and-visuals.js` | 30-node sample tree, link drawing |
 | `07-layout-and-structure.js` | Label wrap, lane API, V-hold structural moves |
 | `08-detectors.js` | Invisible drop hit regions |
-| `09-editing.js` | Inline node editor |
-| `10-selection.js` | Focus/group selection, toasts, drop insert, reparent helpers |
+| `09-editing.js` | Inline node editor. Registers `logyq.editing`. Reads shared state through the bag. |
+| `10-selection.js` | Focus/group selection, toasts, drop insert, reparent helpers. Registers `logyq.selection`. |
 | `11-deletion.js` | Trash/delete and related create/export helpers still adjacent in source |
 | `12-tree-ops.js` | Add child/sibling, GIQ/JSON parse, Word Dock transfer |
 | `13-drag.js` | Subtree / node-only / group drag |
@@ -82,12 +82,13 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 
 ## Shared state (explicit `logyq` bag)
 
-Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. `LOGYQBridge.core` exposes that bag for tests and later cluster extractions.
+Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`) and selection (`10-selection.js`) register `logyq.editing` / `logyq.selection` and take `state`, `elements`, `utils`, `history`, and `treeManager` from that bag. `LOGYQBridge` selection/edit methods go through those registered APIs. `LOGYQBridge.core` exposes the bag for tests and later cluster extractions.
 
 Unconverted fragments still use ambient `state`, `elements`, `utils`, and friends; `attach()` makes those the same object references as `logyq.*`. Hidden communication that remains:
 
 - DOM class names (`is-outlined`, Dock chips) as selection/chip state
-- Capture-phase keyboard listeners racing `keyDispatcher`
+- Capture-phase keyboard listeners racing `keyDispatcher`, including V-hold / G / paste listeners that still live in `10-selection.js`
+- Editing Shift+Enter still calls later `addSiblingRightOf` by ambient name
 - `treeManager.layoutAndRender` patched by the bridge to emit autosave
 - Word Dock `MutationObserver` in preview calling `notifyChange`
 
