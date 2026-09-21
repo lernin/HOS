@@ -61,6 +61,7 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 ## Phone poke revisions
 
 - **Ghost offset retune.** Hold-drag pops **only the floating card** north by `OFFSET_UP_CM` **1.1cm** (`fingerOffset` `{0, -liftPx()}`). The map does not jump on latch, drop, cancel, or second-finger yield. `LATCH_MAP_SHIFT` / `shiftMapOnLatch` are gone.
+- **Stationary hold keeps the origin ghost.** The 1.1cm lift is clone-only. d3.drag is not fed that offset until the finger leaves `STILL_PX` (16). A still hold after latch was a phantom 42px move onto the parent detector, so the origin placeholder vanished and the tree collapsed. Ghost CSS also wins over `hover-adopt-sub` / self `drop-target`. Move slow or fast: ghost stays until drop/cancel. Magnetic drop while actually dragging is unchanged.
 - **Phone fit is full-width.** `autoFit` on coarse/no-hover ≤1200px (or ≤700px) scales to canvas width, centers in the band below the header, and may zoom in. First-load canvas is full-bleed in `app.css` so the first fit sees the phone size.
 - **Word Bank dwell.** Hold-drag banks only after **480ms** on the **inner 44%** of a chip (`hitBankChip`). Near-ribbon still cancels tree adopts. Packed chip strips no longer eat a passing drop.
 - **Drag visual is the map card.** Hold-drag clones the held `g.node` into `#logyq-v162-branch-preview` (same rect, label, chrome). Children are not cloned — only that one card moves. Origin ghost-hold on the live tree is unchanged.

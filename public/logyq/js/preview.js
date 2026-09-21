@@ -128,8 +128,12 @@
          which makes the tree look like it collapsed around the moving card. While a finger
          hold-drag is latched, keep the live map in place and ghost the origin branch. */
       body.v2-branch-drag svg.dragging-mode g.nodes g.node.is-others{opacity:1!important;visibility:visible!important}
-      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost{opacity:.44!important;visibility:visible!important}
-      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost,
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost.hover-adopt-sub,
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost.hover-adopt,
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost.drop-target{opacity:.44!important;visibility:visible!important}
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost rect:not(.grabzone),
+      body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost.drop-target rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
       body.v2-branch-drag svg.dragging-mode g.nodes g.node.v2-branch-origin-ghost text{fill:#64748b!important;opacity:.82!important}
       body.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
       body.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
@@ -554,6 +558,7 @@
       OFFSET_UP_CM: 1.1,
       OFFSET_SIDE_CM: 0,
       BANK_DWELL_MS: 480,
+      STILL_PX: 16,
     }
   }
 
@@ -656,9 +661,9 @@
     if (!drag || drag.pointerId !== event.pointerId) return
     drag.lastX = event.clientX
     drag.lastY = event.clientY
-    const visual = visualPoint(event.clientX, event.clientY)
+    const feed = dragMousePoint(drag, event.clientX, event.clientY)
     movePreview(drag, event.clientX, event.clientY)
-    mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+    mouse(win, win, 'mousemove', feed.x, feed.y, 1)
   }
 
   function onHoldUp(event, doc, win, canvas, state) {
@@ -675,11 +680,12 @@
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
     const dockKind = canceled ? 'none' : dockDropKind(doc, event.clientX, event.clientY)
     const armedBank = !canceled && dockKind === 'bank' && drag.bankArmed
-    const end = (canceled || dockKind !== 'none')
+    const releasedAtOrigin = Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= v162Constants().STILL_PX
+    const end = (canceled || dockKind !== 'none' || releasedAtOrigin)
       ? { x: drag.x, y: drag.y }
       : visualPoint(event.clientX, event.clientY)
 
-    if (canceled || dockKind !== 'none') mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+    if (canceled || dockKind !== 'none' || releasedAtOrigin) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
     mouse(win, win, 'mouseup', end.x, end.y, 0)
 
     cleanupDrag(doc, win, state, drag)
@@ -735,6 +741,7 @@
       bankChip: null,
       bankSince: 0,
       bankArmed: false,
+      moved: false,
     }
 
     doc.body.classList.add('v2-branch-drag')
@@ -742,8 +749,10 @@
     mouse(source, win, 'mousedown', hold.x, hold.y, 1)
     stampOriginGhost(doc, uids)
     state.drag.originLayout = captureOriginLayout(doc, uids)
-    const visual = visualPoint(hold.x, hold.y)
-    mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+    // Do not feed the 1.1cm card lift into d3 while the finger is still:
+    // that phantom dy lands on the parent detector and the origin ghost
+    // looks like it dissolved, then the tree reflows on release.
+    mouse(win, win, 'mousemove', hold.x, hold.y, 1)
     movePreview(state.drag, hold.lastX, hold.lastY)
     startFeedbackLoop(doc, win, state)
     win.navigator.vibrate?.(12)
@@ -806,13 +815,18 @@
       const drag = state.drag
       if (!drag) { state.feedbackRaf = 0; return }
       restoreOriginLayout(doc, drag.originLayout)
+      stampOriginGhost(doc, drag.uids)
       const dockKind = dockDropKind(doc, drag.lastX, drag.lastY)
       armBankHover(win, drag, dockKind, doc)
       doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
       if (dockKind === 'none') {
-        edgePan(doc, win, drag.lastX, drag.lastY)
-        const visual = visualPoint(drag.lastX, drag.lastY)
-        mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+        const panned = edgePan(doc, win, drag.lastX, drag.lastY)
+        if (fingerMovedFromLatch(drag, drag.lastX, drag.lastY)) {
+          const visual = visualPoint(drag.lastX, drag.lastY)
+          mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+        } else if (panned) {
+          mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+        }
       } else {
         mouse(win, win, 'mousemove', drag.x, drag.y, 1)
       }
@@ -903,6 +917,20 @@
   function visualPoint(x, y) {
     const offset = fingerOffset()
     return { x: x + offset.x, y: y + offset.y }
+  }
+
+  function fingerMovedFromLatch(drag, x, y) {
+    if (!drag) return false
+    if (drag.moved) return true
+    const x0 = x == null ? drag.lastX : x
+    const y0 = y == null ? drag.lastY : y
+    drag.moved = Math.hypot(x0 - drag.x, y0 - drag.y) > v162Constants().STILL_PX
+    return drag.moved
+  }
+
+  function dragMousePoint(drag, x, y) {
+    if (!fingerMovedFromLatch(drag, x, y)) return { x: drag.x, y: drag.y }
+    return visualPoint(x, y)
   }
 
   function hitBankChip(doc, x, y) {
@@ -1129,11 +1157,11 @@
   }
 
   function nodeByUid(doc, uid) {
-    return Array.from(doc.querySelectorAll('g.node')).find((node) => nodeUid(node) === uid) || null
+    return Array.from(doc.querySelectorAll('svg#canvas g.node')).find((node) => nodeUid(node) === uid) || null
   }
 
   function hitNode(doc, x, y) {
-    return Array.from(doc.querySelectorAll('g.node'))
+    return Array.from(doc.querySelectorAll('svg#canvas g.node'))
       .filter((node) => {
         const rect = node.getBoundingClientRect()
         return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
@@ -1330,6 +1358,8 @@
     preview.gestures.edgePan = edgePan
     preview.gestures.fingerOffset = fingerOffset
     preview.gestures.visualPoint = visualPoint
+    preview.gestures.fingerMovedFromLatch = fingerMovedFromLatch
+    preview.gestures.dragMousePoint = dragMousePoint
     preview.gestures.liftPx = liftPx
     preview.gestures.yieldNodeDrag = yieldNodeDrag
     preview.gestures.dockDropKind = dockDropKind

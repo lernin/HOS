@@ -285,12 +285,51 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.locator('#logyq-v162-branch-preview .v2-float-node').count(), 0)
   assert.equal(await page.locator('#logyq-v162-branch-preview g.node').count(), 1)
   assert.equal(await page.locator('#logyq-v162-branch-preview line').count(), 0)
+  await page.waitForTimeout(520)
+  const still = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    const parentName = node?.__data__?.parent?.data?.name
+    const parent = parentName
+      ? Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === parentName)
+      : null
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    const box = node?.getBoundingClientRect()
+    return {
+      ghost: node?.classList.contains('v2-branch-origin-ghost'),
+      transform: node?.getAttribute('transform') || '',
+      opacity: node ? getComputedStyle(node).opacity : '0',
+      width: box?.width || 0,
+      height: box?.height || 0,
+      parentDrop: !!parent?.classList.contains('drop-target'),
+      preview: !!document.getElementById('logyq-v162-branch-preview'),
+      y: t.y,
+    }
+  })
+  assert.equal(still.ghost, true, 'origin ghost must survive a stationary hold after latch')
+  assert.equal(still.transform, originTransform)
+  assert.equal(still.parentDrop, false, 'still hold must not arm the parent as a magnetic drop')
+  assert.equal(still.preview, true)
+  assert.ok(Number(still.opacity) > 0.2, `origin ghost opacity vanished: ${still.opacity}`)
+  assert.ok(still.width > 8 && still.height > 8, `origin ghost box collapsed: ${still.width}x${still.height}`)
+  assert.ok(Math.abs(still.y - beforeHold.y) < 2, `map must stay put while holding still, before=${beforeHold.y} during=${still.y}`)
+  assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
   await touch('pointermove', hold.x + 4, hold.y + 4, 42)
   assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
   assert.equal(await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     return node?.getAttribute('transform') || ''
   }), originTransform)
+  assert.equal(await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    return node?.classList.contains('v2-branch-origin-ghost')
+  }), true)
+  await touch('pointermove', hold.x + 80, hold.y + 30, 42)
+  assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
+  assert.equal(await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    return node?.classList.contains('v2-branch-origin-ghost')
+  }), true)
+  await touch('pointermove', hold.x + 4, hold.y + 4, 42)
   await touch('pointerup', hold.x + 4, hold.y + 4, 42)
   await page.waitForFunction(() => !document.body.classList.contains('v2-branch-drag'))
   await page.waitForFunction((prev) => {
