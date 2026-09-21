@@ -102,16 +102,14 @@ test('mobile held drag defers the desktop transaction until release', () => {
   assert.doesNotMatch(js, /startFeedbackLoop/)
 })
 
-test('mobile held drag mirrors the desktop sensing cues without moving the tree', () => {
+test('mobile held drag renders the real desktop sensing cues without moving the tree', () => {
   assert.match(js, /function updateDropHint/)
-  assert.match(js, /function findDropHint/)
-  assert.match(js, /hitNode\(doc,x,y/)
-  assert.match(js, /screenToGraph/)
+  assert.match(js, /g\.bridge\?\.pickDropAtViewport\?\.\(centerX,centerY,g\.uid\)/)
   assert.match(js, /v2-drop-target/)
   assert.match(js, /v2-drop-caret/)
-  assert.match(js, /#f59e0b/)
+  assert.match(js, /#22c55e/)
   assert.match(js, /#64748b/)
-  assert.doesNotMatch(js, /Detectors\.pick/)
+  assert.doesNotMatch(js, /function findDropHint/)
   assert.doesNotMatch(js, /startFeedbackLoop/)
 })
 
