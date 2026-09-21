@@ -298,6 +298,12 @@ test('addWords splits on commas/semicolons and appends to the bank or the focuse
   addWords('alpha; beta, gamma', 'bank')
   assert.deepEqual(logyq.state.wordBank, ['alpha', 'beta', 'gamma'])
 
+  const previousWindow = globalThis.window
+  globalThis.window = { __logyqHoldDragBlocksBank: () => true }
+  addWords('copied', 'bank')
+  assert.deepEqual(logyq.state.wordBank, ['alpha', 'beta', 'gamma'], 'stay-still hold must not copy into Word Bank')
+  globalThis.window = previousWindow
+
   const tree = { name: 'root', children: [] }
   logyq.utils.assignUids(tree)
   logyq.state.root = fakeHierarchy(tree)
@@ -861,7 +867,7 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(treeManager, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\) return;/)
   assert.match(drag, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\)/)
   assert.match(drag, /dragManager\.clear\(\);/)
-  assert.match(wordDock, /if \(window\.__logyqHoldDragBlocksBank\?\.\(\)\) return;/)
+  assert.match(wordDock, /typeof window !== 'undefined' && window\.__logyqHoldDragBlocksBank\?\.\(\)\) return;/)
   assert.match(mix, /__logyqHoldDragBlocksBank/)
   assert.match(v162, /svg#canvas g\.node/)
   assert.match(v162, /function yieldNodeDrag/)

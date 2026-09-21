@@ -269,7 +269,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(treeOps, /if \(window\.__logyqHoldDragBlocksBank\?\.\(\)\) return;/)
   assert.match(treeManager, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\) return;/)
   assert.match(bridge, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\) return;/)
-  assert.match(wordDock, /if \(window\.__logyqHoldDragBlocksBank\?\.\(\)\) return;/)
+  assert.match(wordDock, /typeof window !== 'undefined' && window\.__logyqHoldDragBlocksBank\?\.\(\)\) return;/)
   assert.match(keyboard, /logyq\.input\.isTextField/)
   assert.match(selection, /logyq\.input\.isTextField/)
   assert.match(treeManager, /logyq\.input\.isTextField/)
