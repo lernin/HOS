@@ -226,7 +226,7 @@ function handleAddBox(){
         const rootData = { name: parts[0] };
         utils.assignUids(rootData);
         state.root = d3.hierarchy(rootData); utils.assignIds(state.root);
-        treeManager.layoutAndRender(false);
+        logyq.treeManager.layoutAndRender(false);
         setSelected(state.root.data._uid);
         parts.slice(1).forEach(p => addChildOf(state.root.data._uid, p, { noEdit: true }));
       } else if (base){

@@ -135,80 +135,22 @@ function refreshLaneOnZoom() { /* no visuals */ }
 
 
 
-// ---- Immediate horizontal move engine (swap or reparent across groups at same depth)
-function __getSelectedUidSingle(){
-  return state.selectedUid || (state.selectedUids?.size === 1 ? [...state.selectedUids][0] : null);
-}
-function __getNodeByUid(uid){
-  if (!uid || !state.root) return null;
-  return state.root.descendants().find(n => n.data?._uid === uid) || null;
-}
-function __groupsAtDepthOrderedByX(depth){
-  const nodes = state.root.descendants().filter(n => n.depth === depth);
-  const byParent = new Map();
-  for (const n of nodes){
-    const pid = n.parent?.data?._uid || '__ROOT__';
-    if (!byParent.has(pid)) byParent.set(pid, []);
-    byParent.get(pid).push(n);
-  }
-  const groups = [];
-  for (const [pid, arr] of byParent.entries()){
-    arr.sort((a,b)=>a.x-b.x);
-    const minX = arr.length ? arr[0].x : 0;
-    groups.push({ parentUid: pid, nodes: arr, minX });
-  }
-  groups.sort((a,b)=>a.minX-b.minX);
-  return groups;
-}
-function __swapWithinParent(selNode, dir){
-  const parent = selNode.parent;
-  const kids = parent?.data?.children;
-  if (!Array.isArray(kids)) return false;
-  const i = kids.findIndex(k => k?._uid === selNode.data._uid);
-  const j = i + (dir < 0 ? -1 : 1);
-  if (i < 0 || j < 0 || j >= kids.length) return false;
-  [kids[i], kids[j]] = [kids[j], kids[i]];
-  return true;
-}
-function __reparentToAdjacentGroup(selNode, targetGroup, toEndOnRight){
-  const curKids = selNode.parent?.data?.children;
-  if (!Array.isArray(curKids)) return false;
-  const idx = curKids.findIndex(k => k?._uid === selNode.data._uid);
-  if (idx < 0) return false;
-  const [moved] = curKids.splice(idx,1);
-
-  const targetParentUid = targetGroup.parentUid;
-  const targetParentNode = (targetParentUid === '__ROOT__')
-    ? state.root
-    : state.root.descendants().find(n => n.data?._uid === targetParentUid);
-  if (!targetParentNode) return false;
-
-  targetParentNode.data.children = targetParentNode.data.children || [];
-  const dest = targetParentNode.data.children;
-  if (toEndOnRight) dest.push(moved); else dest.splice(0,0,moved);
-  return true;
-}
-
-
-
-
-
-
 
 
 // --- Move the SINGLE focused node left/right (swap within parent, or hop to neighbor parent at same depth) ---
 function moveSelectedHorizontally(dir){
+  const { state, utils } = logyq
   // dir: -1 = left, +1 = right
   if (!state.root) return;
 
   // Focus-only: act on the currently focused node (ignore group)
   const uid = state.selectedUid;
-  if (!uid) { showToast('No focused node'); return; }
+  if (!uid) { logyq.selection.showToast('No focused node'); return; }
 
   // Live hierarchy node
   const selH = state.root.descendants().find(n => n?.data?._uid === uid);
   if (!selH) return;
-  if (!selH.parent) { showToast('Root has no siblings'); return; }
+  if (!selH.parent) { logyq.selection.showToast('Root has no siblings'); return; }
 
   // Take a snapshot for undo and work on a cloned tree
   const before = utils.deepClone(state.root.data);
@@ -249,7 +191,7 @@ function moveSelectedHorizontally(dir){
 
     const neighborH = row[pIdx + (dir < 0 ? -1 : 1)];
     if (!neighborH){
-      showToast(dir < 0 ? 'No group to the left' : 'No group to the right');
+      logyq.selection.showToast(dir < 0 ? 'No group to the left' : 'No group to the right');
     } else {
       // Remove from current parent
       parentData.children.splice(idx, 1);
@@ -269,16 +211,14 @@ function moveSelectedHorizontally(dir){
   if (!changed) return;
 
   // Commit: push undo, rebuild hierarchy, render, keep focus on the same node
-  pushHistory({ type: 'replace-root', prev: before });
+  logyq.history.pushHistory({ type: 'replace-root', prev: before });
   state.root = d3.hierarchy(work);
   utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
-  setSelected(uid);
+  logyq.treeManager.layoutAndRender(false);
+  logyq.selection.setSelected(uid);
 
     // === Only recenter if we're near a viewport edge (moat rule) ===
-  if (typeof checkMoatAndAutoFit === 'function') {
-    checkMoatAndAutoFit('vhold');
-  }
+  logyq.camera.checkMoatAndAutoFit('vhold');
 
 }
 
@@ -294,9 +234,10 @@ function moveSelectedHorizontally(dir){
 // --- Move the SINGLE focused node vertically ---
 // dir: -1 = Up (reparent to parent's parent’s lane), +1 = Down (drop to next depth)
 function moveSelectedVertically(dir){
+  const { state, utils, config: CONFIG } = logyq
   if (!state.root) return;
   const uid = state.selectedUid;
-  if (!uid) { showToast('No focused node'); return; }
+  if (!uid) { logyq.selection.showToast('No focused node'); return; }
 
   const live = state.root.descendants();
   const selH = live.find(n => n?.data?._uid === uid);
@@ -309,7 +250,7 @@ function moveSelectedVertically(dir){
 // === UP (new: reparent to GP, insert by X among GP's children) ===
 if (dir === -1){
   const parentH = selH.parent;
-  if (!parentH) { showToast('Root has no parent'); return; }
+  if (!parentH) { logyq.selection.showToast('Root has no parent'); return; }
 
   // If parent IS root → keep your existing "new root" behavior
   if (!parentH.parent){
@@ -332,12 +273,12 @@ if (dir === -1){
     newRoot.children = newRoot.children || [];
     newRoot.children.unshift(oldRoot);
 
-    pushHistory({ type: 'replace-root', prev: before });
+    logyq.history.pushHistory({ type: 'replace-root', prev: before });
     state.root = d3.hierarchy(newRoot);
     utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
-    setSelected(uid);
-    if (typeof checkMoatAndAutoFit === 'function') checkMoatAndAutoFit('vhold');
+    logyq.treeManager.layoutAndRender(false);
+    logyq.selection.setSelected(uid);
+    logyq.camera.checkMoatAndAutoFit('vhold');
     return;
   }
 
@@ -395,12 +336,12 @@ if (dir === -1){
   gpData.children.splice(at, 0, nodeData);
 
   // Commit
-  pushHistory({ type: 'replace-root', prev: before });
+  logyq.history.pushHistory({ type: 'replace-root', prev: before });
   state.root = d3.hierarchy(work);
   utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
-  setSelected(uid);
-  if (typeof checkMoatAndAutoFit === 'function') checkMoatAndAutoFit('vhold');
+  logyq.treeManager.layoutAndRender(false);
+  logyq.selection.setSelected(uid);
+    logyq.camera.checkMoatAndAutoFit('vhold');
   return;
 }
 
@@ -418,7 +359,7 @@ if (dir === +1){
   // Root special-case (unchanged behavior)
   if (!selH.parent){
     const kids = selH.children || [];
-    if (!kids.length) { showToast('Root has no children'); return; }
+    if (!kids.length) { logyq.selection.showToast('Root has no children'); return; }
     const promotedH = kids.slice().sort((a,b)=>a.x - b.x)[0];
 
     const before = utils.deepClone(state.root.data);
@@ -462,17 +403,16 @@ if (dir === +1){
     newRoot.children.splice(insertAt, 0, formerRootAsChild);
     oldRootData.children = null;
 
-    pushHistory({ type:'replace-root', prev: before });
+    logyq.history.pushHistory({ type:'replace-root', prev: before });
     state.root = d3.hierarchy(newRoot);
     utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
-    setSelected(formerRootAsChild._uid);
-    if (typeof checkMoatAndAutoFit === 'function') checkMoatAndAutoFit('vhold');
+    logyq.treeManager.layoutAndRender(false);
+    logyq.selection.setSelected(formerRootAsChild._uid);
+    logyq.camera.checkMoatAndAutoFit('vhold');
     return;
   }
 
   // Non-root: SAME-DEPTH adoption (fix)
-  const uid = selH.data._uid;
   const x0  = selH.x;
 
   const movingDescUids = new Set(selH.descendants().map(d => d.data._uid));
@@ -485,7 +425,7 @@ if (dir === +1){
       return dA === dB ? (a.x - b.x) : (dA - dB); // tie → left
     });
 
-  if (!peers.length){ showToast('No peer to adopt under'); return; }
+  if (!peers.length){ logyq.selection.showToast('No peer to adopt under'); return; }
   const targetParentH = peers[0];
 
   // Position among target’s children by live X
@@ -525,12 +465,12 @@ if (dir === +1){
   const at = Math.max(0, Math.min(insertIndexByX(targetParentH, x0), destParent.children.length));
   destParent.children.splice(at, 0, nodeData);
 
-  pushHistory({ type: 'replace-root', prev: before });
+  logyq.history.pushHistory({ type: 'replace-root', prev: before });
   state.root = d3.hierarchy(work);
   utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
-  setSelected(uid);
-  if (typeof checkMoatAndAutoFit === 'function') checkMoatAndAutoFit('vhold');
+  logyq.treeManager.layoutAndRender(false);
+  logyq.selection.setSelected(uid);
+    logyq.camera.checkMoatAndAutoFit('vhold');
   return;
 }
 
@@ -562,56 +502,7 @@ if (dir === +1){
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  attach('structure', {
+    moveSelectedHorizontally,
+    moveSelectedVertically,
+  });

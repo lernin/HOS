@@ -547,6 +547,7 @@ function loadMix() {
     },
     drag: { clear() {} },
     treeOps: {},
+    camera: { checkMoatAndAutoFit() {} },
   }
   const fns = new Function(
     'logyq',
@@ -648,4 +649,86 @@ test('lane stubs stay no-ops and LabelWrap is registered on the layout bag', () 
   assert.equal(logyq.layout.hideLane(), undefined)
   assert.equal(logyq.layout.refreshLaneOnZoom(), undefined)
   assert.equal(typeof logyq.layout.LabelWrap.apply, 'function')
+})
+
+function loadStructure() {
+  const utils = loadUtils()
+  const history = []
+  const toasts = []
+  const source = readFileSync(new URL('../public/logyq/js/engine/07-layout-and-structure.js', import.meta.url), 'utf8')
+  const logyq = {
+    utils,
+    config: { CARD_WIDTH: 140, CARD_HEIGHT: 63, VERTICAL_GAP: 78, FONT_SIZE: 18 },
+    state: { root: null, selectedUid: null, selectedUids: new Set() },
+    history: { pushHistory: (action) => history.push(action) },
+    treeManager: { layoutAndRender() {} },
+    selection: {
+      showToast(msg) { toasts.push(msg) },
+      setSelected(uid) { logyq.state.selectedUid = uid },
+    },
+    camera: { checkMoatAndAutoFit() {} },
+    elements: {
+      gOverlay: {
+        append() {
+          return {
+            attr() { return this },
+            style() { return this },
+            node() { return { style: {}, textContent: '' } },
+          }
+        },
+      },
+    },
+  }
+  const fns = new Function(
+    'logyq',
+    'd3',
+    'attach',
+    `${source}; return { moveSelectedHorizontally, moveSelectedVertically };`,
+  )(logyq, { hierarchy: fakeHierarchy, selectAll() { return { each() {} } } }, (name, value) => { logyq[name] = value; return value })
+  return { logyq, history, toasts, ...fns }
+}
+
+test('moveSelectedHorizontally swaps siblings under the same parent and keeps focus', () => {
+  const { logyq, history, toasts, moveSelectedHorizontally } = loadStructure()
+  moveSelectedHorizontally(1)
+  assert.equal(toasts.length, 0)
+
+  const tree = { name: 'root', children: [{ name: 'A' }, { name: 'B' }] }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  logyq.state.selectedUid = tree.children[0]._uid
+  moveSelectedHorizontally(1)
+  assert.deepEqual(logyq.state.root.data.children.map((child) => child.name), ['B', 'A'])
+  assert.equal(history[0].type, 'replace-root')
+  assert.equal(logyq.state.selectedUid, tree.children[0]._uid)
+
+  logyq.state.selectedUid = null
+  moveSelectedHorizontally(1)
+  assert.equal(toasts.at(-1), 'No focused node')
+})
+
+test('moveSelectedVertically up from a root-child becomes the new root', () => {
+  const { logyq, history, moveSelectedVertically } = loadStructure()
+  const tree = { name: 'root', children: [{ name: 'kid', children: [{ name: 'grand' }] }] }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  const kidUid = tree.children[0]._uid
+  logyq.state.selectedUid = kidUid
+  moveSelectedVertically(-1)
+  assert.equal(logyq.state.root.data.name, 'kid')
+  assert.equal(logyq.state.root.data.children[0].name, 'root')
+  assert.equal(history[0].type, 'replace-root')
+  assert.equal(logyq.state.selectedUid, kidUid)
+})
+
+test('structure movers notify camera moat after a successful change', () => {
+  const { logyq, moveSelectedHorizontally } = loadStructure()
+  const tags = []
+  logyq.camera.checkMoatAndAutoFit = (tag) => { tags.push(tag) }
+  const tree = { name: 'root', children: [{ name: 'A' }, { name: 'B' }] }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  logyq.state.selectedUid = tree.children[0]._uid
+  moveSelectedHorizontally(1)
+  assert.deepEqual(tags, ['vhold'])
 })

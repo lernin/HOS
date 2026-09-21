@@ -99,12 +99,15 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(engine, /core: logyq/)
   for (const call of [
     "attach('config', CONFIG)",
+    "attach('fly', CONFIG_FLY)",
+    "attach('camera', {",
     "attach('state', state)",
     "attach('elements', elements)",
     "attach('utils', utils)",
     "attach('history', { pushHistory, undo, autoFitSoon })",
     "attach('detectors', Detectors)",
     "attach('layout', {",
+    "attach('structure', {",
     "attach('editing', {",
     "attach('selection', {",
     "attach('treeOps', {",
@@ -120,6 +123,9 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   const selection = readFileSync(join(logyqDir, 'js/engine/10-selection.js'), 'utf8')
   assert.match(config, /const \{ elements, state \} = logyq/)
   assert.match(config, /const \{ state, moat \} = logyq/)
+  assert.match(config, /attach\('camera', \{[\s\S]*?\}\);/)
+  assert.match(config, /centerOnSelectedSoon\(120\)/)
+  assert.doesNotMatch(config, /typeof centerOnSelectedSoon/)
   assert.match(editing, /attach\('editing'/)
   assert.match(selection, /attach\('selection'/)
   const treeOps = readFileSync(join(logyqDir, 'js/engine/12-tree-ops.js'), 'utf8')
@@ -132,15 +138,30 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(deletion, /logyq\.history\.pushHistory/)
   const layout = readFileSync(join(logyqDir, 'js/engine/07-layout-and-structure.js'), 'utf8')
   assert.match(layout, /attach\('layout', \{[\s\S]*?\}\);/)
+  assert.match(layout, /attach\('structure', \{[\s\S]*?\}\);/)
   assert.match(layout, /const \{ state, config: CONFIG \} = logyq/)
-  assert.doesNotMatch(layout, /attach\('structure'/)
+  assert.match(layout, /logyq\.camera\.checkMoatAndAutoFit/)
+  assert.doesNotMatch(layout, /typeof checkMoatAndAutoFit/)
+  assert.doesNotMatch(layout, /function __swapWithinParent/)
+  assert.doesNotMatch(layout, /function __reparentToAdjacentGroup/)
+  assert.doesNotMatch(layout, /function __getSelectedUidSingle/)
   const detectors = readFileSync(join(logyqDir, 'js/engine/08-detectors.js'), 'utf8')
   assert.match(detectors, /logyq\.layout\.laneYForDepth/)
   assert.match(detectors, /logyq\.layout\.laneHeightForDepth/)
   assert.match(selection, /logyq\.layout\.laneYForDepth/)
+  assert.match(selection, /logyq\.structure\.moveSelectedHorizontally/)
+  assert.match(selection, /logyq\.structure\.moveSelectedVertically/)
   const treeManager = readFileSync(join(logyqDir, 'js/engine/16-tree-manager.js'), 'utf8')
   assert.match(treeManager, /logyq\.layout\.LabelWrap\.apply/)
   assert.match(treeManager, /logyq\.layout\.refreshLaneOnZoom/)
+  assert.match(treeManager, /logyq\.detectors\.build/)
+  assert.match(treeManager, /logyq\.camera\.centerOnSelected/)
+  assert.match(treeManager, /logyq\.camera\.checkMoatAndAutoFit/)
+  assert.match(treeManager, /logyq\.keyboard\?\.keyDispatcher/)
+  assert.match(treeManager, /logyq\.treeManager\.layoutAndRender/)
+  assert.doesNotMatch(treeManager, /addEventListener\('keydown', keyDispatcher/)
+  assert.doesNotMatch(treeManager, /function enforceMoatForSelected/)
+  assert.doesNotMatch(treeManager, /function flyCenterToUID/)
   const wordDock = readFileSync(join(logyqDir, 'js/engine/14-word-dock.js'), 'utf8')
   assert.match(wordDock, /attach\('wordDock', \{[\s\S]*?\}\);/)
   assert.match(wordDock, /const \{ state, elements, utils \} = logyq/)
@@ -149,6 +170,9 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(treeOps, /logyq\.wordDock\.render/)
   const history = readFileSync(join(logyqDir, 'js/engine/05-history.js'), 'utf8')
   assert.match(history, /logyq\.wordDock\.render/)
+  assert.match(history, /logyq\.treeManager\.layoutAndRender/)
+  assert.match(history, /logyq\.treeManager\.autoFit/)
+  assert.doesNotMatch(history, /typeof treeManager/)
   const stateFrag = readFileSync(join(logyqDir, 'js/engine/02-state.js'), 'utf8')
   assert.match(stateFrag, /logyq\.wordDock\.addWords/)
   const mix = readFileSync(join(logyqDir, 'js/engine/15-mix-and-context.js'), 'utf8')
@@ -162,12 +186,19 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(keyboard, /logyq\.wordDock\.clearChipSelection/)
   assert.match(keyboard, /logyq\.wordDock\.getSelectedChipNames/)
   assert.match(keyboard, /logyq\.mix\.randomizeTree/)
+  assert.match(keyboard, /logyq\.camera\.centerOnSelected/)
+  assert.match(keyboard, /logyq\.camera\.flyCenterToUID/)
+  assert.doesNotMatch(keyboard, /window\.flyCenterToUID/)
+  assert.match(editing, /logyq\.camera\.checkMoatAndAutoFit/)
   assert.match(treeManager, /logyq\.wordDock\.render/)
   assert.match(treeManager, /logyq\.mix\.randomizeTree/)
   assert.match(treeManager, /logyq\.mix\.onNodeContextMenu/)
   const bridge = readFileSync(join(logyqDir, 'js/engine/18-bridge.js'), 'utf8')
   assert.match(bridge, /logyq\.wordDock\.render/)
   assert.match(bridge, /logyq\.mix\.randomizeTree/)
+  assert.match(bridge, /logyq\.treeManager\.layoutAndRender/)
+  assert.match(bridge, /logyq\.treeManager\.autoFit/)
+  assert.doesNotMatch(bridge, /treeManager\.layoutAndRender\.bind\(treeManager\)/)
   const drag = readFileSync(join(logyqDir, 'js/engine/13-drag.js'), 'utf8')
   assert.match(drag, /const \{ state, elements \} = logyq/)
   assert.match(drag, /logyq\.detectors\.pick/)

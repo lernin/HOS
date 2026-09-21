@@ -39,7 +39,7 @@ function keyDispatcher(e){
 
  // 🔑 Hotkeys
     if (lower === 'f' && !e.shiftKey){ e.preventDefault(); logyq.treeManager.autoFit(); return; }
-    if (lower === 'f' && e.shiftKey) { e.preventDefault(); centerOnSelected(); return; }
+    if (lower === 'f' && e.shiftKey) { e.preventDefault(); logyq.camera.centerOnSelected(); return; }
     if (lower === 'a')               { e.preventDefault(); elements.wordInput.focus(); const L = elements.wordInput.value.length; elements.wordInput.setSelectionRange?.(L,L); return; }
     if (lower === 'm')               { e.preventDefault(); logyq.mix.randomizeTree(!!e.shiftKey); return; }
     if (lower === 'w')               { e.preventDefault(); toggleDock(); return; }
@@ -462,7 +462,7 @@ elements.svg.on("contextmenu", (event) => {
     logyq.treeManager.layoutAndRender(false);
 
     logyq.selection.selectSingle(child._uid);
-    (window.flyCenterToUID && flyCenterToUID(child._uid)) || (window.zoomToNodeCenter && zoomToNodeCenter(child._uid, 1.5));
+    logyq.camera.flyCenterToUID(child._uid);
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === child._uid);
@@ -529,8 +529,7 @@ function getSelectedUid(){
 
     // select & edit the new sibling
     logyq.selection.selectSingle(sib._uid);
-    (window.flyCenterToUID && flyCenterToUID(sib._uid)) ||
-    (window.zoomToNodeCenter && zoomToNodeCenter(sib._uid, 1.5));
+    logyq.camera.flyCenterToUID(sib._uid);
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
@@ -598,8 +597,7 @@ function getSelectedUid(){
 
     // Select & edit
     logyq.selection.selectSingle(sib._uid);
-    (window.flyCenterToUID && flyCenterToUID(sib._uid)) ||
-    (window.zoomToNodeCenter && zoomToNodeCenter(sib._uid, 1.5));
+    logyq.camera.flyCenterToUID(sib._uid);
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
@@ -671,8 +669,7 @@ function getSelectedUid(){
 
     // Select & edit the new parent
     logyq.selection.selectSingle(newParent._uid);
-    (window.flyCenterToUID && flyCenterToUID(newParent._uid)) ||
-    (window.zoomToNodeCenter && zoomToNodeCenter(newParent._uid, 1.5));
+    logyq.camera.flyCenterToUID(newParent._uid);
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === newParent._uid);

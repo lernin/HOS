@@ -260,7 +260,7 @@ function setSelected(uid){
     /* [patch] cousin-caret end */
       return [cx, cy];
     }
-    const cy = (hit && hit.rowY != null) ? hit.rowY : (logyq.layout.laneYForDepth((hit?.depth||0)+1) ?? (hit.y + hit.height));
+    const cy = (hit && hit.rowY != null) ? hit.rowY : logyq.layout.laneYForDepth((hit?.depth||0)+1);
     let cx = hit.x + hit.width/2;
 
     if(hit.kind==='sibling' && 'centerX' in hit){
@@ -498,17 +498,17 @@ window.addEventListener('keydown', (e) => {
   if (k === 'j' || k === 'J' || k === 'ArrowLeft'){
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();  // <<< add these
 
-    moveSelectedHorizontally(-1);
+    logyq.structure.moveSelectedHorizontally(-1);
   } else if (k === 'l' || k === 'L' || k === 'ArrowRight'){
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();  // <<< add these
 
-    moveSelectedHorizontally(+1);
+    logyq.structure.moveSelectedHorizontally(+1);
   }
 
  // UP  ← NEW
   if (k === 'i' || k === 'I' || k === 'ArrowUp'){
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-    moveSelectedVertically(-1);
+    logyq.structure.moveSelectedVertically(-1);
     return;
   }
 
@@ -516,7 +516,7 @@ window.addEventListener('keydown', (e) => {
    // DOWN  ← NEW
   if (k === 'k' || k === 'K' || k === 'ArrowDown'){
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-    moveSelectedVertically(+1);
+    logyq.structure.moveSelectedVertically(+1);
     return;
   }
 

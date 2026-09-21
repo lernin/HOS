@@ -7,6 +7,7 @@
     config: null,
     moat: null,
     fly: null,
+    camera: null,
     state: null,
     elements: null,
     utils: null,

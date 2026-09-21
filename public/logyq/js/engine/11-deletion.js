@@ -262,8 +262,6 @@ function createFirstCardAndEdit(){
       // Center/fit so the root is on-screen immediately
       if (typeof logyq.treeManager.autoFit === 'function') {
         logyq.treeManager.autoFit();
-      } else if (typeof flyCenterToUID === 'function') {
-        flyCenterToUID(uid, { duration: 0 });
       }
     } catch (_) {}
 

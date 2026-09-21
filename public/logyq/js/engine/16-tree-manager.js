@@ -1,6 +1,7 @@
 /* ======================= TREE MANAGER ======================= */
 const treeManager = {
   initialize(){
+    const { state, elements, config: CONFIG, utils } = logyq
     elements.gRoot = elements.svg.append("g");
     elements.gLinks= elements.gRoot.append("g").attr("class","links");
     elements.gNodes= elements.gRoot.append("g").attr("class","nodes");
@@ -37,13 +38,13 @@ state.zoom = d3.zoom()
 
   .on("zoom", (e) => {
     elements.gRoot.attr("transform", e.transform);
-    if (state.editingUid) updateNodeEditorPosition();
+    if (state.editingUid) logyq.editing.updateNodeEditorPosition();
     logyq.layout.refreshLaneOnZoom();
-    Detectors.draw();
+    logyq.detectors.draw();
 
     // Run moat check after paint, but not while panning
     setTimeout(() => {
-      if (!state.isPanning) checkMoatAndAutoFit('zoom');
+      if (!state.isPanning) logyq.camera.checkMoatAndAutoFit('zoom');
     }, 0);
   })
 
@@ -110,7 +111,7 @@ window.addEventListener('keydown', (e) => {
                 state.dockSide === 'left'   ? 'hidden' :
                                     'bottom';
             applyDockSide();
-            showToast(
+            logyq.selection.showToast(
                 state.dockSide === 'bottom' ? 'Word Bank → Bottom' :
                 state.dockSide === 'left'   ? 'Word Bank → Left'   :
                                     'Word Bank → Hidden', 900
@@ -142,18 +143,18 @@ window.addEventListener('keydown', (e) => {
 
 
 
-    elements.svg.on("click", e=>{ if(e.target===elements.svg.node()){ clearSelection(); logyq.wordDock.clearChipSelection(); } });
+    elements.svg.on("click", e=>{ if(e.target===elements.svg.node()){ logyq.selection.clearSelection(); logyq.wordDock.clearChipSelection(); } });
 
     state.layout=d3.tree();
-    const data=dataManager.generateTree(30);
+    const data=logyq.data.generateTree(30);
     state.root=d3.hierarchy(data);
-    utils.assignIds(state.root);
+    logyq.utils.assignIds(state.root);
 
     this.layoutAndRender(false);
     this.autoFit();
 
     elements.fitBtn.addEventListener('click', ()=> this.autoFit());
-    elements.undoBtn.addEventListener('click', undo);
+    elements.undoBtn.addEventListener('click', logyq.history.undo);
 
     
     
@@ -217,11 +218,13 @@ elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMap
 
     /* ========== Tab-hold (preserved) ========== */
     function tabDown(e){
+  const { state, elements } = logyq
       if (e.key !== 'Tab') return;
       e.preventDefault();
       state.tabHold = true;
     }
     function tabUp(e){
+  const { state } = logyq
       if (e.key !== 'Tab') return;
       e.preventDefault();
       state.tabHold = false;
@@ -235,15 +238,12 @@ elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMap
     window.addEventListener('keydown', tabDown, true);
     window.addEventListener('keyup', tabUp, true);
 
-    // Other global keys
-    document.addEventListener('keydown', keyDispatcher, true);
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'F' && e.shiftKey) {
-    if (isTextField(e.target) && !state.tabHold) return; // don't hijack typing
-    e.preventDefault();
-    treeManager.centerOnSelected();
-  }
-}, true);
+    // Other global keys. Look up at event time: initialize() runs
+    // before attach('keyboard') in 17-keyboard.js.
+    document.addEventListener('keydown', (e) => {
+      logyq.keyboard?.keyDispatcher?.(e);
+    }, true);
+
 
 
     
@@ -268,14 +268,16 @@ document.addEventListener('keydown', (e) => {
   },
 
   renderEmpty(){
+    const { state, elements } = logyq
     elements.gLinks.selectAll("path.link").remove();
     elements.gNodes.selectAll("g.node").remove();
     state.lastNodes = [];
     state.detectors=[];
-    Detectors.draw();
+    logyq.detectors.draw();
   },
 
   layoutAndRender(isDelete=false){
+    const { state, config: CONFIG } = logyq
     if (!state.root) { this.renderEmpty(); return; }
     state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
       let A=a,B=b; while(A.depth>B.depth)A=A.parent; while(B.depth>A.depth)B=B.parent; while(A!==B){A=A.parent;B=B.parent;}
@@ -289,25 +291,26 @@ document.addEventListener('keydown', (e) => {
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */
       (function(){
         /* wait for render transitions to finish, then fit using final bbox */
-        const done = ()=>{ if(state.repositionMode==="mix"){ state.repositionMode=null; treeManager.autoFit(); } };
+        const done = ()=>{ if(state.repositionMode==="mix"){ state.repositionMode=null; logyq.treeManager.autoFit(); } };
         try{ clearTimeout(window.__mixFitT); }catch(_e){}
         try{ window.__mixFitT = setTimeout(done, 190); }catch(_e){ setTimeout(done, 190); }
       })();
     }
 
-    state.detectors = Detectors.build(state.root);
-    Detectors.draw();
+    state.detectors = logyq.detectors.build(state.root);
+    logyq.detectors.draw();
   },
 
   render(isDelete=false){
+    const { state, elements, config: CONFIG } = logyq
     const nodes=state.root.descendants();
     const links=state.root.links();
 
     const selLinks=elements.gLinks.selectAll("path.link").data(links, d=>d.target.data._uid);
     selLinks.enter().append("path").attr("class","link").style("stroke-width", 2.8).style("opacity", 0.5)
-      .attr("d", d=> visual.vLink({source:d.source, target:d.source}))
-      .transition().duration(260).attr("d", d=> visual.vLink(d));
-    selLinks.transition().duration(260).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> visual.vLink(d));
+      .attr("d", d=> logyq.visual.vLink({source:d.source, target:d.source}))
+      .transition().duration(260).attr("d", d=> logyq.visual.vLink(d));
+    selLinks.transition().duration(260).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> logyq.visual.vLink(d));
     selLinks.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
 
@@ -315,13 +318,13 @@ document.addEventListener('keydown', (e) => {
 
 const selNodes = elements.gNodes.selectAll("g.node").data(nodes, d => d.data._uid);
 
-// prepare drag (left-only per dragManager.behavior().filter)
-const nodeDrag = dragManager.behavior();
+// prepare drag (left-only per logyq.drag.behavior().filter)
+const nodeDrag = logyq.drag.behavior();
 
 // —— UPDATE selection (existing nodes): bind/refresh all handlers ——
 selNodes
   .on("contextmenu", logyq.mix.onNodeContextMenu)  // right-click menu on existing nodes
-  .on("mousedown",  onNodeMouseDown)     // left-click selection on existing nodes
+  .on("mousedown",  logyq.selection.onNodeMouseDown)     // left-click selection on existing nodes
   .call(nodeDrag);                       // drag on existing nodes
 
 // —— ENTER selection (new nodes): same bindings ——
@@ -330,7 +333,7 @@ const nEnter = selNodes.enter()
   .attr("transform", d => `translate(${d.x},${d.y})`)
   .style("opacity", 1)
   .on("contextmenu", logyq.mix.onNodeContextMenu)  // right-click menu on new nodes
-  .on("mousedown",  onNodeMouseDown)     // left-click selection on new nodes
+  .on("mousedown",  logyq.selection.onNodeMouseDown)     // left-click selection on new nodes
   .call(nodeDrag);                       // drag on new nodes
 
 
@@ -339,7 +342,7 @@ const nEnter = selNodes.enter()
 
 
 
-    nEnter.on("dblclick", (event,d)=>{ event.stopPropagation(); openNodeEditor(d); });
+    nEnter.on("dblclick", (event,d)=>{ event.stopPropagation(); logyq.editing.openNodeEditor(d); });
     /* [patch] grabzone-behind start */
     nEnter.insert("rect",":first-child")
       .attr("class","grabzone")
@@ -363,15 +366,12 @@ const nEnter = selNodes.enter()
 
 
 centerOnSelected(opts = {}) {
-  const uid = state.selectedUids && state.selectedUids.size ? [...state.selectedUids][0] : null;
-  if (!uid) { showToast?.('Select a node first'); return; }
-  const n = (state.lastNodes || []).find(d => d.data._uid === uid);
-  if (!n) return;
-  logyq.mix.flyToXY(n.x, n.y, opts); // keeps current zoom; pass {scale:1.0} to also zoom
+  logyq.camera.centerOnSelected(opts)
 },
 
 
   autoFit(pad=24){
+    const { state, elements } = logyq
     const nb=elements.gNodes.node()?.getBBox();
     const lb=elements.gLinks.node()?.getBBox();
     const merge=(a,b)=>{ if(!a||!a.width||!a.height) return b; if(!b||!b.width||!b.height) return a;
@@ -404,6 +404,7 @@ attach('treeManager', treeManager)
 
   /* ======================= SETTINGS ======================= */
   function setupSettings(){
+    const { state, elements, config: CONFIG } = logyq
     const s = elements.settings;
     function open(){ s.backdrop && s.backdrop.classList.add('show'); }
     function close(){ s.backdrop && s.backdrop.classList.remove('show'); }
@@ -422,7 +423,7 @@ attach('treeManager', treeManager)
         CONFIG.VERTICAL_GAP = v;
         if(s.vGapVal) s.vGapVal.textContent = v+'px';
         if(s.vGapValHidden) s.vGapValHidden.textContent = v+'px';
-        treeManager.layoutAndRender(false);
+        logyq.treeManager.layoutAndRender(false);
       });
     }
 
@@ -430,11 +431,11 @@ attach('treeManager', treeManager)
     const defaultGap = Number(CONFIG.VERTICAL_GAP) || 78;
     function clamp(v){ return Math.max(20, Math.min(300, v)); }
     function renderVal(){ const el=document.getElementById("verticalGapVal"); if(el) el.textContent=(Number(CONFIG.VERTICAL_GAP)||0)+"px"; }
-    function adjust(delta){ CONFIG.VERTICAL_GAP = clamp((Number(CONFIG.VERTICAL_GAP)||defaultGap)+delta); renderVal(); treeManager.layoutAndRender(false); }
+    function adjust(delta){ CONFIG.VERTICAL_GAP = clamp((Number(CONFIG.VERTICAL_GAP)||defaultGap)+delta); renderVal(); logyq.treeManager.layoutAndRender(false); }
 
     s.gapUp && s.gapUp.addEventListener("click", ()=>adjust(-STEP));
     s.gapDown && s.gapDown.addEventListener("click", ()=>adjust(+STEP));
-    s.gapReset && s.gapReset.addEventListener("click", ()=>{ CONFIG.VERTICAL_GAP=defaultGap; renderVal(); treeManager.layoutAndRender(false); });
+    s.gapReset && s.gapReset.addEventListener("click", ()=>{ CONFIG.VERTICAL_GAP=defaultGap; renderVal(); logyq.treeManager.layoutAndRender(false); });
     renderVal();
 
     if(s.lanePinBtn){
@@ -470,13 +471,13 @@ attach('treeManager', treeManager)
           let v = parseFloat(e.target.value); if(!isFinite(v)) v = 1.2; if(v < 1) v = 1;
           CONFIG.DETECTOR_DEPTH_FACTOR = v;
           if(s.detDepthVal) s.detDepthVal.textContent = v.toFixed(1)+"×";
-          treeManager.layoutAndRender(false);
+          logyq.treeManager.layoutAndRender(false);
         });
       }
       s.showDetectors.checked = !!CONFIG.SHOW_DETECTORS;
       s.showDetectors.addEventListener('change', (e)=>{
         CONFIG.SHOW_DETECTORS = !!e.target.checked;
-        Detectors.draw();
+        logyq.detectors.draw();
       });
     }
 
@@ -484,7 +485,7 @@ attach('treeManager', treeManager)
     if (s.exportPngBtn){
       s.exportPngBtn.addEventListener('click', ()=> {
         elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show");
-/* [patch] export-btn-handlers start */      if (!window.__exportUIInit) {        window.__exportUIInit = true;        const s = elements.settings;        const close = ()=>{ s.exportBackdrop && s.exportBackdrop.classList.remove('show'); };        s.exportClose && s.exportClose.addEventListener('click', close);        s.exportBackdrop && s.exportBackdrop.addEventListener('click', (e)=>{ if(e.target===s.exportBackdrop) close(); });        const readOpts = ()=>({          pad: parseInt(s.exportPadding?.value||'24',10)||24,          minLabelPx: parseInt(s.exportMinLabel?.value||'0',10)||0,          withBackground: !!(s.exportBackground && s.exportBackground.checked),          addTitle: !!(s.exportAddTitle && s.exportAddTitle.checked),          titleText: (s.exportTitleText?.value||'LOGiC').trim() || 'LOGiC'        });        s.doExportPng && s.doExportPng.addEventListener('click', ()=>{          const o = readOpts();          if (s.exportModeView && s.exportModeView.checked) {            PngExport.exportCurrentView({ scale: 2, withBackground: o.withBackground });          } else {            PngExport.exportFullPNG({ pad: o.pad, withBackground: o.withBackground, minLabelPx: o.minLabelPx, addTitle: o.addTitle, titleText: o.titleText });          }          close();        });        s.doExportSvg && s.doExportSvg.addEventListener('click', ()=>{          const o = readOpts();          PngExport.exportSVG({ pad: o.pad, addTitle: o.addTitle, titleText: o.titleText });          close();        });      }      /* [patch] export-btn-handlers end */
+/* [patch] export-btn-handlers start */      if (!window.__exportUIInit) {        window.__exportUIInit = true;        const s = elements.settings;        const close = ()=>{ s.exportBackdrop && s.exportBackdrop.classList.remove('show'); };        s.exportClose && s.exportClose.addEventListener('click', close);        s.exportBackdrop && s.exportBackdrop.addEventListener('click', (e)=>{ if(e.target===s.exportBackdrop) close(); });        const readOpts = ()=>({          pad: parseInt(s.exportPadding?.value||'24',10)||24,          minLabelPx: parseInt(s.exportMinLabel?.value||'0',10)||0,          withBackground: !!(s.exportBackground && s.exportBackground.checked),          addTitle: !!(s.exportAddTitle && s.exportAddTitle.checked),          titleText: (s.exportTitleText?.value||'LOGiC').trim() || 'LOGiC'        });        s.doExportPng && s.doExportPng.addEventListener('click', ()=>{          const o = readOpts();          if (s.exportModeView && s.exportModeView.checked) {            logyq.export.exportCurrentView({ scale: 2, withBackground: o.withBackground });          } else {            logyq.export.exportFullPNG({ pad: o.pad, withBackground: o.withBackground, minLabelPx: o.minLabelPx, addTitle: o.addTitle, titleText: o.titleText });          }          close();        });        s.doExportSvg && s.doExportSvg.addEventListener('click', ()=>{          const o = readOpts();          logyq.export.exportSVG({ pad: o.pad, addTitle: o.addTitle, titleText: o.titleText });          close();        });      }      /* [patch] export-btn-handlers end */
       });
     }
   }
@@ -507,6 +508,7 @@ attach('treeManager', treeManager)
 
 /* [patch] esc-clears-selection start */
 document.addEventListener('keydown', function(e){
+  const { state, elements } = logyq
   if (e.key !== 'Escape') return;
 
   // If you’re editing a node name, let that Esc be handled by the editor.
@@ -520,7 +522,7 @@ document.addEventListener('keydown', function(e){
   if (modalsOpen) return;
 
   // Otherwise: clear the node selection set.
-  clearSelection();
+  logyq.selection.clearSelection();
 }, true);
 /* [patch] esc-clears-selection end */
 
@@ -528,6 +530,7 @@ document.addEventListener('keydown', function(e){
 
 // --- Clean Tab behavior: press to exit typing + hold to navigate ---
 function tabDown(e){
+  const { state, elements } = logyq
   if (e.key !== 'Tab') return;
   // If any modal is open, keep native tabbing unless we're in the node editor
   const modalOpen =
@@ -540,7 +543,7 @@ function tabDown(e){
     e.preventDefault();
     e.stopPropagation();
     // Commit (true) and restore zoom (true)
-    closeNodeEditor(true, true);
+    logyq.editing.closeNodeEditor(true, true);
     state.tabHold = true;   // immediately enable navigation mode
     return;
   }
@@ -565,109 +568,10 @@ function tabDown(e){
 }
 
 function tabUp(e){
+  const { state } = logyq
   if (e.key !== 'Tab') return;
   state.tabHold = false;
 }
 
 window.addEventListener('keydown', tabDown, true);
 window.addEventListener('keyup', tabUp, true);
-
-
-
-
-
-
-
-
-/* ✅ Helper: center currently selected node (keeps current zoom) */
-function centerOnSelected(){
-  const selUid =
-    state.selectedUid ||
-    (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null);
-  if (!selUid || !state.root) return;
-
-  const h = state.root.descendants().find(n => n?.data?._uid === selUid);
-  if (!h) return;
-
-  flyCenterToUID(selUid, { duration: 420 });  // unified, non-jerky flight
-}
-
-
-
-
-/* Unified smooth pan (no zoom change, cancels any ongoing transitions) */
-function flyCenterToUID(uid, { duration = 420 } = {}){
-  const svg = elements.svg?.node();
-  if (!svg || !state.root) return;
-  const h = state.root.descendants().find(n => n?.data?._uid === uid);
-  if (!h) return;
-
-  // Current zoom (k) stays the same; we only translate.
-  const t = d3.zoomTransform(svg);
-  const W = svg.clientWidth, H = svg.clientHeight;
-  const target = d3.zoomIdentity
-    .translate(W/2, H/2)
-    .scale(t.k)
-    .translate(-h.x, -h.y);
-
-  // 🚫 Stop any in-flight animations before starting ours.
-  d3.select(svg).interrupt();
-  d3.select(elements.gRoot?.node()).interrupt?.();
-
-  elements.svg
-    .transition()
-    .duration(1200) //moat speed
-    .ease(d3.easeExpOut)
-    .call(state.zoom.transform, target);
-}
-
-/* Keyboard-only moat recenter (call AFTER handling arrows/J/K/L/I) */
-function enforceMoatForSelected(){
-  if (!CONFIG_MOAT?.enabled) return;
-  const now = Date.now();
-  if (now - (state._lastMoat || 0) < CONFIG_MOAT.cooldownMs) return;
-
-  const selUid =
-    state.selectedUid ||
-    (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null);
-  if (!selUid || !state.root) return;
-
-  const svg = elements.svg?.node();
-  if (!svg) return;
-
-  const h = state.root.descendants().find(n => n?.data?._uid === selUid);
-  if (!h) return;
-
-  const W = svg.clientWidth, H = svg.clientHeight;
-  const cx = W/2, cy = H/2;
-
-  // Transform node → screen space using current zoom transform
-  const z = d3.zoomTransform(svg);
-  const sx = z.x + z.k * h.x;
-  const sy = z.y + z.k * h.y;
-
-  // Moat radii from config (fractions of half the min side)
-  const halfMin = Math.min(W, H) / 2;
-  const innerR = halfMin * (CONFIG_MOAT.innerFrac || 0.35);
-  const outerR = halfMin * (CONFIG_MOAT.outerFrac || 0.70);
-
-  const dx = sx - cx, dy = sy - cy;
-  const dist = Math.sqrt(dx*dx + dy*dy);
-
-  // Trigger if we’re outside innerR (near edges). Optional cap at outerR.
-  if (dist >= innerR && dist <= outerR){
-    // Scale duration by how deep in the moat we are
-    const t = (dist - innerR) / Math.max(1, (outerR - innerR));
-    const dMin = CONFIG_MOAT.durationMin || 260;
-    const dMax = CONFIG_MOAT.durationMax || 650;
-    const dur = Math.round(dMin + t * (dMax - dMin));
-
-    flyCenterToUID(selUid, { duration: dur });
-    state._lastMoat = now;
-  }
-}
-
-
-
-
-

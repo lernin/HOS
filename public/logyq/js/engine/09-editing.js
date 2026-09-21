@@ -191,7 +191,7 @@ if (state.vHold) return;
       }
 
       // --- mote behavior (unchanged) ---
-      checkMoatAndAutoFit('kbd');
+      logyq.camera.checkMoatAndAutoFit('kbd');
     } catch(_e){}
   }, 0);
 }, { passive: true });

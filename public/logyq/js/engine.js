@@ -8,6 +8,7 @@
     config: null,
     moat: null,
     fly: null,
+    camera: null,
     state: null,
     elements: null,
     utils: null,
@@ -196,19 +197,19 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   const cooldown = moat.cooldownMs ?? 500;
   if (now - (state._lastMoat || 0) < cooldown) return;
 
-  // ✅ Center on selected (not fit)
-  if (typeof centerOnSelectedSoon === 'function'){
-    centerOnSelectedSoon(120);
-  } else if (logyq.treeManager?.centerOnSelected){
-    logyq.treeManager.centerOnSelected();
-  } else if (state?.selectedUids?.size === 1){
-    // last-resort fallback
-    const uid = [...state.selectedUids][0];
-    zoomToNodeCenter(uid, 1.5);
-  }
-
+  // Center on selected (not fit)
+  centerOnSelectedSoon(120);
   state._lastMoat = now;
 }
+
+  attach('camera', {
+    computeNearestWallPct,
+    flyCenterToUID,
+    centerOnSelected,
+    centerOnSelectedSoon,
+    checkMoatAndAutoFit,
+  });
+
 
 
 /* ======================= STATE & ELEMENTS ======================= */
@@ -439,7 +440,7 @@ function handleAddBox(){
         const rootData = { name: parts[0] };
         utils.assignUids(rootData);
         state.root = d3.hierarchy(rootData); utils.assignIds(state.root);
-        treeManager.layoutAndRender(false);
+        logyq.treeManager.layoutAndRender(false);
         setSelected(state.root.data._uid);
         parts.slice(1).forEach(p => addChildOf(state.root.data._uid, p, { noEdit: true }));
       } else if (base){
@@ -714,7 +715,7 @@ function autoFitSoon(delay){
   try{
     var d = Number.isFinite(delay) ? delay : 220; // let transitions finish
     window.__undoFitT = setTimeout(function(){
-      try{ if (treeManager && typeof treeManager.autoFit === 'function') treeManager.autoFit(); }catch(_e){}
+      try{ logyq.treeManager.autoFit(); }catch(_e){}
     }, d);
   }catch(_e){}
 }
@@ -739,7 +740,7 @@ function autoFitSoon(delay){
         parent.children.splice(insertAt, 0, a.subtree);
         state.root = d3.hierarchy(state.root.data);
         utils.assignIds(state.root);
-        treeManager.layoutAndRender(false);
+        logyq.treeManager.layoutAndRender(false);
       }
     } else if(a.type==='move'){
       const toParent = utils.findByPath(state.root.data, a.toParentPath);
@@ -757,7 +758,7 @@ function autoFitSoon(delay){
         }
         state.root = d3.hierarchy(state.root.data);
         utils.assignIds(state.root);
-        treeManager.layoutAndRender(false);
+        logyq.treeManager.layoutAndRender(false);
         /* [patch] undo-fit-call move */ autoFitSoon();
 
       }
@@ -769,7 +770,7 @@ function autoFitSoon(delay){
         if(parent.children.length===0) parent.children=null;
         state.root = d3.hierarchy(state.root.data);
         utils.assignIds(state.root);
-        treeManager.layoutAndRender(true);
+        logyq.treeManager.layoutAndRender(true);
       }
     } else if(a.type==='rename'){
       const target = utils.findByUid(state.root.data, a.uid);
@@ -777,29 +778,29 @@ function autoFitSoon(delay){
         target.name = a.prev;
         state.root = d3.hierarchy(state.root.data);
         utils.assignIds(state.root);
-        treeManager.layoutAndRender(false);
+        logyq.treeManager.layoutAndRender(false);
       }
     } else if (a.type === 'randomize'){
       state.root = a.prev ? d3.hierarchy(a.prev) : null;
       if ('prevBank' in a) state.wordBank = (a.prevBank || []).slice();
       if(state.root) utils.assignIds(state.root);
-      treeManager.layoutAndRender(false);
+      logyq.treeManager.layoutAndRender(false);
       logyq.wordDock.render();
       /* [patch] undo-fit-call randomize */ autoFitSoon();
 
     } else if (a.type === 'delete-root') {
       state.root = d3.hierarchy(a.subtree);
       utils.assignIds(state.root);
-      treeManager.layoutAndRender(false);
+      logyq.treeManager.layoutAndRender(false);
     } else if (a.type === 'add-root') {
       state.root = null;
-      treeManager.renderEmpty();
+      logyq.treeManager.renderEmpty();
     } else if (a.type === 'replace-root') {
       state.root = d3.hierarchy(a.prev);
  if ('prevBank' in a) state.wordBank = (a.prevBank || []).slice();  // ← add this
 
       utils.assignIds(state.root);
-      treeManager.layoutAndRender(false);
+      logyq.treeManager.layoutAndRender(false);
     }
   }
 
@@ -978,80 +979,22 @@ function refreshLaneOnZoom() { /* no visuals */ }
 
 
 
-// ---- Immediate horizontal move engine (swap or reparent across groups at same depth)
-function __getSelectedUidSingle(){
-  return state.selectedUid || (state.selectedUids?.size === 1 ? [...state.selectedUids][0] : null);
-}
-function __getNodeByUid(uid){
-  if (!uid || !state.root) return null;
-  return state.root.descendants().find(n => n.data?._uid === uid) || null;
-}
-function __groupsAtDepthOrderedByX(depth){
-  const nodes = state.root.descendants().filter(n => n.depth === depth);
-  const byParent = new Map();
-  for (const n of nodes){
-    const pid = n.parent?.data?._uid || '__ROOT__';
-    if (!byParent.has(pid)) byParent.set(pid, []);
-    byParent.get(pid).push(n);
-  }
-  const groups = [];
-  for (const [pid, arr] of byParent.entries()){
-    arr.sort((a,b)=>a.x-b.x);
-    const minX = arr.length ? arr[0].x : 0;
-    groups.push({ parentUid: pid, nodes: arr, minX });
-  }
-  groups.sort((a,b)=>a.minX-b.minX);
-  return groups;
-}
-function __swapWithinParent(selNode, dir){
-  const parent = selNode.parent;
-  const kids = parent?.data?.children;
-  if (!Array.isArray(kids)) return false;
-  const i = kids.findIndex(k => k?._uid === selNode.data._uid);
-  const j = i + (dir < 0 ? -1 : 1);
-  if (i < 0 || j < 0 || j >= kids.length) return false;
-  [kids[i], kids[j]] = [kids[j], kids[i]];
-  return true;
-}
-function __reparentToAdjacentGroup(selNode, targetGroup, toEndOnRight){
-  const curKids = selNode.parent?.data?.children;
-  if (!Array.isArray(curKids)) return false;
-  const idx = curKids.findIndex(k => k?._uid === selNode.data._uid);
-  if (idx < 0) return false;
-  const [moved] = curKids.splice(idx,1);
-
-  const targetParentUid = targetGroup.parentUid;
-  const targetParentNode = (targetParentUid === '__ROOT__')
-    ? state.root
-    : state.root.descendants().find(n => n.data?._uid === targetParentUid);
-  if (!targetParentNode) return false;
-
-  targetParentNode.data.children = targetParentNode.data.children || [];
-  const dest = targetParentNode.data.children;
-  if (toEndOnRight) dest.push(moved); else dest.splice(0,0,moved);
-  return true;
-}
-
-
-
-
-
-
 
 
 // --- Move the SINGLE focused node left/right (swap within parent, or hop to neighbor parent at same depth) ---
 function moveSelectedHorizontally(dir){
+  const { state, utils } = logyq
   // dir: -1 = left, +1 = right
   if (!state.root) return;
 
   // Focus-only: act on the currently focused node (ignore group)
   const uid = state.selectedUid;
-  if (!uid) { showToast('No focused node'); return; }
+  if (!uid) { logyq.selection.showToast('No focused node'); return; }
 
   // Live hierarchy node
   const selH = state.root.descendants().find(n => n?.data?._uid === uid);
   if (!selH) return;
-  if (!selH.parent) { showToast('Root has no siblings'); return; }
+  if (!selH.parent) { logyq.selection.showToast('Root has no siblings'); return; }
 
   // Take a snapshot for undo and work on a cloned tree
   const before = utils.deepClone(state.root.data);
@@ -1092,7 +1035,7 @@ function moveSelectedHorizontally(dir){
 
     const neighborH = row[pIdx + (dir < 0 ? -1 : 1)];
     if (!neighborH){
-      showToast(dir < 0 ? 'No group to the left' : 'No group to the right');
+      logyq.selection.showToast(dir < 0 ? 'No group to the left' : 'No group to the right');
     } else {
       // Remove from current parent
       parentData.children.splice(idx, 1);
@@ -1112,16 +1055,14 @@ function moveSelectedHorizontally(dir){
   if (!changed) return;
 
   // Commit: push undo, rebuild hierarchy, render, keep focus on the same node
-  pushHistory({ type: 'replace-root', prev: before });
+  logyq.history.pushHistory({ type: 'replace-root', prev: before });
   state.root = d3.hierarchy(work);
   utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
-  setSelected(uid);
+  logyq.treeManager.layoutAndRender(false);
+  logyq.selection.setSelected(uid);
 
     // === Only recenter if we're near a viewport edge (moat rule) ===
-  if (typeof checkMoatAndAutoFit === 'function') {
-    checkMoatAndAutoFit('vhold');
-  }
+  logyq.camera.checkMoatAndAutoFit('vhold');
 
 }
 
@@ -1137,9 +1078,10 @@ function moveSelectedHorizontally(dir){
 // --- Move the SINGLE focused node vertically ---
 // dir: -1 = Up (reparent to parent's parent’s lane), +1 = Down (drop to next depth)
 function moveSelectedVertically(dir){
+  const { state, utils, config: CONFIG } = logyq
   if (!state.root) return;
   const uid = state.selectedUid;
-  if (!uid) { showToast('No focused node'); return; }
+  if (!uid) { logyq.selection.showToast('No focused node'); return; }
 
   const live = state.root.descendants();
   const selH = live.find(n => n?.data?._uid === uid);
@@ -1152,7 +1094,7 @@ function moveSelectedVertically(dir){
 // === UP (new: reparent to GP, insert by X among GP's children) ===
 if (dir === -1){
   const parentH = selH.parent;
-  if (!parentH) { showToast('Root has no parent'); return; }
+  if (!parentH) { logyq.selection.showToast('Root has no parent'); return; }
 
   // If parent IS root → keep your existing "new root" behavior
   if (!parentH.parent){
@@ -1175,12 +1117,12 @@ if (dir === -1){
     newRoot.children = newRoot.children || [];
     newRoot.children.unshift(oldRoot);
 
-    pushHistory({ type: 'replace-root', prev: before });
+    logyq.history.pushHistory({ type: 'replace-root', prev: before });
     state.root = d3.hierarchy(newRoot);
     utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
-    setSelected(uid);
-    if (typeof checkMoatAndAutoFit === 'function') checkMoatAndAutoFit('vhold');
+    logyq.treeManager.layoutAndRender(false);
+    logyq.selection.setSelected(uid);
+    logyq.camera.checkMoatAndAutoFit('vhold');
     return;
   }
 
@@ -1238,12 +1180,12 @@ if (dir === -1){
   gpData.children.splice(at, 0, nodeData);
 
   // Commit
-  pushHistory({ type: 'replace-root', prev: before });
+  logyq.history.pushHistory({ type: 'replace-root', prev: before });
   state.root = d3.hierarchy(work);
   utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
-  setSelected(uid);
-  if (typeof checkMoatAndAutoFit === 'function') checkMoatAndAutoFit('vhold');
+  logyq.treeManager.layoutAndRender(false);
+  logyq.selection.setSelected(uid);
+    logyq.camera.checkMoatAndAutoFit('vhold');
   return;
 }
 
@@ -1261,7 +1203,7 @@ if (dir === +1){
   // Root special-case (unchanged behavior)
   if (!selH.parent){
     const kids = selH.children || [];
-    if (!kids.length) { showToast('Root has no children'); return; }
+    if (!kids.length) { logyq.selection.showToast('Root has no children'); return; }
     const promotedH = kids.slice().sort((a,b)=>a.x - b.x)[0];
 
     const before = utils.deepClone(state.root.data);
@@ -1305,17 +1247,16 @@ if (dir === +1){
     newRoot.children.splice(insertAt, 0, formerRootAsChild);
     oldRootData.children = null;
 
-    pushHistory({ type:'replace-root', prev: before });
+    logyq.history.pushHistory({ type:'replace-root', prev: before });
     state.root = d3.hierarchy(newRoot);
     utils.assignIds(state.root);
-    treeManager.layoutAndRender(false);
-    setSelected(formerRootAsChild._uid);
-    if (typeof checkMoatAndAutoFit === 'function') checkMoatAndAutoFit('vhold');
+    logyq.treeManager.layoutAndRender(false);
+    logyq.selection.setSelected(formerRootAsChild._uid);
+    logyq.camera.checkMoatAndAutoFit('vhold');
     return;
   }
 
   // Non-root: SAME-DEPTH adoption (fix)
-  const uid = selH.data._uid;
   const x0  = selH.x;
 
   const movingDescUids = new Set(selH.descendants().map(d => d.data._uid));
@@ -1328,7 +1269,7 @@ if (dir === +1){
       return dA === dB ? (a.x - b.x) : (dA - dB); // tie → left
     });
 
-  if (!peers.length){ showToast('No peer to adopt under'); return; }
+  if (!peers.length){ logyq.selection.showToast('No peer to adopt under'); return; }
   const targetParentH = peers[0];
 
   // Position among target’s children by live X
@@ -1368,12 +1309,12 @@ if (dir === +1){
   const at = Math.max(0, Math.min(insertIndexByX(targetParentH, x0), destParent.children.length));
   destParent.children.splice(at, 0, nodeData);
 
-  pushHistory({ type: 'replace-root', prev: before });
+  logyq.history.pushHistory({ type: 'replace-root', prev: before });
   state.root = d3.hierarchy(work);
   utils.assignIds(state.root);
-  treeManager.layoutAndRender(false);
-  setSelected(uid);
-  if (typeof checkMoatAndAutoFit === 'function') checkMoatAndAutoFit('vhold');
+  logyq.treeManager.layoutAndRender(false);
+  logyq.selection.setSelected(uid);
+    logyq.camera.checkMoatAndAutoFit('vhold');
   return;
 }
 
@@ -1405,59 +1346,10 @@ if (dir === +1){
 
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  attach('structure', {
+    moveSelectedHorizontally,
+    moveSelectedVertically,
+  });
   /* ======================= DETECTOR ENGINE ======================= */
   const Detectors = (()=>{
     const PRIORITY = { rootAbove:0 /* [patch] rootAbove-lowest */, rightCousin:5, leftCousin:4, sibling:3, node:2, edgeSibling:1 };
@@ -1841,7 +1733,7 @@ if (state.vHold) return;
       }
 
       // --- mote behavior (unchanged) ---
-      checkMoatAndAutoFit('kbd');
+      logyq.camera.checkMoatAndAutoFit('kbd');
     } catch(_e){}
   }, 0);
 }, { passive: true });
@@ -2169,7 +2061,7 @@ function setSelected(uid){
     /* [patch] cousin-caret end */
       return [cx, cy];
     }
-    const cy = (hit && hit.rowY != null) ? hit.rowY : (logyq.layout.laneYForDepth((hit?.depth||0)+1) ?? (hit.y + hit.height));
+    const cy = (hit && hit.rowY != null) ? hit.rowY : logyq.layout.laneYForDepth((hit?.depth||0)+1);
     let cx = hit.x + hit.width/2;
 
     if(hit.kind==='sibling' && 'centerX' in hit){
@@ -2407,17 +2299,17 @@ window.addEventListener('keydown', (e) => {
   if (k === 'j' || k === 'J' || k === 'ArrowLeft'){
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();  // <<< add these
 
-    moveSelectedHorizontally(-1);
+    logyq.structure.moveSelectedHorizontally(-1);
   } else if (k === 'l' || k === 'L' || k === 'ArrowRight'){
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();  // <<< add these
 
-    moveSelectedHorizontally(+1);
+    logyq.structure.moveSelectedHorizontally(+1);
   }
 
  // UP  ← NEW
   if (k === 'i' || k === 'I' || k === 'ArrowUp'){
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-    moveSelectedVertically(-1);
+    logyq.structure.moveSelectedVertically(-1);
     return;
   }
 
@@ -2425,7 +2317,7 @@ window.addEventListener('keydown', (e) => {
    // DOWN  ← NEW
   if (k === 'k' || k === 'K' || k === 'ArrowDown'){
     e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-    moveSelectedVertically(+1);
+    logyq.structure.moveSelectedVertically(+1);
     return;
   }
 
@@ -2799,8 +2691,6 @@ function createFirstCardAndEdit(){
       // Center/fit so the root is on-screen immediately
       if (typeof logyq.treeManager.autoFit === 'function') {
         logyq.treeManager.autoFit();
-      } else if (typeof flyCenterToUID === 'function') {
-        flyCenterToUID(uid, { duration: 0 });
       }
     } catch (_) {}
 
@@ -5107,6 +4997,7 @@ function flyToXY(x, y, { scale=null, duration=null, ease=d3.easeCubicInOut } = {
 /* ======================= TREE MANAGER ======================= */
 const treeManager = {
   initialize(){
+    const { state, elements, config: CONFIG, utils } = logyq
     elements.gRoot = elements.svg.append("g");
     elements.gLinks= elements.gRoot.append("g").attr("class","links");
     elements.gNodes= elements.gRoot.append("g").attr("class","nodes");
@@ -5143,13 +5034,13 @@ state.zoom = d3.zoom()
 
   .on("zoom", (e) => {
     elements.gRoot.attr("transform", e.transform);
-    if (state.editingUid) updateNodeEditorPosition();
+    if (state.editingUid) logyq.editing.updateNodeEditorPosition();
     logyq.layout.refreshLaneOnZoom();
-    Detectors.draw();
+    logyq.detectors.draw();
 
     // Run moat check after paint, but not while panning
     setTimeout(() => {
-      if (!state.isPanning) checkMoatAndAutoFit('zoom');
+      if (!state.isPanning) logyq.camera.checkMoatAndAutoFit('zoom');
     }, 0);
   })
 
@@ -5216,7 +5107,7 @@ window.addEventListener('keydown', (e) => {
                 state.dockSide === 'left'   ? 'hidden' :
                                     'bottom';
             applyDockSide();
-            showToast(
+            logyq.selection.showToast(
                 state.dockSide === 'bottom' ? 'Word Bank → Bottom' :
                 state.dockSide === 'left'   ? 'Word Bank → Left'   :
                                     'Word Bank → Hidden', 900
@@ -5248,18 +5139,18 @@ window.addEventListener('keydown', (e) => {
 
 
 
-    elements.svg.on("click", e=>{ if(e.target===elements.svg.node()){ clearSelection(); logyq.wordDock.clearChipSelection(); } });
+    elements.svg.on("click", e=>{ if(e.target===elements.svg.node()){ logyq.selection.clearSelection(); logyq.wordDock.clearChipSelection(); } });
 
     state.layout=d3.tree();
-    const data=dataManager.generateTree(30);
+    const data=logyq.data.generateTree(30);
     state.root=d3.hierarchy(data);
-    utils.assignIds(state.root);
+    logyq.utils.assignIds(state.root);
 
     this.layoutAndRender(false);
     this.autoFit();
 
     elements.fitBtn.addEventListener('click', ()=> this.autoFit());
-    elements.undoBtn.addEventListener('click', undo);
+    elements.undoBtn.addEventListener('click', logyq.history.undo);
 
     
     
@@ -5323,11 +5214,13 @@ elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMap
 
     /* ========== Tab-hold (preserved) ========== */
     function tabDown(e){
+  const { state, elements } = logyq
       if (e.key !== 'Tab') return;
       e.preventDefault();
       state.tabHold = true;
     }
     function tabUp(e){
+  const { state } = logyq
       if (e.key !== 'Tab') return;
       e.preventDefault();
       state.tabHold = false;
@@ -5341,15 +5234,12 @@ elements.mapsBtn && elements.mapsBtn.addEventListener("click", logyq.mix.openMap
     window.addEventListener('keydown', tabDown, true);
     window.addEventListener('keyup', tabUp, true);
 
-    // Other global keys
-    document.addEventListener('keydown', keyDispatcher, true);
-document.addEventListener('keydown', (e) => {
-  if (e.key === 'F' && e.shiftKey) {
-    if (isTextField(e.target) && !state.tabHold) return; // don't hijack typing
-    e.preventDefault();
-    treeManager.centerOnSelected();
-  }
-}, true);
+    // Other global keys. Look up at event time: initialize() runs
+    // before attach('keyboard') in 17-keyboard.js.
+    document.addEventListener('keydown', (e) => {
+      logyq.keyboard?.keyDispatcher?.(e);
+    }, true);
+
 
 
     
@@ -5374,14 +5264,16 @@ document.addEventListener('keydown', (e) => {
   },
 
   renderEmpty(){
+    const { state, elements } = logyq
     elements.gLinks.selectAll("path.link").remove();
     elements.gNodes.selectAll("g.node").remove();
     state.lastNodes = [];
     state.detectors=[];
-    Detectors.draw();
+    logyq.detectors.draw();
   },
 
   layoutAndRender(isDelete=false){
+    const { state, config: CONFIG } = logyq
     if (!state.root) { this.renderEmpty(); return; }
     state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
       let A=a,B=b; while(A.depth>B.depth)A=A.parent; while(B.depth>A.depth)B=B.parent; while(A!==B){A=A.parent;B=B.parent;}
@@ -5395,25 +5287,26 @@ document.addEventListener('keydown', (e) => {
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */
       (function(){
         /* wait for render transitions to finish, then fit using final bbox */
-        const done = ()=>{ if(state.repositionMode==="mix"){ state.repositionMode=null; treeManager.autoFit(); } };
+        const done = ()=>{ if(state.repositionMode==="mix"){ state.repositionMode=null; logyq.treeManager.autoFit(); } };
         try{ clearTimeout(window.__mixFitT); }catch(_e){}
         try{ window.__mixFitT = setTimeout(done, 190); }catch(_e){ setTimeout(done, 190); }
       })();
     }
 
-    state.detectors = Detectors.build(state.root);
-    Detectors.draw();
+    state.detectors = logyq.detectors.build(state.root);
+    logyq.detectors.draw();
   },
 
   render(isDelete=false){
+    const { state, elements, config: CONFIG } = logyq
     const nodes=state.root.descendants();
     const links=state.root.links();
 
     const selLinks=elements.gLinks.selectAll("path.link").data(links, d=>d.target.data._uid);
     selLinks.enter().append("path").attr("class","link").style("stroke-width", 2.8).style("opacity", 0.5)
-      .attr("d", d=> visual.vLink({source:d.source, target:d.source}))
-      .transition().duration(260).attr("d", d=> visual.vLink(d));
-    selLinks.transition().duration(260).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> visual.vLink(d));
+      .attr("d", d=> logyq.visual.vLink({source:d.source, target:d.source}))
+      .transition().duration(260).attr("d", d=> logyq.visual.vLink(d));
+    selLinks.transition().duration(260).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> logyq.visual.vLink(d));
     selLinks.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
 
@@ -5421,13 +5314,13 @@ document.addEventListener('keydown', (e) => {
 
 const selNodes = elements.gNodes.selectAll("g.node").data(nodes, d => d.data._uid);
 
-// prepare drag (left-only per dragManager.behavior().filter)
-const nodeDrag = dragManager.behavior();
+// prepare drag (left-only per logyq.drag.behavior().filter)
+const nodeDrag = logyq.drag.behavior();
 
 // —— UPDATE selection (existing nodes): bind/refresh all handlers ——
 selNodes
   .on("contextmenu", logyq.mix.onNodeContextMenu)  // right-click menu on existing nodes
-  .on("mousedown",  onNodeMouseDown)     // left-click selection on existing nodes
+  .on("mousedown",  logyq.selection.onNodeMouseDown)     // left-click selection on existing nodes
   .call(nodeDrag);                       // drag on existing nodes
 
 // —— ENTER selection (new nodes): same bindings ——
@@ -5436,7 +5329,7 @@ const nEnter = selNodes.enter()
   .attr("transform", d => `translate(${d.x},${d.y})`)
   .style("opacity", 1)
   .on("contextmenu", logyq.mix.onNodeContextMenu)  // right-click menu on new nodes
-  .on("mousedown",  onNodeMouseDown)     // left-click selection on new nodes
+  .on("mousedown",  logyq.selection.onNodeMouseDown)     // left-click selection on new nodes
   .call(nodeDrag);                       // drag on new nodes
 
 
@@ -5445,7 +5338,7 @@ const nEnter = selNodes.enter()
 
 
 
-    nEnter.on("dblclick", (event,d)=>{ event.stopPropagation(); openNodeEditor(d); });
+    nEnter.on("dblclick", (event,d)=>{ event.stopPropagation(); logyq.editing.openNodeEditor(d); });
     /* [patch] grabzone-behind start */
     nEnter.insert("rect",":first-child")
       .attr("class","grabzone")
@@ -5469,15 +5362,12 @@ const nEnter = selNodes.enter()
 
 
 centerOnSelected(opts = {}) {
-  const uid = state.selectedUids && state.selectedUids.size ? [...state.selectedUids][0] : null;
-  if (!uid) { showToast?.('Select a node first'); return; }
-  const n = (state.lastNodes || []).find(d => d.data._uid === uid);
-  if (!n) return;
-  logyq.mix.flyToXY(n.x, n.y, opts); // keeps current zoom; pass {scale:1.0} to also zoom
+  logyq.camera.centerOnSelected(opts)
 },
 
 
   autoFit(pad=24){
+    const { state, elements } = logyq
     const nb=elements.gNodes.node()?.getBBox();
     const lb=elements.gLinks.node()?.getBBox();
     const merge=(a,b)=>{ if(!a||!a.width||!a.height) return b; if(!b||!b.width||!b.height) return a;
@@ -5510,6 +5400,7 @@ attach('treeManager', treeManager)
 
   /* ======================= SETTINGS ======================= */
   function setupSettings(){
+    const { state, elements, config: CONFIG } = logyq
     const s = elements.settings;
     function open(){ s.backdrop && s.backdrop.classList.add('show'); }
     function close(){ s.backdrop && s.backdrop.classList.remove('show'); }
@@ -5528,7 +5419,7 @@ attach('treeManager', treeManager)
         CONFIG.VERTICAL_GAP = v;
         if(s.vGapVal) s.vGapVal.textContent = v+'px';
         if(s.vGapValHidden) s.vGapValHidden.textContent = v+'px';
-        treeManager.layoutAndRender(false);
+        logyq.treeManager.layoutAndRender(false);
       });
     }
 
@@ -5536,11 +5427,11 @@ attach('treeManager', treeManager)
     const defaultGap = Number(CONFIG.VERTICAL_GAP) || 78;
     function clamp(v){ return Math.max(20, Math.min(300, v)); }
     function renderVal(){ const el=document.getElementById("verticalGapVal"); if(el) el.textContent=(Number(CONFIG.VERTICAL_GAP)||0)+"px"; }
-    function adjust(delta){ CONFIG.VERTICAL_GAP = clamp((Number(CONFIG.VERTICAL_GAP)||defaultGap)+delta); renderVal(); treeManager.layoutAndRender(false); }
+    function adjust(delta){ CONFIG.VERTICAL_GAP = clamp((Number(CONFIG.VERTICAL_GAP)||defaultGap)+delta); renderVal(); logyq.treeManager.layoutAndRender(false); }
 
     s.gapUp && s.gapUp.addEventListener("click", ()=>adjust(-STEP));
     s.gapDown && s.gapDown.addEventListener("click", ()=>adjust(+STEP));
-    s.gapReset && s.gapReset.addEventListener("click", ()=>{ CONFIG.VERTICAL_GAP=defaultGap; renderVal(); treeManager.layoutAndRender(false); });
+    s.gapReset && s.gapReset.addEventListener("click", ()=>{ CONFIG.VERTICAL_GAP=defaultGap; renderVal(); logyq.treeManager.layoutAndRender(false); });
     renderVal();
 
     if(s.lanePinBtn){
@@ -5576,13 +5467,13 @@ attach('treeManager', treeManager)
           let v = parseFloat(e.target.value); if(!isFinite(v)) v = 1.2; if(v < 1) v = 1;
           CONFIG.DETECTOR_DEPTH_FACTOR = v;
           if(s.detDepthVal) s.detDepthVal.textContent = v.toFixed(1)+"×";
-          treeManager.layoutAndRender(false);
+          logyq.treeManager.layoutAndRender(false);
         });
       }
       s.showDetectors.checked = !!CONFIG.SHOW_DETECTORS;
       s.showDetectors.addEventListener('change', (e)=>{
         CONFIG.SHOW_DETECTORS = !!e.target.checked;
-        Detectors.draw();
+        logyq.detectors.draw();
       });
     }
 
@@ -5590,7 +5481,7 @@ attach('treeManager', treeManager)
     if (s.exportPngBtn){
       s.exportPngBtn.addEventListener('click', ()=> {
         elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show");
-/* [patch] export-btn-handlers start */      if (!window.__exportUIInit) {        window.__exportUIInit = true;        const s = elements.settings;        const close = ()=>{ s.exportBackdrop && s.exportBackdrop.classList.remove('show'); };        s.exportClose && s.exportClose.addEventListener('click', close);        s.exportBackdrop && s.exportBackdrop.addEventListener('click', (e)=>{ if(e.target===s.exportBackdrop) close(); });        const readOpts = ()=>({          pad: parseInt(s.exportPadding?.value||'24',10)||24,          minLabelPx: parseInt(s.exportMinLabel?.value||'0',10)||0,          withBackground: !!(s.exportBackground && s.exportBackground.checked),          addTitle: !!(s.exportAddTitle && s.exportAddTitle.checked),          titleText: (s.exportTitleText?.value||'LOGiC').trim() || 'LOGiC'        });        s.doExportPng && s.doExportPng.addEventListener('click', ()=>{          const o = readOpts();          if (s.exportModeView && s.exportModeView.checked) {            PngExport.exportCurrentView({ scale: 2, withBackground: o.withBackground });          } else {            PngExport.exportFullPNG({ pad: o.pad, withBackground: o.withBackground, minLabelPx: o.minLabelPx, addTitle: o.addTitle, titleText: o.titleText });          }          close();        });        s.doExportSvg && s.doExportSvg.addEventListener('click', ()=>{          const o = readOpts();          PngExport.exportSVG({ pad: o.pad, addTitle: o.addTitle, titleText: o.titleText });          close();        });      }      /* [patch] export-btn-handlers end */
+/* [patch] export-btn-handlers start */      if (!window.__exportUIInit) {        window.__exportUIInit = true;        const s = elements.settings;        const close = ()=>{ s.exportBackdrop && s.exportBackdrop.classList.remove('show'); };        s.exportClose && s.exportClose.addEventListener('click', close);        s.exportBackdrop && s.exportBackdrop.addEventListener('click', (e)=>{ if(e.target===s.exportBackdrop) close(); });        const readOpts = ()=>({          pad: parseInt(s.exportPadding?.value||'24',10)||24,          minLabelPx: parseInt(s.exportMinLabel?.value||'0',10)||0,          withBackground: !!(s.exportBackground && s.exportBackground.checked),          addTitle: !!(s.exportAddTitle && s.exportAddTitle.checked),          titleText: (s.exportTitleText?.value||'LOGiC').trim() || 'LOGiC'        });        s.doExportPng && s.doExportPng.addEventListener('click', ()=>{          const o = readOpts();          if (s.exportModeView && s.exportModeView.checked) {            logyq.export.exportCurrentView({ scale: 2, withBackground: o.withBackground });          } else {            logyq.export.exportFullPNG({ pad: o.pad, withBackground: o.withBackground, minLabelPx: o.minLabelPx, addTitle: o.addTitle, titleText: o.titleText });          }          close();        });        s.doExportSvg && s.doExportSvg.addEventListener('click', ()=>{          const o = readOpts();          logyq.export.exportSVG({ pad: o.pad, addTitle: o.addTitle, titleText: o.titleText });          close();        });      }      /* [patch] export-btn-handlers end */
       });
     }
   }
@@ -5613,6 +5504,7 @@ attach('treeManager', treeManager)
 
 /* [patch] esc-clears-selection start */
 document.addEventListener('keydown', function(e){
+  const { state, elements } = logyq
   if (e.key !== 'Escape') return;
 
   // If you’re editing a node name, let that Esc be handled by the editor.
@@ -5626,7 +5518,7 @@ document.addEventListener('keydown', function(e){
   if (modalsOpen) return;
 
   // Otherwise: clear the node selection set.
-  clearSelection();
+  logyq.selection.clearSelection();
 }, true);
 /* [patch] esc-clears-selection end */
 
@@ -5634,6 +5526,7 @@ document.addEventListener('keydown', function(e){
 
 // --- Clean Tab behavior: press to exit typing + hold to navigate ---
 function tabDown(e){
+  const { state, elements } = logyq
   if (e.key !== 'Tab') return;
   // If any modal is open, keep native tabbing unless we're in the node editor
   const modalOpen =
@@ -5646,7 +5539,7 @@ function tabDown(e){
     e.preventDefault();
     e.stopPropagation();
     // Commit (true) and restore zoom (true)
-    closeNodeEditor(true, true);
+    logyq.editing.closeNodeEditor(true, true);
     state.tabHold = true;   // immediately enable navigation mode
     return;
   }
@@ -5671,112 +5564,13 @@ function tabDown(e){
 }
 
 function tabUp(e){
+  const { state } = logyq
   if (e.key !== 'Tab') return;
   state.tabHold = false;
 }
 
 window.addEventListener('keydown', tabDown, true);
 window.addEventListener('keyup', tabUp, true);
-
-
-
-
-
-
-
-
-/* ✅ Helper: center currently selected node (keeps current zoom) */
-function centerOnSelected(){
-  const selUid =
-    state.selectedUid ||
-    (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null);
-  if (!selUid || !state.root) return;
-
-  const h = state.root.descendants().find(n => n?.data?._uid === selUid);
-  if (!h) return;
-
-  flyCenterToUID(selUid, { duration: 420 });  // unified, non-jerky flight
-}
-
-
-
-
-/* Unified smooth pan (no zoom change, cancels any ongoing transitions) */
-function flyCenterToUID(uid, { duration = 420 } = {}){
-  const svg = elements.svg?.node();
-  if (!svg || !state.root) return;
-  const h = state.root.descendants().find(n => n?.data?._uid === uid);
-  if (!h) return;
-
-  // Current zoom (k) stays the same; we only translate.
-  const t = d3.zoomTransform(svg);
-  const W = svg.clientWidth, H = svg.clientHeight;
-  const target = d3.zoomIdentity
-    .translate(W/2, H/2)
-    .scale(t.k)
-    .translate(-h.x, -h.y);
-
-  // 🚫 Stop any in-flight animations before starting ours.
-  d3.select(svg).interrupt();
-  d3.select(elements.gRoot?.node()).interrupt?.();
-
-  elements.svg
-    .transition()
-    .duration(1200) //moat speed
-    .ease(d3.easeExpOut)
-    .call(state.zoom.transform, target);
-}
-
-/* Keyboard-only moat recenter (call AFTER handling arrows/J/K/L/I) */
-function enforceMoatForSelected(){
-  if (!CONFIG_MOAT?.enabled) return;
-  const now = Date.now();
-  if (now - (state._lastMoat || 0) < CONFIG_MOAT.cooldownMs) return;
-
-  const selUid =
-    state.selectedUid ||
-    (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null);
-  if (!selUid || !state.root) return;
-
-  const svg = elements.svg?.node();
-  if (!svg) return;
-
-  const h = state.root.descendants().find(n => n?.data?._uid === selUid);
-  if (!h) return;
-
-  const W = svg.clientWidth, H = svg.clientHeight;
-  const cx = W/2, cy = H/2;
-
-  // Transform node → screen space using current zoom transform
-  const z = d3.zoomTransform(svg);
-  const sx = z.x + z.k * h.x;
-  const sy = z.y + z.k * h.y;
-
-  // Moat radii from config (fractions of half the min side)
-  const halfMin = Math.min(W, H) / 2;
-  const innerR = halfMin * (CONFIG_MOAT.innerFrac || 0.35);
-  const outerR = halfMin * (CONFIG_MOAT.outerFrac || 0.70);
-
-  const dx = sx - cx, dy = sy - cy;
-  const dist = Math.sqrt(dx*dx + dy*dy);
-
-  // Trigger if we’re outside innerR (near edges). Optional cap at outerR.
-  if (dist >= innerR && dist <= outerR){
-    // Scale duration by how deep in the moat we are
-    const t = (dist - innerR) / Math.max(1, (outerR - innerR));
-    const dMin = CONFIG_MOAT.durationMin || 260;
-    const dMax = CONFIG_MOAT.durationMax || 650;
-    const dur = Math.round(dMin + t * (dMax - dMin));
-
-    flyCenterToUID(selUid, { duration: dur });
-    state._lastMoat = now;
-  }
-}
-
-
-
-
-
 /* ======================= KEYBOARD ======================= */
 function keyDispatcher(e){
   const { state, elements, utils } = logyq
@@ -5818,7 +5612,7 @@ function keyDispatcher(e){
 
  // 🔑 Hotkeys
     if (lower === 'f' && !e.shiftKey){ e.preventDefault(); logyq.treeManager.autoFit(); return; }
-    if (lower === 'f' && e.shiftKey) { e.preventDefault(); centerOnSelected(); return; }
+    if (lower === 'f' && e.shiftKey) { e.preventDefault(); logyq.camera.centerOnSelected(); return; }
     if (lower === 'a')               { e.preventDefault(); elements.wordInput.focus(); const L = elements.wordInput.value.length; elements.wordInput.setSelectionRange?.(L,L); return; }
     if (lower === 'm')               { e.preventDefault(); logyq.mix.randomizeTree(!!e.shiftKey); return; }
     if (lower === 'w')               { e.preventDefault(); toggleDock(); return; }
@@ -6241,7 +6035,7 @@ elements.svg.on("contextmenu", (event) => {
     logyq.treeManager.layoutAndRender(false);
 
     logyq.selection.selectSingle(child._uid);
-    (window.flyCenterToUID && flyCenterToUID(child._uid)) || (window.zoomToNodeCenter && zoomToNodeCenter(child._uid, 1.5));
+    logyq.camera.flyCenterToUID(child._uid);
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === child._uid);
@@ -6308,8 +6102,7 @@ function getSelectedUid(){
 
     // select & edit the new sibling
     logyq.selection.selectSingle(sib._uid);
-    (window.flyCenterToUID && flyCenterToUID(sib._uid)) ||
-    (window.zoomToNodeCenter && zoomToNodeCenter(sib._uid, 1.5));
+    logyq.camera.flyCenterToUID(sib._uid);
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
@@ -6377,8 +6170,7 @@ function getSelectedUid(){
 
     // Select & edit
     logyq.selection.selectSingle(sib._uid);
-    (window.flyCenterToUID && flyCenterToUID(sib._uid)) ||
-    (window.zoomToNodeCenter && zoomToNodeCenter(sib._uid, 1.5));
+    logyq.camera.flyCenterToUID(sib._uid);
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
@@ -6450,8 +6242,7 @@ function getSelectedUid(){
 
     // Select & edit the new parent
     logyq.selection.selectSingle(newParent._uid);
-    (window.flyCenterToUID && flyCenterToUID(newParent._uid)) ||
-    (window.zoomToNodeCenter && zoomToNodeCenter(newParent._uid, 1.5));
+    logyq.camera.flyCenterToUID(newParent._uid);
     if (window.startInlineEdit) startInlineEdit({ wipe: true });
     else {
       const nh = state.root.descendants().find(n => n?.data?._uid === newParent._uid);
@@ -6510,8 +6301,8 @@ function getSelectedUid(){
     });
   };
 
-  const originalLayoutAndRender = treeManager.layoutAndRender.bind(treeManager);
-  treeManager.layoutAndRender = (...args) => {
+  const originalLayoutAndRender = logyq.treeManager.layoutAndRender.bind(logyq.treeManager);
+  logyq.treeManager.layoutAndRender = (...args) => {
     const result = originalLayoutAndRender(...args);
     queueMicrotask(emitChange);
     return result;
@@ -6583,7 +6374,7 @@ function getSelectedUid(){
       target.name = next;
       state.root = d3.hierarchy(state.root.data);
       utils.assignIds(state.root);
-      treeManager.layoutAndRender(false);
+      logyq.treeManager.layoutAndRender(false);
       logyq.selection.selectSingle(uid);
       emitChange();
       return true;
@@ -6603,7 +6394,7 @@ function getSelectedUid(){
     },
     undo() { undo(); },
     mix(includeBank = false) { logyq.mix.randomizeTree(!!includeBank); },
-    fit() { treeManager.autoFit(); },
+    fit() { logyq.treeManager.autoFit(); },
     loadMap(tree, wordBank = []) {
       const next = utils.deepClone(tree || { name: 'New map' });
       utils.assignUids(next);
@@ -6615,8 +6406,8 @@ function getSelectedUid(){
       logyq.selection.clearGroup();
       logyq.selection.clearSelection();
       logyq.wordDock.render();
-      treeManager.layoutAndRender(false);
-      treeManager.autoFit();
+      logyq.treeManager.layoutAndRender(false);
+      logyq.treeManager.autoFit();
     },
     dispatchKey(key, options = {}) {
       document.dispatchEvent(new KeyboardEvent('keydown', {

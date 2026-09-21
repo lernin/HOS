@@ -27,8 +27,8 @@
     });
   };
 
-  const originalLayoutAndRender = treeManager.layoutAndRender.bind(treeManager);
-  treeManager.layoutAndRender = (...args) => {
+  const originalLayoutAndRender = logyq.treeManager.layoutAndRender.bind(logyq.treeManager);
+  logyq.treeManager.layoutAndRender = (...args) => {
     const result = originalLayoutAndRender(...args);
     queueMicrotask(emitChange);
     return result;
@@ -100,7 +100,7 @@
       target.name = next;
       state.root = d3.hierarchy(state.root.data);
       utils.assignIds(state.root);
-      treeManager.layoutAndRender(false);
+      logyq.treeManager.layoutAndRender(false);
       logyq.selection.selectSingle(uid);
       emitChange();
       return true;
@@ -120,7 +120,7 @@
     },
     undo() { undo(); },
     mix(includeBank = false) { logyq.mix.randomizeTree(!!includeBank); },
-    fit() { treeManager.autoFit(); },
+    fit() { logyq.treeManager.autoFit(); },
     loadMap(tree, wordBank = []) {
       const next = utils.deepClone(tree || { name: 'New map' });
       utils.assignUids(next);
@@ -132,8 +132,8 @@
       logyq.selection.clearGroup();
       logyq.selection.clearSelection();
       logyq.wordDock.render();
-      treeManager.layoutAndRender(false);
-      treeManager.autoFit();
+      logyq.treeManager.layoutAndRender(false);
+      logyq.treeManager.autoFit();
     },
     dispatchKey(key, options = {}) {
       document.dispatchEvent(new KeyboardEvent('keydown', {

@@ -45,18 +45,18 @@ public/logyq/
 
 ## Engine fragments
 
-Fragments are **physical modules**, not yet independently imported ES modules. They stay inside the original closure so declaration order, `const` bindings, duplicate listeners, and capture/bubble behavior stay identical to v161.
+Fragments are **physical modules**, not yet independently imported ES modules. They still concatenate into one IIFE. Wave 4 prefers a single bag over copying every v161 oddity; intentional deltas are in `CHANGELOG.md`.
 
 | File | Responsibility |
 |---|---|
 | `00-api.js` | Shared `logyq` bag and `attach()` registry |
-| `01-config.js` | `CONFIG`, moat/fly config, camera helpers (reads `logyq` for state/elements) |
+| `01-config.js` | `CONFIG`, moat/fly config. Registers `logyq.camera` (`flyCenterToUID`, `centerOnSelected`, `checkMoatAndAutoFit`). |
 | `02-state.js` | Shared `state`, `elements`, word-input, dock bounds |
 | `03-utils.js` | UID/clone/path helpers |
 | `04-png-export.js` | PNG/SVG export |
 | `05-history.js` | `pushHistory` / `undo` |
 | `06-data-and-visuals.js` | 30-node sample tree, link drawing |
-| `07-layout-and-structure.js` | Label wrap, lane API, V-hold structural moves. Registers `logyq.layout` for wrap/lanes. Structure moves still use ambient bindings until that cut. |
+| `07-layout-and-structure.js` | Label wrap, lane API, V-hold structural moves. Registers `logyq.layout` (wrap/lanes) and `logyq.structure` (horizontal/vertical focus moves). |
 | `08-detectors.js` | Invisible drop hit regions |
 | `09-editing.js` | Inline node editor. Registers `logyq.editing`. Reads shared state through the bag. |
 | `10-selection.js` | Focus/group selection, toasts, drop insert, reparent helpers. Registers `logyq.selection`. |
@@ -65,7 +65,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `13-drag.js` | Subtree / node-only / group drag. Registers `logyq.drag`. Drop-case order is unchanged: group, then Shift-solo, then subtree. |
 | `14-word-dock.js` | Chip render, chip drag, `parseGIQ` / `normalizeToTree`. Registers `logyq.wordDock`. |
 | `15-mix-and-context.js` | Mix, node context-menu Word Dock actions, leftover `onNodeLeftDown` / `onNodeRightButtonDown` / `flyToXY`. Registers `logyq.mix`. |
-| `16-tree-manager.js` | D3 zoom/layout/render and control wiring |
+| `16-tree-manager.js` | D3 zoom/layout/render and control wiring. Reads layout/detectors/camera/drag/mix through the bag. `centerOnSelected` delegates to `logyq.camera`. Keyboard bind is `logyq.keyboard?.keyDispatcher` (looked up at event time because `initialize()` runs before `attach('keyboard')`). |
 | `17-keyboard.js` | `keyDispatcher` and extra hotkeys. Registers `logyq.keyboard`. Capture-phase Shift+I/J/K/L listeners stay in this fragment. |
 | `18-bridge.js` | `LOGYQBridge` seam used by the preview layer |
 
@@ -82,7 +82,9 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 
 ## Shared state (explicit `logyq` bag)
 
-Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), tree ops (`12-tree-ops.js`), deletion (`11-deletion.js`), drag (`13-drag.js`), Word Dock (`14-word-dock.js`), Mix (`15-mix-and-context.js`), layout (`07-layout-and-structure.js` wrap/lanes), and keyboard (`17-keyboard.js`) register cluster APIs on the bag and take shared state/managers from it. `LOGYQBridge` selection, edit, add-child, create-relative, delete-selection, Word Dock render, and Mix methods go through those APIs. `LOGYQBridge.core` exposes the bag for tests.
+Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` and register `logyq.camera`. Editing, selection, tree ops, deletion, drag, Word Dock, Mix, layout/structure, keyboard, and the tree-manager D3 pass take shared state/managers from the bag. History, first-card import, settings gap changes, and `LOGYQBridge` layout/fit go through `logyq.treeManager`. `LOGYQBridge.core` exposes the bag for tests.
+
+Wave 4 dropped a few v161 oddities on purpose so these boundaries could be one bag. See `CHANGELOG.md`.
 
 Unconverted fragments still use ambient `state`, `elements`, `utils`, and friends; `attach()` makes those the same object references as `logyq.*`. Hidden communication that remains:
 
@@ -90,8 +92,11 @@ Unconverted fragments still use ambient `state`, `elements`, `utils`, and friend
 - Capture-phase keyboard listeners racing `keyDispatcher`, including V-hold / G / paste listeners that still live in `10-selection.js`
 - Editing Shift+Enter still calls later `addSiblingRightOf` by ambient name
 - Mix still joins Word Dock dumps with newlines (`addWords(names.join('\n'), 'bank')`); Word Dock `addWords` splits on `/[;,]+/`, so those dumps land as one chip unless a comma/semicolon is present
-- `caretXYFromHit` still uses `laneYForDepth(...) ?? (hit.y + hit.height)`; `laneYForDepth` always returns a number, so the `??` fallback never runs
-- `treeManager.layoutAndRender` patched by the bridge to emit autosave
+- V-hold I/J/K/L listeners still live in `10-selection.js` and call `logyq.structure`; `keyDispatcher` still bails while `state.vHold` is set
+- Nested Tab-hold listeners inside `treeManager.initialize` plus file-level Tab-hold in `16-tree-manager.js` (both capture)
+- `isTextField` / `applyDockSide` / `commitWordInput` / `updateDockBounds` still ambient from `02-state.js`
+- Detector internals still read ambient `CONFIG` / `state` / `elements` (lane geometry already goes through `logyq.layout`)
+- `logyq.treeManager.layoutAndRender` patched by the bridge to emit autosave
 - Word Dock `MutationObserver` in preview calling `notifyChange`
 
 See `NOT_REFACTORED.md` for internals left intact because changing them would likely change behavior.

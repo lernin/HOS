@@ -160,18 +160,18 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   const cooldown = moat.cooldownMs ?? 500;
   if (now - (state._lastMoat || 0) < cooldown) return;
 
-  // ✅ Center on selected (not fit)
-  if (typeof centerOnSelectedSoon === 'function'){
-    centerOnSelectedSoon(120);
-  } else if (logyq.treeManager?.centerOnSelected){
-    logyq.treeManager.centerOnSelected();
-  } else if (state?.selectedUids?.size === 1){
-    // last-resort fallback
-    const uid = [...state.selectedUids][0];
-    zoomToNodeCenter(uid, 1.5);
-  }
-
+  // Center on selected (not fit)
+  centerOnSelectedSoon(120);
   state._lastMoat = now;
 }
+
+  attach('camera', {
+    computeNearestWallPct,
+    flyCenterToUID,
+    centerOnSelected,
+    centerOnSelectedSoon,
+    checkMoatAndAutoFit,
+  });
+
 
 
