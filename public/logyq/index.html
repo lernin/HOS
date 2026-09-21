@@ -9,11 +9,31 @@
 <link rel="alternate icon" href="logos/LOGO_GREEN_Q.png" sizes="32x32">   <!-- optional fallback -->
 <link rel="apple-touch-icon" href="logos/LOGO_GREEN_Q.png" sizes="180x180"> <!-- optional for phones -->
 <meta name="theme-color" content="#22c55e">
-
+<style id="logyq-phone-boot">
+#logiq-mobile-header,#logiq-mobile-panel,#logiq-voice-bar{display:none}
+@media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+  body>header{display:none!important}
+  #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);overflow:hidden;flex-wrap:nowrap}
+  #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto}
+  #logiq-mobile-header .logiq-mobile-entry{height:36px;min-width:0;flex:1;border:1px solid #dbe3ec;border-radius:10px;padding:0 9px;font:inherit;font-size:14px;background:rgba(255,255,255,.9)}
+  #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:17px;padding:0}
+  #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  #logiq-mobile-header .logiq-save-state{display:inline-flex;width:9px;overflow:hidden;flex:0 0 9px;color:transparent}
+}
+</style>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
 <link rel="stylesheet" href="/logyq/css/app.css">
 </head>
 <body>
+<div id="logiq-mobile-header">
+  <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGiQ">
+  <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
+  <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
+  <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
+  <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
+  <span class="logiq-save-state" role="status" aria-live="polite"></span>
+  <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
+</div>
 
 
 <header>

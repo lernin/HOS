@@ -5,7 +5,8 @@
     desktopState.setAttribute('aria-live', 'polite')
     document.querySelector('header .controls')?.prepend(desktopState)
 
-    document.body.insertAdjacentHTML('beforeend', `
+    if (!document.getElementById('logiq-mobile-header')) {
+      document.body.insertAdjacentHTML('afterbegin', `
       <div id="logiq-mobile-header">
         <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGiQ">
         <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
@@ -14,7 +15,10 @@
         <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
         <span class="logiq-save-state" role="status" aria-live="polite"></span>
         <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
-      </div>
+      </div>`)
+    }
+
+    document.body.insertAdjacentHTML('beforeend', `
       <section id="logiq-mobile-panel" aria-label="LOGiQ controls">
         <div class="logiq-mobile-tools">
           <button data-tool="add">Add typed words</button><button data-tool="add-child">Add to selected</button>
