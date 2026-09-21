@@ -96,9 +96,22 @@ test('mobile editor overlays the card and centers it horizontally', () => {
 })
 
 test('mobile held drag defers the desktop transaction until release', () => {
-  assert.match(js, /updateFloating\(win,g,e\.clientX,e\.clientY\)/)
+  assert.match(js, /updateFloating\(doc,win,g,e\.clientX,e\.clientY\)/)
   assert.match(js, /function commitDrop/)
   assert.match(js, /mouse\(node,win,'mousedown',sx,sy,1\)/)
+  assert.doesNotMatch(js, /startFeedbackLoop/)
+})
+
+test('mobile held drag mirrors the desktop sensing cues without moving the tree', () => {
+  assert.match(js, /function updateDropHint/)
+  assert.match(js, /function findDropHint/)
+  assert.match(js, /hitNode\(doc,x,y/)
+  assert.match(js, /screenToGraph/)
+  assert.match(js, /v2-drop-target/)
+  assert.match(js, /v2-drop-caret/)
+  assert.match(js, /#f59e0b/)
+  assert.match(js, /#64748b/)
+  assert.doesNotMatch(js, /Detectors\.pick/)
   assert.doesNotMatch(js, /startFeedbackLoop/)
 })
 
