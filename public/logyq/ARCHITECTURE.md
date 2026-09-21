@@ -77,7 +77,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `00-boot.js` | Bridge guard, `LOGYQPreview` bag, storage keys, boot sequence |
 | `01-helpers.js` | JSON/localStorage helpers |
 | `02-styles.js` | Injected preview/mobile CSS, including v162 hold-drag ghost styles |
-| `03-ui.js` | Maps library chrome, ⋮ “Drag hand” buttons. Compact phone header markup lives in `index.html`. No spawn-puck, no bottom arrow bar. |
+| `03-ui.js` | Maps library chrome. Compact phone header markup lives in `index.html`. No spawn-puck, no bottom arrow bar, no drag-hand radios. |
 | `04-gestures.js` | Header-mic voice only (fills type-or-speak). |
 | `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag with origin ghost + one-card SVG clone + edge auto-pan, ~360ms double-tap edit, tap-to-MIC, finger offset. |
 | `06-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
@@ -138,8 +138,9 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - Direct flick calls `selectByUid` + `createRelative`, then arms `#logyq-v162-action` on the blank card. It must not start `MediaRecorder` until she taps MIC. Header mic remains a separate voice path into the type-or-speak field.
 - Phone pinch/wheel floor is `scaleExtent([0.02, 2.4])` on `logyq.state.zoom`. Do not restore the v161 `0.4` floor.
 - Finger hold-drag must keep the tree standing: `v2-branch-origin-ghost` on the source branch, `is-others` opacity 1 while `body.v2-branch-drag`. Do not let desktop `dragging-mode` hide the rest of the map. Do not restyle drop-target/caret (Ashley’s magnetic indicator).
-- Finger drag offset is `LOGYQPreview.gestures.fingerOffset()`. Up is **1.45cm**, side **0**, at 38px/cm (`{x:0,y:-55.1}` for both handedness settings). Mouse path must not use it.
-- Finger hold-drag preview is an SVG **clone of only the held card** (`cloneNode` of that `g.node`, grabzone stripped). Children do not float along. Origin ghost-hold on the live map still stamps the whole branch.
+- Finger hold-drag preview is an SVG **clone of only the held card**. On latch, `LATCH_MAP_SHIFT` pans the map **north 1.45cm** and the clone stays under the finger (`fingerOffset` `{0,0}`). Set `LATCH_MAP_SHIFT: false` to restore card-pop offset. Drop/cancel/yield reverts the latch shift.
+- Phone `autoFit` scales to **full canvas width** (may zoom in) and centers in the band below the header. Desktop still `Math.min(1, width, height)`.
+- Hold-drag Word Bank: finger must sit in the **inner ~44% of a chip** (`hitBankChip`) for **480ms** (`BANK_DWELL_MS`) before release banks. Empty ribbon / near-ribbon / a brief chip graze cancel the tree drop and do **not** bank. Chip→tree HTML5 drops are unchanged.
 - Edge auto-pan is `LOGYQPreview.gestures.edgePan` (v162 `v2.js`: zone 84, step 14). Detect from the **finger**; feed drop mousemove at the **visual** point.
 - Phone double-tap edit uses `logyq.camera.flyEditFocusToUID` (center in the visual viewport, k at least 1.35). `openNodeEditor` copies `prevZoom`; Enter/blur/Escape restore it unless `editUserZoom` (user pinched/panned). Flick `createRelative` still closes the editor in the same turn so the delayed focus fly does not run.
 - Hold-drag Word Bank: finger must be **inside a chip with 8px inset** to bank (`sendSubtreeToWordBank`). Finger over the dock slack (16px) cancels the tree drop instead of adopting through the ribbon. Chip→tree HTML5 drops are unchanged.

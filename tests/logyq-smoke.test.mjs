@@ -144,6 +144,7 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
   await waitForTree(page)
+  await page.waitForTimeout(700)
 
   assert.equal(await page.evaluate(() => window.LOGYQPreview?.gestures?.bindCanvas), undefined)
   assert.equal(await page.evaluate(() => typeof window.LOGYQPreview?.gestures?.bindV162), 'function')
@@ -165,6 +166,20 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   assert.ok(canvasBox, 'canvas should be laid out')
   assert.ok(canvasBox.width >= 388, `canvas width ${canvasBox.width} should fill the 390px phone viewport`)
   assert.ok(canvasBox.x <= 1, `canvas x ${canvasBox.x} should start at the left edge`)
+  const fit = await page.evaluate(() => {
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    const nodes = Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => node.getBoundingClientRect())
+    const left = Math.min(...nodes.map((box) => box.left))
+    const right = Math.max(...nodes.map((box) => box.right))
+    return {
+      canvas: canvas.width,
+      tree: right - left,
+      mid: (left + right) / 2,
+      cx: canvas.left + canvas.width / 2,
+    }
+  })
+  assert.ok(fit.tree >= fit.canvas * 0.8, `tree width ${fit.tree} should fill most of canvas ${fit.canvas}`)
+  assert.ok(Math.abs(fit.mid - fit.cx) < fit.canvas * 0.12, `tree mid ${fit.mid} should be near canvas center ${fit.cx}`)
   const zoomExtent = await page.evaluate(() => window.LOGYQBridge.core.state.zoom.scaleExtent())
   assert.deepEqual(zoomExtent, [0.02, 2.4])
   await page.evaluate(() => window.LOGYQBridge.selectByName('Node 05'))
@@ -232,6 +247,10 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     return node?.getAttribute('transform') || ''
   })
+  const beforeHold = await page.evaluate(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { x: t.x, y: t.y, k: t.k }
+  })
   await touch('pointerdown', hold.x, hold.y, 42)
   await page.waitForTimeout(320)
   assert.equal(await page.evaluate(() => document.body.classList.contains('v2-branch-drag')), true)
@@ -240,19 +259,20 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   const ghost = await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     const other = Array.from(document.querySelectorAll('svg#canvas g.node.is-others'))[0]
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return {
       ghost: node?.classList.contains('v2-branch-origin-ghost'),
       transform: node?.getAttribute('transform') || '',
       otherOpacity: other ? getComputedStyle(other).opacity : '1',
-      handed: window.LOGYQPreview.gestures.getHandedness(),
       offset: window.LOGYQPreview.gestures.fingerOffset(),
+      y: t.y,
     }
   })
   assert.equal(ghost.ghost, true)
   assert.equal(ghost.transform, originTransform)
   assert.equal(ghost.otherOpacity, '1')
-  assert.equal(ghost.handed, 'right')
-  assert.deepEqual(ghost.offset, { x: 0, y: -(1.45 * 38) })
+  assert.deepEqual(ghost.offset, { x: 0, y: 0 })
+  assert.ok(Math.abs((beforeHold.y - ghost.y) - (1.45 * 38)) < 2, `map should shift north by 1.45cm, before=${beforeHold.y} during=${ghost.y}`)
   assert.equal(await page.locator('#logyq-v162-branch-preview .v2-float-node').count(), 0)
   assert.equal(await page.locator('#logyq-v162-branch-preview g.node').count(), 1)
   assert.equal(await page.locator('#logyq-v162-branch-preview line').count(), 0)
@@ -264,6 +284,10 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   }), originTransform)
   await touch('pointerup', hold.x + 4, hold.y + 4, 42)
   await page.waitForFunction(() => !document.body.classList.contains('v2-branch-drag'))
+  await page.waitForFunction((prev) => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return Math.abs(t.y - prev.y) < 3
+  }, beforeHold)
 
   const edit = await nodeCenter('Node 08')
   const beforeEdit = await page.evaluate(() => {

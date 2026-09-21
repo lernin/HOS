@@ -55,12 +55,14 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 - **Ghost-hold restored.** Desktop `dragging-mode` still hides `is-others` (`opacity: 0`) — that is the “tree collapsed around the moving card” look. Finger hold-drag now keeps the live map in place and stamps `v2-branch-origin-ghost` on the source branch (v162 `v2-drag-visual-fix.js` / `v2-branch-affordance.js`). CSS is **not** media-query gated so a coarse-pointer miss cannot drop back to collapse. In-flight layout tweens are interrupted on latch, and origin transforms are re-stamped every feedback frame. Magnetic drop/caret CSS was left as the existing drop-target/caret path — not redesigned.
 - **Edge auto-pan.** Ported from `public/logiq-v162-mobile/v2.js` `edgePan` (same math in `v2-ghost.js` and clutch). Zone 84 / quadratic step 14. Finger toward an edge pans the map the opposite way. Re-feeds drop `mousemove` at the handedness visual point.
-- **Handedness drag offset.** Settings “Finger drag hand” radios + phone ⋮ “Drag hand” still persist `logyq_handedness_v1`, but the ghost offset is the same for both: **1.45cm up**, **no side offset** (38px/cm → `{x:0,y:-55.1}`). Desktop mouse drag is unchanged.
+- **Handedness drag offset.** Removed. Settings radios and ⋮ “Drag hand” are gone. No `logyq_handedness_v1` UI.
 - **Second finger yields.** A second pointer during hold-drag calls `yieldNodeDrag` (mouseup at origin) so pinch/pan can take over instead of fighting d3.drag.
 
 ## Phone poke revisions
 
-- **Ghost offset retune.** Finger-drag ghost is **1.45cm up** with **no horizontal offset**. Same for both handedness settings. Desktop mouse stays unoffset.
+- **Ghost offset retune.** Replaced card-pop with **map-shift experiment** (`LATCH_MAP_SHIFT`): on hold latch the world pans north 1.45cm and the clone stays under the finger. Reverts on drop/cancel. Set the flag false to restore popping the card up.
+- **Phone fit is full-width.** `autoFit` on coarse/no-hover ≤1200px (or ≤700px) scales to canvas width, centers in the band below the header, and may zoom in. First-load canvas is full-bleed in `app.css` so the first fit sees the phone size.
+- **Word Bank dwell.** Hold-drag banks only after **480ms** on the **inner 44%** of a chip (`hitBankChip`). Near-ribbon still cancels tree adopts. Packed chip strips no longer eat a passing drop.
 - **Drag visual is the map card.** Hold-drag clones the held `g.node` into `#logyq-v162-branch-preview` (same rect, label, chrome). Children are not cloned — only that one card moves. Origin ghost-hold on the live tree is unchanged.
 - **No fat-header flash.** Desktop `body>header` is hidden from first paint via blocking `#logyq-phone-boot` CSS plus `app.css`. Compact `#logiq-mobile-header` is in `index.html`.
 - **Edit zoom.** Mobile `openNodeEditor` (double-tap / E) delays `flyEditFocusToUID`: pan to ~32% of the visual viewport height and magnify to at least k=1.35 (never zoom out). Enter / blur / Escape animate back to a **copied** pre-edit transform. If the user pinches or pans mid-edit (`zoom` `sourceEvent`), restore is skipped.
