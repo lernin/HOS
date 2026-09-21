@@ -4831,7 +4831,7 @@ function onNodeLeftDown(event, d){
 
 
   /* [patch] saved-maps start */
-  const SAVED_KEY = "savedMaps_v1";
+  const SAVED_KEY = "logyq_saved_maps_v1";
   function getSavedMaps(){ try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); } catch(_e){ return []; } }
   function setSavedMaps(arr){ try { localStorage.setItem(SAVED_KEY, JSON.stringify(arr || [])); } catch(_e){} }
   function saveCurrentMap(){
@@ -5186,7 +5186,7 @@ document.addEventListener('keydown', (e) => {
     elements.undoBtn.disabled = state.history.length===0;
 
     try{
-      const key="ashleyUser";
+      const key="logyq_ashley_user_v1";
       let stored=localStorage.getItem(key);
       if(!stored){
         const u={ username:"Ashley", created:Date.now() };

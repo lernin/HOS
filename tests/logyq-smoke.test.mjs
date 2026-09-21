@@ -4,7 +4,6 @@ import test from 'node:test'
 import { chromium } from 'playwright'
 
 const baseUrl = process.env.LOGYQ_BASE_URL || process.env.LOGIQ_BASE_URL || 'http://127.0.0.1:4173'
-const mapId = '11111111-1111-4111-8111-111111111111'
 const d3Source = readFileSync(new URL('../node_modules/d3/dist/d3.min.js', import.meta.url), 'utf8')
 let browser
 
@@ -17,30 +16,9 @@ test.after(async () => {
 })
 
 async function stubProduction(context, capture = []) {
-  await context.route('https://jzaghifuhinkzzhiojre.supabase.co/rest/v1/rpc/**', async (route) => {
-    const request = route.request()
-    const name = new URL(request.url()).pathname.split('/').pop()
-    const body = request.postDataJSON()
-    capture.push({ name, body })
-    if (name === 'logiq_map_save') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body.map_id || mapId) })
-      return
-    }
-    if (name === 'logiq_map_list') {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([{
-          id: mapId,
-          name: 'Production map',
-          tree: { name: 'Library root', children: [{ name: 'Library child' }] },
-          word_bank: ['library word'],
-          updated_at: '2026-09-13T12:00:00.000Z',
-        }]),
-      })
-      return
-    }
-    await route.fulfill({ status: 204, body: '' })
+  await context.route('https://jzaghifuhinkzzhiojre.supabase.co/**', async (route) => {
+    capture.push({ url: route.request().url(), method: route.request().method() })
+    await route.abort()
   })
 }
 
@@ -51,7 +29,7 @@ async function newContext(options = {}) {
     contentType: 'application/javascript',
     body: d3Source,
   }))
-  await context.addInitScript(() => sessionStorage.setItem('logiq_lab_pin_v1', 'test-pin'))
+  await context.addInitScript(() => sessionStorage.setItem('logyq_lab_pin_v1', 'test-pin'))
   return context
 }
 
@@ -93,7 +71,10 @@ test('LOGYQ desktop boot preserves the 30-node tree, edit, undo, dock, and repar
   await editor.press('Enter')
   await page.waitForFunction(() => document.querySelector('g.node.is-outlined')?.textContent.includes('Edited 05'))
   await page.waitForFunction(() => document.querySelector('.logiq-save-state')?.textContent === 'Saved', null, { timeout: 6000 })
-  assert.ok(requests.some((request) => request.name === 'logiq_map_save' && request.body.map_tree))
+  assert.equal(requests.length, 0)
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('logyq_maps_v1') || '[]'))
+  assert.ok(Array.isArray(stored) && stored.some((row) => row?.tree))
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('logiq_lab_pin_v1')), null)
 
   await page.keyboard.press('u')
   await page.waitForFunction(() => Array.from(document.querySelectorAll('g.node')).some((node) => node.textContent.includes('Node 05')))

@@ -255,7 +255,7 @@ document.addEventListener('keydown', (e) => {
     elements.undoBtn.disabled = state.history.length===0;
 
     try{
-      const key="ashleyUser";
+      const key="logyq_ashley_user_v1";
       let stored=localStorage.getItem(key);
       if(!stored){
         const u={ username:"Ashley", created:Date.now() };

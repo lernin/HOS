@@ -16,9 +16,15 @@ v161 is the tree engine plus the small `LOGiQBridge` integration that `logiq-pre
 
 - Served at `/logyq/` with absolute asset paths under that prefix.
 - Application bridge is `window.LOGYQBridge` (not `LOGiQBridge`).
-- Pending/current map keys are `logyq_*` so local snapshots do not collide with v161.
-- The Lab PIN session key remains `logiq_lab_pin_v1` so an already-entered Lab PIN still works.
-- Production RPCs (`logiq_map_save`, `logiq_map_list`, `logiq_map_delete`) are unchanged. LOGYQ can still write production maps if a PIN is used; treat that as a known risk, not a feature.
+- Map and PIN storage uses only `logyq_*` keys (`logyq_current_map_v1`, `logyq_pending_save_v1`, `logyq_maps_v1`, `logyq_lab_pin_v1`, `logyq_saved_maps_v1`, `logyq_ashley_user_v1`).
+- Maps autosave into `localStorage.logyq_maps_v1`. LOGYQ does not call `logiq_map_save`, `logiq_map_list`, or `logiq_map_delete`, and does not ship the production Supabase URL or key.
+- The Lab PIN is stored as `logyq_lab_pin_v1` and is used only for `/api/transcribe` (voice). Maps never prompt for a PIN.
+
+### Remaining shared surfaces
+
+- `/api/transcribe` is still the Lab transcription endpoint. Voice sends `x-review-pin` from the LOGYQ-only session key. That is not LOGiQ map storage, but it is a shared Lab service.
+- D3 still loads from jsDelivr.
+- Copied preview DOM ids/classes still use `logiq-*` so selectors stay exact. Those names do not share storage with LOGiQ.
 
 ## Layout
 
@@ -71,7 +77,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `02-styles.js` | Injected preview/mobile CSS |
 | `03-ui.js` | Maps library chrome, phone header/context |
 | `04-gestures.js` | Tap-to-select, spawn puck, voice capture |
-| `05-persistence.js` | Debounced autosave, PIN, production RPCs |
+| `05-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
 
 ## Shared state (still one closure)
 

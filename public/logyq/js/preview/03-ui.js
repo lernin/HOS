@@ -32,11 +32,11 @@
       <div class="logiq-backdrop" id="logiq-library" aria-hidden="true">
         <section class="logiq-modal" role="dialog" aria-modal="true" aria-labelledby="logiq-library-title">
           <header class="logiq-modal-head"><h2 id="logiq-library-title">Maps</h2><button class="logiq-primary" id="logiq-new-map">New map</button><button class="logiq-icon-btn" id="logiq-library-close" aria-label="Close maps">×</button></header>
-          <div class="logiq-library-body"><p class="logiq-library-note">Maps save automatically to the production library.</p><div class="logiq-map-list" id="logiq-map-list"></div></div>
+          <div class="logiq-library-body"><p class="logiq-library-note">Maps save automatically on this device. They are not written to production LOGiQ storage.</p><div class="logiq-map-list" id="logiq-map-list"></div></div>
         </section>
       </div>
       <div class="logiq-backdrop" id="logiq-pin" aria-hidden="true">
-        <form class="logiq-pin-card" id="logiq-pin-form"><h2>Connect to the LOGiQ library</h2><p>Enter the Lab PIN once for this browser session. It is used only by the existing production map functions.</p><input id="logiq-pin-input" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Lab PIN" required><span class="logiq-pin-error">That PIN was not accepted.</span><div class="logiq-pin-actions"><button type="button" class="logiq-icon-btn" id="logiq-pin-cancel" aria-label="Cancel">×</button><button class="logiq-primary" type="submit">Connect</button></div></form>
+        <form class="logiq-pin-card" id="logiq-pin-form"><h2>Connect for voice transcription</h2><p>Enter the Lab PIN once for this LOGYQ session. It is stored under a LOGYQ-only key and is not used to read or write production LOGiQ maps.</p><input id="logiq-pin-input" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Lab PIN" required><span class="logiq-pin-error">That PIN was not accepted.</span><div class="logiq-pin-actions"><button type="button" class="logiq-icon-btn" id="logiq-pin-cancel" aria-label="Cancel">×</button><button class="logiq-primary" type="submit">Connect</button></div></form>
       </div>
     `)
 

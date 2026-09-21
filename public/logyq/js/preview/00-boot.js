@@ -4,11 +4,10 @@
   const bridge = window.LOGYQBridge
   if (!bridge) return
 
-  const SUPABASE_URL = 'https://jzaghifuhinkzzhiojre.supabase.co'
-  const SUPABASE_KEY = 'sb_publishable_rQDzA5bYlbzvaTjyo-uTXw_LiiIAddI'
-  const PIN_KEY = 'logiq_lab_pin_v1'
+  const PIN_KEY = 'logyq_lab_pin_v1'
   const CURRENT_KEY = 'logyq_current_map_v1'
   const PENDING_KEY = 'logyq_pending_save_v1'
+  const LIBRARY_KEY = 'logyq_maps_v1'
   const DEFAULT_NAME = 'Untitled map'
 
   const app = {
@@ -59,7 +58,6 @@
   window.addEventListener('keydown', () => requestAnimationFrame(updateContextActions), true)
   window.addEventListener('resize', () => requestAnimationFrame(updateContextActions))
   window.addEventListener('online', retryPending)
-  window.addEventListener('offline', () => setSaveState('offline'))
   updateContextActions()
-  if (recovered && navigator.onLine) setTimeout(retryPending, 500)
+  if (recovered) setTimeout(retryPending, 500)
 

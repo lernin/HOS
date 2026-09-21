@@ -18,8 +18,9 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 
 ## Preview / persistence
 
-- **Production Supabase RPCs and publishable key.** Same endpoints as v161. LOGYQ is an experiment; using Maps with a PIN can mutate production LOGiQ maps.
-- **Autosave debounce, pending local snapshot, and online retry.** Timing and `PENDING_KEY` shape are unchanged aside from the `logyq_*` key names.
+- **Device map library.** Autosave, list, open, rename, and delete use `localStorage.logyq_maps_v1`. The Maps dialog still looks like v161; it no longer talks to production.
+- **Voice PIN only.** `getPin` remains for `/api/transcribe`. It uses `logyq_lab_pin_v1`, not `logiq_lab_pin_v1`.
+- **Autosave debounce.** 850ms write delay and 1100ms retry-on-overlap are unchanged. Offline now means a localStorage write failed, not a missing network.
 - **Phone shell CSS injected at runtime** (`injectStyles`), including `logiq-*` DOM ids/classes. File paths are LOGYQ; DOM ids were not renamed so the copied preview selectors stay exact.
 - **Spawn-puck / voice / tap-vs-pan arbitration.** Coupled to D3 zoom, selected-card pointer-events, and `LOGYQBridge.createRelative`.
 

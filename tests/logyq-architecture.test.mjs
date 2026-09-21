@@ -45,6 +45,7 @@ test('isolated copy retains the v161 engine markers and working controls', () =>
   assert.match(preview, /logyq_current_map_v1/)
   assert.match(preview, /logyq_pending_save_v1/)
   assert.doesNotMatch(preview, /logiq_v161_current_map_v1|logiq_v161_pending_save_v1/)
+  assert.doesNotMatch(preview, /logiq_lab_pin_v1/)
 
   for (const marker of [
     'const CONFIG =',
@@ -71,12 +72,24 @@ test('isolated copy retains the v161 engine markers and working controls', () =>
   assert.doesNotMatch(html, /id=["']saveBtn["']/)
 })
 
-test('LOGYQ preview still targets the existing production RPC surface', () => {
+test('LOGYQ preview persists maps locally and does not call production LOGiQ RPCs', () => {
   const preview = readFileSync(previewPath, 'utf8')
-  assert.match(preview, /jzaghifuhinkzzhiojre\.supabase\.co/)
+  const engine = engineSource()
+  assert.match(preview, /logyq_lab_pin_v1/)
+  assert.match(preview, /logyq_current_map_v1/)
+  assert.match(preview, /logyq_pending_save_v1/)
+  assert.match(preview, /logyq_maps_v1/)
+  assert.doesNotMatch(preview, /logiq_lab_pin_v1/)
+  assert.doesNotMatch(preview, /logiq_v161_current_map_v1|logiq_v161_pending_save_v1/)
+  assert.doesNotMatch(preview, /jzaghifuhinkzzhiojre\.supabase\.co/)
   for (const rpc of ['logiq_map_save', 'logiq_map_list', 'logiq_map_delete']) {
-    assert.ok(preview.includes(rpc), `missing production RPC: ${rpc}`)
+    assert.doesNotMatch(preview, new RegExp(rpc))
+    assert.doesNotMatch(engine, new RegExp(rpc))
   }
+  assert.match(engine, /logyq_saved_maps_v1/)
+  assert.match(engine, /logyq_ashley_user_v1/)
+  assert.doesNotMatch(engine, /savedMaps_v1/)
+  assert.doesNotMatch(engine, /["']ashleyUser["']/)
 })
 
 test('copied engine script parses', () => {

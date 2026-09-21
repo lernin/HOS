@@ -3,8 +3,33 @@
     ui.saveStates.forEach((element) => {
       element.dataset.state = state
       element.textContent = text
-      element.title = state === 'offline' ? 'Changes are safe on this device and will retry when connected.' : ''
+      element.title = state === 'offline' ? 'Changes could not be stored on this device.' : ''
     })
+  }
+
+  function newMapId() {
+    try {
+      if (globalThis.crypto?.randomUUID) return crypto.randomUUID()
+    } catch (_error) {}
+    return `logyq-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  }
+
+  function readLibrary() {
+    const rows = readJson(LIBRARY_KEY, [])
+    return Array.isArray(rows) ? rows : []
+  }
+
+  function writeLibrary(rows) {
+    localStorage.setItem(LIBRARY_KEY, JSON.stringify(rows))
+  }
+
+  function upsertLibraryRecord(record) {
+    const rows = readLibrary()
+    const index = rows.findIndex((row) => row.id === record.id)
+    if (index >= 0) rows[index] = record
+    else rows.unshift(record)
+    writeLibrary(rows)
+    return record
   }
 
   function queueAutosave(snapshot) {
@@ -17,7 +42,7 @@
       ...JSON.parse(serialized),
       updated_at: new Date().toISOString(),
     }))
-    setSaveState(navigator.onLine ? 'saving' : 'offline')
+    setSaveState('saving')
     clearTimeout(app.timer)
     app.timer = setTimeout(savePending, 850)
   }
@@ -34,28 +59,24 @@
     }
     const pending = readJson(PENDING_KEY, null)
     if (!pending) return setSaveState('saved')
-    if (!navigator.onLine) return setSaveState('offline')
-
-    const pin = await getPin(true)
-    if (!pin) return setSaveState('offline')
 
     app.saving = true
     setSaveState('saving')
     try {
-      const id = await rpc('logiq_map_save', {
-        pin,
-        map_name: pending.name || DEFAULT_NAME,
-        map_tree: pending.tree,
-        map_word_bank: pending.word_bank || [],
-        map_id: pending.id || null,
+      const id = pending.id || newMapId()
+      upsertLibraryRecord({
+        id,
+        name: pending.name || DEFAULT_NAME,
+        tree: pending.tree,
+        word_bank: pending.word_bank || [],
+        updated_at: pending.updated_at || new Date().toISOString(),
       })
-      app.current = { id: typeof id === 'string' ? id : (id?.id || pending.id), name: pending.name || DEFAULT_NAME }
+      app.current = { id, name: pending.name || DEFAULT_NAME }
       updateMapName()
       const latest = readJson(PENDING_KEY, null)
       if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
       setSaveState(localStorage.getItem(PENDING_KEY) ? 'saving' : 'saved')
-    } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+    } catch (_error) {
       setSaveState('offline')
     } finally {
       app.saving = false
@@ -65,32 +86,6 @@
         app.timer = setTimeout(savePending, 1100)
       }
     }
-  }
-
-  async function rpc(name, body) {
-    let response
-    try {
-      response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
-        method: 'POST',
-        headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-        cache: 'no-store',
-      })
-    } catch (cause) {
-      throw Object.assign(new Error('Network unavailable'), { cause })
-    }
-    const text = await response.text()
-    let data = null
-    try { data = text ? JSON.parse(text) : null } catch (_error) { data = text }
-    if (!response.ok) {
-      const message = data?.message || data?.hint || `Request failed (${response.status})`
-      throw Object.assign(new Error(message), { status: response.status, auth: response.status < 500 })
-    }
-    return data
   }
 
   let pinResolver = null
@@ -133,24 +128,17 @@
   }
 
   async function refreshLibrary() {
-    const pin = await getPin(true)
-    if (!pin) {
-      ui.mapList.innerHTML = '<div class="logiq-empty">Connect to view production maps.</div>'
-      return
-    }
     try {
-      const rows = await rpc('logiq_map_list', { pin })
-      app.libraryRows = Array.isArray(rows) ? rows : []
+      app.libraryRows = readLibrary()
       renderLibrary()
-    } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
-      ui.mapList.innerHTML = `<div class="logiq-empty">${navigator.onLine ? 'Could not load maps. Check the Lab PIN.' : 'Offline. Saved changes will retry.'}</div>`
+    } catch (_error) {
+      ui.mapList.innerHTML = '<div class="logiq-empty">Could not read maps stored on this device.</div>'
     }
   }
 
   function renderLibrary() {
     if (!app.libraryRows.length) {
-      ui.mapList.innerHTML = '<div class="logiq-empty">No production maps yet. Create one to begin.</div>'
+      ui.mapList.innerHTML = '<div class="logiq-empty">No maps yet. Create one to begin.</div>'
       return
     }
     ui.mapList.innerHTML = app.libraryRows.map((row) => {
@@ -208,42 +196,34 @@
   }
 
   async function renameMap(row, name) {
-    const pin = await getPin(true)
-    if (!pin) return
     try {
-      await rpc('logiq_map_save', {
-        pin,
-        map_name: name,
-        map_tree: row.tree,
-        map_word_bank: row.word_bank || [],
-        map_id: row.id,
-      })
       row.name = name
+      upsertLibraryRecord({
+        ...row,
+        name,
+        updated_at: new Date().toISOString(),
+      })
       if (row.id === app.current.id) {
         app.current.name = name
         updateMapName()
       }
       renderLibrary()
       setSaveState('saved')
-    } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+    } catch (_error) {
       setSaveState('offline')
     }
   }
 
   async function deleteMap(row) {
-    const pin = await getPin(true)
-    if (!pin) return
     try {
-      await rpc('logiq_map_delete', { pin, map_id: row.id })
+      writeLibrary(readLibrary().filter((item) => item.id !== row.id))
       app.libraryRows = app.libraryRows.filter((item) => item.id !== row.id)
       if (app.current.id === row.id) {
         app.current = { id: null, name: DEFAULT_NAME }
         updateMapName()
       }
       renderLibrary()
-    } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+    } catch (_error) {
       setSaveState('offline')
     }
   }
