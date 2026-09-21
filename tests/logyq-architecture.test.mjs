@@ -83,3 +83,13 @@ test('copied engine script parses', () => {
   assert.doesNotThrow(() => new Function(scripts[0]))
   assert.ok(statSync(join(logyqDir, 'logos/LOGO_GREEN_Q.svg')).isFile())
 })
+
+test('theme styles live in the extracted stylesheet', () => {
+  const html = readFileSync(indexPath, 'utf8')
+  const css = readFileSync(join(logyqDir, 'css/app.css'), 'utf8')
+  assert.match(html, /href="\/logyq\/css\/app\.css"/)
+  assert.doesNotMatch(html, /<style>/)
+  for (const marker of ['#trash', '#Dock', 'g.node', '.global-no-cursor', '--card-color']) {
+    assert.ok(css.includes(marker), `missing css marker: ${marker}`)
+  }
+})
