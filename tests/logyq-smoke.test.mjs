@@ -904,6 +904,7 @@ test('LOGYQ library lists recents and New opens a calm one-card canvas', async (
   assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
   await page.locator('#logyq-home-btn').click()
   await page.waitForSelector('#logiq-library.is-open')
+  await page.waitForSelector('.logiq-map-name')
   assert.deepEqual(await page.locator('.logiq-map-name').allTextContents(), ['Recent sky', 'Older map'])
   assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-map-open')), false)
   await assertNoChooser(page)
