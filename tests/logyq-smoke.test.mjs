@@ -336,10 +336,10 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.ok(Math.hypot(flickAfter.x - flickView.x, flickAfter.y - flickView.y) < 2, 'flick create must leave the camera where it was')
   assert.equal(await page.locator('#logiq-voice-bar.is-visible').count(), 0)
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.app?.recorder), false)
-  await page.waitForSelector('#logyq-v162-action.show')
-  assert.equal(await page.locator('#logyq-v162-action').textContent(), 'MIC')
+  assert.equal(await page.locator('#logyq-v162-action.show').count(), 0)
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.recorder), false)
-  assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.actionUid), true)
+  assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.actionUid), false)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
   await page.waitForTimeout(400)
 
   const panCard = await nodeCenter('Node 12')
@@ -1007,6 +1007,124 @@ test('LOGYQ flick-created blank double-tap renames only that card', async () => 
     const names = Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => node.__data__?.data?.name)
     return names.filter((name) => name === 'cat').length === 1 && names.includes('Tapped 08') && names.includes('Node 10')
   }), true)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ flick left/right/up create as calmly as down-on-leaf', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+
+  async function faceCenter(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === label)
+      const face = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = face.getBoundingClientRect()
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        uid: node?.__data__?.data?._uid || '',
+      }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      document.getElementById('canvas').dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function flick(name, dx, dy, pointerId) {
+    const origin = await faceCenter(name)
+    const before = await page.locator('svg#canvas g.node').count()
+    const view = await page.evaluate(() => {
+      const t = window.d3.zoomTransform(document.getElementById('canvas'))
+      return { x: t.x, y: t.y }
+    })
+    await touch('pointerdown', origin.x, origin.y, pointerId)
+    await touch('pointerup', origin.x + dx, origin.y + dy, pointerId)
+    await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before)
+    const after = await page.evaluate(() => {
+      const t = window.d3.zoomTransform(document.getElementById('canvas'))
+      const selected = window.LOGYQBridge.core.state.selectedUid
+      const created = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data?._uid === selected)
+      return {
+        x: t.x,
+        y: t.y,
+        editors: document.querySelectorAll('.node-edit-input').length,
+        mic: document.querySelectorAll('#logyq-v162-action.show').length,
+        selected,
+        createdName: created?.data?.name || '',
+        parent: created?.parent?.data?.name || null,
+        child: created?.children?.[0]?.data?.name || null,
+        beforeName: (() => {
+          const kids = created?.parent?.children || []
+          const index = kids.findIndex((item) => item.data?._uid === selected)
+          return index > 0 ? kids[index - 1]?.data?.name || null : null
+        })(),
+        afterName: (() => {
+          const kids = created?.parent?.children || []
+          const index = kids.findIndex((item) => item.data?._uid === selected)
+          return index >= 0 ? kids[index + 1]?.data?.name || null : null
+        })(),
+      }
+    })
+    assert.ok(Math.hypot(after.x - view.x, after.y - view.y) < 2, `${name} flick must leave the camera`)
+    assert.equal(after.editors, 0, `${name} flick must not open the editor`)
+    assert.equal(after.mic, 0, `${name} flick must not arm MIC`)
+    assert.notEqual(after.selected, origin.uid)
+    assert.equal(after.createdName, '')
+    return { origin, after }
+  }
+
+  const left = await flick('Node 10', -70, 0, 81)
+  assert.equal(left.after.afterName, 'Node 10')
+
+  const right = await flick('Node 12', 70, 0, 82)
+  assert.equal(right.after.beforeName, 'Node 12')
+
+  const up = await flick('Node 05', 0, -70, 83)
+  assert.equal(up.after.child, 'Node 05')
+
+  const blank = await page.evaluate((uid) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?._uid === uid)
+    const face = node?.querySelector('rect:not(.grabzone)') || node
+    const rect = face.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid }
+  }, up.after.selected)
+  await touch('pointerdown', blank.x, blank.y, 84)
+  await touch('pointerup', blank.x, blank.y, 84)
+  await touch('pointerdown', blank.x, blank.y, 85)
+  await touch('pointerup', blank.x, blank.y, 85)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), blank.uid)
+  await page.locator('.node-edit-input').fill('up-blank')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('svg#canvas g.node')).some((node) => node.__data__?.data?.name === 'up-blank'))
+  assert.equal(await page.evaluate(() => {
+    const named = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'up-blank')
+    return named?.__data__?.children?.[0]?.data?.name || null
+  }), 'Node 05')
 
   assert.deepEqual(errors, [])
   await context.close()

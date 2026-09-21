@@ -109,17 +109,20 @@
       return !!logyq.treeOps.addChildOf(logyq.state.selectedUid, '', { noEdit: false });
     },
     createRelative(direction) {
-      if (!logyq.state.selectedUid) return null;
-      const before = logyq.state.selectedUid;
-      if (direction === 'up') logyq.keyboard.insertParentAboveSelectedAndEdit();
-      if (direction === 'left') logyq.keyboard.addElderSiblingLeftAndEdit();
-      if (direction === 'down') logyq.keyboard.addChildBelowSelectedAndEdit();
-      if (direction === 'right') logyq.keyboard.addYoungerSiblingRightAndEdit();
-      const created = logyq.state.selectedUid && logyq.state.selectedUid !== before ? logyq.state.selectedUid : null;
-      if (created && logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
+      const origin = logyq.state.selectedUid;
+      if (!origin) return null;
+      const calm = { noEdit: true, select: true, rootAsChild: false };
+      const created =
+        direction === 'down' ? logyq.treeOps.addChildOf(origin, '', calm) :
+        direction === 'right' ? logyq.treeOps.addSiblingRightOf(origin, '', calm) :
+        direction === 'left' ? logyq.treeOps.addSiblingLeftOf(origin, '', calm) :
+        direction === 'up' ? logyq.treeOps.insertParentAbove(origin, '', calm) :
+        null;
+      if (logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
       try { logyq.elements.gNodes?.selectAll('g.node').interrupt(); } catch (_error) {}
+      if (created) logyq.selection.selectSingle(created);
       emitChange();
-      return created;
+      return created || null;
     },
     renameNode(uid, name) {
       const target = uid && utils.findByUid(state.root?.data, uid);

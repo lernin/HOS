@@ -2869,13 +2869,21 @@ function addChildOf(parentUid, newName = '', opts = {}) {
 }
 
 
-function addSiblingRightOf(uid, newName = ''){
+function addSiblingRightOf(uid, newName = '', opts = {}){
+  return insertSibling(uid, newName, { side: 'right', rootAsChild: true, ...opts });
+}
+
+function addSiblingLeftOf(uid, newName = '', opts = {}){
+  return insertSibling(uid, newName, { side: 'left', rootAsChild: false, ...opts });
+}
+
+function insertSibling(uid, newName = '', opts = {}){
+  const { side = 'right', noEdit = false, select = true, rootAsChild = side === 'right' } = opts;
   const { state, utils } = logyq
   if (!state.root) return null;
   const path = utils.pathToUid(state.root.data, uid);
   if (!path || path.length < 2){
-    // root has no siblings → treat as “add child of root”
-    return addChildOf(uid, newName);
+    return rootAsChild ? addChildOf(uid, newName, { noEdit, select }) : null;
   }
   const parentUid = path[path.length - 2];
   const parent = utils.findByUid(state.root.data, parentUid);
@@ -2883,19 +2891,53 @@ function addSiblingRightOf(uid, newName = ''){
   parent.children = parent.children || [];
 
   const ix = parent.children.findIndex(c => c && c._uid === uid);
+  if (ix < 0) return null;
   const newNode = { name: newName };
   utils.assignUids(newNode);
 
   logyq.history.pushHistory({ type: 'add', parentPath: utils.pathToUid(state.root.data, parentUid), uid: newNode._uid });
 
-  parent.children.splice(Math.max(0, ix) + 1, 0, newNode);
+  parent.children.splice(side === 'left' ? ix : Math.max(0, ix) + 1, 0, newNode);
   state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
   logyq.treeManager.layoutAndRender(false);
-  logyq.selection.setSelected(newNode._uid);
+  if (select) logyq.selection.setSelected(newNode._uid);
 
-  const h = state.root.descendants().find(n => n.data._uid === newNode._uid);
-  if (h) logyq.editing.openNodeEditor(h);
+  if (!noEdit) {
+    const h = state.root.descendants().find(n => n.data._uid === newNode._uid);
+    if (h) logyq.editing.openNodeEditor(h);
+  }
   return newNode._uid;
+}
+
+function insertParentAbove(uid, newName = '', opts = {}){
+  const { noEdit = false, select = true } = opts;
+  const { state, utils } = logyq
+  if (!state.root || !uid) return null;
+  const h = state.root.descendants().find(n => n?.data?._uid === uid);
+  if (!h?.parent) return null;
+
+  const parentData = h.parent.data;
+  parentData.children = parentData.children || [];
+  const idx = parentData.children.findIndex(c => c && c._uid === uid);
+  if (idx < 0) return null;
+
+  const prevTree = utils.deepClone(state.root.data);
+  logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
+
+  const newParent = { name: newName, children: [h.data] };
+  utils.assignUids(newParent);
+  parentData.children.splice(idx, 1, newParent);
+
+  state.root = d3.hierarchy(state.root.data);
+  utils.assignIds(state.root);
+  logyq.treeManager.layoutAndRender(false);
+  if (select) logyq.selection.setSelected(newParent._uid);
+
+  if (!noEdit) {
+    const nh = state.root.descendants().find(n => n.data._uid === newParent._uid);
+    if (nh) logyq.editing.openNodeEditor(nh);
+  }
+  return newParent._uid;
 }
 
 
@@ -3229,6 +3271,9 @@ function sendNodeToWordBank_abandon(h){
   attach('treeOps', {
     addChildOf,
     addSiblingRightOf,
+    addSiblingLeftOf,
+    insertSibling,
+    insertParentAbove,
     addSubtreeChildOf,
     tryParsePureJSON,
     tryParseGIQ,
@@ -6038,17 +6083,20 @@ elements.svg.on("contextmenu", (event) => {
       return !!logyq.treeOps.addChildOf(logyq.state.selectedUid, '', { noEdit: false });
     },
     createRelative(direction) {
-      if (!logyq.state.selectedUid) return null;
-      const before = logyq.state.selectedUid;
-      if (direction === 'up') logyq.keyboard.insertParentAboveSelectedAndEdit();
-      if (direction === 'left') logyq.keyboard.addElderSiblingLeftAndEdit();
-      if (direction === 'down') logyq.keyboard.addChildBelowSelectedAndEdit();
-      if (direction === 'right') logyq.keyboard.addYoungerSiblingRightAndEdit();
-      const created = logyq.state.selectedUid && logyq.state.selectedUid !== before ? logyq.state.selectedUid : null;
-      if (created && logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
+      const origin = logyq.state.selectedUid;
+      if (!origin) return null;
+      const calm = { noEdit: true, select: true, rootAsChild: false };
+      const created =
+        direction === 'down' ? logyq.treeOps.addChildOf(origin, '', calm) :
+        direction === 'right' ? logyq.treeOps.addSiblingRightOf(origin, '', calm) :
+        direction === 'left' ? logyq.treeOps.addSiblingLeftOf(origin, '', calm) :
+        direction === 'up' ? logyq.treeOps.insertParentAbove(origin, '', calm) :
+        null;
+      if (logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
       try { logyq.elements.gNodes?.selectAll('g.node').interrupt(); } catch (_error) {}
+      if (created) logyq.selection.selectSingle(created);
       emitChange();
-      return created;
+      return created || null;
     },
     renameNode(uid, name) {
       const target = uid && utils.findByUid(state.root?.data, uid);

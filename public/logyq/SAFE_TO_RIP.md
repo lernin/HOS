@@ -42,7 +42,7 @@ Do **not** delete because fingers on phone do not press the key. Gestures and th
 - Tab-hold (desktop modifier; do not synthesize Tab on touch)
 - SVG `dblclick` **mute** (edit is pointer double-tap or E)
 - Preview maps library (`logyq_maps_v1`) and header-mic `/api/transcribe` with `logyq_lab_pin_v1`
-- Flick tap-to-MIC chip (`#logyq-v162-action`) — record only after tap
+- Flick tap-to-MIC chip (`#logyq-v162-action`) — **later / nursery**. Flick must not arm it. Header mic stays.
 - Finger hold-drag origin ghost (`v2-branch-origin-ghost` + `is-others` stay visible). Desktop `dragging-mode` hide is load-bearing for mouse; do not delete it, only override during `v2-branch-drag`
 - Hold-drag card-pop via `liftPx()` / `fingerOffset` (`OFFSET_UP_CM` 1.1cm, side 0). Map does not pan on latch. See `GESTURE_STATES.md`.
 - Origin-slot freeze (`holdDragFrozen`) and bank copy guards (`holdDragBlocksBank`) — stay-still must not splice or `addWords`

@@ -89,6 +89,12 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 - **Center-offset pan, not edge bands.** Hold-drag auto-pan uses the finger’s offset from the viewport center (dead zone 56px, quadratic step 16). Up/down matches left/right; near-center does not creep. The content leash is sign-aware on the **leading** edge (`dx>0` → left on `minX`, `dx<0` → right on `maxX`, same for y) and does not yank if already past. After `ba35d2f` the leading inset was ½ card and felt choked against the bezel; it is now ~⅓ of the viewport empty on the side she is panning toward (tree in the opposite ~⅔). Diagonals apply both axes.
 
+## Flick L/R/Up match down-on-leaf (PR 112)
+
+- **One recognizer.** Flick still buckets into `createRelative(direction)`. Down-on-leaf stays the gold standard (camera stays, blank child, no editor).
+- **L/R/Up were AndEdit keyboard helpers.** Those opened the editor, flew the camera, then `createRelative` slammed the editor shut — the blip / bad focus. All four directions now use the same calm `treeOps` settle: `noEdit`, no fly, select the new uid, interrupt `g.node` tweens.
+- **No MIC on flick.** Nursery / recording is later. Flick does not arm `#logyq-v162-action`. Header mic is unchanged. Double-tap still edits **that** new blank.
+
 ## Double-tap edits the card under the finger (PR 112)
 
 - **Wrong-card rename after flick-create.** Flick-down creates a blank via `createRelative` → `addChildBelowSelectedAndEdit` (opens editor on the new uid, then immediately closes it). Double-tap then called `editSelected()` with **no uid**, so a stale `selectedUid` (the flick origin / parent) won if `selectByUid` missed. Meanwhile `layoutAndRender` tweens the parent for 260ms over the new child’s final slot, and `hitNode` used the whole `g.node` box (downward grabzone). Equal-size overlaps picked the earlier DOM node — the parent. She typed “cat” onto the wrong card.

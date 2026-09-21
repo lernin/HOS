@@ -558,7 +558,7 @@ function loadTreeOps() {
     'd3',
     'showToast',
     'attach',
-    `${source}; return { addChildOf, addSiblingRightOf, addSubtreeChildOf };`,
+    `${source}; return { addChildOf, addSiblingRightOf, addSiblingLeftOf, insertParentAbove, addSubtreeChildOf };`,
   )(logyq, { hierarchy: fakeHierarchy }, () => {}, (name, value) => { logyq[name] = value; return value })
   return { logyq, history, ...fns }
 }
@@ -589,6 +589,26 @@ test('addSiblingRightOf on the root falls back to addChildOf', () => {
   logyq.state.root = fakeHierarchy(tree)
   addSiblingRightOf(tree._uid, 'kid')
   assert.equal(tree.children.at(-1).name, 'kid')
+})
+
+test('left sibling and insert-parent stay calm when noEdit is set', () => {
+  const { logyq, addSiblingLeftOf, insertParentAbove } = loadTreeOps()
+  const tree = { name: 'root', children: [{ name: 'a' }, { name: 'c' }] }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  const leftUid = addSiblingLeftOf(tree.children[1]._uid, 'b', { noEdit: true })
+  assert.deepEqual(tree.children.map((child) => child.name), ['a', 'b', 'c'])
+  assert.equal(leftUid, tree.children[1]._uid)
+  assert.equal(logyq._opened, undefined)
+  assert.equal(addSiblingLeftOf(tree._uid, 'nope', { noEdit: true }), null)
+
+  const parentUid = insertParentAbove(tree.children[0]._uid, '', { noEdit: true })
+  assert.equal(tree.children[0]._uid, parentUid)
+  assert.equal(tree.children[0].name, '')
+  assert.equal(tree.children[0].children[0].name, 'a')
+  assert.equal(logyq.state.selectedUid, parentUid)
+  assert.equal(logyq._opened, undefined)
+  assert.equal(insertParentAbove(tree._uid, '', { noEdit: true }), null)
 })
 
 test('drag drop handling keeps group, solo, then subtree order', () => {
@@ -979,6 +999,7 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /__logyqV2ConsumedPointers/)
   assert.match(v162, /bridge\.createRelative\(direction\)/)
   assert.match(v162, /bridge\.editSelected\(\{ uid \}\)/)
+  assert.doesNotMatch(v162, /armBlankCardMic\(state\.mic, doc, createdUid\)/)
   assert.match(v162, /function rankCardHits/)
   assert.match(v162, /rect:not\(\.grabzone\)/)
   assert.match(v162, /function bindV162Gestures/)
@@ -986,7 +1007,7 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /function armBlankCardMic/)
   assert.match(v162, /function startCardRecording/)
   assert.match(v162, /logyq-v162-action/)
-  assert.match(v162, /armBlankCardMic\(state\.mic, doc, createdUid\)/)
+  assert.match(v162, /clearCardMic\(state\.mic\)/)
   assert.match(v162, /function edgePan/)
   assert.match(v162, /function centerPanVector/)
   assert.match(v162, /function clampPanToContent/)

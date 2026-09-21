@@ -798,6 +798,7 @@
         return
       }
       state.lastTap = null
+      clearCardMic(state.mic)
       win.requestAnimationFrame(() => {
         restoreView(doc, win, candidate.view)
         bridge.selectByUid(candidate.uid)
@@ -810,10 +811,10 @@
         }
         restoreView(doc, win, candidate.view)
         bridge.selectByUid(createdUid)
-        armBlankCardMic(state.mic, doc, createdUid)
+        clearCardMic(state.mic)
         win.requestAnimationFrame(() => {
           restoreView(doc, win, candidate.view)
-          armBlankCardMic(state.mic, doc, createdUid)
+          clearCardMic(state.mic)
         })
         win.navigator.vibrate?.(16)
       })
