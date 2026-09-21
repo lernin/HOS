@@ -227,19 +227,19 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   await page.waitForTimeout(400)
 
   const hold = await nodeCenter('Node 03')
-  const holdCount = await page.locator('g.node').count()
+  const holdCount = await page.locator('svg#canvas g.node').count()
   const originTransform = await page.evaluate(() => {
-    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     return node?.getAttribute('transform') || ''
   })
   await touch('pointerdown', hold.x, hold.y, 42)
   await page.waitForTimeout(320)
   assert.equal(await page.evaluate(() => document.body.classList.contains('v2-branch-drag')), true)
   assert.equal(await page.locator('#logyq-v162-branch-preview').count(), 1)
-  assert.equal(await page.locator('g.node').count(), holdCount)
+  assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
   const ghost = await page.evaluate(() => {
-    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
-    const other = Array.from(document.querySelectorAll('g.node.is-others'))[0]
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    const other = Array.from(document.querySelectorAll('svg#canvas g.node.is-others'))[0]
     return {
       ghost: node?.classList.contains('v2-branch-origin-ghost'),
       transform: node?.getAttribute('transform') || '',
@@ -257,9 +257,9 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.locator('#logyq-v162-branch-preview g.node').count(), 1)
   assert.equal(await page.locator('#logyq-v162-branch-preview line').count(), 0)
   await touch('pointermove', hold.x + 4, hold.y + 4, 42)
-  assert.equal(await page.locator('g.node').count(), holdCount)
+  assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
   assert.equal(await page.evaluate(() => {
-    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
     return node?.getAttribute('transform') || ''
   }), originTransform)
   await touch('pointerup', hold.x + 4, hold.y + 4, 42)
