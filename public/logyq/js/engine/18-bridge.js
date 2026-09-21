@@ -1,6 +1,6 @@
 /* LOGYQ preview integration seam.
    Keep the copied engine above intact; mobile UI and persistence live in
-   logyq-preview.js and use only this deliberately small bridge. */
+   js/preview.js and use only this deliberately small bridge. */
 (() => {
   const changeListeners = new Set();
   let changeReady = false;

@@ -3,12 +3,12 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
-import { assembleLogyqEngine } from '../scripts/assemble-logyq.mjs'
+import { assembleLogyqEngine, assembleLogyqPreview } from '../scripts/assemble-logyq.mjs'
 import { engineSource, logyqDir } from './logyq-source.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const indexPath = join(logyqDir, 'index.html')
-const previewPath = join(logyqDir, 'logyq-preview.js')
+const previewPath = join(logyqDir, 'js/preview.js')
 
 function walk(dir, files = []) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -27,6 +27,7 @@ test('LOGYQ lives only under public/logyq and does not import v161 asset paths',
     assert.doesNotMatch(text, /\/logiq-v161\//, relative(root, path))
     assert.doesNotMatch(text, /LOGiQBridge/)
     assert.doesNotMatch(text, /logiq-preview\.js/)
+    assert.doesNotMatch(text, /\/logyq\/logyq-preview\.js/)
   }
 })
 
@@ -38,7 +39,7 @@ test('isolated copy retains the v161 engine markers and working controls', () =>
   assert.match(html, /<title>LOGYQ<\/title>/)
   assert.match(engine, /window\.LOGYQBridge = Object\.freeze/)
   assert.match(html, /<script src="\/logyq\/js\/engine\.js"><\/script>/)
-  assert.match(html, /<script src="\/logyq\/logyq-preview\.js"><\/script>/)
+  assert.match(html, /<script src="\/logyq\/js\/preview\.js"><\/script>/)
   assert.match(preview, /const bridge = window\.LOGYQBridge/)
   assert.match(preview, /logyq_current_map_v1/)
   assert.match(preview, /logyq_pending_save_v1/)
@@ -102,4 +103,15 @@ test('engine fragments concatenate to the served IIFE without edits', () => {
     '01-config.js', '03-utils.js', '05-history.js', '08-detectors.js',
     '10-selection.js', '13-drag.js', '16-tree-manager.js', '17-keyboard.js', '18-bridge.js',
   ]) assert.ok(assembled.names.includes(name), name)
+})
+
+test('preview fragments concatenate to the served enhancement without edits', () => {
+  const assembled = assembleLogyqPreview()
+  assert.deepEqual(assembled.names, [
+    '00-boot.js', '01-helpers.js', '02-styles.js', '03-ui.js', '04-gestures.js', '05-persistence.js',
+  ])
+  assert.equal(assembled.source, readFileSync(previewPath, 'utf8'))
+  assert.match(assembled.source, /function queueAutosave/)
+  assert.match(assembled.source, /function beginSpawnGesture/)
+  assert.match(assembled.source, /function injectStyles/)
 })
