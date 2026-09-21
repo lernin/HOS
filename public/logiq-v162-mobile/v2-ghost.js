@@ -78,7 +78,11 @@
         body.logiq-mobile-v2 g.node.v2-origin-ghost{opacity:.28!important}
         body.logiq-mobile-v2 g.node.v2-origin-ghost rect:not(.grabzone){stroke:#64748b!important;stroke-width:2px!important;stroke-dasharray:5 4!important;fill:#f8fafc!important}
         body.logiq-mobile-v2 g.node.v2-origin-ghost text{opacity:.58!important}
-        #logiq-v2-drag-card{position:fixed;z-index:3940;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:5px 9px;border:2px solid #2563eb;border-radius:10px;background:#fff;color:#374151;box-shadow:0 12px 30px rgba(15,23,42,.28);font:650 14px/1.15 system-ui;text-align:center;pointer-events:none;user-select:none;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transform:none}
+        #logiq-v2-drag-card{position:fixed;z-index:3940;display:flex;align-items:center;justify-content:center;box-sizing:border-box;padding:5px 9px;border:2px solid #64748b;border-radius:10px;background:#fff;color:#374151;box-shadow:0 12px 30px rgba(15,23,42,.28);font:650 14px/1.15 system-ui;text-align:center;pointer-events:none;user-select:none;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transform:none}
+        #logiq-v2-drag-card.v2-valid-drop{border-color:#22c55e;box-shadow:0 12px 30px rgba(34,197,94,.24)}
+        body.logiq-mobile-v2 g.node.v2-drop-target rect:not(.grabzone){fill:#22c55e!important;stroke:#22c55e!important;filter:drop-shadow(0 0 7px rgba(34,197,94,.32))}
+        body.logiq-mobile-v2 g.node.v2-drop-target text{fill:#fff!important}
+        body.logiq-mobile-v2 .v2-drop-caret{fill:#f59e0b;stroke:#fff;stroke-width:2px;filter:drop-shadow(0 1px 2px rgba(15,23,42,.35));pointer-events:none}
         body.logiq-mobile-v2.v2-cancel #logiq-v2-drag-card{border-color:#ef4444;box-shadow:0 12px 30px rgba(239,68,68,.24)}
         body.logiq-mobile-v2.v2-cancel g.node.v2-origin-ghost rect:not(.grabzone){stroke:#ef4444!important}
         @media (orientation:landscape){
@@ -211,7 +215,7 @@
       if (!g || g.pointerId !== e.pointerId) return
       e.preventDefault(); e.stopImmediatePropagation()
       g.lastX=e.clientX; g.lastY=e.clientY
-      updateFloating(win,g,e.clientX,e.clientY)
+      updateFloating(doc,win,g,e.clientX,e.clientY)
     }
 
     const up = e => {
@@ -302,14 +306,14 @@
     state.gesture = {
       pointerId:hold.pointerId, uid:hold.uid, node,
       x:hold.x, y:hold.y, lastX:hold.lastX, lastY:hold.lastY,
-      before:hold.before, cancel:false, preview,
+      before:hold.before, cancel:false, preview, caret:makeDropCaret(doc),
       ghostUids,
       grabX:Math.max(0,hold.x-rect.left), grabY:Math.max(0,hold.y-rect.top),
     }
     win.__logiqV2ConsumedPointers.add(hold.pointerId)
     win.__logiqV2DragActive = true
     doc.body.classList.add('v2-drag')
-    updateFloating(win,state.gesture,hold.lastX,hold.lastY)
+    updateFloating(doc,win,state.gesture,hold.lastX,hold.lastY)
     edgeLoop(doc,win,state)
     win.navigator.vibrate?.(12)
   }
@@ -324,7 +328,7 @@
     return el
   }
 
-  function updateFloating(win,g,x,y) {
+  function updateFloating(doc,win,g,x,y) {
     if (!g?.preview) return
     const width = g.preview.offsetWidth || 80
     const height = g.preview.offsetHeight || 40
@@ -332,6 +336,64 @@
     const top = Math.max(-height+18,Math.min(win.innerHeight-18,y-g.grabY))
     g.preview.style.left = `${left}px`
     g.preview.style.top = `${top}px`
+    updateDropHint(doc,win,g,x,y)
+  }
+
+  function makeDropCaret(doc) {
+    const parent = doc.querySelector('svg#canvas g.overlay')
+    if (!parent) return null
+    const caret = doc.createElementNS('http://www.w3.org/2000/svg','circle')
+    caret.setAttribute('class','v2-drop-caret')
+    caret.setAttribute('r','8')
+    caret.setAttribute('opacity','0')
+    parent.appendChild(caret)
+    return caret
+  }
+
+  function updateDropHint(doc,win,g,x,y) {
+    doc.querySelectorAll('g.node.v2-drop-target').forEach(node => node.classList.remove('v2-drop-target'))
+    g.preview?.classList.remove('v2-valid-drop')
+    g.caret?.setAttribute('opacity','0')
+
+    const hint = findDropHint(doc,win,g,x,y)
+    if (!hint) return
+
+    if (hint.type === 'node') {
+      const target = nodeByUid(doc,hint.targetUid)
+      if (!target || g.ghostUids?.includes(hint.targetUid)) return
+      target.classList.add('v2-drop-target')
+      g.preview?.classList.add('v2-valid-drop')
+      return
+    }
+
+    if (!Number.isFinite(hint.x) || !Number.isFinite(hint.y)) return
+    g.caret?.setAttribute('cx',String(hint.x))
+    g.caret?.setAttribute('cy',String(hint.y))
+    g.caret?.setAttribute('opacity','1')
+    g.preview?.classList.add('v2-valid-drop')
+  }
+
+  function findDropHint(doc,win,g,x,y) {
+    const target = hitNode(doc,x,y)
+    if (target && !g.ghostUids?.includes(nodeUid(target))) return {type:'node',targetUid:nodeUid(target)}
+
+    const candidates = Array.from(doc.querySelectorAll('g.node'))
+      .filter(node => !g.ghostUids?.includes(nodeUid(node)))
+      .map(node => ({rect:node.getBoundingClientRect()}))
+      .filter(({rect}) => x >= rect.left-18 && x <= rect.right+18)
+      .map(({rect}) => ({rect,distance:Math.min(Math.abs(y-rect.top),Math.abs(y-rect.bottom))}))
+      .sort((a,b) => a.distance-b.distance)
+    if (!candidates[0] || candidates[0].distance > 24) return null
+
+    const graph = screenToGraph(doc,win,x,y)
+    return graph ? {type:'gap',x:graph.x,y:graph.y} : null
+  }
+
+  function screenToGraph(doc,win,x,y) {
+    const svg = doc.getElementById('canvas'), rect = svg?.getBoundingClientRect(), zoom = svg && win.d3?.zoomTransform(svg)
+    if (!rect || !zoom?.invert) return null
+    const [xInGraph,yInGraph] = zoom.invert([x-rect.left,y-rect.top])
+    return {x:xInGraph,y:yInGraph}
   }
 
   function cancelHold(win,state) {
@@ -343,6 +405,8 @@
 
   function endGhostDrag(doc,win,state,g) {
     for (const uid of g.ghostUids || []) nodeByUid(doc,uid)?.classList.remove('v2-origin-ghost')
+    doc.querySelectorAll('g.node.v2-drop-target').forEach(node => node.classList.remove('v2-drop-target'))
+    g.caret?.remove?.()
     g.preview?.remove?.()
     state.gesture = null
     win.__logiqV2DragActive = false
@@ -397,7 +461,7 @@
       const g = state.gesture
       if (!g) { state.edgeRaf=0; return }
       edgePan(doc,win,g.lastX,g.lastY)
-      updateFloating(win,g,g.lastX,g.lastY)
+      updateFloating(doc,win,g,g.lastX,g.lastY)
       state.edgeRaf = win.requestAnimationFrame(tick)
     }
     state.edgeRaf = win.requestAnimationFrame(tick)
