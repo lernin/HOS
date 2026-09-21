@@ -1,0 +1,402 @@
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f7f7f2;
+  background: #09110e;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { min-height: 100%; margin: 0; }
+body { min-width: 320px; overflow-x: hidden; background: #09110e; }
+button, select { font: inherit; }
+
+.phonics-lab-shell {
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(117, 255, 190, .07), transparent 32%),
+    linear-gradient(180deg, #0d1713 0%, #07100c 100%);
+  overflow: hidden;
+  user-select: none;
+}
+
+.phonics-stage {
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: max(7px, env(safe-area-inset-top)) 14px 6px;
+  position: relative;
+}
+
+.phonics-card-wrap {
+  width: min(92vw, 540px);
+  height: min(52svh, 500px);
+  min-height: 275px;
+  position: relative;
+}
+
+.phonics-card {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: clamp(28px, 8vw, 44px);
+  border: 1px solid rgba(12, 19, 15, .11);
+  box-shadow:
+    0 26px 60px rgba(0,0,0,.34),
+    0 2px 0 rgba(255,255,255,.58) inset;
+  overflow: hidden;
+}
+
+.phonics-card-current {
+  z-index: 3;
+  cursor: grab;
+}
+
+.phonics-card-current:active { cursor: grabbing; }
+
+.phonics-card-under {
+  z-index: 1;
+  transform: translate3d(0, 8px, 0) scale(.982);
+  box-shadow: 0 18px 42px rgba(0,0,0,.25);
+  pointer-events: none;
+}
+
+.phonics-card-diagnosing {
+  box-shadow:
+    0 26px 60px rgba(0,0,0,.34),
+    0 0 0 3px rgba(94, 221, 164, .32),
+    0 2px 0 rgba(255,255,255,.58) inset;
+}
+
+.phonics-card-child-face {
+  width: 100%;
+  height: 100%;
+  padding: 30px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: rotate(180deg);
+  pointer-events: none;
+}
+
+.phonics-card-child-face strong {
+  font-size: clamp(120px, 39vw, 220px);
+  line-height: .9;
+  letter-spacing: -.08em;
+}
+
+.phonics-tone-vowel {
+  background: linear-gradient(145deg, #ffb0c6 0%, #f58ea9 100%);
+  color: #371420;
+}
+
+.phonics-tone-stop {
+  background: linear-gradient(145deg, #ffd59b 0%, #ffb96d 100%);
+  color: #3c2510;
+}
+
+.phonics-tone-fricative {
+  background: linear-gradient(145deg, #b8e1ff 0%, #83c9f5 100%);
+  color: #123049;
+}
+
+.phonics-tone-affricate {
+  background: linear-gradient(145deg, #d8c4ff 0%, #b69af3 100%);
+  color: #2c1d4f;
+}
+
+.phonics-tone-nasal {
+  background: linear-gradient(145deg, #b8efd6 0%, #82dbb7 100%);
+  color: #153728;
+}
+
+.phonics-tone-approximant {
+  background: linear-gradient(145deg, #ffe9a2 0%, #f7d468 100%);
+  color: #3a3011;
+}
+
+.phonics-tone-mixed {
+  background: linear-gradient(145deg, #d9e3ef 0%, #bac7d6 100%);
+  color: #1f2d3b;
+}
+
+.phonics-tone-blend {
+  background: linear-gradient(145deg, #f7bee4 0%, #eb91cb 100%);
+  color: #43203a;
+}
+
+.phonics-undo {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 7;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.28);
+  border-radius: 13px;
+  color: rgba(255,255,255,.9);
+  background: rgba(9, 17, 14, .55);
+  backdrop-filter: blur(10px);
+  font-size: 20px;
+  font-weight: 800;
+  box-shadow: 0 5px 16px rgba(0,0,0,.18);
+}
+
+.phonics-undo:disabled { opacity: .18; }
+
+.phonics-teacher-panel {
+  padding: 7px 12px max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255,255,255,.08);
+  background: rgba(2, 8, 5, .64);
+  backdrop-filter: blur(18px);
+  position: relative;
+  z-index: 8;
+}
+
+.phonics-deck-row {
+  max-width: 520px;
+  margin: 0 auto 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.phonics-deck-select {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(255,255,255,.48);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.phonics-deck-select select {
+  min-height: 32px;
+  padding: 0 30px 0 10px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 10px;
+  color: #f5f8f5;
+  background: #132019;
+  outline: none;
+}
+
+.phonics-card-position {
+  min-width: 88px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0 8px;
+  border-radius: 9px;
+  color: rgba(255,255,255,.58);
+  background: rgba(255,255,255,.055);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.phonics-mode-banner {
+  max-width: 520px;
+  min-height: 24px;
+  margin: 0 auto 4px;
+  padding: 4px 7px;
+  border-radius: 10px;
+  background: rgba(120,233,170,.11);
+  color: rgba(224,255,237,.84);
+  font-size: 8.5px;
+  line-height: 1.25;
+  font-weight: 720;
+  text-align: center;
+}
+
+.phonics-mode-banner-muted {
+  background: transparent;
+  color: rgba(255,255,255,.34);
+}
+
+.phonics-legend {
+  max-width: 520px;
+  margin: 0 auto 6px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  color: rgba(255,255,255,.52);
+  font-size: 8.5px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.phonics-people {
+  max-width: 520px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  min-height: 76px;
+}
+
+.phonics-person,
+.phonics-person-placeholder {
+  min-width: 0;
+  min-height: 74px;
+  border-radius: 20px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.07);
+  color: #f8fbf8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 7px 4px;
+  position: relative;
+}
+
+.phonics-person {
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.phonics-person:active { cursor: grabbing; }
+.phonics-person:disabled { opacity: .28; cursor: default; }
+
+.phonics-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #d8fbe6;
+  color: #102218;
+  font-weight: 900;
+  font-size: 18px;
+  box-shadow: 0 8px 20px rgba(0,0,0,.2);
+  pointer-events: none;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.phonics-person-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 750;
+  color: rgba(255,255,255,.74);
+  pointer-events: none;
+}
+
+.phonics-production-pending {
+  background: rgba(169, 175, 171, .18);
+  border-color: rgba(220, 224, 221, .3);
+}
+
+.phonics-production-pending .phonics-avatar {
+  background: #d7dcda;
+  color: #26302b;
+}
+
+.phonics-observing {
+  outline: 2px solid rgba(124, 226, 170, .5);
+  outline-offset: 2px;
+}
+
+.phonics-observe-badge {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 7px;
+  line-height: 1;
+  letter-spacing: .11em;
+  font-weight: 900;
+  color: rgba(181, 244, 209, .82);
+  pointer-events: none;
+}
+
+.phonics-watch-positive { border-top: 3px solid rgba(90, 230, 149, .96); }
+.phonics-watch-negative { border-bottom: 3px solid rgba(225, 104, 104, .9); }
+.phonics-listen-positive { border-right: 3px solid rgba(90, 230, 149, .96); }
+.phonics-listen-negative { border-left: 3px solid rgba(225, 104, 104, .9); }
+
+.phonics-person-placeholder {
+  opacity: .14;
+  border-style: dashed;
+  background: transparent;
+}
+
+.phonics-status {
+  max-width: 520px;
+  margin: 5px auto;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.04);
+  color: rgba(255,255,255,.62);
+}
+
+.phonics-status > div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.phonics-status-label { font-size: 8px; text-transform: uppercase; letter-spacing: .1em; }
+.phonics-status strong { color: #8cf0b7; font-size: 16px; }
+.phonics-status p { margin: 0; font-size: 9px; text-align: right; }
+
+.phonics-all-bar {
+  width: min(520px, 100%);
+  min-height: 60px;
+  margin: 0 auto;
+  border: 1px solid rgba(115, 239, 173, .34);
+  border-radius: 20px;
+  color: #eafff2;
+  background: linear-gradient(180deg, rgba(63, 163, 108, .34), rgba(35, 112, 75, .3));
+  box-shadow: 0 10px 24px rgba(0,0,0,.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.phonics-all-bar:active { cursor: grabbing; }
+.phonics-all-bar:disabled { opacity: .24; cursor: default; }
+.phonics-all-bar strong { font-size: 17px; letter-spacing: .08em; }
+.phonics-all-bar span { font-size: 10px; color: rgba(234,255,242,.72); }
+
+@media (max-height: 700px) {
+  .phonics-card-wrap { height: 40svh; min-height: 220px; }
+  .phonics-card-child-face strong { font-size: clamp(96px, 31vw, 170px); }
+  .phonics-person, .phonics-person-placeholder { min-height: 62px; }
+  .phonics-avatar { width: 34px; height: 34px; }
+  .phonics-people { min-height: 62px; }
+  .phonics-mode-banner { min-height: 19px; padding: 3px 5px; }
+  .phonics-deck-select select { min-height: 28px; }
+  .phonics-status { min-height: 30px; margin: 3px auto; }
+  .phonics-all-bar { min-height: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}

@@ -20,7 +20,8 @@
     { "source": "/thekonym", "destination": "/" },
     { "source": "/world-3d", "destination": "/" },
     { "source": "/roy", "destination": "/" },
-    { "source": "/book-vocab", "destination": "/" }
+    { "source": "/book-vocab", "destination": "/" },
+    { "source": "/phonics-swipe", "destination": "/" }
   ],
   "headers": [
     {
