@@ -35,5 +35,12 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 
 - **One dock-hide API.** `logyq.dock` is CSS-class only: `setSide` / `cycleDockSide` / `applyDockSide` / `sideLabel`. Hide is `#Dock.dock-hidden { display: none !important }`. `toggleVisibility` (`style.display`) is deleted. Unshifted W in `keyDispatcher` is the only keyboard binding; the window-capture W listener is gone. Shift+W is a no-op (the unreachable WordBank-to-trash branch and its `renderWordBank`/`renderTrash` stubs are gone rather than made live). Preview Word Dock button calls `LOGYQBridge.cycleDock()` instead of synthesizing `w`.
 - **One `getSelectedUid`.** `logyq.selection.getSelectedUid` (focus, then singleton group) is the bag surface. Keyboard copies are gone. `__selectedUid` in config delegates to it. `LOGYQBridge.getSelectedUid` uses the bag (same fallback). Relative-create Shift+I/J/K/L is one capture listener (`onRelativeCreateHotkeys`) instead of four.
-- **Preview gesture bag.** `window.LOGYQPreview` + `attach('gestures')` exposes tap-vs-pan, spawn-puck, and voice without putting those on the engine `logyq` bag. Thresholds are `LOGYQPreview.gestures.constants`. The existing shell binds via `bindSpawnGestures` / `bindCanvasGestures`; a later phone layer should call those instead of editing engine guts.
+- **Preview gesture bag.** `window.LOGYQPreview` + `attach('gestures')` exposes preview-only input without putting it on the engine `logyq` bag.
+
+## v162 gesture port (this branch)
+
+- **Direct flick / hold-drag / double-tap on `/logyq/` only.** Same-page `LOGYQBridge` (not iframe `contentWindow`). Source of behavior is v162: flick 52px/340ms/1.45, hold 280ms/8px slop into existing `d3.drag()`, pointer double-tap 360ms → `editSelected()`. SVG `dblclick` stays muted.
+- **Old spawn-puck + tap-capture unbound.** `bindCanvas` / `bindSpawn` are no-ops. Flick creates a blank relative and does **not** auto-record or auto-voice. Header mic still uses `startVoiceCapture(null)`.
+- **Storage stays `logyq_*`.** No production LOGiQ maps/PIN writes.
+- **Deferred:** pull-to-copy, Working Lock, drag-watchdog, clutch two-hand, full mobile chrome redesign, ES modules, further bag splits.
 

@@ -280,19 +280,22 @@ test('engine fragments concatenate to the served IIFE without edits', () => {
 test('preview fragments concatenate to the served enhancement without edits', () => {
   const assembled = assembleLogyqPreview()
   assert.deepEqual(assembled.names, [
-    '00-boot.js', '01-helpers.js', '02-styles.js', '03-ui.js', '04-gestures.js', '05-persistence.js',
+    '00-boot.js', '01-helpers.js', '02-styles.js', '03-ui.js', '04-gestures.js',
+    '05-v162-gestures.js', '06-persistence.js',
   ])
   assert.equal(assembled.source, readFileSync(previewPath, 'utf8'))
   assert.match(assembled.source, /function queueAutosave/)
-  assert.match(assembled.source, /function beginSpawnGesture/)
+  assert.match(assembled.source, /function bindV162Gestures/)
   assert.match(assembled.source, /function injectStyles/)
   assert.match(assembled.source, /bridge\.cycleDock\(\)/)
   assert.doesNotMatch(assembled.source, /bridge\.dispatchKey\('w'\)/)
   assert.match(assembled.source, /window\.LOGYQPreview = preview/)
   assert.match(assembled.source, /attach\('gestures'/)
-  assert.match(assembled.source, /bindSpawnGestures\(ui\.spawnPuck\)/)
-  assert.match(assembled.source, /bindCanvasGestures/)
-  assert.match(assembled.source, /TAP_MOVE_PX: 9/)
+  assert.doesNotMatch(assembled.source, /bindSpawnGestures\(ui\.spawnPuck\)/)
+  assert.doesNotMatch(assembled.source, /bindCanvasGestures\(document/)
+  assert.match(assembled.source, /HOLD_MS: 280/)
+  assert.match(assembled.source, /DOUBLE_TAP_MS: 360/)
+  assert.match(assembled.source, /FLICK_MIN: 52/)
 })
 
 test('this branch does not modify existing logiq-* files', () => {

@@ -67,6 +67,7 @@ test('LOGYQ desktop boot preserves the 30-node tree, edit, undo, dock, and repar
   assert.equal(await page.evaluate(() => typeof window.LOGYQBridge.core?.layout?.LabelWrap?.apply), 'function')
   assert.equal(await page.evaluate(() => typeof window.LOGYQBridge.core?.structure?.moveSelectedHorizontally), 'function')
   assert.equal(await page.evaluate(() => typeof window.LOGYQBridge.core?.camera?.centerOnSelected), 'function')
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-mobile-v162')), false)
 
   assert.equal(await page.evaluate(() => window.LOGYQBridge.selectByName('Node 05')), true)
   await page.keyboard.press('e')
@@ -145,7 +146,12 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   await waitForTree(page)
 
   assert.equal(await page.evaluate(() => typeof window.LOGYQPreview?.gestures?.bindCanvas), 'function')
-  assert.equal(await page.evaluate(() => window.LOGYQPreview?.gestures?.constants?.TAP_MOVE_PX), 9)
+  assert.equal(await page.evaluate(() => typeof window.LOGYQPreview?.gestures?.bindV162), 'function')
+  assert.equal(await page.evaluate(() => window.LOGYQPreview?.gestures?.constants?.HOLD_MS), 280)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview?.gestures?.constants?.DOUBLE_TAP_MS), 360)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview?.gestures?.constants?.FLICK_MIN), 52)
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-mobile-v162')), true)
+  assert.equal(await page.locator('#logiq-spawn-puck').isVisible(), false)
   assert.equal(await page.locator('body > header').isVisible(), false)
   assert.equal(await page.locator('#logiq-mobile-header').isVisible(), true)
   assert.equal(await page.locator('#trash').isVisible(), false)
@@ -155,6 +161,74 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   await page.locator('.node-edit-input').fill('Mobile 05')
   await page.locator('.node-edit-input').press('Enter')
   await page.waitForFunction(() => Array.from(document.querySelectorAll('g.node')).some((node) => node.textContent.includes('Mobile 05')))
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap edits', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubProduction(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForTree(page)
+
+  async function nodeCenter(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === label)
+      const rect = node.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId = 41) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const canvas = document.getElementById('canvas')
+      canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const before = await page.locator('g.node').count()
+  const flick = await nodeCenter('Node 10')
+  await touch('pointerdown', flick.x, flick.y)
+  await touch('pointerup', flick.x, flick.y + 70)
+  await page.waitForFunction((count) => document.querySelectorAll('g.node').length > count, before)
+  assert.equal(await page.locator('#logiq-voice-bar.is-visible').count(), 0)
+  assert.equal(await page.evaluate(() => !!window.LOGYQPreview.app?.recorder), false)
+
+  const hold = await nodeCenter('Node 03')
+  await touch('pointerdown', hold.x, hold.y, 42)
+  await page.waitForTimeout(320)
+  assert.equal(await page.evaluate(() => document.body.classList.contains('v2-branch-drag')), true)
+  assert.equal(await page.locator('#logyq-v162-branch-preview').count(), 1)
+  await touch('pointermove', hold.x + 4, hold.y + 4, 42)
+  await touch('pointerup', hold.x + 4, hold.y + 4, 42)
+  await page.waitForFunction(() => !document.body.classList.contains('v2-branch-drag'))
+
+  const edit = await nodeCenter('Node 08')
+  await touch('pointerdown', edit.x, edit.y, 43)
+  await touch('pointerup', edit.x, edit.y, 43)
+  await touch('pointerdown', edit.x, edit.y, 44)
+  await touch('pointerup', edit.x, edit.y, 44)
+  await page.waitForSelector('.node-edit-input')
+  await page.locator('.node-edit-input').fill('Tapped 08')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction(() => Array.from(document.querySelectorAll('g.node')).some((node) => node.textContent.includes('Tapped 08')))
+
   assert.deepEqual(errors, [])
   await context.close()
 })

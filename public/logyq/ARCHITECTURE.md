@@ -75,10 +75,11 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 |---|---|
 | `00-boot.js` | Bridge guard, `LOGYQPreview` bag, storage keys, boot sequence |
 | `01-helpers.js` | JSON/localStorage helpers |
-| `02-styles.js` | Injected preview/mobile CSS |
-| `03-ui.js` | Maps library chrome, phone header/context. Gesture *binding* goes through `bindSpawnGestures` / `bindCanvasGestures`. |
-| `04-gestures.js` | Tap-vs-pan, spawn puck, voice. Registers `LOGYQPreview.gestures` (handlers, `bindCanvas`/`bindSpawn`, `constants`). |
-| `05-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
+| `02-styles.js` | Injected preview/mobile CSS, including v162 hold-drag ghost styles |
+| `03-ui.js` | Maps library chrome, phone header/context. Does **not** bind spawn-puck or old tap-capture. |
+| `04-gestures.js` | Header-mic voice only. `bindCanvas` / `bindSpawn` are retired no-ops so they cannot race the v162 layer. |
+| `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag, ~360ms double-tap edit. |
+| `06-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
 
 ## Shared state (explicit `logyq` bag)
 
@@ -100,16 +101,16 @@ Unconverted fragments still use ambient `state`, `elements`, `utils`, and friend
 
 See `NOT_REFACTORED.md` for internals left intact because changing them would likely change behavior.
 
-## Ready for a later mobile layer?
+## Mobile gesture layer
 
-**Yes, with documented must-nots.** Dock hide, selection uid, and preview gestures now have bag/bridge seams. A later phone chrome should treat the engine as `window.LOGYQBridge` + `LOGYQBridge.core` (`logyq` bag) and preview gestures as `window.LOGYQPreview.gestures`. It should not reach into fragment internals or add a second copy of those listeners.
+**v162 grammar is live on `/logyq/` phone preview.** Dock hide, selection uid, and preview gestures have bag/bridge seams. A later phone chrome should treat the engine as `window.LOGYQBridge` + `LOGYQBridge.core` (`logyq` bag) and preview gestures as `window.LOGYQPreview.gestures` (`bindV162`, `constants`, header-mic `startVoiceCapture`). It should not reach into fragment internals or add a second copy of those listeners.
 
-This is not an ES-module app. Concatenate+IIFE remains. The existing injected phone shell in preview is still v161 chrome; replacing that shell is the next UX track, not a missing engine API.
+This is not an ES-module app. Concatenate+IIFE remains. The existing injected phone shell in preview is still v161 chrome (header/context); replacing that shell is a later UX track. Pull-to-copy, Working Lock, and drag-watchdog are deferred.
 
 ### Depend on these
 
-- `LOGYQBridge` methods (`selectByUid`, `createRelative`, `editSelected`, `deleteSelection`, `mix`, `fit`, `loadMap`, `subscribe`/`notifyChange`, `cycleDock`, `setDockSide`, `getSelectedUid`)
-- `window.LOGYQPreview.gestures` (`bindCanvas`, `bindSpawn`, tap/spawn handlers, `startVoiceCapture`/`stopVoiceCapture`, `constants`)
+- `LOGYQBridge` methods (`selectByUid`, `createRelative`, `editSelected`, `deleteSelection`, `mix`, `fit`, `loadMap`, `subscribe`/`notifyChange`, `cycleDock`, `setDockSide`, `getSelectedUid`, `renameNode`)
+- `window.LOGYQPreview.gestures` (`bindV162`, `constants`, header-mic `startVoiceCapture`/`stopVoiceCapture`; `bindCanvas`/`bindSpawn` are retired no-ops)
 - Bag clusters: `logyq.selection` (`getSelectedUid`), `logyq.editing`, `logyq.treeOps`, `logyq.drag`, `logyq.wordDock`, `logyq.input`, `logyq.dock` (`setSide` / `cycleDockSide` / `applyDockSide` / `sideLabel` / `updateDockBounds`), `logyq.camera`, `logyq.structure`, `logyq.layout`, `logyq.detectors` (`build`/`pick`/`draw` only), `logyq.treeManager.layoutAndRender` / `autoFit`
 - `logyq.input.isTextField` before stealing keys or pointer
 - Preview persistence (`logyq_*` storage keys) and `/api/transcribe` PIN header — already isolated from LOGiQ maps
@@ -122,25 +123,30 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - File-level Tab-hold
 - Copied `logiq-*` DOM ids in the preview shell (selectors, not storage)
 - Production `logiq-*` paths (read-only)
-- Spawn-puck / tap-vs-pan thresholds (`LOGYQPreview.gestures.constants`) — read them, do not fork them inside engine fragments
+- v162 gesture thresholds (`LOGYQPreview.gestures.constants`) — read them, do not fork them inside engine fragments. Live values: flick 52px / 340ms / 1.45 ratio, hold 280ms / 8px slop, double-tap 360ms, tap-move 11px.
 
 ### Known footguns for mobile
 
 - **Tab-hold** is a desktop modifier. Do not synthesize Tab on touch; it will `preventDefault` and set `state.tabHold`.
-- **Suppressed SVG dblclick** — keyboard `E` / `LOGYQBridge.editSelected` is the reliable edit path.
+- **Suppressed SVG dblclick** — do **not** unmute it. Phone edit is v162 pointer double-tap (~360ms) → `LOGYQBridge.editSelected()`, or keyboard `E` / the context Edit button.
 - **Sticky-nav `setSelectionSet`** is undefined; the try/catch swallows it. Do not "fix" it from a mobile overlay without an intentional delta.
 - **`keyDispatcher` runs at initialize()** before `attach('keyboard')`; the bind is `logyq.keyboard?.keyDispatcher`. Keep that late lookup.
 - Concatenate+IIFE remains; do not import fragments as ES modules from a mobile shell.
 - Preview still has a window-capture `keydown` that only refreshes context chrome (`updateContextActions`). Do not add a second capture keydown for the same job.
-- Canvas tap-vs-pan is capture-phase on `#canvas` and skips `g.node.is-outlined` so D3 zoom/drag can win. Call `LOGYQPreview.gestures.bindCanvas` once.
+- v162 gestures bind once from `05-v162-gestures.js` when the coarse/no-hover ≤1200px query matches. Mouse is ignored so desktop drag stays native. Cards use geometric hit-test (`pointer-events: none` on `g.node`) so pan/pinch still work over them.
+- Hold (~280ms, 8px slop) latches through synthetic `mousedown`/`mousemove`/`mouseup` into existing `d3.drag()` (`shiftKey: false`). Flick and double-tap must not start that drag.
+- Direct flick calls `selectByUid` + `createRelative` only. It must not start `MediaRecorder` / `startVoiceCapture`. Header mic remains the voice path.
 
 ### Must not do
 
 - Do not toggle `#Dock` with `style.display`. Hide is CSS class `dock-hidden` via `logyq.dock.setSide('hidden')` / `cycleDockSide()` / `LOGYQBridge.cycleDock()`.
 - Do not synthesize Shift+W. Unshifted W (and `LOGYQBridge.cycleDock`) is the only dock-hide path. Shift+W is a no-op; the old WordBank-to-trash branch was deleted.
 - Do not flip V-hold listeners to capture.
-- Do not put spawn-puck on the engine `logyq` bag. That is preview (`LOGYQPreview.gestures`).
-- Do not add a second canvas capture `pointerdown` or a second spawn-puck bind.
+- Do not put spawn-puck or v162 listeners on the engine `logyq` bag. That is preview (`LOGYQPreview.gestures`).
+- Do not re-bind `bindCanvasGestures` / `bindSpawnGestures`. Those old capture paths auto-voiced on create and fight flick/hold.
+- Do not mix clutch two-hand with v162 hold-flick.
+- Do not write production LOGiQ maps/PIN (`logiq_*` keys, `logiq_map_*` RPCs).
+- Do not start from clutch or rebuild the hidden spawn-puck.
 
 ### Still ambient (OK to leave)
 
@@ -148,4 +154,4 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - Mix newline `addWords` vs comma split
 - PNG export, help HTML mismatches, lane no-op stubs
 - History/tree-ops/editing still use some ambient `showToast` / `utils` names inside their own fragments (same IIFE)
-- Existing injected phone header/puck chrome (v161 DOM ids). A new shell should bind `LOGYQPreview.gestures` instead of editing `04-gestures.js` handlers.
+- Existing injected phone header/context chrome (v161 DOM ids). The spawn-puck DOM node is still in the shell but CSS-hidden and unbound. A later chrome redesign should keep `LOGYQPreview.gestures.bindV162` rather than copying capture listeners.

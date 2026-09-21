@@ -29,7 +29,9 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 - **Voice PIN only.** `getPin` remains for `/api/transcribe`. It uses `logyq_lab_pin_v1`, not `logiq_lab_pin_v1`.
 - **Autosave debounce.** 850ms write delay and 1100ms retry-on-overlap are unchanged. Offline now means a localStorage write failed, not a missing network.
 - **Phone shell CSS injected at runtime** (`injectStyles`), including `logiq-*` DOM ids/classes. File paths are LOGYQ; DOM ids were not renamed so the copied preview selectors stay exact.
-- **Spawn-puck / voice / tap-vs-pan arbitration.** Coupled to D3 zoom, selected-card pointer-events, and `LOGYQBridge.createRelative`. Handlers and thresholds now sit on `window.LOGYQPreview.gestures` (`bindCanvas` / `bindSpawn` / `constants`). A later shell should bind that surface once, not copy the capture listeners.
+- **v162 mobile grammar on `/logyq/`.** Direct flick, 280ms hold-drag, and 360ms double-tap live in `05-v162-gestures.js` and call `LOGYQBridge`. Old spawn-puck auto-voice and canvas tap-capture are unbound (`bindCanvas`/`bindSpawn` no-ops). Header-mic voice remains in `04-gestures.js`. Do not reattach the puck path. Do not unmute SVG `dblclick`.
+- **Phone chrome is still injected v161 header/context.** Spawn-puck DOM remains but is CSS-hidden and unbound. Full chrome redesign is out of scope.
+- **Not ported from later labs:** pull-to-copy, Working Lock, drag-watchdog, clutch two-hand.
 
 ## Extraction method (intentional)
 
