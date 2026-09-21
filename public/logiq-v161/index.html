@@ -7280,6 +7280,37 @@ function getSelectedUid(){
     undo() { undo(); },
     mix(includeBank = false) { randomizeTree(!!includeBank); },
     fit() { treeManager.autoFit(); },
+    pickDropAtViewport(clientX, clientY, sourceUid = null) {
+      const svg = elements.svg?.node?.();
+      if (!svg || !state.root) return null;
+      const x = Number(clientX);
+      const y = Number(clientY);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+
+      const [pointerX, pointerY] = d3.pointer({ clientX: x, clientY: y }, svg);
+      const [graphX, graphY] = d3.zoomTransform(svg).invert([pointerX, pointerY]);
+      const drop = Detectors.pick({ x: graphX, y: graphY });
+      if (!drop) return null;
+
+      const source = sourceUid && state.root.descendants().find((item) => item.data?._uid === sourceUid);
+      const blockedUids = new Set(source ? source.descendants().map((item) => item.data?._uid).filter(Boolean) : []);
+      if (drop.type === 'node') {
+        if (!drop.targetUid || blockedUids.has(drop.targetUid)) return null;
+        return { type: 'node', targetUid: drop.targetUid };
+      }
+      if (drop.type === 'rootAbove' && source && !source.parent) return null;
+      if (drop.parentUid && blockedUids.has(drop.parentUid)) return null;
+
+      const [caretX, caretY] = caretXYFromHit(drop._hit);
+      return {
+        type: drop.type,
+        parentUid: drop.parentUid || null,
+        prevUid: drop.prevUid || null,
+        nextUid: drop.nextUid || null,
+        caretX,
+        caretY
+      };
+    },
     getZoomExtent() {
       return state.zoom ? state.zoom.scaleExtent().slice() : null;
     },
