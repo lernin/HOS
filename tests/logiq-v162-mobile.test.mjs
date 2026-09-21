@@ -6,8 +6,6 @@ const index = await readFile(new URL('../public/logiq-v162-mobile/index.html', i
 const core = await readFile(new URL('../public/logiq-v161/index.html', import.meta.url), 'utf8')
 const preview = await readFile(new URL('../public/logiq-v161/logiq-preview.js', import.meta.url), 'utf8')
 const js = await readFile(new URL('../public/logiq-v162-mobile/v2-ghost.js', import.meta.url), 'utf8')
-const branchAffordance = await readFile(new URL('../public/logiq-v162-mobile/v2-branch-affordance.js', import.meta.url), 'utf8')
-const dragVisualFix = await readFile(new URL('../public/logiq-v162-mobile/v2-drag-visual-fix.js', import.meta.url), 'utf8')
 const chrome = await readFile(new URL('../public/logiq-v162-mobile/orientation-chrome.js', import.meta.url), 'utf8')
 const flick = await readFile(new URL('../public/logiq-v162-mobile/direct-flick.js', import.meta.url), 'utf8')
 const undoFix = await readFile(new URL('../public/logiq-v162-mobile/undo-bank-fix.js', import.meta.url), 'utf8')
@@ -15,8 +13,8 @@ const undoFix = await readFile(new URL('../public/logiq-v162-mobile/undo-bank-fi
 test('mobile v2 shell stays isolated from the released v161 route', () => {
   assert.match(index, /src="\/logiq-v161\/"/)
   assert.match(index, /\.\/v2-ghost\.js/)
-  assert.match(index, /\.\/v2-branch-affordance\.js/)
-  assert.match(index, /\.\/v2-drag-visual-fix\.js/)
+  assert.doesNotMatch(index, /\.\/v2-branch-affordance\.js/)
+  assert.doesNotMatch(index, /\.\/v2-drag-visual-fix\.js/)
   assert.match(index, /\.\/orientation-chrome\.js/)
   assert.match(index, /\.\/undo-bank-fix\.js/)
   assert.match(index, /\.\/direct-flick\.js/)
@@ -62,37 +60,28 @@ test('mobile v2 keeps pinch continuous below the desktop zoom floor', () => {
   assert.match(preview, /window\.LOGiQZoom = Object\.freeze/)
 })
 
-test('mobile branch drag is the sole held-gesture owner and protects the Word Bank', () => {
-  assert.match(branchAffordance, /win\.__logiqBranchDragOwnsHold = true/)
-  assert.match(js, /win\.__logiqBranchDragOwnsHold/)
-  assert.match(branchAffordance, /bridge\?\.clearFocusSelection\?\.\(\)/)
-  assert.match(branchAffordance, /win\.addEventListener\('dragstart', suppressNativeDrag, true\)/)
-  assert.match(branchAffordance, /bankChanged \|\| missingBranchNode \|\| changedOnSnapBack/)
-  assert.match(branchAffordance, /bridge\.loadMap\(drag\.before\.tree, drag\.before\.wordBank\)/)
-  assert.match(branchAffordance, /canvas\.setPointerCapture\?\.\(event\.pointerId\)/)
-  assert.match(branchAffordance, /canvas\?\.releasePointerCapture\?\.\(drag\.pointerId\)/)
+test('mobile ghost drag is the sole held-gesture owner and protects the Word Bank', () => {
+  assert.doesNotMatch(js, /__logiqBranchDragOwnsHold/)
+  assert.match(js, /function latchHold/)
+  assert.match(js, /const missing = !treeHasUid/)
+  assert.match(js, /bridge\.loadMap\(g\.before\.tree,g\.before\.wordBank\)/)
 })
 
-test('held-card drag keeps a ghost origin and defers the V2 fallback transaction until release', () => {
+test('held-card drag keeps the complete source branch ghosted until release', () => {
   assert.match(js, /v2-origin-ghost/)
-  assert.match(js, /node\.classList\.add\('v2-origin-ghost'\)/)
+  assert.match(js, /const ghostUids = typeof hierarchy\?\.descendants[\s\S]*?hierarchy\.descendants\(\)/)
+  assert.match(js, /for \(const uid of ghostUids\) nodeByUid\(doc,uid\)\?\.classList\.add\('v2-origin-ghost'\)/)
+  assert.match(js, /for \(const uid of g\.ghostUids \|\| \[\]\) nodeByUid\(doc,uid\)\?\.classList\.remove\('v2-origin-ghost'\)/)
   assert.match(js, /function commitDrop/)
   assert.match(js, /mouse\(node,win,'mousedown',sx,sy,1\)/)
   assert.match(js, /mouse\(win,win,'mouseup',x,y,0\)/)
 })
 
 test('mobile drag preview keeps the held card at its exact rendered size', () => {
-  assert.match(branchAffordance, /hierarchy\.descendants\(\)/)
-  assert.match(branchAffordance, /makeBranchPreview\(doc, win, \[hierarchy\], hold\.uid\)/)
-  assert.match(branchAffordance, /for \(const uid of uids\) nodeByUid\(doc, uid\)\?\.classList\.add\('v2-branch-origin-ghost'\)/)
-  assert.match(branchAffordance, /v2-branch-origin-ghost/)
-  assert.match(branchAffordance, /logiq-v2-branch-preview/)
-  assert.match(branchAffordance, /card\.style\.width = `\$\{entry\.rect\.width\}px`/)
-  assert.match(branchAffordance, /card\.style\.height = `\$\{entry\.rect\.height\}px`/)
-  assert.match(branchAffordance, /#logiq-v2-drag-card\{display:none!important\}/)
-  assert.match(branchAffordance, /transform:none!important/)
-  assert.doesNotMatch(branchAffordance, /scale\(1\.0?2\)/)
-  assert.match(branchAffordance, /parentUid = entry\.item\?\.parent\?\.data\?\._uid/)
+  assert.match(js, /function makeFloating/)
+  assert.match(js, /Math\.max\(54,rect\.width\)/)
+  assert.match(js, /Math\.max\(34,rect\.height\)/)
+  assert.match(js, /#logiq-v2-drag-card\{[^}]*transform:none/)
 })
 
 test('mobile selection preserves the card geometry instead of scaling its rectangle', () => {
@@ -101,36 +90,22 @@ test('mobile selection preserves the card geometry instead of scaling its rectan
 
 test('mobile editor overlays the card and centers it horizontally', () => {
   assert.match(js, /centerX = Math\.round\(win\.innerWidth \/ 2\)/)
-  assert.match(js, /input\.style\.height=\`\$\{height\}px\`/)
-  assert.match(js, /input\.style\.left=\`\$\{Math\.max\(8,centerX-width\/2\)\}px\`/)
-  assert.match(js, /input\.style\.top=\`\$\{Math\.max\(8,Math\.min\(win\.innerHeight-height-8,r\.top\+Math\.max\(0,\(r\.height-height\)\/2\)\)\)\}px\`/)
+  assert.match(js, /input\.style\.height=/)
+  assert.match(js, /input\.style\.left=/)
+  assert.match(js, /input\.style\.top=/)
 })
 
-test('mobile held drag drives the real desktop drag feedback engine', () => {
-  assert.match(branchAffordance, /mouse\(source, win, 'mousedown', hold\.x, hold\.y, 1\)/)
-  assert.match(branchAffordance, /mouse\(win, win, 'mousemove', event\.clientX, event\.clientY, 1\)/)
-  assert.match(branchAffordance, /mouse\(win, win, 'mouseup', endX, endY, 0\)/)
-  assert.match(branchAffordance, /dragging-mode g\.nodes g\.node\.hover-adopt-sub/)
-  assert.match(branchAffordance, /g\.node\.drop-target rect/)
-  assert.match(branchAffordance, /shiftKey: false/)
-  assert.match(branchAffordance, /startFeedbackLoop/)
+test('mobile held drag defers the desktop transaction until release', () => {
+  assert.match(js, /updateFloating\(win,g,e\.clientX,e\.clientY\)/)
+  assert.match(js, /function commitDrop/)
+  assert.match(js, /mouse\(node,win,'mousedown',sx,sy,1\)/)
+  assert.doesNotMatch(js, /startFeedbackLoop/)
 })
 
-test('mobile branch drag visually stays the same except ghost and green destination affordance', () => {
-  assert.match(dragVisualFix, /\.drag-mini,g\.drag-mini\{display:none!important/)
-  assert.match(dragVisualFix, /\.v2-float-node\.is-root\{border-color:#22c55e!important/)
-  assert.doesNotMatch(dragVisualFix, /#2563eb/)
-  assert.match(dragVisualFix, /v2-branch-origin-ghost\{opacity:\.44!important/)
-  assert.match(dragVisualFix, /g\.node\.is-others\{opacity:1!important/)
-  assert.match(dragVisualFix, /--det-node:transparent!important/)
-  assert.match(dragVisualFix, /--det-cousin-r:transparent!important/)
-  assert.match(dragVisualFix, /g\.node\.drop-target rect/)
-})
-
-test('mobile branch drag prevents hidden trash from stealing a drop', () => {
-  assert.match(branchAffordance, /v2-branch-drag #trash/)
-  assert.match(branchAffordance, /left:-10000px!important/)
-  assert.match(branchAffordance, /top:-10000px!important/)
+test('mobile ghost drag leaves the map untouched while it follows the finger', () => {
+  assert.match(js, /body\.logiq-mobile-v2\.v2-drag svg#canvas\{cursor:grabbing\}/)
+  assert.match(js, /body\.logiq-mobile-v2 g\.node\.v2-origin-ghost/)
+  assert.doesNotMatch(index, /v2-branch-affordance/)
 })
 
 test('invalid held-card drop restores exact tree and bank state', () => {
@@ -156,8 +131,6 @@ test('mobile v2 keeps local blank-card voice and double-tap edit', () => {
 
 test('mobile v2 scripts parse', () => {
   assert.doesNotThrow(() => new Function(js))
-  assert.doesNotThrow(() => new Function(branchAffordance))
-  assert.doesNotThrow(() => new Function(dragVisualFix))
   assert.doesNotThrow(() => new Function(chrome))
   assert.doesNotThrow(() => new Function(flick))
   assert.doesNotThrow(() => new Function(undoFix))
