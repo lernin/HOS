@@ -135,6 +135,14 @@
       logyq.treeManager.layoutAndRender(false);
       logyq.treeManager.autoFit();
     },
+    cycleDock() {
+      const side = logyq.dock.cycleDockSide();
+      logyq.selection.showToast(logyq.dock.sideLabel(side), 900);
+      return side;
+    },
+    setDockSide(side) {
+      return logyq.dock.setSide(side);
+    },
     dispatchKey(key, options = {}) {
       document.dispatchEvent(new KeyboardEvent('keydown', {
         key,

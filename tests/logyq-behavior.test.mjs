@@ -508,11 +508,13 @@ test('getSelectionUids reads the group set from the logyq bag', () => {
   assert.deepEqual(fn({ state: { selectedUids: null } })(), [])
 })
 
-test('keyboard still handles W before the unreachable Shift+W WordBank branch', () => {
+test('keyboard W cycles the dock CSS side and no longer dumps the WordBank', () => {
   const source = readFileSync(new URL('../public/logyq/js/engine/17-keyboard.js', import.meta.url), 'utf8')
-  const w = source.indexOf("if (lower === 'w')")
-  const shiftW = source.indexOf("if ((lower === 'w' && e.shiftKey)")
-  assert.ok(w > 0 && shiftW > w)
+  assert.match(source, /if \(lower === 'w' && !e\.shiftKey\)/)
+  assert.match(source, /logyq\.dock\.cycleDockSide\(\)/)
+  assert.doesNotMatch(source, /toggleVisibility/)
+  assert.doesNotMatch(source, /Moved \$\{moved\.length\} items to Trash/)
+  assert.doesNotMatch(source, /renderWordBank/)
   assert.equal((source.match(/function getSelectedUid\(\)/g) || []).length, 4)
 })
 
@@ -751,7 +753,7 @@ test('isTextField treats inputs and role=textbox as typing surfaces', () => {
 
 test('cycleDockSide walks bottom → left → hidden → bottom', () => {
   const source = readFileSync(new URL('../public/logyq/js/engine/02-state.js', import.meta.url), 'utf8')
-  const start = source.indexOf('function applyDockSide')
+  const start = source.indexOf('const DOCK_SIDES')
   const end = source.indexOf("attach('input'")
   const classes = new Set()
   const logyq = {
@@ -765,9 +767,9 @@ test('cycleDockSide walks bottom → left → hidden → bottom', () => {
       },
     },
   }
-  const { cycleDockSide } = new Function(
+  const { cycleDockSide, setSide } = new Function(
     'logyq',
-    `${source.slice(start, end)}; return { applyDockSide, cycleDockSide };`,
+    `${source.slice(start, end)}; return { applyDockSide, setSide, cycleDockSide };`,
   )(logyq)
   assert.equal(cycleDockSide(), 'left')
   assert.ok(classes.has('dock-left'))
@@ -775,4 +777,7 @@ test('cycleDockSide walks bottom → left → hidden → bottom', () => {
   assert.ok(classes.has('dock-hidden'))
   assert.equal(cycleDockSide(), 'bottom')
   assert.equal(classes.size, 0)
+  assert.equal(setSide('hidden'), 'hidden')
+  assert.ok(classes.has('dock-hidden'))
+  assert.equal(setSide('nope'), 'hidden')
 })

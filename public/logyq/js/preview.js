@@ -254,7 +254,7 @@
       if (action === 'mix') bridge.mix(false)
       if (action === 'fit') bridge.fit()
       if (action === 'library') openLibrary()
-      if (action === 'dock') bridge.dispatchKey('w')
+      if (action === 'dock') bridge.cycleDock()
       if (action === 'help') document.getElementById('helpBtn')?.click()
       closeMobilePanel()
     }))

@@ -506,7 +506,11 @@ window.addEventListener("resize", updateDockBounds, { passive: true });
 
 
 
-/* --- Dock side applier (bottom ↔ left ↔ hidden) --- */
+/* --- Dock side: one CSS-class API (bottom → left → hidden).
+   Hide is `#Dock.dock-hidden { display: none !important }`.
+   Do not toggle `style.display`; a second hide path fights this cycle. --- */
+const DOCK_SIDES = ['bottom', 'left', 'hidden'];
+
 function applyDockSide(){
   const { state, elements } = logyq
   const el = elements.Dock;
@@ -516,24 +520,25 @@ function applyDockSide(){
   else if (state.dockSide === 'hidden') el.classList.add('dock-hidden');
 }
 
-function cycleDockSide(){
+function setSide(side){
   const { state } = logyq
-  state.dockSide =
-    state.dockSide === 'bottom' ? 'left' :
-    state.dockSide === 'left'   ? 'hidden' :
-                        'bottom';
+  if (!DOCK_SIDES.includes(side)) return state.dockSide;
+  state.dockSide = side;
   applyDockSide();
   return state.dockSide;
 }
 
-function toggleVisibility(){
-  const { elements } = logyq
-  const dock = elements.Dock;
-  if (!dock) return;
-  const hidden = (dock.style.display === 'none');
-  dock.style.display = hidden ? '' : 'none';
-  if (elements.Hint) elements.Hint.style.display = hidden ? 'none' : 'inline-flex';
-  return hidden ? 'shown' : 'hidden';
+function cycleDockSide(){
+  const { state } = logyq
+  const i = DOCK_SIDES.indexOf(state.dockSide);
+  const next = DOCK_SIDES[(i < 0 ? 0 : i + 1) % DOCK_SIDES.length];
+  return setSide(next);
+}
+
+function sideLabel(side){
+  return side === 'bottom' ? 'Word Bank → Bottom' :
+         side === 'left'   ? 'Word Bank → Left'   :
+                             'Word Bank → Hidden';
 }
 
   attach('input', {
@@ -545,9 +550,10 @@ function toggleVisibility(){
 
   attach('dock', {
     applyDockSide,
+    setSide,
     cycleDockSide,
+    sideLabel,
     updateDockBounds,
-    toggleVisibility,
   });
 
 /* call once so the current state is applied on load */
@@ -4875,21 +4881,6 @@ window.addEventListener('keydown', (e) => {
     }
   }, { passive: false });
 
-    window.addEventListener('keydown', (e) => {  //green
-        if (e.shiftKey || e.metaKey || e.altKey) return;
-        if (logyq.input.isTextField(e.target)) return;
-        if (e.key === 'w' || e.key === 'W'){
-            e.preventDefault();
-            e.stopPropagation(); // avoid any older W handlers, if any
-            const side = logyq.dock.cycleDockSide();
-            logyq.selection.showToast(
-                side === 'bottom' ? 'Word Bank → Bottom' :
-                side === 'left'   ? 'Word Bank → Left'   :
-                                    'Word Bank → Hidden', 900
-    );}}, 
-    
-    { passive: false, capture: true });
-
 })();
 
 
@@ -5339,7 +5330,12 @@ function keyDispatcher(e){
     if (lower === 'f' && e.shiftKey) { e.preventDefault(); logyq.camera.centerOnSelected(); return; }
     if (lower === 'a')               { e.preventDefault(); elements.wordInput.focus(); const L = elements.wordInput.value.length; elements.wordInput.setSelectionRange?.(L,L); return; }
     if (lower === 'm')               { e.preventDefault(); logyq.mix.randomizeTree(!!e.shiftKey); return; }
-    if (lower === 'w')               { e.preventDefault(); logyq.dock.toggleVisibility(); return; }
+    if (lower === 'w' && !e.shiftKey){
+      e.preventDefault();
+      const side = logyq.dock.cycleDockSide();
+      logyq.selection.showToast(logyq.dock.sideLabel(side), 900);
+      return;
+    }
     if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}
 
@@ -5368,30 +5364,6 @@ if (lower === 'e' && !e.metaKey){
   return;
 }
 
-
-/* [patch] shift-W wordbank to trash start */
-if ((lower === 'w' && e.shiftKey) && !e.metaKey){
-  e.preventDefault();
-  if (!state.wordBank || state.wordBank.length === 0){
-    logyq.selection.showToast('WordBank is empty');
-    return;
-  }
-
-  // Move all items into trash
-  const moved = [...state.wordBank];
-  state.wordBank = [];
-
-  state.trash = state.trash || [];
-  state.trash.push(...moved);
-
-  logyq.selection.showToast(`Moved ${moved.length} items to Trash`);
-  renderWordBank?.();
-  renderTrash?.();
-  return;
-}
-/* [patch] shift-W wordbank to trash end */
-
-  
 
 // T / Shift+T — delete
 //  - T: delete subtree(s) to Trash
@@ -6105,6 +6077,14 @@ function getSelectedUid(){
       logyq.wordDock.render();
       logyq.treeManager.layoutAndRender(false);
       logyq.treeManager.autoFit();
+    },
+    cycleDock() {
+      const side = logyq.dock.cycleDockSide();
+      logyq.selection.showToast(logyq.dock.sideLabel(side), 900);
+      return side;
+    },
+    setDockSide(side) {
+      return logyq.dock.setSide(side);
     },
     dispatchKey(key, options = {}) {
       document.dispatchEvent(new KeyboardEvent('keydown', {

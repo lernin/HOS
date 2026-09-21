@@ -42,7 +42,12 @@ function keyDispatcher(e){
     if (lower === 'f' && e.shiftKey) { e.preventDefault(); logyq.camera.centerOnSelected(); return; }
     if (lower === 'a')               { e.preventDefault(); elements.wordInput.focus(); const L = elements.wordInput.value.length; elements.wordInput.setSelectionRange?.(L,L); return; }
     if (lower === 'm')               { e.preventDefault(); logyq.mix.randomizeTree(!!e.shiftKey); return; }
-    if (lower === 'w')               { e.preventDefault(); logyq.dock.toggleVisibility(); return; }
+    if (lower === 'w' && !e.shiftKey){
+      e.preventDefault();
+      const side = logyq.dock.cycleDockSide();
+      logyq.selection.showToast(logyq.dock.sideLabel(side), 900);
+      return;
+    }
     if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}
 
@@ -71,30 +76,6 @@ if (lower === 'e' && !e.metaKey){
   return;
 }
 
-
-/* [patch] shift-W wordbank to trash start */
-if ((lower === 'w' && e.shiftKey) && !e.metaKey){
-  e.preventDefault();
-  if (!state.wordBank || state.wordBank.length === 0){
-    logyq.selection.showToast('WordBank is empty');
-    return;
-  }
-
-  // Move all items into trash
-  const moved = [...state.wordBank];
-  state.wordBank = [];
-
-  state.trash = state.trash || [];
-  state.trash.push(...moved);
-
-  logyq.selection.showToast(`Moved ${moved.length} items to Trash`);
-  renderWordBank?.();
-  renderTrash?.();
-  return;
-}
-/* [patch] shift-W wordbank to trash end */
-
-  
 
 // T / Shift+T — delete
 //  - T: delete subtree(s) to Trash

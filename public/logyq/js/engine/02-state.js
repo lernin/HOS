@@ -290,7 +290,11 @@ window.addEventListener("resize", updateDockBounds, { passive: true });
 
 
 
-/* --- Dock side applier (bottom ↔ left ↔ hidden) --- */
+/* --- Dock side: one CSS-class API (bottom → left → hidden).
+   Hide is `#Dock.dock-hidden { display: none !important }`.
+   Do not toggle `style.display`; a second hide path fights this cycle. --- */
+const DOCK_SIDES = ['bottom', 'left', 'hidden'];
+
 function applyDockSide(){
   const { state, elements } = logyq
   const el = elements.Dock;
@@ -300,24 +304,25 @@ function applyDockSide(){
   else if (state.dockSide === 'hidden') el.classList.add('dock-hidden');
 }
 
-function cycleDockSide(){
+function setSide(side){
   const { state } = logyq
-  state.dockSide =
-    state.dockSide === 'bottom' ? 'left' :
-    state.dockSide === 'left'   ? 'hidden' :
-                        'bottom';
+  if (!DOCK_SIDES.includes(side)) return state.dockSide;
+  state.dockSide = side;
   applyDockSide();
   return state.dockSide;
 }
 
-function toggleVisibility(){
-  const { elements } = logyq
-  const dock = elements.Dock;
-  if (!dock) return;
-  const hidden = (dock.style.display === 'none');
-  dock.style.display = hidden ? '' : 'none';
-  if (elements.Hint) elements.Hint.style.display = hidden ? 'none' : 'inline-flex';
-  return hidden ? 'shown' : 'hidden';
+function cycleDockSide(){
+  const { state } = logyq
+  const i = DOCK_SIDES.indexOf(state.dockSide);
+  const next = DOCK_SIDES[(i < 0 ? 0 : i + 1) % DOCK_SIDES.length];
+  return setSide(next);
+}
+
+function sideLabel(side){
+  return side === 'bottom' ? 'Word Bank → Bottom' :
+         side === 'left'   ? 'Word Bank → Left'   :
+                             'Word Bank → Hidden';
 }
 
   attach('input', {
@@ -329,9 +334,10 @@ function toggleVisibility(){
 
   attach('dock', {
     applyDockSide,
+    setSide,
     cycleDockSide,
+    sideLabel,
     updateDockBounds,
-    toggleVisibility,
   });
 
 /* call once so the current state is applied on load */

@@ -106,8 +106,8 @@ See `NOT_REFACTORED.md` for internals left intact because changing them would li
 
 ### Depend on these
 
-- `LOGYQBridge` methods (`selectByUid`, `createRelative`, `editSelected`, `deleteSelection`, `mix`, `fit`, `loadMap`, `subscribe`/`notifyChange`)
-- Bag clusters: `logyq.selection`, `logyq.editing`, `logyq.treeOps`, `logyq.drag`, `logyq.wordDock`, `logyq.input`, `logyq.dock`, `logyq.camera`, `logyq.structure`, `logyq.layout`, `logyq.detectors` (`build`/`pick`/`draw` only), `logyq.treeManager.layoutAndRender` / `autoFit`
+- `LOGYQBridge` methods (`selectByUid`, `createRelative`, `editSelected`, `deleteSelection`, `mix`, `fit`, `loadMap`, `subscribe`/`notifyChange`, `cycleDock`, `setDockSide`)
+- Bag clusters: `logyq.selection`, `logyq.editing`, `logyq.treeOps`, `logyq.drag`, `logyq.wordDock`, `logyq.input`, `logyq.dock` (`setSide` / `cycleDockSide` / `applyDockSide` / `sideLabel` / `updateDockBounds`), `logyq.camera`, `logyq.structure`, `logyq.layout`, `logyq.detectors` (`build`/`pick`/`draw` only), `logyq.treeManager.layoutAndRender` / `autoFit`
 - `logyq.input.isTextField` before stealing keys or pointer
 - Preview persistence (`logyq_*` storage keys) and `/api/transcribe` PIN header — already isolated from LOGiQ maps
 
@@ -122,18 +122,22 @@ See `NOT_REFACTORED.md` for internals left intact because changing them would li
 
 ### Known footguns for mobile
 
-- **Two dock-hide mechanisms:** W-capture cycles `dock-left` / `dock-hidden`; Shift+W (via keyDispatcher `w`) toggles `style.display`. A phone chrome should pick one API (`logyq.dock.cycleDockSide` or `toggleVisibility`) and not bind both.
 - **Tab-hold** is a desktop modifier. Do not synthesize Tab on touch; it will `preventDefault` and set `state.tabHold`.
 - **Suppressed SVG dblclick** — keyboard `E` / `LOGYQBridge.editSelected` is the reliable edit path.
-- **Spawn-puck / tap-vs-pan** live in preview `04-gestures.js` and talk to D3 zoom + `LOGYQBridge.createRelative`. That is the next track, not this wave.
+- **Spawn-puck / tap-vs-pan** live in preview `04-gestures.js` and talk to D3 zoom + `LOGYQBridge.createRelative`. Gesture seams are the next cut in this pass; do not redesign the phone chrome here.
 - **Sticky-nav `setSelectionSet`** is undefined; the try/catch swallows it. Do not "fix" it from a mobile overlay without an intentional delta.
 - **`keyDispatcher` runs at initialize()** before `attach('keyboard')`; the bind is `logyq.keyboard?.keyDispatcher`. Keep that late lookup.
 - Concatenate+IIFE remains; do not import fragments as ES modules from a mobile shell.
 
+### Must not do
+
+- Do not toggle `#Dock` with `style.display`. Hide is CSS class `dock-hidden` via `logyq.dock.setSide('hidden')` / `cycleDockSide()`.
+- Do not synthesize Shift+W. Unshifted W (and `LOGYQBridge.cycleDock`) is the only dock-hide path. Shift+W is a no-op; the old WordBank-to-trash branch was deleted.
+- Do not flip V-hold listeners to capture.
+
 ### Still ambient (OK to leave)
 
 - Four `getSelectedUid` copies in `17-keyboard.js` (last wins)
-- Unreachable Shift+W trash-WordBank branch (plain/`lower === 'w'` returns first)
 - Capture-phase Shift+I/J/K/L relative-create vs `keyDispatcher` nav
 - Mix newline `addWords` vs comma split
 - PNG export, help HTML mismatches, lane no-op stubs

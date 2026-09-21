@@ -100,21 +100,6 @@ window.addEventListener('keydown', (e) => {
     }
   }, { passive: false });
 
-    window.addEventListener('keydown', (e) => {  //green
-        if (e.shiftKey || e.metaKey || e.altKey) return;
-        if (logyq.input.isTextField(e.target)) return;
-        if (e.key === 'w' || e.key === 'W'){
-            e.preventDefault();
-            e.stopPropagation(); // avoid any older W handlers, if any
-            const side = logyq.dock.cycleDockSide();
-            logyq.selection.showToast(
-                side === 'bottom' ? 'Word Bank → Bottom' :
-                side === 'left'   ? 'Word Bank → Left'   :
-                                    'Word Bank → Hidden', 900
-    );}}, 
-    
-    { passive: false, capture: true });
-
 })();
 
 
