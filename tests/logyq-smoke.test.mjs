@@ -102,6 +102,8 @@ test('LOGYQ desktop boot preserves the 30-node tree, edit, undo, dock, and repar
   await page.locator('#wordInput').press('Enter')
   assert.deepEqual(await page.locator('#Dock .chip').allTextContents(), ['alpha', 'beta'])
 
+  await page.evaluate(() => document.activeElement?.blur())
+  await page.evaluate(() => window.LOGYQBridge.selectByName('Node 05'))
   const beforeNav = await page.evaluate(() => window.LOGYQBridge.getSelectedUid())
   await page.keyboard.press('ArrowRight')
   assert.notEqual(await page.evaluate(() => window.LOGYQBridge.getSelectedUid()), beforeNav)
