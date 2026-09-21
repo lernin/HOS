@@ -267,14 +267,21 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
       transform: node?.getAttribute('transform') || '',
       otherOpacity: other ? getComputedStyle(other).opacity : '1',
       offset: window.LOGYQPreview.gestures.fingerOffset(),
+      lift: window.LOGYQPreview.gestures.liftPx(),
+      previewTransform: document.getElementById('logyq-v162-branch-preview')?.style.transform || '',
       y: t.y,
     }
   })
   assert.equal(ghost.ghost, true)
   assert.equal(ghost.transform, originTransform)
   assert.equal(ghost.otherOpacity, '1')
-  assert.deepEqual(ghost.offset, { x: 0, y: 0 })
-  assert.ok(Math.abs((beforeHold.y - ghost.y) - (1.45 * 38)) < 2, `map should shift north by 1.45cm, before=${beforeHold.y} during=${ghost.y}`)
+  const D = 1.45 * 38
+  assert.equal(ghost.lift, D)
+  assert.deepEqual(ghost.offset, { x: 0, y: -D })
+  assert.ok(Math.abs((beforeHold.y - ghost.y) - D) < 2, `map should shift north by 1.45cm, before=${beforeHold.y} during=${ghost.y}`)
+  assert.match(ghost.previewTransform, /translate3d\(/)
+  const previewY = Number((ghost.previewTransform.match(/translate3d\([^,]+,\s*([-0-9.]+)px/) || [])[1])
+  assert.ok(Number.isFinite(previewY) && Math.abs(previewY - (-D)) < 2, `floating card should pop north by 1.45cm, transform=${ghost.previewTransform}`)
   assert.equal(await page.locator('#logyq-v162-branch-preview .v2-float-node').count(), 0)
   assert.equal(await page.locator('#logyq-v162-branch-preview g.node').count(), 1)
   assert.equal(await page.locator('#logyq-v162-branch-preview line').count(), 0)

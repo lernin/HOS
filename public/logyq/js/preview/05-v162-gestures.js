@@ -12,8 +12,9 @@
       PX_PER_CM: 38,
       OFFSET_UP_CM: 1.45,
       OFFSET_SIDE_CM: 0,
-      // Experiment: pan the map north on latch instead of popping the card up.
-      // Set false to restore card-offset drag.
+      // Latch pans the map north by OFFSET_UP_CM *and* pops the floating
+      // card by the same D so neither sits under the finger. Side stays 0.
+      // Set false to skip the map pan (card-pop only).
       LATCH_MAP_SHIFT: true,
       BANK_DWELL_MS: 480,
     }
@@ -353,11 +354,15 @@
     return true
   }
 
+  function liftPx() {
+    const C = v162Constants()
+    return C.OFFSET_UP_CM * C.PX_PER_CM
+  }
+
   function fingerOffset() {
     const C = v162Constants()
-    if (C.LATCH_MAP_SHIFT) return { x: 0, y: 0 }
-    const up = C.OFFSET_UP_CM * C.PX_PER_CM
-    return { x: 0, y: -up }
+    const D = liftPx()
+    return { x: C.OFFSET_SIDE_CM * C.PX_PER_CM, y: -D }
   }
 
   function visualPoint(x, y) {
@@ -366,8 +371,7 @@
   }
 
   function latchShiftPx() {
-    const C = v162Constants()
-    return C.OFFSET_UP_CM * C.PX_PER_CM
+    return liftPx()
   }
 
   function applyZoomNow(doc, win, next) {
@@ -824,6 +828,8 @@
     preview.gestures.edgePan = edgePan
     preview.gestures.fingerOffset = fingerOffset
     preview.gestures.visualPoint = visualPoint
+    preview.gestures.liftPx = liftPx
+    preview.gestures.latchShiftPx = latchShiftPx
     preview.gestures.yieldNodeDrag = yieldNodeDrag
     preview.gestures.dockDropKind = dockDropKind
     preview.gestures.hitBankChip = hitBankChip
