@@ -16,7 +16,7 @@ v161 is the tree engine plus the small `LOGiQBridge` integration that `logiq-pre
 
 - Served at `/logyq/` with absolute asset paths under that prefix.
 - Application bridge is `window.LOGYQBridge` (not `LOGiQBridge`).
-- Map and PIN storage uses only `logyq_*` keys (`logyq_current_map_v1`, `logyq_pending_save_v1`, `logyq_maps_v1`, `logyq_lab_pin_v1`, `logyq_saved_maps_v1`, `logyq_ashley_user_v1`).
+- Map and PIN storage uses only `logyq_*` keys (`logyq_current_map_v1`, `logyq_pending_save_v1`, `logyq_maps_v1`, `logyq_lab_pin_v1`).
 - Maps autosave into `localStorage.logyq_maps_v1`. LOGYQ does not call `logiq_map_save`, `logiq_map_list`, or `logiq_map_delete`, and does not ship the production Supabase URL or key.
 - The Lab PIN is stored as `logyq_lab_pin_v1` and is used only for `/api/transcribe` (voice). Maps never prompt for a PIN.
 
@@ -38,6 +38,7 @@ public/logyq/
   js/engine/                 Source fragments concatenated in MANIFEST order
   js/preview/                Preview fragments concatenated in MANIFEST order
   ARCHITECTURE.md            This file
+  SAFE_TO_RIP.md             What was deleted and what is still load-bearing
   NOT_REFACTORED.md          Intentional no-touch areas
 ```
 
@@ -60,11 +61,11 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `08-detectors.js` | Invisible drop hit regions |
 | `09-editing.js` | Inline node editor. Registers `logyq.editing`. Reads shared state through the bag. |
 | `10-selection.js` | Focus/group selection, toasts, drop insert, reparent helpers. Registers `logyq.selection`. |
-| `11-deletion.js` | Trash/delete helpers plus adjacent create/export helpers (`exportGIQ`, `createFirstCardAndEdit`). Registers `logyq.deletion`. |
+| `11-deletion.js` | Trash/delete helpers plus `exportGIQ`. Registers `logyq.deletion`. |
 | `12-tree-ops.js` | Add child/sibling, GIQ/JSON parse, Word Dock transfer. Registers `logyq.treeOps`. `DRAG_SLOP_PX` still lives at the bottom of this fragment because drag is concatenated later. |
 | `13-drag.js` | Subtree / node-only / group drag. Registers `logyq.drag`. Drop-case order is unchanged: group, then Shift-solo, then subtree. |
 | `14-word-dock.js` | Chip render, chip drag, `parseGIQ` / `normalizeToTree`. Registers `logyq.wordDock`. |
-| `15-mix-and-context.js` | Mix, node context-menu Word Dock actions, leftover engine local-maps prompt UI. Registers `logyq.mix`. |
+| `15-mix-and-context.js` | Mix and node context-menu Word Dock actions. Registers `logyq.mix`. |
 | `16-tree-manager.js` | D3 zoom/layout/render and control wiring. Reads layout/detectors/camera/drag/mix through the bag. `centerOnSelected` delegates to `logyq.camera`. Keyboard bind is `logyq.keyboard?.keyDispatcher` (looked up at event time because `initialize()` runs before `attach('keyboard')`). |
 | `17-keyboard.js` | `keyDispatcher` and extra hotkeys. Registers `logyq.keyboard`. Capture-phase Shift+I/J/K/L listeners stay in this fragment. |
 | `18-bridge.js` | `LOGYQBridge` seam used by the preview layer |
@@ -77,7 +78,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `01-helpers.js` | JSON/localStorage helpers |
 | `02-styles.js` | Injected preview/mobile CSS, including v162 hold-drag ghost styles |
 | `03-ui.js` | Maps library chrome, phone header/context. Does **not** bind spawn-puck or old tap-capture. |
-| `04-gestures.js` | Header-mic voice only. `bindCanvas` / `bindSpawn` are retired no-ops so they cannot race the v162 layer. |
+| `04-gestures.js` | Header-mic voice only. |
 | `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag, ~360ms double-tap edit. |
 | `06-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
 
@@ -110,7 +111,7 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 ### Depend on these
 
 - `LOGYQBridge` methods (`selectByUid`, `createRelative`, `editSelected`, `deleteSelection`, `mix`, `fit`, `loadMap`, `subscribe`/`notifyChange`, `cycleDock`, `setDockSide`, `getSelectedUid`, `renameNode`)
-- `window.LOGYQPreview.gestures` (`bindV162`, `constants`, header-mic `startVoiceCapture`/`stopVoiceCapture`; `bindCanvas`/`bindSpawn` are retired no-ops)
+- `window.LOGYQPreview.gestures` (`bindV162`, `constants`, header-mic `startVoiceCapture`/`stopVoiceCapture`)
 - Bag clusters: `logyq.selection` (`getSelectedUid`), `logyq.editing`, `logyq.treeOps`, `logyq.drag`, `logyq.wordDock`, `logyq.input`, `logyq.dock` (`setSide` / `cycleDockSide` / `applyDockSide` / `sideLabel` / `updateDockBounds`), `logyq.camera`, `logyq.structure`, `logyq.layout`, `logyq.detectors` (`build`/`pick`/`draw` only), `logyq.treeManager.layoutAndRender` / `autoFit`
 - `logyq.input.isTextField` before stealing keys or pointer
 - Preview persistence (`logyq_*` storage keys) and `/api/transcribe` PIN header — already isolated from LOGiQ maps
@@ -143,7 +144,7 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - Do not synthesize Shift+W. Unshifted W (and `LOGYQBridge.cycleDock`) is the only dock-hide path. Shift+W is a no-op; the old WordBank-to-trash branch was deleted.
 - Do not flip V-hold listeners to capture.
 - Do not put spawn-puck or v162 listeners on the engine `logyq` bag. That is preview (`LOGYQPreview.gestures`).
-- Do not re-bind `bindCanvasGestures` / `bindSpawnGestures`. Those old capture paths auto-voiced on create and fight flick/hold.
+- Do not reintroduce spawn-puck or a second canvas tap-capture. Those auto-voiced on create and fight flick/hold.
 - Do not mix clutch two-hand with v162 hold-flick.
 - Do not write production LOGiQ maps/PIN (`logiq_*` keys, `logiq_map_*` RPCs).
 - Do not start from clutch or rebuild the hidden spawn-puck.
@@ -152,6 +153,6 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 
 - Capture-phase Shift+I/J/K/L relative-create vs `keyDispatcher` nav (one listener now: `onRelativeCreateHotkeys`)
 - Mix newline `addWords` vs comma split
-- PNG export, help HTML mismatches, lane no-op stubs
+- PNG export, help HTML mismatches, zoom-time `refreshLaneOnZoom` no-op
 - History/tree-ops/editing still use some ambient `showToast` / `utils` names inside their own fragments (same IIFE)
-- Existing injected phone header/context chrome (v161 DOM ids). The spawn-puck DOM node is still in the shell but CSS-hidden and unbound. A later chrome redesign should keep `LOGYQPreview.gestures.bindV162` rather than copying capture listeners.
+- Existing injected phone header/context chrome (v161 DOM ids). Spawn-puck DOM is gone. A later chrome redesign should keep `LOGYQPreview.gestures.bindV162` rather than copying capture listeners.

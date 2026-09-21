@@ -40,7 +40,11 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 ## v162 gesture port (this branch)
 
 - **Direct flick / hold-drag / double-tap on `/logyq/` only.** Same-page `LOGYQBridge` (not iframe `contentWindow`). Source of behavior is v162: flick 52px/340ms/1.45, hold 280ms/8px slop into existing `d3.drag()`, pointer double-tap 360ms → `editSelected()`. SVG `dblclick` stays muted.
-- **Old spawn-puck + tap-capture unbound.** `bindCanvas` / `bindSpawn` are no-ops. Flick creates a blank relative and does **not** auto-record or auto-voice. Header mic still uses `startVoiceCapture(null)`.
-- **Storage stays `logyq_*`.** No production LOGiQ maps/PIN writes.
+- **Old spawn-puck + tap-capture removed.** Flick creates a blank relative and does **not** auto-record or auto-voice. Header mic still uses `startVoiceCapture()` (fills the header input only).
+- **Storage stays `logyq_*`.** No production LOGiQ maps/PIN writes. Engine `logyq_saved_maps_v1` / fake `logyq_ashley_user_v1` are gone; maps live in preview `logyq_maps_v1`.
 - **Deferred:** pull-to-copy, Working Lock, drag-watchdog, clutch two-hand, full mobile chrome redesign, ES modules, further bag splits.
+
+## Fearless-delete wave
+
+See `SAFE_TO_RIP.md`. Spawn-puck, retired bind no-ops, engine prompt-maps, fake user badge, never-shown Hint, unused `startInlineEdit` / `zoomToNodeCenter` / `getSelectionUids` / `copySubtreeToClipboard` / `createFirstCardAndEdit`, the muted node `dblclick` bind, the dead swim-lane pin branch plus `showLaneAtY`/`hideLane`, unused `window.__add*` create aliases, and the unread `elements.mapsBtn` field were deleted. Keyboard create/edit/drag/selection verbs remain. Zoom still calls no-op `refreshLaneOnZoom`.
 

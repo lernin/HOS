@@ -14,13 +14,13 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 - **`insertNodeAtDrop` / `removeNode` live in the selection fragment.** Drag now calls them through `logyq.selection`; they were not moved into `12-tree-ops.js`.
 - **Deletion helpers inline their own top-level-selection filter** rather than calling `topLevelSelection`. `deleteSelectedNodeOnly` does not call `layoutAndRender`; the T-key handler and drag trash path do that after.
 - **Two `dropSelectedToWordBank` implementations.** The commented "Maybe broken?" copy was deleted. One live implementation remains and reads through `logyq`.
-- **Suppressed double-click editor.** A node dblclick handler exists; a later capture listener still swallows SVG double-clicks. Keyboard `E` remains the reliable edit path.
+- **Suppressed SVG double-click.** The node `dblclick` bind is gone. A capture mute still swallows SVG double-clicks; do not unmute it. Phone edit is v162 pointer double-tap → `editSelected()`, or keyboard `E`.
 - **Help text vs code mismatches** (Ctrl vs Shift, double-click rename). Comments and help HTML are unchanged.
-- **Lane API is geometry-only.** `showLaneAtY` / `hideLane` / `refreshLaneOnZoom` are no-op stubs. Swim-lane pin still calls them. `LabelWrap` measures via a hidden overlay text node and falls back to `length * 8` if SVG measure throws.
+- **Lane geometry is live; lane *chrome* is gone.** `laneYForDepth` / `laneHeightForDepth` still size detectors. `refreshLaneOnZoom` is a no-op that zoom still calls. The swim-lane pin button never existed in LOGYQ HTML, so `showLaneAtY` / `hideLane` were deleted. `LabelWrap` measures via a hidden overlay text node and falls back to `length * 8` if SVG measure throws.
 - **V-hold structure moves** clone the whole tree (`replace-root` undo), ignore the group set, and always call `logyq.camera.checkMoatAndAutoFit('vhold')`. Dead `__getSelectedUidSingle` / `__swapWithinParent` / `__groupsAtDepthOrderedByX` / `__reparentToAdjacentGroup` helpers were removed.
-- **Mix (`randomizeTree`)** and its undo snapshot, including Word Dock include/clear rules. Context-menu dumps still call `addWords(names.join('\n'), 'bank')`; Word Dock splits on commas/semicolons, not newlines. Unused `onNodeLeftDown` / `onNodeRightButtonDown` / `flyToXY` were deleted. Engine local-maps `prompt` UI (`saveCurrentMap` / `openMapsMenu`) remains; Trees opens the preview library instead.
+- **Mix (`randomizeTree`)** and its undo snapshot, including Word Dock include/clear rules. Context-menu dumps still call `addWords(names.join('\n'), 'bank')`; Word Dock splits on commas/semicolons, not newlines. Unused `onNodeLeftDown` / `onNodeRightButtonDown` / `flyToXY` were deleted. Engine local-maps `prompt` UI was deleted; Trees opens the preview library.
 - **PNG/SVG export** (`PngExport` and export modal wiring).
-- **Legacy `dataManager` local maps / prompt UI.** Trees opens the preview library instead; local save helpers remain in the copied engine.
+- **`dataManager` is sample-tree only.** `generateTree(30)` is the boot payload. Engine prompt-maps helpers are gone; Trees opens the preview library (`logyq_maps_v1`).
 - **D3 loaded from jsDelivr.** Offline boot is still not guaranteed; tests stub the CDN.
 
 ## Preview / persistence
@@ -29,9 +29,10 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 - **Voice PIN only.** `getPin` remains for `/api/transcribe`. It uses `logyq_lab_pin_v1`, not `logiq_lab_pin_v1`.
 - **Autosave debounce.** 850ms write delay and 1100ms retry-on-overlap are unchanged. Offline now means a localStorage write failed, not a missing network.
 - **Phone shell CSS injected at runtime** (`injectStyles`), including `logiq-*` DOM ids/classes. File paths are LOGYQ; DOM ids were not renamed so the copied preview selectors stay exact.
-- **v162 mobile grammar on `/logyq/`.** Direct flick, 280ms hold-drag, and 360ms double-tap live in `05-v162-gestures.js` and call `LOGYQBridge`. Old spawn-puck auto-voice and canvas tap-capture are unbound (`bindCanvas`/`bindSpawn` no-ops). Header-mic voice remains in `04-gestures.js`. Do not reattach the puck path. Do not unmute SVG `dblclick`.
-- **Phone chrome is still injected v161 header/context.** Spawn-puck DOM remains but is CSS-hidden and unbound. Full chrome redesign is out of scope.
+- **v162 mobile grammar on `/logyq/`.** Direct flick, 280ms hold-drag, and 360ms double-tap live in `05-v162-gestures.js` and call `LOGYQBridge`. Spawn-puck DOM and old canvas tap-capture are gone. Header-mic voice remains in `04-gestures.js`. Do not unmute SVG `dblclick`.
+- **Phone chrome is still injected v161 header/context.** Full chrome redesign is out of scope.
 - **Not ported from later labs:** pull-to-copy, Working Lock, drag-watchdog, clutch two-hand.
+- **Engine local-maps `prompt` UI is gone.** Trees opens the preview library (`logyq_maps_v1`). Do not resurrect `saveCurrentMap` / `openMapsMenu`.
 
 ## Extraction method (intentional)
 
