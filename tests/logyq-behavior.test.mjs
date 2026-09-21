@@ -1088,8 +1088,8 @@ test('hold-drag pan is center-offset with a half-card content leash', () => {
   const farther = helpers.centerPanVector(195, 820, view, C)
   assert.ok(Math.abs(farther.dy) > Math.abs(down.dy), 'further from center is stronger')
 
-  const wide = { minX: -400, maxX: 800, minY: -200, maxY: 1200, cardW: 140, cardH: 63 }
-  const t = { x: 200, y: 300, k: 1 }
+  const wide = { minX: -400, maxX: 800, minY: -400, maxY: 1200, cardW: 140, cardH: 63 }
+  const t = { x: 200, y: 200, k: 1 }
   const halfW = wide.cardW / 2
   const halfH = wide.cardH / 2
   const free = helpers.clampPanToContent(t, -40, 0, wide, view)
@@ -1108,7 +1108,7 @@ test('hold-drag pan is center-offset with a half-card content leash', () => {
   const fingerUp = helpers.clampPanToContent(t, 0, 2000, wide, view)
   const topEdge = wide.minY * t.k + t.y + fingerUp.dy
   assert.ok(Math.abs(topEdge - (view.top + halfH)) < 0.5, 'finger-above / pan-up stops with ½ card at the top/leading edge')
-  const already = { x: 200, y: 300, k: 1 }
+  const already = { x: 200, y: 200, k: 1 }
   already.x = view.right - halfW - wide.maxX
   const noYank = helpers.clampPanToContent(already, -50, 0, wide, view)
   assert.equal(noYank.dx, 0, 'already at the leading bound: do not shove further or yank to the far side')
