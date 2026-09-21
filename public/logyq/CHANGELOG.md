@@ -34,4 +34,5 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 ## Harden pass (pre-mobile)
 
 - **One dock-hide API.** `logyq.dock` is CSS-class only: `setSide` / `cycleDockSide` / `applyDockSide` / `sideLabel`. Hide is `#Dock.dock-hidden { display: none !important }`. `toggleVisibility` (`style.display`) is deleted. Unshifted W in `keyDispatcher` is the only keyboard binding; the window-capture W listener is gone. Shift+W is a no-op (the unreachable WordBank-to-trash branch and its `renderWordBank`/`renderTrash` stubs are gone rather than made live). Preview Word Dock button calls `LOGYQBridge.cycleDock()` instead of synthesizing `w`.
+- **One `getSelectedUid`.** `logyq.selection.getSelectedUid` (focus, then singleton group) is the bag surface. Keyboard copies are gone. `__selectedUid` in config delegates to it. `LOGYQBridge.getSelectedUid` uses the bag (same fallback). Relative-create Shift+I/J/K/L is one capture listener (`onRelativeCreateHotkeys`) instead of four.
 

@@ -1,6 +1,13 @@
   /* ======================= SELECTION + TOAST ======================= */
 /* [patch] selection-helpers start */
 
+function getSelectedUid(){
+  const { state } = logyq
+  if (state?.selectedUid) return state.selectedUid;
+  if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
+  return null;
+}
+
 function applySelectionStyles(){
   const { state, elements } = logyq
   if (!elements.gNodes) return;
@@ -605,6 +612,7 @@ window.addEventListener('keydown', onGroupHotkeys, { passive: false });
 // ==========================================================================
 
   attach('selection', {
+    getSelectedUid,
     applySelectionStyles,
     toggleGroupMembershipOf,
     moveGroupToTarget,

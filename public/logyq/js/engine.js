@@ -113,11 +113,14 @@ function computeNearestWallPct(){
 }
 
 
-// Current single selection (or null)
+// Current single selection (or null). Canonical logic lives on
+// logyq.selection.getSelectedUid; this alias stays for camera/editing
+// callers in this fragment. Fallback is only for eval-before-attach.
 function __selectedUid(){
+  if (typeof logyq.selection?.getSelectedUid === 'function') return logyq.selection.getSelectedUid();
   const { state } = logyq
-  return state.selectedUid
-      || (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null)
+  return state?.selectedUid
+      || (state?.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null)
       || null;
 }
 
@@ -1770,7 +1773,7 @@ if (state.vHold) return;
     try {
       // --- restore sticky set after your nav code has moved focus ---
       if (frozen) {
-        const focused = __selectedUid();        // whatever your nav selected
+        const focused = logyq.selection.getSelectedUid();        // whatever your nav selected
         const merged = new Set(frozen);
         if (focused) merged.add(focused);       // ensure focus stays in set
         setSelectionSet(merged);
@@ -1845,6 +1848,13 @@ window.addEventListener('keydown', (e) => { //purple
 
   /* ======================= SELECTION + TOAST ======================= */
 /* [patch] selection-helpers start */
+
+function getSelectedUid(){
+  const { state } = logyq
+  if (state?.selectedUid) return state.selectedUid;
+  if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
+  return null;
+}
 
 function applySelectionStyles(){
   const { state, elements } = logyq
@@ -2450,6 +2460,7 @@ window.addEventListener('keydown', onGroupHotkeys, { passive: false });
 // ==========================================================================
 
   attach('selection', {
+    getSelectedUid,
     applySelectionStyles,
     toggleGroupMembershipOf,
     moveGroupToTarget,
@@ -5696,17 +5707,9 @@ elements.svg.on("contextmenu", (event) => {
 
   /* ======================= BOOT ======================= */
 
-  function getSelectedUid(){
-    const { state } = logyq
-    if (typeof __selectedUid === 'function') return __selectedUid();
-    if (state?.selectedUid) return state.selectedUid;
-    if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
-    return null;
-  }
-
   function addChildBelowSelectedAndEdit(){
     const { state, utils } = logyq
-    const uid = getSelectedUid();
+    const uid = logyq.selection.getSelectedUid();
     if (!state?.root || !uid){ logyq.selection.showToast('Select one node'); return; }
 
     const h = state.root.descendants().find(n => n?.data?._uid === uid);
@@ -5730,33 +5733,11 @@ elements.svg.on("contextmenu", (event) => {
     if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
-  // Run BEFORE other key handlers and stop them from seeing Shift+K
-  window.addEventListener('keydown', function(e){
-    if ((e.key === 'K' || e.key === 'k') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      // ignore when typing
-      if (logyq.input.isTextField(e.target)) return;
-
-      e.preventDefault();
-      e.stopImmediatePropagation(); // ← prevents the K-nav handler from running
-      addChildBelowSelectedAndEdit();
-    }
-  }, { capture: true }); // ← run first
-
-  window.__addChildBelowSelectedAndEdit = addChildBelowSelectedAndEdit;
-
-function getSelectedUid(){
-    const { state } = logyq
-    if (typeof __selectedUid === 'function') return __selectedUid();
-    if (state?.selectedUid) return state.selectedUid;
-    if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
-    return null;
-  }
-
   function addElderSiblingLeftAndEdit(){
     const { state, utils } = logyq
     if (!state?.root) return;
 
-    const uid = getSelectedUid();
+    const uid = logyq.selection.getSelectedUid();
     if (!uid) { logyq.selection.showToast('Select one node'); return; }
 
     const h = state.root.descendants().find(n => n?.data?._uid === uid);
@@ -5792,35 +5773,11 @@ function getSelectedUid(){
     if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
-  // Hotkey: Shift+J (capture + stop to avoid J-nav)
-  window.addEventListener('keydown', function(e){
-    if ((e.key === 'J' || e.key === 'j') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      if (logyq.input.isTextField(e.target)) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      addElderSiblingLeftAndEdit();
-    }
-  }, { capture: true });
-
-
-
-
-  window.__addElderSiblingLeftAndEdit = addElderSiblingLeftAndEdit;
-
-
- function getSelectedUid(){
-    const { state } = logyq
-    if (typeof __selectedUid === 'function') return __selectedUid();
-    if (state?.selectedUid) return state.selectedUid;
-    if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
-    return null;
-  }
-
   function addYoungerSiblingRightAndEdit(){
     const { state, utils } = logyq
     if (!state?.root) return;
 
-    const uid = getSelectedUid();
+    const uid = logyq.selection.getSelectedUid();
     if (!uid){ logyq.selection.showToast('Select one node'); return; }
 
     const h = state.root.descendants().find(n => n?.data?._uid === uid);
@@ -5855,34 +5812,11 @@ function getSelectedUid(){
     if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
-  // Hotkey: Shift+L (capture so L-nav doesn’t run)
-  window.addEventListener('keydown', function(e){
-    if ((e.key === 'L' || e.key === 'l') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      if (logyq.input.isTextField(e.target)) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      addYoungerSiblingRightAndEdit();
-    }
-  }, { capture: true });
-
-  window.__addYoungerSiblingRightAndEdit = addYoungerSiblingRightAndEdit;
-
-
-/*========== insert parent above selected (adopt selected as child) ==========*/
-
-  function getSelectedUid(){
-    const { state } = logyq
-    if (typeof __selectedUid === 'function') return __selectedUid();
-    if (state?.selectedUid) return state.selectedUid;
-    if (state?.selectedUids && state.selectedUids.size === 1) return [...state.selectedUids][0];
-    return null;
-  }
-
   function insertParentAboveSelectedAndEdit(){
     const { state, utils } = logyq
     if (!state?.root) return;
 
-    const uid = getSelectedUid();
+    const uid = logyq.selection.getSelectedUid();
     if (!uid){ logyq.selection.showToast('Select one node'); return; }
 
     const h = state.root.descendants().find(n => n?.data?._uid === uid);
@@ -5922,16 +5856,27 @@ function getSelectedUid(){
     if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
-  // Hotkey: Shift+I (capture so I-nav doesn’t run first)
-  window.addEventListener('keydown', function(e){
-    if ((e.key === 'I' || e.key === 'i') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      if (logyq.input.isTextField(e.target)) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      insertParentAboveSelectedAndEdit();
-    }
-  }, { capture: true });
+  function onRelativeCreateHotkeys(e){
+    if (!e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (logyq.input.isTextField(e.target)) return;
+    const action =
+      e.key === 'K' || e.key === 'k' ? addChildBelowSelectedAndEdit :
+      e.key === 'J' || e.key === 'j' ? addElderSiblingLeftAndEdit :
+      e.key === 'L' || e.key === 'l' ? addYoungerSiblingRightAndEdit :
+      e.key === 'I' || e.key === 'i' ? insertParentAboveSelectedAndEdit :
+      null;
+    if (!action) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    action();
+  }
 
+  // Capture so I/J/K/L-nav in keyDispatcher never sees the shifted create keys.
+  window.addEventListener('keydown', onRelativeCreateHotkeys, { capture: true });
+
+  window.__addChildBelowSelectedAndEdit = addChildBelowSelectedAndEdit;
+  window.__addElderSiblingLeftAndEdit = addElderSiblingLeftAndEdit;
+  window.__addYoungerSiblingRightAndEdit = addYoungerSiblingRightAndEdit;
   window.__insertParentAboveSelectedAndEdit = insertParentAboveSelectedAndEdit;
 
   attach('keyboard', {
@@ -5940,6 +5885,7 @@ function getSelectedUid(){
     addElderSiblingLeftAndEdit,
     addYoungerSiblingRightAndEdit,
     insertParentAboveSelectedAndEdit,
+    onRelativeCreateHotkeys,
   });
 /* LOGYQ preview integration seam.
    Keep the copied engine above intact; mobile UI and persistence live in
@@ -5986,7 +5932,7 @@ function getSelectedUid(){
       return () => changeListeners.delete(listener);
     },
     notifyChange: emitChange,
-    getSelectedUid: () => logyq.state.selectedUid || null,
+    getSelectedUid: () => logyq.selection.getSelectedUid(),
     getSelectedUids: () => logyq.state.selectedUids ? Array.from(logyq.state.selectedUids) : [],
     selectByUid(uid) {
       const node = uid && logyq.state.root?.descendants().find((item) => item.data?._uid === uid);

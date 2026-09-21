@@ -74,11 +74,14 @@ function computeNearestWallPct(){
 }
 
 
-// Current single selection (or null)
+// Current single selection (or null). Canonical logic lives on
+// logyq.selection.getSelectedUid; this alias stays for camera/editing
+// callers in this fragment. Fallback is only for eval-before-attach.
 function __selectedUid(){
+  if (typeof logyq.selection?.getSelectedUid === 'function') return logyq.selection.getSelectedUid();
   const { state } = logyq
-  return state.selectedUid
-      || (state.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null)
+  return state?.selectedUid
+      || (state?.selectedUids && state.selectedUids.size === 1 ? [...state.selectedUids][0] : null)
       || null;
 }
 

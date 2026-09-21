@@ -107,7 +107,7 @@ See `NOT_REFACTORED.md` for internals left intact because changing them would li
 ### Depend on these
 
 - `LOGYQBridge` methods (`selectByUid`, `createRelative`, `editSelected`, `deleteSelection`, `mix`, `fit`, `loadMap`, `subscribe`/`notifyChange`, `cycleDock`, `setDockSide`)
-- Bag clusters: `logyq.selection`, `logyq.editing`, `logyq.treeOps`, `logyq.drag`, `logyq.wordDock`, `logyq.input`, `logyq.dock` (`setSide` / `cycleDockSide` / `applyDockSide` / `sideLabel` / `updateDockBounds`), `logyq.camera`, `logyq.structure`, `logyq.layout`, `logyq.detectors` (`build`/`pick`/`draw` only), `logyq.treeManager.layoutAndRender` / `autoFit`
+- Bag clusters: `logyq.selection` (`getSelectedUid`), `logyq.editing`, `logyq.treeOps`, `logyq.drag`, `logyq.wordDock`, `logyq.input`, `logyq.dock` (`setSide` / `cycleDockSide` / `applyDockSide` / `sideLabel` / `updateDockBounds`), `logyq.camera`, `logyq.structure`, `logyq.layout`, `logyq.detectors` (`build`/`pick`/`draw` only), `logyq.treeManager.layoutAndRender` / `autoFit`
 - `logyq.input.isTextField` before stealing keys or pointer
 - Preview persistence (`logyq_*` storage keys) and `/api/transcribe` PIN header — already isolated from LOGiQ maps
 
@@ -137,8 +137,7 @@ See `NOT_REFACTORED.md` for internals left intact because changing them would li
 
 ### Still ambient (OK to leave)
 
-- Four `getSelectedUid` copies in `17-keyboard.js` (last wins)
-- Capture-phase Shift+I/J/K/L relative-create vs `keyDispatcher` nav
+- Capture-phase Shift+I/J/K/L relative-create vs `keyDispatcher` nav (one listener now: `onRelativeCreateHotkeys`)
 - Mix newline `addWords` vs comma split
 - PNG export, help HTML mismatches, lane no-op stubs
 - History/tree-ops/editing still use some ambient `showToast` / `utils` names inside their own fragments (same IIFE)

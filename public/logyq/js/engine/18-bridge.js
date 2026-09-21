@@ -43,7 +43,7 @@
       return () => changeListeners.delete(listener);
     },
     notifyChange: emitChange,
-    getSelectedUid: () => logyq.state.selectedUid || null,
+    getSelectedUid: () => logyq.selection.getSelectedUid(),
     getSelectedUids: () => logyq.state.selectedUids ? Array.from(logyq.state.selectedUids) : [],
     selectByUid(uid) {
       const node = uid && logyq.state.root?.descendants().find((item) => item.data?._uid === uid);

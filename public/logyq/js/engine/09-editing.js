@@ -184,7 +184,7 @@ if (state.vHold) return;
     try {
       // --- restore sticky set after your nav code has moved focus ---
       if (frozen) {
-        const focused = __selectedUid();        // whatever your nav selected
+        const focused = logyq.selection.getSelectedUid();        // whatever your nav selected
         const merged = new Set(frozen);
         if (focused) merged.add(focused);       // ensure focus stays in set
         setSelectionSet(merged);
