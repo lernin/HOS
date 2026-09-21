@@ -92,7 +92,7 @@ test('LOGYQ blank drafts are untitled empty roots with no children', () => {
   assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '' }, wordBank: ['alpha'] }), false)
   assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '', color: '#fde68a' }, wordBank: [] }), false)
   assert.equal(maps.isBlankDraft({ id: 'saved', name: 'Untitled map', tree: { name: '' }, wordBank: [] }), false)
-}))
+})
 
 test('GIQ and JSON import parsing keep v161 normalization rules', () => {
   const { tryParsePureJSON, tryParseGIQ, parseIncoming } = loadTreeHelpers()
