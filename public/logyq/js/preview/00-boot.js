@@ -4,6 +4,19 @@
   const bridge = window.LOGYQBridge
   if (!bridge) return
 
+  // Preview bag: spawn-puck / tap-vs-pan live here, not on the engine `logyq` bag.
+  const preview = {
+    app: null,
+    ui: null,
+    bridge,
+    gestures: null,
+  }
+  function attach(name, value) {
+    preview[name] = value
+    return value
+  }
+  window.LOGYQPreview = preview
+
   const PIN_KEY = 'logyq_lab_pin_v1'
   const CURRENT_KEY = 'logyq_current_map_v1'
   const PENDING_KEY = 'logyq_pending_save_v1'
@@ -24,9 +37,11 @@
     recordingUid: null,
     canvasPointers: new Map(),
   }
+  preview.app = app
 
   injectStyles()
   const ui = buildUi()
+  preview.ui = ui
   const recovered = readJson(PENDING_KEY, null)
   if (recovered?.tree) {
     app.current = { id: recovered.id || null, name: recovered.name || DEFAULT_NAME }

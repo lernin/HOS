@@ -144,6 +144,8 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
   await waitForTree(page)
 
+  assert.equal(await page.evaluate(() => typeof window.LOGYQPreview?.gestures?.bindCanvas), 'function')
+  assert.equal(await page.evaluate(() => window.LOGYQPreview?.gestures?.constants?.TAP_MOVE_PX), 9)
   assert.equal(await page.locator('body > header').isVisible(), false)
   assert.equal(await page.locator('#logiq-mobile-header').isVisible(), true)
   assert.equal(await page.locator('#trash').isVisible(), false)

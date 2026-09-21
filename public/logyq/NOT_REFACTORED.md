@@ -29,7 +29,7 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 - **Voice PIN only.** `getPin` remains for `/api/transcribe`. It uses `logyq_lab_pin_v1`, not `logiq_lab_pin_v1`.
 - **Autosave debounce.** 850ms write delay and 1100ms retry-on-overlap are unchanged. Offline now means a localStorage write failed, not a missing network.
 - **Phone shell CSS injected at runtime** (`injectStyles`), including `logiq-*` DOM ids/classes. File paths are LOGYQ; DOM ids were not renamed so the copied preview selectors stay exact.
-- **Spawn-puck / voice / tap-vs-pan arbitration.** Coupled to D3 zoom, selected-card pointer-events, and `LOGYQBridge.createRelative`.
+- **Spawn-puck / voice / tap-vs-pan arbitration.** Coupled to D3 zoom, selected-card pointer-events, and `LOGYQBridge.createRelative`. Handlers and thresholds now sit on `window.LOGYQPreview.gestures` (`bindCanvas` / `bindSpawn` / `constants`). A later shell should bind that surface once, not copy the capture listeners.
 
 ## Extraction method (intentional)
 

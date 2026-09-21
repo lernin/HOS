@@ -105,16 +105,8 @@
       if (action === 'delete' && window.confirm('Delete the selected node or subtree?')) bridge.deleteSelection()
     })
 
-    ui.spawnPuck.addEventListener('pointerdown', beginSpawnGesture)
-    ui.spawnPuck.addEventListener('pointermove', moveSpawnGesture)
-    ui.spawnPuck.addEventListener('pointerup', finishSpawnGesture)
-    ui.spawnPuck.addEventListener('pointercancel', cancelSpawnGesture)
-
-    const canvas = document.getElementById('canvas')
-    canvas?.addEventListener('pointerdown', beginCanvasPointer, true)
-    canvas?.addEventListener('pointermove', moveCanvasPointer, true)
-    canvas?.addEventListener('pointerup', finishCanvasPointer, true)
-    canvas?.addEventListener('pointercancel', cancelCanvasPointer, true)
+    bindSpawnGestures(ui.spawnPuck)
+    bindCanvasGestures(document.getElementById('canvas'))
 
     ui.mapList.addEventListener('click', handleMapAction)
     ui.pin.addEventListener('click', (event) => { if (event.target === ui.pin) finishPin(null) })

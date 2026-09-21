@@ -288,6 +288,11 @@ test('preview fragments concatenate to the served enhancement without edits', ()
   assert.match(assembled.source, /function injectStyles/)
   assert.match(assembled.source, /bridge\.cycleDock\(\)/)
   assert.doesNotMatch(assembled.source, /bridge\.dispatchKey\('w'\)/)
+  assert.match(assembled.source, /window\.LOGYQPreview = preview/)
+  assert.match(assembled.source, /attach\('gestures'/)
+  assert.match(assembled.source, /bindSpawnGestures\(ui\.spawnPuck\)/)
+  assert.match(assembled.source, /bindCanvasGestures/)
+  assert.match(assembled.source, /TAP_MOVE_PX: 9/)
 })
 
 test('this branch does not modify existing logiq-* files', () => {

@@ -1,3 +1,27 @@
+  const GESTURE = {
+    TAP_MOVE_PX: 9,
+    TAP_MAX_MS: 450,
+    SPAWN_AIM_PX: 22,
+    SPAWN_COMMIT_PX: 48,
+    SPAWN_MAX_MS: 850,
+  }
+
+  function bindCanvasGestures(canvas) {
+    if (!canvas) return
+    canvas.addEventListener('pointerdown', beginCanvasPointer, true)
+    canvas.addEventListener('pointermove', moveCanvasPointer, true)
+    canvas.addEventListener('pointerup', finishCanvasPointer, true)
+    canvas.addEventListener('pointercancel', cancelCanvasPointer, true)
+  }
+
+  function bindSpawnGestures(puck) {
+    if (!puck) return
+    puck.addEventListener('pointerdown', beginSpawnGesture)
+    puck.addEventListener('pointermove', moveSpawnGesture)
+    puck.addEventListener('pointerup', finishSpawnGesture)
+    puck.addEventListener('pointercancel', cancelSpawnGesture)
+  }
+
   function beginCanvasPointer(event) {
     if (!isPhoneUi() || event.target.closest?.('g.node.is-outlined')) return
     app.canvasPointers.set(event.pointerId, {
@@ -13,13 +37,13 @@
   function moveCanvasPointer(event) {
     const pointer = app.canvasPointers.get(event.pointerId)
     if (!pointer) return
-    if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > 9) pointer.moved = true
+    if (Math.hypot(event.clientX - pointer.x, event.clientY - pointer.y) > GESTURE.TAP_MOVE_PX) pointer.moved = true
   }
 
   function finishCanvasPointer(event) {
     const pointer = app.canvasPointers.get(event.pointerId)
     app.canvasPointers.delete(event.pointerId)
-    if (!pointer || pointer.multi || pointer.moved || performance.now() - pointer.started > 450) return
+    if (!pointer || pointer.multi || pointer.moved || performance.now() - pointer.started > GESTURE.TAP_MAX_MS) return
     const candidates = Array.from(document.querySelectorAll('g.node')).filter((node) => {
       const rect = node.getBoundingClientRect()
       return event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom
@@ -62,13 +86,13 @@
     const dx = event.clientX - gesture.x
     const dy = event.clientY - gesture.y
     const distance = Math.hypot(dx, dy)
-    if (distance < 22) return
+    if (distance < GESTURE.SPAWN_AIM_PX) return
     gesture.direction = directionFromDelta(dx, dy)
     ui.spawnGhost.textContent = directionLabel(gesture.direction)
     ui.spawnGhost.style.left = `${event.clientX}px`
     ui.spawnGhost.style.top = `${event.clientY}px`
     ui.spawnGhost.classList.add('is-visible')
-    if (!gesture.threshold && distance >= 48) {
+    if (!gesture.threshold && distance >= GESTURE.SPAWN_COMMIT_PX) {
       gesture.threshold = true
       navigator.vibrate?.(18)
     }
@@ -81,7 +105,7 @@
     const elapsed = performance.now() - gesture.started
     const direction = gesture.direction
     cancelSpawnGesture()
-    if (!direction || distance < 48 || elapsed > 850) {
+    if (!direction || distance < GESTURE.SPAWN_COMMIT_PX || elapsed > GESTURE.SPAWN_MAX_MS) {
       showMobileToast('Flick the + toward parent, sibling, or child')
       return
     }
@@ -176,4 +200,20 @@
       requestAnimationFrame(updateContextActions)
     }
   }
+
+  attach('gestures', {
+    constants: GESTURE,
+    bindCanvas: bindCanvasGestures,
+    bindSpawn: bindSpawnGestures,
+    beginCanvasPointer,
+    moveCanvasPointer,
+    finishCanvasPointer,
+    cancelCanvasPointer,
+    beginSpawnGesture,
+    moveSpawnGesture,
+    finishSpawnGesture,
+    cancelSpawnGesture,
+    startVoiceCapture,
+    stopVoiceCapture,
+  });
 
