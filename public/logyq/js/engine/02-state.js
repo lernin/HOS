@@ -310,6 +310,16 @@ function cycleDockSide(){
   return state.dockSide;
 }
 
+function toggleVisibility(){
+  const { elements } = logyq
+  const dock = elements.Dock;
+  if (!dock) return;
+  const hidden = (dock.style.display === 'none');
+  dock.style.display = hidden ? '' : 'none';
+  if (elements.Hint) elements.Hint.style.display = hidden ? 'none' : 'inline-flex';
+  return hidden ? 'shown' : 'hidden';
+}
+
   attach('input', {
     isTextField,
     keyIsNav,
@@ -321,6 +331,7 @@ function cycleDockSide(){
     applyDockSide,
     cycleDockSide,
     updateDockBounds,
+    toggleVisibility,
   });
 
 /* call once so the current state is applied on load */

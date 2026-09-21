@@ -7,6 +7,7 @@
     }
 
     function build(root){
+      const CONFIG = logyq.config
       if(!root) return [];
       const dets=[];
       const byDepth = d3.groups(root.descendants(), d=>d.depth).sort((a,b)=>a[0]-b[0]);
@@ -153,6 +154,7 @@
     function contains(d, x, y){ return (x>=d.x && x<=d.x+d.width && y>=d.y && y<=d.y+d.height); }
 
     function pick(point){
+      const { state } = logyq
       const x=point.x, y=point.y; const hits=[];
       for(const d of state.detectors){ if(contains(d,x,y)) hits.push(d); }
       if(!hits.length) return null;
@@ -171,6 +173,7 @@
     }
 
     function draw(){
+      const { state, elements, config: CONFIG } = logyq
       if(!elements.gDetectors) return;
       elements.gDetectors.selectAll('*').remove();
       if(!CONFIG.SHOW_DETECTORS) return;

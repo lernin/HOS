@@ -42,7 +42,7 @@ function keyDispatcher(e){
     if (lower === 'f' && e.shiftKey) { e.preventDefault(); logyq.camera.centerOnSelected(); return; }
     if (lower === 'a')               { e.preventDefault(); elements.wordInput.focus(); const L = elements.wordInput.value.length; elements.wordInput.setSelectionRange?.(L,L); return; }
     if (lower === 'm')               { e.preventDefault(); logyq.mix.randomizeTree(!!e.shiftKey); return; }
-    if (lower === 'w')               { e.preventDefault(); toggleDock(); return; }
+    if (lower === 'w')               { e.preventDefault(); logyq.dock.toggleVisibility(); return; }
     if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}
 
@@ -334,12 +334,6 @@ function deepestRow(){
 
 
 
-  /* ======================= DOCK TOGGLE ======================= */
-  function toggleDock(){ const { elements } = logyq; const dock = elements.Dock; const hidden = (dock.style.display === 'none'); dock.style.display = hidden ? '' : 'none'; elements.Hint.style.display = hidden ? 'none' : 'inline-flex'; }
-
-
-
-
 /* ======================= TRASH ======================= */
 /* Chips only. Node trash (incl. Shift-abandon) is handled in dragManager.end(...) */
 
@@ -463,20 +457,15 @@ elements.svg.on("contextmenu", (event) => {
 
     logyq.selection.selectSingle(child._uid);
     logyq.camera.flyCenterToUID(child._uid);
-    if (window.startInlineEdit) startInlineEdit({ wipe: true });
-    else {
-      const nh = state.root.descendants().find(n => n?.data?._uid === child._uid);
-      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
-    }
+    const nh = state.root.descendants().find(n => n?.data?._uid === child._uid);
+    if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
   // Run BEFORE other key handlers and stop them from seeing Shift+K
   window.addEventListener('keydown', function(e){
     if ((e.key === 'K' || e.key === 'k') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
       // ignore when typing
-      const t = e.target;
-      const typing = t && (t.matches?.('input, textarea, [contenteditable="true"]') || t.getAttribute?.('role') === 'textbox');
-      if (typing) return;
+      if (logyq.input.isTextField(e.target)) return;
 
       e.preventDefault();
       e.stopImmediatePropagation(); // ← prevents the K-nav handler from running
@@ -530,19 +519,14 @@ function getSelectedUid(){
     // select & edit the new sibling
     logyq.selection.selectSingle(sib._uid);
     logyq.camera.flyCenterToUID(sib._uid);
-    if (window.startInlineEdit) startInlineEdit({ wipe: true });
-    else {
-      const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
-      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
-    }
+    const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
+    if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
   // Hotkey: Shift+J (capture + stop to avoid J-nav)
   window.addEventListener('keydown', function(e){
     if ((e.key === 'J' || e.key === 'j') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      const t = e.target;
-      const typing = t && (t.matches?.('input, textarea, [contenteditable="true"]') || t.getAttribute?.('role') === 'textbox');
-      if (typing) return;
+      if (logyq.input.isTextField(e.target)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       addElderSiblingLeftAndEdit();
@@ -598,19 +582,14 @@ function getSelectedUid(){
     // Select & edit
     logyq.selection.selectSingle(sib._uid);
     logyq.camera.flyCenterToUID(sib._uid);
-    if (window.startInlineEdit) startInlineEdit({ wipe: true });
-    else {
-      const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
-      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
-    }
+    const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
+    if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
   // Hotkey: Shift+L (capture so L-nav doesn’t run)
   window.addEventListener('keydown', function(e){
     if ((e.key === 'L' || e.key === 'l') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      const t = e.target;
-      const typing = t && (t.matches?.('input, textarea, [contenteditable="true"]') || t.getAttribute?.('role') === 'textbox');
-      if (typing) return;
+      if (logyq.input.isTextField(e.target)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       addYoungerSiblingRightAndEdit();
@@ -670,19 +649,14 @@ function getSelectedUid(){
     // Select & edit the new parent
     logyq.selection.selectSingle(newParent._uid);
     logyq.camera.flyCenterToUID(newParent._uid);
-    if (window.startInlineEdit) startInlineEdit({ wipe: true });
-    else {
-      const nh = state.root.descendants().find(n => n?.data?._uid === newParent._uid);
-      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
-    }
+    const nh = state.root.descendants().find(n => n?.data?._uid === newParent._uid);
+    if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
   // Hotkey: Shift+I (capture so I-nav doesn’t run first)
   window.addEventListener('keydown', function(e){
     if ((e.key === 'I' || e.key === 'i') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      const t = e.target;
-      const typing = t && (t.matches?.('input, textarea, [contenteditable="true"]') || t.getAttribute?.('role') === 'textbox');
-      if (typing) return;
+      if (logyq.input.isTextField(e.target)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       insertParentAboveSelectedAndEdit();
@@ -693,7 +667,6 @@ function getSelectedUid(){
 
   attach('keyboard', {
     keyDispatcher,
-    toggleDock,
     addChildBelowSelectedAndEdit,
     addElderSiblingLeftAndEdit,
     addYoungerSiblingRightAndEdit,

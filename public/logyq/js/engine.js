@@ -526,6 +526,16 @@ function cycleDockSide(){
   return state.dockSide;
 }
 
+function toggleVisibility(){
+  const { elements } = logyq
+  const dock = elements.Dock;
+  if (!dock) return;
+  const hidden = (dock.style.display === 'none');
+  dock.style.display = hidden ? '' : 'none';
+  if (elements.Hint) elements.Hint.style.display = hidden ? 'none' : 'inline-flex';
+  return hidden ? 'shown' : 'hidden';
+}
+
   attach('input', {
     isTextField,
     keyIsNav,
@@ -537,6 +547,7 @@ function cycleDockSide(){
     applyDockSide,
     cycleDockSide,
     updateDockBounds,
+    toggleVisibility,
   });
 
 /* call once so the current state is applied on load */
@@ -722,6 +733,7 @@ applyDockSide();
 
   /* ======================= HISTORY ======================= */
   function pushHistory(action){
+    const { state, elements, config: CONFIG } = logyq
     state.history.push(action);
     if(state.history.length>CONFIG.HISTORY_LIMIT) state.history.shift();
       /* [patch] dock-bounds-init start */
@@ -747,6 +759,7 @@ function autoFitSoon(delay){
 
 
   function undo(){
+    const { state, elements, utils } = logyq
     const a = state.history.pop();
       /* [patch] dock-bounds-init start */
       try{ logyq.dock.updateDockBounds(); }catch(_e){}
@@ -1381,6 +1394,7 @@ if (dir === +1){
     }
 
     function build(root){
+      const CONFIG = logyq.config
       if(!root) return [];
       const dets=[];
       const byDepth = d3.groups(root.descendants(), d=>d.depth).sort((a,b)=>a[0]-b[0]);
@@ -1527,6 +1541,7 @@ if (dir === +1){
     function contains(d, x, y){ return (x>=d.x && x<=d.x+d.width && y>=d.y && y<=d.y+d.height); }
 
     function pick(point){
+      const { state } = logyq
       const x=point.x, y=point.y; const hits=[];
       for(const d of state.detectors){ if(contains(d,x,y)) hits.push(d); }
       if(!hits.length) return null;
@@ -1545,6 +1560,7 @@ if (dir === +1){
     }
 
     function draw(){
+      const { state, elements, config: CONFIG } = logyq
       if(!elements.gDetectors) return;
       elements.gDetectors.selectAll('*').remove();
       if(!CONFIG.SHOW_DETECTORS) return;
@@ -2296,7 +2312,9 @@ function removeNode(uid, { abandon = false } = {}){
 
 
 // --- V-hold handlers (focus-only visuals) ---
-window.addEventListener('keydown', (e) => {
+// Bubble-phase on window so document-capture keyDispatcher can bail on
+// state.vHold first, then these still run. Do not change to capture.
+function onVHoldDown(e) {
   const { state, elements } = logyq
   if (logyq.input.isTextField(e.target)) return;
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey){
@@ -2307,11 +2325,12 @@ window.addEventListener('keydown', (e) => {
       applySelectionStyles();
     }
   }
-}, { passive: true });
+}
+window.addEventListener('keydown', onVHoldDown, { passive: true });
 
 
 // While V-hold and no group: immediate push with J/L or ArrowLeft/Right
-window.addEventListener('keydown', (e) => {
+function onVHoldMove(e) {
   const { state } = logyq
   if (!state.vHold) return;
   if (logyq.input.isTextField(e.target)) return;
@@ -2344,19 +2363,21 @@ window.addEventListener('keydown', (e) => {
   }
 
 
-}, { passive: false });
+}
+window.addEventListener('keydown', onVHoldMove, { passive: false });
 
 
 
 
-window.addEventListener('keyup', (e) => {
+function onVHoldUp(e) {
   const { state, elements } = logyq
   if (e.key === 'v' || e.key === 'V'){
     state.vHold = false;
     elements.svg?.classed?.('vhold-mode', false);
     applySelectionStyles();
   }
-}, { passive: true });
+}
+window.addEventListener('keyup', onVHoldUp, { passive: true });
 
 
 // ===== END HOISTED HOLD HANDLERS =====
@@ -2369,7 +2390,7 @@ window.addEventListener('keyup', (e) => {
 
 // Hotkeys: G (group), V (paste), Shift+V (abandonment paste)
 // NOTE: Esc is handled elsewhere already; we don't handle Esc here to avoid duplicates.
-window.addEventListener('keydown', (e) => {
+function onGroupHotkeys(e) {
   const { state } = logyq
   // Don’t steal keys from inputs
   if (logyq.input.isTextField(e.target)) return;
@@ -2397,13 +2418,6 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // --- Navigation keys (J/K/L/I and arrows) ---
-  const navKeys = [
-    'j', 'k', 'l', 'i',
-    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'
-  ];
-  
-
   // --- V / Shift+V: paste group under current focus (if a group exists) ---
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey) {
     const hasGroup = !!(state.selectedUids && state.selectedUids.size > 0);
@@ -2420,7 +2434,8 @@ window.addEventListener('keydown', (e) => {
   }
 
   // (No Esc handler here — you already have a separate global Esc listener.)
-}, { passive: false });
+}
+window.addEventListener('keydown', onGroupHotkeys, { passive: false });
 
 
 
@@ -2445,6 +2460,10 @@ window.addEventListener('keydown', (e) => {
     insertNodeAtDrop,
     moveSelectionToTarget,
     removeNode,
+    onVHoldDown,
+    onVHoldMove,
+    onVHoldUp,
+    onGroupHotkeys,
   })
 
 
@@ -5320,7 +5339,7 @@ function keyDispatcher(e){
     if (lower === 'f' && e.shiftKey) { e.preventDefault(); logyq.camera.centerOnSelected(); return; }
     if (lower === 'a')               { e.preventDefault(); elements.wordInput.focus(); const L = elements.wordInput.value.length; elements.wordInput.setSelectionRange?.(L,L); return; }
     if (lower === 'm')               { e.preventDefault(); logyq.mix.randomizeTree(!!e.shiftKey); return; }
-    if (lower === 'w')               { e.preventDefault(); toggleDock(); return; }
+    if (lower === 'w')               { e.preventDefault(); logyq.dock.toggleVisibility(); return; }
     if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}
 
@@ -5612,12 +5631,6 @@ function deepestRow(){
 
 
 
-  /* ======================= DOCK TOGGLE ======================= */
-  function toggleDock(){ const { elements } = logyq; const dock = elements.Dock; const hidden = (dock.style.display === 'none'); dock.style.display = hidden ? '' : 'none'; elements.Hint.style.display = hidden ? 'none' : 'inline-flex'; }
-
-
-
-
 /* ======================= TRASH ======================= */
 /* Chips only. Node trash (incl. Shift-abandon) is handled in dragManager.end(...) */
 
@@ -5741,20 +5754,15 @@ elements.svg.on("contextmenu", (event) => {
 
     logyq.selection.selectSingle(child._uid);
     logyq.camera.flyCenterToUID(child._uid);
-    if (window.startInlineEdit) startInlineEdit({ wipe: true });
-    else {
-      const nh = state.root.descendants().find(n => n?.data?._uid === child._uid);
-      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
-    }
+    const nh = state.root.descendants().find(n => n?.data?._uid === child._uid);
+    if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
   // Run BEFORE other key handlers and stop them from seeing Shift+K
   window.addEventListener('keydown', function(e){
     if ((e.key === 'K' || e.key === 'k') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
       // ignore when typing
-      const t = e.target;
-      const typing = t && (t.matches?.('input, textarea, [contenteditable="true"]') || t.getAttribute?.('role') === 'textbox');
-      if (typing) return;
+      if (logyq.input.isTextField(e.target)) return;
 
       e.preventDefault();
       e.stopImmediatePropagation(); // ← prevents the K-nav handler from running
@@ -5808,19 +5816,14 @@ function getSelectedUid(){
     // select & edit the new sibling
     logyq.selection.selectSingle(sib._uid);
     logyq.camera.flyCenterToUID(sib._uid);
-    if (window.startInlineEdit) startInlineEdit({ wipe: true });
-    else {
-      const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
-      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
-    }
+    const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
+    if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
   // Hotkey: Shift+J (capture + stop to avoid J-nav)
   window.addEventListener('keydown', function(e){
     if ((e.key === 'J' || e.key === 'j') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      const t = e.target;
-      const typing = t && (t.matches?.('input, textarea, [contenteditable="true"]') || t.getAttribute?.('role') === 'textbox');
-      if (typing) return;
+      if (logyq.input.isTextField(e.target)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       addElderSiblingLeftAndEdit();
@@ -5876,19 +5879,14 @@ function getSelectedUid(){
     // Select & edit
     logyq.selection.selectSingle(sib._uid);
     logyq.camera.flyCenterToUID(sib._uid);
-    if (window.startInlineEdit) startInlineEdit({ wipe: true });
-    else {
-      const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
-      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
-    }
+    const nh = state.root.descendants().find(n => n?.data?._uid === sib._uid);
+    if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
   // Hotkey: Shift+L (capture so L-nav doesn’t run)
   window.addEventListener('keydown', function(e){
     if ((e.key === 'L' || e.key === 'l') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      const t = e.target;
-      const typing = t && (t.matches?.('input, textarea, [contenteditable="true"]') || t.getAttribute?.('role') === 'textbox');
-      if (typing) return;
+      if (logyq.input.isTextField(e.target)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       addYoungerSiblingRightAndEdit();
@@ -5948,19 +5946,14 @@ function getSelectedUid(){
     // Select & edit the new parent
     logyq.selection.selectSingle(newParent._uid);
     logyq.camera.flyCenterToUID(newParent._uid);
-    if (window.startInlineEdit) startInlineEdit({ wipe: true });
-    else {
-      const nh = state.root.descendants().find(n => n?.data?._uid === newParent._uid);
-      if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
-    }
+    const nh = state.root.descendants().find(n => n?.data?._uid === newParent._uid);
+    if (nh){ logyq.editing.openNodeEditor(nh); if (state.editorEl) state.editorEl.value = ''; }
   }
 
   // Hotkey: Shift+I (capture so I-nav doesn’t run first)
   window.addEventListener('keydown', function(e){
     if ((e.key === 'I' || e.key === 'i') && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey){
-      const t = e.target;
-      const typing = t && (t.matches?.('input, textarea, [contenteditable="true"]') || t.getAttribute?.('role') === 'textbox');
-      if (typing) return;
+      if (logyq.input.isTextField(e.target)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
       insertParentAboveSelectedAndEdit();
@@ -5971,7 +5964,6 @@ function getSelectedUid(){
 
   attach('keyboard', {
     keyDispatcher,
-    toggleDock,
     addChildBelowSelectedAndEdit,
     addElderSiblingLeftAndEdit,
     addYoungerSiblingRightAndEdit,

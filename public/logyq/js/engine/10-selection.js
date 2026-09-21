@@ -473,7 +473,9 @@ function removeNode(uid, { abandon = false } = {}){
 
 
 // --- V-hold handlers (focus-only visuals) ---
-window.addEventListener('keydown', (e) => {
+// Bubble-phase on window so document-capture keyDispatcher can bail on
+// state.vHold first, then these still run. Do not change to capture.
+function onVHoldDown(e) {
   const { state, elements } = logyq
   if (logyq.input.isTextField(e.target)) return;
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey){
@@ -484,11 +486,12 @@ window.addEventListener('keydown', (e) => {
       applySelectionStyles();
     }
   }
-}, { passive: true });
+}
+window.addEventListener('keydown', onVHoldDown, { passive: true });
 
 
 // While V-hold and no group: immediate push with J/L or ArrowLeft/Right
-window.addEventListener('keydown', (e) => {
+function onVHoldMove(e) {
   const { state } = logyq
   if (!state.vHold) return;
   if (logyq.input.isTextField(e.target)) return;
@@ -521,19 +524,21 @@ window.addEventListener('keydown', (e) => {
   }
 
 
-}, { passive: false });
+}
+window.addEventListener('keydown', onVHoldMove, { passive: false });
 
 
 
 
-window.addEventListener('keyup', (e) => {
+function onVHoldUp(e) {
   const { state, elements } = logyq
   if (e.key === 'v' || e.key === 'V'){
     state.vHold = false;
     elements.svg?.classed?.('vhold-mode', false);
     applySelectionStyles();
   }
-}, { passive: true });
+}
+window.addEventListener('keyup', onVHoldUp, { passive: true });
 
 
 // ===== END HOISTED HOLD HANDLERS =====
@@ -546,7 +551,7 @@ window.addEventListener('keyup', (e) => {
 
 // Hotkeys: G (group), V (paste), Shift+V (abandonment paste)
 // NOTE: Esc is handled elsewhere already; we don't handle Esc here to avoid duplicates.
-window.addEventListener('keydown', (e) => {
+function onGroupHotkeys(e) {
   const { state } = logyq
   // Don’t steal keys from inputs
   if (logyq.input.isTextField(e.target)) return;
@@ -574,13 +579,6 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // --- Navigation keys (J/K/L/I and arrows) ---
-  const navKeys = [
-    'j', 'k', 'l', 'i',
-    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'
-  ];
-  
-
   // --- V / Shift+V: paste group under current focus (if a group exists) ---
   if ((e.key === 'v' || e.key === 'V') && !e.ctrlKey && !e.metaKey && !e.altKey) {
     const hasGroup = !!(state.selectedUids && state.selectedUids.size > 0);
@@ -597,7 +595,8 @@ window.addEventListener('keydown', (e) => {
   }
 
   // (No Esc handler here — you already have a separate global Esc listener.)
-}, { passive: false });
+}
+window.addEventListener('keydown', onGroupHotkeys, { passive: false });
 
 
 
@@ -622,6 +621,10 @@ window.addEventListener('keydown', (e) => {
     insertNodeAtDrop,
     moveSelectionToTarget,
     removeNode,
+    onVHoldDown,
+    onVHoldMove,
+    onVHoldUp,
+    onGroupHotkeys,
   })
 
 

@@ -92,10 +92,49 @@ Unconverted fragments still use ambient `state`, `elements`, `utils`, and friend
 - Capture-phase keyboard listeners racing `keyDispatcher`, including V-hold / G / paste listeners that still live in `10-selection.js`
 - Editing Shift+Enter still calls later `addSiblingRightOf` by ambient name
 - Mix still joins Word Dock dumps with newlines (`addWords(names.join('\n'), 'bank')`); Word Dock `addWords` splits on `/[;,]+/`, so those dumps land as one chip unless a comma/semicolon is present
-- V-hold I/J/K/L listeners still live in `10-selection.js` and call `logyq.structure`; `keyDispatcher` still bails while `state.vHold` is set
+- V-hold / G / paste listeners still *register* from `10-selection.js` (named `onVHoldDown` / `onVHoldMove` / `onVHoldUp` / `onGroupHotkeys` on the selection bag). They stay bubble-phase on `window` so document-capture `keyDispatcher` can bail on `state.vHold` first. Do not flip them to capture.
 - File-level Tab-hold in `16-tree-manager.js` (capture). Nested initialize Tab-hold that always refocused `#wordInput` was removed.
-- Detector internals still read ambient `CONFIG` / `state` / `elements` (lane geometry already goes through `logyq.layout`)
+- Detector `build`/`pick`/`draw` read `logyq.config` / `logyq.state` / `logyq.elements` (geometry formulas unchanged)
 - `logyq.treeManager.layoutAndRender` patched by the bridge to emit autosave
 - Word Dock `MutationObserver` in preview calling `notifyChange`
 
 See `NOT_REFACTORED.md` for internals left intact because changing them would likely change behavior.
+
+## Ready for a later mobile layer?
+
+**Not yet a clean layer, but cascade-safer than Wave 4.** A later mobile track should treat the engine as `window.LOGYQBridge` + `LOGYQBridge.core` (`logyq` bag) and should not reach into fragment internals.
+
+### Depend on these
+
+- `LOGYQBridge` methods (`selectByUid`, `createRelative`, `editSelected`, `deleteSelection`, `mix`, `fit`, `loadMap`, `subscribe`/`notifyChange`)
+- Bag clusters: `logyq.selection`, `logyq.editing`, `logyq.treeOps`, `logyq.drag`, `logyq.wordDock`, `logyq.input`, `logyq.dock`, `logyq.camera`, `logyq.structure`, `logyq.layout`, `logyq.detectors` (`build`/`pick`/`draw` only), `logyq.treeManager.layoutAndRender` / `autoFit`
+- `logyq.input.isTextField` before stealing keys or pointer
+- Preview persistence (`logyq_*` storage keys) and `/api/transcribe` PIN header — already isolated from LOGiQ maps
+
+### Do not touch / do not reimplement
+
+- Detector *geometry* (`Detectors.build` internals, cousin/sibling thresholds)
+- `dragManager` drop-case order
+- Capture vs bubble keyboard order, especially V-hold (bubble on `window`) vs `keyDispatcher` (capture on `document`)
+- File-level Tab-hold
+- Copied `logiq-*` DOM ids in the preview shell (selectors, not storage)
+- Production `logiq-*` paths (read-only)
+
+### Known footguns for mobile
+
+- **Two dock-hide mechanisms:** W-capture cycles `dock-left` / `dock-hidden`; Shift+W (via keyDispatcher `w`) toggles `style.display`. A phone chrome should pick one API (`logyq.dock.cycleDockSide` or `toggleVisibility`) and not bind both.
+- **Tab-hold** is a desktop modifier. Do not synthesize Tab on touch; it will `preventDefault` and set `state.tabHold`.
+- **Suppressed SVG dblclick** — keyboard `E` / `LOGYQBridge.editSelected` is the reliable edit path.
+- **Spawn-puck / tap-vs-pan** live in preview `04-gestures.js` and talk to D3 zoom + `LOGYQBridge.createRelative`. That is the next track, not this wave.
+- **Sticky-nav `setSelectionSet`** is undefined; the try/catch swallows it. Do not "fix" it from a mobile overlay without an intentional delta.
+- **`keyDispatcher` runs at initialize()** before `attach('keyboard')`; the bind is `logyq.keyboard?.keyDispatcher`. Keep that late lookup.
+- Concatenate+IIFE remains; do not import fragments as ES modules from a mobile shell.
+
+### Still ambient (OK to leave)
+
+- Four `getSelectedUid` copies in `17-keyboard.js` (last wins)
+- Unreachable Shift+W trash-WordBank branch (plain/`lower === 'w'` returns first)
+- Capture-phase Shift+I/J/K/L relative-create vs `keyDispatcher` nav
+- Mix newline `addWords` vs comma split
+- PNG export, help HTML mismatches, lane no-op stubs
+- History/tree-ops/editing still use some ambient `showToast` / `utils` names inside their own fragments (same IIFE)

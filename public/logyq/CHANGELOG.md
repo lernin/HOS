@@ -25,3 +25,9 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Nested initialize Tab-hold deleted.** File-level Tab-hold remains. Tab release no longer always refocuses `#wordInput` (that nested listener stole focus and would pop a mobile keyboard).
 - **Commented `dropSelectedToWordBank` deleted.** One live implementation remains (last-wins already). Unused `const DRAG_SLOP_PX` in tree-ops is gone; drag still uses `window.DRAG_SLOP_PX || 10`.
 - **Orphan add-child JSDoc** at the end of `11-deletion.js` is gone.
+- **`toggleDock` moved to `logyq.dock.toggleVisibility`.** Shift+W still hits this (keyDispatcher `lower === 'w'` matches shift). Plain W is still intercepted by the capture cycle-side handler. Two hide mechanisms remain: CSS `dock-hidden` vs `style.display`.
+- **Dead `window.startInlineEdit` checks removed.** Relative-create always opens via `logyq.editing.openNodeEditor` and clears the field (the path that already ran).
+- **V-hold / G / paste named on `logyq.selection`.** Still registered from `10-selection.js` as bubble-phase window listeners. Unused `navKeys` array in that handler is gone.
+- **Detectors `build`/`pick`/`draw` read CONFIG/state/elements from the bag.** Geometry formulas unchanged.
+- **History `pushHistory`/`undo` destructure `logyq`.**
+

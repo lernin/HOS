@@ -1,5 +1,6 @@
   /* ======================= HISTORY ======================= */
   function pushHistory(action){
+    const { state, elements, config: CONFIG } = logyq
     state.history.push(action);
     if(state.history.length>CONFIG.HISTORY_LIMIT) state.history.shift();
       /* [patch] dock-bounds-init start */
@@ -25,6 +26,7 @@ function autoFitSoon(delay){
 
 
   function undo(){
+    const { state, elements, utils } = logyq
     const a = state.history.pop();
       /* [patch] dock-bounds-init start */
       try{ logyq.dock.updateDockBounds(); }catch(_e){}

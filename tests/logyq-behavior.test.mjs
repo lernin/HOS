@@ -74,14 +74,17 @@ test('undo history is capped at CONFIG.HISTORY_LIMIT of 50', () => {
     history: [],
     undoBtn: { disabled: true },
   }
-  const CONFIG = { HISTORY_LIMIT: 50 }
-  const elements = { undoBtn: fake.undoBtn }
-  const state = fake
-  const pushHistory = new Function('state', 'elements', 'CONFIG', `${push}; return pushHistory;`)(state, elements, CONFIG)
+  const logyq = {
+    state: fake,
+    elements: { undoBtn: fake.undoBtn },
+    config: { HISTORY_LIMIT: 50 },
+    dock: { updateDockBounds() {} },
+  }
+  const pushHistory = new Function('logyq', `${push}; return pushHistory;`)(logyq)
   for (let i = 0; i < 60; i += 1) pushHistory({ type: 'rename', i })
-  assert.equal(state.history.length, 50)
-  assert.equal(state.history[0].i, 10)
-  assert.equal(elements.undoBtn.disabled, false)
+  assert.equal(logyq.state.history.length, 50)
+  assert.equal(logyq.state.history[0].i, 10)
+  assert.equal(logyq.elements.undoBtn.disabled, false)
 })
 
 function selectionSource() {
