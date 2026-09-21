@@ -958,10 +958,32 @@ test('LOGYQ flick-created blank double-tap renames only that card', async () => 
   }
 
   const origin = await faceCenter('(node) => node.__data__?.data?.name === "Node 10"')
+  const beforeTransforms = await page.evaluate(() => Object.fromEntries(Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => [node.__data__.data._uid, node.getAttribute('transform')])))
+  const beforeView = await page.evaluate(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { x: t.x, y: t.y, k: t.k }
+  })
   const before = await page.locator('svg#canvas g.node').count()
   await touch('pointerdown', origin.x, origin.y, 71)
   await touch('pointerup', origin.x, origin.y + 70, 71)
   await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before)
+  const motion = await page.evaluate(({ beforeTransforms, beforeView }) => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    const snapped = []
+    for (const node of document.querySelectorAll('svg#canvas g.node')) {
+      const uid = node.__data__?.data?._uid
+      if (!beforeTransforms[uid]) continue
+      const laid = `translate(${node.__data__.x},${node.__data__.y})`
+      const now = node.getAttribute('transform')
+      if (beforeTransforms[uid] !== laid && now === laid) snapped.push(uid)
+    }
+    return {
+      snapped,
+      camera: Math.hypot(t.x - beforeView.x, t.y - beforeView.y) + Math.abs(t.k - beforeView.k),
+    }
+  }, { beforeTransforms, beforeView })
+  assert.deepEqual(motion.snapped, [], 'flick-down must tween existing cards, not snap the tree')
+  assert.ok(motion.camera < 2, 'flick-down must leave the camera')
 
   const blank = await faceCenter(`(node) => {
     const data = node.__data__
@@ -1323,6 +1345,36 @@ test('LOGYQ flick left/right reserve non-overlapping sibling slots', async () =>
   assert.ok(rightUid)
   assert.notEqual(leftUid, rightUid)
 
+  async function layoutFaces() {
+    return page.evaluate(() => {
+      const svg = document.getElementById('canvas')
+      const view = svg.getBoundingClientRect()
+      const t = window.d3.zoomTransform(svg)
+      const w = window.LOGYQBridge.core.config.CARD_WIDTH
+      const h = window.LOGYQBridge.core.config.CARD_HEIGHT
+      return Array.from(document.querySelectorAll('svg#canvas g.node')).map((node) => {
+        const d = node.__data__
+        const cx = view.left + t.x + d.x * t.k
+        const cy = view.top + t.y + d.y * t.k
+        return {
+          uid: d.data._uid,
+          name: d.data.name || '',
+          left: cx - (w / 2) * t.k,
+          right: cx + (w / 2) * t.k,
+          top: cy - (h / 2) * t.k,
+          bottom: cy + (h / 2) * t.k,
+        }
+      })
+    })
+  }
+
+  const slots = await layoutFaces()
+  for (const card of slots.filter((box) => box.uid === leftUid || box.uid === rightUid)) {
+    const hits = slots.filter((other) => other.uid !== card.uid && overlaps(card, other))
+    assert.deepEqual(hits, [], `layout slot ${card.uid} must not overlap ${hits.map((hit) => hit.name || hit.uid).join(', ')}`)
+  }
+
+  await page.waitForTimeout(320)
   const boxes = await faces()
   const created = boxes.filter((box) => box.uid === leftUid || box.uid === rightUid)
   assert.equal(created.length, 2)
@@ -1332,7 +1384,7 @@ test('LOGYQ flick left/right reserve non-overlapping sibling slots', async () =>
   }
   assert.equal(overlaps(created[0], created[1]), false)
 
-  const left = boxes.find((box) => box.uid === leftUid)
+  const left = slots.find((box) => box.uid === leftUid)
   await touch('pointerdown', (left.left + left.right) / 2, (left.top + left.bottom) / 2, 103)
   await touch('pointerup', (left.left + left.right) / 2, (left.top + left.bottom) / 2, 103)
   await touch('pointerdown', (left.left + left.right) / 2, (left.top + left.bottom) / 2, 104)

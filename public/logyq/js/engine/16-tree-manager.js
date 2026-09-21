@@ -4,6 +4,7 @@ const treeManager = {
     const { state, elements, config: CONFIG, utils } = logyq
     elements.gRoot = elements.svg.append("g");
     elements.gLinks= elements.gRoot.append("g").attr("class","links");
+    elements.gHits = elements.gRoot.append("g").attr("class","hit-slots");
     elements.gNodes= elements.gRoot.append("g").attr("class","nodes");
     elements.gOverlay=elements.gRoot.append("g").attr("class","overlay");
     elements.gDetectors = elements.gOverlay.append('g').attr('class','detector-layer');
@@ -188,35 +189,35 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
   renderEmpty(){
     const { state, elements } = logyq
     elements.gLinks.selectAll("path.link").remove();
+    elements.gHits?.selectAll("g.hit-slot").remove();
     elements.gNodes.selectAll("g.node").remove();
     state.lastNodes = [];
     state.detectors=[];
     logyq.detectors.draw();
   },
 
-  snapLaidOutNodes(){
-    const { elements } = logyq
-    const sel = elements.gNodes?.selectAll("g.node");
-    if (sel) {
-      sel.interrupt();
-      sel.attr("transform", function(d){
-        if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return this.getAttribute("transform");
-        return `translate(${d.x},${d.y})`;
-      });
+  syncHitSlots(nodes){
+    const { elements, config: CONFIG } = logyq
+    if (!elements.gHits) {
+      elements.gHits = elements.gRoot.insert("g", "g.nodes").attr("class", "hit-slots");
     }
-    const links = elements.gLinks?.selectAll("path.link");
-    if (links) {
-      links.interrupt();
-      links.attr("d", function(d){
-        if (!d?.source || !d?.target) return this.getAttribute("d");
-        return logyq.visual.vLink(d);
-      });
-    }
+    const sel = elements.gHits.selectAll("g.hit-slot").data(nodes, d => d.data._uid);
+    const enter = sel.enter().append("g").attr("class", "hit-slot");
+    enter.append("rect")
+      .attr("x", -CONFIG.CARD_WIDTH/2)
+      .attr("y", -CONFIG.CARD_HEIGHT/2)
+      .attr("width", CONFIG.CARD_WIDTH)
+      .attr("height", CONFIG.CARD_HEIGHT)
+      .attr("fill", "transparent")
+      .style("pointer-events", "all");
+    enter.merge(sel)
+      .attr("data-uid", d => d.data._uid)
+      .attr("transform", d => `translate(${d.x},${d.y})`);
+    sel.exit().remove();
   },
 
-  layoutAndRender(isDelete=false, opts={}){
+  layoutAndRender(isDelete=false){
     const { state, config: CONFIG } = logyq
-    const immediate = !!(opts && opts.immediate);
     if (window.__logyqHoldDragFrozen?.()) return;
     if (!state.root) { this.renderEmpty(); return; }
     state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
@@ -227,7 +228,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       return Math.max(0.1, base+inc+bonus);
     });
     state.layout(state.root);
-    this.render(isDelete, immediate);
+    this.render(isDelete);
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */
       (function(){
         /* wait for render transitions to finish, then fit using final bbox */
@@ -241,7 +242,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     logyq.detectors.draw();
   },
 
-  render(isDelete=false, immediate=false){
+  render(isDelete=false){
     const { state, elements, config: CONFIG } = logyq
     const nodes=state.root.descendants();
     const links=state.root.links();
@@ -270,6 +271,7 @@ selNodes
 // —— ENTER selection (new nodes): same bindings ——
 const nEnter = selNodes.enter()
   .append("g").attr("class","node")
+  .attr("data-uid", d => d.data._uid)
   .attr("transform", d => `translate(${d.x},${d.y})`)
   .style("opacity", 1)
   .on("contextmenu", logyq.mix.onNodeContextMenu)  // right-click menu on new nodes
@@ -295,17 +297,15 @@ const nEnter = selNodes.enter()
     nEnter.append("rect").attr("x", -CONFIG.CARD_WIDTH/2).attr("y", -CONFIG.CARD_HEIGHT/2).attr("width", CONFIG.CARD_WIDTH).attr("height", CONFIG.CARD_HEIGHT);
     nEnter.append("text").attr("class","label").attr("x",0).attr("y",0).style("font-size", `${CONFIG.FONT_SIZE}px`).text(d=>d.data.name);
 
-    nEnter.merge(selNodes).select("rect:not(.grabzone)")
+    const allNodes = nEnter.merge(selNodes);
+    allNodes.attr("data-uid", d => d.data._uid);
+    allNodes.select("rect:not(.grabzone)")
       .style("fill", d => d.data.color || null);
-
-    if (immediate) {
-      this.snapLaidOutNodes();
-    } else {
-      selNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
-    }
-    selNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
+    allNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
+    allNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
+    this.syncHitSlots(nodes);
     state.lastNodes=state.root.descendants();
     logyq.layout.LabelWrap.apply();
   },

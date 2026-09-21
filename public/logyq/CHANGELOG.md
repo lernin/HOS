@@ -92,19 +92,20 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 ## Flick L/R/Up match down-on-leaf (PR 112)
 
 - **One recognizer.** Flick still buckets into `createRelative(direction)`. Down-on-leaf stays the gold standard (camera stays, blank child, no editor).
-- **L/R/Up were AndEdit keyboard helpers.** Those opened the editor, flew the camera, then `createRelative` slammed the editor shut — the blip / bad focus. All four directions now use the same calm `treeOps` settle: `noEdit`, no fly, select the new uid, snap laid-out nodes to reserved slots.
+- **L/R/Up were AndEdit keyboard helpers.** Those opened the editor, flew the camera, then `createRelative` slammed the editor shut — the blip / bad focus. All four directions now use the same calm `treeOps` settle: `noEdit`, no fly, select the new uid, one 260ms layout tween.
 - **No MIC on flick.** Nursery / recording is later. Flick does not arm `#logyq-v162-action`. Header mic is unchanged. Double-tap still edits **that** new blank.
 
 ## Double-tap edits the card under the finger (PR 112)
 
 - **Wrong-card rename after flick-create.** Flick-down creates a blank via `createRelative` → `addChildBelowSelectedAndEdit` (opens editor on the new uid, then immediately closes it). Double-tap then called `editSelected()` with **no uid**, so a stale `selectedUid` (the flick origin / parent) won if `selectByUid` missed. Meanwhile `layoutAndRender` tweens the parent for 260ms over the new child’s final slot, and `hitNode` used the whole `g.node` box (downward grabzone). Equal-size overlaps picked the earlier DOM node — the parent. She typed “cat” onto the wrong card.
-- **Fix.** Double-tap calls `editSelected({ uid })` for the exact hit. Hit-test prefers the visual card face (`rect:not(.grabzone)`), then the deepest / closest card. Named-card double-tap is unchanged.
+- **Fix.** Double-tap calls `editSelected({ uid })` for the exact hit. Hit-test prefers the reserved layout slot / tapped `data-uid`, not mid-tween visuals.
 
-## Flick-create slot snap + uid-only edit (PR 112)
+## Create → layout → settle pipeline (PR 112)
 
-- **Name-collision hypothesis was wrong for the edit path.** Double-tap already reads `__data__.data._uid` → `editSelected({ uid })` → `openNodeEditor` / `editingUid`. Commit uses `findByUid`. `cardText` is only MIC / blank-chip detection. `selectByName` is a test/helper and is **not** on flick or edit. Empty `name: ""` is shared by blanks; `_uid` is not.
-- **Real overlap / wrong-card cause.** After create, `layoutAndRender` started a 260ms update tween to open the sibling slot, then the flick path `interrupt()`’d it. d3 interrupt leaves existing cards at the **old** transform. The new blank enters at final `d.x,d.y`. L/R siblings stacked (two blanks looking like one smashed block; neighbors clipped). A tap on the visual blank could hit the card still occupying that slot — parent, earlier sibling, or the first blank in DOM order. That looked like “empty name matched the top card.” Down-on-leaf usually lands in empty space below, but a parent shift + interrupt can still stack.
-- **Fix.** `createRelative` / `treeOps` pass `{ immediate: true }`. `snapLaidOutNodes()` interrupts and jumps every `g.node` (and links) to the reserved `translate(d.x,d.y)`. Flick no longer interrupt-only. `selectByName` / `getParentName` reject blank labels. `editSelected({ uid })` does not fall back to `selectedUid` when an explicit uid is passed. Two blanks with `name: ""` each edit independently.
+- **Reverted `snapLaidOutNodes` on create.** `91dc667` jumped every card+link to `d.x,d.y` on flick. That stopped stacked hits but jerked the whole map (down-flick was no longer silky). The snap function is gone from create/flick and from `treeManager`.
+- **One path for down/left/right/up.** `createRelative` inserts a unique `_uid` → `d3.hierarchy` + `d3.tree` once → one 260ms transition of cards and links to those finals. No `interrupt()`, no camera fly, no editor, no MIC.
+- **Hits use identity, not mid-tween geometry.** Invisible `g.hit-slot[data-uid]` sit at the reserved slot immediately. `uidFromEvent` reads the tapped element’s `_uid`. Fallback `hitLayoutSlot` uses laid-out `d.x,d.y` through the zoom transform — not `getBoundingClientRect` of a card still sliding. `selectByName` is not on this path; blank labels are rejected there.
+- **After settle, slots do not overlap.** Sibling/cousin spacing is the existing `nodeSize` + `separation` layout. Visual faces match those slots once the tween finishes. The crushed “Node 09 Node 22…” bottom strip in Ashley’s zoomed shot is HTML-sized dock text, not SVG cards that lost layout.
 
 ## Library-first open + no blank shells (PR 112)
 

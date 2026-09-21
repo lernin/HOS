@@ -1,5 +1,5 @@
 function addChildOf(parentUid, newName = '', opts = {}) {
-  const { noEdit = false, select = true, immediate = false } = opts;
+  const { noEdit = false, select = true } = opts;
   const { state, utils } = logyq
 
   const parent = utils.findByUid(state.root?.data, parentUid);
@@ -21,7 +21,7 @@ function addChildOf(parentUid, newName = '', opts = {}) {
   // rebuild + render
   state.root = d3.hierarchy(state.root.data);
   utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(false, { immediate: !!opts.immediate });
+  logyq.treeManager.layoutAndRender(false);
 
   // focus new node (unless caller opts out)
   if (select) logyq.selection.setSelected(newNode._uid);
@@ -66,7 +66,7 @@ function insertSibling(uid, newName = '', opts = {}){
 
   parent.children.splice(side === 'left' ? ix : Math.max(0, ix) + 1, 0, newNode);
   state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(false, { immediate: !!opts.immediate });
+  logyq.treeManager.layoutAndRender(false);
   if (select) logyq.selection.setSelected(newNode._uid);
 
   if (!noEdit) {
@@ -97,7 +97,7 @@ function insertParentAbove(uid, newName = '', opts = {}){
 
   state.root = d3.hierarchy(state.root.data);
   utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(false, { immediate: !!opts.immediate });
+  logyq.treeManager.layoutAndRender(false);
   if (select) logyq.selection.setSelected(newParent._uid);
 
   if (!noEdit) {

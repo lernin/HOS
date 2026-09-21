@@ -1015,7 +1015,9 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /__logyqV2ConsumedPointers/)
   assert.match(v162, /bridge\.createRelative\(direction\)/)
   assert.match(v162, /bridge\.editSelected\(\{ uid \}\)/)
-  assert.match(v162, /snapLaidOutNodes/)
+  assert.match(v162, /function uidFromEvent/)
+  assert.match(v162, /function hitLayoutSlot/)
+  assert.doesNotMatch(v162, /snapLaidOutNodes/)
   assert.doesNotMatch(v162, /selectAll\('g\.node'\)\.interrupt\(\)/)
   assert.doesNotMatch(v162, /armBlankCardMic\(state\.mic, doc, createdUid\)/)
   assert.match(v162, /function rankCardHits/)
@@ -1263,10 +1265,24 @@ test('card contact race classifies hold vs slow pan vs flick-speed', () => {
   assert.ok(helpers.recentSpeedPxPerMs(whip, 140) > helpers.flickFastSpeed(C))
 })
 
+test('uidFromEvent reads data-uid from the tapped hit-slot or node', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function nodeUid(node) {')
+  const end = source.indexOf('function canvasView(doc) {', start)
+  assert.ok(start >= 0 && end > start)
+  const uidFromEvent = new Function(`${source.slice(start, end)}; return uidFromEvent;`)()
+  const slot = { getAttribute: (name) => (name === 'data-uid' ? 'n-blank-2' : null), closest() { return this }, classList: { contains: (name) => name === 'hit-slot' } }
+  const parent = { getAttribute: () => 'n-parent', closest() { return this }, classList: { contains: (name) => name === 'node' } }
+  assert.equal(uidFromEvent({ composedPath: () => [slot] }), 'n-blank-2')
+  assert.equal(uidFromEvent({ composedPath: () => [parent] }), 'n-parent')
+  assert.equal(uidFromEvent({ composedPath: () => [] }), null)
+  assert.equal(uidFromEvent({ currentTarget: { __data__: { data: { _uid: 'n-from-current' } } } }), 'n-from-current')
+})
+
 test('card hit-test prefers the visual face and the deepest overlapping card', () => {
   const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
   const start = source.indexOf('function rankCardHits(hits, x, y) {')
-  const end = source.indexOf('function hitNode(doc, x, y) {', start)
+  const end = source.indexOf('function uidFromEvent(event) {', start)
   assert.ok(start >= 0 && end > start)
   const rankCardHits = new Function(`${source.slice(start, end)}; return rankCardHits;`)()
   const parent = { id: 'parent', onFace: false, onBox: true, depth: 1, cx: 100, cy: 80 }

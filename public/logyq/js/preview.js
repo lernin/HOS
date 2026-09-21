@@ -704,7 +704,7 @@
     }
 
     state.active.add(event.pointerId)
-    const source = hitNode(doc, event.clientX, event.clientY)
+    const source = hitNode(doc, event.clientX, event.clientY, event)
     const uid = nodeUid(source)
     const pointer = {
       x: event.clientX,
@@ -1367,7 +1367,7 @@
     if (alreadyActive) state.candidates.forEach((candidate) => { candidate.multi = true })
     state.active.add(event.pointerId)
 
-    const node = hitNode(doc, event.clientX, event.clientY)
+    const node = hitNode(doc, event.clientX, event.clientY, event)
     const uid = nodeUid(node)
     state.candidates.set(event.pointerId, {
       uid,
@@ -1420,7 +1420,6 @@
         bridge.selectByUid(candidate.uid)
         const createdUid = bridge.createRelative(direction)
         if (!createdUid) return
-        try { bridge.core?.treeManager?.snapLaidOutNodes?.() } catch (_error) {}
         restoreView(doc, win, candidate.view)
         bridge.selectByUid(createdUid)
         clearCardMic(state.mic)
@@ -1438,7 +1437,7 @@
       return
     }
 
-    const node = hitNode(doc, event.clientX, event.clientY)
+    const node = hitNode(doc, event.clientX, event.clientY, event)
     const uid = nodeUid(node)
     if (!uid || uid !== candidate.uid) {
       state.lastTap = null
@@ -1498,7 +1497,7 @@
   }
 
   function nodeUid(node) {
-    return node?.__data__?.data?._uid || null
+    return node?.__data__?.data?._uid || node?.getAttribute?.('data-uid') || null
   }
 
   function nodeByUid(doc, uid) {
@@ -1526,7 +1525,60 @@
     })
   }
 
-  function hitNode(doc, x, y) {
+  function uidFromEvent(event) {
+    const path = typeof event?.composedPath === 'function' ? event.composedPath() : []
+    const nodes = path.length ? path : (event?.target ? [event.target] : [])
+    for (const item of nodes) {
+      if (!item || item === item.window || item === item.document) continue
+      const host = item.closest?.('g.hit-slot, g.node')
+        || (item.classList?.contains?.('hit-slot') || item.classList?.contains?.('node') ? item : null)
+      const uid = host?.getAttribute?.('data-uid') || nodeUid(host)
+      if (uid) return uid
+    }
+    return event?.currentTarget && nodeUid(event.currentTarget) || null
+  }
+
+  function canvasView(doc) {
+    const svg = doc.getElementById('canvas')
+    if (!svg) return null
+    const rect = svg.getBoundingClientRect()
+    const win = doc.defaultView
+    const t = win?.d3?.zoomTransform?.(svg) || svg.__zoom || { x: 0, y: 0, k: 1 }
+    return { left: rect.left, top: rect.top, x: t.x || 0, y: t.y || 0, k: t.k || 1 }
+  }
+
+  function layoutFaceRect(node, view) {
+    const d = node?.__data__
+    if (!d || !view || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return null
+    const cfg = (typeof window !== 'undefined' && window.LOGYQBridge?.core?.config) || {}
+    const w = cfg.CARD_WIDTH || 140
+    const h = cfg.CARD_HEIGHT || 63
+    const cx = view.left + view.x + d.x * view.k
+    const cy = view.top + view.y + d.y * view.k
+    const hw = (w / 2) * view.k
+    const hh = (h / 2) * view.k
+    return { left: cx - hw, right: cx + hw, top: cy - hh, bottom: cy + hh, cx, cy }
+  }
+
+  function hitLayoutSlot(doc, x, y) {
+    const view = canvasView(doc)
+    if (!view) return null
+    const scored = Array.from(doc.querySelectorAll('svg#canvas g.node')).map((node) => {
+      const slot = layoutFaceRect(node, view)
+      if (!pointInRect(slot, x, y)) return null
+      return {
+        node,
+        onFace: true,
+        onBox: true,
+        depth: node.__data__?.depth ?? 0,
+        cx: slot.cx,
+        cy: slot.cy,
+      }
+    }).filter(Boolean)
+    return rankCardHits(scored, x, y)[0]?.node || null
+  }
+
+  function hitVisualNode(doc, x, y) {
     const scored = Array.from(doc.querySelectorAll('svg#canvas g.node')).map((node) => {
       const face = cardFaceRect(node)
       const box = node.getBoundingClientRect()
@@ -1543,6 +1595,12 @@
       }
     }).filter(Boolean)
     return rankCardHits(scored, x, y)[0]?.node || null
+  }
+
+  function hitNode(doc, x, y, event) {
+    const fromEvent = uidFromEvent(event)
+    if (fromEvent) return nodeByUid(doc, fromEvent) || null
+    return hitLayoutSlot(doc, x, y) || hitVisualNode(doc, x, y)
   }
 
   function cardText(node) {
@@ -1753,6 +1811,9 @@
     preview.gestures.hitNode = hitNode
     preview.gestures.rankCardHits = rankCardHits
     preview.gestures.cardFaceRect = cardFaceRect
+    preview.gestures.uidFromEvent = uidFromEvent
+    preview.gestures.hitLayoutSlot = hitLayoutSlot
+    preview.gestures.layoutFaceRect = layoutFaceRect
   }
   function setSaveState(state) {
     const text = state === 'saving' ? 'Saving' : state === 'offline' ? 'Offline' : 'Saved'

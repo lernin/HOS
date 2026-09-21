@@ -116,7 +116,7 @@
     createRelative(direction) {
       const origin = logyq.state.selectedUid;
       if (!origin) return null;
-      const calm = { noEdit: true, select: true, rootAsChild: false, immediate: true };
+      const calm = { noEdit: true, select: true, rootAsChild: false };
       const created =
         direction === 'down' ? logyq.treeOps.addChildOf(origin, '', calm) :
         direction === 'right' ? logyq.treeOps.addSiblingRightOf(origin, '', calm) :
@@ -124,7 +124,6 @@
         direction === 'up' ? logyq.treeOps.insertParentAbove(origin, '', calm) :
         null;
       if (logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
-      try { logyq.treeManager.snapLaidOutNodes(); } catch (_error) {}
       if (created) logyq.selection.selectSingle(created);
       emitChange();
       return created || null;
