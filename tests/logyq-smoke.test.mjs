@@ -265,8 +265,11 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   assert.ok(Math.abs(fit.mid - fit.cx) < fit.canvas * 0.12, `tree mid ${fit.mid} should be near canvas center ${fit.cx}`)
   const zoomExtent = await page.evaluate(() => window.LOGYQBridge.core.state.zoom.scaleExtent())
   assert.deepEqual(zoomExtent, [0.02, 2.4])
-  await page.evaluate(() => window.LOGYQBridge.selectByName('Node 05'))
-  await page.evaluate(() => window.LOGYQBridge.editSelected())
+  const editUid = await page.evaluate(() => {
+    window.LOGYQBridge.selectByName('Node 05')
+    return window.LOGYQBridge.getSelectedUid()
+  })
+  await page.evaluate((uid) => window.LOGYQBridge.editSelected({ uid }), editUid)
   await page.locator('.node-edit-input').fill('Mobile 05')
   await page.locator('.node-edit-input').press('Enter')
   await page.waitForFunction(() => Array.from(document.querySelectorAll('g.node')).some((node) => node.textContent.includes('Mobile 05')))
@@ -1265,6 +1268,134 @@ test('LOGYQ two blank cards edit by uid, not empty name', async () => {
   assert.equal(names.target, 'cat')
   assert.equal(names.decoy, 'dog')
   assert.equal(names.node10, true)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ flick-down child edit binds newUid not root, then clear stays on that uid', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+
+  const ids = await page.evaluate(() => {
+    const rootUid = window.LOGYQBridge.core.state.root?.data?._uid
+    window.LOGYQBridge.selectByName('Node 05')
+    const originUid = window.LOGYQBridge.getSelectedUid()
+    const newUid = window.LOGYQBridge.createRelative('down')
+    return { rootUid, originUid, newUid }
+  })
+  assert.ok(ids.rootUid)
+  assert.ok(ids.originUid)
+  assert.ok(ids.newUid)
+  assert.notEqual(ids.newUid, ids.rootUid)
+  assert.notEqual(ids.newUid, ids.originUid)
+
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.editSelected()), false)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.editSelected({})), false)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), null)
+
+  const opened = await page.evaluate((uid) => window.LOGYQBridge.editSelected({ uid }), ids.newUid)
+  assert.equal(opened, true)
+  await page.waitForSelector('.node-edit-input')
+  const editing = await page.evaluate(() => window.LOGYQBridge.core.state.editingUid)
+  assert.equal(editing, ids.newUid)
+  assert.notEqual(editing, ids.rootUid)
+  assert.notEqual(editing, ids.originUid)
+
+  await page.locator('.node-edit-input').fill('cat')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    const node = window.LOGYQBridge.core.state.root?.descendants().find((item) => item.data?._uid === uid)
+    return node?.data?.name === 'cat'
+  }, ids.newUid)
+
+  const afterCat = await page.evaluate((ids) => {
+    const byUid = (uid) => window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)
+    return {
+      child: byUid(ids.newUid)?.name,
+      root: byUid(ids.rootUid)?.name,
+      origin: byUid(ids.originUid)?.name,
+    }
+  }, ids)
+  assert.equal(afterCat.child, 'cat')
+  assert.notEqual(afterCat.root, 'cat')
+  assert.equal(afterCat.origin, 'Node 05')
+
+  assert.equal(await page.evaluate((uid) => window.LOGYQBridge.editSelected({ uid }), ids.newUid), true)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), ids.newUid)
+  await page.locator('.node-edit-input').fill('')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    const node = window.LOGYQBridge.core.state.root?.descendants().find((item) => item.data?._uid === uid)
+    return node?.data?.name === ''
+  }, ids.newUid)
+
+  const afterClear = await page.evaluate((ids) => {
+    const byUid = (uid) => window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)
+    return {
+      child: byUid(ids.newUid)?.name,
+      root: byUid(ids.rootUid)?.name,
+      origin: byUid(ids.originUid)?.name,
+    }
+  }, ids)
+  assert.equal(afterClear.child, '')
+  assert.equal(afterClear.root, afterCat.root)
+  assert.equal(afterClear.origin, 'Node 05')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ rename then delete all characters persists empty name on that uid', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+
+  const uid = await page.evaluate(() => {
+    window.LOGYQBridge.selectByName('Node 12')
+    return window.LOGYQBridge.getSelectedUid()
+  })
+  assert.ok(uid)
+  assert.equal(await page.evaluate((id) => window.LOGYQBridge.renameNode(id, 'temp-name'), uid), true)
+  await page.waitForFunction((id) => {
+    const node = window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, id)
+    return node?.name === 'temp-name'
+  }, uid)
+
+  assert.equal(await page.evaluate((id) => window.LOGYQBridge.editSelected({ uid: id }), uid), true)
+  await page.waitForSelector('.node-edit-input')
+  await page.locator('.node-edit-input').fill('   ')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((id) => {
+    const node = window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, id)
+    return node?.name === ''
+  }, uid)
+
+  const named = await page.evaluate((id) => {
+    const node = window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, id)
+    return {
+      name: node?.name,
+      othersStillLabeled: window.LOGYQBridge.core.state.root.descendants()
+        .filter((item) => item.data?._uid !== id)
+        .every((item) => item.data?.name !== ''),
+    }
+  }, uid)
+  assert.equal(named.name, '')
+  assert.equal(named.othersStillLabeled, true)
+  assert.equal(await page.evaluate((id) => window.LOGYQBridge.renameNode(id, ''), uid), true)
+  assert.equal(await page.evaluate((id) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, id)?.name
+  }, uid), '')
   assert.deepEqual(errors, [])
   await context.close()
 })

@@ -821,9 +821,9 @@
       return
     }
 
-    const node = hitNode(doc, event.clientX, event.clientY, event)
-    const uid = nodeUid(node)
-    if (!uid || uid !== candidate.uid) {
+    const uid = hitEditUid(doc, event.clientX, event.clientY, event)
+    const node = uid ? nodeByUid(doc, uid) : null
+    if (!uid) {
       state.lastTap = null
       clearCardMic(state.mic)
       return
@@ -909,6 +909,10 @@
     })
   }
 
+  function uidFromHost(host) {
+    return host?.getAttribute?.('data-uid') || nodeUid(host) || null
+  }
+
   function uidFromEvent(event) {
     const path = typeof event?.composedPath === 'function' ? event.composedPath() : []
     const nodes = path.length ? path : (event?.target ? [event.target] : [])
@@ -916,10 +920,41 @@
       if (!item || item === item.window || item === item.document) continue
       const host = item.closest?.('g.hit-slot, g.node')
         || (item.classList?.contains?.('hit-slot') || item.classList?.contains?.('node') ? item : null)
-      const uid = host?.getAttribute?.('data-uid') || nodeUid(host)
+      const uid = uidFromHost(host)
       if (uid) return uid
     }
-    return event?.currentTarget && nodeUid(event.currentTarget) || null
+    return null
+  }
+
+  function uidFromPoint(doc, x, y) {
+    const stack = typeof doc.elementsFromPoint === 'function' ? doc.elementsFromPoint(x, y) : []
+    for (const el of stack) {
+      const host = el?.closest?.('g.hit-slot, g.node')
+      const uid = uidFromHost(host)
+      if (uid) return uid
+    }
+    return null
+  }
+
+  // Cards are pointer-events:none on phone so the event target is often a
+  // reserved hit-slot *behind* a mid-tween visual. Prefer the painted
+  // g.node under the finger (elementsFromPoint still sees it) so a
+  // just-created blank keeps its own _uid even if she taps before settle.
+  function uidFromVisualPoint(doc, x, y) {
+    const stack = typeof doc.elementsFromPoint === 'function' ? doc.elementsFromPoint(x, y) : []
+    for (const el of stack) {
+      const host = el?.closest?.('g.node')
+      const uid = uidFromHost(host)
+      if (uid) return uid
+    }
+    return null
+  }
+
+  function hitEditUid(doc, x, y, event) {
+    return uidFromVisualPoint(doc, x, y)
+      || uidFromEvent(event)
+      || uidFromPoint(doc, x, y)
+      || nodeUid(hitLayoutSlot(doc, x, y))
   }
 
   function canvasView(doc) {
@@ -928,15 +963,37 @@
     const rect = svg.getBoundingClientRect()
     const win = doc.defaultView
     const t = win?.d3?.zoomTransform?.(svg) || svg.__zoom || { x: 0, y: 0, k: 1 }
-    return { left: rect.left, top: rect.top, x: t.x || 0, y: t.y || 0, k: t.k || 1 }
+    const root = svg.querySelector(':scope > g') || svg.querySelector('g')
+    return {
+      left: rect.left,
+      top: rect.top,
+      x: t.x || 0,
+      y: t.y || 0,
+      k: t.k || 1,
+      ctm: root?.getScreenCTM?.() || null,
+    }
   }
 
   function layoutFaceRect(node, view) {
     const d = node?.__data__
-    if (!d || !view || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return null
+    if (!d || !Number.isFinite(d.x) || !Number.isFinite(d.y)) return null
     const cfg = (typeof window !== 'undefined' && window.LOGYQBridge?.core?.config) || {}
     const w = cfg.CARD_WIDTH || 140
     const h = cfg.CARD_HEIGHT || 63
+    if (view?.ctm && typeof DOMPoint === 'function') {
+      const c = new DOMPoint(d.x, d.y).matrixTransform(view.ctm)
+      const tl = new DOMPoint(d.x - w / 2, d.y - h / 2).matrixTransform(view.ctm)
+      const br = new DOMPoint(d.x + w / 2, d.y + h / 2).matrixTransform(view.ctm)
+      return {
+        left: Math.min(tl.x, br.x),
+        right: Math.max(tl.x, br.x),
+        top: Math.min(tl.y, br.y),
+        bottom: Math.max(tl.y, br.y),
+        cx: c.x,
+        cy: c.y,
+      }
+    }
+    if (!view) return null
     const cx = view.left + view.x + d.x * view.k
     const cy = view.top + view.y + d.y * view.k
     const hw = (w / 2) * view.k
@@ -982,9 +1039,9 @@
   }
 
   function hitNode(doc, x, y, event) {
-    const fromEvent = uidFromEvent(event)
-    if (fromEvent) return nodeByUid(doc, fromEvent) || null
-    return hitLayoutSlot(doc, x, y) || hitVisualNode(doc, x, y)
+    const uid = hitEditUid(doc, x, y, event)
+    if (uid) return nodeByUid(doc, uid) || null
+    return hitVisualNode(doc, x, y)
   }
 
   function cardText(node) {
@@ -1196,6 +1253,9 @@
     preview.gestures.rankCardHits = rankCardHits
     preview.gestures.cardFaceRect = cardFaceRect
     preview.gestures.uidFromEvent = uidFromEvent
+    preview.gestures.uidFromPoint = uidFromPoint
+    preview.gestures.uidFromVisualPoint = uidFromVisualPoint
+    preview.gestures.hitEditUid = hitEditUid
     preview.gestures.hitLayoutSlot = hitLayoutSlot
     preview.gestures.layoutFaceRect = layoutFaceRect
   }

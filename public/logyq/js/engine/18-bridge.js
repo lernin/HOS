@@ -98,10 +98,9 @@
       const node = logyq.state.root?.descendants().find((item) => item.data?.name === label);
       return node?.parent?.data?.name || null;
     },
-    editSelected({ wipe = false, uid = null } = {}) {
-      const explicitUid = (uid != null && String(uid).trim() !== '');
-      const targetUid = explicitUid ? uid : logyq.state.selectedUid;
-      if (!targetUid) return false;
+    editSelected({ wipe = false, uid = undefined } = {}) {
+      if (uid == null || String(uid) === '') return false;
+      const targetUid = uid;
       const node = logyq.state.root?.descendants().find((item) => item.data?._uid === targetUid);
       if (!node) return false;
       logyq.selection.selectSingle(targetUid);
@@ -130,9 +129,9 @@
     },
     renameNode(uid, name) {
       const target = uid && utils.findByUid(state.root?.data, uid);
-      const next = String(name || '').trim();
-      if (!target || !next) return false;
-      const prev = target.name || '';
+      if (!target) return false;
+      const next = name == null ? '' : String(name).trim();
+      const prev = target.name ?? '';
       if (next === prev) return true;
       pushHistory({ type: 'rename', uid, prev, next });
       target.name = next;

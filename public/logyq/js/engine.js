@@ -1796,8 +1796,8 @@ if (dir === +1){
     if(apply){
       const target = utils.findByUid(state.root.data, uid);
       if(target){
-        const prev = target.name || "";
-        let next = (el && typeof el.value==="string" ? el.value.trim() : prev) || prev;
+        const prev = target.name ?? "";
+        const next = (el && typeof el.value === "string") ? el.value.trim() : prev;
         if(next !== prev){
           logyq.history.pushHistory({ type:"rename", uid, prev, next });
           target.name = next;
@@ -1826,8 +1826,9 @@ if (dir === +1){
   function openNodeEditor(d){
     const { state, elements } = logyq
     try{ closeNodeEditor(false,false); }catch(_e){}
-    if(!d) return;
-    state.editingUid = d.data._uid;
+    const uid = d?.data?._uid;
+    if(!d || uid == null || String(uid) === '') return;
+    state.editingUid = uid;
     const current = d3.zoomTransform(elements.svg.node());
     state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
     state.editZoom = null;
@@ -6097,10 +6098,9 @@ elements.svg.on("contextmenu", (event) => {
       const node = logyq.state.root?.descendants().find((item) => item.data?.name === label);
       return node?.parent?.data?.name || null;
     },
-    editSelected({ wipe = false, uid = null } = {}) {
-      const explicitUid = (uid != null && String(uid).trim() !== '');
-      const targetUid = explicitUid ? uid : logyq.state.selectedUid;
-      if (!targetUid) return false;
+    editSelected({ wipe = false, uid = undefined } = {}) {
+      if (uid == null || String(uid) === '') return false;
+      const targetUid = uid;
       const node = logyq.state.root?.descendants().find((item) => item.data?._uid === targetUid);
       if (!node) return false;
       logyq.selection.selectSingle(targetUid);
@@ -6129,9 +6129,9 @@ elements.svg.on("contextmenu", (event) => {
     },
     renameNode(uid, name) {
       const target = uid && utils.findByUid(state.root?.data, uid);
-      const next = String(name || '').trim();
-      if (!target || !next) return false;
-      const prev = target.name || '';
+      if (!target) return false;
+      const next = name == null ? '' : String(name).trim();
+      const prev = target.name ?? '';
       if (next === prev) return true;
       pushHistory({ type: 'rename', uid, prev, next });
       target.name = next;

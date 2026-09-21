@@ -95,6 +95,11 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **L/R/Up were AndEdit keyboard helpers.** Those opened the editor, flew the camera, then `createRelative` slammed the editor shut — the blip / bad focus. All four directions now use the same calm `treeOps` settle: `noEdit`, no fly, select the new uid, one 260ms layout tween.
 - **No MIC on flick.** Nursery / recording is later. Flick does not arm `#logyq-v162-action`. Header mic is unchanged. Double-tap still edits **that** new blank.
 
+## Empty name + uid-only blank edit (PR 112)
+
+- **Bug A — cannot clear a name.** `closeNodeEditor` treated `""` as falsy (`(trim || prev)`), so select-all + delete snapped the previous label back. `renameNode` also bailed on `if (!target || !next)`. Empty / whitespace-only commit now persists `name: ""` on that `_uid` only. Map titles still coerce to Untitled; card labels may be blank.
+- **Bug B — new blank opens the root editor.** `editSelected()` fell back to `selectedUid` / first node when the tap uid was missing, and phone cards are `pointer-events: none`, so the event landed on a reserved hit-slot or the canvas. After flick-create that often resolved as the top/root card. Edit open now **requires** the tapped `_uid` (no selected / root / name fallback). Hit order is painted `g.node` under the finger (`elementsFromPoint`, even mid-tween) → event-path slot → layout-slot CTM. Persistence wipe-edit passes the root uid explicitly. Silky create tween is unchanged (no full-tree snap).
+
 ## Double-tap edits the card under the finger (PR 112)
 
 - **Wrong-card rename after flick-create.** Flick-down creates a blank via `createRelative` → `addChildBelowSelectedAndEdit` (opens editor on the new uid, then immediately closes it). Double-tap then called `editSelected()` with **no uid**, so a stale `selectedUid` (the flick origin / parent) won if `selectByUid` missed. Meanwhile `layoutAndRender` tweens the parent for 260ms over the new child’s final slot, and `hitNode` used the whole `g.node` box (downward grabzone). Equal-size overlaps picked the earlier DOM node — the parent. She typed “cat” onto the wrong card.

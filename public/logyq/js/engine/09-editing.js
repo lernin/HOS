@@ -71,8 +71,8 @@
     if(apply){
       const target = utils.findByUid(state.root.data, uid);
       if(target){
-        const prev = target.name || "";
-        let next = (el && typeof el.value==="string" ? el.value.trim() : prev) || prev;
+        const prev = target.name ?? "";
+        const next = (el && typeof el.value === "string") ? el.value.trim() : prev;
         if(next !== prev){
           logyq.history.pushHistory({ type:"rename", uid, prev, next });
           target.name = next;
@@ -101,8 +101,9 @@
   function openNodeEditor(d){
     const { state, elements } = logyq
     try{ closeNodeEditor(false,false); }catch(_e){}
-    if(!d) return;
-    state.editingUid = d.data._uid;
+    const uid = d?.data?._uid;
+    if(!d || uid == null || String(uid) === '') return;
+    state.editingUid = uid;
     const current = d3.zoomTransform(elements.svg.node());
     state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
     state.editZoom = null;

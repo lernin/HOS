@@ -295,7 +295,7 @@
       const uid = bridge.core?.state?.root?.data?._uid
       if (uid) {
         bridge.selectByUid(uid)
-        bridge.editSelected({ wipe: true })
+        bridge.editSelected({ wipe: true, uid })
       }
     }
     setSaveState('saved')
@@ -318,7 +318,7 @@
     const uid = bridge.core?.state?.root?.data?._uid
     if (uid && edit) {
       bridge.selectByUid(uid)
-      bridge.editSelected({ wipe: true })
+      bridge.editSelected({ wipe: true, uid })
     }
   }
 
