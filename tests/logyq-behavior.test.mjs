@@ -958,7 +958,7 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.doesNotMatch(styles, /#logiq-mobile-context/)
   assert.doesNotMatch(boot, /spawnGesture/)
   assert.doesNotMatch(boot, /canvasPointers/)
-  assert.match(v162, /HOLD_MS: 280/)
+  assert.match(v162, /HOLD_MS: 160/)
   assert.match(v162, /HOLD_SLOP: 8/)
   assert.match(v162, /DOUBLE_TAP_MS: 360/)
   assert.match(v162, /FLICK_MIN: 52/)

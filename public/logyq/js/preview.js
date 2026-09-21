@@ -604,7 +604,7 @@
       FLICK_MIN: 52,
       FLICK_MAX_MS: 340,
       FLICK_RATIO: 1.45,
-      HOLD_MS: 280,
+      HOLD_MS: 160,
       HOLD_SLOP: 8,
       TAP_MOVE: 11,
       DOUBLE_TAP_MS: 360,

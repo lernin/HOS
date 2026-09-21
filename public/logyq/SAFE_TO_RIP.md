@@ -2,7 +2,7 @@
 
 Fearless-delete notes for `/logyq/` only. This is not an ES-module plan. Do not touch `logiq-*`, merge, or deploy.
 
-Live mobile grammar: flick / 280ms hold-drag / 360ms double-tap on `LOGYQBridge`. See `ARCHITECTURE.md` and `GESTURE_STATES.md`.
+Live mobile grammar: flick / 160ms hold-drag / 360ms double-tap on `LOGYQBridge`. See `ARCHITECTURE.md` and `GESTURE_STATES.md`.
 
 ## Removed in this wave (gone; do not put back)
 

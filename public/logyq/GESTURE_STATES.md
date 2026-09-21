@@ -1,13 +1,13 @@
 # LOGYQ mobile hold-drag states
 
-Phone only (`logyq-mobile-v162`). Finger grammar: flick create / 280ms hold-drag / 360ms double-tap edit. This page is hold-drag only.
+Phone only (`logyq-mobile-v162`). Finger grammar: flick create / 160ms hold-drag / 360ms double-tap edit. This page is hold-drag only.
 
 ```mermaid
 stateDiagram-v2
   [*] --> Idle
   Idle --> Arming: pointerdown on a card
   Arming --> Idle: move > 8px slop / cancel / second finger
-  Arming --> Latched: hold 280ms still
+  Arming --> Latched: hold 160ms still
   Latched --> Still: finger within 16px of latch
   Latched --> Moved: finger leaves 16px
   Still --> Moved: finger leaves 16px
@@ -21,8 +21,8 @@ stateDiagram-v2
 idle
   │ pointerdown on card
   ▼
-arming (280ms, 8px slop)
-  │ hold still 280ms
+arming (160ms, 8px slop)
+  │ hold still 160ms
   ▼
 latched  ──clone lifts 1.1cm; origin ghost; layout frozen──
   ├─ still (≤16px) ──release / cancel / 2nd finger──► idle
@@ -45,4 +45,4 @@ latched  ──clone lifts 1.1cm; origin ghost; layout frozen──
 
 ## Thresholds
 
-`HOLD_MS` 280 · `HOLD_SLOP` 8 · `STILL_PX` 16 · `OFFSET_UP_CM` 1.1 · `BANK_DWELL_MS` 480 · chip hit = inner 44% inset 8px.
+`HOLD_MS` 160 · `HOLD_SLOP` 8 · `STILL_PX` 16 · `OFFSET_UP_CM` 1.1 · `BANK_DWELL_MS` 480 · chip hit = inner 44% inset 8px.

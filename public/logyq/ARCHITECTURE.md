@@ -79,7 +79,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `02-styles.js` | Injected preview/mobile CSS, including v162 hold-drag ghost styles |
 | `03-ui.js` | Maps library chrome. Compact phone header markup lives in `index.html` (includes the paint palette button). No spawn-puck, no bottom arrow bar, no drag-hand radios. |
 | `04-gestures.js` | Header-mic voice only (fills type-or-speak). |
-| `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~280ms hold-drag with origin ghost + one-card SVG clone + edge auto-pan, ~360ms double-tap edit, tap-to-MIC, finger offset. Paint: tap one card / flick-down branch while a palette color is active. |
+| `05-v162-gestures.js` | Same-page port of v162 mobile grammar onto `LOGYQBridge`: direct flick, ~160ms hold-drag with origin ghost + one-card SVG clone + edge auto-pan, ~360ms double-tap edit, tap-to-MIC, finger offset. Paint: tap one card / flick-down branch while a palette color is active. |
 | `06-persistence.js` | Debounced local autosave, LOGYQ PIN for voice only, device map library |
 
 ## Shared state (explicit `logyq` bag)
@@ -124,7 +124,7 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - File-level Tab-hold
 - Copied `logiq-*` DOM ids in the preview shell (selectors, not storage)
 - Production `logiq-*` paths (read-only)
-- v162 gesture thresholds (`LOGYQPreview.gestures.constants`) — read them, do not fork them inside engine fragments. Live values: flick 52px / 340ms / 1.45 ratio, hold 280ms / 8px slop, double-tap 360ms, tap-move 11px.
+- v162 gesture thresholds (`LOGYQPreview.gestures.constants`) — read them, do not fork them inside engine fragments. Live values: flick 52px / 340ms / 1.45 ratio, hold 160ms / 8px slop, double-tap 360ms, tap-move 11px.
 
 ### Known footguns for mobile
 
@@ -134,7 +134,7 @@ This is not an ES-module app. Concatenate+IIFE remains. The existing injected ph
 - **`keyDispatcher` runs at initialize()** before `attach('keyboard')`; the bind is `logyq.keyboard?.keyDispatcher`. Keep that late lookup.
 - Concatenate+IIFE remains; do not import fragments as ES modules from a mobile shell.
 - v162 gestures bind once from `05-v162-gestures.js` when the coarse/no-hover ≤1200px query matches. Mouse is ignored so desktop drag stays native. Cards use geometric hit-test (`pointer-events: none` on `g.node`) so pan/pinch still work over them.
-- Hold (~280ms, 8px slop) latches through synthetic `mousedown`/`mousemove`/`mouseup` into existing `d3.drag()` (`shiftKey: false`). Flick and double-tap must not start that drag.
+- Hold (~160ms, 8px slop) latches through synthetic `mousedown`/`mousemove`/`mouseup` into existing `d3.drag()` (`shiftKey: false`). Flick and double-tap must not start that drag.
 - Direct flick calls `selectByUid` + `createRelative`, then arms `#logyq-v162-action` on the blank card. It must not start `MediaRecorder` until she taps MIC. Header mic remains a separate voice path into the type-or-speak field.
 - Phone pinch/wheel floor is `scaleExtent([0.02, 2.4])` on `logyq.state.zoom`. Do not restore the v161 `0.4` floor.
 - Finger hold-drag must keep the tree standing: `v2-branch-origin-ghost` on the source branch, `is-others` opacity 1 while `body.v2-branch-drag`. Do not let desktop `dragging-mode` hide the rest of the map. Do not restyle drop-target/caret (Ashley’s magnetic indicator).

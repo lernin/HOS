@@ -81,6 +81,10 @@ LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were
 - **Color is node data.** `data.color` on the tree; snapshot / maps / reload keep it. Undo is `replace-root`. Card shape (rx, stroke chrome) is unchanged; only fill changes.
 - **Mix and save keep paint.** `randomizeTree` used to shuffle names into new `{ name }` objects, dropping `data.color`. After Mix the snapshot (and therefore `logyq_maps_v1` / reopen) had no paint. Mix now carries each card’s color through the shuffle; GIQ `normalizeToTree` also keeps `color`. Snapshot / `loadMap` already JSON-clone the full node. Paint UX is unchanged.
 
+## Hold-drag latch (PR 112)
+
+- **Faster hold-to-lift.** `HOLD_MS` **280 → 160**. Still-hold slop (8px), flick 52px / 340ms / 1.45, double-tap 360ms, and bank dwell 480ms stay put so a tap or flick does not become a drag.
+
 ## Hold-drag camera (PR 112)
 
 - **Center-offset pan, not edge bands.** Hold-drag auto-pan uses the finger’s offset from the viewport center (dead zone 56px, quadratic step 16). Up/down matches left/right; near-center does not creep. The content leash is sign-aware on the **leading** edge (`dx>0` → left on `minX`, `dx<0` → right on `maxX`, same for y) and does not yank if already past. After `ba35d2f` the leading inset was ½ card and felt choked against the bezel; it is now ~⅓ of the viewport empty on the side she is panning toward (tree in the opposite ~⅔). Diagonals apply both axes.
