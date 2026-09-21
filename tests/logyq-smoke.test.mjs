@@ -359,14 +359,15 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   }
 
   const beforeTap = await zoomNow()
-  const idle = await nodeCenter('Node 08')
+  const idle = await nodeCenter('Node 07')
   await touch('pointerdown', idle.x, idle.y, 51)
   await touch('pointerup', idle.x, idle.y, 51)
-  await page.waitForTimeout(180)
+  await page.waitForTimeout(400)
   const afterTap = await zoomNow()
   assert.ok(Math.hypot(afterTap.x - beforeTap.x, afterTap.y - beforeTap.y) < 6, 'tap must not re-center the map')
   assert.ok(Math.abs(afterTap.k - beforeTap.k) < 0.02)
   assert.equal(await page.locator('svg#canvas g.node.is-outlined').count(), 0)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.paintTap()), false)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.paintFlickDown('down')), false)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.paintFlickDown('left')), false)
@@ -389,6 +390,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
     const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 08')
     return node?.__data__?.data?.color === '#fde68a'
   })
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
   const afterPaint = await zoomNow()
   assert.ok(Math.hypot(afterPaint.x - beforePaint.x, afterPaint.y - beforePaint.y) < 6, 'paint tap must not re-center')
   const tapPaint = await page.evaluate(() => {
