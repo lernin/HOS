@@ -1285,7 +1285,8 @@ test('uidFromEvent reads data-uid from the tapped hit-slot or node', () => {
   assert.equal(uidFromEvent({ composedPath: () => [slot] }), 'n-blank-2')
   assert.equal(uidFromEvent({ composedPath: () => [parent] }), 'n-parent')
   assert.equal(uidFromEvent({ composedPath: () => [] }), null)
-  assert.equal(uidFromEvent({ currentTarget: { __data__: { data: { _uid: 'n-from-current' } } } }), 'n-from-current')
+  assert.equal(uidFromEvent({ currentTarget: { __data__: { data: { _uid: 'n-from-current' } } } }), null)
+  assert.equal(uidFromEvent({ target: slot }), 'n-blank-2')
 })
 
 test('card hit-test prefers the visual face and the deepest overlapping card', () => {
