@@ -253,6 +253,71 @@ test('normalizeToTree preserves v161 array, node, and plain-object rules', () =>
   assert.equal(normalizeToTree('leaf').name, 'leaf')
 })
 
+test('parseGIQ still splits JSON, word-dock, and $$$ tail', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/14-word-dock.js', import.meta.url), 'utf8')
+  const block = extractBlock(source, 'function parseGIQ(raw) {', '/* Helper: normalize parsed JSON')
+  const parseGIQ = new Function(`${block}; return parseGIQ;`)()
+  assert.deepEqual(parseGIQ('{"name":"Map"}###alpha, beta$$$future'), {
+    jsonText: '{"name":"Map"}',
+    wordsText: 'alpha, beta',
+    futureText: 'future',
+  })
+})
+
+test('addWords splits on commas/semicolons and appends to the bank or the focused node', () => {
+  const utils = loadUtils()
+  const source = readFileSync(new URL('../public/logyq/js/engine/14-word-dock.js', import.meta.url), 'utf8')
+  const history = []
+  const dock = { innerHTML: '', appendChild() {} }
+  const logyq = {
+    utils,
+    state: { root: null, wordBank: [], selectedUid: null, selectedUids: new Set(), chipDrag: {} },
+    history: { pushHistory: (action) => history.push(action) },
+    treeManager: { layoutAndRender() {} },
+    selection: { showToast() {} },
+    elements: { Dock: dock, caretDot: { style() { return this }, attr() { return this } }, trash: { classList: { remove() {} } }, svg: { on() {}, node() { return {} }, call() {} }, gNodes: { selectAll() { return { classed() { return this }, filter() { return this } } } } },
+  }
+  globalThis.document = {
+    createElement() {
+      return { className: '', textContent: '', draggable: false, addEventListener() {} }
+    },
+    querySelectorAll() { return [] },
+  }
+  const d3 = {
+    hierarchy: fakeHierarchy,
+    pointer() { return [0, 0] },
+    zoomTransform() { return { invert() { return [0, 0] }, k: 1 } },
+    selectAll() { return { classed() {} } },
+  }
+  const addWords = new Function(
+    'logyq',
+    'd3',
+    'attach',
+    `${source}; return addWords;`,
+  )(logyq, d3, (name, value) => { logyq[name] = value; return value })
+
+  addWords('alpha; beta, gamma', 'bank')
+  assert.deepEqual(logyq.state.wordBank, ['alpha', 'beta', 'gamma'])
+
+  const tree = { name: 'root', children: [] }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  logyq.state.selectedUid = tree._uid
+  addWords('kid', 'selected')
+  assert.equal(tree.children[0].name, 'kid')
+  assert.equal(history[0].type, 'add')
+})
+
+test('chip-drop cases keep empty-canvas, rootAbove, gap, then node order', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/14-word-dock.js', import.meta.url), 'utf8')
+  const dropStart = source.indexOf("logyq.elements.svg.on('drop'")
+  const empty = source.indexOf("if (drop.type === 'newRootAt')", dropStart)
+  const above = source.indexOf("if (drop.type === 'rootAbove' && state.root)", dropStart)
+  const gap = source.indexOf("if (drop.type === 'gap')", dropStart)
+  const node = source.indexOf("if (drop.type === 'node')", dropStart)
+  assert.ok(dropStart > 0 && empty > dropStart && above > empty && gap > above && node > gap)
+})
+
 test('undo still recognizes the original action types', () => {
   const history = readFileSync(new URL('../public/logyq/js/engine/05-history.js', import.meta.url), 'utf8')
   for (const type of ['delete', 'move', 'add', 'rename', 'randomize', 'delete-root', 'add-root', 'replace-root']) {
@@ -382,16 +447,15 @@ function loadTreeOps() {
     },
     editing: { openNodeEditor(node) { logyq._opened = node } },
     drag: { clear() {} },
+    wordDock: { addWords() {}, render() {} },
   }
   const fns = new Function(
     'logyq',
     'd3',
     'showToast',
-    'render',
-    'addWords',
     'attach',
     `${source}; return { addChildOf, addSiblingRightOf, addSubtreeChildOf };`,
-  )(logyq, { hierarchy: fakeHierarchy }, () => {}, () => {}, () => {}, (name, value) => { logyq[name] = value; return value })
+  )(logyq, { hierarchy: fakeHierarchy }, () => {}, (name, value) => { logyq[name] = value; return value })
   return { logyq, history, ...fns }
 }
 

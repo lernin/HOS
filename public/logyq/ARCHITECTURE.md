@@ -63,7 +63,7 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 | `11-deletion.js` | Trash/delete helpers plus adjacent create/export helpers (`exportGIQ`, `createFirstCardAndEdit`). Registers `logyq.deletion`. Orphan add-child JSDoc at the file end is leftover v161 text; the real add helpers live in `12-tree-ops.js`. |
 | `12-tree-ops.js` | Add child/sibling, GIQ/JSON parse, Word Dock transfer. Registers `logyq.treeOps`. `DRAG_SLOP_PX` still lives at the bottom of this fragment because drag is concatenated later. |
 | `13-drag.js` | Subtree / node-only / group drag. Registers `logyq.drag`. Drop-case order is unchanged: group, then Shift-solo, then subtree. |
-| `14-word-dock.js` | Chip render, chip drag, `normalizeToTree` |
+| `14-word-dock.js` | Chip render, chip drag, `parseGIQ` / `normalizeToTree`. Registers `logyq.wordDock`. |
 | `15-mix-and-context.js` | Mix and node context-menu Word Dock actions |
 | `16-tree-manager.js` | D3 zoom/layout/render and control wiring |
 | `17-keyboard.js` | `keyDispatcher` and extra hotkeys. Registers `logyq.keyboard`. Capture-phase Shift+I/J/K/L listeners stay in this fragment. |
@@ -82,13 +82,14 @@ Fragments are **physical modules**, not yet independently imported ES modules. T
 
 ## Shared state (explicit `logyq` bag)
 
-Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), tree ops (`12-tree-ops.js`), deletion (`11-deletion.js`), drag (`13-drag.js`), and keyboard (`17-keyboard.js`) register cluster APIs on the bag and take shared state/managers from it. `LOGYQBridge` selection, edit, add-child, create-relative, and delete-selection methods go through those APIs. `LOGYQBridge.core` exposes the bag for tests.
+Fragments still concatenate into one IIFE so declaration order is preserved. They now register shared objects onto a single `logyq` bag (`00-api.js` `attach()`). Camera/moat helpers in `01-config.js` already read `logyq.state` / `logyq.elements` / `logyq.moat` / `logyq.fly` instead of hoping later `const` bindings exist. Editing (`09-editing.js`), selection (`10-selection.js`), tree ops (`12-tree-ops.js`), deletion (`11-deletion.js`), drag (`13-drag.js`), Word Dock (`14-word-dock.js`), and keyboard (`17-keyboard.js`) register cluster APIs on the bag and take shared state/managers from it. `LOGYQBridge` selection, edit, add-child, create-relative, delete-selection, and Word Dock render methods go through those APIs. `LOGYQBridge.core` exposes the bag for tests.
 
 Unconverted fragments still use ambient `state`, `elements`, `utils`, and friends; `attach()` makes those the same object references as `logyq.*`. Hidden communication that remains:
 
 - DOM class names (`is-outlined`, Dock chips) as selection/chip state
 - Capture-phase keyboard listeners racing `keyDispatcher`, including V-hold / G / paste listeners that still live in `10-selection.js`
 - Editing Shift+Enter still calls later `addSiblingRightOf` by ambient name
+- Mix still calls ambient `addWords` / `render` / `getSelectedChipNames` (including `addWords(names.join('\n'), 'bank')`, which Word Dock splits on `/[;,]+/` rather than newlines)
 - `treeManager.layoutAndRender` patched by the bridge to emit autosave
 - Word Dock `MutationObserver` in preview calling `notifyChange`
 

@@ -365,8 +365,8 @@ function collapseAndRemoveChips(names, done){
   // remove from bank after animation
   setTimeout(()=>{
     state.wordBank = state.wordBank.filter(w => !set.has(w));
-    clearChipSelection();
-    render();
+    logyq.wordDock.clearChipSelection();
+    logyq.wordDock.render();
     done?.();
   }, 320);
 }
@@ -408,7 +408,7 @@ elements.trash.addEventListener('drop', function(e){
 /* Context menu: delete selected chips */
 elements.trash.addEventListener('contextmenu', (e)=>{
   e.preventDefault();
-  const names = getSelectedChipNames();
+  const names = logyq.wordDock.getSelectedChipNames();
   if (!names.length) return;
   collapseAndRemoveChips(names);
 });

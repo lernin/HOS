@@ -142,7 +142,7 @@ window.addEventListener('keydown', (e) => {
 
 
 
-    elements.svg.on("click", e=>{ if(e.target===elements.svg.node()){ clearSelection(); clearChipSelection(); } });
+    elements.svg.on("click", e=>{ if(e.target===elements.svg.node()){ clearSelection(); logyq.wordDock.clearChipSelection(); } });
 
     state.layout=d3.tree();
     const data=dataManager.generateTree(30);
@@ -248,7 +248,7 @@ document.addEventListener('keydown', (e) => {
 
     
 
-    render();
+    logyq.wordDock.render();
     /* [patch] dock-bounds-init start */
     try{ updateDockBounds(); }catch(_e){}
     /* [/patch] dock-bounds-init end */

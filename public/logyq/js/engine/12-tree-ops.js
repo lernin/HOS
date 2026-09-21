@@ -406,7 +406,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
   logyq.selection.clearSelection();
 
   if (state.root) {
-    render?.();
+    logyq.wordDock.render?.();
     logyq.treeManager.layoutAndRender(false);
   } else {
     logyq.treeManager.renderEmpty();
@@ -436,7 +436,7 @@ function sendSubtreeToWordBank(h){
   const { state, utils } = logyq
   try{
     const labels = (h?.descendants?.() || []).map(n => n?.data?.name).filter(Boolean);
-    if (labels.length){labels.forEach(lbl => addWords(lbl, 'bank'));  // one chip per label
+    if (labels.length){labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));  // one chip per label
 }
 
 
@@ -473,7 +473,7 @@ function sendNodeToWordBank_abandon(h){
   const { state, utils } = logyq
   try{
     const label = h?.data?.name;
-    if (label) addWords(label, 'bank');
+    if (label) logyq.wordDock.addWords(label, 'bank');
 
     if (!h.parent){
       // Root: promote leftmost child as new root; old root (this label) already banked

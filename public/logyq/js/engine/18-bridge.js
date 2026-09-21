@@ -131,7 +131,7 @@
       elements.undoBtn.disabled = true;
       logyq.selection.clearGroup();
       logyq.selection.clearSelection();
-      render();
+      logyq.wordDock.render();
       treeManager.layoutAndRender(false);
       treeManager.autoFit();
     },

@@ -108,6 +108,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('selection', {",
     "attach('treeOps', {",
     "attach('deletion', {",
+    "attach('wordDock', {",
     "attach('drag', dragManager)",
     "attach('treeManager', treeManager)",
     "attach('keyboard', {",
@@ -127,12 +128,32 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(deletion, /attach\('deletion', \{[\s\S]*?\}\);/)
   assert.match(deletion, /const \{ state, utils \} = logyq/)
   assert.match(deletion, /logyq\.history\.pushHistory/)
+  const wordDock = readFileSync(join(logyqDir, 'js/engine/14-word-dock.js'), 'utf8')
+  assert.match(wordDock, /attach\('wordDock', \{[\s\S]*?\}\);/)
+  assert.match(wordDock, /const \{ state, elements, utils \} = logyq/)
+  assert.match(wordDock, /logyq\.elements\.svg\.on/)
+  assert.match(treeOps, /logyq\.wordDock\.addWords/)
+  assert.match(treeOps, /logyq\.wordDock\.render/)
+  const history = readFileSync(join(logyqDir, 'js/engine/05-history.js'), 'utf8')
+  assert.match(history, /logyq\.wordDock\.render/)
+  const stateFrag = readFileSync(join(logyqDir, 'js/engine/02-state.js'), 'utf8')
+  assert.match(stateFrag, /logyq\.wordDock\.addWords/)
+  const mix = readFileSync(join(logyqDir, 'js/engine/15-mix-and-context.js'), 'utf8')
+  assert.match(mix, /typeof addWords === 'function'/)
+  assert.doesNotMatch(mix, /logyq\.wordDock/)
+  assert.doesNotMatch(mix, /attach\('mix'/)
+  const keyboard = readFileSync(join(logyqDir, 'js/engine/17-keyboard.js'), 'utf8')
+  assert.match(keyboard, /logyq\.wordDock\.clearChipSelection/)
+  assert.match(keyboard, /logyq\.wordDock\.getSelectedChipNames/)
+  const treeManager = readFileSync(join(logyqDir, 'js/engine/16-tree-manager.js'), 'utf8')
+  assert.match(treeManager, /logyq\.wordDock\.render/)
+  const bridge = readFileSync(join(logyqDir, 'js/engine/18-bridge.js'), 'utf8')
+  assert.match(bridge, /logyq\.wordDock\.render/)
   const drag = readFileSync(join(logyqDir, 'js/engine/13-drag.js'), 'utf8')
   assert.match(drag, /const \{ state, elements \} = logyq/)
   assert.match(drag, /logyq\.detectors\.pick/)
   assert.match(drag, /logyq\.selection\.insertNodeAtDrop/)
   assert.match(drag, /window\.DRAG_SLOP_PX \|\| 10/)
-  const keyboard = readFileSync(join(logyqDir, 'js/engine/17-keyboard.js'), 'utf8')
   assert.match(keyboard, /attach\('keyboard', \{[\s\S]*?\}\);/)
   assert.match(keyboard, /const \{ state, elements, utils \} = logyq/)
   assert.match(keyboard, /if \(window\.startInlineEdit\) startInlineEdit/)

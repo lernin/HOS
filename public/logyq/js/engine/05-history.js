@@ -85,7 +85,7 @@ function autoFitSoon(delay){
       if ('prevBank' in a) state.wordBank = (a.prevBank || []).slice();
       if(state.root) utils.assignIds(state.root);
       treeManager.layoutAndRender(false);
-      render();
+      logyq.wordDock.render();
       /* [patch] undo-fit-call randomize */ autoFitSoon();
 
     } else if (a.type === 'delete-root') {

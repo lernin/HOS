@@ -138,7 +138,7 @@ if (toTree) {
 } else {
   // Split like the toTree branch so "a, b, c" makes three chips
   const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
-  parts.forEach(p => addWords(p, 'bank'));
+  parts.forEach(p => logyq.wordDock.addWords(p, 'bank'));
   showToast('Added to Word Dock');
 }
 
@@ -209,7 +209,7 @@ function handleAddBox(){
 
     // (optional) merge word bank into Dock (front)
     if (Array.isArray(parsed.wordBank) && parsed.wordBank.length){
-      parsed.wordBank.forEach(w => addWords && addWords(w, 'bank'));
+      parsed.wordBank.forEach(w => logyq.wordDock?.addWords?.(w, 'bank'));
     }
 
     showToast('Imported tree', 900);

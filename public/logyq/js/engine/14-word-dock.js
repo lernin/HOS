@@ -3,6 +3,7 @@
   function getSelectedChipNames(){ return Array.from(document.querySelectorAll("#Dock .chip.is-outlined")).map(el=>el.textContent.trim()).filter(Boolean); }
 
   function render(){
+    const { state, elements, utils } = logyq
     const list = elements.Dock; list.innerHTML = '';
     state.wordBank.forEach((w)=>{
       const chip = document.createElement('div');
@@ -36,7 +37,7 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
 
       chip.addEventListener("contextmenu", (e) => {e.preventDefault();
         e.stopPropagation(); const sel = Array.from((state.selectedUids || new Set()).values());
-if (!state.root || sel.length !== 1) {showToast(sel.length === 0 ? "Select a node first" : "Select just one node");
+if (!state.root || sel.length !== 1) {logyq.selection.showToast(sel.length === 0 ? "Select a node first" : "Select just one node");
   return;}
 const target = utils.findByUid(state.root.data, sel[0]);
 /* [patch] multiselect-gate end */
@@ -49,17 +50,18 @@ const target = utils.findByUid(state.root.data, sel[0]);
         for (const name of toAdd) {
           if (!name) continue;
           const node = { name }; utils.assignUids(node); target.children.push(node);
-          pushHistory({ type: "add", parentPath: utils.pathToUid(state.root.data, target._uid), uid: node._uid, index: (target.children.length - 1) });
+          logyq.history.pushHistory({ type: "add", parentPath: utils.pathToUid(state.root.data, target._uid), uid: node._uid, index: (target.children.length - 1) });
         }
         state.wordBank = state.wordBank.filter(n => !toAdd.includes(n));
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        clearChipSelection(); render(); treeManager.layoutAndRender(false);
+        clearChipSelection(); render(); logyq.treeManager.layoutAndRender(false);
       });
       list.appendChild(chip);
     });
   }
 
   function addWords(raw, to){
+    const { state, utils } = logyq
     const text = (raw || '').trim(); if(!text) return;
     const words = text.split(/[;,]+/).map(s => s.trim()).filter(Boolean);
     if(!words.length) return;
@@ -69,10 +71,10 @@ const target = utils.findByUid(state.root.data, sel[0]);
         target.children = target.children || [];
         for(const w of words){
           const node = { name:w }; utils.assignUids(node); target.children.push(node);
-          pushHistory({ type: 'add', parentPath: utils.pathToUid(state.root.data, target._uid), uid: node._uid, index: (target.children.length - 1) });
+          logyq.history.pushHistory({ type: 'add', parentPath: utils.pathToUid(state.root.data, target._uid), uid: node._uid, index: (target.children.length - 1) });
         }
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-        render(); treeManager.layoutAndRender(false); return;
+        render(); logyq.treeManager.layoutAndRender(false); return;
       }
     }
     state.wordBank.push(...words); render();
@@ -190,7 +192,8 @@ function normalizeToTree(value) {
 
 
 /* ======================= CHIP DROP OVER SVG (uses detectors) ======================= */
-elements.svg.on('dragover', (event) => {
+logyq.elements.svg.on('dragover', (event) => {
+  const { state, elements, config: CONFIG } = logyq
   if (!state.chipDrag.active) return;
   event.preventDefault();
 
@@ -212,7 +215,7 @@ elements.svg.on('dragover', (event) => {
   const [px, py] = d3.pointer(event, elements.svg.node());
   const t = d3.zoomTransform(elements.svg.node());
   const [gx, gy] = t.invert([px, py]);
-  const drop = Detectors.pick({ x: gx, y: gy });
+  const drop = logyq.detectors.pick({ x: gx, y: gy });
 
 
 // Reset visuals each move
@@ -229,7 +232,7 @@ if (!drop) { return; }
 
   if (drop.type === 'gap') {
     const hit = drop._hit;
-    const [cx, cy] = caretXYFromHit(hit);
+    const [cx, cy] = logyq.selection.caretXYFromHit(hit);
     elements.caretDot
       .attr('cx', cx)
       .attr('cy', cy)
@@ -287,7 +290,7 @@ state.chipDrag.drop = {
   elements.gNodes.selectAll("g.node")
     .classed("hover-adopt hover-adopt-sub drop-target", false);
 
-  const [cx, cy] = caretXYFromHit(drop._hit);
+  const [cx, cy] = logyq.selection.caretXYFromHit(drop._hit);
   elements.caretDot
     .attr('cx', cx)
     .attr('cy', cy)
@@ -303,7 +306,8 @@ state.chipDrag.drop = {
 
 });
 
-elements.svg.on('drop', (event) => {
+logyq.elements.svg.on('drop', (event) => {
+  const { state, elements, utils } = logyq
   if (!state.chipDrag.active) return;
   event.preventDefault();
 
@@ -332,7 +336,7 @@ elements.svg.on('drop', (event) => {
       });
     }
 
-    pushHistory({ type: 'add-root', uid: rootNode._uid });
+    logyq.history.pushHistory({ type: 'add-root', uid: rootNode._uid });
     removeFromBank(words);
 
     state.root = d3.hierarchy(rootNode);
@@ -343,7 +347,7 @@ elements.caretDot.style('opacity', 0);
 d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false);
 
     render();
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
 
     // Keep your “drop under pointer” behavior
     const current = d3.zoomTransform(elements.svg.node());
@@ -367,7 +371,7 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     }
 
     removeFromBank(words);
-    pushHistory({ type: 'replace-root', prev });
+    logyq.history.pushHistory({ type: 'replace-root', prev });
 
     state.root = d3.hierarchy(newRoot);
     utils.assignIds(state.root);
@@ -376,7 +380,7 @@ elements.caretDot.style('opacity', 0);
 d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false);
 
     render();
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
     return;
   }
 
@@ -404,7 +408,7 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     words.forEach((nm, i) => {
       const node = { name: nm }; utils.assignUids(node);
       parent.children.splice(insertAt + i, 0, node);
-      pushHistory({ type: 'add', parentPath, uid: node._uid, index: insertAt + i });
+      logyq.history.pushHistory({ type: 'add', parentPath, uid: node._uid, index: insertAt + i });
     });
 
     removeFromBank(words);
@@ -416,7 +420,7 @@ elements.caretDot.style('opacity', 0);
 d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false);
 
     render();
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
     return;
   }
 
@@ -431,7 +435,7 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     words.forEach(nm => {
       const node = { name: nm }; utils.assignUids(node);
       target.children.push(node);
-      pushHistory({
+      logyq.history.pushHistory({
         type: 'add',
         parentPath,
         uid: node._uid,
@@ -448,8 +452,15 @@ elements.caretDot.style('opacity', 0);
 d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false);
 
     render();
-    treeManager.layoutAndRender(false);
+    logyq.treeManager.layoutAndRender(false);
   }
 });
 
-
+  attach('wordDock', {
+    clearChipSelection,
+    getSelectedChipNames,
+    render,
+    addWords,
+    parseGIQ,
+    normalizeToTree,
+  });
