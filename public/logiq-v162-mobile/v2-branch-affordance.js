@@ -208,7 +208,7 @@
     bridge?.clearFocusSelection?.()
     bridge?.selectByUid?.(hold.uid)
 
-    nodeByUid(doc, hold.uid)?.classList.add('v2-branch-origin-ghost')
+    for (const uid of uids) nodeByUid(doc, uid)?.classList.add('v2-branch-origin-ghost')
 
     state.drag = {
       pointerId: hold.pointerId,
