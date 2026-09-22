@@ -195,6 +195,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
   const { state, utils } = logyq
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
+  if (!window.__logyqHoldDragAllowBank && !window.__logyqExplicitBankCommit) return;
   if (!state.root) { showToast('Nothing to drop'); return; }
   const count = state.selectedUids ? state.selectedUids.size : 0;
   if (count === 0) { showToast('Select node(s) to return'); return; }
@@ -329,6 +330,9 @@ function sendSubtreeToWordBank(h){
   const { state, utils } = logyq
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
+  // Move + dock dwell sets AllowBank. Keyboard D sets ExplicitBankCommit.
+  // Anything else (contextmenu, paint, Mix, select, chrome) must not bank.
+  if (!window.__logyqHoldDragAllowBank && !window.__logyqExplicitBankCommit) return;
   try{
     const labels = (h?.descendants?.() || []).map(n => (n?.data?.name || '').trim()).filter(Boolean);
     // Blank cards are not words. Skip the bank write and the delete.
@@ -369,6 +373,7 @@ function sendNodeToWordBank_abandon(h){
   const { state, utils } = logyq
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
+  if (!window.__logyqHoldDragAllowBank && !window.__logyqExplicitBankCommit) return;
   try{
     const label = (h?.data?.name || '').trim();
     if (!label) return;

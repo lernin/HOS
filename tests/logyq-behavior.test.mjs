@@ -856,7 +856,7 @@ test('randomizeTree keeps label aliases with each card', () => {
   assert.ok(byName('A')._uid)
 })
 
-test('Word Bank contextmenu is desktop right-click only', () => {
+test('Word Bank contextmenu never copies a card, including desktop right-click', () => {
   const config = readFileSync(new URL('../public/logyq/js/engine/01-config.js', import.meta.url), 'utf8')
   const start = config.indexOf('function coarseBankSurface')
   const end = config.indexOf('window.__logyqHoldDragFrozen = holdDragFrozen')
@@ -904,8 +904,8 @@ test('Word Bank contextmenu is desktop right-click only', () => {
   globalThis.window.__logyqHoldDragSession = false
   globalThis.window.__logyqSuppressBankContextUntil = 0
   onNodeContextMenu(menuEvent(), leaf)
-  assert.deepEqual(added, [['Leaf', 'bank']], 'desktop right-click still banks a named card')
-  assert.deepEqual(named.children, [])
+  assert.deepEqual(added, [], 'right-click must not copy a card into Word Bank')
+  assert.equal(named.children[0].name, 'Leaf')
 
   added.length = 0
   const again = { name: 'Root', children: [{ name: 'Leaf' }] }
@@ -968,16 +968,22 @@ test('sendSubtreeToWordBank ignores blank cards', () => {
     leaf.descendants = () => [leaf]
     state.root = named
     sendSubtreeToWordBank(leaf)
+    assert.deepEqual(added, [], 'a card must not bank without move+dwell or an explicit key')
+    assert.equal(named.data.children[0].name, 'Leaf')
+    globalThis.window.__logyqHoldDragAllowBank = true
+    sendSubtreeToWordBank(leaf)
     assert.deepEqual(added, ['Leaf'])
   } finally {
     globalThis.window = previousWindow
   }
 })
 
-test('context-menu Word Dock dumps still join names with newlines', () => {
+test('contextmenu does not dump cards into the Word Bank', () => {
   const source = sourceMix()
-  assert.match(source, /logyq\.wordDock\.addWords\(namesToBank\.join\('\\n'\), 'bank'\)/)
-  assert.match(source, /logyq\.wordDock\.addWords\(names\.join\('\\n'\), 'bank'\)/)
+  assert.match(source, /Contextmenu is never a Word Bank write/)
+  assert.doesNotMatch(source, /namesToBank/)
+  assert.doesNotMatch(source, /addWords\(/)
+  assert.doesNotMatch(source, /wordBank\.push/)
   const treeManager = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
   assert.equal((treeManager.match(/mixBtn\.addEventListener\('contextmenu'/g) || []).length, 1)
   assert.doesNotMatch(treeManager, /Tab-hold \(preserved\)/)

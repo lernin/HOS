@@ -596,23 +596,25 @@
   }
 
   function armBankHover(win, drag, dockKind, doc) {
-    const chip = dockKind === 'bank' ? hitBankChip(doc, drag.lastX, drag.lastY) : null
     const now = win.performance?.now?.() || Date.now()
-    if (chip && chip === drag.bankChip) {
-      drag.bankArmed = (now - drag.bankSince) >= v162Constants().BANK_DWELL_MS
+    if (dockKind !== 'bank') {
+      drag.bankChip = null
+      drag.bankSince = 0
+      drag.bankArmed = false
       return
     }
-    drag.bankChip = chip
-    drag.bankSince = chip ? now : 0
-    drag.bankArmed = false
+    drag.bankChip = hitBankChip(doc, drag.lastX, drag.lastY)
+    if (!drag.bankSince) drag.bankSince = now
+    drag.bankArmed = (now - drag.bankSince) >= v162Constants().BANK_DWELL_MS
   }
 
   function dockDropKind(doc, x, y) {
     const dock = doc.getElementById('Dock')
     if (!dock || dock.classList.contains('dock-hidden')) return 'none'
-    if (hitBankChip(doc, x, y)) return 'bank'
     const rect = dock.getBoundingClientRect()
     if (rect.width < 8 || rect.height < 8) return 'none'
+    const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+    if (inside || hitBankChip(doc, x, y)) return 'bank'
     const slack = 28
     if (x >= rect.left - slack && x <= rect.right + slack && y >= rect.top - slack && y <= rect.bottom + slack) return 'near'
     return 'none'

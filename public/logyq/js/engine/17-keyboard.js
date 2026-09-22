@@ -185,17 +185,22 @@ if (!e.ctrlKey && !e.metaKey) {
       if (parents.size === 1) parentToFocus = [...parents][0];
     }
 
-    // Do the action(s)
-    if (e.shiftKey) {
-      for (const uid of top) {
-        const h = state.root?.descendants().find(n => n.data && n.data._uid === uid);
-        if (h) sendNodeToWordBank_abandon(h);
+    // Do the action(s). D is an explicit key, not a long-press.
+    window.__logyqExplicitBankCommit = true;
+    try {
+      if (e.shiftKey) {
+        for (const uid of top) {
+          const h = state.root?.descendants().find(n => n.data && n.data._uid === uid);
+          if (h) sendNodeToWordBank_abandon(h);
+        }
+      } else {
+        for (const uid of top) {
+          const h = state.root?.descendants().find(n => n.data && n.data._uid === uid);
+          if (h) sendSubtreeToWordBank(h);
+        }
       }
-    } else {
-      for (const uid of top) {
-        const h = state.root?.descendants().find(n => n.data && n.data._uid === uid);
-        if (h) sendSubtreeToWordBank(h);
-      }
+    } finally {
+      window.__logyqExplicitBankCommit = false;
     }
 
     // Selection/focus: parent of what we just dropped

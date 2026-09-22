@@ -209,7 +209,7 @@
         body>header{display:none!important}
         svg#canvas{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;touch-action:none;overflow:visible;z-index:0}
         #trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
-        #Dock{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));padding:0 4px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
+        #Dock{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));padding:0 4px;min-height:48px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
         #Dock.dock-left{top:54px;bottom:max(8px,env(safe-area-inset-bottom));left:8px;right:auto;width:min(220px,72vw);padding:8px}
         #Toast{bottom:72px;max-width:calc(100vw - 36px);text-align:center}
         #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px);overflow:hidden;flex-wrap:nowrap}
@@ -1237,23 +1237,25 @@
   }
 
   function armBankHover(win, drag, dockKind, doc) {
-    const chip = dockKind === 'bank' ? hitBankChip(doc, drag.lastX, drag.lastY) : null
     const now = win.performance?.now?.() || Date.now()
-    if (chip && chip === drag.bankChip) {
-      drag.bankArmed = (now - drag.bankSince) >= v162Constants().BANK_DWELL_MS
+    if (dockKind !== 'bank') {
+      drag.bankChip = null
+      drag.bankSince = 0
+      drag.bankArmed = false
       return
     }
-    drag.bankChip = chip
-    drag.bankSince = chip ? now : 0
-    drag.bankArmed = false
+    drag.bankChip = hitBankChip(doc, drag.lastX, drag.lastY)
+    if (!drag.bankSince) drag.bankSince = now
+    drag.bankArmed = (now - drag.bankSince) >= v162Constants().BANK_DWELL_MS
   }
 
   function dockDropKind(doc, x, y) {
     const dock = doc.getElementById('Dock')
     if (!dock || dock.classList.contains('dock-hidden')) return 'none'
-    if (hitBankChip(doc, x, y)) return 'bank'
     const rect = dock.getBoundingClientRect()
     if (rect.width < 8 || rect.height < 8) return 'none'
+    const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+    if (inside || hitBankChip(doc, x, y)) return 'bank'
     const slack = 28
     if (x >= rect.left - slack && x <= rect.right + slack && y >= rect.top - slack && y <= rect.bottom + slack) return 'near'
     return 'none'
