@@ -2081,15 +2081,20 @@
     wash.setAttribute('fill', heat.wash)
     wash.setAttribute('fill-opacity', String(heat.washOpacity))
     wash.style.animation = 'none'
+    wash.style.filter = 'none'
+    // Inline stroke wins over `.node rect`, which would otherwise keep a full white ring.
     if (outline) {
       wash.setAttribute('stroke', heat.stroke)
-      wash.setAttribute('stroke-width', '3.5')
+      wash.style.stroke = heat.stroke
+      wash.style.strokeWidth = '3.5px'
       wash.style.strokeDasharray = 'none'
       wash.style.vectorEffect = 'non-scaling-stroke'
     } else {
       wash.setAttribute('stroke', 'none')
-      wash.style.strokeDasharray = ''
-      wash.style.vectorEffect = ''
+      wash.style.stroke = 'none'
+      wash.style.strokeWidth = '0'
+      wash.style.strokeDasharray = 'none'
+      wash.style.vectorEffect = 'none'
     }
     node.dataset.smiteHeat = '1'
   }

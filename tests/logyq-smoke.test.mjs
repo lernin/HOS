@@ -2350,9 +2350,14 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     const parts = clock.getAttribute('stroke-dasharray').trim().split(/[\s,]+/).map(Number)
     const total = clock.getTotalLength()
     const paths = Array.from(document.querySelectorAll('path.logyq-smite-clock'))
+    const stroked = Array.from(node.children).filter((el) => {
+      const paint = getComputedStyle(el).stroke
+      return paint && paint !== 'none'
+    }).map((el) => el.getAttribute('class') || el.tagName)
     return {
       paths: paths.length,
       onNode: node.querySelectorAll('path.logyq-smite-clock').length,
+      stroked,
       pathLength: clock.hasAttribute('pathLength'),
       animation: style.animationName,
       vector: style.vectorEffect,
@@ -2364,6 +2369,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   })
   assert.equal(oneRing.paths, 1, 'one mercy stroke on the doomed root')
   assert.equal(oneRing.onNode, 1)
+  assert.deepEqual(oneRing.stroked, ['logyq-smite-clock logyq-smite-red'])
   assert.equal(oneRing.pathLength, false)
   assert.equal(oneRing.animation, 'none')
   assert.equal(oneRing.vector, 'non-scaling-stroke', 'the mercy line stays the crisp screen-pixel stroke')

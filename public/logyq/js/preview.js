@@ -239,8 +239,8 @@
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
         body.logyq-mobile-v162 svg#canvas g.node,body.logyq-mobile-v162 svg#canvas g.node *{pointer-events:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash,body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash,body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important;filter:none!important}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{stroke:none;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red,body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:none}
@@ -2733,15 +2733,20 @@
     wash.setAttribute('fill', heat.wash)
     wash.setAttribute('fill-opacity', String(heat.washOpacity))
     wash.style.animation = 'none'
+    wash.style.filter = 'none'
+    // Inline stroke wins over `.node rect`, which would otherwise keep a full white ring.
     if (outline) {
       wash.setAttribute('stroke', heat.stroke)
-      wash.setAttribute('stroke-width', '3.5')
+      wash.style.stroke = heat.stroke
+      wash.style.strokeWidth = '3.5px'
       wash.style.strokeDasharray = 'none'
       wash.style.vectorEffect = 'non-scaling-stroke'
     } else {
       wash.setAttribute('stroke', 'none')
-      wash.style.strokeDasharray = ''
-      wash.style.vectorEffect = ''
+      wash.style.stroke = 'none'
+      wash.style.strokeWidth = '0'
+      wash.style.strokeDasharray = 'none'
+      wash.style.vectorEffect = 'none'
     }
     node.dataset.smiteHeat = '1'
   }
