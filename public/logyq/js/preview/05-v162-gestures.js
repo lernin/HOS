@@ -339,6 +339,32 @@
     return nominated[0]
   }
 
+  // Parent is master. Red re-arms every remaining ticket as amber and the
+  // caller restarts the 3s hold. Any other state cancels the whole cast.
+  function smiteParentCommand(marks, castUid, tone) {
+    const current = smiteNominatedTone(marks, castUid, tone)
+    if (current !== 'red') return { action: 'cancel', entries: [] }
+    const entries = smiteTicketEntries(marks).map(([uid, mark]) => (
+      mark === 'red' || mark === 'amber' ? [uid, 'amber'] : [uid, mark]
+    ))
+    return { action: 'rearm', entries }
+  }
+
+  // A child tap drops that one ticket. The cast ends only when none remain.
+  function smiteChildCommand(marks, uid) {
+    const entries = smiteTicketEntries(marks).filter(([id]) => id !== uid)
+    const live = entries.some(([, mark]) => mark === 'red' || mark === 'amber')
+    return { action: live ? 'drop' : 'cancel', entries }
+  }
+
+  function smiteTicketEntries(marks) {
+    const out = []
+    if (!marks) return out
+    if (typeof marks.forEach === 'function') marks.forEach((mark, uid) => out.push([uid, mark]))
+    else Object.keys(marks).forEach((uid) => out.push([uid, marks[uid]]))
+    return out
+  }
+
   // Full residue, then a soft ease-out. 0 means the scar is gone.
   function smiteScarOpacity(ageMs, holdMs = 2800, fadeMs = 7200) {
     const age = Math.max(0, Number(ageMs) || 0)
@@ -1951,16 +1977,36 @@
     }
     if (Math.hypot(dx, dy) >= v162Constants().TAP_MOVE) return false
     if (!pointer.uid) return false
-    const mercy = live.find((item) => item.marks.has(pointer.uid))
+    const asParent = live.find((item) => item.castUid === pointer.uid)
+    const mercy = asParent || live.find((item) => item.marks.has(pointer.uid))
     if (!mercy) return false
-    const treeRoot = bridge.core?.state?.root?.data?._uid
-    const current = mercy.marks.get(pointer.uid)
-    const next = smiteNextMark(current, pointer.uid === treeRoot)
-    if (next === current) return true
-    mercy.marks.set(pointer.uid, next)
-    mercy.remaining = smiteRefillMs(mercy.remaining, SMITE_REFILL_MS, SMITE_MAX_MS)
+    const now = win.performance?.now?.() || Date.now()
+    const tone = mercy.direction === 'left' ? 'amber' : 'red'
+    if (mercy.castUid === pointer.uid) {
+      const command = smiteParentCommand(mercy.marks, mercy.castUid, tone)
+      if (command.action === 'cancel') {
+        smiteDropMercy(smite, mercy)
+      } else {
+        smiteApplyEntries(mercy.marks, command.entries)
+        mercy.remaining = SMITE_START_MS
+        mercy.lastTick = now
+      }
+    } else {
+      const command = smiteChildCommand(mercy.marks, pointer.uid)
+      if (command.action === 'cancel') smiteDropMercy(smite, mercy)
+      else smiteApplyEntries(mercy.marks, command.entries)
+    }
     smiteRefresh(doc, smite)
+    smiteEnsureTick(doc, win, smite)
     return true
+  }
+
+  function smiteApplyEntries(marks, entries) {
+    const keep = new Set(entries.map(([uid]) => uid))
+    for (const uid of [...marks.keys()]) {
+      if (!keep.has(uid)) marks.delete(uid)
+    }
+    for (const [uid, mark] of entries) marks.set(uid, mark)
   }
 
   function commitSmite(doc, win, smite, mercy = smite.mercy) {

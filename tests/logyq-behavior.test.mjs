@@ -1497,7 +1497,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteParentCommand, smiteChildCommand, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1605,6 +1605,15 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.equal(smite.smiteNominatedTone(new Map([['a', 'amber'], ['a1', 'amber']]), 'a', 'red'), 'amber')
   assert.equal(smite.smiteNominatedTone(new Map([['a', 'normal'], ['a1', 'amber']]), 'a', 'red'), 'amber')
   assert.equal(smite.smiteNominatedTone(new Map([['a', 'normal']]), 'a', 'red'), null)
+  const rearm = smite.smiteParentCommand(new Map([['a', 'red'], ['a1', 'red'], ['blank', 'red']]), 'a', 'red')
+  assert.equal(rearm.action, 'rearm')
+  assert.deepEqual(rearm.entries.map(([, mark]) => mark), ['amber', 'amber', 'amber'])
+  assert.equal(smite.smiteParentCommand(new Map(rearm.entries), 'a', 'red').action, 'cancel')
+  assert.equal(smite.smiteParentCommand(new Map([['a1', 'amber'], ['blank', 'amber']]), 'a', 'red').action, 'cancel')
+  const dropped = smite.smiteChildCommand(new Map([['a', 'red'], ['a1', 'red'], ['blank', 'red']]), 'a1')
+  assert.equal(dropped.action, 'drop')
+  assert.deepEqual(dropped.entries, [['a', 'red'], ['blank', 'red']])
+  assert.equal(smite.smiteChildCommand(new Map([['blank', 'red']]), 'blank').action, 'cancel')
 
   const tree = smiteSampleTree()
   assert.deepEqual(smite.smiteClockRoots(tree, { r: 'red', a: 'red', a1: 'red' }), ['r'])
