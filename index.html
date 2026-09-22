@@ -95,6 +95,28 @@
         window.addEventListener('popstate', () => setTimeout(addLogyqCard, 0));
         setTimeout(addLogyqCard, 0);
       })();
+
+      // Timer is a standalone stroke experiment. Sibling Lab card only.
+      (() => {
+        const addTimerCard = () => {
+          const grid = document.querySelector('.experience-grid');
+          if (!grid || document.getElementById('timer-hub-card')) return;
+
+          const card = document.createElement('article');
+          card.className = 'experience-card';
+          card.id = 'timer-hub-card';
+          card.innerHTML = '<span class="experience-icon">T</span><span class="experience-copy"><strong>Timer</strong><small>One stroke around a card. Tap to run a single counter-clockwise loop from 12.</small></span><button class="experience-go" type="button">Go</button>';
+          card.querySelector('button')?.addEventListener('click', () => { window.location.href = '/timer/'; });
+
+          const logyqCard = document.getElementById('logyq-hub-card');
+          if (logyqCard) logyqCard.after(card); else grid.append(card);
+        };
+
+        const root = document.getElementById('root');
+        if (root) new MutationObserver(addTimerCard).observe(root, { childList: true, subtree: true });
+        window.addEventListener('popstate', () => setTimeout(addTimerCard, 0));
+        setTimeout(addTimerCard, 0);
+      })();
     </script>
   </body>
 </html>
