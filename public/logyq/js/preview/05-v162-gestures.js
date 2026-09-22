@@ -2180,7 +2180,7 @@
       clock.setAttribute('stroke', heat.stroke)
       clock.removeAttribute('pathLength')
       clock.style.animation = 'none'
-      clock.style.vectorEffect = 'none'
+      clock.style.vectorEffect = 'non-scaling-stroke'
       let length = 0
       try { length = clock.getTotalLength() } catch (_error) { length = 0 }
       if (!(length > 0)) length = smiteClockLength(w, h, rx, ry)

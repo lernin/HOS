@@ -1679,7 +1679,7 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   const clock = styles.slice(styles.indexOf('path.logyq-smite-clock'), styles.indexOf('.logyq-smite-scar'))
   assert.doesNotMatch(clock, /#22c55e/)
   assert.doesNotMatch(clock, /stroke-dasharray:\s*5\s+4/)
-  assert.doesNotMatch(clock, /vector-effect:\s*non-scaling-stroke/)
+  assert.match(clock, /vector-effect:\s*non-scaling-stroke/)
   assert.match(clock, /animation:\s*none/)
   assert.doesNotMatch(v162, /Sent subtree to Word Dock/)
   assert.doesNotMatch(v162, /setAttribute\(['"]pathLength/)
