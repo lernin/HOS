@@ -628,7 +628,7 @@ test('addSiblingRightOf on the root falls back to addChildOf', () => {
 })
 
 test('left sibling and insert-parent stay calm when noEdit is set', () => {
-  const { logyq, addSiblingLeftOf, insertParentAbove } = loadTreeOps()
+  const { logyq, history, addSiblingLeftOf, insertParentAbove } = loadTreeOps()
   const tree = { name: 'root', children: [{ name: 'a' }, { name: 'c' }] }
   logyq.utils.assignUids(tree)
   logyq.state.root = fakeHierarchy(tree)
@@ -644,7 +644,16 @@ test('left sibling and insert-parent stay calm when noEdit is set', () => {
   assert.equal(tree.children[0].children[0].name, 'a')
   assert.equal(logyq.state.selectedUid, parentUid)
   assert.equal(logyq._opened, undefined)
-  assert.equal(insertParentAbove(tree._uid, '', { noEdit: true }), null)
+
+  const wrappedUid = insertParentAbove(tree._uid, '', { noEdit: true })
+  assert.equal(logyq.state.root.data._uid, wrappedUid)
+  assert.equal(logyq.state.root.data.name, '')
+  assert.equal(logyq.state.root.data.children[0].name, 'root')
+  assert.equal(logyq.state.root.data.children[0].children[0].name, '')
+  assert.equal(logyq.state.selectedUid, wrappedUid)
+  assert.equal(logyq._opened, undefined)
+  assert.equal(history.at(-1).type, 'replace-root')
+  assert.equal(history.at(-1).prev.name, 'root')
 })
 
 test('create inserts go through requestCreateLayout instead of overlapping layoutAndRender', () => {
@@ -741,7 +750,7 @@ function sourceMix() {
   return readFileSync(new URL('../public/logyq/js/engine/15-mix-and-context.js', import.meta.url), 'utf8')
 }
 
-test('randomizeTree keeps the root label, records randomize history, and clears the bank only when asked', () => {
+test('randomizeTree shuffles the root with the other cards and clears the bank only when asked', () => {
   const { logyq, history, toasts, randomizeTree, rendered } = loadMix()
   randomizeTree(false)
   assert.equal(logyq.state.root, null)
@@ -751,8 +760,17 @@ test('randomizeTree keeps the root label, records randomize history, and clears 
   logyq.utils.assignUids(tree)
   logyq.state.root = fakeHierarchy(tree)
   logyq.state.wordBank = ['C']
-  randomizeTree(false)
-  assert.equal(logyq.state.root.data.name, 'Root')
+  const random = Math.random
+  Math.random = () => 0
+  try { randomizeTree(false) } finally { Math.random = random }
+  const names = []
+  const walk = (node) => {
+    names.push(node.name)
+    for (const child of node.children || []) walk(child)
+  }
+  walk(logyq.state.root.data)
+  assert.deepEqual(names.slice().sort(), ['A', 'B', 'Root'])
+  assert.notEqual(logyq.state.root.data.name, 'Root')
   assert.deepEqual(logyq.state.wordBank, ['C'])
   assert.equal(history[0].type, 'randomize')
   assert.deepEqual(history[0].nextBank, ['C'])
@@ -760,10 +778,16 @@ test('randomizeTree keeps the root label, records randomize history, and clears 
   assert.equal(rendered(), 1)
 
   randomizeTree(true)
-  assert.equal(logyq.state.root.data.name, 'Root')
   assert.deepEqual(logyq.state.wordBank, [])
   assert.deepEqual(history.at(-1).nextBank, [])
   assert.equal(logyq.state.repositionMode, 'mix')
+  const mixed = []
+  const walkMixed = (node) => {
+    mixed.push(node.name)
+    for (const child of node.children || []) walkMixed(child)
+  }
+  walkMixed(logyq.state.root.data)
+  assert.deepEqual(mixed.slice().sort(), ['A', 'B', 'C', 'Root'])
 })
 
 test('randomizeTree and snapshot keep each card color', () => {
@@ -788,8 +812,18 @@ test('randomizeTree and snapshot keep each card color', () => {
   }
   walk(logyq.state.root.data)
   assert.deepEqual(bag.sort(), ['A:#fde68a', 'B:#bfdbfe', 'C:', 'Root:#fecaca'].sort())
-  assert.equal(logyq.state.root.data.name, 'Root')
-  assert.equal(logyq.state.root.data.color, '#fecaca')
+  const rootCard = (() => {
+    const find = (node) => {
+      if (node.name === 'Root') return node
+      for (const child of node.children || []) {
+        const hit = find(child)
+        if (hit) return hit
+      }
+      return null
+    }
+    return find(logyq.state.root.data)
+  })()
+  assert.equal(rootCard.color, '#fecaca')
 
   const snap = logyq.utils.deepClone(logyq.state.root.data)
   const again = []
@@ -814,10 +848,12 @@ test('randomizeTree mixes blank painted cards and keeps their colors', () => {
   }
   logyq.utils.assignUids(tree)
   logyq.state.root = fakeHierarchy(tree)
-  randomizeTree(false)
+  const random = Math.random
+  Math.random = () => 0
+  try { randomizeTree(false) } finally { Math.random = random }
   assert.deepEqual(toasts, [])
   assert.equal(logyq.state.root.data.name, '')
-  assert.equal(logyq.state.root.data.color, '#fde68a')
+  assert.notEqual(logyq.state.root.data.color, '#fde68a')
   const colors = []
   const walk = (node) => {
     colors.push(node.color || '')

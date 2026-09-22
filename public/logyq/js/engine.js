@@ -2980,7 +2980,19 @@ function insertParentAbove(uid, newName = '', opts = {}){
   const { state, utils } = logyq
   if (!state.root || !uid) return null;
   const h = state.root.descendants().find(n => n?.data?._uid === uid);
-  if (!h?.parent) return null;
+  if (!h) return null;
+  // Flick up on the root has no parent slot to splice into. Wrap the
+  // whole tree: a new card becomes root and the current root is its child.
+  if (!h.parent) {
+    if (h.data !== state.root.data) return null;
+    const prevTree = utils.deepClone(state.root.data);
+    logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
+    const newParent = { name: newName, children: [h.data] };
+    utils.assignUids(newParent);
+    state.root = d3.hierarchy(newParent);
+    utils.assignIds(state.root);
+    return commitCreatedNode(newParent._uid, { noEdit, select, layout: opts.layout !== false });
+  }
 
   const parentData = h.parent.data;
   parentData.children = parentData.children || [];
@@ -4850,24 +4862,24 @@ function randomizeTree(includeBank){
     // A card in the tree is mixable even when its label is "". Paint on a
     // blank card has to travel with that card; name length is not presence.
     const treeNodes = state.root ? state.root.descendants() : [];
-    const pool = treeNodes.slice(1).map((n) => mixCard(cardLabel(n.data), n.data));
+    // The root card is in the pool with everyone else. It used to be copied
+    // out first, so Mix froze it on top and only shuffled descendants.
+    const pool = treeNodes.map((n) => mixCard(cardLabel(n.data), n.data));
     if (includeBank && prevBank.length) {
       for (const word of prevBank) {
         if (word) pool.push(mixCard(word, null));
       }
     }
-    const root = state.root
-      ? mixCard(cardLabel(state.root.data), state.root.data)
-      : pool.shift();
-    if (!root){ logyq.selection.showToast("Nothing to mix"); return; }
+    if (!pool.length){ logyq.selection.showToast("Nothing to mix"); return; }
     for (let i = pool.length - 1; i > 0; i--){
       const j = (Math.random() * (i + 1)) | 0;
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
+    const root = mixCard(pool[0].name, pool[0]);
     function ri(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
     root.children = [];
-    let q = [{ node: root, cap: ri(1,3), used: 0 }], k = 0;
+    let q = [{ node: root, cap: ri(1,3), used: 0 }], k = 1;
     while (k < pool.length){
       if (!q.length) q.push({ node: root, cap: ri(1,3), used: 0 });
       const p = q[0];
@@ -4895,7 +4907,6 @@ function randomizeTree(includeBank){
     utils.assignIds(state.root);
     logyq.selection.setSelected(null);
 
-    // Remix instantly with stable root
     state.repositionMode = "mix"; /* [patch] mix-reposition-activate */
     logyq.treeManager.layoutAndRender(false);
 

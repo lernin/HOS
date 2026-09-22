@@ -77,7 +77,19 @@ function insertParentAbove(uid, newName = '', opts = {}){
   const { state, utils } = logyq
   if (!state.root || !uid) return null;
   const h = state.root.descendants().find(n => n?.data?._uid === uid);
-  if (!h?.parent) return null;
+  if (!h) return null;
+  // Flick up on the root has no parent slot to splice into. Wrap the
+  // whole tree: a new card becomes root and the current root is its child.
+  if (!h.parent) {
+    if (h.data !== state.root.data) return null;
+    const prevTree = utils.deepClone(state.root.data);
+    logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
+    const newParent = { name: newName, children: [h.data] };
+    utils.assignUids(newParent);
+    state.root = d3.hierarchy(newParent);
+    utils.assignIds(state.root);
+    return commitCreatedNode(newParent._uid, { noEdit, select, layout: opts.layout !== false });
+  }
 
   const parentData = h.parent.data;
   parentData.children = parentData.children || [];
