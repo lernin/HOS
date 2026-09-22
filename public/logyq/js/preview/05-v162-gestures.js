@@ -269,6 +269,41 @@
     return roots
   }
 
+  function smiteMoodColor(mark) {
+    return mark === 'amber' ? '#ffa100' : '#ff0000'
+  }
+
+  // Connectors whose target is strictly below the clock parent. The edge
+  // into that parent, and anything above it, keeps the normal link color.
+  function smiteMoodTargets(tree, castUid) {
+    const out = []
+    if (!tree || !castUid) return out
+    const uidOf = (node) => node?._uid || node?.uid || node?.data?._uid || null
+    const kidsOf = (node) => (
+      Array.isArray(node?.children) ? node.children
+        : (Array.isArray(node?.data?.children) ? node.data.children : [])
+    )
+    let found = null
+    const find = (node) => {
+      if (found || !node || typeof node !== 'object') return
+      if (uidOf(node) === castUid) {
+        found = node
+        return
+      }
+      for (const kid of kidsOf(node)) find(kid)
+    }
+    const collect = (node) => {
+      for (const kid of kidsOf(node)) {
+        const uid = uidOf(kid)
+        if (uid) out.push(uid)
+        collect(kid)
+      }
+    }
+    find(tree)
+    if (found) collect(found)
+    return out
+  }
+
   // Live windows are branches of the one open map, not separate documents.
   // Sibling branches that share no cards each keep a timer. A cast that
   // touches a card already in a live branch is ignored.
@@ -2165,7 +2200,7 @@
   function smitePaintEdge(link, heat) {
     try { link.ownerDocument?.defaultView?.d3?.select(link).interrupt() } catch (_error) {}
     link.dataset.smiteEdge = '1'
-    link.style.stroke = heat.stroke
+    link.style.setProperty('stroke', heat.stroke, 'important')
     link.style.strokeWidth = '3.5px'
     link.style.opacity = '1'
     link.style.strokeDasharray = 'none'
@@ -2316,7 +2351,7 @@
       // The clock hides the card border so that white stroke is not a second ring.
       smitePaintFaceStroke(face)
       node.dataset.smiteClock = '1'
-      const color = host.mark === 'amber' ? '#ffa100' : '#ff0000'
+      const color = smiteMoodColor(host.mark)
       const d = smiteClockPath(x, y, w, h, rx, ry)
       if (!d) {
         clock?.remove()
@@ -2354,7 +2389,19 @@
       clock.style.removeProperty('stroke-dasharray')
       clock.style.removeProperty('stroke-dashoffset')
     })
-    doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => smiteRestoreEdge(link))
+    const mood = new Map()
+    for (const [castUid, host] of clockHosts) {
+      const color = smiteMoodColor(host.mark)
+      for (const uid of smiteMoodTargets(tree, castUid)) {
+        if (!mood.has(uid)) mood.set(uid, color)
+      }
+    }
+    doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => {
+      const uid = link.__data__?.target?.data?._uid || link.__data__?.target?.data?.uid || null
+      const color = uid ? mood.get(uid) : null
+      if (color) smitePaintEdge(link, { stroke: color })
+      else smiteRestoreEdge(link)
+    })
   }
 
   function smiteScarPoint(doc, win, uid) {

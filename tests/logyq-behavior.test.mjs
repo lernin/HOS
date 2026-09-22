@@ -1497,7 +1497,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteParentCommand, smiteChildCommand, smiteChildNextMark, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteParentCommand, smiteChildCommand, smiteChildNextMark, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1639,6 +1639,12 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.deepEqual(smite.smiteClockRoots(tree, { a: 'red' }), ['a'])
   assert.deepEqual(smite.smiteClockRoots(tree, { r: 'normal', a: 'red' }), ['a'])
   assert.deepEqual(smite.smiteClockRoots(tree, { a: 'amber', a1: 'amber', blank: 'normal' }), ['a'])
+  assert.deepEqual(smite.smiteMoodTargets(tree, 'a').slice().sort(), ['a1', 'blank'])
+  assert.deepEqual(smite.smiteMoodTargets(tree, 'r').slice().sort(), ['a', 'a1', 'b', 'blank'])
+  assert.deepEqual(smite.smiteMoodTargets(tree, 'b'), [])
+  assert.equal(smite.smiteMoodTargets(tree, 'a').includes('a'), false)
+  assert.equal(smite.smiteMoodColor('red'), '#ff0000')
+  assert.equal(smite.smiteMoodColor('amber'), '#ffa100')
   assert.equal(smite.smiteCastOverlaps([], ['a']), false)
   assert.equal(smite.smiteCastOverlaps([{ marks: new Map([['a', 'red'], ['a1', 'red']]) }], ['b']), false)
   assert.equal(smite.smiteCastOverlaps([{ marks: { a: 'red', a1: 'amber' } }], ['a1']), true)
