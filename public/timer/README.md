@@ -1,10 +1,20 @@
 # Timer
 
-A Lab experiment with one card. Tap it and a single stroke drains once around the rounded rectangle, then clears.
+A Lab experiment with one card. Tap it to arm red, tap again to arm amber, tap again to turn the stroke off. Each arm is a full ring, a 3 second hold, then one 12 second drain.
 
 Open it from **The Lab** hub → **Timer** → **Go**, or go directly to `/timer/`.
 
 Smite is not part of this page.
+
+## Tap cycle
+
+One clock per arm: `elapsed` since that tap.
+
+- For the first 3 seconds, progress stays `1` (the ring is full).
+- After that, progress is the drain still left divided by 12 seconds.
+- At 0 the stroke clears and the card is idle again.
+- Red is `#ff0000`. Amber is `#ffa100`.
+- Switching to amber restarts that clock from a full ring. It does not continue the red drain.
 
 ## Path direction
 
@@ -28,4 +38,5 @@ The visible ink is the **suffix** of that path (the part that still ends at 12).
 - A full ring is a single dash equal to `pathLength` and offset `0` — still one pattern, not two.
 - The SVG `pathLength` attribute is set **once** to the measured length and never animated. Dash values use that same length.
 - There is no CSS animation, no `animation-iteration`, and no `vector-effect`.
-- `requestAnimationFrame` stops at 0 and clears the stroke. A tap during the run is ignored, so a second timer cannot stack. The next tap starts over from a full ring only after the stroke is gone.
+- `requestAnimationFrame` is the only clock. There is no CSS animation duration and no CSS pixel dash. At 0 it clears the stroke and returns to idle.
+- A tap while red arms amber from a full ring and starts the 3 second hold over. A tap while amber clears the stroke. The next tap arms red again. The hold is never skipped.

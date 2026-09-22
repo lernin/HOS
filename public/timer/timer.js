@@ -7,8 +7,16 @@
 //
 // One lap: `timerDash` builds a single pattern whose dash + gap equals
 // `pathLength` exactly. Progress is clamped to 0..1. Nothing repeats it.
+//
+// Tap cycle: idle → red → amber → idle. Each arm paints a full ring, holds
+// it for 3s, then drains that same ring for 12s. A retarget starts the hold
+// over. There is no CSS duration.
 
-export const TIMER_MS = 12000
+export const TIMER_HOLD_MS = 3000
+export const TIMER_DRAIN_MS = 12000
+export const TIMER_MS = TIMER_DRAIN_MS
+export const TIMER_RED = '#ff0000'
+export const TIMER_AMBER = '#ffa100'
 
 const SVG = 'http://www.w3.org/2000/svg'
 
@@ -68,6 +76,29 @@ export function timerDash(progress, pathLength) {
   return { array: `${visible} ${eaten}`, offset: visible }
 }
 
+// 1 while the hold is still running, then the drain still left / 12s.
+// At 0 the stroke is empty and the arm is finished.
+export function timerProgress(elapsedMs, holdMs = TIMER_HOLD_MS, drainMs = TIMER_DRAIN_MS) {
+  const elapsed = Math.max(0, Number(elapsedMs) || 0)
+  const hold = Number(holdMs) > 0 ? Number(holdMs) : TIMER_HOLD_MS
+  const drain = Number(drainMs) > 0 ? Number(drainMs) : TIMER_DRAIN_MS
+  if (elapsed <= hold) return 1
+  const into = elapsed - hold
+  if (into >= drain) return 0
+  return 1 - into / drain
+}
+
+// idle arms red, red retargets to amber, amber shuts off.
+export function timerNextFate(fate) {
+  if (fate === 'red') return 'amber'
+  if (fate === 'amber') return 'idle'
+  return 'red'
+}
+
+export function timerColor(fate) {
+  return fate === 'amber' ? TIMER_AMBER : TIMER_RED
+}
+
 // True when distance `d` along the path is inside the one visible dash.
 export function timerStrokeOn(distance, progress, pathLength) {
   const total = Math.max(0, Number(pathLength) || 0)
@@ -94,7 +125,8 @@ export function timerStrokeOn(distance, progress, pathLength) {
 
 export function mountTimer(svg, options = {}) {
   const box = options.box || { x: 18, y: 18, w: 244, h: 148, rx: 28 }
-  const duration = options.duration || TIMER_MS
+  const holdMs = options.holdMs || TIMER_HOLD_MS
+  const drainMs = options.drainMs || TIMER_DRAIN_MS
   const path = document.createElementNS(SVG, 'path')
   path.id = 'timer-stroke'
   path.setAttribute('d', timerPath(box.x, box.y, box.w, box.h, box.rx, box.rx))
@@ -104,6 +136,7 @@ export function mountTimer(svg, options = {}) {
   path.setAttribute('stroke-linecap', 'butt')
   path.setAttribute('stroke-linejoin', 'round')
   path.style.animation = 'none'
+  path.style.transition = 'none'
   path.style.filter = 'none'
   path.style.stroke = 'none'
   svg.appendChild(path)
@@ -113,55 +146,93 @@ export function mountTimer(svg, options = {}) {
   const length = path.getTotalLength()
   path.setAttribute('pathLength', String(length))
 
-  let running = false
+  let fate = 'idle'
+  let progress = 0
+  let token = 0
   let raf = 0
+  svg.dataset.fate = 'idle'
 
-  function paint(progress) {
-    const dash = timerDash(progress, length)
-    path.setAttribute('stroke', '#f3d48a')
-    path.style.stroke = '#f3d48a'
+  function paint(nextProgress, nextFate) {
+    const color = timerColor(nextFate)
+    const dash = timerDash(nextProgress, length)
+    path.setAttribute('stroke', color)
+    path.style.stroke = color
+    path.style.animation = 'none'
+    path.style.transition = 'none'
+    // Dash stays on the SVG attributes, in this one path length.
+    // A CSS pixel length would finish the stroke before the 12s drain.
     path.setAttribute('stroke-dasharray', dash.array)
     path.setAttribute('stroke-dashoffset', String(dash.offset))
-    path.style.strokeDasharray = dash.array
-    path.style.strokeDashoffset = String(dash.offset)
+    path.style.removeProperty('stroke-dasharray')
+    path.style.removeProperty('stroke-dashoffset')
   }
 
   function clear() {
-    running = false
+    token += 1
+    fate = 'idle'
+    progress = 0
     if (raf) cancelAnimationFrame(raf)
     raf = 0
     path.setAttribute('stroke', 'none')
     path.style.stroke = 'none'
     path.setAttribute('stroke-dasharray', 'none')
     path.setAttribute('stroke-dashoffset', '0')
-    path.style.strokeDasharray = 'none'
-    path.style.strokeDashoffset = '0'
+    path.style.removeProperty('stroke-dasharray')
+    path.style.removeProperty('stroke-dashoffset')
     svg.classList.remove('is-running')
+    svg.dataset.fate = 'idle'
   }
 
-  function start() {
-    if (running) return
-    running = true
+  function arm(next) {
+    token += 1
+    const mine = token
+    if (raf) cancelAnimationFrame(raf)
+    raf = 0
+    fate = next
+    progress = 1
     svg.classList.add('is-running')
+    svg.dataset.fate = next
+    paint(1, next)
     const t0 = performance.now()
-    paint(1)
     const step = (now) => {
-      if (!running) return
-      const progress = 1 - (now - t0) / duration
-      if (progress <= 0) {
+      if (mine !== token) return
+      const nextProgress = timerProgress(now - t0, holdMs, drainMs)
+      progress = nextProgress
+      if (nextProgress <= 0) {
         clear()
         return
       }
-      paint(progress)
+      paint(nextProgress, next)
       raf = requestAnimationFrame(step)
     }
     raf = requestAnimationFrame(step)
   }
 
+  function tap() {
+    const next = timerNextFate(fate)
+    if (next === 'idle') clear()
+    else arm(next)
+  }
+
+  function start() {
+    if (fate !== 'idle') return
+    arm('red')
+  }
+
   svg.addEventListener('pointerdown', (event) => {
     event.preventDefault()
-    start()
+    tap()
   })
 
-  return { start, clear, path, length, paint }
+  return {
+    start,
+    tap,
+    clear,
+    arm,
+    path,
+    length,
+    paint,
+    get fate() { return fate },
+    get progress() { return progress },
+  }
 }

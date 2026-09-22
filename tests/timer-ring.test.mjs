@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { timerDash, timerPath, timerStrokeOn } from '../public/timer/timer.js'
+import { timerColor, timerDash, timerNextFate, timerPath, timerProgress, timerStrokeOn, TIMER_AMBER, TIMER_RED } from '../public/timer/timer.js'
 
 const d = timerPath(18, 18, 244, 148, 28, 28)
 
@@ -49,4 +49,26 @@ test('the ink is one suffix, so the tip travels counter-clockwise and cannot pai
   }
   assert.equal(timerStrokeOn(10, 0, length), false)
   assert.equal(timerStrokeOn(10, 1, length), true)
+})
+
+test('each arm holds a full ring for 3s, then drains for 12s', () => {
+  assert.equal(timerProgress(0), 1)
+  assert.equal(timerProgress(3000), 1)
+  assert.equal(timerProgress(2999), 1)
+  assert.equal(timerProgress(9000), 0.5)
+  assert.equal(timerProgress(15000), 0)
+  assert.equal(timerProgress(16000), 0)
+  const intoDrain = 3000 + 6000
+  assert.equal(timerProgress(intoDrain), 0.5)
+})
+
+test('taps cycle red, then amber, then off', () => {
+  assert.equal(timerNextFate('idle'), 'red')
+  assert.equal(timerNextFate('red'), 'amber')
+  assert.equal(timerNextFate('amber'), 'idle')
+  assert.equal(timerNextFate(undefined), 'red')
+  assert.equal(timerColor('red'), TIMER_RED)
+  assert.equal(timerColor('amber'), TIMER_AMBER)
+  assert.equal(TIMER_RED, '#ff0000')
+  assert.equal(TIMER_AMBER, '#ffa100')
 })

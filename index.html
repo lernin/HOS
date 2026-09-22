@@ -105,7 +105,7 @@
           const card = document.createElement('article');
           card.className = 'experience-card';
           card.id = 'timer-hub-card';
-          card.innerHTML = '<span class="experience-icon">T</span><span class="experience-copy"><strong>Timer</strong><small>One stroke around a card. Tap to run a single counter-clockwise loop from 12.</small></span><button class="experience-go" type="button">Go</button>';
+          card.innerHTML = '<span class="experience-icon">T</span><span class="experience-copy"><strong>Timer</strong><small>Tap for red, again for amber, again to turn it off. One counter-clockwise stroke from 12.</small></span><button class="experience-go" type="button">Go</button>';
           card.querySelector('button')?.addEventListener('click', () => { window.location.href = '/timer/'; });
 
           const logyqCard = document.getElementById('logyq-hub-card');
