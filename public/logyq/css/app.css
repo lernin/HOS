@@ -288,9 +288,34 @@ header {
 #logyq-chip-ghost{
   position: fixed;
   z-index: 4000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   pointer-events: none;
   touch-action: none;
-  box-shadow: 0 8px 20px rgba(15,23,42,.18);
+  transform: translate(-50%, calc(-100% - 36px));
+}
+#logyq-chip-ghost .chip{
+  opacity: 0.55;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, .22);
+}
+body.logyq-chip-drag .chip.is-lifting{
+  opacity: 0.35;
+}
+.chip-bank-all{
+  flex: 0 0 auto;
+  align-self: center;
+  min-height: 28px;
+  margin: 0;
+  padding: 2px 12px;
+  border: 1px dashed #94a3b8;
+  border-radius: 999px;
+  background: #fff;
+  color: #0f172a;
+  font: 700 13px/1 system-ui, sans-serif;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .chip.is-outlined{

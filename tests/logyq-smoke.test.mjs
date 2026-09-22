@@ -2735,6 +2735,12 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
   }
 
   async function centerCard(page, name) {
+    await page.waitForFunction((label) => {
+      const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.getBoundingClientRect()
+      return rect && rect.width > 20 && rect.height > 20
+    }, name)
+    await page.waitForTimeout(320)
     await page.evaluate((label) => {
       const state = window.LOGYQBridge.core.state
       state._lastMoat = Date.now()
@@ -2749,7 +2755,7 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
       state._lastMoat = Date.now()
       try { clearTimeout(window.__centerSoonT) } catch (_error) {}
     }, name)
-    await page.waitForFunction((label) => {
+    const placed = await page.waitForFunction((label) => {
       const svg = document.getElementById('canvas')
       const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === label)
       const rect = node?.getBoundingClientRect()
@@ -2758,8 +2764,13 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
       if (!rect || rect.width < 20) return false
       const cx = rect.left + rect.width / 2
       const cy = rect.top + rect.height / 2
+      window.__centerCard = { label, cx, cy, box: { t: box.top, b: box.bottom, l: box.left, r: box.right }, dockTop }
       return cx > box.left + 8 && cx < box.right - 8 && cy > box.top + 8 && cy < Math.min(box.bottom - 8, dockTop - 8)
-    }, name)
+    }, name, { timeout: 4000 }).then(() => true).catch(() => false)
+    if (!placed) {
+      const info = await page.evaluate(() => window.__centerCard)
+      throw new Error(`card ${name} stayed off the canvas ${JSON.stringify(info)}`)
+    }
   }
 
   async function chipPoint(page, text) {
@@ -2810,8 +2821,22 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
     await cdp.detach()
   }
 
-  async function touchDrag(page, from, to) {
-    await touchPath(page, [from, to])
+  async function touchDrag(page, from, to, sample) {
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from.x, y: from.y, id: 1 }] })
+    const steps = 8
+    for (let i = 1; i <= steps; i += 1) {
+      const x = from.x + ((to.x - from.x) * i) / steps
+      const y = from.y + ((to.y - from.y) * i) / steps
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y, id: 1 }],
+      })
+      await page.waitForTimeout(16)
+      if (sample && i === 4) await sample({ x, y })
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
   }
 
   async function mouseDrag(page, from, to) {
@@ -2827,12 +2852,36 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
   const phoneErrors = []
   phonePage.on('pageerror', (error) => phoneErrors.push(error.message))
   await openBankMap(phonePage)
+  assert.equal(await phonePage.locator('#logyq-bank-all').textContent(), 'All')
+  await phonePage.locator('#logyq-bank-all').tap()
+  assert.deepEqual(await phonePage.locator('#Dock .chip.is-outlined').allTextContents(), ['Pop', 'Stay'])
+  assert.equal(await phonePage.locator('#logyq-bank-all').textContent(), 'None')
+  await phonePage.locator('#logyq-bank-all').tap()
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').count(), 0)
+  assert.equal(await phonePage.locator('#logyq-bank-all').textContent(), 'All')
+
   const pop = await chipPoint(phonePage, 'Pop')
   assert.equal(pop.hitChip, true)
   assert.equal(pop.touchAction, 'none')
   assert.equal(pop.draggable, false)
   const cardA = await cardPoint(phonePage, 'A')
-  await touchDrag(phonePage, pop, cardA)
+  await touchDrag(phonePage, pop, cardA, async (point) => {
+    const ghost = await phonePage.evaluate(() => {
+      const stack = document.getElementById('logyq-chip-ghost')
+      const rect = stack?.getBoundingClientRect()
+      const chip = stack?.querySelector('.chip')
+      return {
+        text: chip?.textContent || '',
+        bottom: rect?.bottom ?? null,
+        opacity: chip ? getComputedStyle(chip).opacity : null,
+        lifting: document.querySelector('#Dock .chip.is-lifting')?.textContent || '',
+      }
+    })
+    assert.equal(ghost.text, 'Pop')
+    assert.equal(ghost.lifting, 'Pop')
+    assert.ok(Number(ghost.opacity) < 0.9)
+    assert.ok(ghost.bottom < point.y - 8)
+  })
   await phonePage.waitForFunction(() => {
     const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
     return parent?.children?.some((child) => child.data.name === 'Pop')
@@ -2848,9 +2897,11 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
 
   const beforeTap = await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name).sort())
   await phonePage.locator('#Dock .chip', { hasText: 'Stay' }).tap()
-  await phonePage.waitForTimeout(80)
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').textContent(), 'Stay')
   assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay'])
   assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name).sort()), beforeTap)
+  await phonePage.locator('#Dock .chip', { hasText: 'Stay' }).tap()
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').count(), 0)
 
   await phonePage.evaluate(() => window.LOGYQBridge.core.wordDock.addWords('Mint'))
   assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay', 'Mint'])
@@ -2894,16 +2945,27 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
   }, gap.parent)
   assert.ok(siblings.indexOf(gap.prev) < siblings.indexOf('Mint') && siblings.indexOf('Mint') < siblings.indexOf(gap.next))
 
-  await phonePage.evaluate(() => window.LOGYQBridge.core.wordDock.addWords('Over'))
-  const above = await phonePage.evaluate(() => {
-    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Root')
-    const rect = node.getBoundingClientRect()
-    return { x: rect.left + rect.width / 2, y: Math.max(56, rect.top - 28) }
+  await phonePage.evaluate(() => window.LOGYQBridge.core.wordDock.addWords('Miss'))
+  const miss = await phonePage.evaluate(() => {
+    const svg = document.getElementById('canvas')
+    const transform = window.d3.zoomTransform(svg)
+    const origin = svg.getBoundingClientRect()
+    const dockTop = document.getElementById('Dock').getBoundingClientRect().top
+    for (let y = origin.top + 64; y < dockTop - 16; y += 22) {
+      for (let x = origin.left + 10; x < origin.right - 10; x += 26) {
+        const [gx, gy] = transform.invert([x - origin.left, y - origin.top])
+        const drop = window.LOGYQBridge.core.detectors.pick({ x: gx, y: gy })
+        if (!drop || (drop.type !== 'node' && drop.type !== 'gap')) return { x, y }
+      }
+    }
+    return null
   })
-  await touchDrag(phonePage, await chipPoint(phonePage, 'Over'), above)
-  await phonePage.waitForFunction(() => window.LOGYQBridge.core.state.root.data.name === 'Over')
-  assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.children.some((node) => node.data.name === 'Root')), true)
-  assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Over')), false)
+  assert.ok(miss, 'empty canvas beside the tree is a miss')
+  const beforeMiss = await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.data.name)
+  await touchDrag(phonePage, await chipPoint(phonePage, 'Miss'), miss)
+  assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.data.name), beforeMiss)
+  assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Miss')), true)
+  assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'Miss')), false)
 
   await phonePage.evaluate(() => {
     window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, ['Bare'])
@@ -2913,6 +2975,38 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
   await touchDrag(phonePage, bare, { x: 180, y: 280 })
   await phonePage.waitForFunction(() => window.LOGYQBridge.core.state.root?.data?.name === 'Bare')
   assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), [])
+
+  await phonePage.evaluate(() => {
+    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, ['First', 'Second'])
+    window.LOGYQBridge.core.state.root = null
+  })
+  await phonePage.locator('#Dock .chip', { hasText: 'First' }).tap()
+  await phonePage.locator('#Dock .chip', { hasText: 'Second' }).tap()
+  assert.deepEqual(await phonePage.locator('#Dock .chip.is-outlined').allTextContents(), ['First', 'Second'])
+  await touchDrag(phonePage, await chipPoint(phonePage, 'Second'), { x: 180, y: 280 })
+  await phonePage.waitForFunction(() => window.LOGYQBridge.core.state.root?.data?.name === 'First')
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.children.map((node) => node.data.name)), ['Second'])
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), [])
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').count(), 0)
+
+  await phonePage.evaluate(() => {
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      color: '#2563eb',
+      children: [{ name: 'A' }],
+    }, ['Pop', 'Stay'])
+  })
+  await centerCard(phonePage, 'A')
+  await phonePage.locator('#Dock .chip', { hasText: 'Pop' }).tap()
+  await phonePage.locator('#Dock .chip', { hasText: 'Stay' }).tap()
+  await touchDrag(phonePage, await chipPoint(phonePage, 'Stay'), await cardPoint(phonePage, 'A'))
+  await phonePage.waitForFunction(() => {
+    const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
+    const names = parent?.children?.map((node) => node.data.name) || []
+    return names[0] === 'Pop' && names[1] === 'Stay'
+  })
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), [])
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').count(), 0)
   assert.equal(await phonePage.locator('#logyq-paint-btn').count(), 1)
   assert.equal(await phonePage.locator('[data-tool="mix"]').count(), 1)
   assert.deepEqual(phoneErrors, [])
@@ -2929,7 +3023,19 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
   assert.deepEqual(await desktopPage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Pop', 'Stay', 'Typed'])
   const desktopChip = await chipPoint(desktopPage, 'Pop')
   assert.equal(desktopChip.hitChip, true)
-  await mouseDrag(desktopPage, desktopChip, await cardPoint(desktopPage, 'A'))
+  await desktopPage.mouse.move(desktopChip.x, desktopChip.y)
+  await desktopPage.mouse.down()
+  const lifted = { x: desktopChip.x, y: Math.max(120, desktopChip.y - 160) }
+  await desktopPage.mouse.move(lifted.x, lifted.y, { steps: 8 })
+  const mouseGhost = await desktopPage.evaluate(() => {
+    const stack = document.getElementById('logyq-chip-ghost')
+    const rect = stack?.getBoundingClientRect()
+    return { text: stack?.querySelector('.chip')?.textContent || '', bottom: rect?.bottom ?? null }
+  })
+  assert.equal(mouseGhost.text, 'Pop')
+  assert.ok(mouseGhost.bottom < lifted.y - 8)
+  await desktopPage.mouse.move((await cardPoint(desktopPage, 'A')).x, (await cardPoint(desktopPage, 'A')).y, { steps: 8 })
+  await desktopPage.mouse.up()
   await desktopPage.waitForFunction(() => {
     const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
     return parent?.children?.some((child) => child.data.name === 'Pop')
