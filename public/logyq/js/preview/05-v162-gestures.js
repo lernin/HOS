@@ -171,6 +171,25 @@
     return (Math.PI * sum * (1 + (3 * h) / (10 + Math.sqrt(Math.max(0, 4 - 3 * h))))) / 4
   }
 
+  // Perimeter of the counter-clockwise outline, in the same user units as the path.
+  function smiteLineCorners(width, height, rx = 10, ry = 10) {
+    const { w, h, capX, capY } = smiteRoundCaps(width, height, rx, ry)
+    if (w <= 0 || h <= 0) return null
+    const topHalf = Math.max(0, w / 2 - capX)
+    const side = Math.max(0, h - 2 * capY)
+    const bottom = Math.max(0, w - 2 * capX)
+    const arc = smiteQuarterArc(capX, capY)
+    const firstCorner = topHalf + arc
+    const bottomLeft = firstCorner + side + arc
+    const bottomRight = bottomLeft + bottom + arc
+    const finalTop = bottomRight + side + arc
+    return { total: finalTop + topHalf, firstCorner, bottomLeft, bottomRight, finalTop }
+  }
+
+  function smiteClockLength(width, height, rx = 10, ry = 10) {
+    return smiteLineCorners(width, height, rx, ry)?.total || 0
+  }
+
   // One counter-clockwise rounded outline. It begins at 12 o'clock and
   // travels toward the left. The visible stroke is the untraveled suffix
   // that still closes back at 12, so the gap eats forward as the ring drains.
@@ -199,13 +218,16 @@
     ].join(' ')
   }
 
-  // Gap on the eaten prefix, dash on the suffix that still ends at 12.
-  function smiteLineDash(fraction) {
+  // One progress value, one dash. `length` is the path's own user-unit length.
+  // A full ring is a solid stroke (no dash pattern). While it drains, one gap
+  // eats the counter-clockwise prefix and one dash is the suffix back to 12.
+  function smiteLineDash(fraction, length) {
     const f = Number(fraction)
-    if (!Number.isFinite(f) || f >= 1) return { array: '100', offset: 0 }
-    if (f <= 0) return { array: '0 100', offset: 0 }
-    const visible = Math.min(100, Math.max(0, f * 100))
-    const eaten = 100 - visible
+    const total = Math.max(0, Number(length) || 0)
+    if (!Number.isFinite(f) || f >= 1) return { array: 'none', offset: 0 }
+    if (f <= 0 || total <= 0) return { array: '0 1', offset: 0 }
+    const visible = total * Math.min(1, f)
+    const eaten = total - visible
     return { array: `${visible} ${eaten}`, offset: eaten }
   }
 
@@ -217,23 +239,13 @@
     const f = Number(fraction)
     if (!Number.isFinite(f) || f >= 1) return 'l1'
     if (f <= 0) return 'l5'
-    const { w, h, capX, capY } = smiteRoundCaps(width, height, rx, ry)
-    if (w <= 0 || h <= 0) return 'l1'
-    const topHalf = Math.max(0, w / 2 - capX)
-    const side = Math.max(0, h - 2 * capY)
-    const bottom = Math.max(0, w - 2 * capX)
-    const arc = smiteQuarterArc(capX, capY)
-    const total = topHalf + arc + side + arc + bottom + arc + side + arc + topHalf
-    if (total <= 0) return 'l1'
-    const eaten = (1 - Math.min(1, f)) * total
-    const firstCorner = topHalf + arc
-    const bottomLeft = firstCorner + side + arc
-    const bottomRight = bottomLeft + bottom + arc
-    const finalTop = bottomRight + side + arc
-    if (eaten <= firstCorner) return 'l1'
-    if (eaten <= bottomLeft) return 'l2'
-    if (eaten <= bottomRight) return 'l3'
-    if (eaten <= finalTop) return 'l4'
+    const corners = smiteLineCorners(width, height, rx, ry)
+    if (!corners || corners.total <= 0) return 'l1'
+    const eaten = (1 - Math.min(1, f)) * corners.total
+    if (eaten <= corners.firstCorner) return 'l1'
+    if (eaten <= corners.bottomLeft) return 'l2'
+    if (eaten <= corners.bottomRight) return 'l3'
+    if (eaten <= corners.finalTop) return 'l4'
     return 'l5'
   }
 
@@ -1967,8 +1979,17 @@
     return node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)') || null
   }
 
+  function smiteRestoreFace(face) {
+    if (!face?.style) return
+    face.style.stroke = ''
+    face.style.strokeWidth = ''
+    face.style.strokeDasharray = ''
+    face.style.animation = ''
+  }
+
   function smiteRestoreCard(node) {
     if (!node) return
+    smiteRestoreFace(smiteFace(node))
     node.querySelectorAll('rect.logyq-smite-wash, rect.logyq-smite-glow').forEach((layer) => layer.remove())
     node.querySelectorAll('text.label').forEach((el) => {
       el.style.fill = ''
@@ -1979,6 +2000,48 @@
     delete node.dataset.smiteHeat
     delete node.dataset.smitePhase
     node.style?.removeProperty?.('--smite-ink')
+  }
+
+  // The clock root's own border is hidden so the mercy path is the only ring.
+  // Descendants keep a solid fate stroke. Neither one is dashed or animated.
+  function smitePaintFaceStroke(face, heat, isClock) {
+    if (!face?.style) return
+    face.style.animation = 'none'
+    face.style.strokeDasharray = 'none'
+    if (isClock) {
+      face.style.stroke = 'none'
+      return
+    }
+    face.style.stroke = heat.stroke
+    face.style.strokeWidth = '2.5px'
+  }
+
+  function smiteTakeClock(node) {
+    const found = []
+    for (const child of node?.children || []) {
+      if (child.classList?.contains?.('logyq-smite-clock')) found.push(child)
+    }
+    for (const extra of found.slice(1)) extra.remove()
+    return found[0] || null
+  }
+
+  function smiteRestoreEdge(link) {
+    if (!link || link.dataset.smiteEdge !== '1') return
+    link.style.stroke = ''
+    link.style.strokeDasharray = ''
+    link.style.animation = ''
+    link.style.opacity = '0.5'
+    link.style.strokeWidth = '2.8px'
+    delete link.dataset.smiteEdge
+  }
+
+  function smitePaintEdge(link, heat) {
+    link.dataset.smiteEdge = '1'
+    link.style.stroke = heat.stroke
+    link.style.strokeWidth = '2.8px'
+    link.style.opacity = '1'
+    link.style.strokeDasharray = 'none'
+    link.style.animation = 'none'
   }
 
   function smitePaintCard(node, heat, rx, ry) {
@@ -2057,15 +2120,14 @@
       for (const uid of smiteClockRoots(tree, owned)) clockRoots.add(uid)
     }
     const nodes = doc.querySelectorAll('svg#canvas g.node')
+    const nodeByUid = new Map()
     nodes.forEach((node) => {
       const uid = nodeUid(node)
+      if (uid) nodeByUid.set(uid, node)
       const entry = uid ? byUid.get(uid) : null
       const mark = entry?.mark
       const fraction = entry?.fraction
-      let clock = null
-      for (const child of node.children || []) {
-        if (child.classList?.contains?.('logyq-smite-clock')) clock = child
-      }
+      let clock = smiteTakeClock(node)
       if (mark !== 'red' && mark !== 'amber') {
         if (clock || node.dataset.smiteHeat === '1') smiteRestoreCard(node)
         clock?.remove()
@@ -2086,6 +2148,7 @@
       const heat = smiteHeat(phase, mark)
       const isClock = clockRoots.has(uid)
       smitePaintCard(node, heat, rx, ry)
+      smitePaintFaceStroke(face, heat, isClock)
       node.dataset.smitePhase = phase
       node.style.setProperty('--smite-ink', heat.stroke)
       if (!isClock) {
@@ -2110,16 +2173,32 @@
         clock.setAttribute('stroke-linecap', 'round')
         clock.setAttribute('stroke-linejoin', 'round')
         clock.setAttribute('pointer-events', 'none')
-        clock.setAttribute('pathLength', '100')
         node.appendChild(clock)
       }
-      const dash = smiteLineDash(fraction)
       clock.setAttribute('d', d)
       clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}`)
       clock.setAttribute('stroke', heat.stroke)
+      clock.removeAttribute('pathLength')
+      clock.style.animation = 'none'
+      clock.style.vectorEffect = 'none'
+      let length = 0
+      try { length = clock.getTotalLength() } catch (_error) { length = 0 }
+      if (!(length > 0)) length = smiteClockLength(w, h, rx, ry)
+      const dash = smiteLineDash(fraction, length)
       clock.setAttribute('stroke-dasharray', dash.array)
       clock.setAttribute('stroke-dashoffset', String(dash.offset))
       smitePaintGlow(node, heat, rx, ry)
+    })
+    doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => {
+      const uid = link.__data__?.target?.data?._uid
+      const entry = uid ? byUid.get(uid) : null
+      const mark = entry?.mark
+      const node = uid ? nodeByUid.get(uid) : null
+      if (!node || (mark !== 'red' && mark !== 'amber')) {
+        smiteRestoreEdge(link)
+        return
+      }
+      smitePaintEdge(link, smiteHeat(node.dataset.smitePhase || 'l1', mark))
     })
   }
 
@@ -2147,6 +2226,7 @@
       if (node.dataset.smiteHeat === '1' || node.querySelector('.logyq-smite-clock')) smiteRestoreCard(node)
     })
     doc.querySelectorAll('svg#canvas .logyq-smite-clock').forEach((clock) => clock.remove())
+    doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => smiteRestoreEdge(link))
   }
 
   function clearSmiteScars(doc, smite) {
@@ -2333,6 +2413,7 @@
     preview.gestures.smiteRefillMs = smiteRefillMs
     preview.gestures.planSmiteCommit = planSmiteCommit
     preview.gestures.smiteClockPath = smiteClockPath
+    preview.gestures.smiteClockLength = smiteClockLength
     preview.gestures.smiteLineDash = smiteLineDash
     preview.gestures.smiteLinePhase = smiteLinePhase
     preview.gestures.smiteClockRoots = smiteClockRoots

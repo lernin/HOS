@@ -2180,17 +2180,44 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     return page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name))
   }
   async function heats() {
-    return page.evaluate(() => Array.from(document.querySelectorAll('svg#canvas g.node')).filter((node) => node.dataset.smiteHeat === '1').map((node) => {
-      const wash = node.querySelector('rect.logyq-smite-wash')
-      return {
-        name: node.__data__?.data?.name ?? null,
-        phase: node.dataset.smitePhase || '',
-        clock: !!node.querySelector('path.logyq-smite-clock'),
-        wash: wash?.getAttribute('fill') || '',
-        washOpacity: Number(wash?.getAttribute('fill-opacity')),
-        glow: node.querySelector('rect.logyq-smite-glow') ? Number(node.querySelector('rect.logyq-smite-glow').getAttribute('fill-opacity')) : 0,
+    return page.evaluate(() => {
+      const cssHex = (value) => {
+        const rgb = String(value || '').match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+        if (!rgb) return String(value || '')
+        const hex = (n) => Number(n).toString(16).padStart(2, '0')
+        return `#${hex(rgb[1])}${hex(rgb[2])}${hex(rgb[3])}`
       }
-    }))
+      return Array.from(document.querySelectorAll('svg#canvas g.node')).filter((node) => node.dataset.smiteHeat === '1').map((node) => {
+        const wash = node.querySelector('rect.logyq-smite-wash')
+        return {
+          name: node.__data__?.data?.name ?? null,
+          phase: node.dataset.smitePhase || '',
+          clock: !!node.querySelector('path.logyq-smite-clock'),
+          wash: wash?.getAttribute('fill') || '',
+          washOpacity: Number(wash?.getAttribute('fill-opacity')),
+          glow: node.querySelector('rect.logyq-smite-glow') ? Number(node.querySelector('rect.logyq-smite-glow').getAttribute('fill-opacity')) : 0,
+          faceStroke: cssHex(node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')?.style?.stroke || ''),
+          clocks: node.querySelectorAll('path.logyq-smite-clock').length,
+        }
+      })
+    })
+  }
+  async function edges() {
+    return page.evaluate(() => {
+      const cssHex = (value) => {
+        const rgb = String(value || '').match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+        if (!rgb) return String(value || '')
+        const hex = (n) => Number(n).toString(16).padStart(2, '0')
+        return `#${hex(rgb[1])}${hex(rgb[2])}${hex(rgb[3])}`
+      }
+      return Array.from(document.querySelectorAll('svg#canvas g.links path.link')).map((link) => ({
+        name: link.__data__?.target?.data?.name ?? null,
+        stroke: cssHex(link.style.stroke || ''),
+        dash: link.style.strokeDasharray || '',
+        edge: link.dataset.smiteEdge || '',
+        animation: link.style.animationName || link.style.animation || '',
+      }))
+    })
   }
   async function zoomK() {
     return page.evaluate(() => window.d3.zoomTransform(document.getElementById('canvas')).k)
@@ -2228,7 +2255,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   let armed = await clocks()
   assert.deepEqual(armed.map((clock) => clock.name), ['Root'])
   assert.equal(armed[0].red, true)
-  assert.equal(armed[0].dash, '100')
+  assert.equal(armed[0].dash, 'none')
   assert.equal(armed[0].offset, 0)
   assert.equal(armed[0].phase, 'l1')
   assert.equal(armed[0].stroke, '#f6b6b6')
@@ -2266,16 +2293,16 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     svg.setAttribute('width', '200')
     svg.setAttribute('height', '120')
     const path = document.createElementNS(svgNS, 'path')
-    const dash = window.LOGYQPreview.gestures.smiteLineDash(0.5)
     path.setAttribute('d', window.LOGYQPreview.gestures.smiteClockPath(20, 20, 160, 80, 10, 10))
     path.setAttribute('fill', 'none')
     path.setAttribute('stroke', '#dc2626')
     path.setAttribute('stroke-width', '8')
     path.setAttribute('stroke-linecap', 'butt')
-    path.setAttribute('pathLength', '100')
+    svg.appendChild(path)
+    document.body.appendChild(svg)
+    const dash = window.LOGYQPreview.gestures.smiteLineDash(0.5, path.getTotalLength())
     path.setAttribute('stroke-dasharray', dash.array)
     path.setAttribute('stroke-dashoffset', String(dash.offset))
-    svg.appendChild(path)
     const xml = new XMLSerializer().serializeToString(svg)
     const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
     const image = new Image()
@@ -2287,6 +2314,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     const ctx = canvas.getContext('2d')
     ctx.drawImage(image, 0, 0)
     URL.revokeObjectURL(url)
+    svg.remove()
     const red = (x, y) => {
       const pixel = ctx.getImageData(x, y, 1, 1).data
       return pixel[0] > 160 && pixel[1] < 90 && pixel[2] < 90
@@ -2306,6 +2334,40 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(half.left, false)
   await touch('pointerup', root.x, root.y + 80, 22, root.uid)
   await touch('pointerup', 16, 120, 21)
+  await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 6000 })
+  await page.waitForFunction(() => {
+    const clock = document.querySelector('path.logyq-smite-clock')
+    const dash = clock?.getAttribute('stroke-dasharray') || ''
+    return dash.includes(' ')
+  })
+  const oneRing = await page.evaluate(() => {
+    const clock = document.querySelector('path.logyq-smite-clock')
+    const node = clock.parentElement
+    const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')
+    const style = getComputedStyle(clock)
+    const parts = clock.getAttribute('stroke-dasharray').trim().split(/[\s,]+/).map(Number)
+    const total = clock.getTotalLength()
+    const paths = Array.from(document.querySelectorAll('path.logyq-smite-clock'))
+    return {
+      paths: paths.length,
+      onNode: node.querySelectorAll('path.logyq-smite-clock').length,
+      pathLength: clock.hasAttribute('pathLength'),
+      animation: style.animationName,
+      faceStroke: face.style.stroke,
+      parts,
+      total,
+      offset: Number(clock.getAttribute('stroke-dashoffset')),
+    }
+  })
+  assert.equal(oneRing.paths, 1, 'one mercy stroke on the doomed root')
+  assert.equal(oneRing.onNode, 1)
+  assert.equal(oneRing.pathLength, false)
+  assert.equal(oneRing.animation, 'none')
+  assert.equal(oneRing.faceStroke, 'none', 'the card border is not a second ring')
+  assert.equal(oneRing.parts.length, 2)
+  assert.ok(oneRing.parts[0] > 120 && oneRing.parts[1] > 120, 'the dash is one gap and one stroke, not a fast repeat')
+  assert.ok(Math.abs(oneRing.parts[0] + oneRing.parts[1] - oneRing.total) < 1.5)
+  assert.ok(Math.abs(oneRing.offset / oneRing.total - 0.5) < 0.12, 'the tip has rewound about halfway counter-clockwise')
   await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 1600 })
   await page.waitForFunction(() => {
     const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Root')
@@ -2387,9 +2449,17 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   const family = await heats()
   assert.deepEqual(family.map((card) => card.name).sort(), ['', 'A', 'A1'])
   assert.deepEqual(family.filter((card) => card.clock).map((card) => card.name), ['A'])
-  assert.ok(family.every((card) => card.phase === 'l1' && card.wash === '#f6b6b6' && card.glow === 0))
+  assert.ok(family.every((card) => card.phase === 'l1' && card.wash === '#f6b6b6' && card.glow === 0 && card.clocks <= 1))
+  assert.equal(family.find((card) => card.name === 'A')?.faceStroke, 'none')
+  assert.equal(family.find((card) => card.name === 'A1')?.faceStroke, '#f6b6b6')
+  assert.equal(family.find((card) => card.name === '')?.clock, false)
   assert.equal((await clocks()).length, 1)
   assert.equal((await clocks())[0].name, 'A')
+  const familyEdges = await edges()
+  const doomedEdges = familyEdges.filter((edge) => edge.edge === '1')
+  assert.deepEqual(doomedEdges.map((edge) => edge.name).sort(), ['', 'A', 'A1'])
+  assert.ok(doomedEdges.every((edge) => edge.stroke === '#f6b6b6' && edge.dash === 'none' && edge.animation === 'none'))
+  assert.equal(familyEdges.find((edge) => edge.name === 'B')?.edge || '', '')
   await touch('pointerup', card.x, card.y + 84, 42, card.uid)
   await touch('pointerup', 16, 422, 41)
   const child = await center('A1')
@@ -2398,8 +2468,12 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   const toggled = await heats()
   assert.equal(toggled.find((card) => card.name === 'A1')?.clock, false)
   assert.equal(toggled.find((card) => card.name === 'A1')?.wash, '#f6dfb6')
+  assert.equal(toggled.find((card) => card.name === 'A1')?.clocks, 0)
   assert.equal(toggled.find((card) => card.name === 'A')?.clock, true)
   assert.equal(toggled.find((card) => card.name === 'A')?.wash, '#f6b6b6')
+  const toggledEdges = await edges()
+  assert.equal(toggledEdges.find((edge) => edge.name === 'A1')?.stroke, '#f6dfb6')
+  assert.equal(toggledEdges.find((edge) => edge.name === 'A')?.stroke, '#f6b6b6')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
   const again = await center('A')
   await touch('pointerdown', again.x, again.y, 44, again.uid)
@@ -2412,6 +2486,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await page.waitForFunction(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A'))
   assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
   assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), [])
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false)
 
   await settle()
   const side = await center('B')
@@ -2433,7 +2508,14 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(parallel.find((card) => card.name === 'A')?.wash, '#f6dfb6')
   assert.equal(parallel.find((card) => card.name === 'A1')?.clock, false)
   assert.equal(parallel.find((card) => card.name === 'A1')?.wash, '#f6dfb6')
+  assert.equal(parallel.find((card) => card.name === 'A1')?.clocks, 0)
+  assert.equal(await page.evaluate(() => document.querySelectorAll('path.logyq-smite-clock').length), 2)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
+  const parallelEdges = await edges()
+  assert.equal(parallelEdges.find((edge) => edge.name === 'B')?.stroke, '#f6b6b6')
+  assert.equal(parallelEdges.find((edge) => edge.name === 'A')?.stroke, '#f6dfb6')
+  assert.equal(parallelEdges.find((edge) => edge.name === 'A1')?.stroke, '#f6dfb6')
+  assert.equal(parallelEdges.find((edge) => edge.name === 'Root')?.edge || '', '')
   assert.equal(await page.evaluate(({ a, b }) => {
     const root = window.LOGYQBridge.core.state.root
     const owns = (uid) => root.descendants().some((node) => node.data._uid === uid)
@@ -2467,6 +2549,8 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(afterToggle.find((card) => card.name === 'A1'), undefined)
   assert.equal(afterToggle.find((card) => card.name === 'A')?.wash, '#f6dfb6')
   assert.equal(afterToggle.find((card) => card.name === 'B')?.wash, '#f6b6b6')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.edge || '', '')
+  assert.equal(await page.evaluate(() => document.querySelectorAll('path.logyq-smite-clock').length), 2)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
   const overlapThumb = await park('middle', 91)
   const overlap = await center('A1')

@@ -1497,7 +1497,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteCastOverlaps, smiteHeat, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteCastOverlaps, smiteHeat, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1562,11 +1562,15 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.equal(/A [\d.]+ [\d.]+ 0 0 1 /.test(ring), false)
   assert.equal(smite.smiteClockPath(0, 0, 0, 40), '')
   assert.ok(smite.smiteClockPath(0, 0, 140, 63, 0, 0).includes('A 10 10'), 'a missing radius still rounds the card')
-  assert.equal(smite.smiteLineDash(1).array, '100')
-  assert.equal(smite.smiteLineDash(1).offset, 0)
-  assert.equal(smite.smiteLineDash(0.5).array, '50 50')
-  assert.equal(smite.smiteLineDash(0.5).offset, 50)
-  assert.equal(smite.smiteLineDash(0).array, '0 100')
+  const length = smite.smiteClockLength(140, 63, 10, 10)
+  assert.ok(length > 300 && length < 450, 'the dash uses the real outline length')
+  assert.equal(smite.smiteLineDash(1, length).array, 'none')
+  assert.equal(smite.smiteLineDash(1, length).offset, 0)
+  const halfDash = smite.smiteLineDash(0.5, length)
+  assert.equal(Number(halfDash.array.split(' ')[0]) + Number(halfDash.array.split(' ')[1]), length)
+  assert.equal(halfDash.offset, length / 2)
+  assert.equal(smite.smiteLineDash(0, length).array, '0 1')
+  assert.ok(Math.abs(halfDash.offset - length / 2) < 1e-6)
 
   const box = [140, 63, 10, 10]
   assert.equal(smite.smiteLinePhase(1, ...box), 'l1')
@@ -1675,5 +1679,8 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   const clock = styles.slice(styles.indexOf('path.logyq-smite-clock'), styles.indexOf('.logyq-smite-scar'))
   assert.doesNotMatch(clock, /#22c55e/)
   assert.doesNotMatch(clock, /stroke-dasharray:\s*5\s+4/)
+  assert.doesNotMatch(clock, /vector-effect:\s*non-scaling-stroke/)
+  assert.match(clock, /animation:\s*none/)
   assert.doesNotMatch(v162, /Sent subtree to Word Dock/)
+  assert.doesNotMatch(v162, /setAttribute\(['"]pathLength/)
 })
