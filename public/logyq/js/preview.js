@@ -242,7 +242,7 @@
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash,body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important;filter:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{stroke:none;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
-        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;transition:none!important;vector-effect:none}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red,body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:none}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation;pointer-events:auto;transform-origin:center}
         .logyq-smite-scar.is-covered{pointer-events:none!important}
@@ -724,7 +724,9 @@
     return isTreeRoot ? 'normal' : 'red'
   }
 
-  // Full ring at and above 12s. Only the last 12s drains.
+  // The mercy clock is 15s: 3s with the line held full, then a 12s drain.
+  // `remaining` is that whole clock. Progress is the drain still left / 12s,
+  // so the stroke and the delete share one number.
   function smiteRingFraction(remainingMs, fullMs = 12000) {
     const full = Number(fullMs) > 0 ? Number(fullMs) : 12000
     const remaining = Number(remainingMs) || 0
@@ -2229,9 +2231,11 @@
   }
 
   const SMITE_PARK_SLOP = 18
-  const SMITE_START_MS = 15000
-  const SMITE_MAX_MS = 15000
-  const SMITE_FULL_MS = 12000
+  const SMITE_BUFFER_MS = 3000
+  const SMITE_DRAIN_MS = 12000
+  const SMITE_START_MS = SMITE_BUFFER_MS + SMITE_DRAIN_MS
+  const SMITE_MAX_MS = SMITE_START_MS
+  const SMITE_FULL_MS = SMITE_DRAIN_MS
   const SMITE_REFILL_MS = 1000
   const SMITE_TRIGGER_DY = 36
   const SMITE_SCAR_HOLD_MS = 2800
@@ -2538,7 +2542,8 @@
         if (!mercy || mercy.committing) continue
         const dt = Math.max(0, now - mercy.lastTick)
         mercy.lastTick = now
-        if (!mercy.interacting) mercy.remaining -= dt
+        if (!mercy.interacting) mercy.remaining = Math.max(0, mercy.remaining - dt)
+        // Empty line and delete are this tick. Nothing holds the cards after remaining hits 0.
         if (mercy.remaining <= 0) due.push(mercy)
       }
       for (const mercy of due) commitSmite(doc, win, smite, mercy)
@@ -2854,16 +2859,20 @@
       clock.setAttribute('d', d)
       clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}`)
       clock.setAttribute('stroke', color)
-      clock.removeAttribute('pathLength')
       clock.style.animation = 'none'
+      clock.style.transition = 'none'
       clock.style.filter = 'none'
-      clock.style.vectorEffect = 'non-scaling-stroke'
+      clock.style.vectorEffect = 'none'
       let length = 0
       try { length = clock.getTotalLength() } catch (_error) { length = 0 }
       if (!(length > 0)) length = smiteClockLength(w, h, rx, ry)
+      // One pathLength, the same number the dash uses. Progress is the 12s drain only.
+      clock.setAttribute('pathLength', String(length))
       const dash = smiteLineDash(fraction, length)
       clock.setAttribute('stroke-dasharray', dash.array)
       clock.setAttribute('stroke-dashoffset', String(dash.offset))
+      clock.style.strokeDasharray = dash.array
+      clock.style.strokeDashoffset = String(dash.offset)
     })
     doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => smiteRestoreEdge(link))
   }

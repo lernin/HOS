@@ -2357,8 +2357,9 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
       paths: paths.length,
       onNode: node.querySelectorAll('path.logyq-smite-clock').length,
       stroked,
-      pathLength: clock.hasAttribute('pathLength'),
+      pathLength: clock.getAttribute('pathLength'),
       animation: style.animationName,
+      transition: style.transitionProperty,
       vector: style.vectorEffect,
       faceStroke: face.style.stroke,
       parts,
@@ -2369,9 +2370,10 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(oneRing.paths, 1, 'one mercy stroke on the doomed root')
   assert.equal(oneRing.onNode, 1)
   assert.deepEqual(oneRing.stroked, ['logyq-smite-clock logyq-smite-red'])
-  assert.equal(oneRing.pathLength, false)
+  assert.ok(Math.abs(Number(oneRing.pathLength) - oneRing.total) < 0.01, 'dash units are the path length once')
   assert.equal(oneRing.animation, 'none')
-  assert.equal(oneRing.vector, 'non-scaling-stroke', 'the mercy line stays the crisp screen-pixel stroke')
+  assert.equal(oneRing.transition, 'none')
+  assert.equal(oneRing.vector, 'none', 'the dash stays in the same space as the path')
   assert.equal(oneRing.faceStroke, 'none', 'the card border is not a second ring')
   assert.equal(oneRing.parts.length, 2)
   assert.ok(oneRing.parts[0] > 120 && oneRing.parts[1] > 120, 'the dash is one gap and one stroke, not a fast repeat')

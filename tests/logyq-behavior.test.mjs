@@ -1552,6 +1552,12 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.equal(smite.smiteRingFraction(12000), 1)
   assert.equal(smite.smiteRingFraction(6000), 0.5)
   assert.equal(smite.smiteRingFraction(0), 0)
+  // 3s full, then the line is drain-left / 12s, empty at 15s.
+  for (let elapsed = 0; elapsed <= 3000; elapsed += 100) {
+    assert.equal(smite.smiteRingFraction(15000 - elapsed), 1)
+  }
+  assert.equal(smite.smiteRingFraction(15000 - 9000), 0.5)
+  assert.equal(smite.smiteRingFraction(15000 - 15000), 0)
   assert.equal(smite.smiteRefillMs(15000), 15000)
   assert.equal(smite.smiteRefillMs(14500), 15000)
   assert.equal(smite.smiteRefillMs(1000), 2000)
@@ -1679,8 +1685,11 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   const clock = styles.slice(styles.indexOf('path.logyq-smite-clock'), styles.indexOf('.logyq-smite-scar'))
   assert.doesNotMatch(clock, /#22c55e/)
   assert.doesNotMatch(clock, /stroke-dasharray:\s*5\s+4/)
-  assert.match(clock, /vector-effect:\s*non-scaling-stroke/)
+  assert.match(clock, /vector-effect:\s*none/)
   assert.match(clock, /animation:\s*none/)
+  assert.match(clock, /transition:\s*none/)
   assert.doesNotMatch(v162, /Sent subtree to Word Dock/)
-  assert.doesNotMatch(v162, /setAttribute\(['"]pathLength/)
+  assert.match(v162, /setAttribute\('pathLength'/)
+  assert.match(v162, /SMITE_BUFFER_MS = 3000/)
+  assert.match(v162, /SMITE_DRAIN_MS = 12000/)
 })
