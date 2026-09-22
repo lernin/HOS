@@ -25,12 +25,12 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 
 ## Preview / persistence
 
-- **Device map library.** Autosave, list, open, rename, and delete use `localStorage.logyq_maps_v1`. The Maps dialog still looks like v161; it no longer talks to production.
-- **Voice PIN only.** `getPin` remains for `/api/transcribe`. It uses `logyq_lab_pin_v1`, not `logiq_lab_pin_v1`.
+- **Live map library.** List, save, rename, and delete use the PIN RPCs in `PERSISTENCE.md`. `localStorage.logyq_maps_v1` is the last successful list, not the source of truth. A missing PIN shows Connect, not an empty library.
+- **Lab PIN.** `getPin` uses `logyq_lab_pin_v1` for those RPCs and for `/api/transcribe`, not `logiq_lab_pin_v1`. It is stored only after a Lab RPC accepts it.
 - **Autosave debounce.** 850ms write delay and 1100ms retry-on-overlap are unchanged. Offline now means a localStorage write failed, not a missing network.
 - **Phone shell CSS.** Compact phone header CSS lives in `index.html` (`#logyq-phone-boot`) and `css/app.css` so the fat desktop header cannot paint first. `injectStyles` still adds the rest of the preview chrome. DOM ids stay `logiq-*` so copied selectors match.
 - **v162 mobile grammar on `/logyq/`.** Direct flick, 160ms hold-drag, 360ms double-tap, and paint (header palette → tap one card / flick-down whole branch) live in `05-v162-gestures.js` and call `LOGYQBridge`. Spawn-puck DOM, old canvas tap-capture, and the bottom arrow bar are gone. Header-mic voice remains in `04-gestures.js`. Do not unmute SVG `dblclick`. Flick must not auto-record. Finger hold-drag must ghost the origin branch in place (do not collapse `is-others`). The **moving** visual is an SVG clone of only the held card. The map stays put on latch; the clone pops north 1.1cm (`liftPx()` / `fingerOffset`) so it is not under the finger. Edge auto-pan is preview-only. Desktop mouse drag stays unoffset. Magnetic drop-target/caret is the engine’s existing indicator — do not restyle it from the overlay. Phone edit flies via `flyEditFocusToUID` and restores `prevZoom` unless the user pinched. Hold-drag banks a node only after a **480ms dwell on the inner chip**. Right/left-handed settings were removed. Phone has **no select UX** and does not follow-camera on tap.
-- **Phone chrome is still the compact v161 mobile header.** The markup now lives in `index.html` so first paint is already compact; panel/modals are still injected. Full chrome redesign is out of scope.
+- **Phone chrome.** Portrait stays the compact top bar. Landscape phone floats a corner cluster and a type/mic/paint strip over a full-bleed canvas, and the library stays an overlay. There is no permanent side rail. Panel/modals are still injected.
 - **Not ported from later labs:** pull-to-copy, Working Lock, drag-watchdog, clutch two-hand.
 - **Engine local-maps `prompt` UI is gone.** Trees opens the preview library (`logyq_maps_v1`). Do not resurrect `saveCurrentMap` / `openMapsMenu`.
 

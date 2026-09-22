@@ -116,13 +116,14 @@
         map_word_bank: payload.word_bank,
         map_id: pending.id || null,
       })
+      acceptPin(pin)
       app.current = { id: typeof id === 'string' ? id : (id?.id || pending.id), name: payload.name }
       updateMapName()
       const latest = readJson(PENDING_KEY, null)
       if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
       setSaveState(localStorage.getItem(PENDING_KEY) ? 'saving' : 'saved')
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       setSaveState('offline')
     } finally {
       app.saving = false
@@ -134,16 +135,38 @@
     }
   }
 
+  let memoryPin = null
   let pinResolver = null
-  function getPin(interactive) {
-    const stored = sessionStorage.getItem(PIN_KEY)
+  let libraryTask = null
+
+  function readStoredPin() {
+    try {
+      const stored = sessionStorage.getItem(PIN_KEY)
+      if (stored) return stored
+    } catch (_error) {}
+    return memoryPin
+  }
+
+  function acceptPin(value) {
+    memoryPin = value || null
+    if (!value) return
+    try { sessionStorage.setItem(PIN_KEY, value) } catch (_error) {}
+  }
+
+  function forgetPin() {
+    memoryPin = null
+    try { sessionStorage.removeItem(PIN_KEY) } catch (_error) {}
+  }
+
+  function getPin(interactive, options = {}) {
+    const stored = readStoredPin()
     if (stored || !interactive) return Promise.resolve(stored)
     if (pinResolver) return new Promise((resolve) => {
       const prior = pinResolver
       pinResolver = (value) => { prior(value); resolve(value) }
     })
     ui.pinInput.value = ''
-    ui.pinError.classList.remove('is-visible')
+    if (!options.keepError) ui.pinError.classList.remove('is-visible')
     ui.pin.classList.add('is-open')
     ui.pin.setAttribute('aria-hidden', 'false')
     requestAnimationFrame(() => ui.pinInput.focus())
@@ -152,12 +175,11 @@
 
   function finishPin(value) {
     if (!pinResolver) return
-    if (value) sessionStorage.setItem(PIN_KEY, value)
     ui.pin.classList.remove('is-open')
     ui.pin.setAttribute('aria-hidden', 'true')
     const resolve = pinResolver
     pinResolver = null
-    resolve(value)
+    resolve(value || null)
   }
 
   function showLibrary() {
@@ -202,7 +224,10 @@
     closeMobilePanel()
     abandonBlankDraft()
     showLibrary()
-    ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+    if (!libraryTask) {
+      app.libraryStatus = 'loading'
+      ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+    }
     await refreshLibrary()
   }
 
@@ -212,34 +237,69 @@
   }
 
   async function listLiveMaps() {
-    const pin = await getPin(true)
-    if (!pin) return readCachedLibrary()
-    const rows = await rpc('logiq_map_list', { pin })
-    const list = Array.isArray(rows) ? rows.slice() : []
-    list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
-    cacheLibrary(list)
-    return list
+    let keepError = false
+    for (;;) {
+      const pin = await getPin(true, { keepError })
+      keepError = false
+      if (!pin) throw Object.assign(new Error('Lab PIN required'), { locked: true })
+      try {
+        const rows = await rpc('logiq_map_list', { pin })
+        if (!Array.isArray(rows)) throw new Error('Could not read the map list.')
+        acceptPin(pin)
+        const list = rows.slice()
+        list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+        cacheLibrary(list)
+        return list
+      } catch (error) {
+        if (!error.auth) throw error
+        forgetPin()
+        ui.pinError.textContent = 'That PIN was not accepted. Your maps are still saved.'
+        ui.pinError.classList.add('is-visible')
+        keepError = true
+      }
+    }
   }
 
-  async function refreshLibrary() {
+  function refreshLibrary() {
+    if (libraryTask) return libraryTask
+    libraryTask = refreshLibraryNow().finally(() => { libraryTask = null })
+    return libraryTask
+  }
+
+  async function refreshLibraryNow() {
     try {
       app.libraryRows = await listLiveMaps()
+      app.libraryStatus = 'live'
       renderLibrary()
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       app.libraryRows = readCachedLibrary()
-      if (app.libraryRows.length) renderLibrary()
-      else ui.mapList.innerHTML = `<div class="logiq-empty">${navigator.onLine ? 'Could not load maps. Check the Lab PIN.' : 'Offline. Saved changes will retry.'}</div>`
+      app.libraryStatus = error.locked ? 'locked' : 'error'
+      renderLibrary()
     }
   }
 
   function renderLibrary() {
     const rows = Array.isArray(app.libraryRows) ? app.libraryRows : []
+    const status = app.libraryStatus || 'live'
+    if (status === 'loading') {
+      ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+      return
+    }
+    if (!rows.length && status === 'locked') {
+      ui.mapList.innerHTML = '<div class="logiq-empty"><p>Your maps are still saved. Enter the Lab PIN to open them.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
+      return
+    }
+    if (!rows.length && status !== 'live') {
+      ui.mapList.innerHTML = `<div class="logiq-empty"><p>${navigator.onLine ? 'Could not load maps. Nothing was deleted.' : 'Offline. Saved changes will retry.'}</p><button type="button" class="logiq-primary" data-connect>Try again</button></div>`
+      return
+    }
     if (!rows.length) {
       ui.mapList.innerHTML = '<div class="logiq-empty"><p>No maps yet.</p><button type="button" class="logiq-primary" data-empty-new>+ New</button></div>'
       return
     }
-    ui.mapList.innerHTML = rows.map((row) => {
+    const note = status === 'live' ? '' : '<div class="logiq-library-note"><p>Showing maps last opened on this device. Connect to refresh the Lab. Nothing was deleted.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
+    ui.mapList.innerHTML = note + rows.map((row) => {
       const current = row.id === app.current.id ? ' is-current' : ''
       const when = formatUpdatedAt(row.updated_at)
       return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
@@ -251,6 +311,10 @@
   }
 
   async function handleMapAction(event) {
+    if (event.target.closest('[data-connect]')) {
+      refreshLibrary()
+      return
+    }
     if (event.target.closest('[data-empty-new]')) {
       createMap({ edit: false })
       return
@@ -338,6 +402,7 @@
         map_word_bank: payload.word_bank,
         map_id: row.id,
       })
+      acceptPin(pin)
       row.name = payload.name
       if (row.id === app.current.id) {
         app.current.name = payload.name
@@ -346,7 +411,7 @@
       renderLibrary()
       setSaveState('saved')
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       setSaveState('offline')
     }
   }
@@ -356,6 +421,7 @@
     if (!pin) return
     try {
       await rpc('logiq_map_delete', { pin, map_id: row.id })
+      acceptPin(pin)
       app.libraryRows = app.libraryRows.filter((item) => item.id !== row.id)
       cacheLibrary(app.libraryRows)
       if (app.current.id === row.id) {
@@ -367,7 +433,7 @@
       renderLibrary()
       if (!app.libraryRows.length) openHomeLibrary()
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       setSaveState('offline')
     }
   }
@@ -391,15 +457,15 @@
       return
     }
     if (recovered) localStorage.removeItem(PENDING_KEY)
-    try {
-      const rows = await listLiveMaps()
-      app.libraryRows = rows
-      openHomeLibrary()
-    } catch (_error) {
-      app.libraryRows = readCachedLibrary()
-      openHomeLibrary()
-    }
+    app.hasOpenMap = false
+    document.body.classList.remove('logyq-map-open')
+    showLibrary()
+    app.libraryStatus = 'loading'
+    ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+    await refreshLibrary()
     app.booted = true
   }
+
+  bootSession()
 })()
 

@@ -15,7 +15,7 @@ test.after(async () => {
   await browser?.close()
 })
 
-async function stubMaps(context, { maps = [], capture = [] } = {}) {
+async function stubMaps(context, { maps = [], capture = [], acceptPin = null, listBody = null } = {}) {
   const store = { maps: maps.map((row) => ({ ...row })) }
   await context.route('https://jzaghifuhinkzzhiojre.supabase.co/**', async (route) => {
     const url = route.request().url()
@@ -23,6 +23,18 @@ async function stubMaps(context, { maps = [], capture = [] } = {}) {
     let body = {}
     try { body = route.request().postDataJSON() || {} } catch (_error) {}
     capture.push({ name, url, method: route.request().method(), body })
+    if (acceptPin && body.pin !== acceptPin && ['logiq_map_list', 'logiq_map_save', 'logiq_map_delete'].includes(name)) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Wrong Lab password', code: '28000' }),
+      })
+      return
+    }
+    if (name === 'logiq_map_list' && listBody) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(listBody) })
+      return
+    }
     if (name === 'logiq_map_list') {
       const rows = store.maps.slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) })
@@ -54,13 +66,14 @@ async function stubMaps(context, { maps = [], capture = [] } = {}) {
 }
 
 async function newContext(options = {}) {
-  const context = await browser.newContext(options)
+  const { pin = 'test-pin', ...browserOptions } = options
+  const context = await browser.newContext(browserOptions)
   await context.route('https://cdn.jsdelivr.net/npm/d3@7*', (route) => route.fulfill({
     status: 200,
     contentType: 'application/javascript',
     body: d3Source,
   }))
-  await context.addInitScript(() => sessionStorage.setItem('logyq_lab_pin_v1', 'test-pin'))
+  if (pin != null) await context.addInitScript((value) => sessionStorage.setItem('logyq_lab_pin_v1', value), pin)
   return context
 }
 
@@ -854,6 +867,81 @@ test('LOGYQ empty library stays a library, not a chooser or editor', async () =>
   assert.match((await page.locator('#logiq-map-list').innerText()), /No maps yet/)
   await page.waitForTimeout(950)
   assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ missing Lab PIN asks to connect and does not claim the library is empty', async () => {
+  const capture = []
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, pin: null })
+  await stubMaps(context, {
+    capture,
+    acceptPin: 'test-pin',
+    maps: [
+      { id: 'animals', name: 'Animals', tree: { name: 'Animals', formatVersion: 2 }, word_bank: [], updated_at: '2026-09-22T00:12:35.000Z' },
+      { id: 'logyq-2', name: 'LOGYQ 2', tree: { name: 'LOGYQ 2', formatVersion: 2 }, word_bank: [], updated_at: '2026-09-22T00:11:39.000Z' },
+      { id: 'logyq', name: 'LOGYQ', tree: { name: 'LOGYQ', formatVersion: 2 }, word_bank: [], updated_at: '2026-09-22T00:10:03.000Z' },
+    ],
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await page.waitForSelector('#logiq-pin.is-open')
+  assert.doesNotMatch(await page.locator('#logiq-map-list').innerText(), /No maps yet/)
+  await page.locator('#logiq-pin-cancel').click()
+  await waitForBoot(page)
+  const locked = await page.locator('#logiq-map-list').innerText()
+  assert.match(locked, /still saved/)
+  assert.doesNotMatch(locked, /No maps yet/)
+  await page.locator('[data-connect]').click()
+  await page.waitForSelector('#logiq-pin.is-open')
+  await page.locator('#logiq-pin-input').fill('0000')
+  await page.locator('#logiq-pin-form button[type="submit"]').click()
+  await page.waitForSelector('.logiq-pin-error.is-visible')
+  assert.match(await page.locator('.logiq-pin-error').innerText(), /still saved/)
+  assert.doesNotMatch(await page.locator('#logiq-map-list').innerText(), /No maps yet/)
+  await page.locator('#logiq-pin-input').fill('test-pin')
+  await page.locator('#logiq-pin-form button[type="submit"]').click()
+  await page.waitForSelector('.logiq-map-name')
+  const names = await page.locator('.logiq-map-name').allTextContents()
+  assert.ok(names.includes('Animals'))
+  assert.ok(names.includes('LOGYQ'))
+  assert.ok(names.includes('LOGYQ 2'))
+  assert.equal(capture.filter((request) => request.name === 'logiq_map_list').at(-1)?.body?.pin, 'test-pin')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ landscape edge chrome is full-bleed with a corner cluster, not a side rail', async () => {
+  const context = await newContext({ viewport: { width: 667, height: 375 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+  const canvas = await page.locator('svg#canvas').boundingBox()
+  assert.ok(canvas.x <= 1, `canvas x ${canvas.x} should stay full-bleed`)
+  assert.ok(canvas.width >= 660, `canvas width ${canvas.width} should fill the landscape viewport`)
+  const cluster = await page.locator('#logyq-corner-cluster').boundingBox()
+  const strip = await page.locator('#logyq-select-strip').boundingBox()
+  assert.ok(cluster.width < 80, `corner cluster width ${cluster.width} should not be a bar or rail`)
+  assert.ok(cluster.height < 320, `corner cluster height ${cluster.height} should not span the screen`)
+  assert.ok(cluster.x > 520, `corner cluster x ${cluster.x} should sit on the right`)
+  assert.ok(strip.y < 40, `select strip y ${strip.y} should float at the top`)
+  assert.ok(strip.height < 80, `select strip height ${strip.height} should be a strip`)
+  assert.ok(strip.width < 500, `select strip width ${strip.width} should not be a full-width bar`)
+  assert.ok(strip.x < 40, `select strip x ${strip.x} should float from the left, not a left rail inset`)
+  await page.locator('#logiq-mobile-word-input').focus()
+  const sheet = await page.locator('#logiq-mobile-word-input').boundingBox()
+  assert.ok(sheet.width > 400, `type sheet width ${sheet.width} should open across the screen`)
+  await page.locator('#logiq-mobile-word-input').blur()
+  await page.locator('#logyq-home-btn').click()
+  await page.waitForSelector('#logiq-library.is-open')
+  const library = await page.locator('#logiq-library').boundingBox()
+  assert.ok(library.width > 640, `library width ${library.width} should overlay the screen`)
   assert.deepEqual(errors, [])
   await context.close()
 })

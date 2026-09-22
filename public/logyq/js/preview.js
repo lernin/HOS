@@ -31,6 +31,7 @@
     saving: false,
     saveAgain: false,
     libraryRows: [],
+    libraryStatus: 'loading',
     recorder: null,
     recordingStream: null,
     recordingChunks: [],
@@ -57,7 +58,6 @@
   }
 
   window.addEventListener('online', retryPending)
-  bootSession()
 
   const SUPABASE_URL = 'https://jzaghifuhinkzzhiojre.supabase.co'
   const SUPABASE_KEY = 'sb_publishable_rQDzA5bYlbzvaTjyo-uTXw_LiiIAddI'
@@ -155,6 +155,7 @@
       @keyframes logiq-pulse{50%{opacity:.35}}
       .logiq-backdrop{position:fixed;inset:0;z-index:5000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(15,23,42,.36);backdrop-filter:blur(4px)}
       .logiq-backdrop.is-open{display:flex}
+      #logiq-pin.is-open{z-index:6400}
       .logiq-modal{width:min(680px,100%);max-height:min(760px,calc(100dvh - 36px));overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 70px rgba(15,23,42,.24);color:#334155}
       body.logyq-home #logiq-library{display:flex;align-items:stretch;justify-content:stretch;padding:0;background:#f8fafc;z-index:4500}
       body.logyq-home #logiq-library .logiq-modal{width:100%;max-width:none;max-height:none;height:100%;border:0;border-radius:0;box-shadow:none}
@@ -221,8 +222,17 @@
         #logyq-paint-strip.is-open{display:flex}
         .logyq-swatch{flex:0 0 32px;width:32px;height:32px;border:2px solid #e2e8f0;border-radius:999px;background:#fff;color:#334155;font-size:16px;line-height:1;padding:0}
         .logyq-swatch.is-active{border-color:#0f172a;box-shadow:0 0 0 2px rgba(15,23,42,.18)}
-        #logiq-mobile-header .logiq-save-state{width:9px;overflow:hidden;gap:0;flex:0 0 9px;color:transparent}
+        #logiq-mobile-header .logiq-save-state{width:9px;overflow:hidden;gap:0;flex:0 0 9px;color:transparent;order:8}
         #logiq-mobile-header .logiq-save-state::before{flex:0 0 8px;width:8px;height:8px}
+        #logyq-corner-cluster,#logyq-select-strip{display:contents}
+        #logyq-home-btn{order:1}
+        #logiq-mobile-header img{order:2}
+        #logiq-mobile-word-input{order:3}
+        #logiq-mobile-mic-btn{order:4}
+        #logiq-mobile-header [data-tool="undo"]{order:5}
+        #logiq-mobile-header [data-tool="fit"]{order:6}
+        #logyq-paint-btn{order:7}
+        #logiq-mobile-menu-btn{order:9}
         #logiq-mobile-panel{position:fixed;display:none;z-index:3100;top:54px;right:8px;left:8px;padding:12px;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
         #logiq-mobile-panel.is-open{display:block}
         .logiq-mobile-tools{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.logiq-mobile-tools button{min-height:42px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-weight:650}
@@ -264,6 +274,22 @@
         #logiq-mobile-panel{top:48px;left:auto;width:min(310px,calc(100vw - 16px))}
         #logiq-voice-bar{bottom:62px}
       }
+      @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
+        #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0;overflow:visible}
+        #logyq-corner-cluster{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;bottom:auto;width:max-content;height:auto;max-height:calc(100dvh - 16px);padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);overflow:auto}
+        #logyq-corner-cluster img{display:none}
+        #logyq-select-strip{display:flex;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:auto;bottom:auto;width:max-content;max-width:calc(100vw - 88px);height:auto;padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);overflow-x:auto}
+        #logyq-corner-cluster .logiq-icon-btn,#logyq-select-strip .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px;touch-action:manipulation}
+        #logyq-select-strip .logiq-mobile-entry{width:44px;min-width:44px;max-width:44px;height:44px;flex:0 0 44px;padding:0;color:transparent;caret-color:transparent;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E") center/18px no-repeat}
+        #logyq-select-strip .logiq-mobile-entry:not(:placeholder-shown){color:#0f172a;background-image:none;font-size:11px;text-overflow:ellipsis}
+        #logyq-select-strip .logiq-mobile-entry:focus{position:fixed;z-index:3600;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));width:auto;min-width:0;max-width:none;height:48px;padding:0 14px;color:#0f172a;caret-color:#0f172a;background:#fff;font-size:16px;text-align:left;border-radius:14px;box-shadow:0 16px 40px rgba(15,23,42,.24)}
+        #logyq-select-strip .logiq-save-state{width:12px;height:44px;flex:0 0 12px;justify-content:center;overflow:visible}
+        svg#canvas{left:0;right:0;top:0;width:100%;height:100dvh}
+        #logyq-paint-strip,#logiq-mobile-panel{top:max(64px,calc(env(safe-area-inset-top) + 56px));left:max(8px,env(safe-area-inset-left));right:max(72px,calc(env(safe-area-inset-right) + 8px))}
+        #Dock{left:max(8px,env(safe-area-inset-left));right:max(72px,env(safe-area-inset-right))}
+        body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
+        body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
+      }
     `
     document.head.append(style)
   }
@@ -278,15 +304,19 @@
     if (!document.getElementById('logiq-mobile-header')) {
       document.body.insertAdjacentHTML('afterbegin', `
       <div id="logiq-mobile-header">
-        <button class="logiq-icon-btn" id="logyq-home-btn" type="button" aria-label="Your maps"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></button>
-        <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGYQ">
-        <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
-        <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
-        <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
-        <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
-        <button class="logiq-icon-btn" id="logyq-paint-btn" aria-label="Paint colors" aria-expanded="false" aria-haspopup="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><circle cx="8" cy="16" r="3"></circle><circle cx="16" cy="16" r="3"></circle></svg></button>
-        <span class="logiq-save-state" role="status" aria-live="polite"></span>
-        <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
+        <div id="logyq-corner-cluster">
+          <button class="logiq-icon-btn" id="logyq-home-btn" type="button" aria-label="Your maps"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></button>
+          <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGYQ">
+          <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
+          <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
+          <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
+        </div>
+        <div id="logyq-select-strip">
+          <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
+          <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
+          <button class="logiq-icon-btn" id="logyq-paint-btn" aria-label="Paint colors" aria-expanded="false" aria-haspopup="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><circle cx="8" cy="16" r="3"></circle><circle cx="16" cy="16" r="3"></circle></svg></button>
+          <span class="logiq-save-state" role="status" aria-live="polite"></span>
+        </div>
       </div>`)
     }
 
@@ -1822,7 +1852,7 @@
       const response = await win.fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin }, body: form })
       const result = await response.json()
       if (!response.ok || !result?.text?.trim()) {
-        if (response.status === 401 || response.status === 403) win.sessionStorage.removeItem(PIN_KEY)
+        if (response.status === 401 || response.status === 403) forgetPin()
         throw new Error('transcribe')
       }
       const text = result.text.trim()
@@ -2030,13 +2060,14 @@
         map_word_bank: payload.word_bank,
         map_id: pending.id || null,
       })
+      acceptPin(pin)
       app.current = { id: typeof id === 'string' ? id : (id?.id || pending.id), name: payload.name }
       updateMapName()
       const latest = readJson(PENDING_KEY, null)
       if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
       setSaveState(localStorage.getItem(PENDING_KEY) ? 'saving' : 'saved')
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       setSaveState('offline')
     } finally {
       app.saving = false
@@ -2048,16 +2079,38 @@
     }
   }
 
+  let memoryPin = null
   let pinResolver = null
-  function getPin(interactive) {
-    const stored = sessionStorage.getItem(PIN_KEY)
+  let libraryTask = null
+
+  function readStoredPin() {
+    try {
+      const stored = sessionStorage.getItem(PIN_KEY)
+      if (stored) return stored
+    } catch (_error) {}
+    return memoryPin
+  }
+
+  function acceptPin(value) {
+    memoryPin = value || null
+    if (!value) return
+    try { sessionStorage.setItem(PIN_KEY, value) } catch (_error) {}
+  }
+
+  function forgetPin() {
+    memoryPin = null
+    try { sessionStorage.removeItem(PIN_KEY) } catch (_error) {}
+  }
+
+  function getPin(interactive, options = {}) {
+    const stored = readStoredPin()
     if (stored || !interactive) return Promise.resolve(stored)
     if (pinResolver) return new Promise((resolve) => {
       const prior = pinResolver
       pinResolver = (value) => { prior(value); resolve(value) }
     })
     ui.pinInput.value = ''
-    ui.pinError.classList.remove('is-visible')
+    if (!options.keepError) ui.pinError.classList.remove('is-visible')
     ui.pin.classList.add('is-open')
     ui.pin.setAttribute('aria-hidden', 'false')
     requestAnimationFrame(() => ui.pinInput.focus())
@@ -2066,12 +2119,11 @@
 
   function finishPin(value) {
     if (!pinResolver) return
-    if (value) sessionStorage.setItem(PIN_KEY, value)
     ui.pin.classList.remove('is-open')
     ui.pin.setAttribute('aria-hidden', 'true')
     const resolve = pinResolver
     pinResolver = null
-    resolve(value)
+    resolve(value || null)
   }
 
   function showLibrary() {
@@ -2116,7 +2168,10 @@
     closeMobilePanel()
     abandonBlankDraft()
     showLibrary()
-    ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+    if (!libraryTask) {
+      app.libraryStatus = 'loading'
+      ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+    }
     await refreshLibrary()
   }
 
@@ -2126,34 +2181,69 @@
   }
 
   async function listLiveMaps() {
-    const pin = await getPin(true)
-    if (!pin) return readCachedLibrary()
-    const rows = await rpc('logiq_map_list', { pin })
-    const list = Array.isArray(rows) ? rows.slice() : []
-    list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
-    cacheLibrary(list)
-    return list
+    let keepError = false
+    for (;;) {
+      const pin = await getPin(true, { keepError })
+      keepError = false
+      if (!pin) throw Object.assign(new Error('Lab PIN required'), { locked: true })
+      try {
+        const rows = await rpc('logiq_map_list', { pin })
+        if (!Array.isArray(rows)) throw new Error('Could not read the map list.')
+        acceptPin(pin)
+        const list = rows.slice()
+        list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+        cacheLibrary(list)
+        return list
+      } catch (error) {
+        if (!error.auth) throw error
+        forgetPin()
+        ui.pinError.textContent = 'That PIN was not accepted. Your maps are still saved.'
+        ui.pinError.classList.add('is-visible')
+        keepError = true
+      }
+    }
   }
 
-  async function refreshLibrary() {
+  function refreshLibrary() {
+    if (libraryTask) return libraryTask
+    libraryTask = refreshLibraryNow().finally(() => { libraryTask = null })
+    return libraryTask
+  }
+
+  async function refreshLibraryNow() {
     try {
       app.libraryRows = await listLiveMaps()
+      app.libraryStatus = 'live'
       renderLibrary()
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       app.libraryRows = readCachedLibrary()
-      if (app.libraryRows.length) renderLibrary()
-      else ui.mapList.innerHTML = `<div class="logiq-empty">${navigator.onLine ? 'Could not load maps. Check the Lab PIN.' : 'Offline. Saved changes will retry.'}</div>`
+      app.libraryStatus = error.locked ? 'locked' : 'error'
+      renderLibrary()
     }
   }
 
   function renderLibrary() {
     const rows = Array.isArray(app.libraryRows) ? app.libraryRows : []
+    const status = app.libraryStatus || 'live'
+    if (status === 'loading') {
+      ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+      return
+    }
+    if (!rows.length && status === 'locked') {
+      ui.mapList.innerHTML = '<div class="logiq-empty"><p>Your maps are still saved. Enter the Lab PIN to open them.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
+      return
+    }
+    if (!rows.length && status !== 'live') {
+      ui.mapList.innerHTML = `<div class="logiq-empty"><p>${navigator.onLine ? 'Could not load maps. Nothing was deleted.' : 'Offline. Saved changes will retry.'}</p><button type="button" class="logiq-primary" data-connect>Try again</button></div>`
+      return
+    }
     if (!rows.length) {
       ui.mapList.innerHTML = '<div class="logiq-empty"><p>No maps yet.</p><button type="button" class="logiq-primary" data-empty-new>+ New</button></div>'
       return
     }
-    ui.mapList.innerHTML = rows.map((row) => {
+    const note = status === 'live' ? '' : '<div class="logiq-library-note"><p>Showing maps last opened on this device. Connect to refresh the Lab. Nothing was deleted.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
+    ui.mapList.innerHTML = note + rows.map((row) => {
       const current = row.id === app.current.id ? ' is-current' : ''
       const when = formatUpdatedAt(row.updated_at)
       return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
@@ -2165,6 +2255,10 @@
   }
 
   async function handleMapAction(event) {
+    if (event.target.closest('[data-connect]')) {
+      refreshLibrary()
+      return
+    }
     if (event.target.closest('[data-empty-new]')) {
       createMap({ edit: false })
       return
@@ -2252,6 +2346,7 @@
         map_word_bank: payload.word_bank,
         map_id: row.id,
       })
+      acceptPin(pin)
       row.name = payload.name
       if (row.id === app.current.id) {
         app.current.name = payload.name
@@ -2260,7 +2355,7 @@
       renderLibrary()
       setSaveState('saved')
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       setSaveState('offline')
     }
   }
@@ -2270,6 +2365,7 @@
     if (!pin) return
     try {
       await rpc('logiq_map_delete', { pin, map_id: row.id })
+      acceptPin(pin)
       app.libraryRows = app.libraryRows.filter((item) => item.id !== row.id)
       cacheLibrary(app.libraryRows)
       if (app.current.id === row.id) {
@@ -2281,7 +2377,7 @@
       renderLibrary()
       if (!app.libraryRows.length) openHomeLibrary()
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       setSaveState('offline')
     }
   }
@@ -2305,15 +2401,15 @@
       return
     }
     if (recovered) localStorage.removeItem(PENDING_KEY)
-    try {
-      const rows = await listLiveMaps()
-      app.libraryRows = rows
-      openHomeLibrary()
-    } catch (_error) {
-      app.libraryRows = readCachedLibrary()
-      openHomeLibrary()
-    }
+    app.hasOpenMap = false
+    document.body.classList.remove('logyq-map-open')
+    showLibrary()
+    app.libraryStatus = 'loading'
+    ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+    await refreshLibrary()
     app.booted = true
   }
+
+  bootSession()
 })()
 

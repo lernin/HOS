@@ -1204,7 +1204,7 @@
       const response = await win.fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin }, body: form })
       const result = await response.json()
       if (!response.ok || !result?.text?.trim()) {
-        if (response.status === 401 || response.status === 403) win.sessionStorage.removeItem(PIN_KEY)
+        if (response.status === 401 || response.status === 403) forgetPin()
         throw new Error('transcribe')
       }
       const text = result.text.trim()

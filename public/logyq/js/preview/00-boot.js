@@ -31,6 +31,7 @@
     saving: false,
     saveAgain: false,
     libraryRows: [],
+    libraryStatus: 'loading',
     recorder: null,
     recordingStream: null,
     recordingChunks: [],
@@ -57,5 +58,4 @@
   }
 
   window.addEventListener('online', retryPending)
-  bootSession()
 
