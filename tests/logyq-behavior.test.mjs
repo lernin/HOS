@@ -103,6 +103,11 @@ test('LOGYQ blank drafts are untitled empty roots with no children', () => {
   assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '' }, wordBank: ['alpha'] }), false)
   assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '', color: '#fde68a' }, wordBank: [] }), false)
   assert.equal(maps.isBlankDraft({ id: 'saved', name: 'Untitled map', tree: { name: '' }, wordBank: [] }), false)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled 1', tree: { name: '' }, wordBank: [] }), true)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled 2', tree: { name: '', children: [{ name: '' }] }, wordBank: [] }), false)
+  assert.equal(maps.nextUntitledName(['Animals', 'Untitled 1', 'Untitled 2']), 'Untitled 3')
+  assert.equal(maps.nextUntitledName([]), 'Untitled 1')
+  assert.equal(maps.nextUntitledName(['untitled 4', 'Untitled 1']), 'Untitled 2')
 })
 
 test('GIQ and JSON import parsing keep v161 normalization rules', () => {
@@ -938,6 +943,42 @@ test('Word Bank contextmenu never copies a card, including desktop right-click',
   }
 })
 
+test('undo after a bank send restores the Word Bank and redo puts the chips back', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/05-history.js', import.meta.url), 'utf8')
+  const state = {
+    history: [],
+    redo: [],
+    root: null,
+    wordBank: ['Leaf'],
+  }
+  let dockRenders = 0
+  const logyq = {
+    state,
+    elements: { undoBtn: { disabled: false } },
+    config: { HISTORY_LIMIT: 50 },
+    utils: {
+      deepClone: (value) => JSON.parse(JSON.stringify(value)),
+      assignIds() {},
+      findByPath() { return null },
+      findByUid() { return null },
+    },
+    dock: { updateDockBounds() {} },
+    treeManager: { layoutAndRender() {}, renderEmpty() {}, autoFit() {} },
+    wordDock: { render() { dockRenders += 1 } },
+  }
+  const d3 = { hierarchy: (data) => ({ data }) }
+  let historyApi = null
+  new Function('logyq', 'd3', 'attach', source)(logyq, d3, (_name, value) => { historyApi = value })
+  state.history.push({ type: 'delete-root', subtree: { name: 'Leaf', _uid: 'a' }, prevBank: [] })
+  historyApi.undo()
+  assert.equal(state.root.data.name, 'Leaf')
+  assert.deepEqual(state.wordBank, [])
+  assert.ok(dockRenders >= 1)
+  historyApi.redo()
+  assert.equal(state.root, null)
+  assert.deepEqual(state.wordBank, ['Leaf'])
+})
+
 test('sendSubtreeToWordBank ignores blank cards', () => {
   const source = readFileSync(new URL('../public/logyq/js/engine/12-tree-ops.js', import.meta.url), 'utf8')
   const start = source.indexOf('function sendSubtreeToWordBank')
@@ -1478,6 +1519,15 @@ test('uidFromEvent reads data-uid from the tapped hit-slot or node', () => {
   assert.equal(uidFromEvent({ target: slot }), 'n-blank-2')
 })
 
+test('card hit-test uses the painted face before a layout slot', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function hitNode(doc, x, y, event) {')
+  const end = source.indexOf('function cardText(node) {', start)
+  assert.ok(start >= 0 && end > start)
+  const body = source.slice(start, end)
+  assert.ok(body.indexOf('hitVisualNode') < body.indexOf('hitEditUid'), 'a painted card beats a moved slot or grab zone')
+})
+
 test('card hit-test prefers the visual face and the deepest overlapping card', () => {
   const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
   const start = source.indexOf('function rankCardHits(hits, x, y) {')
@@ -1519,6 +1569,25 @@ function smiteSampleTree() {
     ],
   }
 }
+
+test('smite deletes a blank card and does not turn it into a chip', () => {
+  const smite = loadSmitePure()
+  const tree = {
+    name: 'Root',
+    _uid: 'r',
+    children: [
+      { name: '', _uid: 'blank', color: '#fde68a' },
+      { name: 'Kept', _uid: 'k' },
+    ],
+  }
+  const red = smite.planSmiteCommit(tree, new Map([['blank', 'red']]))
+  assert.deepEqual(red.bank, [])
+  assert.equal(red.tree.name, 'Root')
+  assert.deepEqual(red.tree.children.map((child) => child.name), ['Kept'])
+  const amber = smite.planSmiteCommit(tree, new Map([['blank', 'amber']]))
+  assert.deepEqual(amber.bank, [], 'an empty label is not a Word Bank chip')
+  assert.deepEqual(amber.tree.children.map((child) => child.name), ['Kept'])
+})
 
 test('smite cake zones, directions, marks, and the mercy ring', () => {
   const smite = loadSmitePure()

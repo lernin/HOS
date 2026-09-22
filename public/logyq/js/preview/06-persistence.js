@@ -371,7 +371,11 @@
   }
 
   function createMap({ edit = false } = {}) {
-    app.current = { id: null, name: DEFAULT_NAME }
+    const taken = []
+    for (const row of app.libraryRows || []) taken.push(row?.name)
+    for (const row of readCachedLibrary()) taken.push(row?.name)
+    if (app.current?.name) taken.push(app.current.name)
+    app.current = { id: null, name: nextUntitledName(taken) }
     const tree = encodeMapTree({ name: '' })
     app.hasOpenMap = true
     document.body.classList.add('logyq-map-open')

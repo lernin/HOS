@@ -139,6 +139,22 @@
   }
 
 /* ======================= HEADER & CONTROLS ======================= */
+#logyq-map-title{
+  position: fixed;
+  z-index: 40;
+  top: 58px;
+  left: 14px;
+  max-width: min(240px, 46vw);
+  pointer-events: none;
+  color: #94a3b8;
+  font: 500 12px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+body.logyq-home #logyq-map-title{display:none}
+
 header {
   position: fixed;
   top: 0;
@@ -306,14 +322,17 @@ body.logyq-chip-drag .chip.is-lifting{
 .chip-bank-all{
   flex: 0 0 auto;
   align-self: center;
-  min-height: 28px;
-  margin: 0;
-  padding: 2px 12px;
-  border: 1px dashed #94a3b8;
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  margin: 0 0 0 12px;
+  padding: 2px 10px;
+  border: 1px dotted #64748b;
+  border-radius: 8px;
   background: #fff;
   color: #0f172a;
-  font: 700 13px/1 system-ui, sans-serif;
+  font: 700 13px/1.2 system-ui, sans-serif;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -344,6 +363,7 @@ body.logyq-chip-drag .chip.is-lifting{
 
 
   /* ======================= TOAST ======================= */
+  #Toast {
     position: fixed;
     left: 50%;
     transform: translateX(-50%);
@@ -691,7 +711,7 @@ svg.delete-intent g.links path.link.is-parent-link {
   .node rect.grabzone{
     fill: transparent !important;
     stroke: none !important;
-    pointer-events: all;
+    pointer-events: none;
     transition: none !important;
     animation: none !important;
   }

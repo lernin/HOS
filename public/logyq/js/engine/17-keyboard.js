@@ -45,6 +45,7 @@ function keyDispatcher(e){
       logyq.selection.showToast(logyq.dock.sideLabel(side), 900);
       return;
     }
+    if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }
     if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}
 

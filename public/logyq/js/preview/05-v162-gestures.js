@@ -1238,7 +1238,7 @@
     if (alreadyActive) state.candidates.forEach((candidate) => { candidate.multi = true })
     state.active.add(event.pointerId)
 
-    const uid = uidFromTouchedNode(event) || nodeUid(hitNode(doc, event.clientX, event.clientY, event))
+    const uid = nodeUid(hitNode(doc, event.clientX, event.clientY, event))
     if (!uid) hardClearBackground(doc, win, { keepStroke: true })
     state.candidates.set(event.pointerId, {
       uid,
@@ -1537,9 +1537,14 @@
   }
 
   function hitNode(doc, x, y, event) {
+    // Painted face first. A raised neighbor's grab zone and a layout slot
+    // that has already moved both used to name a different card than the
+    // one under the finger.
+    const visual = hitVisualNode(doc, x, y)
+    if (visual) return visual
     const uid = hitEditUid(doc, x, y, event)
     if (uid) return nodeByUid(doc, uid) || null
-    return hitVisualNode(doc, x, y)
+    return null
   }
 
   function cardText(node) {

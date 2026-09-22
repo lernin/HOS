@@ -334,10 +334,24 @@ function bindChipPointerPlace() {
     svg.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX: x, clientY: y }))
   }
 
+  const chipUnderPoint = (x, y) => {
+    if (typeof document.elementsFromPoint !== 'function') return null
+    const stack = document.elementsFromPoint(x, y) || []
+    for (const el of stack) {
+      const chip = el?.closest?.('.chip')
+      if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') continue
+      return chip
+    }
+    return null
+  }
+
   dock.addEventListener('pointerdown', (event) => {
     if (event.button != null && event.button !== 0) return
-    const chip = event.target?.closest?.('.chip')
-    if (!chip || !dock.contains(chip)) return
+    const direct = event.target?.closest?.('.chip')
+    const chip = chipUnderPoint(event.clientX, event.clientY) || direct
+    if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') return
+    const rect = chip.getBoundingClientRect?.()
+    if (rect && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) return
     const word = chip.textContent.trim()
     if (!word) return
     session = { pointerId: event.pointerId, word, x: event.clientX, y: event.clientY, dragging: false, chip }

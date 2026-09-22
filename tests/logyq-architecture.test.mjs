@@ -152,7 +152,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
     "attach('state', state)",
     "attach('elements', elements)",
     "attach('utils', utils)",
-    "attach('history', { pushHistory, undo, autoFitSoon })",
+    "attach('history', { pushHistory, undo, redo, autoFitSoon })",
     "attach('detectors', Detectors)",
     "attach('layout', {",
     "attach('structure', {",

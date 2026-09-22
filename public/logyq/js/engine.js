@@ -345,7 +345,7 @@ const state = {
 
   root:null, lastNodes:[], zoom:null, layout:null,
   dragState:{ trashZone:'far', drop:null, solo:false, groupAbandon:false },
-  history:[], wordBank:[], selectedUid:null, /* [patch] multiselect-state */ selectedUids:new Set(),
+  history:[], redo:[], wordBank:[], selectedUid:null, /* [patch] multiselect-state */ selectedUids:new Set(),
   chipDrag:{ active:false, word:null, words:[], drop:null },
   editingUid:null, editorEl:null, prevZoom:null,
   detectors:[], tabHold:false, /* [patch] tab-hold-flag */
@@ -866,6 +866,7 @@ applyDockSide();
   function pushHistory(action){
     const { state, elements, config: CONFIG } = logyq
     state.history.push(action);
+    state.redo = [];
     if(state.history.length>CONFIG.HISTORY_LIMIT) state.history.shift();
       /* [patch] dock-bounds-init start */
       try{ logyq.dock.updateDockBounds(); }catch(_e){}
@@ -897,6 +898,11 @@ function autoFitSoon(delay){
       /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
     if(!a) return;
+    // Forward snapshot so redo puts the tree and the Word Bank back together.
+    a.redoRoot = state.root ? utils.deepClone(state.root.data) : null;
+    a.redoBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
+    state.redo = state.redo || [];
+    state.redo.push(a);
 
     if(a.type==='delete'){
       const parent = utils.findByPath(state.root.data, a.parentPath);
@@ -968,9 +974,27 @@ function autoFitSoon(delay){
       utils.assignIds(state.root);
       logyq.treeManager.layoutAndRender(false);
     }
+    if ('prevBank' in a) {
+      state.wordBank = (a.prevBank || []).slice();
+      try { logyq.wordDock.render(); } catch (_e) {}
+    }
   }
 
-  attach('history', { pushHistory, undo, autoFitSoon })
+  function redo(){
+    const { state, elements, utils } = logyq
+    const a = (state.redo || []).pop();
+    if (!a || !('redoRoot' in a)) return;
+    state.history.push(a);
+    if (elements.undoBtn) elements.undoBtn.disabled = state.history.length === 0;
+    state.root = a.redoRoot ? d3.hierarchy(a.redoRoot) : null;
+    if (state.root) utils.assignIds(state.root);
+    state.wordBank = (a.redoBank || []).slice();
+    if (state.root) logyq.treeManager.layoutAndRender(false);
+    else logyq.treeManager.renderEmpty();
+    try { logyq.wordDock.render(); } catch (_e) {}
+  }
+
+  attach('history', { pushHistory, undo, redo, autoFitSoon })
 
   /* ======================= SAMPLE DATA ======================= */
   const dataManager = {
@@ -3216,13 +3240,14 @@ function sendSubtreeToWordBank(h){
     const labels = (h?.descendants?.() || []).map(n => (n?.data?.name || '').trim()).filter(Boolean);
     // Blank cards are not words. Skip the bank write and the delete.
     if (!labels.length) return;
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
     labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));
 
 
     // Remove subtree (with history)
     if (!h.parent){
       // Deleting the root means clear the tree
-      logyq.history.pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data) });
+      logyq.history.pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data), prevBank });
       state.root = null;
       state.lastNodes = [];
       logyq.drag?.clear?.();
@@ -3237,7 +3262,8 @@ function sendSubtreeToWordBank(h){
       type: 'delete',
       parentPath: utils.pathToUid(state.root.data, parentData._uid),
       index: idx,
-      subtree: utils.deepClone(h.data)
+      subtree: utils.deepClone(h.data),
+      prevBank
     });
     if (idx > -1) parentData.children.splice(idx, 1);
     if (parentData.children && parentData.children.length === 0) parentData.children = null;
@@ -3256,13 +3282,17 @@ function sendNodeToWordBank_abandon(h){
   try{
     const label = (h?.data?.name || '').trim();
     if (!label) return;
+    if (!h.parent){
+      const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
+      if (!kidsH.length){ showToast('Root has no child to promote'); return; }
+    }
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
     logyq.wordDock.addWords(label, 'bank');
 
     if (!h.parent){
       // Root: promote leftmost child as new root; old root (this label) already banked
       const prevTree = utils.deepClone(state.root.data);
       const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
-      if (!kidsH.length){ showToast('Root has no child to promote'); return; }
 
       const newRootData = kidsH[0].data;
       const others = kidsH.slice(1).map(hh => hh.data);
@@ -3275,7 +3305,7 @@ function sendNodeToWordBank_abandon(h){
       if (idx > -1) prevTree.children.splice(idx, 1);
       newRootData.children = (newRootData.children || []).concat(others);
 
-      logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
+      logyq.history.pushHistory({ type: 'replace-root', prev: prevTree, prevBank });
       state.root = d3.hierarchy(newRootData); utils.assignIds(state.root);
       logyq.treeManager.layoutAndRender(false);
       showToast(`Saved "${label}" to Word Dock`);
@@ -3297,7 +3327,8 @@ function sendNodeToWordBank_abandon(h){
       type: 'delete',
       parentPath: fromParentPath,
       index: fromIndex,
-      subtree: utils.deepClone(moving)
+      subtree: utils.deepClone(moving),
+      prevBank
     });
 
     state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
@@ -4434,10 +4465,24 @@ function bindChipPointerPlace() {
     svg.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX: x, clientY: y }))
   }
 
+  const chipUnderPoint = (x, y) => {
+    if (typeof document.elementsFromPoint !== 'function') return null
+    const stack = document.elementsFromPoint(x, y) || []
+    for (const el of stack) {
+      const chip = el?.closest?.('.chip')
+      if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') continue
+      return chip
+    }
+    return null
+  }
+
   dock.addEventListener('pointerdown', (event) => {
     if (event.button != null && event.button !== 0) return
-    const chip = event.target?.closest?.('.chip')
-    if (!chip || !dock.contains(chip)) return
+    const direct = event.target?.closest?.('.chip')
+    const chip = chipUnderPoint(event.clientX, event.clientY) || direct
+    if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') return
+    const rect = chip.getBoundingClientRect?.()
+    if (rect && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) return
     const word = chip.textContent.trim()
     if (!word) return
     session = { pointerId: event.pointerId, word, x: event.clientX, y: event.clientY, dragging: false, chip }
@@ -5231,11 +5276,11 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       g.insert('rect', ':first-child')
         .attr('class', 'grabzone')
         .attr('x', -CONFIG.CARD_WIDTH / 2)
-        .attr('y', -CONFIG.CARD_HEIGHT * 0.5)
+        .attr('y', -CONFIG.CARD_HEIGHT / 2)
         .attr('width', CONFIG.CARD_WIDTH)
-        .attr('height', CONFIG.CARD_HEIGHT * 1.5)
+        .attr('height', CONFIG.CARD_HEIGHT)
         .style('fill', 'transparent')
-        .style('pointer-events', 'all')
+        .style('pointer-events', 'none')
       g.append('rect')
         .attr('x', -CONFIG.CARD_WIDTH / 2)
         .attr('y', -CONFIG.CARD_HEIGHT / 2)
@@ -5396,17 +5441,23 @@ const nEnter = selNodes.enter()
     nEnter.insert("rect",":first-child")
       .attr("class","grabzone")
       .attr("x",-CONFIG.CARD_WIDTH/2)
-      .attr("y",-CONFIG.CARD_HEIGHT*0.5)
+      .attr("y",-CONFIG.CARD_HEIGHT/2)
       .attr("width",CONFIG.CARD_WIDTH)
-      .attr("height",CONFIG.CARD_HEIGHT*1.5)
+      .attr("height",CONFIG.CARD_HEIGHT)
       .style("fill","transparent")
-      .style("cursor","grab").style("pointer-events","all");
+      .style("cursor","grab").style("pointer-events","none");
     /* [patch] grabzone-behind end */
     nEnter.append("rect").attr("x", -CONFIG.CARD_WIDTH/2).attr("y", -CONFIG.CARD_HEIGHT/2).attr("width", CONFIG.CARD_WIDTH).attr("height", CONFIG.CARD_HEIGHT);
     nEnter.append("text").attr("class","label").attr("x",0).attr("y",0).style("font-size", `${CONFIG.FONT_SIZE}px`).text(d=>d.data.name);
 
     const allNodes = nEnter.merge(selNodes);
     allNodes.attr("data-uid", d => d.data._uid);
+    allNodes.select("rect.grabzone")
+      .attr("x", -CONFIG.CARD_WIDTH/2)
+      .attr("y", -CONFIG.CARD_HEIGHT/2)
+      .attr("width", CONFIG.CARD_WIDTH)
+      .attr("height", CONFIG.CARD_HEIGHT)
+      .style("pointer-events", "none");
     allNodes.select("rect:not(.grabzone)")
       .attr("data-uid", d => d.data._uid)
       .style("fill", d => d.data.color || null);
@@ -5677,6 +5728,7 @@ function keyDispatcher(e){
       logyq.selection.showToast(logyq.dock.sideLabel(side), 900);
       return;
     }
+    if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }
     if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}
 

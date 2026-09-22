@@ -41,6 +41,8 @@
       .logiq-pin-actions{display:flex;justify-content:flex-end;gap:8px}
       .logiq-pin-error{display:none;color:#dc2626;font-size:12px}.logiq-pin-error.is-visible{display:block}
       #logiq-mobile-header,#logiq-mobile-panel,#logiq-voice-bar{display:none}
+      #logyq-map-title{position:fixed;z-index:40;top:58px;left:14px;max-width:min(240px,46vw);pointer-events:none;color:#94a3b8;font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      body.logyq-home #logyq-map-title{display:none}
 
       /* Ghost-hold is not media-query gated: desktop drag-mode hides is-others (opacity:0),
          which makes the tree look like it collapsed around the moving card. While a finger
@@ -68,6 +70,7 @@
         #Dock.dock-left{top:54px;bottom:max(8px,env(safe-area-inset-bottom));left:8px;right:auto;width:min(220px,72vw);padding:8px}
         #Toast{bottom:72px;max-width:calc(100vw - 36px);text-align:center}
         #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px);overflow:hidden;flex-wrap:nowrap}
+        #logyq-map-title{top:52px;left:12px}
         #logyq-corner-cluster{display:contents}
         #logyq-select-strip{display:none!important}
         #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto;order:2}
@@ -133,6 +136,7 @@
       }
       @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
         #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0;overflow:visible}
+        #logyq-map-title{top:max(8px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}
         #logyq-corner-cluster{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;bottom:auto;width:max-content;height:auto;max-height:calc(100dvh - 16px);padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);overflow:auto}
         #logyq-corner-cluster img,#logyq-select-strip,#logyq-home-btn{display:none}
         #logyq-paint-btn{order:-1}

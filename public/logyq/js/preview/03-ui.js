@@ -5,6 +5,10 @@
     desktopState.setAttribute('aria-live', 'polite')
     document.querySelector('header .controls')?.prepend(desktopState)
 
+    if (!document.getElementById('logyq-map-title')) {
+      document.body.insertAdjacentHTML('afterbegin', '<div id="logyq-map-title"></div>')
+    }
+
     if (!document.getElementById('logiq-mobile-header')) {
       document.body.insertAdjacentHTML('afterbegin', `
       <div id="logiq-mobile-header">
@@ -280,5 +284,7 @@
 
   function updateMapName() {
     localStorage.setItem(CURRENT_KEY, JSON.stringify(app.current))
+    const title = document.getElementById('logyq-map-title')
+    if (title) title.textContent = app.current?.name || ''
   }
 

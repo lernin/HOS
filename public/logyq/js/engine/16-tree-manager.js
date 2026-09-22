@@ -271,11 +271,11 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       g.insert('rect', ':first-child')
         .attr('class', 'grabzone')
         .attr('x', -CONFIG.CARD_WIDTH / 2)
-        .attr('y', -CONFIG.CARD_HEIGHT * 0.5)
+        .attr('y', -CONFIG.CARD_HEIGHT / 2)
         .attr('width', CONFIG.CARD_WIDTH)
-        .attr('height', CONFIG.CARD_HEIGHT * 1.5)
+        .attr('height', CONFIG.CARD_HEIGHT)
         .style('fill', 'transparent')
-        .style('pointer-events', 'all')
+        .style('pointer-events', 'none')
       g.append('rect')
         .attr('x', -CONFIG.CARD_WIDTH / 2)
         .attr('y', -CONFIG.CARD_HEIGHT / 2)
@@ -436,17 +436,23 @@ const nEnter = selNodes.enter()
     nEnter.insert("rect",":first-child")
       .attr("class","grabzone")
       .attr("x",-CONFIG.CARD_WIDTH/2)
-      .attr("y",-CONFIG.CARD_HEIGHT*0.5)
+      .attr("y",-CONFIG.CARD_HEIGHT/2)
       .attr("width",CONFIG.CARD_WIDTH)
-      .attr("height",CONFIG.CARD_HEIGHT*1.5)
+      .attr("height",CONFIG.CARD_HEIGHT)
       .style("fill","transparent")
-      .style("cursor","grab").style("pointer-events","all");
+      .style("cursor","grab").style("pointer-events","none");
     /* [patch] grabzone-behind end */
     nEnter.append("rect").attr("x", -CONFIG.CARD_WIDTH/2).attr("y", -CONFIG.CARD_HEIGHT/2).attr("width", CONFIG.CARD_WIDTH).attr("height", CONFIG.CARD_HEIGHT);
     nEnter.append("text").attr("class","label").attr("x",0).attr("y",0).style("font-size", `${CONFIG.FONT_SIZE}px`).text(d=>d.data.name);
 
     const allNodes = nEnter.merge(selNodes);
     allNodes.attr("data-uid", d => d.data._uid);
+    allNodes.select("rect.grabzone")
+      .attr("x", -CONFIG.CARD_WIDTH/2)
+      .attr("y", -CONFIG.CARD_HEIGHT/2)
+      .attr("width", CONFIG.CARD_WIDTH)
+      .attr("height", CONFIG.CARD_HEIGHT)
+      .style("pointer-events", "none");
     allNodes.select("rect:not(.grabzone)")
       .attr("data-uid", d => d.data._uid)
       .style("fill", d => d.data.color || null);
