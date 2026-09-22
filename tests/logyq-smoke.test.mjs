@@ -15,7 +15,7 @@ test.after(async () => {
   await browser?.close()
 })
 
-async function stubMaps(context, { maps = [], capture = [] } = {}) {
+async function stubMaps(context, { maps = [], capture = [], acceptPin = null, listBody = null } = {}) {
   const store = { maps: maps.map((row) => ({ ...row })) }
   await context.route('https://jzaghifuhinkzzhiojre.supabase.co/**', async (route) => {
     const url = route.request().url()
@@ -23,6 +23,18 @@ async function stubMaps(context, { maps = [], capture = [] } = {}) {
     let body = {}
     try { body = route.request().postDataJSON() || {} } catch (_error) {}
     capture.push({ name, url, method: route.request().method(), body })
+    if (acceptPin && body.pin !== acceptPin && ['logiq_map_list', 'logiq_map_save', 'logiq_map_delete'].includes(name)) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Wrong Lab password', code: '28000' }),
+      })
+      return
+    }
+    if (name === 'logiq_map_list' && listBody) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(listBody) })
+      return
+    }
     if (name === 'logiq_map_list') {
       const rows = store.maps.slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) })
@@ -54,13 +66,14 @@ async function stubMaps(context, { maps = [], capture = [] } = {}) {
 }
 
 async function newContext(options = {}) {
-  const context = await browser.newContext(options)
+  const { pin = 'test-pin', ...browserOptions } = options
+  const context = await browser.newContext(browserOptions)
   await context.route('https://cdn.jsdelivr.net/npm/d3@7*', (route) => route.fulfill({
     status: 200,
     contentType: 'application/javascript',
     body: d3Source,
   }))
-  await context.addInitScript(() => sessionStorage.setItem('logyq_lab_pin_v1', 'test-pin'))
+  if (pin != null) await context.addInitScript((value) => sessionStorage.setItem('logyq_lab_pin_v1', value), pin)
   return context
 }
 
@@ -228,12 +241,17 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   assert.equal(await page.locator('body > header').isVisible(), false)
   assert.equal(await page.locator('#logiq-mobile-header').count(), 1)
   assert.equal(await page.locator('#logiq-mobile-header').isVisible(), true)
-  assert.equal(await page.locator('#logyq-paint-btn').count(), 1)
+  assert.equal(await page.locator('#logyq-select-strip').isVisible(), false)
+  assert.equal(await page.locator('#logiq-mobile-word-input').isVisible(), false)
+  assert.equal(await page.locator('#logiq-mobile-mic-btn').isVisible(), false)
+  assert.equal(await page.locator('#logyq-home-btn').isVisible(), true)
   assert.equal(await page.locator('#logyq-paint-btn').isVisible(), true)
   const headerBox = await page.locator('#logiq-mobile-header').boundingBox()
-  assert.ok(headerBox, 'phone header should be laid out')
-  assert.ok(headerBox.height <= 52, `phone header height ${headerBox.height} should stay compact`)
-  assert.ok(headerBox.y <= 1, `phone header y ${headerBox.y} should sit at the top`)
+  assert.ok(headerBox, 'portrait header should be laid out')
+  assert.ok(headerBox.height <= 52, `portrait header height ${headerBox.height} should stay compact`)
+  assert.ok(headerBox.y <= 1, `portrait header y ${headerBox.y} should sit at the top`)
+  assert.ok(headerBox.width >= 380, `portrait header width ${headerBox.width} should span the phone`)
+  assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('logiq-mobile-header')).display), 'flex')
   assert.equal(await page.locator('#trash').isVisible(), false)
   assert.equal(await page.evaluate(() => {
     const boot = document.getElementById('logyq-phone-boot')?.textContent || ''
@@ -648,6 +666,25 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.evaluate(() => {
     return Array.from(document.querySelectorAll('svg#canvas g.node')).some((element) => element.__data__?.data?.name === 'Node 03')
   }), true)
+  await page.waitForTimeout(520)
+  await page.evaluate(({ x, y }) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    for (const button of [0, 2]) {
+      node?.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: x,
+        clientY: y,
+        button,
+      }))
+    }
+  }, hold)
+  assert.equal(await page.locator('#Dock .chip').count(), bankBefore, 'late long-press contextmenu must not copy into Word Bank')
+  assert.deepEqual(await page.evaluate(() => (window.LOGYQBridge.core.state.wordBank || []).slice()), bankWordsBefore)
+  assert.equal(await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('svg#canvas g.node')).some((element) => element.__data__?.data?.name === 'Node 03')
+  }), true, 'late contextmenu must leave the card on the map')
   await page.waitForFunction((prev) => {
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return Math.abs(t.y - prev.y) < 3
@@ -858,6 +895,87 @@ test('LOGYQ empty library stays a library, not a chooser or editor', async () =>
   await context.close()
 })
 
+test('LOGYQ missing Lab PIN asks to connect and does not claim the library is empty', async () => {
+  const capture = []
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, pin: null })
+  await stubMaps(context, {
+    capture,
+    acceptPin: 'test-pin',
+    maps: [
+      { id: 'animals', name: 'Animals', tree: { name: 'Animals', formatVersion: 2 }, word_bank: [], updated_at: '2026-09-22T00:12:35.000Z' },
+      { id: 'logyq-2', name: 'LOGYQ 2', tree: { name: 'LOGYQ 2', formatVersion: 2 }, word_bank: [], updated_at: '2026-09-22T00:11:39.000Z' },
+      { id: 'logyq', name: 'LOGYQ', tree: { name: 'LOGYQ', formatVersion: 2 }, word_bank: [], updated_at: '2026-09-22T00:10:03.000Z' },
+    ],
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await page.waitForSelector('#logiq-pin.is-open')
+  assert.doesNotMatch(await page.locator('#logiq-map-list').innerText(), /No maps yet/)
+  await page.locator('#logiq-pin-cancel').click()
+  await waitForBoot(page)
+  const locked = await page.locator('#logiq-map-list').innerText()
+  assert.match(locked, /still saved/)
+  assert.doesNotMatch(locked, /No maps yet/)
+  await page.locator('[data-connect]').click()
+  await page.waitForSelector('#logiq-pin.is-open')
+  await page.locator('#logiq-pin-input').fill('0000')
+  await page.locator('#logiq-pin-form button[type="submit"]').click()
+  await page.waitForSelector('.logiq-pin-error.is-visible')
+  assert.match(await page.locator('.logiq-pin-error').innerText(), /still saved/)
+  assert.doesNotMatch(await page.locator('#logiq-map-list').innerText(), /No maps yet/)
+  await page.locator('#logiq-pin-input').fill('test-pin')
+  await page.locator('#logiq-pin-form button[type="submit"]').click()
+  await page.waitForSelector('.logiq-map-name')
+  const names = await page.locator('.logiq-map-name').allTextContents()
+  assert.ok(names.includes('Animals'))
+  assert.ok(names.includes('LOGYQ'))
+  assert.ok(names.includes('LOGYQ 2'))
+  assert.equal(capture.filter((request) => request.name === 'logiq_map_list').at(-1)?.body?.pin, 'test-pin')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ landscape edge chrome is full-bleed with paint on the rail and maps in the menu', async () => {
+  const context = await newContext({ viewport: { width: 667, height: 375 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+  const canvas = await page.locator('svg#canvas').boundingBox()
+  assert.ok(canvas.x <= 1, `canvas x ${canvas.x} should stay full-bleed`)
+  assert.ok(canvas.width >= 660, `canvas width ${canvas.width} should fill the landscape viewport`)
+  assert.equal(await page.evaluate(() => getComputedStyle(document.getElementById('logiq-mobile-header')).display), 'contents')
+  const cluster = await page.locator('#logyq-corner-cluster').boundingBox()
+  assert.ok(cluster.width < 80, `corner cluster width ${cluster.width} should stay a narrow rail`)
+  assert.ok(cluster.height < 360, `corner cluster height ${cluster.height} should not span the screen`)
+  assert.ok(cluster.x > 520, `corner cluster x ${cluster.x} should sit on the right`)
+  assert.equal(await page.locator('#logyq-select-strip').isVisible(), false)
+  assert.equal(await page.locator('#logiq-mobile-word-input').isVisible(), false)
+  assert.equal(await page.locator('#logiq-mobile-mic-btn').isVisible(), false)
+  assert.equal(await page.locator('#logyq-home-btn').isVisible(), false)
+  const paint = await page.locator('#logyq-paint-btn').boundingBox()
+  const undo = await page.locator('#logyq-corner-cluster [data-tool="undo"]').boundingBox()
+  assert.ok(paint.y < undo.y, `paint y ${paint.y} should sit above undo y ${undo.y}`)
+  assert.ok(Math.abs(paint.x - undo.x) < 12, 'paint should sit in the right rail')
+  await page.locator('#logyq-paint-btn').click()
+  await page.waitForSelector('#logyq-paint-strip.is-open')
+  const palette = await page.locator('#logyq-paint-strip').boundingBox()
+  assert.ok(palette.width > 200 && palette.width < 430, `palette width ${palette.width} should hug the swatches`)
+  assert.ok(palette.x + palette.width <= cluster.x + 4, `palette should end at the rail, not stretch across the screen`)
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.locator('#logiq-mobile-panel [data-tool="library"]').click()
+  await page.waitForSelector('#logiq-library.is-open')
+  const library = await page.locator('#logiq-library').boundingBox()
+  assert.ok(library.width > 640, `library width ${library.width} should overlay the screen`)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ library lists recents and New opens a calm one-card canvas', async () => {
   const capture = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
@@ -893,7 +1011,8 @@ test('LOGYQ library lists recents and New opens a calm one-card canvas', async (
   assert.equal(await page.locator('g.node').count(), 1)
   assert.equal(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.color), '#fde68a')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
-  await page.locator('#logyq-home-btn').click()
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.locator('#logiq-mobile-panel [data-tool="library"]').click()
   await page.waitForSelector('#logiq-library.is-open')
   await page.locator('#logiq-new-map').click()
   await page.waitForFunction(() => !document.getElementById('logiq-library')?.classList.contains('is-open'))
@@ -905,7 +1024,8 @@ test('LOGYQ library lists recents and New opens a calm one-card canvas', async (
   assert.equal(await page.locator('.node-edit-input').count(), 0)
   await page.waitForTimeout(950)
   assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
-  await page.locator('#logyq-home-btn').click()
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.locator('#logiq-mobile-panel [data-tool="library"]').click()
   await page.waitForSelector('#logiq-library.is-open')
   await page.waitForSelector('.logiq-map-name')
   assert.deepEqual(await page.locator('.logiq-map-name').allTextContents(), ['Recent sky', 'Older map'])
@@ -1948,6 +2068,648 @@ test('LOGYQ flick left/right reserve non-overlapping sibling slots', async () =>
   await touch('pointerup', (left.left + left.right) / 2, (left.top + left.bottom) / 2, 104)
   await page.waitForSelector('.node-edit-input')
   assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), leftUid)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amber path', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      color: '#2563eb',
+      children: [
+        { name: 'A', children: [{ name: 'A1' }, { name: '' }] },
+        { name: 'B' },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => document.body.classList.contains('logyq-mobile-v162') && document.getElementById('canvas')?.dataset.logyqSmite === '1')
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'A')
+    const rect = node?.getBoundingClientRect()
+    return rect && rect.width > 20 && rect.bottom > 48 && rect.top < window.innerHeight
+  })
+
+  const chrome = await page.evaluate(() => {
+    const header = document.getElementById('logiq-mobile-header')
+    const strip = document.getElementById('logyq-select-strip')
+    return {
+      display: getComputedStyle(header).display,
+      height: header.getBoundingClientRect().height,
+      strip: getComputedStyle(strip).display,
+    }
+  })
+  assert.equal(chrome.display, 'flex')
+  assert.ok(chrome.height > 40 && chrome.height <= 52)
+  assert.equal(chrome.strip, 'none')
+
+  async function center(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid: node.__data__.data._uid }
+    }, name)
+  }
+  async function settle() {
+    await page.waitForFunction(() => !document.body.classList.contains('logyq-layout-settling'))
+  }
+  async function touch(type, x, y, pointerId, uid = null) {
+    await page.evaluate(({ type, x, y, pointerId, uid }) => {
+      const node = uid
+        ? Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => (el.__data__?.data?._uid || el.getAttribute('data-uid')) === uid)
+        : null
+      const target = node || document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: false,
+        button: 0,
+        buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId, uid })
+  }
+  async function park(zone, pointerId) {
+    const point = await page.evaluate((which) => {
+      const height = window.innerHeight
+      const y = which === 'top' ? height * 0.16 : which === 'bottom' ? height * 0.84 : height * 0.5
+      return { x: 16, y }
+    }, zone)
+    await touch('pointerdown', point.x, point.y, pointerId)
+    return point
+  }
+  async function clocks() {
+    return page.evaluate(() => Array.from(document.querySelectorAll('path.logyq-smite-clock')).map((clock) => {
+      const node = clock.parentElement
+      const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')
+      const wash = node.querySelector('rect.logyq-smite-wash')
+      const text = node.querySelector('text.label')
+      return {
+        name: node.__data__?.data?.name ?? null,
+        red: clock.classList.contains('logyq-smite-red'),
+        amber: clock.classList.contains('logyq-smite-amber'),
+        dash: clock.getAttribute('stroke-dasharray'),
+        offset: Number(clock.getAttribute('stroke-dashoffset')),
+        stroke: clock.getAttribute('stroke'),
+        phase: node.dataset.smitePhase || '',
+        faceFill: face?.style?.fill || '',
+        wash: wash?.getAttribute('fill') || '',
+        washOpacity: Number(wash?.getAttribute('fill-opacity')),
+        glow: node.querySelector('rect.logyq-smite-glow') ? Number(node.querySelector('rect.logyq-smite-glow').getAttribute('fill-opacity')) : 0,
+        text: text?.style?.fill || '',
+      }
+    }))
+  }
+  async function names() {
+    return page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name))
+  }
+  async function heats() {
+    return page.evaluate(() => {
+      const cssHex = (value) => {
+        const rgb = String(value || '').match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+        if (!rgb) return String(value || '')
+        const hex = (n) => Number(n).toString(16).padStart(2, '0')
+        return `#${hex(rgb[1])}${hex(rgb[2])}${hex(rgb[3])}`
+      }
+      return Array.from(document.querySelectorAll('svg#canvas g.node')).filter((node) => node.dataset.smiteHeat === '1').map((node) => {
+        const wash = node.querySelector('rect.logyq-smite-wash')
+        return {
+          name: node.__data__?.data?.name ?? null,
+          phase: node.dataset.smitePhase || '',
+          clock: !!node.querySelector('path.logyq-smite-clock'),
+          wash: wash?.getAttribute('fill') || '',
+          washOpacity: Number(wash?.getAttribute('fill-opacity')),
+          glow: node.querySelector('rect.logyq-smite-glow') ? Number(node.querySelector('rect.logyq-smite-glow').getAttribute('fill-opacity')) : 0,
+          faceStroke: cssHex(node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')?.style?.stroke || ''),
+          washStroke: cssHex(wash?.getAttribute('stroke') || ''),
+          clocks: node.querySelectorAll('path.logyq-smite-clock').length,
+        }
+      })
+    })
+  }
+  async function edges() {
+    return page.evaluate(() => {
+      const cssHex = (value) => {
+        const rgb = String(value || '').match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+        if (!rgb) return String(value || '')
+        const hex = (n) => Number(n).toString(16).padStart(2, '0')
+        return `#${hex(rgb[1])}${hex(rgb[2])}${hex(rgb[3])}`
+      }
+      return Array.from(document.querySelectorAll('svg#canvas g.links path.link')).map((link) => ({
+        name: link.__data__?.target?.data?.name ?? null,
+        stroke: cssHex(getComputedStyle(link).stroke || link.style.stroke || ''),
+        dash: link.style.strokeDasharray || '',
+        opacity: link.style.opacity || '',
+        edge: link.dataset.smiteEdge || '',
+        animation: link.style.animationName || link.style.animation || '',
+      }))
+    })
+  }
+  async function zoomK() {
+    return page.evaluate(() => window.d3.zoomTransform(document.getElementById('canvas')).k)
+  }
+
+  const beforePinch = await names()
+  const k0 = await zoomK()
+  await touch('pointerdown', 40, 300, 11)
+  await touch('pointerdown', 200, 300, 12)
+  await touch('pointermove', 40, 420, 11)
+  const kParked = await zoomK()
+  assert.ok(Math.abs(kParked - k0) < 0.02, 'a parked finger does not zoom')
+  await touch('pointermove', 180, 300, 12)
+  const kArmed = await zoomK()
+  assert.ok(Math.abs(kArmed - k0) < 0.02, 'becoming a pinch does not apply the earlier one-finger slide')
+  await touch('pointermove', 40, 460, 11)
+  await touch('pointermove', 120, 300, 12)
+  const kPinch = await zoomK()
+  assert.ok(Math.abs(kPinch - k0) > 0.01, 'two moving fingers pinch the map')
+  await touch('pointerup', 120, 300, 12)
+  await touch('pointerup', 40, 460, 11)
+  assert.equal(await page.evaluate(() => window.__logyqSuppressZoom), false)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
+  assert.deepEqual(await clocks(), [])
+  assert.deepEqual(await names(), beforePinch)
+
+  await settle()
+  const root = await center('Root')
+  const kBeforeCast = await zoomK()
+  await park('top', 21)
+  await touch('pointerdown', root.x, root.y, 22, root.uid)
+  await touch('pointermove', root.x, root.y + 80, 22, root.uid)
+  const kDuringCast = await zoomK()
+  assert.ok(Math.abs(kDuringCast - kBeforeCast) < 0.02, 'thumb park plus a swipe does not zoom')
+  let armed = await clocks()
+  assert.deepEqual(armed.map((clock) => clock.name), ['Root'])
+  assert.equal(armed[0].red, true)
+  assert.equal(armed[0].dash, 'none')
+  assert.equal(armed[0].offset, 0)
+  assert.equal(armed[0].phase, '')
+  assert.equal(armed[0].stroke, '#ff0000')
+  assert.equal(armed[0].glow, 0)
+  assert.ok(armed[0].faceFill === '#2563eb' || armed[0].faceFill === 'rgb(37, 99, 235)', 'paint stays on the card')
+  assert.equal(armed[0].wash, '#ffb8b8')
+  assert.ok(armed[0].washOpacity > 0.8)
+  const rootMood = await edges()
+  for (const name of ['A', 'A1', '', 'B']) {
+    assert.equal(rootMood.find((edge) => edge.name === name)?.edge, '1')
+    assert.equal(rootMood.find((edge) => edge.name === name)?.stroke, '#ff0000')
+  }
+  assert.equal(armed[0].text, '')
+  const noon = await page.evaluate(() => {
+    const clock = document.querySelector('path.logyq-smite-clock')
+    const face = clock.parentElement.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')
+    const x = parseFloat(face.getAttribute('x')) || 0
+    const y = parseFloat(face.getAttribute('y')) || 0
+    const w = parseFloat(face.getAttribute('width')) || 0
+    const h = parseFloat(face.getAttribute('height')) || 0
+    const rxAttr = parseFloat(face.getAttribute('rx'))
+    const ryAttr = parseFloat(face.getAttribute('ry'))
+    const rx = rxAttr > 0 ? rxAttr : 10
+    const ry = ryAttr > 0 ? ryAttr : rx
+    const start = clock.getPointAtLength(0)
+    const step = clock.getPointAtLength(Math.max(1, clock.getTotalLength() * 0.03))
+    return {
+      matches: clock.getAttribute('d') === window.LOGYQPreview.gestures.smiteClockPath(x, y, w, h, rx, ry),
+      dx: Math.abs(start.x - (x + w / 2)),
+      dy: Math.abs(start.y - y),
+      counterClockwise: step.x < start.x,
+    }
+  })
+  assert.equal(noon.matches, true)
+  assert.ok(noon.dx < 1 && noon.dy < 1, 'live line starts at the top center of the card')
+  assert.equal(noon.counterClockwise, true)
+  const half = await page.evaluate(async () => {
+    const svgNS = 'http://www.w3.org/2000/svg'
+    const svg = document.createElementNS(svgNS, 'svg')
+    svg.setAttribute('width', '200')
+    svg.setAttribute('height', '120')
+    const path = document.createElementNS(svgNS, 'path')
+    path.setAttribute('d', window.LOGYQPreview.gestures.smiteClockPath(20, 20, 160, 80, 10, 10))
+    path.setAttribute('fill', 'none')
+    path.setAttribute('stroke', '#dc2626')
+    path.setAttribute('stroke-width', '8')
+    path.setAttribute('stroke-linecap', 'butt')
+    svg.appendChild(path)
+    document.body.appendChild(svg)
+    const dash = window.LOGYQPreview.gestures.smiteLineDash(0.5, path.getTotalLength())
+    path.setAttribute('stroke-dasharray', dash.array)
+    path.setAttribute('stroke-dashoffset', String(dash.offset))
+    const xml = new XMLSerializer().serializeToString(svg)
+    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
+    const image = new Image()
+    image.src = url
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = 200
+    canvas.height = 120
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(image, 0, 0)
+    URL.revokeObjectURL(url)
+    svg.remove()
+    const red = (x, y) => {
+      const pixel = ctx.getImageData(x, y, 1, 1).data
+      return pixel[0] > 160 && pixel[1] < 90 && pixel[2] < 90
+    }
+    return {
+      noon: red(100, 20),
+      towardThree: red(140, 20),
+      towardNine: red(60, 20),
+      right: red(180, 60),
+      left: red(20, 60),
+    }
+  })
+  assert.equal(half.noon, true, 'half ring is still anchored at 12')
+  assert.equal(half.towardThree, true, 'the remaining stroke includes the closing top')
+  assert.equal(half.right, true)
+  assert.equal(half.towardNine, false, 'the opening top toward the left has already been eaten')
+  assert.equal(half.left, false)
+  await touch('pointerup', root.x, root.y + 80, 22, root.uid)
+  await touch('pointerup', 16, 120, 21)
+  await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 6000 })
+  await page.waitForFunction(() => {
+    const clock = document.querySelector('path.logyq-smite-clock')
+    const dash = clock?.getAttribute('stroke-dasharray') || ''
+    return dash.includes(' ')
+  })
+  const oneRing = await page.evaluate(() => {
+    const clock = document.querySelector('path.logyq-smite-clock')
+    const node = clock.parentElement
+    const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')
+    const style = getComputedStyle(clock)
+    const parts = clock.getAttribute('stroke-dasharray').trim().split(/[\s,]+/).map(Number)
+    const total = clock.getTotalLength()
+    const paths = Array.from(document.querySelectorAll('path.logyq-smite-clock'))
+    const stroked = Array.from(node.children).filter((el) => {
+      const paint = getComputedStyle(el).stroke
+      return paint && paint !== 'none'
+    }).map((el) => el.getAttribute('class') || el.tagName)
+    return {
+      paths: paths.length,
+      onNode: node.querySelectorAll('path.logyq-smite-clock').length,
+      stroked,
+      pathLength: clock.getAttribute('pathLength'),
+      animation: style.animationName,
+      transition: style.transitionProperty,
+      vector: style.vectorEffect,
+      faceStroke: face.style.stroke,
+      parts,
+      total,
+      offset: Number(clock.getAttribute('stroke-dashoffset')),
+    }
+  })
+  assert.equal(oneRing.paths, 1, 'one mercy stroke on the doomed root')
+  assert.equal(oneRing.onNode, 1)
+  assert.deepEqual(oneRing.stroked, ['logyq-smite-clock logyq-smite-red'])
+  assert.ok(Math.abs(Number(oneRing.pathLength) - oneRing.total) < 0.01, 'dash units are the path length once')
+  assert.equal(oneRing.animation, 'none')
+  assert.equal(oneRing.transition, 'none')
+  assert.equal(oneRing.vector, 'none', 'the dash stays in the same space as the path')
+  assert.equal(oneRing.faceStroke, 'none', 'the card border is not a second ring')
+  assert.equal(oneRing.parts.length, 2)
+  assert.ok(oneRing.parts[0] > 120 && oneRing.parts[1] > 120, 'the dash is one gap and one stroke, not a fast repeat')
+  assert.ok(Math.abs(oneRing.parts[0] + oneRing.parts[1] - oneRing.total) < 1.5)
+  assert.ok(Math.abs(oneRing.offset / oneRing.total - 0.5) < 0.12, 'the tip has rewound about halfway counter-clockwise')
+  await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 1600 })
+  await page.waitForFunction(() => {
+    const clock = document.querySelector('path.logyq-smite-clock')
+    const parts = (clock?.getAttribute('stroke-dasharray') || '').trim().split(/[\s,]+/).map(Number)
+    return parts.length === 2 && parts[0] < clock.getTotalLength() * 0.2
+  })
+  const late = await clocks()
+  assert.equal(late[0].stroke, '#ff0000')
+  assert.equal(late[0].wash, '#ffb8b8')
+  assert.equal(late[0].glow, 0)
+  assert.ok(late[0].faceFill === '#2563eb' || late[0].faceFill === 'rgb(37, 99, 235)')
+  await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 15000 })
+  const cycle = async (pointerId) => {
+    const point = await center('Root')
+    await touch('pointerdown', point.x, point.y, pointerId, point.uid)
+    await touch('pointerup', point.x, point.y, pointerId, point.uid)
+    return page.evaluate(() => {
+      const mercy = window.LOGYQPreview.gestures.smite.mercy
+      if (!mercy) return null
+      const uid = window.LOGYQBridge.core.state.root.data._uid
+      return { mark: mercy.marks.get(uid), remaining: mercy.remaining, dash: document.querySelector('path.logyq-smite-clock')?.getAttribute('stroke-dasharray'), stroke: document.querySelector('path.logyq-smite-clock')?.getAttribute('stroke') }
+    })
+  }
+  const rearmed = await cycle(23)
+  assert.equal(rearmed.mark, 'amber')
+  assert.ok(rearmed.remaining >= 14000, 're-arming restarts the 3s hold')
+  assert.equal(rearmed.dash, 'none')
+  assert.equal(rearmed.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === 'A')?.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal(await cycle(25), null)
+  const restored = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Root')
+    return {
+      wash: node.querySelectorAll('rect.logyq-smite-wash').length,
+      glow: node.querySelectorAll('rect.logyq-smite-glow').length,
+      clock: node.querySelectorAll('.logyq-smite-clock').length,
+      fill: node.querySelector('rect:not(.grabzone)')?.style?.fill || '',
+    }
+  })
+  assert.equal(restored.wash, 0)
+  assert.equal(restored.glow, 0)
+  assert.equal(restored.clock, 0)
+  assert.ok(restored.fill === '#2563eb' || restored.fill === 'rgb(37, 99, 235)')
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  assert.ok((await names()).includes('A'))
+
+  await settle()
+  const leaf = await center('B')
+  await park('middle', 31)
+  await touch('pointerdown', leaf.x, leaf.y, 32, leaf.uid)
+  await touch('pointermove', leaf.x - 80, leaf.y, 32, leaf.uid)
+  const bankArmed = await clocks()
+  assert.deepEqual(bankArmed.map((clock) => clock.name), ['B'])
+  assert.equal(bankArmed[0].amber, true)
+  assert.equal(bankArmed[0].stroke, '#ffa100')
+  assert.equal(bankArmed[0].phase, '')
+  assert.equal(bankArmed[0].wash, '#ffcc80')
+  assert.equal(bankArmed[0].glow, 0)
+  await touch('pointerup', leaf.x - 80, leaf.y, 32, leaf.uid)
+  await touch('pointerup', 16, 400, 31)
+  const triggerB = await center('B')
+  await touch('pointerdown', triggerB.x, triggerB.y, 33, triggerB.uid)
+  await touch('pointermove', triggerB.x, triggerB.y + 70, 33, triggerB.uid)
+  await touch('pointerup', triggerB.x, triggerB.y + 70, 33, triggerB.uid)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['B'])
+  assert.equal((await names()).includes('B'), false)
+  assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
+  await page.locator('[data-tool="undo"]').click()
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.length === 0)
+
+  await settle()
+  const card = await center('A')
+  await park('middle', 41)
+  await touch('pointerdown', card.x, card.y, 42, card.uid)
+  await touch('pointermove', card.x, card.y + 84, 42, card.uid)
+  const family = await heats()
+  assert.deepEqual(family.map((card) => card.name).sort(), ['', 'A', 'A1'])
+  assert.equal(family.find((card) => card.name === 'A')?.clock, true)
+  assert.equal(family.find((card) => card.name === 'A1')?.clock, false)
+  assert.equal(family.every((card) => card.wash === '#ffb8b8' && card.glow === 0), true)
+  assert.equal(family.find((card) => card.name === 'A')?.faceStroke, 'none')
+  assert.equal((await clocks()).length, 1)
+  assert.equal((await clocks())[0].name, 'A')
+  assert.equal((await clocks())[0].stroke, '#ff0000')
+  const familyEdges = await edges()
+  assert.equal(familyEdges.find((edge) => edge.name === 'A1')?.edge, '1')
+  assert.equal(familyEdges.find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
+  assert.equal(familyEdges.find((edge) => edge.name === '')?.stroke, '#ff0000')
+  assert.equal(familyEdges.find((edge) => edge.name === 'A')?.edge || '', '')
+  assert.equal(familyEdges.find((edge) => edge.name === 'B')?.edge || '', '')
+  await touch('pointerup', card.x, card.y + 84, 42, card.uid)
+  await touch('pointerup', 16, 422, 41)
+  await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 1600 })
+  await page.waitForFunction(() => {
+    const clock = document.querySelector('path.logyq-smite-clock')
+    const parts = (clock?.getAttribute('stroke-dasharray') || '').trim().split(/[\s,]+/).map(Number)
+    return clock?.getAttribute('stroke') === '#ff0000' && parts.length === 2 && parts[0] < clock.getTotalLength() * 0.2
+  })
+  assert.equal((await clocks())[0].stroke, '#ff0000')
+  assert.equal((await clocks())[0].wash, '#ffb8b8')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
+  assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
+  await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 8000 })
+  const child = await center('A1')
+  await touch('pointerdown', child.x, child.y, 45, child.uid)
+  await touch('pointerup', child.x, child.y, 45, child.uid)
+  const childAmber = await heats()
+  assert.equal(childAmber.find((card) => card.name === 'A1')?.wash, '#ffcc80')
+  assert.equal(childAmber.find((card) => card.name === 'A')?.wash, '#ffb8b8')
+  assert.equal(childAmber.find((card) => card.name === '')?.wash, '#ffb8b8')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
+  await touch('pointerdown', child.x, child.y, 46, child.uid)
+  await touch('pointerup', child.x, child.y, 46, child.uid)
+  const droppedChild = await heats()
+  assert.equal(droppedChild.find((card) => card.name === 'A1'), undefined)
+  assert.equal(droppedChild.find((card) => card.name === 'A')?.wash, '#ffb8b8')
+  assert.equal(droppedChild.find((card) => card.name === '')?.wash, '#ffb8b8')
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.marks.get(
+    Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'A1')?.__data__.data._uid
+  )), 'normal')
+  assert.ok(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.remaining < 14000), 'a child cycle does not restart the parent clock')
+  const parentPoint = await center('A')
+  await touch('pointerdown', parentPoint.x, parentPoint.y, 43, parentPoint.uid)
+  await touch('pointerup', parentPoint.x, parentPoint.y, 43, parentPoint.uid)
+  const rearmedFamily = await heats()
+  assert.deepEqual(rearmedFamily.map((card) => card.name).sort(), ['', 'A'])
+  assert.equal(rearmedFamily.every((card) => card.wash === '#ffcc80'), true)
+  assert.equal(rearmedFamily.find((card) => card.name === 'A')?.clock, true)
+  assert.equal(rearmedFamily.find((card) => card.name === 'A1'), undefined)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.marks.get(
+    Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'A1')?.__data__.data._uid
+  )), 'normal')
+  assert.equal((await clocks()).length, 1)
+  assert.equal((await clocks())[0].name, 'A')
+  assert.equal((await clocks())[0].stroke, '#ffa100')
+  assert.equal((await clocks())[0].dash, 'none')
+  assert.ok(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.remaining >= 14000))
+  await touch('pointerdown', child.x, child.y, 47, child.uid)
+  await touch('pointerup', child.x, child.y, 47, child.uid)
+  const reincluded = await heats()
+  assert.equal(reincluded.find((card) => card.name === 'A1')?.wash, '#ffb8b8')
+  assert.equal(reincluded.find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal(reincluded.find((card) => card.name === 'A')?.clock, true)
+  assert.equal((await clocks())[0].stroke, '#ffa100')
+  await touch('pointerdown', child.x, child.y, 48, child.uid)
+  await touch('pointerup', child.x, child.y, 48, child.uid)
+  await touch('pointerdown', child.x, child.y, 49, child.uid)
+  await touch('pointerup', child.x, child.y, 49, child.uid)
+  assert.equal((await heats()).find((card) => card.name === 'A1'), undefined)
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === '')?.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  const again = await center('A')
+  await touch('pointerdown', again.x, again.y, 44, again.uid)
+  await touch('pointermove', again.x, again.y + 76, 44, again.uid)
+  await touch('pointerup', again.x, again.y + 76, 44, again.uid)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['A'])
+  assert.deepEqual((await names()).slice().sort(), ['A1', 'B', 'Root'])
+  assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
+  await page.locator('[data-tool="undo"]').click()
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A'))
+  assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), [])
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false)
+
+  await settle()
+  const kidParent = await center('A')
+  const thumbKids = await park('bottom', 91)
+  await touch('pointerdown', kidParent.x, kidParent.y, 92, kidParent.uid)
+  await touch('pointermove', kidParent.x, kidParent.y + 84, 92, kidParent.uid)
+  const kidsOnly = await heats()
+  assert.equal(kidsOnly.find((card) => card.name === 'A'), undefined)
+  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.clock, false)
+  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.wash, '#ffb8b8')
+  assert.equal(kidsOnly.find((card) => card.name === '')?.wash, '#ffb8b8')
+  const kidClocks = await clocks()
+  assert.deepEqual(kidClocks.map((clock) => clock.name), ['A'])
+  assert.equal(kidClocks[0].stroke, '#ff0000')
+  assert.equal(kidClocks[0].wash, '')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
+  assert.equal((await edges()).find((edge) => edge.name === '')?.stroke, '#ff0000')
+  assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
+  await touch('pointerup', kidParent.x, kidParent.y + 84, 92, kidParent.uid)
+  await touch('pointerup', thumbKids.x, thumbKids.y, 91)
+  const kidTicket = await center('A1')
+  await touch('pointerdown', kidTicket.x, kidTicket.y, 94, kidTicket.uid)
+  await touch('pointerup', kidTicket.x, kidTicket.y, 94, kidTicket.uid)
+  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, '#ffcc80')
+  await touch('pointerdown', kidTicket.x, kidTicket.y, 194, kidTicket.uid)
+  await touch('pointerup', kidTicket.x, kidTicket.y, 194, kidTicket.uid)
+  const afterKid = await heats()
+  assert.equal(afterKid.find((card) => card.name === 'A1'), undefined)
+  assert.equal(afterKid.find((card) => card.name === '')?.wash, '#ffb8b8')
+  assert.deepEqual((await clocks()).map((clock) => clock.name), ['A'])
+  const master = await center('A')
+  await touch('pointerdown', master.x, master.y, 95, master.uid)
+  await touch('pointerup', master.x, master.y, 95, master.uid)
+  const kidRearm = await heats()
+  assert.equal(kidRearm.find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal(kidRearm.find((card) => card.name === 'A')?.clock, true)
+  assert.equal(kidRearm.find((card) => card.name === 'A1'), undefined)
+  assert.equal(kidRearm.find((card) => card.name === '')?.wash, '#ffcc80')
+  assert.deepEqual((await clocks()).map((clock) => clock.name), ['A'])
+  assert.equal((await clocks())[0].stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
+  assert.ok(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.remaining >= 14000))
+  await touch('pointerdown', kidTicket.x, kidTicket.y, 195, kidTicket.uid)
+  await touch('pointerup', kidTicket.x, kidTicket.y, 195, kidTicket.uid)
+  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, '#ffb8b8')
+  assert.equal((await heats()).find((card) => card.name === 'A')?.wash, '#ffcc80')
+  await touch('pointerdown', master.x, master.y, 96, master.uid)
+  await touch('pointerup', master.x, master.y, 96, master.uid)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
+  assert.deepEqual(await clocks(), [])
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  await touch('pointerdown', kidTicket.x, kidTicket.y, 196, kidTicket.uid)
+  await touch('pointerup', kidTicket.x, kidTicket.y, 196, kidTicket.uid)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
+  assert.equal((await heats()).find((card) => card.name === 'A1'), undefined)
+  await page.evaluate(() => {
+    document.querySelectorAll('.node-edit-input').forEach((input) => input.blur())
+    document.body.click()
+  })
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+
+  await settle()
+  const side = await center('B')
+  const thumbB = await park('top', 71)
+  await touch('pointerdown', side.x, side.y, 72, side.uid)
+  await touch('pointermove', side.x, side.y + 80, 72, side.uid)
+  await touch('pointerup', side.x, side.y + 80, 72, side.uid)
+  await touch('pointerup', thumbB.x, thumbB.y, 71)
+  const branch = await center('A')
+  const thumbA = await park('middle', 81)
+  await touch('pointerdown', branch.x, branch.y, 82, branch.uid)
+  await touch('pointermove', branch.x - 86, branch.y, 82, branch.uid)
+  await touch('pointerup', branch.x - 86, branch.y, 82, branch.uid)
+  await touch('pointerup', thumbA.x, thumbA.y, 81)
+  const parallel = await heats()
+  assert.equal(parallel.find((card) => card.name === 'B')?.clock, true)
+  assert.equal(parallel.find((card) => card.name === 'B')?.wash, '#ffb8b8')
+  assert.equal(parallel.find((card) => card.name === 'A')?.clock, true)
+  assert.equal(parallel.find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal(parallel.find((card) => card.name === 'A1')?.clock, false)
+  assert.equal(parallel.find((card) => card.name === 'A1')?.wash, '#ffcc80')
+  assert.equal(await page.evaluate(() => document.querySelectorAll('path.logyq-smite-clock').length), 2)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
+  const parallelClocks = await clocks()
+  assert.equal(parallelClocks.find((clock) => clock.name === 'B')?.stroke, '#ff0000')
+  assert.equal(parallelClocks.find((clock) => clock.name === 'A')?.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === '')?.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
+  assert.equal((await edges()).find((edge) => edge.name === 'B')?.edge || '', '')
+  assert.equal(await page.evaluate(({ a, b }) => {
+    const root = window.LOGYQBridge.core.state.root
+    const owns = (uid) => root.descendants().some((node) => node.data._uid === uid)
+    return root.data.name === 'Root' && owns(a) && owns(b)
+  }, { a: branch.uid, b: side.uid }), true, 'both mercy windows are branches of this one map')
+  await page.evaluate((uid) => {
+    const mercy = window.LOGYQPreview.gestures.smite.mercies.find((item) => item.marks.has(uid))
+    mercy.remaining = 1600
+  }, side.uid)
+  await page.waitForFunction((uid) => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?._uid === uid)
+    const clock = node?.querySelector('path.logyq-smite-clock')
+    const parts = (clock?.getAttribute('stroke-dasharray') || '').trim().split(/[\s,]+/).map(Number)
+    return clock?.getAttribute('stroke') === '#ff0000' && parts.length === 2 && parts[0] < clock.getTotalLength() * 0.25
+  }, side.uid)
+  const split = await clocks()
+  assert.equal(split.find((clock) => clock.name === 'B')?.stroke, '#ff0000')
+  assert.equal(split.find((clock) => clock.name === 'A')?.stroke, '#ffa100')
+  await page.evaluate((uid) => {
+    const mercy = window.LOGYQPreview.gestures.smite.mercies.find((item) => item.marks.has(uid))
+    mercy.remaining = 15000
+  }, side.uid)
+  await page.waitForFunction((uid) => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?._uid === uid)
+    return node?.querySelector('path.logyq-smite-clock')?.getAttribute('stroke-dasharray') === 'none'
+  }, side.uid)
+  const childAgain = await center('A1')
+  await touch('pointerdown', childAgain.x, childAgain.y, 83, childAgain.uid)
+  await touch('pointerup', childAgain.x, childAgain.y, 83, childAgain.uid)
+  const afterToggle = await heats()
+  assert.equal(afterToggle.find((card) => card.name === 'A1'), undefined)
+  assert.equal(afterToggle.find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal((await clocks()).find((clock) => clock.name === 'A')?.stroke, '#ffa100')
+  assert.equal((await clocks()).find((clock) => clock.name === 'B')?.stroke, '#ff0000')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.edge, '1')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal(await page.evaluate(() => document.querySelectorAll('path.logyq-smite-clock').length), 2)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
+  const overlapThumb = await park('middle', 97)
+  const overlap = await center('')
+  await touch('pointerdown', overlap.x, overlap.y, 98, overlap.uid)
+  await touch('pointermove', overlap.x, overlap.y + 80, 98, overlap.uid)
+  await touch('pointerup', overlap.x, overlap.y + 80, 98, overlap.uid)
+  await touch('pointerup', overlapThumb.x, overlapThumb.y, 97)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
+  assert.equal((await clocks()).find((clock) => clock.name === 'A')?.stroke, '#ffa100')
+  const finishB = await center('B')
+  await touch('pointerdown', finishB.x, finishB.y, 93, finishB.uid)
+  await touch('pointermove', finishB.x, finishB.y + 74, 93, finishB.uid)
+  await touch('pointerup', finishB.x, finishB.y + 74, 93, finishB.uid)
+  await settle()
+  assert.equal((await names()).includes('B'), false)
+  assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 1)
+  assert.equal((await clocks()).find((clock) => clock.name === 'A')?.stroke, '#ffa100')
+  const rootAgain = await center('Root')
+  const thumbRoot = await park('top', 94)
+  await touch('pointerdown', rootAgain.x, rootAgain.y, 95, rootAgain.uid)
+  await touch('pointermove', rootAgain.x, rootAgain.y + 80, 95, rootAgain.uid)
+  await touch('pointerup', rootAgain.x, rootAgain.y + 80, 95, rootAgain.uid)
+  await touch('pointerup', thumbRoot.x, thumbRoot.y, 94)
+  const both = await clocks()
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
+  assert.equal(both.find((clock) => clock.name === 'Root')?.stroke, '#ff0000')
+  assert.equal(both.find((clock) => clock.name === 'A')?.stroke, '#ffa100')
 
   assert.deepEqual(errors, [])
   await context.close()

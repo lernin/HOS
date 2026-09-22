@@ -704,19 +704,32 @@ body::before {
   body>header{display:none!important}
   #trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
   svg#canvas{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;overflow:visible}
-  #logiq-mobile-header{
-    position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;
-    box-sizing:border-box;align-items:center;gap:5px;padding:5px 7px;
-    background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);
-    box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px);
-    overflow:hidden;flex-wrap:nowrap
-  }
-  #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto}
-  .logiq-mobile-entry{height:36px;min-width:0;flex:1;border:1px solid #dbe3ec;border-radius:10px;padding:0 9px;font:inherit;font-size:14px;background:rgba(255,255,255,.9)}
+  #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);overflow:hidden;flex-wrap:nowrap}
+  #logyq-corner-cluster{display:contents}
+  #logyq-select-strip{display:none!important}
+  #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto;order:2}
+  #logyq-home-btn{order:1}
+  #logiq-mobile-header [data-tool="undo"]{order:5}
+  #logiq-mobile-header [data-tool="fit"]{order:6}
+  #logyq-paint-btn{order:7}
+  #logiq-mobile-header .logiq-save-state{display:inline-flex;align-items:center;width:9px;overflow:hidden;gap:0;flex:0 0 9px;color:transparent;order:8}
+  #logiq-mobile-header .logiq-save-state::before{content:"";flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#22c55e}
+  #logiq-mobile-menu-btn{order:9}
   #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:17px;padding:0}
   #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-  #logiq-mobile-header .logiq-save-state{display:inline-flex;align-items:center;width:9px;overflow:hidden;gap:0;flex:0 0 9px;color:transparent}
-  #logiq-mobile-header .logiq-save-state::before{content:"";flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#22c55e}
+}
+@media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
+  #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0;overflow:visible}
+  #logyq-corner-cluster{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;bottom:auto;width:max-content;height:auto;max-height:calc(100dvh - 16px);padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);overflow:auto}
+  #logyq-corner-cluster img,#logyq-select-strip,#logyq-home-btn{display:none}
+  #logyq-paint-btn{order:-1}
+  #logyq-corner-cluster .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px;touch-action:manipulation}
+  #logyq-corner-cluster .logiq-save-state{display:none}
+  svg#canvas{left:0;right:0;top:0;width:100%;height:100dvh}
+  #logyq-paint-strip{top:max(8px,env(safe-area-inset-top));left:auto;right:max(72px,calc(env(safe-area-inset-right) + 8px));width:max-content;max-width:min(420px,calc(100vw - 88px))}
+  #logiq-mobile-panel{top:max(8px,env(safe-area-inset-top));left:auto;right:max(72px,calc(env(safe-area-inset-right) + 8px));width:min(310px,calc(100vw - 88px))}
+  body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
+  body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto}
 }
 
 

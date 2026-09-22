@@ -31,6 +31,7 @@
     saving: false,
     saveAgain: false,
     libraryRows: [],
+    libraryStatus: 'loading',
     recorder: null,
     recordingStream: null,
     recordingChunks: [],
@@ -57,7 +58,6 @@
   }
 
   window.addEventListener('online', retryPending)
-  bootSession()
 
   const SUPABASE_URL = 'https://jzaghifuhinkzzhiojre.supabase.co'
   const SUPABASE_KEY = 'sb_publishable_rQDzA5bYlbzvaTjyo-uTXw_LiiIAddI'
@@ -155,6 +155,7 @@
       @keyframes logiq-pulse{50%{opacity:.35}}
       .logiq-backdrop{position:fixed;inset:0;z-index:5000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(15,23,42,.36);backdrop-filter:blur(4px)}
       .logiq-backdrop.is-open{display:flex}
+      #logiq-pin.is-open{z-index:6400}
       .logiq-modal{width:min(680px,100%);max-height:min(760px,calc(100dvh - 36px));overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 70px rgba(15,23,42,.24);color:#334155}
       body.logyq-home #logiq-library{display:flex;align-items:stretch;justify-content:stretch;padding:0;background:#f8fafc;z-index:4500}
       body.logyq-home #logiq-library .logiq-modal{width:100%;max-width:none;max-height:none;height:100%;border:0;border-radius:0;box-shadow:none}
@@ -208,22 +209,28 @@
         body>header{display:none!important}
         svg#canvas{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;touch-action:none;overflow:visible;z-index:0}
         #trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
-        #Dock{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));padding:0 4px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
+        #Dock{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));padding:0 4px;min-height:48px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
         #Dock.dock-left{top:54px;bottom:max(8px,env(safe-area-inset-bottom));left:8px;right:auto;width:min(220px,72vw);padding:8px}
         #Toast{bottom:72px;max-width:calc(100vw - 36px);text-align:center}
-        #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px)}
-        #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto}
-        .logiq-mobile-entry{height:36px;min-width:66px;flex:1;border:1px solid #dbe3ec;border-radius:10px;padding:0 9px;font:inherit;font-size:14px;background:rgba(255,255,255,.9)}
+        #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px);overflow:hidden;flex-wrap:nowrap}
+        #logyq-corner-cluster{display:contents}
+        #logyq-select-strip{display:none!important}
+        #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto;order:2}
+        #logyq-home-btn{order:1}
+        #logiq-mobile-header [data-tool="undo"]{order:5}
+        #logiq-mobile-header [data-tool="fit"]{order:6}
+        #logyq-paint-btn{order:7}
+        #logiq-mobile-header .logiq-save-state{display:inline-flex;align-items:center;width:9px;overflow:hidden;gap:0;flex:0 0 9px;color:transparent;order:8}
+        #logiq-mobile-header .logiq-save-state::before{flex:0 0 8px;width:8px;height:8px}
+        #logiq-mobile-menu-btn{order:9}
         #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border-radius:10px;font-size:17px;padding:0}
         #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
         #logyq-paint-btn.is-paint-on{border-color:#0f172a;box-shadow:inset 0 0 0 3px var(--paint-active,#fde68a)}
-        #logyq-paint-strip{position:fixed;display:none;z-index:3200;top:54px;left:8px;right:8px;align-items:center;gap:8px;padding:8px;overflow-x:auto;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
+        #logyq-paint-strip{position:fixed;display:none;z-index:3200;top:54px;left:auto;right:8px;width:max-content;max-width:calc(100vw - 16px);align-items:center;gap:8px;padding:8px;overflow-x:auto;flex-wrap:nowrap;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
         #logyq-paint-strip.is-open{display:flex}
         .logyq-swatch{flex:0 0 32px;width:32px;height:32px;border:2px solid #e2e8f0;border-radius:999px;background:#fff;color:#334155;font-size:16px;line-height:1;padding:0}
         .logyq-swatch.is-active{border-color:#0f172a;box-shadow:0 0 0 2px rgba(15,23,42,.18)}
-        #logiq-mobile-header .logiq-save-state{width:9px;overflow:hidden;gap:0;flex:0 0 9px;color:transparent}
-        #logiq-mobile-header .logiq-save-state::before{flex:0 0 8px;width:8px;height:8px}
-        #logiq-mobile-panel{position:fixed;display:none;z-index:3100;top:54px;right:8px;left:8px;padding:12px;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
+        #logiq-mobile-panel{position:fixed;display:none;z-index:3100;top:54px;left:auto;right:8px;width:min(310px,calc(100vw - 16px));padding:12px;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
         #logiq-mobile-panel.is-open{display:block}
         .logiq-mobile-tools{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}.logiq-mobile-tools button{min-height:42px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-weight:650}
         #logiq-voice-bar{position:fixed;z-index:3300;left:50%;bottom:70px;transform:translateX(-50%);align-items:center;gap:9px;max-width:calc(100vw - 20px);padding:8px 9px 8px 13px;border-radius:999px;background:#111827;color:#fff;box-shadow:0 12px 34px rgba(15,23,42,.35);font-size:13px;font-weight:700;white-space:nowrap}
@@ -232,6 +239,13 @@
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
         body.logyq-mobile-v162 svg#canvas g.node,body.logyq-mobile-v162 svg#canvas g.node *{pointer-events:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash,body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important;filter:none!important}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{stroke:none!important;filter:none!important;vector-effect:none}
+        body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;transition:none!important;vector-effect:none}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red,body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:none}
+        .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation;pointer-events:auto;transform-origin:center}
+        .logyq-smite-scar.is-covered{pointer-events:none!important}
         body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node *,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>text{pointer-events:none!important}
         #logyq-v162-action{position:fixed;z-index:3950;display:none;place-items:center;width:40px;height:40px;padding:0;border:2px solid #fff;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 7px 20px rgba(15,23,42,.26);font:800 10px/1 system-ui;touch-action:none}
         #logyq-v162-action.show{display:grid}#logyq-v162-action.rec{background:#ef4444}
@@ -260,9 +274,21 @@
         body.logyq-mobile-v162.v2-branch-drag #trash{display:block!important;position:fixed!important;left:-10000px!important;right:auto!important;top:-10000px!important;bottom:auto!important}
       }
       @media (hover:none) and (pointer:coarse) and (max-height:500px){
-        #logiq-mobile-header{height:44px;padding-top:4px;padding-bottom:4px}
-        #logiq-mobile-panel{top:48px;left:auto;width:min(310px,calc(100vw - 16px))}
         #logiq-voice-bar{bottom:62px}
+      }
+      @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
+        #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0;overflow:visible}
+        #logyq-corner-cluster{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;bottom:auto;width:max-content;height:auto;max-height:calc(100dvh - 16px);padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);overflow:auto}
+        #logyq-corner-cluster img,#logyq-select-strip,#logyq-home-btn{display:none}
+        #logyq-paint-btn{order:-1}
+        #logyq-corner-cluster .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px;touch-action:manipulation}
+        #logyq-corner-cluster .logiq-save-state{display:none}
+        svg#canvas{left:0;right:0;top:0;width:100%;height:100dvh}
+        #logyq-paint-strip{top:max(8px,env(safe-area-inset-top));left:auto;right:max(72px,calc(env(safe-area-inset-right) + 8px));width:max-content;max-width:min(420px,calc(100vw - 88px))}
+        #logiq-mobile-panel{top:max(8px,env(safe-area-inset-top));left:auto;right:max(72px,calc(env(safe-area-inset-right) + 8px));width:min(310px,calc(100vw - 88px))}
+        #Dock{left:max(8px,env(safe-area-inset-left));right:max(72px,env(safe-area-inset-right))}
+        body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
+        body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
       }
     `
     document.head.append(style)
@@ -278,15 +304,19 @@
     if (!document.getElementById('logiq-mobile-header')) {
       document.body.insertAdjacentHTML('afterbegin', `
       <div id="logiq-mobile-header">
-        <button class="logiq-icon-btn" id="logyq-home-btn" type="button" aria-label="Your maps"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></button>
-        <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGYQ">
-        <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
-        <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
-        <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
-        <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
-        <button class="logiq-icon-btn" id="logyq-paint-btn" aria-label="Paint colors" aria-expanded="false" aria-haspopup="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><circle cx="8" cy="16" r="3"></circle><circle cx="16" cy="16" r="3"></circle></svg></button>
-        <span class="logiq-save-state" role="status" aria-live="polite"></span>
-        <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
+        <div id="logyq-corner-cluster">
+          <button class="logiq-icon-btn" id="logyq-home-btn" type="button" aria-label="Your maps"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></button>
+          <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGYQ">
+          <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
+          <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
+          <button class="logiq-icon-btn" id="logyq-paint-btn" aria-label="Paint colors" aria-expanded="false" aria-haspopup="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><circle cx="8" cy="16" r="3"></circle><circle cx="16" cy="16" r="3"></circle></svg></button>
+          <span class="logiq-save-state" role="status" aria-live="polite"></span>
+          <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
+        </div>
+        <div id="logyq-select-strip">
+          <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
+          <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
+        </div>
       </div>`)
     }
 
@@ -294,7 +324,7 @@
       <section id="logiq-mobile-panel" aria-label="LOGiQ controls">
         <div class="logiq-mobile-tools">
           <button data-tool="add">Add typed words</button><button data-tool="add-child">Add to selected</button>
-          <button data-tool="library">Maps</button><button data-tool="mix">Mix</button>
+          <button data-tool="library">Your maps</button><button data-tool="mix">Mix</button>
           <button data-tool="paint">Paint colors</button><button data-tool="dock">Word Dock</button>
           <button data-tool="help">Help</button>
         </div>
@@ -641,6 +671,442 @@
     return target.matchMedia('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px))').matches
   }
 
+  // SMITE_PURE_START
+  // Parked-thumb smite. These stay pure so the mercy rules can be tested
+  // without a phone: zone, cast direction, affected set, toggle, ring, commit.
+  function smiteZone(y, height) {
+    const span = Number(height) > 0 ? Number(height) : 1
+    const ratio = Number(y) / span
+    if (ratio < 1 / 3) return 'top'
+    if (ratio < 2 / 3) return 'middle'
+    return 'bottom'
+  }
+
+  function smiteCastDirection(dx, dy, min = 52) {
+    const adx = Math.abs(Number(dx) || 0)
+    const ady = Math.abs(Number(dy) || 0)
+    if (Math.hypot(Number(dx) || 0, Number(dy) || 0) < min) return null
+    if (ady >= adx && dy > 0) return 'down'
+    if (adx > ady && dx < 0) return 'left'
+    return null
+  }
+
+  function smiteNodeId(node) {
+    if (!node) return null
+    return node.uid || node._uid || node.data?._uid || null
+  }
+
+  function smiteChildList(node) {
+    if (Array.isArray(node?.children)) return node.children
+    if (Array.isArray(node?.data?.children)) return node.data.children
+    return []
+  }
+
+  function smiteAffected(node, zone) {
+    const id = smiteNodeId(node)
+    if (!id) return []
+    if (zone === 'top') return [id]
+    if (zone === 'bottom') return smiteChildList(node).map(smiteNodeId).filter(Boolean)
+    const out = []
+    const walk = (current) => {
+      const uid = smiteNodeId(current)
+      if (uid) out.push(uid)
+      for (const kid of smiteChildList(current)) walk(kid)
+    }
+    walk(node)
+    return out
+  }
+
+  // Tree root stops at normal. Every other marked card cycles back to red.
+  function smiteNextMark(mark, isTreeRoot) {
+    if (mark === 'red') return 'amber'
+    if (mark === 'amber') return 'normal'
+    return isTreeRoot ? 'normal' : 'red'
+  }
+
+  // The mercy clock is 15s: 3s with the line held full, then a 12s drain.
+  // `remaining` is that whole clock. Progress is the drain still left / 12s,
+  // so the stroke and the delete share one number.
+  function smiteRingFraction(remainingMs, fullMs = 12000) {
+    const full = Number(fullMs) > 0 ? Number(fullMs) : 12000
+    const remaining = Number(remainingMs) || 0
+    if (remaining >= full) return 1
+    if (remaining <= 0) return 0
+    return remaining / full
+  }
+
+  function smiteRefillMs(remainingMs, addMs = 1000, maxMs = 15000) {
+    const next = Math.max(0, Number(remainingMs) || 0) + (Number(addMs) || 0)
+    return Math.min(Number(maxMs) > 0 ? Number(maxMs) : 15000, next)
+  }
+
+  function smiteMarkOf(marks, uid) {
+    if (!marks || uid == null) return null
+    const value = typeof marks.get === 'function' ? marks.get(uid) : marks[uid]
+    return value === 'red' || value === 'amber' || value === 'normal' ? value : null
+  }
+
+  function smiteCloneCard(node) {
+    const copy = JSON.parse(JSON.stringify(node))
+    delete copy.children
+    return copy
+  }
+
+  function smiteVisit(node, keptAncestorUid, marks, bank, scars) {
+    if (!node || typeof node !== 'object') return []
+    const uid = node._uid || node.uid || null
+    const mark = smiteMarkOf(marks, uid)
+    const fate = mark === 'red' || mark === 'amber' ? mark : 'keep'
+    const nextAncestor = fate === 'keep' ? uid : keptAncestorUid
+    const lifted = []
+    const kids = Array.isArray(node.children) ? node.children : []
+    for (const kid of kids) lifted.push(...smiteVisit(kid, nextAncestor, marks, bank, scars))
+    if (fate === 'keep') {
+      const copy = smiteCloneCard(node)
+      copy.children = lifted.length ? lifted : null
+      return [copy]
+    }
+    if (fate === 'amber') {
+      const name = String(node.name || '').trim()
+      if (name) bank.push(name)
+      return lifted
+    }
+    scars.push({
+      name: node.name || '',
+      color: node.color || null,
+      uid,
+      parentUid: keptAncestorUid || null,
+    })
+    return lifted
+  }
+
+  // Does not mutate `tree`. Red scars, amber banks (blank labels do not),
+  // normal and unmarked cards stay and climb to the nearest kept ancestor.
+  function planSmiteCommit(tree, marks) {
+    const bank = []
+    const scars = []
+    if (!tree || typeof tree !== 'object') return { tree: null, bank, scars }
+    const source = JSON.parse(JSON.stringify(tree))
+    const lifted = smiteVisit(source, null, marks, bank, scars)
+    if (!lifted.length) return { tree: null, bank, scars }
+    const root = lifted[0]
+    if (lifted.length > 1) root.children = (root.children || []).concat(lifted.slice(1))
+    return { tree: root, bank, scars }
+  }
+
+  function smiteNum(value) {
+    return String(Math.round((Number(value) || 0) * 1000) / 1000)
+  }
+
+  function smiteRoundCaps(width, height, rx, ry) {
+    const w = Number(width) || 0
+    const h = Number(height) || 0
+    const wantX = Number(rx) > 0 ? Number(rx) : 10
+    const wantY = Number(ry) > 0 ? Number(ry) : wantX
+    return {
+      w,
+      h,
+      capX: Math.min(wantX, Math.max(0, w / 2 - 1)),
+      capY: Math.min(wantY, Math.max(0, h / 2 - 1)),
+    }
+  }
+
+  function smiteQuarterArc(rx, ry) {
+    const a = Math.max(0, Number(rx) || 0)
+    const b = Math.max(0, Number(ry) || 0)
+    if (a <= 0 && b <= 0) return 0
+    if (Math.abs(a - b) < 0.01) return (Math.PI * Math.max(a, b)) / 2
+    const sum = a + b
+    const h = ((a - b) / sum) ** 2
+    return (Math.PI * sum * (1 + (3 * h) / (10 + Math.sqrt(Math.max(0, 4 - 3 * h))))) / 4
+  }
+
+  // Perimeter of the counter-clockwise outline, in the same user units as the path.
+  function smiteLineCorners(width, height, rx = 10, ry = 10) {
+    const { w, h, capX, capY } = smiteRoundCaps(width, height, rx, ry)
+    if (w <= 0 || h <= 0) return null
+    const topHalf = Math.max(0, w / 2 - capX)
+    const side = Math.max(0, h - 2 * capY)
+    const bottom = Math.max(0, w - 2 * capX)
+    const arc = smiteQuarterArc(capX, capY)
+    const firstCorner = topHalf + arc
+    const bottomLeft = firstCorner + side + arc
+    const bottomRight = bottomLeft + bottom + arc
+    const finalTop = bottomRight + side + arc
+    return { total: finalTop + topHalf, firstCorner, bottomLeft, bottomRight, finalTop }
+  }
+
+  function smiteClockLength(width, height, rx = 10, ry = 10) {
+    return smiteLineCorners(width, height, rx, ry)?.total || 0
+  }
+
+  // One counter-clockwise rounded outline. It begins at 12 o'clock and
+  // travels toward the left. The visible stroke is the untraveled suffix
+  // that still closes back at 12, so the gap eats forward as the ring drains.
+  function smiteClockPath(x, y, width, height, rx = 10, ry = 10) {
+    const { w, h, capX, capY } = smiteRoundCaps(width, height, rx, ry)
+    if (w <= 0 || h <= 0) return ''
+    const left = Number(x) || 0
+    const top = Number(y) || 0
+    const right = left + w
+    const bottom = top + h
+    const noonX = left + w / 2
+    if (capX <= 0 || capY <= 0) {
+      return `M ${smiteNum(noonX)} ${smiteNum(top)} H ${smiteNum(left)} V ${smiteNum(bottom)} H ${smiteNum(right)} V ${smiteNum(top)} H ${smiteNum(noonX)} Z`
+    }
+    return [
+      `M ${smiteNum(noonX)} ${smiteNum(top)}`,
+      `H ${smiteNum(left + capX)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 0 ${smiteNum(left)} ${smiteNum(top + capY)}`,
+      `V ${smiteNum(bottom - capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 0 ${smiteNum(left + capX)} ${smiteNum(bottom)}`,
+      `H ${smiteNum(right - capX)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 0 ${smiteNum(right)} ${smiteNum(bottom - capY)}`,
+      `V ${smiteNum(top + capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 0 ${smiteNum(right - capX)} ${smiteNum(top)}`,
+      `H ${smiteNum(noonX)} Z`,
+    ].join(' ')
+  }
+
+  // One progress value, one dash. `length` is the path's own user-unit length.
+  // A full ring is a solid stroke (no dash pattern). While it drains, one gap
+  // eats the counter-clockwise prefix and one dash is the suffix back to 12.
+  function smiteLineDash(fraction, length) {
+    const f = Number(fraction)
+    const total = Math.max(0, Number(length) || 0)
+    if (!Number.isFinite(f) || f >= 1) return { array: 'none', offset: 0 }
+    if (f <= 0 || total <= 0) return { array: '0 1', offset: 0 }
+  const visible = total * Math.min(1, f)
+  const eaten = total - visible
+  // Offset is the remaining length, so the pattern starts on the gap.
+  // Dash + gap = pathLength, one suffix, no second painted lap.
+  return { array: `${visible} ${eaten}`, offset: visible }
+}
+
+  // Five levels from where the drain tip is along the stroke.
+  // l1 just staged, l2 after the first corner off the top, l3 after the
+  // bottom-left corner, l4 after the bottom-right corner, l5 after the
+  // last top corner.
+  function smiteLinePhase(fraction, width, height, rx = 10, ry = 10) {
+    const f = Number(fraction)
+    if (!Number.isFinite(f) || f >= 1) return 'l1'
+    if (f <= 0) return 'l5'
+    const corners = smiteLineCorners(width, height, rx, ry)
+    if (!corners || corners.total <= 0) return 'l1'
+    const eaten = (1 - Math.min(1, f)) * corners.total
+    if (eaten <= corners.firstCorner) return 'l1'
+    if (eaten <= corners.bottomLeft) return 'l2'
+    if (eaten <= corners.bottomRight) return 'l3'
+    if (eaten <= corners.finalTop) return 'l4'
+    return 'l5'
+  }
+
+  // A clock card is a dying node whose parent is not also dying.
+  function smiteClockRoots(rootData, marks) {
+    const roots = []
+    const walk = (node, parentDying) => {
+      if (!node || typeof node !== 'object') return
+      const uid = node._uid || node.uid || node.data?._uid || null
+      const mark = smiteMarkOf(marks, uid)
+      const dying = mark === 'red' || mark === 'amber'
+      if (dying && !parentDying && uid) roots.push(uid)
+      const kids = Array.isArray(node.children) ? node.children : []
+      for (const kid of kids) walk(kid, dying)
+    }
+    walk(rootData, false)
+    return roots
+  }
+
+  function smiteMoodColor(mark) {
+    return mark === 'amber' ? '#ffa100' : '#ff0000'
+  }
+
+  // Connectors whose target is strictly below the clock parent. The edge
+  // into that parent, and anything above it, keeps the normal link color.
+  function smiteMoodTargets(tree, castUid) {
+    const out = []
+    if (!tree || !castUid) return out
+    const uidOf = (node) => node?._uid || node?.uid || node?.data?._uid || null
+    const kidsOf = (node) => (
+      Array.isArray(node?.children) ? node.children
+        : (Array.isArray(node?.data?.children) ? node.data.children : [])
+    )
+    let found = null
+    const find = (node) => {
+      if (found || !node || typeof node !== 'object') return
+      if (uidOf(node) === castUid) {
+        found = node
+        return
+      }
+      for (const kid of kidsOf(node)) find(kid)
+    }
+    const collect = (node) => {
+      for (const kid of kidsOf(node)) {
+        const uid = uidOf(kid)
+        if (uid) out.push(uid)
+        collect(kid)
+      }
+    }
+    find(tree)
+    if (found) collect(found)
+    return out
+  }
+
+  // Live windows are branches of the one open map, not separate documents.
+  // Sibling branches that share no cards each keep a timer. A cast that
+  // touches a card already in a live branch is ignored.
+  function smiteCastOverlaps(sets, ids) {
+    const taken = new Set()
+    for (const set of sets || []) {
+      const marks = set?.marks || set
+      if (!marks) continue
+      if (typeof marks.keys === 'function') {
+        for (const uid of marks.keys()) taken.add(uid)
+      } else {
+        for (const uid of Object.keys(marks)) taken.add(uid)
+      }
+    }
+    return (ids || []).some((id) => taken.has(id))
+  }
+
+  function smiteHsl(hue, sat, light) {
+    const s = sat / 100
+    const l = light / 100
+    const a = s * Math.min(l, 1 - l)
+    const channel = (n) => {
+      const k = (n + hue / 30) % 12
+      const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)
+      return Math.round(c * 255).toString(16).padStart(2, '0')
+    }
+    return `#${channel(0)}${channel(8)}${channel(4)}`
+  }
+
+  // One ladder for both fates. Same hue, saturation up, lightness down
+  // toward the pure primary. l5 red is #ff0000. l5 amber is #ffa100.
+  function smiteHeat(phase, mark = 'red') {
+    const hue = mark === 'amber' ? 38 : 0
+    const ladder = {
+      l1: [78, 84, 0.38],
+      l2: [86, 72, 0.52],
+      l3: [92, 62, 0.66],
+      l4: [96, 55, 0.8],
+      l5: [100, 50, 0.94],
+    }
+    const stop = ladder[phase] || ladder.l1
+    const color = smiteHsl(hue, stop[0], stop[1])
+    return { stroke: color, wash: color, washOpacity: stop[2], glow: 0 }
+  }
+
+  function smitePastel(mark) {
+    if (mark === 'amber') return { fill: '#ffcc80', opacity: 0.88 }
+    return { fill: '#ffb8b8', opacity: 0.88 }
+  }
+
+  function smiteMarkList(marks) {
+    const out = []
+    if (!marks) return out
+    if (typeof marks.forEach === 'function') marks.forEach((mark) => out.push(mark))
+    else Object.keys(marks).forEach((uid) => out.push(marks[uid]))
+    return out
+  }
+
+  // Clock color for the swiped card. Null when nothing is still nominated,
+  // so a parent toggled all the way off does not keep a ring.
+  function smiteNominatedTone(marks, castUid, tone) {
+    const own = smiteMarkOf(marks, castUid)
+    const nominated = smiteMarkList(marks).filter((mark) => mark === 'red' || mark === 'amber')
+    if (!nominated.length) return null
+    if (own === 'red' || own === 'amber') return own
+    if (nominated.every((mark) => mark === nominated[0])) return nominated[0]
+    if (tone === 'amber' || tone === 'red') return tone
+    return nominated[0]
+  }
+
+  // Parent is master. Red → amber broadcasts to the parent and every child
+  // still nominated. Original / deselected kids stay out. Amber → out clears
+  // the whole remaining cast (caller drops the mercy).
+  function smiteParentCommand(marks, castUid, tone) {
+    const current = smiteNominatedTone(marks, castUid, tone)
+    if (current !== 'red') return { action: 'cancel', entries: [] }
+    const entries = []
+    let parentSeen = false
+    let live = false
+    for (const [uid, mark] of smiteTicketEntries(marks)) {
+      if (mark === 'red' || mark === 'amber') {
+        if (uid === castUid) parentSeen = true
+        entries.push([uid, 'amber'])
+        live = true
+      } else {
+        // Keep original kids in the cast map so they can cycle back in, but
+        // do not paint or retarget them with this broadcast.
+        entries.push([uid, mark])
+      }
+    }
+    if (castUid && !parentSeen) {
+      entries.push([castUid, 'amber'])
+      live = true
+    }
+    if (!live) return { action: 'cancel', entries: [] }
+    return { action: 'rearm', entries }
+  }
+
+  // Child tap is independent: red → amber → original → red → …
+  // Original keeps the uid in the cast so a later tap can re-include while
+  // the parent mercy is still live. A child tap never starts a new cast.
+  function smiteChildNextMark(mark) {
+    if (mark === 'red') return 'amber'
+    if (mark === 'amber') return 'normal'
+    return 'red'
+  }
+
+  function smiteChildCommand(marks, uid) {
+    const entries = smiteTicketEntries(marks)
+    if (!entries.some(([id]) => id === uid)) return { action: 'noop', entries }
+    const next = smiteChildNextMark(smiteMarkOf(marks, uid))
+    return {
+      action: 'cycle',
+      next,
+      entries: entries.map(([id, mark]) => (id === uid ? [id, next] : [id, mark])),
+    }
+  }
+
+  function smiteHasNominated(marks) {
+    return smiteMarkList(marks).some((mark) => mark === 'red' || mark === 'amber')
+  }
+
+  function smiteTicketEntries(marks) {
+    const out = []
+    if (!marks) return out
+    if (typeof marks.forEach === 'function') marks.forEach((mark, uid) => out.push([uid, mark]))
+    else Object.keys(marks).forEach((uid) => out.push([uid, marks[uid]]))
+    return out
+  }
+
+  // Full residue, then a soft ease-out. 0 means the scar is gone.
+  function smiteScarOpacity(ageMs, holdMs = 2800, fadeMs = 7200) {
+    const age = Math.max(0, Number(ageMs) || 0)
+    const hold = Number(holdMs) > 0 ? Number(holdMs) : 0
+    const fade = Number(fadeMs) > 0 ? Number(fadeMs) : 1
+    if (age <= hold) return 1
+    const t = (age - hold) / fade
+    if (t >= 1) return 0
+    const remain = 1 - t
+    return remain * remain
+  }
+
+  // A live card owns the tap when its face contains the scar center.
+  function smiteScarBlocked(x, y, rects) {
+    const cx = Number(x)
+    const cy = Number(y)
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return false
+    for (const rect of rects || []) {
+      if (!rect) continue
+      if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) return true
+    }
+    return false
+  }
+  // SMITE_PURE_END
+
   function bindV162Gestures() {
     const win = window
     const doc = document
@@ -680,7 +1146,7 @@
     win.addEventListener('pointerup', (event) => onHoldUp(event, doc, win, canvas, holdState), true)
     win.addEventListener('pointercancel', (event) => onHoldCancel(event, doc, win, holdState), true)
     win.addEventListener('contextmenu', (event) => {
-      if (!(holdState.drag || win.__logyqHoldDragSession || doc.body.classList.contains('v2-branch-drag'))) return
+      if (!swallowBankContextMenu(event, doc, win, holdState)) return
       event.preventDefault()
       event.stopImmediatePropagation()
     }, true)
@@ -689,6 +1155,7 @@
     canvas.addEventListener('pointerup', (event) => onFlickUp(event, doc, win, flickState), true)
     canvas.addEventListener('pointercancel', (event) => onFlickClear(event, win, flickState), true)
     if (preview.gestures) preview.gestures.session = { hold: holdState, flick: flickState }
+    bindSmiteGestures(doc, win, canvas, holdState)
   }
 
   function hardClearBackground(doc, win, { keepStroke = false } = {}) {
@@ -712,8 +1179,32 @@
     if (!win.__logyqHoldDragSession) win.__logyqSuppressZoom = false
   }
 
+  function noteTouchBankGrace(win) {
+    if (typeof win.noteBankContextGrace === 'function') win.noteBankContextGrace(900)
+    else {
+      const until = Date.now() + 900
+      if (!win.__logyqSuppressBankContextUntil || win.__logyqSuppressBankContextUntil < until) {
+        win.__logyqSuppressBankContextUntil = until
+      }
+    }
+  }
+
+  // Phone has no right-click. Swallow card contextmenu during a hold,
+  // during the post-touch grace, and any time the target is a card.
+  // That is the long-press that used to addWords a copy into Word Bank.
+  function swallowBankContextMenu(event, doc, win, holdState) {
+    const onNode = !!event.target?.closest?.('g.node')
+    if (holdState.drag || win.__logyqHoldDragSession || win.__logyqHoldArming || doc.body.classList.contains('v2-branch-drag')) return true
+    if (!onNode) return false
+    if (doc.body.classList.contains('logyq-mobile-v162') || v162Mobile(win)) return true
+    if (win.__logyqSuppressBankContextUntil && Date.now() < win.__logyqSuppressBankContextUntil) return true
+    if (typeof win.incidentalBankContext === 'function' && win.incidentalBankContext(event)) return true
+    return false
+  }
+
   function onHoldDown(event, doc, win, canvas, state) {
     if (event.pointerType === 'mouse') return
+    noteTouchBankGrace(win)
     if (!(event.target === canvas || canvas.contains(event.target))) return
     if (bridge.core?.input?.isTextField?.(event.target)) return
     if (doc.querySelector('.logiq-backdrop.is-open')) return
@@ -789,6 +1280,7 @@
   }
 
   function onHoldUp(event, doc, win, canvas, state) {
+    if (event.pointerType !== 'mouse') noteTouchBankGrace(win)
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
@@ -833,6 +1325,7 @@
   }
 
   function onHoldCancel(event, doc, win, state) {
+    if (event.pointerType !== 'mouse') noteTouchBankGrace(win)
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
@@ -1188,23 +1681,25 @@
   }
 
   function armBankHover(win, drag, dockKind, doc) {
-    const chip = dockKind === 'bank' ? hitBankChip(doc, drag.lastX, drag.lastY) : null
     const now = win.performance?.now?.() || Date.now()
-    if (chip && chip === drag.bankChip) {
-      drag.bankArmed = (now - drag.bankSince) >= v162Constants().BANK_DWELL_MS
+    if (dockKind !== 'bank') {
+      drag.bankChip = null
+      drag.bankSince = 0
+      drag.bankArmed = false
       return
     }
-    drag.bankChip = chip
-    drag.bankSince = chip ? now : 0
-    drag.bankArmed = false
+    drag.bankChip = hitBankChip(doc, drag.lastX, drag.lastY)
+    if (!drag.bankSince) drag.bankSince = now
+    drag.bankArmed = (now - drag.bankSince) >= v162Constants().BANK_DWELL_MS
   }
 
   function dockDropKind(doc, x, y) {
     const dock = doc.getElementById('Dock')
     if (!dock || dock.classList.contains('dock-hidden')) return 'none'
-    if (hitBankChip(doc, x, y)) return 'bank'
     const rect = dock.getBoundingClientRect()
     if (rect.width < 8 || rect.height < 8) return 'none'
+    const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+    if (inside || hitBankChip(doc, x, y)) return 'bank'
     const slack = 28
     if (x >= rect.left - slack && x <= rect.right + slack && y >= rect.top - slack && y <= rect.bottom + slack) return 'near'
     return 'none'
@@ -1822,7 +2317,7 @@
       const response = await win.fetch('/api/transcribe', { method: 'POST', headers: { 'x-review-pin': pin }, body: form })
       const result = await response.json()
       if (!response.ok || !result?.text?.trim()) {
-        if (response.status === 401 || response.status === 403) win.sessionStorage.removeItem(PIN_KEY)
+        if (response.status === 401 || response.status === 403) forgetPin()
         throw new Error('transcribe')
       }
       const text = result.text.trim()
@@ -1853,6 +2348,855 @@
     svg.__zoom = transform
     const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
     if (root) root.setAttribute('transform', transform.toString())
+  }
+
+  const SMITE_PARK_SLOP = 18
+  const SMITE_BUFFER_MS = 3000
+  const SMITE_DRAIN_MS = 12000
+  const SMITE_START_MS = SMITE_BUFFER_MS + SMITE_DRAIN_MS
+  const SMITE_MAX_MS = SMITE_START_MS
+  const SMITE_FULL_MS = SMITE_DRAIN_MS
+  const SMITE_REFILL_MS = 1000
+  const SMITE_TRIGGER_DY = 36
+  const SMITE_SCAR_HOLD_MS = 2800
+  const SMITE_SCAR_FADE_MS = 7200
+
+  function bindSmiteGestures(doc, win, canvas, holdState) {
+    if (!canvas || canvas.dataset.logyqSmite === '1') return
+    canvas.dataset.logyqSmite = '1'
+    const smite = {
+      pointers: new Map(),
+      pair: false,
+      pinched: false,
+      pinch: null,
+      mercy: null,
+      // One entry per doomed branch of this map.
+      mercies: [],
+      scars: [],
+      raf: 0,
+    }
+    if (preview.gestures) preview.gestures.smite = smite
+
+    const onCanvas = (event) => event.target === canvas || canvas.contains(event.target)
+    const ignore = (event) => {
+      if (event.pointerType === 'mouse') return true
+      if (bridge.core?.input?.isTextField?.(event.target)) return true
+      if (doc.querySelector('.logiq-backdrop.is-open')) return true
+      return false
+    }
+
+    win.addEventListener('pointerdown', (event) => {
+      if (ignore(event) || !onCanvas(event)) return
+      if (smite.pointers.size > 0) smite.pair = true
+      const source = hitNode(doc, event.clientX, event.clientY, event)
+      const uid = nodeUid(source)
+      smite.pointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        uid,
+      })
+      if (smiteOwnsUid(smite, uid) && holdState) cancelHold(win, holdState)
+      if (smite.pointers.size >= 2) smiteHoldTwoFingers(doc, win, smite, holdState)
+      smiteSetInteracting(win, smite, true)
+    }, true)
+
+    win.addEventListener('pointermove', (event) => {
+      const pointer = smite.pointers.get(event.pointerId)
+      if (!pointer) return
+      pointer.lastX = event.clientX
+      pointer.lastY = event.clientY
+      if (smite.pointers.size >= 2) win.__logyqSuppressZoom = true
+      let moved = 0
+      smite.pointers.forEach((finger) => {
+        if (smiteFingerMoved(finger, SMITE_PARK_SLOP)) moved += 1
+      })
+      if (smite.pointers.size >= 2 && moved >= 2) {
+        smite.pinched = true
+        smiteRefresh(doc, smite)
+        smiteApplyPinch(doc, win, smite)
+        return
+      }
+      if (smite.pointers.size >= 2) smite.pinch = null
+      smitePaintPreview(doc, win, smite)
+    }, true)
+
+    win.addEventListener('pointerup', (event) => {
+      const pointer = smite.pointers.get(event.pointerId)
+      if (!pointer) return
+      pointer.lastX = event.clientX
+      pointer.lastY = event.clientY
+      const paired = smite.pair
+      let handled = false
+      if (!smite.pinched) handled = smiteMercyUp(doc, win, smite, pointer)
+      if (!handled && !smite.pinched) handled = smiteTryCast(doc, win, smite, pointer, event.pointerId)
+      smite.pointers.delete(event.pointerId)
+      if (handled || paired) win.__logyqV2ConsumedPointers.add(event.pointerId)
+      smiteReleaseZoom(win, smite)
+      smiteRefresh(doc, smite)
+      if (smite.pointers.size === 0) {
+        smite.pair = false
+        smite.pinched = false
+        smiteSetInteracting(win, smite, false)
+      } else {
+        smiteSetInteracting(win, smite, true)
+      }
+    }, true)
+
+    win.addEventListener('pointercancel', (event) => {
+      if (!smite.pointers.has(event.pointerId)) return
+      smite.pointers.delete(event.pointerId)
+      smiteReleaseZoom(win, smite)
+      if (smite.pointers.size === 0) {
+        smite.pair = false
+        smite.pinched = false
+        smiteSetInteracting(win, smite, false)
+      }
+      smiteRefresh(doc, smite)
+    }, true)
+
+    doc.addEventListener('click', (event) => {
+      if (event.target?.closest?.('[data-tool="undo"], #undoBtn')) clearSmiteScars(doc, smite)
+    }, true)
+    win.addEventListener('keydown', (event) => {
+      if (bridge.core?.input?.isTextField?.(event.target)) return
+      if (doc.querySelector('.logiq-backdrop.is-open, #settingsBackdrop.show')) return
+      if ((event.key || '').toLowerCase() === 'u') clearSmiteScars(doc, smite)
+    }, true)
+  }
+
+  function smiteFingerMoved(pointer, slop) {
+    return Math.hypot(pointer.lastX - pointer.x, pointer.lastY - pointer.y) > slop
+  }
+
+  // Two fingers block the map zoom until both of them are actually moving.
+  // A parked thumb stays a Smite cast, not a pinch.
+  function smiteHoldTwoFingers(doc, win, smite, holdState) {
+    smite.pinch = null
+    if (holdState) {
+      cancelHold(win, holdState)
+      holdState.pan = null
+      holdState.race = null
+      win.__logyqHoldArming = false
+    }
+    win.__logyqSuppressZoom = true
+    stopZoomGesture(doc)
+  }
+
+  function smiteReleaseZoom(win, smite) {
+    if (smite.pointers.size >= 2) return
+    win.__logyqSuppressZoom = false
+    smite.pinch = null
+  }
+
+  function smiteApplyPinch(doc, win, smite) {
+    const fingers = Array.from(smite.pointers.values())
+    if (fingers.length < 2 || !win.d3) return
+    const a = fingers[0]
+    const b = fingers[1]
+    const dist = Math.hypot(a.lastX - b.lastX, a.lastY - b.lastY)
+    const midX = (a.lastX + b.lastX) / 2
+    const midY = (a.lastY + b.lastY) / 2
+    const prev = smite.pinch
+    smite.pinch = { dist, midX, midY }
+    if (!prev || prev.dist < 1 || dist < 1) return
+    const svg = doc.getElementById('canvas')
+    if (!svg) return
+    const t = win.d3.zoomTransform(svg)
+    const k = Math.max(0.02, Math.min(2.4, t.k * (dist / prev.dist)))
+    const applied = t.k ? k / t.k : 1
+    const nextX = midX - applied * (prev.midX - t.x)
+    const nextY = midY - applied * (prev.midY - t.y)
+    const next = win.d3.zoomIdentity.translate(nextX, nextY).scale(k)
+    svg.__zoom = next
+    const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+    if (root) root.setAttribute('transform', next.toString())
+  }
+
+  function smiteOwnsUid(smite, uid) {
+    if (!uid) return false
+    return (smite.mercies || []).some((mercy) => mercy.marks?.has?.(uid))
+  }
+
+  function smiteDropMercy(smite, mercy) {
+    smite.mercies = (smite.mercies || []).filter((item) => item !== mercy)
+    if (smite.mercy === mercy) smite.mercy = smite.mercies[smite.mercies.length - 1] || null
+  }
+
+  function smiteActiveLayers(smite) {
+    return (smite.mercies || []).filter((mercy) => mercy && !mercy.committing).map((mercy) => ({
+      marks: mercy.marks,
+      fraction: smiteRingFraction(mercy.remaining, SMITE_FULL_MS),
+      castUid: mercy.castUid,
+      tone: mercy.direction === 'left' ? 'amber' : 'red',
+    }))
+  }
+
+  function smiteRefresh(doc, smite, extra) {
+    const layers = smiteActiveLayers(smite)
+    if (extra?.marks) layers.push(extra)
+    if (!layers.length) {
+      clearSmiteClocks(doc)
+      return
+    }
+    paintSmiteLayers(doc, layers)
+  }
+
+  function smiteEnsureTick(doc, win, smite) {
+    if (smite.ticking || smite.raf) return
+    if (!(smite.mercies || []).some((mercy) => mercy && !mercy.committing)) return
+    smite.raf = win.requestAnimationFrame(() => smiteTick(doc, win, smite))
+  }
+
+  function smiteSetInteracting(win, smite, on) {
+    const now = win.performance?.now?.() || Date.now()
+    for (const mercy of smite.mercies || []) {
+      if (!mercy || mercy.committing) continue
+      if (mercy.interacting && !on) mercy.lastTick = now
+      mercy.interacting = !!on
+    }
+  }
+
+  function smiteLiveData(uid) {
+    const root = bridge.core?.state?.root
+    if (!root?.descendants || uid == null) return null
+    const node = root.descendants().find((item) => item?.data?._uid === uid)
+    return node?.data || null
+  }
+
+  function smiteToast(text) {
+    try { bridge.core?.selection?.showToast?.(text, 1100) } catch (_error) {}
+  }
+
+  function smiteZoneWord(zone) {
+    if (zone === 'top') return 'parent'
+    if (zone === 'bottom') return 'kids'
+    return 'family'
+  }
+
+  function smitePaintPreview(doc, win, smite) {
+    if (smite.pinched || smite.pointers.size !== 2) {
+      smiteRefresh(doc, smite)
+      return
+    }
+    const fingers = Array.from(smite.pointers.values())
+    const moved = fingers.filter((finger) => smiteFingerMoved(finger, SMITE_PARK_SLOP))
+    const parked = fingers.filter((finger) => !smiteFingerMoved(finger, SMITE_PARK_SLOP))
+    if (moved.length !== 1 || parked.length !== 1 || !moved[0].uid) {
+      smiteRefresh(doc, smite)
+      return
+    }
+    const swipe = moved[0]
+    const direction = smiteCastDirection(swipe.lastX - swipe.x, swipe.lastY - swipe.y, v162Constants().FLICK_MIN)
+    if (!direction) {
+      smiteRefresh(doc, smite)
+      return
+    }
+    const data = smiteLiveData(swipe.uid)
+    if (!data) return
+    const marks = new Map()
+    const tone = direction === 'left' ? 'amber' : 'red'
+    const ids = smiteAffected(data, smiteZone(parked[0].y, win.innerHeight))
+    if (!ids.length || smiteCastOverlaps(smite.mercies, ids)) {
+      smiteRefresh(doc, smite)
+      return
+    }
+    for (const id of ids) marks.set(id, tone)
+    smiteRefresh(doc, smite, { marks, fraction: 1, castUid: swipe.uid, tone })
+  }
+
+  function smiteTryCast(doc, win, smite, pointer, pointerId) {
+    if (smite.pinched || !pointer?.uid) return false
+    const others = []
+    smite.pointers.forEach((finger, id) => { if (id !== pointerId) others.push(finger) })
+    if (others.length !== 1 || smiteFingerMoved(others[0], SMITE_PARK_SLOP)) return false
+    if (!smiteFingerMoved(pointer, SMITE_PARK_SLOP)) return false
+    const direction = smiteCastDirection(pointer.lastX - pointer.x, pointer.lastY - pointer.y, v162Constants().FLICK_MIN)
+    if (!direction) return false
+    const data = smiteLiveData(pointer.uid)
+    if (!data) return true
+    const zone = smiteZone(others[0].y, win.innerHeight)
+    const ids = smiteAffected(data, zone)
+    if (!ids.length) {
+      smiteToast('Nothing to smite')
+      smiteRefresh(doc, smite)
+      return true
+    }
+    if (smiteCastOverlaps(smite.mercies, ids)) {
+      smiteRefresh(doc, smite)
+      return true
+    }
+    const tone = direction === 'left' ? 'amber' : 'red'
+    const marks = new Map()
+    for (const id of ids) marks.set(id, tone)
+    beginSmiteMercy(doc, win, smite, { uid: pointer.uid, zone, direction, marks })
+    return true
+  }
+
+  function beginSmiteMercy(doc, win, smite, cast) {
+    const now = win.performance?.now?.() || Date.now()
+    const mercy = {
+      marks: cast.marks,
+      castUid: cast.uid,
+      zone: cast.zone,
+      direction: cast.direction,
+      remaining: SMITE_START_MS,
+      lastTick: now,
+      interacting: smite.pointers.size > 0,
+      committing: false,
+    }
+    smite.mercies.push(mercy)
+    smite.mercy = mercy
+    smiteToast(`${cast.direction === 'left' ? 'Bank' : 'Mercy'} · ${smiteZoneWord(cast.zone)}`)
+    smiteRefresh(doc, smite)
+    smiteEnsureTick(doc, win, smite)
+    try { win.navigator.vibrate?.(12) } catch (_error) {}
+  }
+
+  function smiteTick(doc, win, smite) {
+    smite.raf = 0
+    smite.ticking = true
+    try {
+      const now = win.performance?.now?.() || Date.now()
+      const due = []
+      for (const mercy of smite.mercies) {
+        if (!mercy || mercy.committing) continue
+        const dt = Math.max(0, now - mercy.lastTick)
+        mercy.lastTick = now
+        const nominated = smiteHasNominated(mercy.marks)
+        // Original-only casts stay alive for re-include, but the clock does
+        // not drain or commit until someone is nominated again.
+        if (!mercy.interacting && nominated) mercy.remaining = Math.max(0, mercy.remaining - dt)
+        if (nominated && mercy.remaining <= 0) due.push(mercy)
+      }
+      for (const mercy of due) commitSmite(doc, win, smite, mercy)
+      if (smite.mercies.some((mercy) => mercy && !mercy.committing)) {
+        smiteRefresh(doc, smite)
+        smite.raf = win.requestAnimationFrame(() => smiteTick(doc, win, smite))
+      } else {
+        clearSmiteClocks(doc)
+      }
+    } finally {
+      smite.ticking = false
+    }
+  }
+
+  function smiteMercyUp(doc, win, smite, pointer) {
+    const live = (smite.mercies || []).filter((mercy) => mercy && !mercy.committing)
+    if (!live.length) return false
+    const dx = pointer.lastX - pointer.x
+    const dy = pointer.lastY - pointer.y
+    if (pointer.uid && dy > SMITE_TRIGGER_DY && dy > Math.abs(dx)) {
+      const triggered = live.find((mercy) => mercy.castUid === pointer.uid)
+      if (triggered) {
+        commitSmite(doc, win, smite, triggered)
+        return true
+      }
+    }
+    if (Math.hypot(dx, dy) >= v162Constants().TAP_MOVE) return false
+    if (!pointer.uid) return false
+    const asParent = live.find((item) => item.castUid === pointer.uid)
+    const mercy = asParent || live.find((item) => item.marks.has(pointer.uid))
+    if (!mercy) return false
+    const now = win.performance?.now?.() || Date.now()
+    const tone = mercy.direction === 'left' ? 'amber' : 'red'
+    if (mercy.castUid === pointer.uid) {
+      const command = smiteParentCommand(mercy.marks, mercy.castUid, tone)
+      if (command.action === 'cancel') {
+        smiteDropMercy(smite, mercy)
+      } else {
+        smiteApplyEntries(mercy.marks, command.entries)
+        mercy.remaining = SMITE_START_MS
+        mercy.lastTick = now
+      }
+    } else {
+      const command = smiteChildCommand(mercy.marks, pointer.uid)
+      if (command.action === 'cycle') smiteApplyEntries(mercy.marks, command.entries)
+    }
+    smiteRefresh(doc, smite)
+    smiteEnsureTick(doc, win, smite)
+    return true
+  }
+
+  function smiteApplyEntries(marks, entries) {
+    const keep = new Set(entries.map(([uid]) => uid))
+    for (const uid of [...marks.keys()]) {
+      if (!keep.has(uid)) marks.delete(uid)
+    }
+    for (const [uid, mark] of entries) marks.set(uid, mark)
+  }
+
+  function commitSmite(doc, win, smite, mercy = smite.mercy) {
+    if (!mercy || mercy.committing) return
+    mercy.committing = true
+    const core = bridge.core
+    const state = core?.state
+    const utils = core?.utils
+    if (!state?.root || !utils?.deepClone) {
+      smiteDropMercy(smite, mercy)
+      smiteRefresh(doc, smite)
+      smiteEnsureTick(doc, win, smite)
+      return
+    }
+    const prev = utils.deepClone(state.root.data)
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : []
+    const plan = planSmiteCommit(prev, mercy.marks)
+    doc.body.classList.remove('v2-branch-drag', 'v2-cancel', 'v2-dock-target')
+    win.__logyqHoldArming = false
+    win.__logyqHoldDragSession = false
+    try { core.history.pushHistory({ type: 'replace-root', prev, prevBank }) } catch (_error) {}
+    core.selection?.clearGroup?.()
+    core.selection?.clearSelection?.()
+    if (plan.tree) {
+      state.root = win.d3.hierarchy(plan.tree)
+      utils.assignIds(state.root)
+      core.treeManager.layoutAndRender(false)
+    } else {
+      state.root = null
+      core.treeManager.renderEmpty()
+    }
+    if (plan.bank.length) {
+      win.__logyqHoldDragAllowBank = true
+      try {
+        for (const name of plan.bank) core.wordDock.addWords(name, 'bank')
+      } finally {
+        win.__logyqHoldDragAllowBank = false
+      }
+    }
+    core.wordDock.render?.()
+    try { bridge.notifyChange?.() } catch (_error) {}
+    smiteDropMercy(smite, mercy)
+    clearSmiteScars(doc, smite)
+    smiteRefresh(doc, smite)
+    smiteEnsureTick(doc, win, smite)
+    try { win.navigator.vibrate?.(18) } catch (_error) {}
+  }
+
+  function smiteFace(node) {
+    return node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)') || null
+  }
+
+  function smiteRestoreFace(face) {
+    if (!face?.style) return
+    face.style.stroke = ''
+    face.style.strokeWidth = ''
+    face.style.strokeDasharray = ''
+    face.style.animation = ''
+  }
+
+  function smiteRestoreCard(node) {
+    if (!node) return
+    smiteRestoreFace(smiteFace(node))
+    node.querySelectorAll('rect.logyq-smite-wash, rect.logyq-smite-glow').forEach((layer) => layer.remove())
+    node.querySelectorAll('text.label').forEach((el) => {
+      el.style.fill = ''
+      el.style.stroke = ''
+      el.style.strokeWidth = ''
+      el.style.paintOrder = ''
+    })
+    delete node.dataset.smiteHeat
+    delete node.dataset.smitePhase
+    delete node.dataset.smiteClock
+    node.style?.removeProperty?.('--smite-ink')
+  }
+
+  // The card's own border stays hidden so it cannot paint a second shade.
+  function smitePaintFaceStroke(face) {
+    if (!face?.style) return
+    face.style.animation = 'none'
+    face.style.strokeDasharray = 'none'
+    face.style.stroke = 'none'
+  }
+
+  function smiteFaceBox(face) {
+    const rxAttr = parseFloat(face?.getAttribute?.('rx'))
+    const ryAttr = parseFloat(face?.getAttribute?.('ry'))
+    const rx = rxAttr > 0 ? rxAttr : 10
+    const ry = ryAttr > 0 ? ryAttr : rx
+    return {
+      rx,
+      ry,
+      x: parseFloat(face?.getAttribute?.('x')) || 0,
+      y: parseFloat(face?.getAttribute?.('y')) || 0,
+      w: parseFloat(face?.getAttribute?.('width')) || 0,
+      h: parseFloat(face?.getAttribute?.('height')) || 0,
+    }
+  }
+
+  function smiteTakeClock(node) {
+    const found = []
+    for (const child of node?.children || []) {
+      if (child.classList?.contains?.('logyq-smite-clock')) found.push(child)
+    }
+    for (const extra of found.slice(1)) extra.remove()
+    return found[0] || null
+  }
+
+  function smiteRestoreEdge(link) {
+    if (!link || link.dataset.smiteEdge !== '1') return
+    link.style.stroke = ''
+    link.style.strokeDasharray = ''
+    link.style.animation = ''
+    link.style.opacity = '0.5'
+    link.style.strokeWidth = '2.8px'
+    link.style.vectorEffect = ''
+    link.style.transition = ''
+    delete link.dataset.smiteEdge
+  }
+
+  function smitePaintEdge(link, heat) {
+    try { link.ownerDocument?.defaultView?.d3?.select(link).interrupt() } catch (_error) {}
+    link.dataset.smiteEdge = '1'
+    link.style.setProperty('stroke', heat.stroke, 'important')
+    link.style.strokeWidth = '3.5px'
+    link.style.opacity = '1'
+    link.style.strokeDasharray = 'none'
+    link.style.animation = 'none'
+    link.style.transition = 'none'
+    link.style.vectorEffect = 'non-scaling-stroke'
+  }
+
+  function smitePaintCard(node, heat, rx, ry, outline) {
+    const face = smiteFace(node)
+    if (!face) return
+    const doc = node.ownerDocument
+    const svg = 'http://www.w3.org/2000/svg'
+    let wash = node.querySelector('rect.logyq-smite-wash')
+    if (!wash) {
+      wash = doc.createElementNS(svg, 'rect')
+      wash.setAttribute('class', 'logyq-smite-wash')
+      wash.setAttribute('pointer-events', 'none')
+      const text = node.querySelector('text.label')
+      if (text) node.insertBefore(wash, text)
+      else node.appendChild(wash)
+    }
+    wash.setAttribute('x', face.getAttribute('x') || '0')
+    wash.setAttribute('y', face.getAttribute('y') || '0')
+    wash.setAttribute('width', face.getAttribute('width') || '0')
+    wash.setAttribute('height', face.getAttribute('height') || '0')
+    wash.setAttribute('rx', String(rx))
+    wash.setAttribute('ry', String(ry))
+    wash.setAttribute('fill', heat.wash)
+    wash.setAttribute('fill-opacity', String(heat.washOpacity))
+    wash.style.fill = heat.wash
+    wash.style.fillOpacity = String(heat.washOpacity)
+    wash.style.animation = 'none'
+    wash.style.filter = 'none'
+    // Inline stroke wins over `.node rect`, which would otherwise keep a full white ring.
+    if (outline) {
+      wash.setAttribute('stroke', heat.stroke)
+      wash.style.stroke = heat.stroke
+      wash.style.strokeWidth = '3.5px'
+      wash.style.strokeDasharray = 'none'
+      wash.style.vectorEffect = 'non-scaling-stroke'
+    } else {
+      wash.setAttribute('stroke', 'none')
+      wash.style.stroke = 'none'
+      wash.style.strokeWidth = '0'
+      wash.style.strokeDasharray = 'none'
+      wash.style.vectorEffect = 'none'
+    }
+    node.dataset.smiteHeat = '1'
+  }
+
+  function smitePaintGlow(node, heat, rx, ry) {
+    const face = smiteFace(node)
+    let glow = node.querySelector('rect.logyq-smite-glow')
+    if (!face || !heat.glow) {
+      glow?.remove()
+      return
+    }
+    const doc = node.ownerDocument
+    if (!glow) {
+      glow = doc.createElementNS('http://www.w3.org/2000/svg', 'rect')
+      glow.setAttribute('class', 'logyq-smite-glow')
+      glow.setAttribute('pointer-events', 'none')
+      node.insertBefore(glow, face)
+    }
+    const x = parseFloat(face.getAttribute('x')) || 0
+    const y = parseFloat(face.getAttribute('y')) || 0
+    const w = parseFloat(face.getAttribute('width')) || 0
+    const h = parseFloat(face.getAttribute('height')) || 0
+    const pad = 8
+    glow.setAttribute('x', smiteNum(x - pad))
+    glow.setAttribute('y', smiteNum(y - pad))
+    glow.setAttribute('width', smiteNum(w + pad * 2))
+    glow.setAttribute('height', smiteNum(h + pad * 2))
+    glow.setAttribute('rx', String(rx + pad))
+    glow.setAttribute('ry', String(ry + pad))
+    glow.setAttribute('fill', heat.stroke)
+    glow.setAttribute('fill-opacity', String(heat.glow))
+    glow.setAttribute('stroke', 'none')
+    glow.style.filter = 'blur(9px)'
+  }
+
+  function paintSmiteLayers(doc, layers) {
+    const tree = bridge.core?.state?.root?.data
+    const byUid = new Map()
+    const clockHosts = new Map()
+    for (const layer of layers || []) {
+      const marks = layer?.marks
+      if (!marks) continue
+      const fraction = Number(layer.fraction)
+      const owned = new Map()
+      const take = (uid, mark) => {
+        if (!uid || byUid.has(uid) || owned.has(uid)) return
+        owned.set(uid, mark)
+        byUid.set(uid, { mark, fraction, layer })
+      }
+      if (typeof marks.forEach === 'function') marks.forEach((mark, uid) => take(uid, mark))
+      else Object.keys(marks).forEach((uid) => take(uid, marks[uid]))
+      const castUid = layer.castUid || null
+      const tone = smiteNominatedTone(marks, castUid, layer.tone)
+      if (castUid && tone && !clockHosts.has(castUid)) {
+        clockHosts.set(castUid, { mark: tone, fraction })
+      } else if (!castUid) {
+        for (const uid of smiteClockRoots(tree, owned)) {
+          const mark = owned.get(uid)
+          if ((mark === 'red' || mark === 'amber') && !clockHosts.has(uid)) {
+            clockHosts.set(uid, { mark, fraction })
+          }
+        }
+      }
+    }
+    const nodes = doc.querySelectorAll('svg#canvas g.node')
+    nodes.forEach((node) => {
+      const uid = nodeUid(node)
+      const entry = uid ? byUid.get(uid) : null
+      const mark = entry?.mark
+      const nominated = mark === 'red' || mark === 'amber'
+      const host = uid ? clockHosts.get(uid) : null
+      let clock = smiteTakeClock(node)
+      node.querySelectorAll('rect.logyq-smite-glow').forEach((layer) => layer.remove())
+      delete node.dataset.smitePhase
+      node.style?.removeProperty?.('--smite-ink')
+      if (!nominated && !host) {
+        if (clock || node.dataset.smiteHeat === '1' || node.dataset.smiteClock === '1' || node.querySelector('rect.logyq-smite-wash')) {
+          smiteRestoreCard(node)
+        }
+        clock?.remove()
+        delete node.dataset.smiteClock
+        return
+      }
+      const face = smiteFace(node)
+      if (!face) return
+      const { rx, ry, x, y, w, h } = smiteFaceBox(face)
+      if (nominated) {
+        const pastel = smitePastel(mark)
+        smitePaintCard(node, { wash: pastel.fill, washOpacity: pastel.opacity, stroke: pastel.fill }, rx, ry, false)
+      } else {
+        node.querySelectorAll('rect.logyq-smite-wash').forEach((layer) => layer.remove())
+        delete node.dataset.smiteHeat
+      }
+      if (!host) {
+        clock?.remove()
+        delete node.dataset.smiteClock
+        smiteRestoreFace(face)
+        return
+      }
+      const svg = 'http://www.w3.org/2000/svg'
+      // The clock hides the card border so that white stroke is not a second ring.
+      smitePaintFaceStroke(face)
+      node.dataset.smiteClock = '1'
+      const color = smiteMoodColor(host.mark)
+      const d = smiteClockPath(x, y, w, h, rx, ry)
+      if (!d) {
+        clock?.remove()
+        return
+      }
+      if (clock && clock.localName !== 'path') {
+        clock.remove()
+        clock = null
+      }
+      if (!clock) {
+        clock = doc.createElementNS(svg, 'path')
+        clock.setAttribute('fill', 'none')
+        clock.setAttribute('stroke-width', '3.5')
+        clock.setAttribute('stroke-linecap', 'round')
+        clock.setAttribute('stroke-linejoin', 'round')
+        clock.setAttribute('pointer-events', 'none')
+        node.appendChild(clock)
+      }
+      clock.setAttribute('d', d)
+      clock.setAttribute('class', `logyq-smite-clock logyq-smite-${host.mark}`)
+      clock.setAttribute('stroke', color)
+      clock.style.animation = 'none'
+      clock.style.transition = 'none'
+      clock.style.filter = 'none'
+      clock.style.vectorEffect = 'none'
+      let length = 0
+      try { length = clock.getTotalLength() } catch (_error) { length = 0 }
+      if (!(length > 0)) length = smiteClockLength(w, h, rx, ry)
+      // Dash lives on the SVG attributes, in this one path length.
+      // A CSS pixel length would shrink faster than the 12s drain when the map is scaled.
+      clock.setAttribute('pathLength', String(length))
+      const dash = smiteLineDash(host.fraction, length)
+      clock.setAttribute('stroke-dasharray', dash.array)
+      clock.setAttribute('stroke-dashoffset', String(dash.offset))
+      clock.style.removeProperty('stroke-dasharray')
+      clock.style.removeProperty('stroke-dashoffset')
+    })
+    const mood = new Map()
+    for (const [castUid, host] of clockHosts) {
+      const color = smiteMoodColor(host.mark)
+      for (const uid of smiteMoodTargets(tree, castUid)) {
+        if (!mood.has(uid)) mood.set(uid, color)
+      }
+    }
+    doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => {
+      const uid = link.__data__?.target?.data?._uid || link.__data__?.target?.data?.uid || null
+      const color = uid ? mood.get(uid) : null
+      if (color) smitePaintEdge(link, { stroke: color })
+      else smiteRestoreEdge(link)
+    })
+  }
+
+  function smiteScarPoint(doc, win, uid) {
+    const nodes = Array.from(doc.querySelectorAll('svg#canvas g.node')).filter((node) => nodeUid(node) === uid)
+    for (const node of nodes) {
+      const face = smiteFace(node)
+      const rect = face?.getBoundingClientRect?.()
+      if (rect && rect.width >= 1 && rect.height >= 1) {
+        return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 }
+      }
+    }
+    const laid = nodes.find((node) => Number.isFinite(node.__data__?.x) && Number.isFinite(node.__data__?.y))
+    const host = doc.getElementById('canvas')?.querySelector('g')
+    const ctm = host?.getScreenCTM?.()
+    if (laid && ctm && typeof win.DOMPoint === 'function') {
+      const point = new win.DOMPoint(laid.__data__.x, laid.__data__.y).matrixTransform(ctm)
+      if (Number.isFinite(point.x) && Number.isFinite(point.y)) return { x: point.x, y: point.y }
+    }
+    return null
+  }
+
+  function clearSmiteClocks(doc) {
+    doc.querySelectorAll('svg#canvas g.node').forEach((node) => {
+      if (node.dataset.smiteHeat === '1' || node.querySelector('.logyq-smite-clock')) smiteRestoreCard(node)
+    })
+    doc.querySelectorAll('svg#canvas .logyq-smite-clock').forEach((clock) => clock.remove())
+    doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => smiteRestoreEdge(link))
+  }
+
+  function clearSmiteScars(doc, smite) {
+    if (smite?.scarRaf) {
+      ;(doc.defaultView || window).cancelAnimationFrame(smite.scarRaf)
+      smite.scarRaf = 0
+    }
+    smite.scars = []
+    doc.querySelectorAll('.logyq-smite-scar').forEach((scar) => scar.remove())
+  }
+
+  function smiteCardFaces(doc) {
+    return Array.from(doc.querySelectorAll('svg#canvas g.node')).map((node) => {
+      const face = smiteFace(node)
+      const rect = face?.getBoundingClientRect?.()
+      if (!rect || rect.width < 2 || rect.height < 2) return null
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
+    }).filter(Boolean)
+  }
+
+  function syncSmiteScars(doc, win, smite) {
+    const now = win.performance?.now?.() || Date.now()
+    const faces = smiteCardFaces(doc)
+    let live = false
+    doc.querySelectorAll('.logyq-smite-scar').forEach((button) => {
+      if (button._smiteBorn == null) button._smiteBorn = now
+      const opacity = smiteScarOpacity(now - button._smiteBorn, SMITE_SCAR_HOLD_MS, SMITE_SCAR_FADE_MS)
+      if (opacity <= 0) {
+        button.remove()
+        return
+      }
+      live = true
+      const box = button.getBoundingClientRect()
+      const blocked = smiteScarBlocked((box.left + box.right) / 2, (box.top + box.bottom) / 2, faces)
+      button.style.opacity = String(opacity)
+      button.style.transform = opacity < 1 ? `scale(${0.72 + 0.28 * opacity})` : ''
+      button.classList.toggle('is-covered', blocked)
+      button.style.pointerEvents = blocked ? 'none' : 'auto'
+    })
+    if (smite) {
+      const still = new Set(doc.querySelectorAll('.logyq-smite-scar'))
+      smite.scars = (smite.scars || []).filter((scar) => scar.button && still.has(scar.button))
+    }
+    return live
+  }
+
+  function kickSmiteScarLoop(doc, win, smite) {
+    if (smite.scarRaf) return
+    const tick = () => {
+      smite.scarRaf = 0
+      if (syncSmiteScars(doc, win, smite)) smite.scarRaf = win.requestAnimationFrame(tick)
+    }
+    smite.scarRaf = win.requestAnimationFrame(tick)
+  }
+
+  function mountSmiteScars(doc, win, smite, placed) {
+    const born = win.performance?.now?.() || Date.now()
+    placed.forEach((scar, index) => {
+      const button = doc.createElement('button')
+      button.type = 'button'
+      button.className = 'logyq-smite-scar'
+      button.dataset.uid = scar.uid || ''
+      button.dataset.name = scar.name || ''
+      button.setAttribute('aria-label', 'Restore smitten card')
+      button.style.left = `${scar.x + index * 8}px`
+      button.style.top = `${scar.y}px`
+      button._smiteBorn = born
+      scar.button = button
+      button.addEventListener('pointerdown', (event) => {
+        if (button.classList.contains('is-covered')) return
+        event.preventDefault()
+        event.stopPropagation()
+      })
+      button.addEventListener('pointerup', (event) => {
+        if (button.classList.contains('is-covered')) return
+        event.preventDefault()
+        event.stopPropagation()
+        const now = win.performance?.now?.() || Date.now()
+        if (button._smiteTap && now - button._smiteTap <= v162Constants().DOUBLE_TAP_MS) {
+          button._smiteTap = 0
+          restoreSmiteScar(doc, win, smite, scar, button)
+        } else {
+          button._smiteTap = now
+        }
+      })
+      doc.body.appendChild(button)
+      smite.scars.push(scar)
+    })
+    syncSmiteScars(doc, win, smite)
+    kickSmiteScarLoop(doc, win, smite)
+  }
+
+  function restoreSmiteScar(doc, win, smite, scar, button) {
+    const core = bridge.core
+    const state = core?.state
+    const utils = core?.utils
+    if (!state || !utils) return
+    const card = { name: scar.name || '', _uid: scar.uid }
+    if (scar.color) card.color = scar.color
+    utils.assignUids?.(card)
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : []
+    if (!state.root) {
+      try { core.history.pushHistory({ type: 'add-root' }) } catch (_error) {}
+      state.root = win.d3.hierarchy(card)
+      utils.assignIds(state.root)
+      core.treeManager.layoutAndRender(false)
+    } else {
+      const prev = utils.deepClone(state.root.data)
+      const parent = scar.parentUid ? utils.findByUid(state.root.data, scar.parentUid) : null
+      const host = parent || state.root.data
+      try { core.history.pushHistory({ type: 'replace-root', prev, prevBank }) } catch (_error) {}
+      host.children = host.children || []
+      host.children.push(card)
+      state.root = win.d3.hierarchy(state.root.data)
+      utils.assignIds(state.root)
+      core.treeManager.layoutAndRender(false)
+    }
+    button.remove()
+    smite.scars = smite.scars.filter((item) => item !== scar)
+    try { bridge.notifyChange?.() } catch (_error) {}
   }
 
   function mouse(target, win, type, x, y, buttons) {
@@ -1911,6 +3255,23 @@
     preview.gestures.hitEditUid = hitEditUid
     preview.gestures.hitLayoutSlot = hitLayoutSlot
     preview.gestures.layoutFaceRect = layoutFaceRect
+    preview.gestures.smiteZone = smiteZone
+    preview.gestures.smiteCastDirection = smiteCastDirection
+    preview.gestures.smiteAffected = smiteAffected
+    preview.gestures.smiteNextMark = smiteNextMark
+    preview.gestures.smiteRingFraction = smiteRingFraction
+    preview.gestures.smiteRefillMs = smiteRefillMs
+    preview.gestures.planSmiteCommit = planSmiteCommit
+    preview.gestures.smiteClockPath = smiteClockPath
+    preview.gestures.smiteClockLength = smiteClockLength
+    preview.gestures.smiteLineDash = smiteLineDash
+    preview.gestures.smiteLinePhase = smiteLinePhase
+    preview.gestures.smiteClockRoots = smiteClockRoots
+    preview.gestures.smiteCastOverlaps = smiteCastOverlaps
+    preview.gestures.smiteHeat = smiteHeat
+    preview.gestures.smiteScarOpacity = smiteScarOpacity
+    preview.gestures.smiteScarBlocked = smiteScarBlocked
+    preview.gestures.syncSmiteScars = () => syncSmiteScars(document, window, preview.gestures.smite)
   }
   function setSaveState(state) {
     const text = state === 'saving' ? 'Saving' : state === 'offline' ? 'Offline' : 'Saved'
@@ -2030,13 +3391,14 @@
         map_word_bank: payload.word_bank,
         map_id: pending.id || null,
       })
+      acceptPin(pin)
       app.current = { id: typeof id === 'string' ? id : (id?.id || pending.id), name: payload.name }
       updateMapName()
       const latest = readJson(PENDING_KEY, null)
       if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
       setSaveState(localStorage.getItem(PENDING_KEY) ? 'saving' : 'saved')
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       setSaveState('offline')
     } finally {
       app.saving = false
@@ -2048,16 +3410,38 @@
     }
   }
 
+  let memoryPin = null
   let pinResolver = null
-  function getPin(interactive) {
-    const stored = sessionStorage.getItem(PIN_KEY)
+  let libraryTask = null
+
+  function readStoredPin() {
+    try {
+      const stored = sessionStorage.getItem(PIN_KEY)
+      if (stored) return stored
+    } catch (_error) {}
+    return memoryPin
+  }
+
+  function acceptPin(value) {
+    memoryPin = value || null
+    if (!value) return
+    try { sessionStorage.setItem(PIN_KEY, value) } catch (_error) {}
+  }
+
+  function forgetPin() {
+    memoryPin = null
+    try { sessionStorage.removeItem(PIN_KEY) } catch (_error) {}
+  }
+
+  function getPin(interactive, options = {}) {
+    const stored = readStoredPin()
     if (stored || !interactive) return Promise.resolve(stored)
     if (pinResolver) return new Promise((resolve) => {
       const prior = pinResolver
       pinResolver = (value) => { prior(value); resolve(value) }
     })
     ui.pinInput.value = ''
-    ui.pinError.classList.remove('is-visible')
+    if (!options.keepError) ui.pinError.classList.remove('is-visible')
     ui.pin.classList.add('is-open')
     ui.pin.setAttribute('aria-hidden', 'false')
     requestAnimationFrame(() => ui.pinInput.focus())
@@ -2066,12 +3450,11 @@
 
   function finishPin(value) {
     if (!pinResolver) return
-    if (value) sessionStorage.setItem(PIN_KEY, value)
     ui.pin.classList.remove('is-open')
     ui.pin.setAttribute('aria-hidden', 'true')
     const resolve = pinResolver
     pinResolver = null
-    resolve(value)
+    resolve(value || null)
   }
 
   function showLibrary() {
@@ -2116,7 +3499,10 @@
     closeMobilePanel()
     abandonBlankDraft()
     showLibrary()
-    ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+    if (!libraryTask) {
+      app.libraryStatus = 'loading'
+      ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+    }
     await refreshLibrary()
   }
 
@@ -2126,34 +3512,69 @@
   }
 
   async function listLiveMaps() {
-    const pin = await getPin(true)
-    if (!pin) return readCachedLibrary()
-    const rows = await rpc('logiq_map_list', { pin })
-    const list = Array.isArray(rows) ? rows.slice() : []
-    list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
-    cacheLibrary(list)
-    return list
+    let keepError = false
+    for (;;) {
+      const pin = await getPin(true, { keepError })
+      keepError = false
+      if (!pin) throw Object.assign(new Error('Lab PIN required'), { locked: true })
+      try {
+        const rows = await rpc('logiq_map_list', { pin })
+        if (!Array.isArray(rows)) throw new Error('Could not read the map list.')
+        acceptPin(pin)
+        const list = rows.slice()
+        list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+        cacheLibrary(list)
+        return list
+      } catch (error) {
+        if (!error.auth) throw error
+        forgetPin()
+        ui.pinError.textContent = 'That PIN was not accepted. Your maps are still saved.'
+        ui.pinError.classList.add('is-visible')
+        keepError = true
+      }
+    }
   }
 
-  async function refreshLibrary() {
+  function refreshLibrary() {
+    if (libraryTask) return libraryTask
+    libraryTask = refreshLibraryNow().finally(() => { libraryTask = null })
+    return libraryTask
+  }
+
+  async function refreshLibraryNow() {
     try {
       app.libraryRows = await listLiveMaps()
+      app.libraryStatus = 'live'
       renderLibrary()
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       app.libraryRows = readCachedLibrary()
-      if (app.libraryRows.length) renderLibrary()
-      else ui.mapList.innerHTML = `<div class="logiq-empty">${navigator.onLine ? 'Could not load maps. Check the Lab PIN.' : 'Offline. Saved changes will retry.'}</div>`
+      app.libraryStatus = error.locked ? 'locked' : 'error'
+      renderLibrary()
     }
   }
 
   function renderLibrary() {
     const rows = Array.isArray(app.libraryRows) ? app.libraryRows : []
+    const status = app.libraryStatus || 'live'
+    if (status === 'loading') {
+      ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+      return
+    }
+    if (!rows.length && status === 'locked') {
+      ui.mapList.innerHTML = '<div class="logiq-empty"><p>Your maps are still saved. Enter the Lab PIN to open them.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
+      return
+    }
+    if (!rows.length && status !== 'live') {
+      ui.mapList.innerHTML = `<div class="logiq-empty"><p>${navigator.onLine ? 'Could not load maps. Nothing was deleted.' : 'Offline. Saved changes will retry.'}</p><button type="button" class="logiq-primary" data-connect>Try again</button></div>`
+      return
+    }
     if (!rows.length) {
       ui.mapList.innerHTML = '<div class="logiq-empty"><p>No maps yet.</p><button type="button" class="logiq-primary" data-empty-new>+ New</button></div>'
       return
     }
-    ui.mapList.innerHTML = rows.map((row) => {
+    const note = status === 'live' ? '' : '<div class="logiq-library-note"><p>Showing maps last opened on this device. Connect to refresh the Lab. Nothing was deleted.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
+    ui.mapList.innerHTML = note + rows.map((row) => {
       const current = row.id === app.current.id ? ' is-current' : ''
       const when = formatUpdatedAt(row.updated_at)
       return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
@@ -2165,6 +3586,10 @@
   }
 
   async function handleMapAction(event) {
+    if (event.target.closest('[data-connect]')) {
+      refreshLibrary()
+      return
+    }
     if (event.target.closest('[data-empty-new]')) {
       createMap({ edit: false })
       return
@@ -2252,6 +3677,7 @@
         map_word_bank: payload.word_bank,
         map_id: row.id,
       })
+      acceptPin(pin)
       row.name = payload.name
       if (row.id === app.current.id) {
         app.current.name = payload.name
@@ -2260,7 +3686,7 @@
       renderLibrary()
       setSaveState('saved')
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       setSaveState('offline')
     }
   }
@@ -2270,6 +3696,7 @@
     if (!pin) return
     try {
       await rpc('logiq_map_delete', { pin, map_id: row.id })
+      acceptPin(pin)
       app.libraryRows = app.libraryRows.filter((item) => item.id !== row.id)
       cacheLibrary(app.libraryRows)
       if (app.current.id === row.id) {
@@ -2281,7 +3708,7 @@
       renderLibrary()
       if (!app.libraryRows.length) openHomeLibrary()
     } catch (error) {
-      if (error.auth) sessionStorage.removeItem(PIN_KEY)
+      if (error.auth) forgetPin()
       setSaveState('offline')
     }
   }
@@ -2305,15 +3732,15 @@
       return
     }
     if (recovered) localStorage.removeItem(PENDING_KEY)
-    try {
-      const rows = await listLiveMaps()
-      app.libraryRows = rows
-      openHomeLibrary()
-    } catch (_error) {
-      app.libraryRows = readCachedLibrary()
-      openHomeLibrary()
-    }
+    app.hasOpenMap = false
+    document.body.classList.remove('logyq-map-open')
+    showLibrary()
+    app.libraryStatus = 'loading'
+    ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
+    await refreshLibrary()
     app.booted = true
   }
+
+  bootSession()
 })()
 

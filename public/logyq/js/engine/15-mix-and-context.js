@@ -29,32 +29,25 @@ function randomizeTree(includeBank){
     // Keep painted/annotated card fields with each shuffle. Mix used to
     // rebuild `{ name }` only, which wiped `data.color` (and any label
     // aliases) before snapshot / `logyq_maps_v1` saved that bare tree.
-    const cards = [];
-    if (state.root){
-      for (const n of state.root.descendants()) {
-        const name = cardLabel(n.data);
-        if (!name) continue;
-        cards.push(mixCard(name, n.data));
-      }
-    }
+    // A card in the tree is mixable even when its label is "". Paint on a
+    // blank card has to travel with that card; name length is not presence.
+    const treeNodes = state.root ? state.root.descendants() : [];
+    const pool = treeNodes.slice(1).map((n) => mixCard(cardLabel(n.data), n.data));
     if (includeBank && prevBank.length) {
       for (const word of prevBank) {
-        if (word) cards.push(mixCard(word, null));
+        if (word) pool.push(mixCard(word, null));
       }
     }
-    if (!cards.length){ logyq.selection.showToast("Nothing to mix"); return; }
-
-    const rootLabel = cardLabel(state.root?.data) || cards[0].name;
-    let pool = cards.slice();
-    const rmIdx = pool.findIndex((card) => card.name === rootLabel);
-    if (rmIdx > -1) pool.splice(rmIdx, 1);
+    const root = state.root
+      ? mixCard(cardLabel(state.root.data), state.root.data)
+      : pool.shift();
+    if (!root){ logyq.selection.showToast("Nothing to mix"); return; }
     for (let i = pool.length - 1; i > 0; i--){
       const j = (Math.random() * (i + 1)) | 0;
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     function ri(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
-    const root = mixCard(rootLabel, state.root?.data);
     root.children = [];
     let q = [{ node: root, cap: ri(1,3), used: 0 }], k = 0;
     while (k < pool.length){
@@ -101,11 +94,10 @@ function randomizeTree(includeBank){
   // Don’t show the browser menu or bubble to zoom
   event.preventDefault();
   event.stopPropagation();
-  // Phone long-press hold-drag synthesizes contextmenu. That path
-  // addWords-copies labels, then splices data; layout freeze hid the
-  // splice so Ashley saw a Word Bank copy while the origin slot stayed.
-  if (window.__logyqHoldDragFrozen?.() || window.__logyqHoldDragBlocksBank?.()) return;
-
+  // Contextmenu is never a Word Bank write. Phone long-press and desktop
+  // right-click both land here, and both used to copy the card label into
+  // the dock (Ashley’s “Jrvb” chip while Dog / Poodle / Jdvb stayed put).
+  // Card → bank is only sendSubtreeToWordBank after a move + dock dwell.
   if (!d || !state.root) return;
   const uid = d?.data?._uid;
   if (!uid) return;
@@ -127,65 +119,7 @@ function randomizeTree(includeBank){
 
 
 
-// 1) Ctrl+RIGHT = ABANDON (single OR multi-set; children stay with parent)
-if (event.shiftKey && !event.metaKey) {
-  const set = (state.selectedUids instanceof Set) ? state.selectedUids : null;
-  const inGroup = !!(set && set.size > 1 && set.has(uid));
-
-  // Build the list of victim UIDs: either the top-level selection, or just the clicked node
-  let victims = [uid];
-  if (inGroup) {
-    const byUid = new Map(state.root.descendants().map(h => [h.data._uid, h]));
-    const topLevel = [];
-    for (const u of set) {
-      const h = byUid.get(u);
-      if (!h || !h.parent) continue;            // skip root / missing
-      let p = h.parent, under = false;
-      while (p) { if (set.has(p.data._uid)) { under = true; break; } p = p.parent; }
-      if (!under) topLevel.push(u);
-    }
-    victims = topLevel;
-  }
-
-  if (!victims.length) return;
-
-  const prev = utils.deepClone(state.root.data);
-
-  for (const vUid of victims) {
-    // find fresh hierarchy node for each vUid
-    const h = state.root.descendants().find(n => n.data && n.data._uid === vUid);
-    if (!h || !h.parent) continue;              // skip root or not found
-
-    const parentData = h.parent.data;
-    const arr = parentData.children || (parentData.children = []);
-    const idx = arr.findIndex(c => c && c._uid === vUid);
-    if (idx < 0) continue;
-
-    const moving = arr[idx];
-    const orphans = (moving.children || []).slice();
-    moving.children = null;                      // only the node’s label goes to bank
-
-    // parent adopts children at same position
-    arr.splice(idx, 1, ...orphans);
-    if (arr.length === 0) parentData.children = null;
-
-    const nm = (moving?.name || '').trim();
-    if (nm) {
-      if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(nm, 'bank');
-      else {
-        state.wordBank = state.wordBank || [];
-        state.wordBank.push(nm);
-      }
-    }
-  }
-
-  logyq.history.pushHistory?.({ type: 'replace-root', prev });  // snapshot once for whole operation
-  state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-  logyq.selection.clearSelection?.();
-  logyq.treeManager.layoutAndRender(false);
-  logyq.selection.showToast?.(`Sent ${victims.length} node(s) to Word Dock (children stayed)`);
-  return;
-}
+// Right-click / long-press does not abandon a card into the Word Bank.
 
 
 
@@ -208,7 +142,10 @@ if (event.shiftKey && !event.metaKey) {
 
 
 
-  // 2) If chips are selected → paste chips as children under this node
+  // Selected chips can still be pasted under this card. That removes
+  // words from the dock; it does not add any.
+  if (window.incidentalBankContext?.(event)) return;
+  if (window.__logyqHoldDragFrozen?.() || window.__logyqHoldDragBlocksBank?.()) return;
   const selectedNames = logyq.wordDock.getSelectedChipNames?.() || [];
   if (selectedNames.length){
     const targetData = d.data;
@@ -232,117 +169,6 @@ if (event.shiftKey && !event.metaKey) {
     logyq.selection.showToast?.(`Added ${selectedNames.length} to "${targetData.name}"`);
     return;
   }
-
-
-
-
-
-
-
-// 3) Plain RIGHT = SUBTREE(S) → Word Bank (group-aware)
-
-  const set = (state.selectedUids instanceof Set) ? state.selectedUids : null;
-  const inGroup = !!(set && set.size > 1 && set.has(uid));
-
-  if (inGroup) {
-    // --- MULTI: gather top-level selections (skip any whose ancestor is also selected)
-    const byUid = new Map(state.root.descendants().map(h => [h.data._uid, h]));
-    const topLevel = [];
-    for (const u of set) {
-      const h = byUid.get(u); if (!h) continue;
-      // don’t accidentally delete the whole tree via root in a group
-      if (!h.parent) continue;
-      let p = h.parent, under = false;
-      while (p) { if (set.has(p.data._uid)) { under = true; break; } p = p.parent; }
-      if (!under) topLevel.push(u);
-    }
-    // left→right stability (optional)
-    topLevel.sort((a,b) => (byUid.get(a)?.x||0) - (byUid.get(b)?.x||0));
-
-    if (!topLevel.length) {
-      // nothing valid to do → fall back to single below
-    } else {
-      const namesToBank = [];
-
-      for (const u of topLevel) {
-        const h = byUid.get(u); if (!h || !h.parent) continue;
-
-        // collect all labels in this subtree
-        const subtreeNames = h.descendants()
-          .map(n => (n?.data?.name || '').trim())
-          .filter(Boolean);
-        namesToBank.push(...subtreeNames);
-
-        // delete subtree from its parent (with history)
-        const parentData = h.parent.data;
-        const arr = parentData.children || (parentData.children = []);
-        const idx = arr.findIndex(c => c && c._uid === u);
-        logyq.history.pushHistory?.({
-          type: 'delete',
-          parentPath: utils.pathToUid(state.root.data, parentData._uid),
-          index: idx,
-          subtree: utils.deepClone(h.data)
-        });
-        if (idx >= 0) arr.splice(idx, 1);
-        if (arr.length === 0) parentData.children = null;
-      }
-
-      // shove all collected names to the Word Bank
-      if (namesToBank.length) {
-        if (typeof logyq.wordDock?.addWords === 'function') {
-          logyq.wordDock.addWords(namesToBank.join('\n'), 'bank');
-        } else {
-          state.wordBank = state.wordBank || [];
-          state.wordBank.push(...namesToBank);
-        }
-      }
-
-      // rebuild & redraw
-      state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-      logyq.selection.clearSelection?.();
-      logyq.treeManager.layoutAndRender(true, true);
-      logyq.selection.showToast?.(`Sent ${namesToBank.length} items to Word Dock`);
-      return;
-    }
-  }
-
-  // --- SINGLE (fallback): your original single-subtree → Word Bank behavior
-  const names = d.descendants().map(n => n?.data?.name).filter(Boolean);
-  if (names.length){
-    if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(names.join('\n'), 'bank');
-    else {
-      state.wordBank = state.wordBank || [];
-      state.wordBank.push(...names);
-    }
-  }
-
-  if (!d.parent){
-    // whole tree
-    logyq.history.pushHistory?.({ type: 'delete-root', subtree: utils.deepClone(d.data) });
-    state.root = null; state.lastNodes = [];
-    logyq.drag.clear?.();
-    logyq.treeManager.renderEmpty();
-    logyq.selection.showToast?.("Sent whole tree to Word Dock");
-    return;
-  }
-
-  // non-root: remove subtree from parent
-  const parentData = d.parent.data;
-  const sibs = parentData.children || (parentData.children = []);
-  const idx = sibs.findIndex(c => c && c._uid === uid);
-  logyq.history.pushHistory?.({
-    type: 'delete',
-    parentPath: utils.pathToUid(state.root.data, parentData._uid),
-    index: idx,
-    subtree: utils.deepClone(d.data)
-  });
-  if (idx >= 0) sibs.splice(idx, 1);
-
-  // Rebuild from data; no need to mutate d.parent.children when we rebuild
-  state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
-  logyq.treeManager.layoutAndRender(true, true);
-  logyq.selection.showToast?.("Sent subtree to Word Dock");
-  return;
 }
 
 

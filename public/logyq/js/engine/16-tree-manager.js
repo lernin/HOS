@@ -152,7 +152,8 @@ elements.mixBtn && elements.mixBtn.addEventListener('pointerdown', (e) => {
 
 elements.mixBtn && elements.mixBtn.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  // Right-click forces include WordBank
+  // Right-click forces include WordBank. A phone long-press is not that.
+  if (window.incidentalBankContext?.(e)) return;
   logyq.mix.randomizeTree(true);
 });
 
@@ -480,7 +481,8 @@ centerOnSelected(opts = {}) {
     if(!b||!b.width||!b.height) return;
     const phone = typeof window !== 'undefined' && window.matchMedia
       && window.matchMedia('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px)),(max-width:700px)').matches;
-    const headerH = phone ? (document.getElementById('logiq-mobile-header')?.getBoundingClientRect().height || 48) : 0;
+    const edge = phone && window.matchMedia('(orientation: landscape)').matches;
+    const headerH = phone && !edge ? (document.getElementById('logiq-mobile-header')?.getBoundingClientRect().height || 48) : 0;
     const dockEl = phone ? document.getElementById('Dock') : null;
     const dockBox = dockEl && !dockEl.classList.contains('dock-hidden') ? dockEl.getBoundingClientRect() : null;
     const dockH = dockBox && dockBox.height > 8 ? dockBox.height + 8 : 16;
