@@ -177,6 +177,30 @@
       `H ${smiteNum(noonX)} Z`,
     ].join(' ')
   }
+
+  // Full residue, then a soft ease-out. 0 means the scar is gone.
+  function smiteScarOpacity(ageMs, holdMs = 2800, fadeMs = 7200) {
+    const age = Math.max(0, Number(ageMs) || 0)
+    const hold = Number(holdMs) > 0 ? Number(holdMs) : 0
+    const fade = Number(fadeMs) > 0 ? Number(fadeMs) : 1
+    if (age <= hold) return 1
+    const t = (age - hold) / fade
+    if (t >= 1) return 0
+    const remain = 1 - t
+    return remain * remain
+  }
+
+  // A live card owns the tap when its face contains the scar center.
+  function smiteScarBlocked(x, y, rects) {
+    const cx = Number(x)
+    const cy = Number(y)
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) return false
+    for (const rect of rects || []) {
+      if (!rect) continue
+      if (cx >= rect.left && cx <= rect.right && cy >= rect.top && cy <= rect.bottom) return true
+    }
+    return false
+  }
   // SMITE_PURE_END
 
   function bindV162Gestures() {
@@ -1428,6 +1452,8 @@
   const SMITE_FULL_MS = 12000
   const SMITE_REFILL_MS = 1000
   const SMITE_TRIGGER_DY = 36
+  const SMITE_SCAR_HOLD_MS = 2800
+  const SMITE_SCAR_FADE_MS = 7200
 
   function bindSmiteGestures(doc, win, canvas, holdState) {
     if (!canvas || canvas.dataset.logyqSmite === '1') return
@@ -1792,11 +1818,60 @@
   }
 
   function clearSmiteScars(doc, smite) {
+    if (smite?.scarRaf) {
+      ;(doc.defaultView || window).cancelAnimationFrame(smite.scarRaf)
+      smite.scarRaf = 0
+    }
     smite.scars = []
     doc.querySelectorAll('.logyq-smite-scar').forEach((scar) => scar.remove())
   }
 
+  function smiteCardFaces(doc) {
+    return Array.from(doc.querySelectorAll('svg#canvas g.node')).map((node) => {
+      const face = node.querySelector('rect:not(.grabzone)')
+      const rect = face?.getBoundingClientRect?.()
+      if (!rect || rect.width < 2 || rect.height < 2) return null
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
+    }).filter(Boolean)
+  }
+
+  function syncSmiteScars(doc, win, smite) {
+    const now = win.performance?.now?.() || Date.now()
+    const faces = smiteCardFaces(doc)
+    let live = false
+    doc.querySelectorAll('.logyq-smite-scar').forEach((button) => {
+      if (button._smiteBorn == null) button._smiteBorn = now
+      const opacity = smiteScarOpacity(now - button._smiteBorn, SMITE_SCAR_HOLD_MS, SMITE_SCAR_FADE_MS)
+      if (opacity <= 0) {
+        button.remove()
+        return
+      }
+      live = true
+      const box = button.getBoundingClientRect()
+      const blocked = smiteScarBlocked((box.left + box.right) / 2, (box.top + box.bottom) / 2, faces)
+      button.style.opacity = String(opacity)
+      button.style.transform = opacity < 1 ? `scale(${0.72 + 0.28 * opacity})` : ''
+      button.classList.toggle('is-covered', blocked)
+      button.style.pointerEvents = blocked ? 'none' : 'auto'
+    })
+    if (smite) {
+      const still = new Set(doc.querySelectorAll('.logyq-smite-scar'))
+      smite.scars = (smite.scars || []).filter((scar) => scar.button && still.has(scar.button))
+    }
+    return live
+  }
+
+  function kickSmiteScarLoop(doc, win, smite) {
+    if (smite.scarRaf) return
+    const tick = () => {
+      smite.scarRaf = 0
+      if (syncSmiteScars(doc, win, smite)) smite.scarRaf = win.requestAnimationFrame(tick)
+    }
+    smite.scarRaf = win.requestAnimationFrame(tick)
+  }
+
   function mountSmiteScars(doc, win, smite, placed) {
+    const born = win.performance?.now?.() || Date.now()
     placed.forEach((scar, index) => {
       const button = doc.createElement('button')
       button.type = 'button'
@@ -1806,11 +1881,15 @@
       button.setAttribute('aria-label', 'Restore smitten card')
       button.style.left = `${scar.x + index * 8}px`
       button.style.top = `${scar.y}px`
+      button._smiteBorn = born
+      scar.button = button
       button.addEventListener('pointerdown', (event) => {
+        if (button.classList.contains('is-covered')) return
         event.preventDefault()
         event.stopPropagation()
       })
       button.addEventListener('pointerup', (event) => {
+        if (button.classList.contains('is-covered')) return
         event.preventDefault()
         event.stopPropagation()
         const now = win.performance?.now?.() || Date.now()
@@ -1824,6 +1903,8 @@
       doc.body.appendChild(button)
       smite.scars.push(scar)
     })
+    syncSmiteScars(doc, win, smite)
+    kickSmiteScarLoop(doc, win, smite)
   }
 
   function restoreSmiteScar(doc, win, smite, scar, button) {
@@ -1920,4 +2001,7 @@
     preview.gestures.smiteRefillMs = smiteRefillMs
     preview.gestures.planSmiteCommit = planSmiteCommit
     preview.gestures.smiteClockPath = smiteClockPath
+    preview.gestures.smiteScarOpacity = smiteScarOpacity
+    preview.gestures.smiteScarBlocked = smiteScarBlocked
+    preview.gestures.syncSmiteScars = () => syncSmiteScars(document, window, preview.gestures.smite)
   }

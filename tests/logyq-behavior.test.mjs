@@ -1497,7 +1497,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1563,6 +1563,15 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.ok(round.includes('A 8 8 0 0 1 150 28'), 'from 12 the snake moves clockwise toward 3')
   assert.equal(smite.smiteClockPath(0, 0, 0, 40), '')
   assert.ok(smite.smiteClockPath(0, 0, 10, 10, 40, 40).includes('A 5 5'))
+
+  assert.equal(smite.smiteScarOpacity(0), 1)
+  assert.equal(smite.smiteScarOpacity(2800), 1)
+  assert.ok(smite.smiteScarOpacity(2800 + 3600) < 1 && smite.smiteScarOpacity(2800 + 3600) > 0)
+  assert.equal(smite.smiteScarOpacity(2800 + 7200), 0)
+  const card = { left: 40, top: 80, right: 180, bottom: 143 }
+  assert.equal(smite.smiteScarBlocked(100, 110, [card]), true)
+  assert.equal(smite.smiteScarBlocked(10, 110, [card]), false)
+  assert.equal(smite.smiteScarBlocked(100, 110, []), false)
 })
 
 test('smite commit kills red, banks amber, and climbs the cards that stay', () => {

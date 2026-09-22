@@ -2325,6 +2325,36 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.deepEqual((await names()).slice().sort(), ['B', 'Root'])
   const scarNames = await page.evaluate(() => Array.from(document.querySelectorAll('.logyq-smite-scar')).map((el) => el.dataset.name))
   assert.deepEqual(scarNames.slice().sort(), ['', 'A'])
+  const scarHit = await page.evaluate(() => {
+    const button = Array.from(document.querySelectorAll('.logyq-smite-scar')).find((el) => el.dataset.name === 'A')
+    const face = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Root').querySelector('rect:not(.grabzone)').getBoundingClientRect()
+    button.style.left = `${(face.left + face.right) / 2}px`
+    button.style.top = `${(face.top + face.bottom) / 2}px`
+    window.LOGYQPreview.gestures.syncSmiteScars()
+    const covered = button.classList.contains('is-covered') && button.style.pointerEvents === 'none'
+    const faces = Array.from(document.querySelectorAll('g.node rect:not(.grabzone)')).map((el) => el.getBoundingClientRect())
+    let spot = null
+    for (let y = 70; y < window.innerHeight - 24 && !spot; y += 22) {
+      for (let x = 8; x < 70; x += 14) {
+        if (!faces.some((rect) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)) {
+          spot = { x, y }
+          break
+        }
+      }
+    }
+    button.style.left = `${spot.x}px`
+    button.style.top = `${spot.y}px`
+    window.LOGYQPreview.gestures.syncSmiteScars()
+    const open = !button.classList.contains('is-covered') && button.style.pointerEvents === 'auto' && Number(button.style.opacity) === 1
+    const blank = Array.from(document.querySelectorAll('.logyq-smite-scar')).find((el) => el.dataset.name !== 'A')
+    blank._smiteBorn = (performance.now() || Date.now()) - 20000
+    window.LOGYQPreview.gestures.syncSmiteScars()
+    return { covered, open, blankGone: !blank.isConnected, aLive: button.isConnected }
+  })
+  assert.equal(scarHit.covered, true)
+  assert.equal(scarHit.open, true)
+  assert.equal(scarHit.blankGone, true)
+  assert.equal(scarHit.aLive, true)
   await page.evaluate(() => {
     const button = Array.from(document.querySelectorAll('.logyq-smite-scar')).find((el) => el.dataset.name === 'A')
     const fire = () => button.dispatchEvent(new PointerEvent('pointerup', {
