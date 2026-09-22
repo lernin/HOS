@@ -796,6 +796,33 @@ test('randomizeTree and snapshot keep each card color', () => {
   assert.deepEqual(again.sort(), bag.sort())
 })
 
+test('randomizeTree mixes blank painted cards and keeps their colors', () => {
+  const { logyq, toasts, randomizeTree } = loadMix()
+  const tree = {
+    name: '',
+    color: '#fde68a',
+    children: [
+      { name: '', color: '#bae6fd' },
+      { name: '', color: '#bbf7d0' },
+      { name: '', color: '#fecdd3' },
+    ],
+  }
+  logyq.utils.assignUids(tree)
+  logyq.state.root = fakeHierarchy(tree)
+  randomizeTree(false)
+  assert.deepEqual(toasts, [])
+  assert.equal(logyq.state.root.data.name, '')
+  assert.equal(logyq.state.root.data.color, '#fde68a')
+  const colors = []
+  const walk = (node) => {
+    colors.push(node.color || '')
+    assert.equal(node.name, '')
+    for (const child of node.children || []) walk(child)
+  }
+  walk(logyq.state.root.data)
+  assert.deepEqual(colors.slice().sort(), ['#bae6fd', '#bbf7d0', '#fde68a', '#fecdd3'].sort())
+})
+
 test('randomizeTree keeps label aliases with each card', () => {
   const { logyq, randomizeTree } = loadMix()
   const tree = {

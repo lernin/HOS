@@ -29,32 +29,25 @@ function randomizeTree(includeBank){
     // Keep painted/annotated card fields with each shuffle. Mix used to
     // rebuild `{ name }` only, which wiped `data.color` (and any label
     // aliases) before snapshot / `logyq_maps_v1` saved that bare tree.
-    const cards = [];
-    if (state.root){
-      for (const n of state.root.descendants()) {
-        const name = cardLabel(n.data);
-        if (!name) continue;
-        cards.push(mixCard(name, n.data));
-      }
-    }
+    // A card in the tree is mixable even when its label is "". Paint on a
+    // blank card has to travel with that card; name length is not presence.
+    const treeNodes = state.root ? state.root.descendants() : [];
+    const pool = treeNodes.slice(1).map((n) => mixCard(cardLabel(n.data), n.data));
     if (includeBank && prevBank.length) {
       for (const word of prevBank) {
-        if (word) cards.push(mixCard(word, null));
+        if (word) pool.push(mixCard(word, null));
       }
     }
-    if (!cards.length){ logyq.selection.showToast("Nothing to mix"); return; }
-
-    const rootLabel = cardLabel(state.root?.data) || cards[0].name;
-    let pool = cards.slice();
-    const rmIdx = pool.findIndex((card) => card.name === rootLabel);
-    if (rmIdx > -1) pool.splice(rmIdx, 1);
+    const root = state.root
+      ? mixCard(cardLabel(state.root.data), state.root.data)
+      : pool.shift();
+    if (!root){ logyq.selection.showToast("Nothing to mix"); return; }
     for (let i = pool.length - 1; i > 0; i--){
       const j = (Math.random() * (i + 1)) | 0;
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     function ri(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
-    const root = mixCard(rootLabel, state.root?.data);
     root.children = [];
     let q = [{ node: root, cap: ri(1,3), used: 0 }], k = 0;
     while (k < pool.length){
