@@ -1692,4 +1692,8 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   assert.match(v162, /setAttribute\('pathLength'/)
   assert.match(v162, /SMITE_BUFFER_MS = 3000/)
   assert.match(v162, /SMITE_DRAIN_MS = 12000/)
+  assert.match(v162, /clock\.style\.removeProperty\('stroke-dasharray'\)/)
+  assert.match(v162, /clock\.style\.removeProperty\('stroke-dashoffset'\)/)
+  assert.doesNotMatch(v162, /clock\.style\.strokeDasharray\s*=/)
+  assert.doesNotMatch(v162, /clock\.style\.strokeDashoffset\s*=/)
 })

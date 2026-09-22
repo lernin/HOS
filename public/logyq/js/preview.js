@@ -2866,13 +2866,14 @@
       let length = 0
       try { length = clock.getTotalLength() } catch (_error) { length = 0 }
       if (!(length > 0)) length = smiteClockLength(w, h, rx, ry)
-      // One pathLength, the same number the dash uses. Progress is the 12s drain only.
+      // Dash lives on the SVG attributes, in this one path length.
+      // A CSS pixel length would shrink faster than the 12s drain when the map is scaled.
       clock.setAttribute('pathLength', String(length))
       const dash = smiteLineDash(fraction, length)
       clock.setAttribute('stroke-dasharray', dash.array)
       clock.setAttribute('stroke-dashoffset', String(dash.offset))
-      clock.style.strokeDasharray = dash.array
-      clock.style.strokeDashoffset = String(dash.offset)
+      clock.style.removeProperty('stroke-dasharray')
+      clock.style.removeProperty('stroke-dashoffset')
     })
     doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => smiteRestoreEdge(link))
   }
