@@ -2154,14 +2154,23 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     return point
   }
   async function clocks() {
-    return page.evaluate(() => Array.from(document.querySelectorAll('path.logyq-smite-clock')).map((clock) => ({
-      name: clock.parentElement.__data__?.data?.name ?? null,
-      red: clock.classList.contains('logyq-smite-red'),
-      amber: clock.classList.contains('logyq-smite-amber'),
-      dash: clock.getAttribute('stroke-dasharray'),
-      offset: Number(clock.getAttribute('stroke-dashoffset')),
-      stroke: clock.getAttribute('stroke'),
-    })))
+    return page.evaluate(() => Array.from(document.querySelectorAll('g.logyq-smite-clock')).map((clock) => {
+      const paths = Array.from(clock.querySelectorAll('path'))
+      const face = clock.parentElement.querySelector('rect:not(.grabzone)')
+      const text = clock.parentElement.querySelector('text.label')
+      const on = paths.filter((path) => path.getAttribute('stroke') && path.getAttribute('stroke') !== 'none')
+      return {
+        name: clock.parentElement.__data__?.data?.name ?? null,
+        red: clock.classList.contains('logyq-smite-red'),
+        amber: clock.classList.contains('logyq-smite-amber'),
+        segments: paths.length,
+        lit: on.length,
+        dash: paths.some((path) => path.hasAttribute('stroke-dasharray') || path.hasAttribute('stroke-dashoffset')),
+        stroke: on[0]?.getAttribute('stroke') || null,
+        fill: face?.style?.fill || '',
+        text: text?.style?.fill || '',
+      }
+    }))
   }
   async function names() {
     return page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name))
@@ -2186,73 +2195,94 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   let armed = await clocks()
   assert.deepEqual(armed.map((clock) => clock.name), ['Root'])
   assert.equal(armed[0].red, true)
-  assert.equal(armed[0].dash, '100')
-  assert.equal(armed[0].offset, 0)
+  assert.equal(armed[0].segments, 12)
+  assert.equal(armed[0].lit, 12)
+  assert.equal(armed[0].dash, false)
   assert.equal(armed[0].stroke, '#dc2626')
+  assert.ok(armed[0].fill === '#ffffff' || armed[0].fill === 'rgb(255, 255, 255)')
+  assert.ok(armed[0].text === '#1f2937' || armed[0].text === 'rgb(31, 41, 55)')
   const noon = await page.evaluate(() => {
-    const clock = document.querySelector('path.logyq-smite-clock')
+    const clock = document.querySelector('g.logyq-smite-clock')
     const face = clock.parentElement.querySelector('rect:not(.grabzone)')
     const x = parseFloat(face.getAttribute('x')) || 0
     const y = parseFloat(face.getAttribute('y')) || 0
     const w = parseFloat(face.getAttribute('width')) || 0
     const h = parseFloat(face.getAttribute('height')) || 0
-    const rx = parseFloat(face.getAttribute('rx')) || 0
-    const ry = parseFloat(face.getAttribute('ry')) || rx
-    const start = clock.getPointAtLength(0)
-    const step = clock.getPointAtLength(Math.max(1, clock.getTotalLength() * 0.03))
+    const rxAttr = parseFloat(face.getAttribute('rx'))
+    const ryAttr = parseFloat(face.getAttribute('ry'))
+    const rx = rxAttr > 0 ? rxAttr : 10
+    const ry = ryAttr > 0 ? ryAttr : rx
+    const expected = window.LOGYQPreview.gestures.smiteClockSegments(x, y, w, h, rx, ry)
+    const paths = Array.from(clock.querySelectorAll('path'))
+    const arcs = paths.some((path) => /[Aa]/.test(path.getAttribute('d') || ''))
     return {
-      matches: clock.getAttribute('d') === window.LOGYQPreview.gestures.smiteClockPath(x, y, w, h, rx, ry),
-      dx: Math.abs(start.x - (x + w / 2)),
-      dy: Math.abs(start.y - y),
-      clockwise: step.x > start.x,
+      matches: paths.every((path, i) => path.getAttribute('d') === expected[i]),
+      arcs,
+      first: paths[0]?.getAttribute('d') || '',
+      last: paths[11]?.getAttribute('d') || '',
+      center: x + w / 2,
+      top: y,
     }
   })
   assert.equal(noon.matches, true)
-  assert.ok(noon.dx < 1 && noon.dy < 1, 'live clock starts at the top center of the card')
-  assert.equal(noon.clockwise, true)
-  const half = await page.evaluate(async () => {
-    const svgNS = 'http://www.w3.org/2000/svg'
-    const svg = document.createElementNS(svgNS, 'svg')
-    svg.setAttribute('width', '200')
-    svg.setAttribute('height', '120')
-    const path = document.createElementNS(svgNS, 'path')
-    path.setAttribute('d', window.LOGYQPreview.gestures.smiteClockPath(20, 20, 160, 80, 0, 0))
-    path.setAttribute('fill', 'none')
-    path.setAttribute('stroke', '#dc2626')
-    path.setAttribute('stroke-width', '8')
-    path.setAttribute('stroke-linecap', 'butt')
-    path.setAttribute('pathLength', '100')
-    path.setAttribute('stroke-dasharray', '100')
-    path.setAttribute('stroke-dashoffset', '50')
-    svg.appendChild(path)
-    const xml = new XMLSerializer().serializeToString(svg)
-    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
-    const image = new Image()
-    image.src = url
-    await image.decode()
-    const canvas = document.createElement('canvas')
-    canvas.width = 200
-    canvas.height = 120
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(image, 0, 0)
-    URL.revokeObjectURL(url)
-    const red = (x, y) => {
-      const pixel = ctx.getImageData(x, y, 1, 1).data
-      return pixel[0] > 160 && pixel[1] < 90 && pixel[2] < 90
+  assert.equal(noon.arcs, false, 'segments stay on the straight edges')
+  const ticks = await page.evaluate(async () => {
+    const gestures = window.LOGYQPreview.gestures
+    const segs = gestures.smiteClockSegments(20, 20, 160, 80, 10, 10)
+    const draw = async (hide) => {
+      const svgNS = 'http://www.w3.org/2000/svg'
+      const svg = document.createElementNS(svgNS, 'svg')
+      svg.setAttribute('width', '200')
+      svg.setAttribute('height', '120')
+      segs.forEach((d, i) => {
+        const path = document.createElementNS(svgNS, 'path')
+        path.setAttribute('d', d)
+        path.setAttribute('fill', 'none')
+        path.setAttribute('stroke', i < hide ? 'none' : '#dc2626')
+        path.setAttribute('stroke-width', '8')
+        path.setAttribute('stroke-linecap', 'butt')
+        svg.appendChild(path)
+      })
+      const xml = new XMLSerializer().serializeToString(svg)
+      const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
+      const image = new Image()
+      image.src = url
+      await image.decode()
+      const canvas = document.createElement('canvas')
+      canvas.width = 200
+      canvas.height = 120
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(image, 0, 0)
+      URL.revokeObjectURL(url)
+      const red = (x, y) => {
+        const pixel = ctx.getImageData(x, y, 1, 1).data
+        return pixel[0] > 160 && pixel[1] < 90 && pixel[2] < 90
+      }
+      return {
+        noonGap: red(100, 20),
+        topRight: red(118, 20),
+        topLeft: red(46, 20),
+        corner: red(20, 20),
+        right: red(180, 44),
+        bottomRight: red(154, 100),
+        bottomLeft: red(46, 100),
+        left: red(20, 44),
+      }
     }
-    return {
-      noon: red(100, 20),
-      towardThree: red(140, 20),
-      towardNine: red(60, 20),
-      right: red(180, 60),
-      left: red(20, 60),
-    }
+    return { full: await draw(0), half: await draw(6) }
   })
-  assert.equal(half.noon, true, 'half ring is still anchored at 12')
-  assert.equal(half.towardThree, true, 'remaining stroke runs clockwise from 12')
-  assert.equal(half.right, true)
-  assert.equal(half.towardNine, false, 'the drained side is counterclockwise from 12, not the top-left corner')
-  assert.equal(half.left, false)
+  assert.equal(ticks.full.noonGap, false, '12 o’clock is the gap between the top ticks')
+  assert.equal(ticks.full.topRight, true)
+  assert.equal(ticks.full.topLeft, true)
+  assert.equal(ticks.full.corner, false, 'the rounded corner is not a segment')
+  assert.equal(ticks.full.right, true)
+  assert.equal(ticks.half.topRight, false, 'the first ticks click off from the right of 12')
+  assert.equal(ticks.half.right, false)
+  assert.equal(ticks.half.bottomRight, false)
+  assert.equal(ticks.half.topLeft, true, 'the top ticks left of 12 are the last to go')
+  assert.equal(ticks.half.left, true)
+  assert.equal(ticks.half.bottomLeft, true)
+  assert.equal(ticks.half.corner, false)
   await touch('pointerup', root.x, root.y + 80, 22, root.uid)
   await touch('pointerup', 16, 120, 21)
   const cycle = async (pointerId) => {
@@ -2307,7 +2337,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointermove', card.x, card.y + 84, 42, card.uid)
   const family = await clocks()
   assert.deepEqual(family.map((clock) => clock.name).sort(), ['', 'A', 'A1'])
-  assert.ok(family.every((clock) => clock.red && clock.dash === '100' && clock.offset === 0))
+  assert.ok(family.every((clock) => clock.red && clock.segments === 12 && clock.lit === 12 && clock.dash === false && clock.stroke === '#dc2626'))
   await touch('pointerup', card.x, card.y + 84, 42, card.uid)
   await touch('pointerup', 16, 422, 41)
   const child = await center('A1')
