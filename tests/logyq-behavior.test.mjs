@@ -1497,7 +1497,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteHeat, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteCastOverlaps, smiteHeat, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1596,6 +1596,10 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.deepEqual(smite.smiteClockRoots(tree, { a: 'red' }), ['a'])
   assert.deepEqual(smite.smiteClockRoots(tree, { r: 'normal', a: 'red' }), ['a'])
   assert.deepEqual(smite.smiteClockRoots(tree, { a: 'amber', a1: 'amber', blank: 'normal' }), ['a'])
+  assert.equal(smite.smiteCastOverlaps([], ['a']), false)
+  assert.equal(smite.smiteCastOverlaps([{ marks: new Map([['a', 'red'], ['a1', 'red']]) }], ['b']), false)
+  assert.equal(smite.smiteCastOverlaps([{ marks: { a: 'red', a1: 'amber' } }], ['a1']), true)
+  assert.equal(smite.smiteCastOverlaps([{ marks: new Map([['a', 'normal']]) }], ['a']), true)
 
   assert.equal(smite.smiteScarOpacity(0), 1)
   assert.equal(smite.smiteScarOpacity(2800), 1)
@@ -1658,6 +1662,7 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   assert.match(v162, /function commitSmite/)
   assert.match(v162, /__logyqV2ConsumedPointers\.add\(event\.pointerId\)/)
   assert.match(v162, /smite\.pinched/)
+  assert.match(v162, /smite\.mercies/)
   assert.match(v162, /function smiteApplyPinch/)
   assert.match(v162, /clearSmiteScars\(doc, smite\)/)
   assert.doesNotMatch(v162.slice(v162.indexOf('function commitSmite'), v162.indexOf('function smiteFace')), /mountSmiteScars/)

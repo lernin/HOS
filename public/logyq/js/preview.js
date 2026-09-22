@@ -903,6 +903,21 @@
     return roots
   }
 
+  // A second cast that touches any node already in a live window is ignored.
+  function smiteCastOverlaps(sets, ids) {
+    const taken = new Set()
+    for (const set of sets || []) {
+      const marks = set?.marks || set
+      if (!marks) continue
+      if (typeof marks.keys === 'function') {
+        for (const uid of marks.keys()) taken.add(uid)
+      } else {
+        for (const uid of Object.keys(marks)) taken.add(uid)
+      }
+    }
+    return (ids || []).some((id) => taken.has(id))
+  }
+
   function smiteHsl(hue, sat, light) {
     const s = sat / 100
     const l = light / 100
@@ -2217,6 +2232,7 @@
       pinched: false,
       pinch: null,
       mercy: null,
+      mercies: [],
       scars: [],
       raf: 0,
     }
@@ -2242,7 +2258,7 @@
         lastY: event.clientY,
         uid,
       })
-      if (smite.mercy?.marks?.has(uid) && holdState) cancelHold(win, holdState)
+      if (smiteOwnsUid(smite, uid) && holdState) cancelHold(win, holdState)
       if (smite.pointers.size >= 2) smiteHoldTwoFingers(doc, win, smite, holdState)
       smiteSetInteracting(win, smite, true)
     }, true)
@@ -2259,12 +2275,12 @@
       })
       if (smite.pointers.size >= 2 && moved >= 2) {
         smite.pinched = true
-        if (!smite.mercy) clearSmiteClocks(doc)
+        smiteRefresh(doc, smite)
         smiteApplyPinch(doc, win, smite)
         return
       }
       if (smite.pointers.size >= 2) smite.pinch = null
-      if (!smite.mercy) smitePaintPreview(doc, win, smite)
+      smitePaintPreview(doc, win, smite)
     }, true)
 
     win.addEventListener('pointerup', (event) => {
@@ -2274,12 +2290,12 @@
       pointer.lastY = event.clientY
       const paired = smite.pair
       let handled = false
-      if (smite.mercy && !smite.pinched) handled = smiteMercyUp(doc, win, smite, pointer)
-      if (!handled && !smite.mercy) handled = smiteTryCast(doc, win, smite, pointer, event.pointerId)
+      if (!smite.pinched) handled = smiteMercyUp(doc, win, smite, pointer)
+      if (!handled && !smite.pinched) handled = smiteTryCast(doc, win, smite, pointer, event.pointerId)
       smite.pointers.delete(event.pointerId)
       if (handled || paired) win.__logyqV2ConsumedPointers.add(event.pointerId)
       smiteReleaseZoom(win, smite)
-      if (!smite.mercy) clearSmiteClocks(doc)
+      smiteRefresh(doc, smite)
       if (smite.pointers.size === 0) {
         smite.pair = false
         smite.pinched = false
@@ -2297,8 +2313,8 @@
         smite.pair = false
         smite.pinched = false
         smiteSetInteracting(win, smite, false)
-        if (!smite.mercy) clearSmiteClocks(doc)
       }
+      smiteRefresh(doc, smite)
     }, true)
 
     doc.addEventListener('click', (event) => {
@@ -2359,11 +2375,46 @@
     if (root) root.setAttribute('transform', next.toString())
   }
 
+  function smiteOwnsUid(smite, uid) {
+    if (!uid) return false
+    return (smite.mercies || []).some((mercy) => mercy.marks?.has?.(uid))
+  }
+
+  function smiteDropMercy(smite, mercy) {
+    smite.mercies = (smite.mercies || []).filter((item) => item !== mercy)
+    if (smite.mercy === mercy) smite.mercy = smite.mercies[smite.mercies.length - 1] || null
+  }
+
+  function smiteActiveLayers(smite) {
+    return (smite.mercies || []).filter((mercy) => mercy && !mercy.committing).map((mercy) => ({
+      marks: mercy.marks,
+      fraction: smiteRingFraction(mercy.remaining, SMITE_FULL_MS),
+    }))
+  }
+
+  function smiteRefresh(doc, smite, extra) {
+    const layers = smiteActiveLayers(smite)
+    if (extra?.marks) layers.push(extra)
+    if (!layers.length) {
+      clearSmiteClocks(doc)
+      return
+    }
+    paintSmiteLayers(doc, layers)
+  }
+
+  function smiteEnsureTick(doc, win, smite) {
+    if (smite.ticking || smite.raf) return
+    if (!(smite.mercies || []).some((mercy) => mercy && !mercy.committing)) return
+    smite.raf = win.requestAnimationFrame(() => smiteTick(doc, win, smite))
+  }
+
   function smiteSetInteracting(win, smite, on) {
-    const mercy = smite.mercy
-    if (!mercy || mercy.committing) return
-    if (mercy.interacting && !on) mercy.lastTick = win.performance?.now?.() || Date.now()
-    mercy.interacting = !!on
+    const now = win.performance?.now?.() || Date.now()
+    for (const mercy of smite.mercies || []) {
+      if (!mercy || mercy.committing) continue
+      if (mercy.interacting && !on) mercy.lastTick = now
+      mercy.interacting = !!on
+    }
   }
 
   function smiteLiveData(uid) {
@@ -2384,33 +2435,34 @@
   }
 
   function smitePaintPreview(doc, win, smite) {
-    if (smite.pinched || smite.mercy || smite.pointers.size !== 2) {
-      if (!smite.mercy) clearSmiteClocks(doc)
+    if (smite.pinched || smite.pointers.size !== 2) {
+      smiteRefresh(doc, smite)
       return
     }
     const fingers = Array.from(smite.pointers.values())
     const moved = fingers.filter((finger) => smiteFingerMoved(finger, SMITE_PARK_SLOP))
     const parked = fingers.filter((finger) => !smiteFingerMoved(finger, SMITE_PARK_SLOP))
     if (moved.length !== 1 || parked.length !== 1 || !moved[0].uid) {
-      clearSmiteClocks(doc)
+      smiteRefresh(doc, smite)
       return
     }
     const swipe = moved[0]
     const direction = smiteCastDirection(swipe.lastX - swipe.x, swipe.lastY - swipe.y, v162Constants().FLICK_MIN)
     if (!direction) {
-      clearSmiteClocks(doc)
+      smiteRefresh(doc, smite)
       return
     }
     const data = smiteLiveData(swipe.uid)
     if (!data) return
     const marks = new Map()
     const tone = direction === 'left' ? 'amber' : 'red'
-    for (const id of smiteAffected(data, smiteZone(parked[0].y, win.innerHeight))) marks.set(id, tone)
-    if (!marks.size) {
-      clearSmiteClocks(doc)
+    const ids = smiteAffected(data, smiteZone(parked[0].y, win.innerHeight))
+    if (!ids.length || smiteCastOverlaps(smite.mercies, ids)) {
+      smiteRefresh(doc, smite)
       return
     }
-    paintSmiteClocks(doc, marks, 1)
+    for (const id of ids) marks.set(id, tone)
+    smiteRefresh(doc, smite, { marks, fraction: 1 })
   }
 
   function smiteTryCast(doc, win, smite, pointer, pointerId) {
@@ -2427,7 +2479,11 @@
     const ids = smiteAffected(data, zone)
     if (!ids.length) {
       smiteToast('Nothing to smite')
-      clearSmiteClocks(doc)
+      smiteRefresh(doc, smite)
+      return true
+    }
+    if (smiteCastOverlaps(smite.mercies, ids)) {
+      smiteRefresh(doc, smite)
       return true
     }
     const tone = direction === 'left' ? 'amber' : 'red'
@@ -2438,9 +2494,8 @@
   }
 
   function beginSmiteMercy(doc, win, smite, cast) {
-    if (smite.raf) win.cancelAnimationFrame(smite.raf)
     const now = win.performance?.now?.() || Date.now()
-    smite.mercy = {
+    const mercy = {
       marks: cast.marks,
       castUid: cast.uid,
       zone: cast.zone,
@@ -2450,63 +2505,75 @@
       interacting: smite.pointers.size > 0,
       committing: false,
     }
+    smite.mercies.push(mercy)
+    smite.mercy = mercy
     smiteToast(`${cast.direction === 'left' ? 'Bank' : 'Mercy'} · ${smiteZoneWord(cast.zone)}`)
-    paintSmiteClocks(doc, cast.marks, 1)
-    smite.raf = win.requestAnimationFrame(() => smiteTick(doc, win, smite))
+    smiteRefresh(doc, smite)
+    smiteEnsureTick(doc, win, smite)
     try { win.navigator.vibrate?.(12) } catch (_error) {}
   }
 
   function smiteTick(doc, win, smite) {
     smite.raf = 0
-    const mercy = smite.mercy
-    if (!mercy || mercy.committing) return
-    const now = win.performance?.now?.() || Date.now()
-    const dt = Math.max(0, now - mercy.lastTick)
-    mercy.lastTick = now
-    if (!mercy.interacting) mercy.remaining -= dt
-    if (mercy.remaining <= 0) {
-      commitSmite(doc, win, smite)
-      return
+    smite.ticking = true
+    try {
+      const now = win.performance?.now?.() || Date.now()
+      const due = []
+      for (const mercy of smite.mercies) {
+        if (!mercy || mercy.committing) continue
+        const dt = Math.max(0, now - mercy.lastTick)
+        mercy.lastTick = now
+        if (!mercy.interacting) mercy.remaining -= dt
+        if (mercy.remaining <= 0) due.push(mercy)
+      }
+      for (const mercy of due) commitSmite(doc, win, smite, mercy)
+      if (smite.mercies.some((mercy) => mercy && !mercy.committing)) {
+        smiteRefresh(doc, smite)
+        smite.raf = win.requestAnimationFrame(() => smiteTick(doc, win, smite))
+      } else {
+        clearSmiteClocks(doc)
+      }
+    } finally {
+      smite.ticking = false
     }
-    paintSmiteClocks(doc, mercy.marks, smiteRingFraction(mercy.remaining, SMITE_FULL_MS))
-    smite.raf = win.requestAnimationFrame(() => smiteTick(doc, win, smite))
   }
 
   function smiteMercyUp(doc, win, smite, pointer) {
-    const mercy = smite.mercy
-    if (!mercy || mercy.committing) return false
+    const live = (smite.mercies || []).filter((mercy) => mercy && !mercy.committing)
+    if (!live.length) return false
     const dx = pointer.lastX - pointer.x
     const dy = pointer.lastY - pointer.y
-    if (pointer.uid && pointer.uid === mercy.castUid && dy > SMITE_TRIGGER_DY && dy > Math.abs(dx)) {
-      commitSmite(doc, win, smite)
-      return true
+    if (pointer.uid && dy > SMITE_TRIGGER_DY && dy > Math.abs(dx)) {
+      const triggered = live.find((mercy) => mercy.castUid === pointer.uid)
+      if (triggered) {
+        commitSmite(doc, win, smite, triggered)
+        return true
+      }
     }
     if (Math.hypot(dx, dy) >= v162Constants().TAP_MOVE) return false
-    if (!pointer.uid || !mercy.marks.has(pointer.uid)) return false
+    if (!pointer.uid) return false
+    const mercy = live.find((item) => item.marks.has(pointer.uid))
+    if (!mercy) return false
     const treeRoot = bridge.core?.state?.root?.data?._uid
     const current = mercy.marks.get(pointer.uid)
     const next = smiteNextMark(current, pointer.uid === treeRoot)
     if (next === current) return true
     mercy.marks.set(pointer.uid, next)
     mercy.remaining = smiteRefillMs(mercy.remaining, SMITE_REFILL_MS, SMITE_MAX_MS)
-    paintSmiteClocks(doc, mercy.marks, smiteRingFraction(mercy.remaining, SMITE_FULL_MS))
+    smiteRefresh(doc, smite)
     return true
   }
 
-  function commitSmite(doc, win, smite) {
-    const mercy = smite.mercy
+  function commitSmite(doc, win, smite, mercy = smite.mercy) {
     if (!mercy || mercy.committing) return
     mercy.committing = true
-    if (smite.raf) {
-      win.cancelAnimationFrame(smite.raf)
-      smite.raf = 0
-    }
     const core = bridge.core
     const state = core?.state
     const utils = core?.utils
     if (!state?.root || !utils?.deepClone) {
-      smite.mercy = null
-      clearSmiteClocks(doc)
+      smiteDropMercy(smite, mercy)
+      smiteRefresh(doc, smite)
+      smiteEnsureTick(doc, win, smite)
       return
     }
     const prev = utils.deepClone(state.root.data)
@@ -2536,9 +2603,10 @@
     }
     core.wordDock.render?.()
     try { bridge.notifyChange?.() } catch (_error) {}
-    smite.mercy = null
-    clearSmiteClocks(doc)
+    smiteDropMercy(smite, mercy)
     clearSmiteScars(doc, smite)
+    smiteRefresh(doc, smite)
+    smiteEnsureTick(doc, win, smite)
     try { win.navigator.vibrate?.(18) } catch (_error) {}
   }
 
@@ -2617,12 +2685,30 @@
     glow.style.filter = 'blur(9px)'
   }
 
-  function paintSmiteClocks(doc, marks, fraction) {
-    const clockRoots = new Set(smiteClockRoots(bridge.core?.state?.root?.data, marks))
+  function paintSmiteLayers(doc, layers) {
+    const tree = bridge.core?.state?.root?.data
+    const byUid = new Map()
+    const clockRoots = new Set()
+    for (const layer of layers || []) {
+      const marks = layer?.marks
+      if (!marks) continue
+      const fraction = Number(layer.fraction)
+      const owned = new Map()
+      const take = (uid, mark) => {
+        if (!uid || byUid.has(uid) || owned.has(uid)) return
+        owned.set(uid, mark)
+        byUid.set(uid, { mark, fraction })
+      }
+      if (typeof marks.forEach === 'function') marks.forEach((mark, uid) => take(uid, mark))
+      else Object.keys(marks).forEach((uid) => take(uid, marks[uid]))
+      for (const uid of smiteClockRoots(tree, owned)) clockRoots.add(uid)
+    }
     const nodes = doc.querySelectorAll('svg#canvas g.node')
     nodes.forEach((node) => {
       const uid = nodeUid(node)
-      const mark = uid ? smiteMarkOf(marks, uid) : null
+      const entry = uid ? byUid.get(uid) : null
+      const mark = entry?.mark
+      const fraction = entry?.fraction
       let clock = null
       for (const child of node.children || []) {
         if (child.classList?.contains?.('logyq-smite-clock')) clock = child
@@ -2897,6 +2983,7 @@
     preview.gestures.smiteLineDash = smiteLineDash
     preview.gestures.smiteLinePhase = smiteLinePhase
     preview.gestures.smiteClockRoots = smiteClockRoots
+    preview.gestures.smiteCastOverlaps = smiteCastOverlaps
     preview.gestures.smiteHeat = smiteHeat
     preview.gestures.smiteScarOpacity = smiteScarOpacity
     preview.gestures.smiteScarBlocked = smiteScarBlocked
