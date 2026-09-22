@@ -208,31 +208,31 @@
     return n - Math.min(n, Math.max(0, clicks))
   }
 
-  // Fill heat follows how many ticks remain. Amber keeps its own hue.
+  // Segment color ramps inside the fate hue. The wash stays translucent so paint shows through.
   function smiteHeat(lit, mark = 'red') {
     const n = Math.max(0, Math.round(Number(lit) || 0))
     const ramp = mark === 'amber'
       ? [
-          { lit: 12, fill: '#ffffff', text: '#1f2937', stroke: '#d97706', light: false },
-          { lit: 10, fill: '#fef3c7', text: '#1f2937', stroke: '#d97706', light: false },
-          { lit: 8, fill: '#fcd34d', text: '#1f2937', stroke: '#b45309', light: false },
-          { lit: 7, fill: '#f59e0b', text: '#1f2937', stroke: '#92400e', light: false },
-          { lit: 6, fill: '#d97706', text: '#ffffff', stroke: '#78350f', light: true },
-          { lit: 5, fill: '#b45309', text: '#ffffff', stroke: '#451a03', light: true },
-          { lit: 4, fill: '#92400e', text: '#ffffff', stroke: '#451a03', light: true },
-          { lit: 2, fill: '#451a03', text: '#ffffff', stroke: '#fde68a', light: true },
-          { lit: 0, fill: '#ffb000', text: '#1c1917', stroke: '#1c1917', light: false },
+          { lit: 12, stroke: '#fcd34d', wash: '#f59e0b', washOpacity: 0.12 },
+          { lit: 10, stroke: '#fbbf24', wash: '#f59e0b', washOpacity: 0.15 },
+          { lit: 8, stroke: '#f59e0b', wash: '#d97706', washOpacity: 0.18 },
+          { lit: 7, stroke: '#d97706', wash: '#d97706', washOpacity: 0.2 },
+          { lit: 6, stroke: '#b45309', wash: '#d97706', washOpacity: 0.22 },
+          { lit: 5, stroke: '#92400e', wash: '#b45309', washOpacity: 0.24 },
+          { lit: 4, stroke: '#78350f', wash: '#b45309', washOpacity: 0.26 },
+          { lit: 2, stroke: '#451a03', wash: '#92400e', washOpacity: 0.28 },
+          { lit: 0, stroke: '#ffb000', wash: '#ffb000', washOpacity: 0.28 },
         ]
       : [
-          { lit: 12, fill: '#ffffff', text: '#1f2937', stroke: '#dc2626', light: false },
-          { lit: 10, fill: '#fecaca', text: '#1f2937', stroke: '#dc2626', light: false },
-          { lit: 8, fill: '#fca5a5', text: '#1f2937', stroke: '#dc2626', light: false },
-          { lit: 7, fill: '#f87171', text: '#1f2937', stroke: '#b91c1c', light: false },
-          { lit: 6, fill: '#dc2626', text: '#ffffff', stroke: '#7f1d1d', light: true },
-          { lit: 5, fill: '#b91c1c', text: '#ffffff', stroke: '#450a0a', light: true },
-          { lit: 4, fill: '#991b1b', text: '#ffffff', stroke: '#450a0a', light: true },
-          { lit: 2, fill: '#450a0a', text: '#ffffff', stroke: '#fecaca', light: true },
-          { lit: 0, fill: '#ff1a1a', text: '#ffffff', stroke: '#ffffff', light: true },
+          { lit: 12, stroke: '#fca5a5', wash: '#ef4444', washOpacity: 0.12 },
+          { lit: 10, stroke: '#f87171', wash: '#ef4444', washOpacity: 0.15 },
+          { lit: 8, stroke: '#ef4444', wash: '#ef4444', washOpacity: 0.18 },
+          { lit: 7, stroke: '#dc2626', wash: '#dc2626', washOpacity: 0.2 },
+          { lit: 6, stroke: '#b91c1c', wash: '#dc2626', washOpacity: 0.22 },
+          { lit: 5, stroke: '#991b1b', wash: '#b91c1c', washOpacity: 0.24 },
+          { lit: 4, stroke: '#7f1d1d', wash: '#b91c1c', washOpacity: 0.26 },
+          { lit: 2, stroke: '#450a0a', wash: '#991b1b', washOpacity: 0.28 },
+          { lit: 0, stroke: '#ff2d2d', wash: '#ff2d2d', washOpacity: 0.28 },
         ]
     for (const step of ramp) {
       if (n >= step.lit) return step
@@ -1806,14 +1806,13 @@
     try { win.navigator.vibrate?.(18) } catch (_error) {}
   }
 
+  function smiteFace(node) {
+    return node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash)') || null
+  }
+
   function smiteRestoreCard(node) {
     if (!node) return
-    const face = node.querySelector('rect:not(.grabzone)')
-    const color = node.__data__?.data?.color || ''
-    if (face) {
-      face.style.fill = color
-      face.style.stroke = ''
-    }
+    node.querySelectorAll('rect.logyq-smite-wash').forEach((wash) => wash.remove())
     node.querySelectorAll('text.label').forEach((el) => {
       el.style.fill = ''
       el.style.stroke = ''
@@ -1823,18 +1822,29 @@
     delete node.dataset.smiteHeat
   }
 
-  function smitePaintCard(node, heat) {
-    const face = node.querySelector('rect:not(.grabzone)')
-    if (face) {
-      face.style.fill = heat.fill
-      face.style.stroke = heat.fill
+  function smitePaintCard(node, heat, rx, ry) {
+    const face = smiteFace(node)
+    if (!face) return
+    const doc = node.ownerDocument
+    const svg = 'http://www.w3.org/2000/svg'
+    let wash = node.querySelector('rect.logyq-smite-wash')
+    if (!wash) {
+      wash = doc.createElementNS(svg, 'rect')
+      wash.setAttribute('class', 'logyq-smite-wash')
+      wash.setAttribute('pointer-events', 'none')
+      const text = node.querySelector('text.label')
+      if (text) node.insertBefore(wash, text)
+      else node.appendChild(wash)
     }
-    node.querySelectorAll('text.label').forEach((el) => {
-      el.style.fill = heat.text
-      el.style.stroke = heat.light ? 'rgba(28,10,10,.72)' : ''
-      el.style.strokeWidth = heat.light ? '2.5px' : ''
-      el.style.paintOrder = heat.light ? 'stroke fill' : ''
-    })
+    wash.setAttribute('x', face.getAttribute('x') || '0')
+    wash.setAttribute('y', face.getAttribute('y') || '0')
+    wash.setAttribute('width', face.getAttribute('width') || '0')
+    wash.setAttribute('height', face.getAttribute('height') || '0')
+    wash.setAttribute('rx', String(rx))
+    wash.setAttribute('ry', String(ry))
+    wash.setAttribute('fill', heat.wash)
+    wash.setAttribute('fill-opacity', String(heat.washOpacity))
+    wash.setAttribute('stroke', 'none')
     node.dataset.smiteHeat = '1'
   }
 
@@ -1853,7 +1863,7 @@
         clock?.remove()
         return
       }
-      const face = node.querySelector('rect:not(.grabzone)')
+      const face = smiteFace(node)
       if (!face) return
       const svg = 'http://www.w3.org/2000/svg'
       if (clock && clock.localName !== 'g') {
@@ -1899,14 +1909,14 @@
         path.setAttribute('d', paths[i])
         path.setAttribute('stroke', on ? heat.stroke : 'none')
       }
-      smitePaintCard(node, heat)
+      smitePaintCard(node, heat, rx, ry)
     })
   }
 
   function smiteScarPoint(doc, win, uid) {
     const nodes = Array.from(doc.querySelectorAll('svg#canvas g.node')).filter((node) => nodeUid(node) === uid)
     for (const node of nodes) {
-      const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-clock)')
+      const face = smiteFace(node)
       const rect = face?.getBoundingClientRect?.()
       if (rect && rect.width >= 1 && rect.height >= 1) {
         return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 }
@@ -1940,7 +1950,7 @@
 
   function smiteCardFaces(doc) {
     return Array.from(doc.querySelectorAll('svg#canvas g.node')).map((node) => {
-      const face = node.querySelector('rect:not(.grabzone)')
+      const face = smiteFace(node)
       const rect = face?.getBoundingClientRect?.()
       if (!rect || rect.width < 2 || rect.height < 2) return null
       return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom }
