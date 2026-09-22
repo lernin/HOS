@@ -64,6 +64,7 @@
         svg#canvas{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;touch-action:none;overflow:visible;z-index:0}
         #trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
         #Dock{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));padding:0 4px;min-height:48px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
+        #Dock .chip{touch-action:none;-webkit-user-drag:none}
         #Dock.dock-left{top:54px;bottom:max(8px,env(safe-area-inset-bottom));left:8px;right:auto;width:min(220px,72vw);padding:8px}
         #Toast{bottom:72px;max-width:calc(100vw - 36px);text-align:center}
         #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px);overflow:hidden;flex-wrap:nowrap}

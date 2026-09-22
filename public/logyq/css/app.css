@@ -269,6 +269,8 @@ header {
   font-weight: 600;
   cursor: grab;
   user-select: none;
+  touch-action: none;
+  -webkit-user-drag: none;
 
   max-width: 100%;
   white-space: nowrap;

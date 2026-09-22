@@ -7,7 +7,10 @@
     const list = elements.Dock; list.innerHTML = '';
     state.wordBank.forEach((w)=>{
       const chip = document.createElement('div');
-      chip.className='chip'; chip.textContent=w; chip.draggable=true;
+      chip.className='chip'; chip.textContent=w;
+      // Native HTML5 drag cancels the pointer as soon as it moves, so a
+      // finger never finishes the gesture. Press-drag below places the chip.
+      chip.draggable=false;
       chip.addEventListener('click',(e)=>{
         const chips=document.querySelectorAll("#Dock .chip");
         if(e.shiftKey){ chip.classList.toggle("is-outlined"); }
@@ -202,11 +205,11 @@ function endChipDragVisuals() {
   document.body.classList.remove('logyq-chip-drag')
 }
 
-// Touch and pen have no HTML5 drag. A finger that leaves the dock uses the
-// same detector drop as a mouse chip drag, then the chip leaves the bank.
+// Press-drag for a finger or a mouse. The dock is a scroll container, so a
+// chip has to claim the gesture itself; native drag cancels the pointer.
 function bindChipPointerPlace() {
   const dock = logyq.elements.Dock
-  if (!dock || dock.dataset.chipPointer === '1') return
+  if (!dock || typeof dock.addEventListener !== 'function' || dock.dataset?.chipPointer === '1') return
   dock.dataset.chipPointer = '1'
   let session = null
 
@@ -250,7 +253,6 @@ function bindChipPointerPlace() {
   }
 
   dock.addEventListener('pointerdown', (event) => {
-    if (event.pointerType === 'mouse') return
     if (event.button != null && event.button !== 0) return
     const chip = event.target?.closest?.('.chip')
     if (!chip || !dock.contains(chip)) return
@@ -263,7 +265,9 @@ function bindChipPointerPlace() {
     if (!session || event.pointerId !== session.pointerId) return
     const moved = Math.hypot(event.clientX - session.x, event.clientY - session.y) >= 10
     if (!session.dragging) {
-      if (!(moved && !overDock(event.clientX, event.clientY))) return
+      // Claim the gesture while the finger is still on the chip. Waiting
+      // until it has left the dock lets the browser cancel the pointer first.
+      if (!moved) return
       const selected = getSelectedChipNames()
       const words = selected.includes(session.word) ? selected.slice() : [session.word]
       if (!words.includes(session.word)) words.unshift(session.word)
