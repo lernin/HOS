@@ -244,10 +244,6 @@
         body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red,body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:none}
-        body.logyq-mobile-v162 g.node[data-smite-phase="l2"] text.label{filter:drop-shadow(0 0 1px var(--smite-ink, transparent))}
-        body.logyq-mobile-v162 g.node[data-smite-phase="l3"] text.label{filter:drop-shadow(0 0 1px var(--smite-ink, transparent))}
-        body.logyq-mobile-v162 g.node[data-smite-phase="l4"] text.label{filter:drop-shadow(0 0 2px var(--smite-ink, transparent))}
-        body.logyq-mobile-v162 g.node[data-smite-phase="l5"] text.label{filter:drop-shadow(0 0 2px var(--smite-ink, transparent))}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation;pointer-events:auto;transform-origin:center}
         .logyq-smite-scar.is-covered{pointer-events:none!important}
         body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node *,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>text{pointer-events:none!important}
@@ -878,10 +874,12 @@
     const total = Math.max(0, Number(length) || 0)
     if (!Number.isFinite(f) || f >= 1) return { array: 'none', offset: 0 }
     if (f <= 0 || total <= 0) return { array: '0 1', offset: 0 }
-    const visible = total * Math.min(1, f)
-    const eaten = total - visible
-    return { array: `${visible} ${eaten}`, offset: eaten }
-  }
+  const visible = total * Math.min(1, f)
+  const eaten = total - visible
+  // Offset is the remaining length, so the pattern starts on the gap.
+  // Dash + gap = pathLength, one suffix, no second painted lap.
+  return { array: `${visible} ${eaten}`, offset: visible }
+}
 
   // Five levels from where the drain tip is along the stroke.
   // l1 just staged, l2 after the first corner off the top, l3 after the
@@ -2806,27 +2804,15 @@
       const uid = nodeUid(node)
       if (uid) nodeByUid.set(uid, node)
     })
-    // One heat stop per mercy. Every card and connector in that set uses it.
-    const phaseOf = new Map()
-    for (const layer of layers || []) {
-      if (phaseOf.has(layer)) continue
-      let box = null
-      for (const uid of clockRoots) {
-        const entry = byUid.get(uid)
-        if (!entry || entry.layer !== layer) continue
-        const face = smiteFace(nodeByUid.get(uid))
-        if (!face) continue
-        box = smiteFaceBox(face)
-        break
-      }
-      phaseOf.set(layer, smiteLinePhase(layer?.fraction, box?.w || 140, box?.h || 63, box?.rx || 10, box?.ry || 10))
-    }
     nodes.forEach((node) => {
       const uid = nodeUid(node)
       const entry = uid ? byUid.get(uid) : null
       const mark = entry?.mark
       const fraction = entry?.fraction
       let clock = smiteTakeClock(node)
+      node.querySelectorAll('rect.logyq-smite-wash, rect.logyq-smite-glow').forEach((layer) => layer.remove())
+      delete node.dataset.smitePhase
+      node.style?.removeProperty?.('--smite-ink')
       if (mark !== 'red' && mark !== 'amber') {
         if (clock || node.dataset.smiteHeat === '1') smiteRestoreCard(node)
         clock?.remove()
@@ -2834,24 +2820,22 @@
       }
       const face = smiteFace(node)
       if (!face) return
-      const svg = 'http://www.w3.org/2000/svg'
-      const { rx, ry, x, y, w, h } = smiteFaceBox(face)
-      const phase = phaseOf.get(entry.layer) || 'l1'
-      const heat = smiteHeat(phase, mark)
       const isClock = clockRoots.has(uid)
-      smitePaintCard(node, heat, rx, ry, !isClock)
-      smitePaintFaceStroke(face)
-      node.dataset.smitePhase = phase
-      node.style.setProperty('--smite-ink', heat.stroke)
       if (!isClock) {
         clock?.remove()
-        node.querySelector('rect.logyq-smite-glow')?.remove()
+        smiteRestoreFace(face)
+        delete node.dataset.smiteHeat
         return
       }
+      const svg = 'http://www.w3.org/2000/svg'
+      const { rx, ry, x, y, w, h } = smiteFaceBox(face)
+      // One steady line. The card keeps its own fill. No wash, glow, or heat step.
+      smitePaintFaceStroke(face)
+      node.dataset.smiteHeat = '1'
+      const color = mark === 'amber' ? '#ffa100' : '#ff0000'
       const d = smiteClockPath(x, y, w, h, rx, ry)
       if (!d) {
         clock?.remove()
-        node.querySelector('rect.logyq-smite-glow')?.remove()
         return
       }
       if (clock && clock.localName !== 'path') {
@@ -2869,9 +2853,10 @@
       }
       clock.setAttribute('d', d)
       clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}`)
-      clock.setAttribute('stroke', heat.stroke)
+      clock.setAttribute('stroke', color)
       clock.removeAttribute('pathLength')
       clock.style.animation = 'none'
+      clock.style.filter = 'none'
       clock.style.vectorEffect = 'non-scaling-stroke'
       let length = 0
       try { length = clock.getTotalLength() } catch (_error) { length = 0 }
@@ -2879,19 +2864,8 @@
       const dash = smiteLineDash(fraction, length)
       clock.setAttribute('stroke-dasharray', dash.array)
       clock.setAttribute('stroke-dashoffset', String(dash.offset))
-      smitePaintGlow(node, heat, rx, ry)
     })
-    doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => {
-      const uid = link.__data__?.target?.data?._uid
-      const entry = uid ? byUid.get(uid) : null
-      const mark = entry?.mark
-      const node = uid ? nodeByUid.get(uid) : null
-      if (!node || (mark !== 'red' && mark !== 'amber')) {
-        smiteRestoreEdge(link)
-        return
-      }
-      smitePaintEdge(link, smiteHeat(node.dataset.smitePhase || 'l1', mark))
-    })
+    doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => smiteRestoreEdge(link))
   }
 
   function smiteScarPoint(doc, win, uid) {
