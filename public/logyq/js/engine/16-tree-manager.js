@@ -152,7 +152,8 @@ elements.mixBtn && elements.mixBtn.addEventListener('pointerdown', (e) => {
 
 elements.mixBtn && elements.mixBtn.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  // Right-click forces include WordBank
+  // Right-click forces include WordBank. A phone long-press is not that.
+  if (window.incidentalBankContext?.(e)) return;
   logyq.mix.randomizeTree(true);
 });
 

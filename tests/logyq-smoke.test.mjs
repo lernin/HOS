@@ -666,6 +666,25 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.evaluate(() => {
     return Array.from(document.querySelectorAll('svg#canvas g.node')).some((element) => element.__data__?.data?.name === 'Node 03')
   }), true)
+  await page.waitForTimeout(520)
+  await page.evaluate(({ x, y }) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    for (const button of [0, 2]) {
+      node?.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+        clientX: x,
+        clientY: y,
+        button,
+      }))
+    }
+  }, hold)
+  assert.equal(await page.locator('#Dock .chip').count(), bankBefore, 'late long-press contextmenu must not copy into Word Bank')
+  assert.deepEqual(await page.evaluate(() => (window.LOGYQBridge.core.state.wordBank || []).slice()), bankWordsBefore)
+  assert.equal(await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('svg#canvas g.node')).some((element) => element.__data__?.data?.name === 'Node 03')
+  }), true, 'late contextmenu must leave the card on the map')
   await page.waitForFunction((prev) => {
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return Math.abs(t.y - prev.y) < 3

@@ -263,7 +263,7 @@ test('engine exposes a shared logyq API bag that fragments register onto', () =>
   assert.match(mix, /function mixCard/)
   assert.match(mix, /function cardLabel/)
   assert.match(mix, /if \(color\) node\.color = color/)
-  assert.match(mix, /mixCard\(name, n\.data\)/)
+  assert.match(mix, /mixCard\(cardLabel\(n\.data\), n\.data\)/)
   assert.match(wordDock, /if \(typeof x\[key\] === 'string' && x\[key\]\.trim\(\)\) node\[key\] = x\[key\]/)
   assert.match(treeManager, /s\.close && s\.close\.addEventListener\('click', close\)/)
   assert.doesNotMatch(treeManager, /s\.showCarets/)

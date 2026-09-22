@@ -183,7 +183,8 @@ function __namesFromSubtree(nodeData){
   const out = [];
   (function walk(n){
     if (!n) return;
-    if (n.name != null) out.push(String(n.name));
+    const name = n.name == null ? '' : String(n.name).trim();
+    if (name) out.push(name);
     (n.children || []).forEach(walk);
   })(nodeData);
   return out;
@@ -246,7 +247,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
       }
     } else {
       // Node only → WordBank; abandon children in place
-      const name = String(h.data?.name ?? '');
+      const name = String(h.data?.name ?? '').trim();
       if (name) state.wordBank.unshift(name);
 
       if (!h.parent) {
@@ -329,9 +330,10 @@ function sendSubtreeToWordBank(h){
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   try{
-    const labels = (h?.descendants?.() || []).map(n => n?.data?.name).filter(Boolean);
-    if (labels.length){labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));  // one chip per label
-}
+    const labels = (h?.descendants?.() || []).map(n => (n?.data?.name || '').trim()).filter(Boolean);
+    // Blank cards are not words. Skip the bank write and the delete.
+    if (!labels.length) return;
+    labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));
 
 
     // Remove subtree (with history)
@@ -368,8 +370,9 @@ function sendNodeToWordBank_abandon(h){
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   try{
-    const label = h?.data?.name;
-    if (label) logyq.wordDock.addWords(label, 'bank');
+    const label = (h?.data?.name || '').trim();
+    if (!label) return;
+    logyq.wordDock.addWords(label, 'bank');
 
     if (!h.parent){
       // Root: promote leftmost child as new root; old root (this label) already banked

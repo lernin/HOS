@@ -703,7 +703,7 @@
     win.addEventListener('pointerup', (event) => onHoldUp(event, doc, win, canvas, holdState), true)
     win.addEventListener('pointercancel', (event) => onHoldCancel(event, doc, win, holdState), true)
     win.addEventListener('contextmenu', (event) => {
-      if (!(holdState.drag || win.__logyqHoldDragSession || doc.body.classList.contains('v2-branch-drag'))) return
+      if (!swallowBankContextMenu(event, doc, win, holdState)) return
       event.preventDefault()
       event.stopImmediatePropagation()
     }, true)
@@ -735,8 +735,32 @@
     if (!win.__logyqHoldDragSession) win.__logyqSuppressZoom = false
   }
 
+  function noteTouchBankGrace(win) {
+    if (typeof win.noteBankContextGrace === 'function') win.noteBankContextGrace(900)
+    else {
+      const until = Date.now() + 900
+      if (!win.__logyqSuppressBankContextUntil || win.__logyqSuppressBankContextUntil < until) {
+        win.__logyqSuppressBankContextUntil = until
+      }
+    }
+  }
+
+  // Phone has no right-click. Swallow card contextmenu during a hold,
+  // during the post-touch grace, and any time the target is a card.
+  // That is the long-press that used to addWords a copy into Word Bank.
+  function swallowBankContextMenu(event, doc, win, holdState) {
+    const onNode = !!event.target?.closest?.('g.node')
+    if (holdState.drag || win.__logyqHoldDragSession || win.__logyqHoldArming || doc.body.classList.contains('v2-branch-drag')) return true
+    if (!onNode) return false
+    if (doc.body.classList.contains('logyq-mobile-v162') || v162Mobile(win)) return true
+    if (win.__logyqSuppressBankContextUntil && Date.now() < win.__logyqSuppressBankContextUntil) return true
+    if (typeof win.incidentalBankContext === 'function' && win.incidentalBankContext(event)) return true
+    return false
+  }
+
   function onHoldDown(event, doc, win, canvas, state) {
     if (event.pointerType === 'mouse') return
+    noteTouchBankGrace(win)
     if (!(event.target === canvas || canvas.contains(event.target))) return
     if (bridge.core?.input?.isTextField?.(event.target)) return
     if (doc.querySelector('.logiq-backdrop.is-open')) return
@@ -812,6 +836,7 @@
   }
 
   function onHoldUp(event, doc, win, canvas, state) {
+    if (event.pointerType !== 'mouse') noteTouchBankGrace(win)
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
@@ -856,6 +881,7 @@
   }
 
   function onHoldCancel(event, doc, win, state) {
+    if (event.pointerType !== 'mouse') noteTouchBankGrace(win)
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)

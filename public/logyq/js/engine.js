@@ -289,17 +289,54 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   // Stay-still / in-flight hold must never chip a copy into Word Bank.
   // Only an explicit allow-bank commit (moved past STILL_PX + chip dwell)
   // may write the dock. Layout freeze stays independent of this gate.
+  // Arming is included so a contextmenu that arrives before the 160ms
+  // latch still cannot copy labels.
   function holdDragBlocksBank(){
     try {
       if (window.__logyqHoldDragAllowBank) return false
-      return !!(window.__logyqHoldDragSession || document.body?.classList?.contains('v2-branch-drag'))
+      return !!(window.__logyqHoldArming || window.__logyqHoldDragSession || document.body?.classList?.contains('v2-branch-drag'))
     } catch (_e) {
       return false
     }
   }
+
+  // Phone / long-press contextmenu is not a Word Bank gesture.
+  // Desktop right-click (button 2 on a fine pointer) stays explicit.
+  function coarseBankSurface(){
+    try {
+      if (document.body?.classList?.contains('logyq-mobile-v162')) return true
+      return !!window.matchMedia?.('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px))')?.matches
+    } catch (_e) {
+      return false
+    }
+  }
+  function incidentalBankContext(event){
+    try {
+      if (window.__logyqHoldArming || window.__logyqHoldDragSession) return true
+      if (document.body?.classList?.contains('v2-branch-drag')) return true
+      if (window.__logyqSuppressBankContextUntil && Date.now() < window.__logyqSuppressBankContextUntil) return true
+      const type = event?.pointerType || event?.sourceEvent?.pointerType
+      if (type === 'touch' || type === 'pen') return true
+      if (coarseBankSurface()) return true
+      if (event && typeof event.button === 'number' && event.button !== 2) return true
+      return false
+    } catch (_e) {
+      return false
+    }
+  }
+  function noteBankContextGrace(ms){
+    try {
+      const until = Date.now() + (Number(ms) || 900)
+      if (!window.__logyqSuppressBankContextUntil || window.__logyqSuppressBankContextUntil < until) {
+        window.__logyqSuppressBankContextUntil = until
+      }
+    } catch (_e) {}
+  }
   window.__logyqHoldDragFrozen = holdDragFrozen
   window.__logyqHoldDragBlocksBank = holdDragBlocksBank
-  attach('holdDrag', { frozen: holdDragFrozen, blocksBank: holdDragBlocksBank })
+  window.incidentalBankContext = incidentalBankContext
+  window.noteBankContextGrace = noteBankContextGrace
+  attach('holdDrag', { frozen: holdDragFrozen, blocksBank: holdDragBlocksBank, incidentalBankContext, noteBankContextGrace })
 
 
 
@@ -3024,7 +3061,8 @@ function __namesFromSubtree(nodeData){
   const out = [];
   (function walk(n){
     if (!n) return;
-    if (n.name != null) out.push(String(n.name));
+    const name = n.name == null ? '' : String(n.name).trim();
+    if (name) out.push(name);
     (n.children || []).forEach(walk);
   })(nodeData);
   return out;
@@ -3087,7 +3125,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
       }
     } else {
       // Node only → WordBank; abandon children in place
-      const name = String(h.data?.name ?? '');
+      const name = String(h.data?.name ?? '').trim();
       if (name) state.wordBank.unshift(name);
 
       if (!h.parent) {
@@ -3170,9 +3208,10 @@ function sendSubtreeToWordBank(h){
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   try{
-    const labels = (h?.descendants?.() || []).map(n => n?.data?.name).filter(Boolean);
-    if (labels.length){labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));  // one chip per label
-}
+    const labels = (h?.descendants?.() || []).map(n => (n?.data?.name || '').trim()).filter(Boolean);
+    // Blank cards are not words. Skip the bank write and the delete.
+    if (!labels.length) return;
+    labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));
 
 
     // Remove subtree (with history)
@@ -3209,8 +3248,9 @@ function sendNodeToWordBank_abandon(h){
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   try{
-    const label = h?.data?.name;
-    if (label) logyq.wordDock.addWords(label, 'bank');
+    const label = (h?.data?.name || '').trim();
+    if (!label) return;
+    logyq.wordDock.addWords(label, 'bank');
 
     if (!h.parent){
       // Root: promote leftmost child as new root; old root (this label) already banked
@@ -4620,9 +4660,11 @@ function randomizeTree(includeBank){
   // Don’t show the browser menu or bubble to zoom
   event.preventDefault();
   event.stopPropagation();
-  // Phone long-press hold-drag synthesizes contextmenu. That path
-  // addWords-copies labels, then splices data; layout freeze hid the
-  // splice so Ashley saw a Word Bank copy while the origin slot stayed.
+  // Phone long-press synthesizes contextmenu. That path addWords-copies
+  // labels. Word Bank writes from this handler are desktop right-click
+  // only. Still hold, a late contextmenu after the session flag drops,
+  // paint, Mix, and card select must not land here as a bank commit.
+  if (window.incidentalBankContext?.(event)) return;
   if (window.__logyqHoldDragFrozen?.() || window.__logyqHoldDragBlocksBank?.()) return;
 
   if (!d || !state.root) return;
@@ -4669,6 +4711,7 @@ if (event.shiftKey && !event.metaKey) {
   if (!victims.length) return;
 
   const prev = utils.deepClone(state.root.data);
+  let banked = 0;
 
   for (const vUid of victims) {
     // find fresh hierarchy node for each vUid
@@ -4681,6 +4724,9 @@ if (event.shiftKey && !event.metaKey) {
     if (idx < 0) continue;
 
     const moving = arr[idx];
+    const nm = (moving?.name || '').trim();
+    // Empty-label cards are not words. Leave the painted card in place.
+    if (!nm) continue;
     const orphans = (moving.children || []).slice();
     moving.children = null;                      // only the node’s label goes to bank
 
@@ -4688,21 +4734,21 @@ if (event.shiftKey && !event.metaKey) {
     arr.splice(idx, 1, ...orphans);
     if (arr.length === 0) parentData.children = null;
 
-    const nm = (moving?.name || '').trim();
-    if (nm) {
-      if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(nm, 'bank');
-      else {
-        state.wordBank = state.wordBank || [];
-        state.wordBank.push(nm);
-      }
+    if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(nm, 'bank');
+    else {
+      state.wordBank = state.wordBank || [];
+      state.wordBank.push(nm);
     }
+    banked += 1;
   }
+
+  if (!banked) return;
 
   logyq.history.pushHistory?.({ type: 'replace-root', prev });  // snapshot once for whole operation
   state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
   logyq.selection.clearSelection?.();
   logyq.treeManager.layoutAndRender(false);
-  logyq.selection.showToast?.(`Sent ${victims.length} node(s) to Word Dock (children stayed)`);
+  logyq.selection.showToast?.(`Sent ${banked} node(s) to Word Dock (children stayed)`);
   return;
 }
 
@@ -4790,6 +4836,7 @@ if (event.shiftKey && !event.metaKey) {
         const subtreeNames = h.descendants()
           .map(n => (n?.data?.name || '').trim())
           .filter(Boolean);
+        if (!subtreeNames.length) continue;
         namesToBank.push(...subtreeNames);
 
         // delete subtree from its parent (with history)
@@ -4806,14 +4853,13 @@ if (event.shiftKey && !event.metaKey) {
         if (arr.length === 0) parentData.children = null;
       }
 
-      // shove all collected names to the Word Bank
-      if (namesToBank.length) {
-        if (typeof logyq.wordDock?.addWords === 'function') {
-          logyq.wordDock.addWords(namesToBank.join('\n'), 'bank');
-        } else {
-          state.wordBank = state.wordBank || [];
-          state.wordBank.push(...namesToBank);
-        }
+      // Blank-only selections are not words. Leave those cards in place.
+      if (!namesToBank.length) return;
+      if (typeof logyq.wordDock?.addWords === 'function') {
+        logyq.wordDock.addWords(namesToBank.join('\n'), 'bank');
+      } else {
+        state.wordBank = state.wordBank || [];
+        state.wordBank.push(...namesToBank);
       }
 
       // rebuild & redraw
@@ -4826,13 +4872,12 @@ if (event.shiftKey && !event.metaKey) {
   }
 
   // --- SINGLE (fallback): your original single-subtree → Word Bank behavior
-  const names = d.descendants().map(n => n?.data?.name).filter(Boolean);
-  if (names.length){
-    if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(names.join('\n'), 'bank');
-    else {
-      state.wordBank = state.wordBank || [];
-      state.wordBank.push(...names);
-    }
+  const names = d.descendants().map(n => (n?.data?.name || '').trim()).filter(Boolean);
+  if (!names.length) return;
+  if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(names.join('\n'), 'bank');
+  else {
+    state.wordBank = state.wordBank || [];
+    state.wordBank.push(...names);
   }
 
   if (!d.parent){
@@ -5032,7 +5077,8 @@ elements.mixBtn && elements.mixBtn.addEventListener('pointerdown', (e) => {
 
 elements.mixBtn && elements.mixBtn.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  // Right-click forces include WordBank
+  // Right-click forces include WordBank. A phone long-press is not that.
+  if (window.incidentalBankContext?.(e)) return;
   logyq.mix.randomizeTree(true);
 });
 

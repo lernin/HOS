@@ -94,9 +94,11 @@ function randomizeTree(includeBank){
   // Don’t show the browser menu or bubble to zoom
   event.preventDefault();
   event.stopPropagation();
-  // Phone long-press hold-drag synthesizes contextmenu. That path
-  // addWords-copies labels, then splices data; layout freeze hid the
-  // splice so Ashley saw a Word Bank copy while the origin slot stayed.
+  // Phone long-press synthesizes contextmenu. That path addWords-copies
+  // labels. Word Bank writes from this handler are desktop right-click
+  // only. Still hold, a late contextmenu after the session flag drops,
+  // paint, Mix, and card select must not land here as a bank commit.
+  if (window.incidentalBankContext?.(event)) return;
   if (window.__logyqHoldDragFrozen?.() || window.__logyqHoldDragBlocksBank?.()) return;
 
   if (!d || !state.root) return;
@@ -143,6 +145,7 @@ if (event.shiftKey && !event.metaKey) {
   if (!victims.length) return;
 
   const prev = utils.deepClone(state.root.data);
+  let banked = 0;
 
   for (const vUid of victims) {
     // find fresh hierarchy node for each vUid
@@ -155,6 +158,9 @@ if (event.shiftKey && !event.metaKey) {
     if (idx < 0) continue;
 
     const moving = arr[idx];
+    const nm = (moving?.name || '').trim();
+    // Empty-label cards are not words. Leave the painted card in place.
+    if (!nm) continue;
     const orphans = (moving.children || []).slice();
     moving.children = null;                      // only the node’s label goes to bank
 
@@ -162,21 +168,21 @@ if (event.shiftKey && !event.metaKey) {
     arr.splice(idx, 1, ...orphans);
     if (arr.length === 0) parentData.children = null;
 
-    const nm = (moving?.name || '').trim();
-    if (nm) {
-      if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(nm, 'bank');
-      else {
-        state.wordBank = state.wordBank || [];
-        state.wordBank.push(nm);
-      }
+    if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(nm, 'bank');
+    else {
+      state.wordBank = state.wordBank || [];
+      state.wordBank.push(nm);
     }
+    banked += 1;
   }
+
+  if (!banked) return;
 
   logyq.history.pushHistory?.({ type: 'replace-root', prev });  // snapshot once for whole operation
   state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
   logyq.selection.clearSelection?.();
   logyq.treeManager.layoutAndRender(false);
-  logyq.selection.showToast?.(`Sent ${victims.length} node(s) to Word Dock (children stayed)`);
+  logyq.selection.showToast?.(`Sent ${banked} node(s) to Word Dock (children stayed)`);
   return;
 }
 
@@ -264,6 +270,7 @@ if (event.shiftKey && !event.metaKey) {
         const subtreeNames = h.descendants()
           .map(n => (n?.data?.name || '').trim())
           .filter(Boolean);
+        if (!subtreeNames.length) continue;
         namesToBank.push(...subtreeNames);
 
         // delete subtree from its parent (with history)
@@ -280,14 +287,13 @@ if (event.shiftKey && !event.metaKey) {
         if (arr.length === 0) parentData.children = null;
       }
 
-      // shove all collected names to the Word Bank
-      if (namesToBank.length) {
-        if (typeof logyq.wordDock?.addWords === 'function') {
-          logyq.wordDock.addWords(namesToBank.join('\n'), 'bank');
-        } else {
-          state.wordBank = state.wordBank || [];
-          state.wordBank.push(...namesToBank);
-        }
+      // Blank-only selections are not words. Leave those cards in place.
+      if (!namesToBank.length) return;
+      if (typeof logyq.wordDock?.addWords === 'function') {
+        logyq.wordDock.addWords(namesToBank.join('\n'), 'bank');
+      } else {
+        state.wordBank = state.wordBank || [];
+        state.wordBank.push(...namesToBank);
       }
 
       // rebuild & redraw
@@ -300,13 +306,12 @@ if (event.shiftKey && !event.metaKey) {
   }
 
   // --- SINGLE (fallback): your original single-subtree → Word Bank behavior
-  const names = d.descendants().map(n => n?.data?.name).filter(Boolean);
-  if (names.length){
-    if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(names.join('\n'), 'bank');
-    else {
-      state.wordBank = state.wordBank || [];
-      state.wordBank.push(...names);
-    }
+  const names = d.descendants().map(n => (n?.data?.name || '').trim()).filter(Boolean);
+  if (!names.length) return;
+  if (typeof logyq.wordDock?.addWords === 'function') logyq.wordDock.addWords(names.join('\n'), 'bank');
+  else {
+    state.wordBank = state.wordBank || [];
+    state.wordBank.push(...names);
   }
 
   if (!d.parent){

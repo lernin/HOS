@@ -821,6 +821,7 @@ test('randomizeTree mixes blank painted cards and keeps their colors', () => {
   }
   walk(logyq.state.root.data)
   assert.deepEqual(colors.slice().sort(), ['#bae6fd', '#bbf7d0', '#fde68a', '#fecdd3'].sort())
+  assert.deepEqual(logyq.state.wordBank, [], 'Mix must not throw blank cards into Word Bank')
 })
 
 test('randomizeTree keeps label aliases with each card', () => {
@@ -853,6 +854,124 @@ test('randomizeTree keeps label aliases with each card', () => {
   assert.equal(byName('A').text, 'A body')
   assert.equal(byName('B').value, 'bravo')
   assert.ok(byName('A')._uid)
+})
+
+test('Word Bank contextmenu is desktop right-click only', () => {
+  const config = readFileSync(new URL('../public/logyq/js/engine/01-config.js', import.meta.url), 'utf8')
+  const start = config.indexOf('function coarseBankSurface')
+  const end = config.indexOf('window.__logyqHoldDragFrozen = holdDragFrozen')
+  const { incidentalBankContext, noteBankContextGrace } = new Function(
+    `${config.slice(start, end)}; return { coarseBankSurface, incidentalBankContext, noteBankContextGrace };`,
+  )()
+  const previousWindow = globalThis.window
+  const previousDocument = globalThis.document
+  const body = { className: '', classList: { contains: (name) => body.className.split(/\s+/).includes(name) } }
+  globalThis.document = { body }
+  globalThis.window = {
+    matchMedia: (query) => ({ matches: query.includes('pointer:coarse') && globalThis.window.coarse }),
+    coarse: false,
+  }
+
+  try {
+  assert.equal(incidentalBankContext({ button: 2, pointerType: 'mouse' }), false)
+  assert.equal(incidentalBankContext({ button: 0, pointerType: 'mouse' }), true, 'button 0 contextmenu is a long-press')
+  assert.equal(incidentalBankContext({ button: 2, pointerType: 'touch' }), true)
+  globalThis.window.__logyqHoldArming = true
+  assert.equal(incidentalBankContext({ button: 2, pointerType: 'mouse' }), true, 'arming must block bank contextmenu')
+  globalThis.window.__logyqHoldArming = false
+  globalThis.window.__logyqHoldDragSession = true
+  assert.equal(incidentalBankContext({ button: 2, pointerType: 'mouse' }), true)
+  globalThis.window.__logyqHoldDragSession = false
+  noteBankContextGrace(5000)
+  assert.equal(incidentalBankContext({ button: 2, pointerType: 'mouse' }), true, 'post-touch grace must block a late contextmenu')
+  globalThis.window.__logyqSuppressBankContextUntil = 0
+  globalThis.window.coarse = true
+  body.className = 'logyq-mobile-v162'
+  assert.equal(incidentalBankContext({ button: 2, pointerType: 'mouse' }), true, 'phone right-click synthesis must not bank')
+
+  const { logyq, added, onNodeContextMenu } = loadMix()
+  const menuEvent = () => ({ preventDefault() {}, stopPropagation() {}, button: 2, pointerType: 'mouse' })
+  globalThis.window.incidentalBankContext = incidentalBankContext
+
+  const named = { name: 'Root', children: [{ name: 'Leaf' }] }
+  logyq.utils.assignUids(named)
+  logyq.state.root = fakeHierarchy(named)
+  const leaf = logyq.state.root.children[0]
+  leaf.descendants = () => [leaf]
+  globalThis.window.coarse = false
+  body.className = ''
+  globalThis.window.__logyqHoldArming = false
+  globalThis.window.__logyqHoldDragSession = false
+  globalThis.window.__logyqSuppressBankContextUntil = 0
+  onNodeContextMenu(menuEvent(), leaf)
+  assert.deepEqual(added, [['Leaf', 'bank']], 'desktop right-click still banks a named card')
+  assert.deepEqual(named.children, [])
+
+  added.length = 0
+  const again = { name: 'Root', children: [{ name: 'Leaf' }] }
+  logyq.utils.assignUids(again)
+  logyq.state.root = fakeHierarchy(again)
+  const phoneLeaf = logyq.state.root.children[0]
+  phoneLeaf.descendants = () => [phoneLeaf]
+  globalThis.window.coarse = true
+  body.className = 'logyq-mobile-v162'
+  onNodeContextMenu({ ...menuEvent(), button: 0, pointerType: 'touch' }, phoneLeaf)
+  assert.deepEqual(added, [], 'phone contextmenu must not copy into Word Bank')
+  assert.equal(again.children[0].name, 'Leaf')
+
+  added.length = 0
+  const blank = { name: '', color: '#fde68a', children: [{ name: '   ', color: '#bae6fd' }] }
+  logyq.utils.assignUids(blank)
+  logyq.state.root = fakeHierarchy(blank)
+  const blankLeaf = logyq.state.root.children[0]
+  blankLeaf.descendants = () => [blankLeaf]
+  globalThis.window.coarse = false
+  body.className = ''
+  onNodeContextMenu(menuEvent(), blankLeaf)
+  onNodeContextMenu(menuEvent(), logyq.state.root)
+  assert.deepEqual(added, [], 'empty-label cards must not become Word Bank chips')
+  assert.equal(blank.children.length, 1)
+  assert.equal(logyq.state.root.data.name, '')
+  } finally {
+    globalThis.window = previousWindow
+    globalThis.document = previousDocument
+  }
+})
+
+test('sendSubtreeToWordBank ignores blank cards', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/12-tree-ops.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function sendSubtreeToWordBank')
+  const end = source.indexOf('function sendNodeToWordBank_abandon')
+  const state = { wordBank: ['keep'], root: null }
+  const added = []
+  const sendSubtreeToWordBank = new Function('logyq', 'showToast', 'd3', `${source.slice(start, end)}; return sendSubtreeToWordBank;`)({
+    get state() { return state },
+    utils: loadUtils(),
+    wordDock: { addWords(raw) { added.push(raw) } },
+    history: { pushHistory() {} },
+    treeManager: { renderEmpty() {}, layoutAndRender() {} },
+    drag: { clear() {} },
+    selection: { showToast() {} },
+  }, () => {}, { hierarchy: fakeHierarchy })
+  const previousWindow = globalThis.window
+  globalThis.window = {}
+  try {
+    const blank = fakeHierarchy({ name: '', color: '#fde68a', children: [{ name: '', color: '#fff' }] })
+    state.root = blank
+    sendSubtreeToWordBank(blank)
+    assert.deepEqual(added, [])
+    assert.deepEqual(state.wordBank, ['keep'])
+    assert.equal(blank.data.children.length, 1)
+
+    const named = fakeHierarchy({ name: 'Root', children: [{ name: 'Leaf' }] })
+    const leaf = named.children[0]
+    leaf.descendants = () => [leaf]
+    state.root = named
+    sendSubtreeToWordBank(leaf)
+    assert.deepEqual(added, ['Leaf'])
+  } finally {
+    globalThis.window = previousWindow
+  }
 })
 
 test('context-menu Word Dock dumps still join names with newlines', () => {
@@ -1138,6 +1257,9 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /__logyqHoldDragAllowBank = true/)
   assert.match(v162, /function endHoldDragSession/)
   assert.match(v162, /addEventListener\('contextmenu'/)
+  assert.match(v162, /function swallowBankContextMenu/)
+  assert.match(v162, /function noteTouchBankGrace/)
+  assert.match(v162, /__logyqSuppressBankContextUntil/)
   const config = readFileSync(new URL('../public/logyq/js/engine/01-config.js', import.meta.url), 'utf8')
   const treeOps = readFileSync(new URL('../public/logyq/js/engine/12-tree-ops.js', import.meta.url), 'utf8')
   const drag = readFileSync(new URL('../public/logyq/js/engine/13-drag.js', import.meta.url), 'utf8')
@@ -1146,10 +1268,14 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   const mix = readFileSync(new URL('../public/logyq/js/engine/15-mix-and-context.js', import.meta.url), 'utf8')
   assert.match(config, /function holdDragFrozen/)
   assert.match(config, /function holdDragBlocksBank/)
+  assert.match(config, /function incidentalBankContext/)
+  assert.match(config, /__logyqHoldArming/)
   assert.match(config, /window\.__logyqHoldDragFrozen/)
   assert.match(config, /window\.__logyqHoldDragBlocksBank/)
   assert.match(treeOps, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\) return;/)
   assert.match(treeOps, /if \(window\.__logyqHoldDragBlocksBank\?\.\(\)\) return;/)
+  assert.match(treeOps, /if \(!labels\.length\) return;/)
+  assert.match(mix, /incidentalBankContext/)
   assert.match(treeManager, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\) return;/)
   assert.match(drag, /if \(window\.__logyqHoldDragFrozen\?\.\(\)\)/)
   assert.match(drag, /dragManager\.clear\(\);/)

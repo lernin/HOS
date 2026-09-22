@@ -249,17 +249,54 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   // Stay-still / in-flight hold must never chip a copy into Word Bank.
   // Only an explicit allow-bank commit (moved past STILL_PX + chip dwell)
   // may write the dock. Layout freeze stays independent of this gate.
+  // Arming is included so a contextmenu that arrives before the 160ms
+  // latch still cannot copy labels.
   function holdDragBlocksBank(){
     try {
       if (window.__logyqHoldDragAllowBank) return false
-      return !!(window.__logyqHoldDragSession || document.body?.classList?.contains('v2-branch-drag'))
+      return !!(window.__logyqHoldArming || window.__logyqHoldDragSession || document.body?.classList?.contains('v2-branch-drag'))
     } catch (_e) {
       return false
     }
   }
+
+  // Phone / long-press contextmenu is not a Word Bank gesture.
+  // Desktop right-click (button 2 on a fine pointer) stays explicit.
+  function coarseBankSurface(){
+    try {
+      if (document.body?.classList?.contains('logyq-mobile-v162')) return true
+      return !!window.matchMedia?.('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px))')?.matches
+    } catch (_e) {
+      return false
+    }
+  }
+  function incidentalBankContext(event){
+    try {
+      if (window.__logyqHoldArming || window.__logyqHoldDragSession) return true
+      if (document.body?.classList?.contains('v2-branch-drag')) return true
+      if (window.__logyqSuppressBankContextUntil && Date.now() < window.__logyqSuppressBankContextUntil) return true
+      const type = event?.pointerType || event?.sourceEvent?.pointerType
+      if (type === 'touch' || type === 'pen') return true
+      if (coarseBankSurface()) return true
+      if (event && typeof event.button === 'number' && event.button !== 2) return true
+      return false
+    } catch (_e) {
+      return false
+    }
+  }
+  function noteBankContextGrace(ms){
+    try {
+      const until = Date.now() + (Number(ms) || 900)
+      if (!window.__logyqSuppressBankContextUntil || window.__logyqSuppressBankContextUntil < until) {
+        window.__logyqSuppressBankContextUntil = until
+      }
+    } catch (_e) {}
+  }
   window.__logyqHoldDragFrozen = holdDragFrozen
   window.__logyqHoldDragBlocksBank = holdDragBlocksBank
-  attach('holdDrag', { frozen: holdDragFrozen, blocksBank: holdDragBlocksBank })
+  window.incidentalBankContext = incidentalBankContext
+  window.noteBankContextGrace = noteBankContextGrace
+  attach('holdDrag', { frozen: holdDragFrozen, blocksBank: holdDragBlocksBank, incidentalBankContext, noteBankContextGrace })
 
 
 
