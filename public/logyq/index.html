@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>LOGYQ</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+<link rel="icon" href="logos/LOGO_GREEN_Q.svg" type="image/svg+xml">
+<link rel="alternate icon" href="logos/LOGO_GREEN_Q.png" sizes="32x32">   <!-- optional fallback -->
+<link rel="apple-touch-icon" href="logos/LOGO_GREEN_Q.png" sizes="180x180"> <!-- optional for phones -->
+<meta name="theme-color" content="#22c55e">
+<style id="logyq-phone-boot">
+#logiq-mobile-header,#logiq-mobile-panel,#logiq-voice-bar{display:none}
+@media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+  body>header{display:none!important}
+  #trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
+  svg#canvas{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;overflow:visible}
+  #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);overflow:hidden;flex-wrap:nowrap}
+  #logyq-corner-cluster{display:contents}
+  #logyq-select-strip{display:none!important}
+  #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto;order:2}
+  #logyq-home-btn{order:1}#logiq-mobile-header [data-tool="undo"]{order:5}#logiq-mobile-header [data-tool="fit"]{order:6}#logyq-paint-btn{order:7}#logiq-mobile-menu-btn{order:9}
+  #logiq-mobile-header .logiq-save-state{display:inline-flex;width:9px;overflow:hidden;flex:0 0 9px;color:transparent;order:8}
+  #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:17px;padding:0}
+  #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+}
+@media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
+  #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0}
+  #logyq-corner-cluster{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;width:max-content;height:auto;padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16)}
+  #logyq-corner-cluster img,#logyq-select-strip,#logyq-home-btn,#logyq-corner-cluster .logiq-save-state{display:none}
+  #logyq-paint-btn{order:-1}
+  #logyq-corner-cluster .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px}
+  svg#canvas{left:0;right:0;top:0;width:100%}
+}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<link rel="stylesheet" href="/logyq/css/app.css">
+</head>
+<body>
+<div id="logiq-mobile-header">
+  <div id="logyq-corner-cluster">
+    <button class="logiq-icon-btn" id="logyq-home-btn" type="button" aria-label="Your maps"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></button>
+    <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGYQ">
+    <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
+    <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
+    <button class="logiq-icon-btn" id="logyq-paint-btn" aria-label="Paint colors" aria-expanded="false" aria-haspopup="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><circle cx="8" cy="16" r="3"></circle><circle cx="16" cy="16" r="3"></circle></svg></button>
+    <span class="logiq-save-state" role="status" aria-live="polite"></span>
+    <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
+  </div>
+  <div id="logyq-select-strip">
+    <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
+    <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
+  </div>
+</div>
+
+
+<header>
+ <div class="brand">
+  <img src="logos/LOGO_GREEN_Q.svg" alt="LOGiQ">
+</div>
+
+
+  <div class="word-tools">
+    <input id="wordInput" placeholder="word(s,) or JSON!" />
+    <button class="btn" id="addWordBtn">Add</button>
+  </div>
+
+  <div class="controls">
+    <button class="btn" id="undoBtn" disabled>Undo</button>
+    <button class="btn" id="mixBtn" title="Mix (M)">Mix</button>
+    <button class="btn" id="mapsBtn" title="Trees">Trees</button>
+    <button class="btn" id="fitBtn" title="Hotkey: F">Fit</button>
+    <button class="btn" id="settingsBtn" title="Settings">⋮</button>
+    <button class="btn" id="helpBtn" title="Help">?</button>
+  </div>
+</header>
+
+
+
+
+
+
+<div id="Dock"></div>
+  <div id="Toast"></div>
+<svg id="canvas" aria-label="Interactive Tree Diagram"></svg>
+<div id="trash" aria-label="Trash" role="button" aria-live="polite">
+  <svg viewBox="0 0 40 40" aria-hidden="true">
+    <g class="lid">
+      <rect class="lid-shape" x="8" y="6" width="24" height="6" rx="2" ry="2"></rect>
+      <rect class="lid-shape" x="18" y="3" width="4" height="3" rx="1"></rect>
+    </g>
+    <rect class="body" x="10" y="12" width="20" height="22" rx="3"></rect>
+    <rect class="stripe" x="14" y="16" width="2" height="14"></rect>
+    <rect class="stripe" x="19" y="16" width="2" height="14"></rect>
+    <rect class="stripe" x="24" y="16" width="2" height="14"></rect>
+  </svg>
+</div>
+
+
+
+<!-- Settings -->
+<div id="settingsBackdrop" class="settings-backdrop" aria-hidden="true">
+  <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settings-header">
+    <div class="settings-row">
+      <button class="btn" id="exportPngBtn" title="Export current view to PNG">Export PNG</button>
+    </div> <!-- [patch] export-btn -->
+<!-- [patch] export-more-buttons start --><div id="exportBackdrop" class="settings-backdrop" aria-hidden="true">  <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="exportTitle">    <div class="settings-header">      <strong id="exportTitle">Export</strong>      <button class="settings-close" id="exportClose" aria-label="Close">✕</button>    </div>    <div class="settings-row">      <label><strong>Export what</strong></label>      <div style="display:flex;gap:12px;align-items:center;">        <label style="display:flex;align-items:center;gap:6px;"><input type="radio" name="exportMode" id="exportModeFull" checked> Full map (cropped + padding)</label>        <label style="display:flex;align-items:center;gap:6px;"><input type="radio" name="exportMode" id="exportModeView"> Current view (as seen)</label>      </div>    </div>    <div class="settings-row">      <label><strong>Padding</strong></label>      <div style="display:flex;align-items:center;gap:8px;">        <input type="number" id="exportPadding" min="0" max="200" step="2" value="24" style="width:84px;">        <span class="gap-readout">px around map</span>      </div>    </div>    <div class="settings-row">      <label><strong>Min label size</strong></label>      <div style="display:flex;align-items:center;gap:8px;">        <input type="number" id="exportMinLabel" min="0" max="64" step="1" value="18" style="width:84px;">        <span class="gap-readout">px (auto scales full export)</span>      </div>    </div>    <div class="settings-row">      <label><strong>Background</strong></label>      <label style="display:flex;align-items:center;gap:6px;">        <input type="checkbox" id="exportBackground" checked> Include page gradient      </label>    </div>    <div class="settings-row">      <label><strong>Title</strong></label>      <div style="display:flex;align-items:center;gap:8px;min-width:160px;">        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="exportAddTitle" checked> Add</label>        <input id="exportTitleText" value="LOGiC" style="height:32px;padding:0 10px;border:1px solid #e5e7eb;border-radius:8px;"/>      </div>    </div>    <div class="settings-row">      <label><strong>Export as</strong></label>      <div style="display:flex;gap:8px;">        <button class="btn" id="doExportPng">PNG</button>        <button class="btn" id="doExportSvg">SVG (vector)</button>      </div>    </div>  </div></div><!-- [patch] export-more-buttons end -->
+
+
+
+
+<strong id="settingsTitle">Settings</strong>
+
+<button class="settings-close" id="settingsClose" aria-label="Close">✕</button>
+
+
+
+      <!-- [patch] settings-no-x -->
+    </div>
+    <div class="settings-row gap-controls">
+      <label><strong>Vertical spacing</strong></label>
+      <div style="display:flex;align-items:center;gap:8px;min-width:160px;">
+        <button class="btn" id="gapUp" title="Up (decrease)">▲</button>
+        <button class="btn" id="gapDown" title="Down (increase)">▼</button>
+        <button class="btn" id="gapReset" title="Reset">Reset</button>
+        <span id="verticalGapVal" class="gap-readout">78px</span>
+      </div>
+    </div>
+    <div class="settings-row">
+      <label for="verticalGap"><strong>Vertical spacing (slider)</strong></label>
+      <div style="display:flex;align-items:center;gap:8px;min-width:160px;">
+        <input type="range" id="verticalGap" min="20" max="240" step="2" value="78">
+        <span id="verticalGapValHidden">78px</span>
+      </div>
+    </div>
+
+    <div class="settings-row">
+      <label><strong>Paint colors</strong></label>
+      <div style="display:flex;align-items:center;gap:8px;min-width:160px;">
+        <button class="btn" id="logyq-paint-settings-btn" type="button" title="Open the paint palette">Open palette</button>
+      </div>
+    </div>
+    <div class="settings-row">
+      <label><strong>Show detectors</strong></label>
+      <div style="display:flex;align-items:center;gap:8px;min-width:160px;">
+        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="showDetectors"> Visible overlays</label>
+      </div>
+    </div>
+    <div class="settings-row">
+      <label for="detDepth"><strong>Detector depth</strong></label>
+      <div style="display:flex;align-items:center;gap:8px;min-width:160px;">
+        <input type="range" id="detDepth" min="1" max="3" step="0.1" value="1.2">
+        <span id="detDepthVal">1.2x</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- [patch] help-html start --><div id="helpBackdrop" class="settings-backdrop" aria-hidden="true"><div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle"><div class="settings-header"><strong id="helpTitle">Quick Help</strong><!-- [patch] help-no-x-html --></div><!-- [patch] help-body start -->
+<div style="font-size:13px;color:#475569;line-height:1.35">
+  <p style="margin:0 0 6px 0;">Handy controls:</p>
+  <ul style="margin:0;padding-left:18px">
+  <li><b>Arrows</b> or <b>J/K/L/I</b> – move node selection</li>
+  <li><b>Double-click node</b> – rename (<b>Enter</b>=save, <b>Esc</b>=cancel)</li>
+  <li><b>Drag node</b> – reparent; drag to Trash=delete</li>
+  <li><b>Mix (M)</b> – shuffle tree; <b>Shift+M</b> or right-click Mix includes WordBank</li>
+  <li><b>Word Dock</b> – Click=select, Shift+Click=multi-select; drag to tree/Trash</li>
+  <li><b>Ctrl+A</b> over Dock – toggle select all chips</li>
+  <li><b>F</b>=Fit • <b>W</b>=Dock • <b>A</b>=Input • <b>U</b>=Undo • <b>P</b>=PNG export</li>
+  <li><b>Settings</b> – adjust spacing, detectors</li>
+  <li><b>Esc</b> – close modal/editor</li>
+  </ul>
+</div>
+<!-- [/patch] help-body end --><!-- [/patch] help-html end -->
+
+</div></div></div>
+
+
+<script src="/logyq/js/engine.js"></script>
+
+<script src="/logyq/js/preview.js"></script>
+
+</body>
+
+</html>
+
