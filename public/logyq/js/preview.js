@@ -823,8 +823,9 @@
     return (Math.PI * sum * (1 + (3 * h) / (10 + Math.sqrt(Math.max(0, 4 - 3 * h))))) / 4
   }
 
-  // One clockwise rounded outline. It begins at 12 o'clock. The dash keeps that
-  // end and the free tip retracts back toward 12.
+  // One counter-clockwise rounded outline. It begins at 12 o'clock and
+  // travels toward the left. The visible stroke is the untraveled suffix
+  // that still closes back at 12, so the gap eats forward as the ring drains.
   function smiteClockPath(x, y, width, height, rx = 10, ry = 10) {
     const { w, h, capX, capY } = smiteRoundCaps(width, height, rx, ry)
     if (w <= 0 || h <= 0) return ''
@@ -834,67 +835,95 @@
     const bottom = top + h
     const noonX = left + w / 2
     if (capX <= 0 || capY <= 0) {
-      return `M ${smiteNum(noonX)} ${smiteNum(top)} H ${smiteNum(right)} V ${smiteNum(bottom)} H ${smiteNum(left)} V ${smiteNum(top)} H ${smiteNum(noonX)} Z`
+      return `M ${smiteNum(noonX)} ${smiteNum(top)} H ${smiteNum(left)} V ${smiteNum(bottom)} H ${smiteNum(right)} V ${smiteNum(top)} H ${smiteNum(noonX)} Z`
     }
     return [
       `M ${smiteNum(noonX)} ${smiteNum(top)}`,
-      `H ${smiteNum(right - capX)}`,
-      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(right)} ${smiteNum(top + capY)}`,
-      `V ${smiteNum(bottom - capY)}`,
-      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(right - capX)} ${smiteNum(bottom)}`,
       `H ${smiteNum(left + capX)}`,
-      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(left)} ${smiteNum(bottom - capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 0 ${smiteNum(left)} ${smiteNum(top + capY)}`,
+      `V ${smiteNum(bottom - capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 0 ${smiteNum(left + capX)} ${smiteNum(bottom)}`,
+      `H ${smiteNum(right - capX)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 0 ${smiteNum(right)} ${smiteNum(bottom - capY)}`,
       `V ${smiteNum(top + capY)}`,
-      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(left + capX)} ${smiteNum(top)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 0 ${smiteNum(right - capX)} ${smiteNum(top)}`,
       `H ${smiteNum(noonX)} Z`,
     ].join(' ')
   }
 
-  // Where the free tip sits. The stroke is the clockwise prefix from 12, so as
-  // fraction falls the tip travels back: closing top, first side, bottom, right side, opening top.
+  // Gap on the eaten prefix, dash on the suffix that still ends at 12.
+  function smiteLineDash(fraction) {
+    const f = Number(fraction)
+    if (!Number.isFinite(f) || f >= 1) return { array: '100', offset: 0 }
+    if (f <= 0) return { array: '0 100', offset: 0 }
+    const visible = Math.min(100, Math.max(0, f * 100))
+    const eaten = 100 - visible
+    return { array: `${visible} ${eaten}`, offset: eaten }
+  }
+
+  // Heat follows the leading edge as it leaves 12 toward the left.
+  // Very light until the top-left corner is rounded, then stronger after
+  // each corner, and a behind-glow only on the last stretch.
   function smiteLinePhase(fraction, width, height, rx = 10, ry = 10) {
     const f = Number(fraction)
-    if (!Number.isFinite(f) || f >= 1) return 'full'
+    if (!Number.isFinite(f) || f >= 1) return 'veil'
     if (f <= 0) return 'glow'
     const { w, h, capX, capY } = smiteRoundCaps(width, height, rx, ry)
-    if (w <= 0 || h <= 0) return 'full'
+    if (w <= 0 || h <= 0) return 'veil'
     const topHalf = Math.max(0, w / 2 - capX)
     const side = Math.max(0, h - 2 * capY)
     const bottom = Math.max(0, w - 2 * capX)
     const arc = smiteQuarterArc(capX, capY)
     const total = topHalf + arc + side + arc + bottom + arc + side + arc + topHalf
-    if (total <= 0) return 'full'
-    const tip = Math.min(1, f) * total
-    const openTop = topHalf
-    const rightEnd = openTop + arc + side
-    const bottomEnd = rightEnd + arc + bottom
-    const leftEnd = bottomEnd + arc + side
-    if (tip <= openTop) return 'glow'
-    if (tip <= rightEnd) return 'dark'
-    if (tip <= bottomEnd) return 'medium'
-    if (tip <= leftEnd) return 'light'
-    return 'full'
+    if (total <= 0) return 'veil'
+    const eaten = (1 - Math.min(1, f)) * total
+    const topLeft = topHalf + arc
+    const bottomLeft = topLeft + side + arc
+    const bottomRight = bottomLeft + bottom + arc
+    const topRight = bottomRight + side + arc
+    if (eaten <= topLeft) return 'veil'
+    if (eaten <= bottomLeft) return 'light'
+    if (eaten <= bottomRight) return 'medium'
+    if (eaten <= topRight) return 'dark'
+    return 'glow'
   }
 
-  // Fate hue, stepped by where the line is. Wash stays translucent. Glow is behind the card.
+  // A clock card is a dying node whose parent is not also dying.
+  function smiteClockRoots(rootData, marks) {
+    const roots = []
+    const walk = (node, parentDying) => {
+      if (!node || typeof node !== 'object') return
+      const uid = node._uid || node.uid || node.data?._uid || null
+      const mark = smiteMarkOf(marks, uid)
+      const dying = mark === 'red' || mark === 'amber'
+      if (dying && !parentDying && uid) roots.push(uid)
+      const kids = Array.isArray(node.children) ? node.children : []
+      for (const kid of kids) walk(kid, dying)
+    }
+    walk(rootData, false)
+    return roots
+  }
+
+  // Fate hue, stepped by how many corners the edge has rounded.
+  // Wash stays translucent so painted color still reads underneath.
   function smiteHeat(phase, mark = 'red') {
     const amber = mark === 'amber'
     const table = amber
       ? {
-          full: { stroke: '#d97706', wash: '#f59e0b', washOpacity: 0.1, glow: 0 },
-          light: { stroke: '#fcd34d', wash: '#fbbf24', washOpacity: 0.14, glow: 0 },
-          medium: { stroke: '#d97706', wash: '#f59e0b', washOpacity: 0.18, glow: 0 },
-          dark: { stroke: '#92400e', wash: '#b45309', washOpacity: 0.22, glow: 0 },
-          glow: { stroke: '#ffb000', wash: '#ffb000', washOpacity: 0.2, glow: 0.92 },
+          veil: { stroke: '#fde68a', wash: '#fde68a', washOpacity: 0.22, glow: 0 },
+          light: { stroke: '#fcd34d', wash: '#fbbf24', washOpacity: 0.34, glow: 0 },
+          medium: { stroke: '#f59e0b', wash: '#f59e0b', washOpacity: 0.48, glow: 0 },
+          dark: { stroke: '#b45309', wash: '#92400e', washOpacity: 0.58, glow: 0 },
+          glow: { stroke: '#ffb000', wash: '#f59e0b', washOpacity: 0.72, glow: 0.95 },
         }
       : {
-          full: { stroke: '#dc2626', wash: '#ef4444', washOpacity: 0.1, glow: 0 },
-          light: { stroke: '#fca5a5', wash: '#f87171', washOpacity: 0.14, glow: 0 },
-          medium: { stroke: '#ef4444', wash: '#ef4444', washOpacity: 0.18, glow: 0 },
-          dark: { stroke: '#991b1b', wash: '#b91c1c', washOpacity: 0.22, glow: 0 },
-          glow: { stroke: '#ff2d2d', wash: '#ff2d2d', washOpacity: 0.2, glow: 0.92 },
+          veil: { stroke: '#fecaca', wash: '#fecaca', washOpacity: 0.22, glow: 0 },
+          light: { stroke: '#fca5a5', wash: '#f87171', washOpacity: 0.34, glow: 0 },
+          medium: { stroke: '#ef4444', wash: '#ef4444', washOpacity: 0.48, glow: 0 },
+          dark: { stroke: '#b91c1c', wash: '#991b1b', washOpacity: 0.58, glow: 0 },
+          glow: { stroke: '#ff2d2d', wash: '#ef4444', washOpacity: 0.72, glow: 0.95 },
         }
-    return table[phase] || table.full
+    return table[phase] || table.veil
   }
 
   // Full residue, then a soft ease-out. 0 means the scar is gone.
@@ -2181,6 +2210,7 @@
       pointers: new Map(),
       pair: false,
       pinched: false,
+      pinch: null,
       mercy: null,
       scars: [],
       raf: 0,
@@ -2208,6 +2238,7 @@
         uid,
       })
       if (smite.mercy?.marks?.has(uid) && holdState) cancelHold(win, holdState)
+      if (smite.pointers.size >= 2) smiteHoldTwoFingers(doc, win, smite, holdState)
       smiteSetInteracting(win, smite, true)
     }, true)
 
@@ -2216,15 +2247,18 @@
       if (!pointer) return
       pointer.lastX = event.clientX
       pointer.lastY = event.clientY
+      if (smite.pointers.size >= 2) win.__logyqSuppressZoom = true
       let moved = 0
       smite.pointers.forEach((finger) => {
         if (smiteFingerMoved(finger, SMITE_PARK_SLOP)) moved += 1
       })
-      if (moved >= 2) {
+      if (smite.pointers.size >= 2 && moved >= 2) {
         smite.pinched = true
         if (!smite.mercy) clearSmiteClocks(doc)
+        smiteApplyPinch(doc, win, smite)
         return
       }
+      if (smite.pointers.size >= 2) smite.pinch = null
       if (!smite.mercy) smitePaintPreview(doc, win, smite)
     }, true)
 
@@ -2239,6 +2273,7 @@
       if (!handled && !smite.mercy) handled = smiteTryCast(doc, win, smite, pointer, event.pointerId)
       smite.pointers.delete(event.pointerId)
       if (handled || paired) win.__logyqV2ConsumedPointers.add(event.pointerId)
+      smiteReleaseZoom(win, smite)
       if (!smite.mercy) clearSmiteClocks(doc)
       if (smite.pointers.size === 0) {
         smite.pair = false
@@ -2252,6 +2287,7 @@
     win.addEventListener('pointercancel', (event) => {
       if (!smite.pointers.has(event.pointerId)) return
       smite.pointers.delete(event.pointerId)
+      smiteReleaseZoom(win, smite)
       if (smite.pointers.size === 0) {
         smite.pair = false
         smite.pinched = false
@@ -2272,6 +2308,50 @@
 
   function smiteFingerMoved(pointer, slop) {
     return Math.hypot(pointer.lastX - pointer.x, pointer.lastY - pointer.y) > slop
+  }
+
+  // Two fingers block the map zoom until both of them are actually moving.
+  // A parked thumb stays a Smite cast, not a pinch.
+  function smiteHoldTwoFingers(doc, win, smite, holdState) {
+    smite.pinch = null
+    if (holdState) {
+      cancelHold(win, holdState)
+      holdState.pan = null
+      holdState.race = null
+      win.__logyqHoldArming = false
+    }
+    win.__logyqSuppressZoom = true
+    stopZoomGesture(doc)
+  }
+
+  function smiteReleaseZoom(win, smite) {
+    if (smite.pointers.size >= 2) return
+    win.__logyqSuppressZoom = false
+    smite.pinch = null
+  }
+
+  function smiteApplyPinch(doc, win, smite) {
+    const fingers = Array.from(smite.pointers.values())
+    if (fingers.length < 2 || !win.d3) return
+    const a = fingers[0]
+    const b = fingers[1]
+    const dist = Math.hypot(a.lastX - b.lastX, a.lastY - b.lastY)
+    const midX = (a.lastX + b.lastX) / 2
+    const midY = (a.lastY + b.lastY) / 2
+    const prev = smite.pinch
+    smite.pinch = { dist, midX, midY }
+    if (!prev || prev.dist < 1 || dist < 1) return
+    const svg = doc.getElementById('canvas')
+    if (!svg) return
+    const t = win.d3.zoomTransform(svg)
+    const k = Math.max(0.02, Math.min(2.4, t.k * (dist / prev.dist)))
+    const applied = t.k ? k / t.k : 1
+    const nextX = midX - applied * (prev.midX - t.x)
+    const nextY = midY - applied * (prev.midY - t.y)
+    const next = win.d3.zoomIdentity.translate(nextX, nextY).scale(k)
+    svg.__zoom = next
+    const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+    if (root) root.setAttribute('transform', next.toString())
   }
 
   function smiteSetInteracting(win, smite, on) {
@@ -2427,12 +2507,6 @@
     const prev = utils.deepClone(state.root.data)
     const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : []
     const plan = planSmiteCommit(prev, mercy.marks)
-    const placed = []
-    for (const scar of plan.scars) {
-      const point = smiteScarPoint(doc, win, scar.uid)
-      if (!point) continue
-      placed.push({ ...scar, x: point.x, y: point.y })
-    }
     doc.body.classList.remove('v2-branch-drag', 'v2-cancel', 'v2-dock-target')
     win.__logyqHoldArming = false
     win.__logyqHoldDragSession = false
@@ -2459,7 +2533,7 @@
     try { bridge.notifyChange?.() } catch (_error) {}
     smite.mercy = null
     clearSmiteClocks(doc)
-    mountSmiteScars(doc, win, smite, placed)
+    clearSmiteScars(doc, smite)
     try { win.navigator.vibrate?.(18) } catch (_error) {}
   }
 
@@ -2539,6 +2613,7 @@
   }
 
   function paintSmiteClocks(doc, marks, fraction) {
+    const clockRoots = new Set(smiteClockRoots(bridge.core?.state?.root?.data, marks))
     const nodes = doc.querySelectorAll('svg#canvas g.node')
     nodes.forEach((node) => {
       const uid = nodeUid(node)
@@ -2555,10 +2630,6 @@
       const face = smiteFace(node)
       if (!face) return
       const svg = 'http://www.w3.org/2000/svg'
-      if (clock && clock.localName !== 'path') {
-        clock.remove()
-        clock = null
-      }
       const rxAttr = parseFloat(face.getAttribute('rx'))
       const ryAttr = parseFloat(face.getAttribute('ry'))
       const rx = rxAttr > 0 ? rxAttr : 10
@@ -2567,11 +2638,26 @@
       const y = parseFloat(face.getAttribute('y')) || 0
       const w = parseFloat(face.getAttribute('width')) || 0
       const h = parseFloat(face.getAttribute('height')) || 0
+      const phase = smiteLinePhase(fraction, w, h, rx, ry)
+      const heat = smiteHeat(phase, mark)
+      const isClock = clockRoots.has(uid)
+      smitePaintCard(node, heat, rx, ry)
+      node.dataset.smitePhase = phase
+      node.style.setProperty('--smite-ink', heat.stroke)
+      if (!isClock) {
+        clock?.remove()
+        node.querySelector('rect.logyq-smite-glow')?.remove()
+        return
+      }
       const d = smiteClockPath(x, y, w, h, rx, ry)
       if (!d) {
         clock?.remove()
-        smiteRestoreCard(node)
+        node.querySelector('rect.logyq-smite-glow')?.remove()
         return
+      }
+      if (clock && clock.localName !== 'path') {
+        clock.remove()
+        clock = null
       }
       if (!clock) {
         clock = doc.createElementNS(svg, 'path')
@@ -2583,18 +2669,13 @@
         clock.setAttribute('pathLength', '100')
         node.appendChild(clock)
       }
-      const phase = smiteLinePhase(fraction, w, h, rx, ry)
-      const heat = smiteHeat(phase, mark)
-      const gap = 100 * (1 - (Number(fraction) > 0 ? Math.min(1, Number(fraction)) : 0))
+      const dash = smiteLineDash(fraction)
       clock.setAttribute('d', d)
       clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}${phase === 'glow' ? ' is-glow' : ''}`)
       clock.setAttribute('stroke', heat.stroke)
-      clock.setAttribute('stroke-dasharray', '100')
-      clock.setAttribute('stroke-dashoffset', String(gap))
-      smitePaintCard(node, heat, rx, ry)
+      clock.setAttribute('stroke-dasharray', dash.array)
+      clock.setAttribute('stroke-dashoffset', String(dash.offset))
       smitePaintGlow(node, heat, rx, ry)
-      node.dataset.smitePhase = phase
-      node.style.setProperty('--smite-ink', heat.stroke)
     })
   }
 
@@ -2808,7 +2889,9 @@
     preview.gestures.smiteRefillMs = smiteRefillMs
     preview.gestures.planSmiteCommit = planSmiteCommit
     preview.gestures.smiteClockPath = smiteClockPath
+    preview.gestures.smiteLineDash = smiteLineDash
     preview.gestures.smiteLinePhase = smiteLinePhase
+    preview.gestures.smiteClockRoots = smiteClockRoots
     preview.gestures.smiteHeat = smiteHeat
     preview.gestures.smiteScarOpacity = smiteScarOpacity
     preview.gestures.smiteScarBlocked = smiteScarBlocked

@@ -2179,34 +2179,63 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   async function names() {
     return page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name))
   }
+  async function heats() {
+    return page.evaluate(() => Array.from(document.querySelectorAll('svg#canvas g.node')).filter((node) => node.dataset.smiteHeat === '1').map((node) => {
+      const wash = node.querySelector('rect.logyq-smite-wash')
+      return {
+        name: node.__data__?.data?.name ?? null,
+        phase: node.dataset.smitePhase || '',
+        clock: !!node.querySelector('path.logyq-smite-clock'),
+        wash: wash?.getAttribute('fill') || '',
+        washOpacity: Number(wash?.getAttribute('fill-opacity')),
+        glow: node.querySelector('rect.logyq-smite-glow') ? Number(node.querySelector('rect.logyq-smite-glow').getAttribute('fill-opacity')) : 0,
+      }
+    }))
+  }
+  async function zoomK() {
+    return page.evaluate(() => window.d3.zoomTransform(document.getElementById('canvas')).k)
+  }
 
   const beforePinch = await names()
-  await touch('pointerdown', 30, 220, 11)
-  await touch('pointerdown', 180, 360, 12)
-  await touch('pointermove', 30, 280, 11)
-  await touch('pointermove', 80, 470, 12)
-  await touch('pointerup', 80, 470, 12)
-  await touch('pointerup', 30, 280, 11)
+  const k0 = await zoomK()
+  await touch('pointerdown', 40, 300, 11)
+  await touch('pointerdown', 200, 300, 12)
+  await touch('pointermove', 40, 420, 11)
+  const kParked = await zoomK()
+  assert.ok(Math.abs(kParked - k0) < 0.02, 'a parked finger does not zoom')
+  await touch('pointermove', 180, 300, 12)
+  const kArmed = await zoomK()
+  assert.ok(Math.abs(kArmed - k0) < 0.02, 'becoming a pinch does not apply the earlier one-finger slide')
+  await touch('pointermove', 40, 460, 11)
+  await touch('pointermove', 120, 300, 12)
+  const kPinch = await zoomK()
+  assert.ok(Math.abs(kPinch - k0) > 0.01, 'two moving fingers pinch the map')
+  await touch('pointerup', 120, 300, 12)
+  await touch('pointerup', 40, 460, 11)
+  assert.equal(await page.evaluate(() => window.__logyqSuppressZoom), false)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
   assert.deepEqual(await clocks(), [])
   assert.deepEqual(await names(), beforePinch)
 
   await settle()
   const root = await center('Root')
+  const kBeforeCast = await zoomK()
   await park('top', 21)
   await touch('pointerdown', root.x, root.y, 22, root.uid)
   await touch('pointermove', root.x, root.y + 80, 22, root.uid)
+  const kDuringCast = await zoomK()
+  assert.ok(Math.abs(kDuringCast - kBeforeCast) < 0.02, 'thumb park plus a swipe does not zoom')
   let armed = await clocks()
   assert.deepEqual(armed.map((clock) => clock.name), ['Root'])
   assert.equal(armed[0].red, true)
   assert.equal(armed[0].dash, '100')
   assert.equal(armed[0].offset, 0)
-  assert.equal(armed[0].phase, 'full')
-  assert.equal(armed[0].stroke, '#dc2626')
+  assert.equal(armed[0].phase, 'veil')
+  assert.equal(armed[0].stroke, '#fecaca')
   assert.equal(armed[0].glow, 0)
   assert.ok(armed[0].faceFill === '#2563eb' || armed[0].faceFill === 'rgb(37, 99, 235)', 'paint stays on the card')
-  assert.equal(armed[0].wash, '#ef4444')
-  assert.ok(armed[0].washOpacity > 0 && armed[0].washOpacity <= 0.3)
+  assert.equal(armed[0].wash, '#fecaca')
+  assert.ok(armed[0].washOpacity >= 0.2 && armed[0].washOpacity < 0.3)
   assert.equal(armed[0].text, '')
   const noon = await page.evaluate(() => {
     const clock = document.querySelector('path.logyq-smite-clock')
@@ -2225,26 +2254,27 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
       matches: clock.getAttribute('d') === window.LOGYQPreview.gestures.smiteClockPath(x, y, w, h, rx, ry),
       dx: Math.abs(start.x - (x + w / 2)),
       dy: Math.abs(start.y - y),
-      clockwise: step.x > start.x,
+      counterClockwise: step.x < start.x,
     }
   })
   assert.equal(noon.matches, true)
   assert.ok(noon.dx < 1 && noon.dy < 1, 'live line starts at the top center of the card')
-  assert.equal(noon.clockwise, true)
+  assert.equal(noon.counterClockwise, true)
   const half = await page.evaluate(async () => {
     const svgNS = 'http://www.w3.org/2000/svg'
     const svg = document.createElementNS(svgNS, 'svg')
     svg.setAttribute('width', '200')
     svg.setAttribute('height', '120')
     const path = document.createElementNS(svgNS, 'path')
+    const dash = window.LOGYQPreview.gestures.smiteLineDash(0.5)
     path.setAttribute('d', window.LOGYQPreview.gestures.smiteClockPath(20, 20, 160, 80, 10, 10))
     path.setAttribute('fill', 'none')
     path.setAttribute('stroke', '#dc2626')
     path.setAttribute('stroke-width', '8')
     path.setAttribute('stroke-linecap', 'butt')
     path.setAttribute('pathLength', '100')
-    path.setAttribute('stroke-dasharray', '100')
-    path.setAttribute('stroke-dashoffset', '50')
+    path.setAttribute('stroke-dasharray', dash.array)
+    path.setAttribute('stroke-dashoffset', String(dash.offset))
     svg.appendChild(path)
     const xml = new XMLSerializer().serializeToString(svg)
     const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
@@ -2270,9 +2300,9 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     }
   })
   assert.equal(half.noon, true, 'half ring is still anchored at 12')
-  assert.equal(half.towardThree, true, 'remaining stroke runs clockwise from 12')
+  assert.equal(half.towardThree, true, 'the remaining stroke includes the closing top')
   assert.equal(half.right, true)
-  assert.equal(half.towardNine, false)
+  assert.equal(half.towardNine, false, 'the opening top toward the left has already been eaten')
   assert.equal(half.left, false)
   await touch('pointerup', root.x, root.y + 80, 22, root.uid)
   await touch('pointerup', 16, 120, 21)
@@ -2286,7 +2316,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(late[0].stroke, '#ff2d2d')
   assert.ok(late[0].glow > 0.5, 'late mercy glows from behind the card')
   assert.ok(late[0].faceFill === '#2563eb' || late[0].faceFill === 'rgb(37, 99, 235)')
-  assert.ok(late[0].washOpacity <= 0.3)
+  assert.ok(late[0].washOpacity > 0.6, 'the card wash intensifies near the end')
   const cycle = async (pointerId) => {
     const point = await center('Root')
     await touch('pointerdown', point.x, point.y, pointerId, point.uid)
@@ -2332,10 +2362,10 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   const bankArmed = await clocks()
   assert.deepEqual(bankArmed.map((clock) => clock.name), ['B'])
   assert.equal(bankArmed[0].amber, true)
-  assert.equal(bankArmed[0].stroke, '#d97706')
-  assert.equal(bankArmed[0].phase, 'full')
-  assert.equal(bankArmed[0].wash, '#f59e0b')
-  assert.ok(bankArmed[0].washOpacity > 0 && bankArmed[0].washOpacity <= 0.3)
+  assert.equal(bankArmed[0].stroke, '#fde68a')
+  assert.equal(bankArmed[0].phase, 'veil')
+  assert.equal(bankArmed[0].wash, '#fde68a')
+  assert.ok(bankArmed[0].washOpacity >= 0.2 && bankArmed[0].washOpacity < 0.3)
   await touch('pointerup', leaf.x - 80, leaf.y, 32, leaf.uid)
   await touch('pointerup', 16, 400, 31)
   const triggerB = await center('B')
@@ -2353,17 +2383,22 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await park('middle', 41)
   await touch('pointerdown', card.x, card.y, 42, card.uid)
   await touch('pointermove', card.x, card.y + 84, 42, card.uid)
-  const family = await clocks()
-  assert.deepEqual(family.map((clock) => clock.name).sort(), ['', 'A', 'A1'])
-  assert.ok(family.every((clock) => clock.red && clock.dash === '100' && clock.offset === 0 && clock.phase === 'full' && clock.stroke === '#dc2626' && clock.wash === '#ef4444'))
+  const family = await heats()
+  assert.deepEqual(family.map((card) => card.name).sort(), ['', 'A', 'A1'])
+  assert.deepEqual(family.filter((card) => card.clock).map((card) => card.name), ['A'])
+  assert.ok(family.every((card) => card.phase === 'veil' && card.wash === '#fecaca' && card.glow === 0))
+  assert.equal((await clocks()).length, 1)
+  assert.equal((await clocks())[0].name, 'A')
   await touch('pointerup', card.x, card.y + 84, 42, card.uid)
   await touch('pointerup', 16, 422, 41)
   const child = await center('A1')
   await touch('pointerdown', child.x, child.y, 43, child.uid)
   await touch('pointerup', child.x, child.y, 43, child.uid)
-  const toggled = await clocks()
-  assert.equal(toggled.find((clock) => clock.name === 'A1')?.amber, true)
-  assert.equal(toggled.find((clock) => clock.name === 'A')?.red, true)
+  const toggled = await heats()
+  assert.equal(toggled.find((card) => card.name === 'A1')?.clock, false)
+  assert.equal(toggled.find((card) => card.name === 'A1')?.wash, '#fde68a')
+  assert.equal(toggled.find((card) => card.name === 'A')?.clock, true)
+  assert.equal(toggled.find((card) => card.name === 'A')?.wash, '#fecaca')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
   const again = await center('A')
   await touch('pointerdown', again.x, again.y, 44, again.uid)
@@ -2371,54 +2406,11 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerup', again.x, again.y + 76, 44, again.uid)
   assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['A1'])
   assert.deepEqual((await names()).slice().sort(), ['B', 'Root'])
-  const scarNames = await page.evaluate(() => Array.from(document.querySelectorAll('.logyq-smite-scar')).map((el) => el.dataset.name))
-  assert.deepEqual(scarNames.slice().sort(), ['', 'A'])
-  const scarHit = await page.evaluate(() => {
-    const button = Array.from(document.querySelectorAll('.logyq-smite-scar')).find((el) => el.dataset.name === 'A')
-    const face = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Root').querySelector('rect:not(.grabzone)').getBoundingClientRect()
-    button.style.left = `${(face.left + face.right) / 2}px`
-    button.style.top = `${(face.top + face.bottom) / 2}px`
-    window.LOGYQPreview.gestures.syncSmiteScars()
-    const covered = button.classList.contains('is-covered') && button.style.pointerEvents === 'none'
-    const faces = Array.from(document.querySelectorAll('g.node rect:not(.grabzone)')).map((el) => el.getBoundingClientRect())
-    let spot = null
-    for (let y = 70; y < window.innerHeight - 24 && !spot; y += 22) {
-      for (let x = 8; x < 70; x += 14) {
-        if (!faces.some((rect) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)) {
-          spot = { x, y }
-          break
-        }
-      }
-    }
-    button.style.left = `${spot.x}px`
-    button.style.top = `${spot.y}px`
-    window.LOGYQPreview.gestures.syncSmiteScars()
-    const open = !button.classList.contains('is-covered') && button.style.pointerEvents === 'auto' && Number(button.style.opacity) === 1
-    const blank = Array.from(document.querySelectorAll('.logyq-smite-scar')).find((el) => el.dataset.name !== 'A')
-    blank._smiteBorn = (performance.now() || Date.now()) - 20000
-    window.LOGYQPreview.gestures.syncSmiteScars()
-    return { covered, open, blankGone: !blank.isConnected, aLive: button.isConnected }
-  })
-  assert.equal(scarHit.covered, true)
-  assert.equal(scarHit.open, true)
-  assert.equal(scarHit.blankGone, true)
-  assert.equal(scarHit.aLive, true)
-  await page.evaluate(() => {
-    const button = Array.from(document.querySelectorAll('.logyq-smite-scar')).find((el) => el.dataset.name === 'A')
-    const fire = () => button.dispatchEvent(new PointerEvent('pointerup', {
-      bubbles: true,
-      cancelable: true,
-      pointerType: 'touch',
-      pointerId: 45,
-    }))
-    fire()
-    fire()
-  })
-  await page.waitForFunction(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A'))
-  await page.locator('[data-tool="undo"]').click()
-  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A'))
   assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
-  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['A1'])
+  await page.locator('[data-tool="undo"]').click()
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A'))
+  assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), [])
 
   assert.deepEqual(errors, [])
   await context.close()
