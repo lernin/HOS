@@ -143,6 +143,40 @@
     if (lifted.length > 1) root.children = (root.children || []).concat(lifted.slice(1))
     return { tree: root, bank, scars }
   }
+
+  function smiteNum(value) {
+    return String(Math.round((Number(value) || 0) * 1000) / 1000)
+  }
+
+  // Clockwise outline that begins at 12 o'clock (top center), not the top-left
+  // corner a raw <rect> stroke uses. The dash then retracts back toward 12.
+  function smiteClockPath(x, y, width, height, rx = 0, ry = 0) {
+    const w = Number(width) || 0
+    const h = Number(height) || 0
+    if (w <= 0 || h <= 0) return ''
+    const left = Number(x) || 0
+    const top = Number(y) || 0
+    const right = left + w
+    const bottom = top + h
+    const noonX = left + w / 2
+    const capX = Math.min(Math.max(0, Number(rx) || 0), w / 2)
+    const capY = Math.min(Math.max(0, Number(ry) || Number(rx) || 0), h / 2)
+    if (capX <= 0 || capY <= 0) {
+      return `M ${smiteNum(noonX)} ${smiteNum(top)} H ${smiteNum(right)} V ${smiteNum(bottom)} H ${smiteNum(left)} V ${smiteNum(top)} H ${smiteNum(noonX)} Z`
+    }
+    return [
+      `M ${smiteNum(noonX)} ${smiteNum(top)}`,
+      `H ${smiteNum(right - capX)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(right)} ${smiteNum(top + capY)}`,
+      `V ${smiteNum(bottom - capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(right - capX)} ${smiteNum(bottom)}`,
+      `H ${smiteNum(left + capX)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(left)} ${smiteNum(bottom - capY)}`,
+      `V ${smiteNum(top + capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(left + capX)} ${smiteNum(top)}`,
+      `H ${smiteNum(noonX)} Z`,
+    ].join(' ')
+  }
   // SMITE_PURE_END
 
   function bindV162Gestures() {
@@ -1700,19 +1734,32 @@
       const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-clock)')
       if (!face) return
       const svg = 'http://www.w3.org/2000/svg'
+      if (clock && clock.localName !== 'path') {
+        clock.remove()
+        clock = null
+      }
       if (!clock) {
-        clock = doc.createElementNS(svg, 'rect')
+        clock = doc.createElementNS(svg, 'path')
         clock.setAttribute('class', 'logyq-smite-clock')
         clock.setAttribute('fill', 'none')
         clock.setAttribute('stroke-width', '3')
         clock.setAttribute('stroke-linecap', 'round')
+        clock.setAttribute('stroke-linejoin', 'round')
         clock.setAttribute('pointer-events', 'none')
         clock.setAttribute('pathLength', '100')
         node.appendChild(clock)
       }
-      for (const attr of ['x', 'y', 'width', 'height', 'rx', 'ry']) {
-        if (face.hasAttribute(attr)) clock.setAttribute(attr, face.getAttribute(attr))
-      }
+      const rx = parseFloat(face.getAttribute('rx')) || 0
+      const d = smiteClockPath(
+        parseFloat(face.getAttribute('x')) || 0,
+        parseFloat(face.getAttribute('y')) || 0,
+        parseFloat(face.getAttribute('width')) || 0,
+        parseFloat(face.getAttribute('height')) || 0,
+        rx,
+        parseFloat(face.getAttribute('ry')) || rx,
+      )
+      if (!d) return
+      clock.setAttribute('d', d)
       clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}`)
       clock.setAttribute('stroke', mark === 'amber' ? '#d97706' : '#dc2626')
       const gap = 100 * (1 - (Number(fraction) || 0))
@@ -1741,7 +1788,7 @@
   }
 
   function clearSmiteClocks(doc) {
-    doc.querySelectorAll('svg#canvas rect.logyq-smite-clock').forEach((clock) => clock.remove())
+    doc.querySelectorAll('svg#canvas .logyq-smite-clock').forEach((clock) => clock.remove())
   }
 
   function clearSmiteScars(doc, smite) {
@@ -1872,4 +1919,5 @@
     preview.gestures.smiteRingFraction = smiteRingFraction
     preview.gestures.smiteRefillMs = smiteRefillMs
     preview.gestures.planSmiteCommit = planSmiteCommit
+    preview.gestures.smiteClockPath = smiteClockPath
   }

@@ -93,9 +93,9 @@
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
         body.logyq-mobile-v162 svg#canvas g.node,body.logyq-mobile-v162 svg#canvas g.node *{pointer-events:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-clock{fill:none!important;stroke-width:3px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;vector-effect:non-scaling-stroke}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-clock.logyq-smite-red{stroke:#dc2626!important;filter:drop-shadow(0 0 6px rgba(239,68,68,.55))!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-clock.logyq-smite-amber{stroke:#d97706!important;filter:drop-shadow(0 0 5px rgba(217,119,6,.42))!important}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red{stroke:#dc2626!important;filter:drop-shadow(0 0 6px rgba(239,68,68,.55))!important}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{stroke:#d97706!important;filter:drop-shadow(0 0 5px rgba(217,119,6,.42))!important}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation}
         body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node *,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>text{pointer-events:none!important}
         #logyq-v162-action{position:fixed;z-index:3950;display:none;place-items:center;width:40px;height:40px;padding:0;border:2px solid #fff;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 7px 20px rgba(15,23,42,.26);font:800 10px/1 system-ui;touch-action:none}

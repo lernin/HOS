@@ -1497,7 +1497,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath };`)()
 }
 
 function smiteSampleTree() {
@@ -1555,6 +1555,14 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.equal(smite.smiteRefillMs(15000), 15000)
   assert.equal(smite.smiteRefillMs(14500), 15000)
   assert.equal(smite.smiteRefillMs(1000), 2000)
+
+  const sharp = smite.smiteClockPath(0, 0, 100, 40, 0, 0)
+  assert.equal(sharp, 'M 50 0 H 100 V 40 H 0 V 0 H 50 Z')
+  const round = smite.smiteClockPath(10, 20, 140, 60, 8, 8)
+  assert.ok(round.startsWith('M 80 20 '), 'clock path starts at 12 o’clock')
+  assert.ok(round.includes('A 8 8 0 0 1 150 28'), 'from 12 the snake moves clockwise toward 3')
+  assert.equal(smite.smiteClockPath(0, 0, 0, 40), '')
+  assert.ok(smite.smiteClockPath(0, 0, 10, 10, 40, 40).includes('A 5 5'))
 })
 
 test('smite commit kills red, banks amber, and climbs the cards that stay', () => {
@@ -1614,7 +1622,7 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   assert.match(styles, /logyq-smite-red/)
   assert.match(styles, /logyq-smite-amber/)
   assert.match(styles, /logyq-smite-scar/)
-  const clock = styles.slice(styles.indexOf('rect.logyq-smite-clock'), styles.indexOf('.logyq-smite-scar'))
+  const clock = styles.slice(styles.indexOf('path.logyq-smite-clock'), styles.indexOf('.logyq-smite-scar'))
   assert.doesNotMatch(clock, /#22c55e/)
   assert.doesNotMatch(clock, /stroke-dasharray:\s*5\s+4/)
   assert.doesNotMatch(v162, /Sent subtree to Word Dock/)

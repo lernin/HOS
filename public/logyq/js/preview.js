@@ -239,9 +239,9 @@
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
         body.logyq-mobile-v162 svg#canvas g.node,body.logyq-mobile-v162 svg#canvas g.node *{pointer-events:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-clock{fill:none!important;stroke-width:3px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;vector-effect:non-scaling-stroke}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-clock.logyq-smite-red{stroke:#dc2626!important;filter:drop-shadow(0 0 6px rgba(239,68,68,.55))!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-clock.logyq-smite-amber{stroke:#d97706!important;filter:drop-shadow(0 0 5px rgba(217,119,6,.42))!important}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red{stroke:#dc2626!important;filter:drop-shadow(0 0 6px rgba(239,68,68,.55))!important}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{stroke:#d97706!important;filter:drop-shadow(0 0 5px rgba(217,119,6,.42))!important}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation}
         body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node *,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>text{pointer-events:none!important}
         #logyq-v162-action{position:fixed;z-index:3950;display:none;place-items:center;width:40px;height:40px;padding:0;border:2px solid #fff;border-radius:50%;background:#16a34a;color:#fff;box-shadow:0 7px 20px rgba(15,23,42,.26);font:800 10px/1 system-ui;touch-action:none}
@@ -787,6 +787,40 @@
     const root = lifted[0]
     if (lifted.length > 1) root.children = (root.children || []).concat(lifted.slice(1))
     return { tree: root, bank, scars }
+  }
+
+  function smiteNum(value) {
+    return String(Math.round((Number(value) || 0) * 1000) / 1000)
+  }
+
+  // Clockwise outline that begins at 12 o'clock (top center), not the top-left
+  // corner a raw <rect> stroke uses. The dash then retracts back toward 12.
+  function smiteClockPath(x, y, width, height, rx = 0, ry = 0) {
+    const w = Number(width) || 0
+    const h = Number(height) || 0
+    if (w <= 0 || h <= 0) return ''
+    const left = Number(x) || 0
+    const top = Number(y) || 0
+    const right = left + w
+    const bottom = top + h
+    const noonX = left + w / 2
+    const capX = Math.min(Math.max(0, Number(rx) || 0), w / 2)
+    const capY = Math.min(Math.max(0, Number(ry) || Number(rx) || 0), h / 2)
+    if (capX <= 0 || capY <= 0) {
+      return `M ${smiteNum(noonX)} ${smiteNum(top)} H ${smiteNum(right)} V ${smiteNum(bottom)} H ${smiteNum(left)} V ${smiteNum(top)} H ${smiteNum(noonX)} Z`
+    }
+    return [
+      `M ${smiteNum(noonX)} ${smiteNum(top)}`,
+      `H ${smiteNum(right - capX)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(right)} ${smiteNum(top + capY)}`,
+      `V ${smiteNum(bottom - capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(right - capX)} ${smiteNum(bottom)}`,
+      `H ${smiteNum(left + capX)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(left)} ${smiteNum(bottom - capY)}`,
+      `V ${smiteNum(top + capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(left + capX)} ${smiteNum(top)}`,
+      `H ${smiteNum(noonX)} Z`,
+    ].join(' ')
   }
   // SMITE_PURE_END
 
@@ -2345,19 +2379,32 @@
       const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-clock)')
       if (!face) return
       const svg = 'http://www.w3.org/2000/svg'
+      if (clock && clock.localName !== 'path') {
+        clock.remove()
+        clock = null
+      }
       if (!clock) {
-        clock = doc.createElementNS(svg, 'rect')
+        clock = doc.createElementNS(svg, 'path')
         clock.setAttribute('class', 'logyq-smite-clock')
         clock.setAttribute('fill', 'none')
         clock.setAttribute('stroke-width', '3')
         clock.setAttribute('stroke-linecap', 'round')
+        clock.setAttribute('stroke-linejoin', 'round')
         clock.setAttribute('pointer-events', 'none')
         clock.setAttribute('pathLength', '100')
         node.appendChild(clock)
       }
-      for (const attr of ['x', 'y', 'width', 'height', 'rx', 'ry']) {
-        if (face.hasAttribute(attr)) clock.setAttribute(attr, face.getAttribute(attr))
-      }
+      const rx = parseFloat(face.getAttribute('rx')) || 0
+      const d = smiteClockPath(
+        parseFloat(face.getAttribute('x')) || 0,
+        parseFloat(face.getAttribute('y')) || 0,
+        parseFloat(face.getAttribute('width')) || 0,
+        parseFloat(face.getAttribute('height')) || 0,
+        rx,
+        parseFloat(face.getAttribute('ry')) || rx,
+      )
+      if (!d) return
+      clock.setAttribute('d', d)
       clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}`)
       clock.setAttribute('stroke', mark === 'amber' ? '#d97706' : '#dc2626')
       const gap = 100 * (1 - (Number(fraction) || 0))
@@ -2386,7 +2433,7 @@
   }
 
   function clearSmiteClocks(doc) {
-    doc.querySelectorAll('svg#canvas rect.logyq-smite-clock').forEach((clock) => clock.remove())
+    doc.querySelectorAll('svg#canvas .logyq-smite-clock').forEach((clock) => clock.remove())
   }
 
   function clearSmiteScars(doc, smite) {
@@ -2517,6 +2564,7 @@
     preview.gestures.smiteRingFraction = smiteRingFraction
     preview.gestures.smiteRefillMs = smiteRefillMs
     preview.gestures.planSmiteCommit = planSmiteCommit
+    preview.gestures.smiteClockPath = smiteClockPath
   }
   function setSaveState(state) {
     const text = state === 'saving' ? 'Saving' : state === 'offline' ? 'Offline' : 'Saved'
