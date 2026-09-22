@@ -903,7 +903,9 @@
     return roots
   }
 
-  // A second cast that touches any node already in a live window is ignored.
+  // Live windows are branches of the one open map, not separate documents.
+  // Sibling branches that share no cards each keep a timer. A cast that
+  // touches a card already in a live branch is ignored.
   function smiteCastOverlaps(sets, ids) {
     const taken = new Set()
     for (const set of sets || []) {
@@ -2232,6 +2234,7 @@
       pinched: false,
       pinch: null,
       mercy: null,
+      // One entry per doomed branch of this map.
       mercies: [],
       scars: [],
       raf: 0,

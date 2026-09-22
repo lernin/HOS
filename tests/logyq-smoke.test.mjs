@@ -2434,6 +2434,11 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(parallel.find((card) => card.name === 'A1')?.clock, false)
   assert.equal(parallel.find((card) => card.name === 'A1')?.wash, '#f6dfb6')
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
+  assert.equal(await page.evaluate(({ a, b }) => {
+    const root = window.LOGYQBridge.core.state.root
+    const owns = (uid) => root.descendants().some((node) => node.data._uid === uid)
+    return root.data.name === 'Root' && owns(a) && owns(b)
+  }, { a: branch.uid, b: side.uid }), true, 'both mercy windows are branches of this one map')
   await page.evaluate((uid) => {
     const mercy = window.LOGYQPreview.gestures.smite.mercies.find((item) => item.marks.has(uid))
     mercy.remaining = 1600
