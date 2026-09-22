@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { timerColor, timerDash, timerNextFate, timerPath, timerProgress, timerStrokeOn, TIMER_AMBER, TIMER_RED } from '../public/timer/timer.js'
+import { timerArmState, timerColor, timerDash, timerNextFate, timerPath, timerProgress, timerStrokeOn, TIMER_AMBER, TIMER_RED } from '../public/timer/timer.js'
 
 const d = timerPath(18, 18, 244, 148, 28, 28)
 
@@ -15,7 +15,7 @@ test('the path leaves 12 toward the left and only sweeps counter-clockwise', () 
 test('one dash plus one gap equals pathLength, and progress cannot leave 0..1', () => {
   const length = 800
   const full = timerDash(1, length)
-  assert.equal(full.array, '800')
+  assert.equal(full.array, '800 0')
   assert.equal(full.offset, 0)
 
   for (const progress of [0.92, 0.75, 0.5, 0.25, 0.08]) {
@@ -26,7 +26,7 @@ test('one dash plus one gap equals pathLength, and progress cannot leave 0..1', 
     assert.equal(dash.array.split(' ').length, 2)
   }
 
-  assert.deepEqual(timerDash(1.4, length), { array: '800', offset: 0 })
+  assert.deepEqual(timerDash(1.4, length), { array: '800 0', offset: 0 })
   assert.deepEqual(timerDash(-0.2, length), { array: '0 1', offset: 0 })
   assert.deepEqual(timerDash(0, length), { array: '0 1', offset: 0 })
 })
@@ -71,4 +71,20 @@ test('taps cycle red, then amber, then off', () => {
   assert.equal(timerColor('amber'), TIMER_AMBER)
   assert.equal(TIMER_RED, '#ff0000')
   assert.equal(TIMER_AMBER, '#ffa100')
+})
+
+test('arming amber during a red drain starts a new full hold', () => {
+  const draining = { fate: 'red', armedAt: 0 }
+  assert.ok(timerProgress(9000) < 1)
+  const amber = timerArmState(draining.fate, 9000)
+  assert.equal(amber.fate, 'amber')
+  assert.equal(amber.armedAt, 9000)
+  assert.equal(amber.progress, 1)
+  assert.equal(timerProgress(9000 + 2500 - amber.armedAt), 1)
+  assert.equal(timerProgress(9000 + 3000 - amber.armedAt), 1)
+  assert.ok(timerProgress(9000 + 3001 - amber.armedAt) < 1)
+  const off = timerArmState(amber.fate, 20000)
+  assert.deepEqual(off, { fate: 'idle', armedAt: 0, progress: 0 })
+  const red = timerArmState(off.fate, 20000)
+  assert.deepEqual(red, { fate: 'red', armedAt: 20000, progress: 1 })
 })

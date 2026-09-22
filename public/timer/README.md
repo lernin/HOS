@@ -14,7 +14,7 @@ One clock per arm: `elapsed` since that tap.
 - After that, progress is the drain still left divided by 12 seconds.
 - At 0 the stroke clears and the card is idle again.
 - Red is `#ff0000`. Amber is `#ffa100`.
-- Switching to amber restarts that clock from a full ring. It does not continue the red drain.
+- Switching to amber throws away the stroke that was already draining and mounts a new full ring. The 3 second hold starts at that tap. It does not keep the red elapsed time.
 
 ## Path direction
 
@@ -35,7 +35,7 @@ The visible ink is the **suffix** of that path (the part that still ends at 12).
 - `progress` is clamped to `0..1` (1 = full ring, 0 = empty).
 - While it drains, `stroke-dasharray` is `visible gap` where `visible = pathLength * progress` and `gap = pathLength - visible`. Those two numbers **sum to `pathLength` once**, so the pattern is exactly one dash and one gap. It has no room to repeat on the same path.
 - `stroke-dashoffset` is `visible` (the remaining length). That starts the pattern on the gap, which keeps the ink as one suffix. It does not use a second path or a second offset.
-- A full ring is a single dash equal to `pathLength` and offset `0` — still one pattern, not two.
+- A full ring is one dash equal to the measured length and a zero gap, offset `0`. That is still one pattern. A retarget mounts a new path with that full dash instead of rewriting the gap already on screen.
 - The SVG `pathLength` attribute is set **once** to the measured length and never animated. Dash values use that same length.
 - There is no CSS animation, no `animation-iteration`, and no `vector-effect`.
 - `requestAnimationFrame` is the only clock. There is no CSS animation duration and no CSS pixel dash. At 0 it clears the stroke and returns to idle.
