@@ -25,15 +25,7 @@
         e.dataTransfer.effectAllowed = 'copyMove';
 });
 
-chip.addEventListener('dragend',()=>{
-elements.caretDot.style('opacity', 0);
-d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false);
-
-  state.chipDrag.active = false;
-  state.chipDrag.words = [];
-  state.chipDrag.drop = null;
-  elements.trash.classList.remove('open','over','wiggle','near');
-});
+chip.addEventListener('dragend', () => endChipDragVisuals());
 
       chip.addEventListener("contextmenu", (e) => {e.preventDefault();
         e.stopPropagation(); const sel = Array.from((state.selectedUids || new Set()).values());
@@ -196,6 +188,122 @@ function normalizeToTree(value) {
 
 
 
+
+function endChipDragVisuals() {
+  const { state, elements } = logyq
+  elements.caretDot.style('opacity', 0)
+  d3.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
+  state.chipDrag.active = false
+  state.chipDrag.words = []
+  state.chipDrag.word = null
+  state.chipDrag.drop = null
+  elements.trash.classList.remove('open', 'over', 'wiggle', 'near')
+  document.getElementById('logyq-chip-ghost')?.remove()
+  document.body.classList.remove('logyq-chip-drag')
+}
+
+// Touch and pen have no HTML5 drag. A finger that leaves the dock uses the
+// same detector drop as a mouse chip drag, then the chip leaves the bank.
+function bindChipPointerPlace() {
+  const dock = logyq.elements.Dock
+  if (!dock || dock.dataset.chipPointer === '1') return
+  dock.dataset.chipPointer = '1'
+  let session = null
+
+  const overDock = (x, y) => {
+    if (dock.classList.contains('dock-hidden')) return false
+    const style = getComputedStyle(dock)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+    const rect = dock.getBoundingClientRect()
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+  }
+
+  const placeGhost = (word, x, y) => {
+    let ghost = document.getElementById('logyq-chip-ghost')
+    if (!ghost) {
+      ghost = document.createElement('div')
+      ghost.id = 'logyq-chip-ghost'
+      ghost.className = 'chip'
+      document.body.appendChild(ghost)
+    }
+    ghost.textContent = word
+    ghost.style.position = 'fixed'
+    ghost.style.zIndex = '4000'
+    ghost.style.pointerEvents = 'none'
+    ghost.style.left = `${x}px`
+    ghost.style.top = `${y}px`
+    ghost.style.transform = 'translate(-50%, -50%)'
+    ghost.style.opacity = '0.92'
+    ghost.style.touchAction = 'none'
+  }
+
+  const hoverMap = (x, y) => {
+    const svg = logyq.elements.svg.node()
+    if (!svg) return
+    if (overDock(x, y)) {
+      logyq.state.chipDrag.drop = null
+      logyq.elements.caretDot.style('opacity', 0)
+      d3.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
+      return
+    }
+    svg.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX: x, clientY: y }))
+  }
+
+  dock.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse') return
+    if (event.button != null && event.button !== 0) return
+    const chip = event.target?.closest?.('.chip')
+    if (!chip || !dock.contains(chip)) return
+    const word = chip.textContent.trim()
+    if (!word) return
+    session = { pointerId: event.pointerId, word, x: event.clientX, y: event.clientY, dragging: false, chip }
+  })
+
+  window.addEventListener('pointermove', (event) => {
+    if (!session || event.pointerId !== session.pointerId) return
+    const moved = Math.hypot(event.clientX - session.x, event.clientY - session.y) >= 10
+    if (!session.dragging) {
+      if (!(moved && !overDock(event.clientX, event.clientY))) return
+      const selected = getSelectedChipNames()
+      const words = selected.includes(session.word) ? selected.slice() : [session.word]
+      if (!words.includes(session.word)) words.unshift(session.word)
+      logyq.state.chipDrag.active = true
+      logyq.state.chipDrag.words = words
+      logyq.state.chipDrag.word = session.word
+      logyq.state.chipDrag.drop = null
+      session.dragging = true
+      window.__logyqChipPlacing = true
+      document.body.classList.add('logyq-chip-drag')
+      try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+    }
+    event.preventDefault()
+    placeGhost(session.word, event.clientX, event.clientY)
+    hoverMap(event.clientX, event.clientY)
+  }, { passive: false })
+
+  const finishPointer = (event, commit) => {
+    if (!session || event.pointerId !== session.pointerId) return
+    const dragging = session.dragging
+    session = null
+    if (!dragging) return
+    event.preventDefault()
+    event.stopPropagation()
+    if (commit && !overDock(event.clientX, event.clientY)) {
+      hoverMap(event.clientX, event.clientY)
+      logyq.elements.svg.node()?.dispatchEvent(new DragEvent('drop', {
+        bubbles: true,
+        cancelable: true,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      }))
+    }
+    endChipDragVisuals()
+    window.setTimeout(() => { window.__logyqChipPlacing = false }, 400)
+  }
+
+  window.addEventListener('pointerup', (event) => finishPointer(event, true))
+  window.addEventListener('pointercancel', (event) => finishPointer(event, false))
+}
 
 /* ======================= CHIP DROP OVER SVG (uses detectors) ======================= */
 logyq.elements.svg.on('dragover', (event) => {
@@ -461,6 +569,8 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     logyq.treeManager.layoutAndRender(false);
   }
 });
+
+  bindChipPointerPlace()
 
   attach('wordDock', {
     clearChipSelection,

@@ -146,6 +146,7 @@ function selectSingle(uid){
 
 function onNodeMouseDown(event, d){
   const { state, config: CONFIG } = logyq
+  if (window.__logyqChipPlacing) return
   if (event.button !== 0) return;                  // left only
   if (logyq.input.isTextField(event.target)) return;
 
