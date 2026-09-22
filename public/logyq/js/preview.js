@@ -239,13 +239,15 @@
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
         body.logyq-mobile-v162 svg#canvas g.node,body.logyq-mobile-v162 svg#canvas g.node *{pointer-events:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{pointer-events:none!important}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock{pointer-events:none!important}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock.logyq-smite-red{filter:drop-shadow(0 0 4px rgba(220,38,38,.5))}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock.logyq-smite-amber{filter:drop-shadow(0 0 4px rgba(217,119,6,.42))}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock.is-alarm{filter:drop-shadow(0 0 8px rgba(255,45,45,.9))}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock.logyq-smite-amber.is-alarm{filter:drop-shadow(0 0 8px rgba(255,176,0,.85))}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock>path{fill:none!important;stroke-width:4px!important;stroke-linecap:butt;pointer-events:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash,body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red{filter:drop-shadow(0 0 4px rgba(220,38,38,.45))}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:drop-shadow(0 0 4px rgba(217,119,6,.4))}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.is-glow{stroke-width:4px!important;filter:drop-shadow(0 0 8px var(--smite-ink, #ff2d2d))}
+        body.logyq-mobile-v162 g.node[data-smite-phase="light"] text.label{filter:drop-shadow(0 0 1px var(--smite-ink, transparent))}
+        body.logyq-mobile-v162 g.node[data-smite-phase="medium"] text.label{filter:drop-shadow(0 0 2px var(--smite-ink, transparent))}
+        body.logyq-mobile-v162 g.node[data-smite-phase="dark"] text.label{filter:drop-shadow(0 0 2px var(--smite-ink, transparent))}
+        body.logyq-mobile-v162 g.node[data-smite-phase="glow"] text.label{filter:drop-shadow(0 0 4px var(--smite-ink, #ff2d2d))}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation;pointer-events:auto;transform-origin:center}
         .logyq-smite-scar.is-covered{pointer-events:none!important}
         body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node *,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>text{pointer-events:none!important}
@@ -798,96 +800,101 @@
     return String(Math.round((Number(value) || 0) * 1000) / 1000)
   }
 
-  // Straight-edge ticks only. Corners stay open so a segment never wraps the radius.
-  function smiteEdgePieces(x0, y0, x1, y1, count, gap) {
-    const n = count
-    const dx = x1 - x0
-    const dy = y1 - y0
-    const len = Math.hypot(dx, dy)
-    if (!(len > 0) || n <= 0) return Array.from({ length: Math.max(0, n) }, () => '')
-    const gaps = n - 1
-    let useGap = gap
-    if (gaps > 0 && useGap * gaps >= len * 0.45) useGap = (len * 0.45) / gaps
-    const seg = (len - useGap * gaps) / n
-    const ux = dx / len
-    const uy = dy / len
-    const out = []
-    for (let i = 0; i < n; i++) {
-      const a = i * (seg + useGap)
-      const b = a + seg
-      out.push(`M ${smiteNum(x0 + ux * a)} ${smiteNum(y0 + uy * a)} L ${smiteNum(x0 + ux * b)} ${smiteNum(y0 + uy * b)}`)
-    }
-    return out
-  }
-
-  // 4 top, 2 right, 4 bottom, 2 left. Click-off order is clockwise from 12:
-  // top (center → right), right (top → bottom), bottom (right → left),
-  // left (bottom → top), then the two top ticks just left of 12 last.
-  function smiteClockSegments(x, y, width, height, rx = 10, ry = 10) {
+  function smiteRoundCaps(width, height, rx, ry) {
     const w = Number(width) || 0
     const h = Number(height) || 0
-    if (w <= 0 || h <= 0) return []
+    const wantX = Number(rx) > 0 ? Number(rx) : 10
+    const wantY = Number(ry) > 0 ? Number(ry) : wantX
+    return {
+      w,
+      h,
+      capX: Math.min(wantX, Math.max(0, w / 2 - 1)),
+      capY: Math.min(wantY, Math.max(0, h / 2 - 1)),
+    }
+  }
+
+  function smiteQuarterArc(rx, ry) {
+    const a = Math.max(0, Number(rx) || 0)
+    const b = Math.max(0, Number(ry) || 0)
+    if (a <= 0 && b <= 0) return 0
+    if (Math.abs(a - b) < 0.01) return (Math.PI * Math.max(a, b)) / 2
+    const sum = a + b
+    const h = ((a - b) / sum) ** 2
+    return (Math.PI * sum * (1 + (3 * h) / (10 + Math.sqrt(Math.max(0, 4 - 3 * h))))) / 4
+  }
+
+  // One clockwise rounded outline. It begins at 12 o'clock. The dash keeps that
+  // end and the free tip retracts back toward 12.
+  function smiteClockPath(x, y, width, height, rx = 10, ry = 10) {
+    const { w, h, capX, capY } = smiteRoundCaps(width, height, rx, ry)
+    if (w <= 0 || h <= 0) return ''
     const left = Number(x) || 0
     const top = Number(y) || 0
     const right = left + w
     const bottom = top + h
-    const wantX = Number(rx) > 0 ? Number(rx) : 10
-    const wantY = Number(ry) > 0 ? Number(ry) : wantX
-    const capX = Math.min(wantX, Math.max(0, w / 2 - 6))
-    const capY = Math.min(wantY, Math.max(0, h / 2 - 6))
-    const topSeg = smiteEdgePieces(left + capX, top, right - capX, top, 4, 4)
-    const rightSeg = smiteEdgePieces(right, top + capY, right, bottom - capY, 2, 4)
-    const bottomSeg = smiteEdgePieces(right - capX, bottom, left + capX, bottom, 4, 4)
-    const leftSeg = smiteEdgePieces(left, bottom - capY, left, top + capY, 2, 4)
-    return [
-      topSeg[2], topSeg[3],
-      rightSeg[0], rightSeg[1],
-      bottomSeg[0], bottomSeg[1], bottomSeg[2], bottomSeg[3],
-      leftSeg[0], leftSeg[1],
-      topSeg[0], topSeg[1],
-    ]
-  }
-
-  // One segment per second of the 12s drain. The 15s buffer stays on smiteRingFraction.
-  function smiteSegmentsLit(fraction, count = 12) {
-    const n = Number(count) > 0 ? Math.round(Number(count)) : 12
-    const f = Number(fraction)
-    if (!Number.isFinite(f) || f >= 1) return n
-    if (f <= 0) return 0
-    const clicks = Math.floor((1 - f) * n + 1e-9)
-    return n - Math.min(n, Math.max(0, clicks))
-  }
-
-  // Segment color ramps inside the fate hue. The wash stays translucent so paint shows through.
-  function smiteHeat(lit, mark = 'red') {
-    const n = Math.max(0, Math.round(Number(lit) || 0))
-    const ramp = mark === 'amber'
-      ? [
-          { lit: 12, stroke: '#fcd34d', wash: '#f59e0b', washOpacity: 0.12 },
-          { lit: 10, stroke: '#fbbf24', wash: '#f59e0b', washOpacity: 0.15 },
-          { lit: 8, stroke: '#f59e0b', wash: '#d97706', washOpacity: 0.18 },
-          { lit: 7, stroke: '#d97706', wash: '#d97706', washOpacity: 0.2 },
-          { lit: 6, stroke: '#b45309', wash: '#d97706', washOpacity: 0.22 },
-          { lit: 5, stroke: '#92400e', wash: '#b45309', washOpacity: 0.24 },
-          { lit: 4, stroke: '#78350f', wash: '#b45309', washOpacity: 0.26 },
-          { lit: 2, stroke: '#451a03', wash: '#92400e', washOpacity: 0.28 },
-          { lit: 0, stroke: '#ffb000', wash: '#ffb000', washOpacity: 0.28 },
-        ]
-      : [
-          { lit: 12, stroke: '#fca5a5', wash: '#ef4444', washOpacity: 0.12 },
-          { lit: 10, stroke: '#f87171', wash: '#ef4444', washOpacity: 0.15 },
-          { lit: 8, stroke: '#ef4444', wash: '#ef4444', washOpacity: 0.18 },
-          { lit: 7, stroke: '#dc2626', wash: '#dc2626', washOpacity: 0.2 },
-          { lit: 6, stroke: '#b91c1c', wash: '#dc2626', washOpacity: 0.22 },
-          { lit: 5, stroke: '#991b1b', wash: '#b91c1c', washOpacity: 0.24 },
-          { lit: 4, stroke: '#7f1d1d', wash: '#b91c1c', washOpacity: 0.26 },
-          { lit: 2, stroke: '#450a0a', wash: '#991b1b', washOpacity: 0.28 },
-          { lit: 0, stroke: '#ff2d2d', wash: '#ff2d2d', washOpacity: 0.28 },
-        ]
-    for (const step of ramp) {
-      if (n >= step.lit) return step
+    const noonX = left + w / 2
+    if (capX <= 0 || capY <= 0) {
+      return `M ${smiteNum(noonX)} ${smiteNum(top)} H ${smiteNum(right)} V ${smiteNum(bottom)} H ${smiteNum(left)} V ${smiteNum(top)} H ${smiteNum(noonX)} Z`
     }
-    return ramp[ramp.length - 1]
+    return [
+      `M ${smiteNum(noonX)} ${smiteNum(top)}`,
+      `H ${smiteNum(right - capX)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(right)} ${smiteNum(top + capY)}`,
+      `V ${smiteNum(bottom - capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(right - capX)} ${smiteNum(bottom)}`,
+      `H ${smiteNum(left + capX)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(left)} ${smiteNum(bottom - capY)}`,
+      `V ${smiteNum(top + capY)}`,
+      `A ${smiteNum(capX)} ${smiteNum(capY)} 0 0 1 ${smiteNum(left + capX)} ${smiteNum(top)}`,
+      `H ${smiteNum(noonX)} Z`,
+    ].join(' ')
+  }
+
+  // Where the free tip sits. The stroke is the clockwise prefix from 12, so as
+  // fraction falls the tip travels back: closing top, first side, bottom, right side, opening top.
+  function smiteLinePhase(fraction, width, height, rx = 10, ry = 10) {
+    const f = Number(fraction)
+    if (!Number.isFinite(f) || f >= 1) return 'full'
+    if (f <= 0) return 'glow'
+    const { w, h, capX, capY } = smiteRoundCaps(width, height, rx, ry)
+    if (w <= 0 || h <= 0) return 'full'
+    const topHalf = Math.max(0, w / 2 - capX)
+    const side = Math.max(0, h - 2 * capY)
+    const bottom = Math.max(0, w - 2 * capX)
+    const arc = smiteQuarterArc(capX, capY)
+    const total = topHalf + arc + side + arc + bottom + arc + side + arc + topHalf
+    if (total <= 0) return 'full'
+    const tip = Math.min(1, f) * total
+    const openTop = topHalf
+    const rightEnd = openTop + arc + side
+    const bottomEnd = rightEnd + arc + bottom
+    const leftEnd = bottomEnd + arc + side
+    if (tip <= openTop) return 'glow'
+    if (tip <= rightEnd) return 'dark'
+    if (tip <= bottomEnd) return 'medium'
+    if (tip <= leftEnd) return 'light'
+    return 'full'
+  }
+
+  // Fate hue, stepped by where the line is. Wash stays translucent. Glow is behind the card.
+  function smiteHeat(phase, mark = 'red') {
+    const amber = mark === 'amber'
+    const table = amber
+      ? {
+          full: { stroke: '#d97706', wash: '#f59e0b', washOpacity: 0.1, glow: 0 },
+          light: { stroke: '#fcd34d', wash: '#fbbf24', washOpacity: 0.14, glow: 0 },
+          medium: { stroke: '#d97706', wash: '#f59e0b', washOpacity: 0.18, glow: 0 },
+          dark: { stroke: '#92400e', wash: '#b45309', washOpacity: 0.22, glow: 0 },
+          glow: { stroke: '#ffb000', wash: '#ffb000', washOpacity: 0.2, glow: 0.92 },
+        }
+      : {
+          full: { stroke: '#dc2626', wash: '#ef4444', washOpacity: 0.1, glow: 0 },
+          light: { stroke: '#fca5a5', wash: '#f87171', washOpacity: 0.14, glow: 0 },
+          medium: { stroke: '#ef4444', wash: '#ef4444', washOpacity: 0.18, glow: 0 },
+          dark: { stroke: '#991b1b', wash: '#b91c1c', washOpacity: 0.22, glow: 0 },
+          glow: { stroke: '#ff2d2d', wash: '#ff2d2d', washOpacity: 0.2, glow: 0.92 },
+        }
+    return table[phase] || table.full
   }
 
   // Full residue, then a soft ease-out. 0 means the scar is gone.
@@ -2457,12 +2464,12 @@
   }
 
   function smiteFace(node) {
-    return node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash)') || null
+    return node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)') || null
   }
 
   function smiteRestoreCard(node) {
     if (!node) return
-    node.querySelectorAll('rect.logyq-smite-wash').forEach((wash) => wash.remove())
+    node.querySelectorAll('rect.logyq-smite-wash, rect.logyq-smite-glow').forEach((layer) => layer.remove())
     node.querySelectorAll('text.label').forEach((el) => {
       el.style.fill = ''
       el.style.stroke = ''
@@ -2470,6 +2477,8 @@
       el.style.paintOrder = ''
     })
     delete node.dataset.smiteHeat
+    delete node.dataset.smitePhase
+    node.style?.removeProperty?.('--smite-ink')
   }
 
   function smitePaintCard(node, heat, rx, ry) {
@@ -2498,8 +2507,38 @@
     node.dataset.smiteHeat = '1'
   }
 
+  function smitePaintGlow(node, heat, rx, ry) {
+    const face = smiteFace(node)
+    let glow = node.querySelector('rect.logyq-smite-glow')
+    if (!face || !heat.glow) {
+      glow?.remove()
+      return
+    }
+    const doc = node.ownerDocument
+    if (!glow) {
+      glow = doc.createElementNS('http://www.w3.org/2000/svg', 'rect')
+      glow.setAttribute('class', 'logyq-smite-glow')
+      glow.setAttribute('pointer-events', 'none')
+      node.insertBefore(glow, face)
+    }
+    const x = parseFloat(face.getAttribute('x')) || 0
+    const y = parseFloat(face.getAttribute('y')) || 0
+    const w = parseFloat(face.getAttribute('width')) || 0
+    const h = parseFloat(face.getAttribute('height')) || 0
+    const pad = 8
+    glow.setAttribute('x', smiteNum(x - pad))
+    glow.setAttribute('y', smiteNum(y - pad))
+    glow.setAttribute('width', smiteNum(w + pad * 2))
+    glow.setAttribute('height', smiteNum(h + pad * 2))
+    glow.setAttribute('rx', String(rx + pad))
+    glow.setAttribute('ry', String(ry + pad))
+    glow.setAttribute('fill', heat.stroke)
+    glow.setAttribute('fill-opacity', String(heat.glow))
+    glow.setAttribute('stroke', 'none')
+    glow.style.filter = 'blur(9px)'
+  }
+
   function paintSmiteClocks(doc, marks, fraction) {
-    const lit = smiteSegmentsLit(fraction)
     const nodes = doc.querySelectorAll('svg#canvas g.node')
     nodes.forEach((node) => {
       const uid = nodeUid(node)
@@ -2516,7 +2555,7 @@
       const face = smiteFace(node)
       if (!face) return
       const svg = 'http://www.w3.org/2000/svg'
-      if (clock && clock.localName !== 'g') {
+      if (clock && clock.localName !== 'path') {
         clock.remove()
         clock = null
       }
@@ -2524,42 +2563,38 @@
       const ryAttr = parseFloat(face.getAttribute('ry'))
       const rx = rxAttr > 0 ? rxAttr : 10
       const ry = ryAttr > 0 ? ryAttr : rx
-      const paths = smiteClockSegments(
-        parseFloat(face.getAttribute('x')) || 0,
-        parseFloat(face.getAttribute('y')) || 0,
-        parseFloat(face.getAttribute('width')) || 0,
-        parseFloat(face.getAttribute('height')) || 0,
-        rx,
-        ry,
-      )
-      if (paths.length !== 12) {
+      const x = parseFloat(face.getAttribute('x')) || 0
+      const y = parseFloat(face.getAttribute('y')) || 0
+      const w = parseFloat(face.getAttribute('width')) || 0
+      const h = parseFloat(face.getAttribute('height')) || 0
+      const d = smiteClockPath(x, y, w, h, rx, ry)
+      if (!d) {
         clock?.remove()
         smiteRestoreCard(node)
         return
       }
-      if (!clock || clock.childElementCount !== 12) {
-        clock?.remove()
-        clock = doc.createElementNS(svg, 'g')
+      if (!clock) {
+        clock = doc.createElementNS(svg, 'path')
+        clock.setAttribute('fill', 'none')
+        clock.setAttribute('stroke-width', '3.5')
+        clock.setAttribute('stroke-linecap', 'round')
+        clock.setAttribute('stroke-linejoin', 'round')
         clock.setAttribute('pointer-events', 'none')
-        for (let i = 0; i < 12; i++) {
-          const path = doc.createElementNS(svg, 'path')
-          path.setAttribute('fill', 'none')
-          path.setAttribute('stroke-linecap', 'butt')
-          path.setAttribute('stroke-width', '4')
-          path.setAttribute('pointer-events', 'none')
-          clock.appendChild(path)
-        }
+        clock.setAttribute('pathLength', '100')
         node.appendChild(clock)
       }
-      const heat = smiteHeat(lit, mark)
-      clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}${lit <= 1 ? ' is-alarm' : ''}`)
-      for (let i = 0; i < 12; i++) {
-        const path = clock.children[i]
-        const on = i >= 12 - lit
-        path.setAttribute('d', paths[i])
-        path.setAttribute('stroke', on ? heat.stroke : 'none')
-      }
+      const phase = smiteLinePhase(fraction, w, h, rx, ry)
+      const heat = smiteHeat(phase, mark)
+      const gap = 100 * (1 - (Number(fraction) > 0 ? Math.min(1, Number(fraction)) : 0))
+      clock.setAttribute('d', d)
+      clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}${phase === 'glow' ? ' is-glow' : ''}`)
+      clock.setAttribute('stroke', heat.stroke)
+      clock.setAttribute('stroke-dasharray', '100')
+      clock.setAttribute('stroke-dashoffset', String(gap))
       smitePaintCard(node, heat, rx, ry)
+      smitePaintGlow(node, heat, rx, ry)
+      node.dataset.smitePhase = phase
+      node.style.setProperty('--smite-ink', heat.stroke)
     })
   }
 
@@ -2772,8 +2807,8 @@
     preview.gestures.smiteRingFraction = smiteRingFraction
     preview.gestures.smiteRefillMs = smiteRefillMs
     preview.gestures.planSmiteCommit = planSmiteCommit
-    preview.gestures.smiteClockSegments = smiteClockSegments
-    preview.gestures.smiteSegmentsLit = smiteSegmentsLit
+    preview.gestures.smiteClockPath = smiteClockPath
+    preview.gestures.smiteLinePhase = smiteLinePhase
     preview.gestures.smiteHeat = smiteHeat
     preview.gestures.smiteScarOpacity = smiteScarOpacity
     preview.gestures.smiteScarBlocked = smiteScarBlocked

@@ -2155,23 +2155,23 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     return point
   }
   async function clocks() {
-    return page.evaluate(() => Array.from(document.querySelectorAll('g.logyq-smite-clock')).map((clock) => {
-      const paths = Array.from(clock.querySelectorAll('path'))
-      const face = clock.parentElement.querySelector('rect:not(.grabzone):not(.logyq-smite-wash)')
-      const wash = clock.parentElement.querySelector('rect.logyq-smite-wash')
-      const text = clock.parentElement.querySelector('text.label')
-      const on = paths.filter((path) => path.getAttribute('stroke') && path.getAttribute('stroke') !== 'none')
+    return page.evaluate(() => Array.from(document.querySelectorAll('path.logyq-smite-clock')).map((clock) => {
+      const node = clock.parentElement
+      const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')
+      const wash = node.querySelector('rect.logyq-smite-wash')
+      const text = node.querySelector('text.label')
       return {
-        name: clock.parentElement.__data__?.data?.name ?? null,
+        name: node.__data__?.data?.name ?? null,
         red: clock.classList.contains('logyq-smite-red'),
         amber: clock.classList.contains('logyq-smite-amber'),
-        segments: paths.length,
-        lit: on.length,
-        dash: paths.some((path) => path.hasAttribute('stroke-dasharray') || path.hasAttribute('stroke-dashoffset')),
-        stroke: on[0]?.getAttribute('stroke') || null,
+        dash: clock.getAttribute('stroke-dasharray'),
+        offset: Number(clock.getAttribute('stroke-dashoffset')),
+        stroke: clock.getAttribute('stroke'),
+        phase: node.dataset.smitePhase || '',
         faceFill: face?.style?.fill || '',
         wash: wash?.getAttribute('fill') || '',
         washOpacity: Number(wash?.getAttribute('fill-opacity')),
+        glow: node.querySelector('rect.logyq-smite-glow') ? Number(node.querySelector('rect.logyq-smite-glow').getAttribute('fill-opacity')) : 0,
         text: text?.style?.fill || '',
       }
     }))
@@ -2199,17 +2199,18 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   let armed = await clocks()
   assert.deepEqual(armed.map((clock) => clock.name), ['Root'])
   assert.equal(armed[0].red, true)
-  assert.equal(armed[0].segments, 12)
-  assert.equal(armed[0].lit, 12)
-  assert.equal(armed[0].dash, false)
-  assert.equal(armed[0].stroke, '#fca5a5')
+  assert.equal(armed[0].dash, '100')
+  assert.equal(armed[0].offset, 0)
+  assert.equal(armed[0].phase, 'full')
+  assert.equal(armed[0].stroke, '#dc2626')
+  assert.equal(armed[0].glow, 0)
   assert.ok(armed[0].faceFill === '#2563eb' || armed[0].faceFill === 'rgb(37, 99, 235)', 'paint stays on the card')
   assert.equal(armed[0].wash, '#ef4444')
   assert.ok(armed[0].washOpacity > 0 && armed[0].washOpacity <= 0.3)
   assert.equal(armed[0].text, '')
   const noon = await page.evaluate(() => {
-    const clock = document.querySelector('g.logyq-smite-clock')
-    const face = clock.parentElement.querySelector('rect:not(.grabzone)')
+    const clock = document.querySelector('path.logyq-smite-clock')
+    const face = clock.parentElement.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')
     const x = parseFloat(face.getAttribute('x')) || 0
     const y = parseFloat(face.getAttribute('y')) || 0
     const w = parseFloat(face.getAttribute('width')) || 0
@@ -2218,79 +2219,74 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     const ryAttr = parseFloat(face.getAttribute('ry'))
     const rx = rxAttr > 0 ? rxAttr : 10
     const ry = ryAttr > 0 ? ryAttr : rx
-    const expected = window.LOGYQPreview.gestures.smiteClockSegments(x, y, w, h, rx, ry)
-    const paths = Array.from(clock.querySelectorAll('path'))
-    const arcs = paths.some((path) => /[Aa]/.test(path.getAttribute('d') || ''))
+    const start = clock.getPointAtLength(0)
+    const step = clock.getPointAtLength(Math.max(1, clock.getTotalLength() * 0.03))
     return {
-      matches: paths.every((path, i) => path.getAttribute('d') === expected[i]),
-      arcs,
-      first: paths[0]?.getAttribute('d') || '',
-      last: paths[11]?.getAttribute('d') || '',
-      center: x + w / 2,
-      top: y,
+      matches: clock.getAttribute('d') === window.LOGYQPreview.gestures.smiteClockPath(x, y, w, h, rx, ry),
+      dx: Math.abs(start.x - (x + w / 2)),
+      dy: Math.abs(start.y - y),
+      clockwise: step.x > start.x,
     }
   })
   assert.equal(noon.matches, true)
-  assert.equal(noon.arcs, false, 'segments stay on the straight edges')
-  const ticks = await page.evaluate(async () => {
-    const gestures = window.LOGYQPreview.gestures
-    const segs = gestures.smiteClockSegments(20, 20, 160, 80, 10, 10)
-    const draw = async (hide) => {
-      const svgNS = 'http://www.w3.org/2000/svg'
-      const svg = document.createElementNS(svgNS, 'svg')
-      svg.setAttribute('width', '200')
-      svg.setAttribute('height', '120')
-      segs.forEach((d, i) => {
-        const path = document.createElementNS(svgNS, 'path')
-        path.setAttribute('d', d)
-        path.setAttribute('fill', 'none')
-        path.setAttribute('stroke', i < hide ? 'none' : '#dc2626')
-        path.setAttribute('stroke-width', '8')
-        path.setAttribute('stroke-linecap', 'butt')
-        svg.appendChild(path)
-      })
-      const xml = new XMLSerializer().serializeToString(svg)
-      const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
-      const image = new Image()
-      image.src = url
-      await image.decode()
-      const canvas = document.createElement('canvas')
-      canvas.width = 200
-      canvas.height = 120
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(image, 0, 0)
-      URL.revokeObjectURL(url)
-      const red = (x, y) => {
-        const pixel = ctx.getImageData(x, y, 1, 1).data
-        return pixel[0] > 160 && pixel[1] < 90 && pixel[2] < 90
-      }
-      return {
-        noonGap: red(100, 20),
-        topRight: red(118, 20),
-        topLeft: red(46, 20),
-        corner: red(20, 20),
-        right: red(180, 44),
-        bottomRight: red(154, 100),
-        bottomLeft: red(46, 100),
-        left: red(20, 44),
-      }
+  assert.ok(noon.dx < 1 && noon.dy < 1, 'live line starts at the top center of the card')
+  assert.equal(noon.clockwise, true)
+  const half = await page.evaluate(async () => {
+    const svgNS = 'http://www.w3.org/2000/svg'
+    const svg = document.createElementNS(svgNS, 'svg')
+    svg.setAttribute('width', '200')
+    svg.setAttribute('height', '120')
+    const path = document.createElementNS(svgNS, 'path')
+    path.setAttribute('d', window.LOGYQPreview.gestures.smiteClockPath(20, 20, 160, 80, 10, 10))
+    path.setAttribute('fill', 'none')
+    path.setAttribute('stroke', '#dc2626')
+    path.setAttribute('stroke-width', '8')
+    path.setAttribute('stroke-linecap', 'butt')
+    path.setAttribute('pathLength', '100')
+    path.setAttribute('stroke-dasharray', '100')
+    path.setAttribute('stroke-dashoffset', '50')
+    svg.appendChild(path)
+    const xml = new XMLSerializer().serializeToString(svg)
+    const url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }))
+    const image = new Image()
+    image.src = url
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = 200
+    canvas.height = 120
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(image, 0, 0)
+    URL.revokeObjectURL(url)
+    const red = (x, y) => {
+      const pixel = ctx.getImageData(x, y, 1, 1).data
+      return pixel[0] > 160 && pixel[1] < 90 && pixel[2] < 90
     }
-    return { full: await draw(0), half: await draw(6) }
+    return {
+      noon: red(100, 20),
+      towardThree: red(140, 20),
+      towardNine: red(60, 20),
+      right: red(180, 60),
+      left: red(20, 60),
+    }
   })
-  assert.equal(ticks.full.noonGap, false, '12 o’clock is the gap between the top ticks')
-  assert.equal(ticks.full.topRight, true)
-  assert.equal(ticks.full.topLeft, true)
-  assert.equal(ticks.full.corner, false, 'the rounded corner is not a segment')
-  assert.equal(ticks.full.right, true)
-  assert.equal(ticks.half.topRight, false, 'the first ticks click off from the right of 12')
-  assert.equal(ticks.half.right, false)
-  assert.equal(ticks.half.bottomRight, false)
-  assert.equal(ticks.half.topLeft, true, 'the top ticks left of 12 are the last to go')
-  assert.equal(ticks.half.left, true)
-  assert.equal(ticks.half.bottomLeft, true)
-  assert.equal(ticks.half.corner, false)
+  assert.equal(half.noon, true, 'half ring is still anchored at 12')
+  assert.equal(half.towardThree, true, 'remaining stroke runs clockwise from 12')
+  assert.equal(half.right, true)
+  assert.equal(half.towardNine, false)
+  assert.equal(half.left, false)
   await touch('pointerup', root.x, root.y + 80, 22, root.uid)
   await touch('pointerup', 16, 120, 21)
+  await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 1600 })
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Root')
+    return node?.dataset?.smitePhase === 'glow'
+  })
+  const late = await clocks()
+  assert.equal(late[0].phase, 'glow')
+  assert.equal(late[0].stroke, '#ff2d2d')
+  assert.ok(late[0].glow > 0.5, 'late mercy glows from behind the card')
+  assert.ok(late[0].faceFill === '#2563eb' || late[0].faceFill === 'rgb(37, 99, 235)')
+  assert.ok(late[0].washOpacity <= 0.3)
   const cycle = async (pointerId) => {
     const point = await center('Root')
     await touch('pointerdown', point.x, point.y, pointerId, point.uid)
@@ -2307,11 +2303,13 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Root')
     return {
       wash: node.querySelectorAll('rect.logyq-smite-wash').length,
+      glow: node.querySelectorAll('rect.logyq-smite-glow').length,
       clock: node.querySelectorAll('.logyq-smite-clock').length,
       fill: node.querySelector('rect:not(.grabzone)')?.style?.fill || '',
     }
   })
   assert.equal(restored.wash, 0)
+  assert.equal(restored.glow, 0)
   assert.equal(restored.clock, 0)
   assert.ok(restored.fill === '#2563eb' || restored.fill === 'rgb(37, 99, 235)')
   assert.equal(await cycle(27), 'normal')
@@ -2334,7 +2332,8 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   const bankArmed = await clocks()
   assert.deepEqual(bankArmed.map((clock) => clock.name), ['B'])
   assert.equal(bankArmed[0].amber, true)
-  assert.equal(bankArmed[0].stroke, '#fcd34d')
+  assert.equal(bankArmed[0].stroke, '#d97706')
+  assert.equal(bankArmed[0].phase, 'full')
   assert.equal(bankArmed[0].wash, '#f59e0b')
   assert.ok(bankArmed[0].washOpacity > 0 && bankArmed[0].washOpacity <= 0.3)
   await touch('pointerup', leaf.x - 80, leaf.y, 32, leaf.uid)
@@ -2356,7 +2355,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointermove', card.x, card.y + 84, 42, card.uid)
   const family = await clocks()
   assert.deepEqual(family.map((clock) => clock.name).sort(), ['', 'A', 'A1'])
-  assert.ok(family.every((clock) => clock.red && clock.segments === 12 && clock.lit === 12 && clock.dash === false && clock.stroke === '#fca5a5' && clock.wash === '#ef4444'))
+  assert.ok(family.every((clock) => clock.red && clock.dash === '100' && clock.offset === 0 && clock.phase === 'full' && clock.stroke === '#dc2626' && clock.wash === '#ef4444'))
   await touch('pointerup', card.x, card.y + 84, 42, card.uid)
   await touch('pointerup', 16, 422, 41)
   const child = await center('A1')

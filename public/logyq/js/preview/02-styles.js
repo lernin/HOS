@@ -93,13 +93,15 @@
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
         body.logyq-mobile-v162 svg#canvas g.node,body.logyq-mobile-v162 svg#canvas g.node *{pointer-events:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{pointer-events:none!important}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock{pointer-events:none!important}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock.logyq-smite-red{filter:drop-shadow(0 0 4px rgba(220,38,38,.5))}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock.logyq-smite-amber{filter:drop-shadow(0 0 4px rgba(217,119,6,.42))}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock.is-alarm{filter:drop-shadow(0 0 8px rgba(255,45,45,.9))}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock.logyq-smite-amber.is-alarm{filter:drop-shadow(0 0 8px rgba(255,176,0,.85))}
-        body.logyq-mobile-v162 svg#canvas g.node>g.logyq-smite-clock>path{fill:none!important;stroke-width:4px!important;stroke-linecap:butt;pointer-events:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash,body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red{filter:drop-shadow(0 0 4px rgba(220,38,38,.45))}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:drop-shadow(0 0 4px rgba(217,119,6,.4))}
+        body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.is-glow{stroke-width:4px!important;filter:drop-shadow(0 0 8px var(--smite-ink, #ff2d2d))}
+        body.logyq-mobile-v162 g.node[data-smite-phase="light"] text.label{filter:drop-shadow(0 0 1px var(--smite-ink, transparent))}
+        body.logyq-mobile-v162 g.node[data-smite-phase="medium"] text.label{filter:drop-shadow(0 0 2px var(--smite-ink, transparent))}
+        body.logyq-mobile-v162 g.node[data-smite-phase="dark"] text.label{filter:drop-shadow(0 0 2px var(--smite-ink, transparent))}
+        body.logyq-mobile-v162 g.node[data-smite-phase="glow"] text.label{filter:drop-shadow(0 0 4px var(--smite-ink, #ff2d2d))}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation;pointer-events:auto;transform-origin:center}
         .logyq-smite-scar.is-covered{pointer-events:none!important}
         body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node *,body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162.logyq-layout-settling svg#canvas g.node>text{pointer-events:none!important}
