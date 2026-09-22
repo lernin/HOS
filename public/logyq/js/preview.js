@@ -218,7 +218,7 @@
         #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border-radius:10px;font-size:17px;padding:0}
         #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
         #logyq-paint-btn.is-paint-on{border-color:#0f172a;box-shadow:inset 0 0 0 3px var(--paint-active,#fde68a)}
-        #logyq-paint-strip{position:fixed;display:none;z-index:3200;top:54px;left:8px;right:8px;align-items:center;gap:8px;padding:8px;overflow-x:auto;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
+        #logyq-paint-strip{position:fixed;display:none;z-index:3200;top:54px;left:auto;right:8px;width:max-content;max-width:calc(100vw - 16px);align-items:center;gap:8px;padding:8px;overflow-x:auto;flex-wrap:nowrap;background:rgba(255,255,255,.98);border:1px solid #e2e8f0;border-radius:14px;box-shadow:0 18px 50px rgba(15,23,42,.22)}
         #logyq-paint-strip.is-open{display:flex}
         .logyq-swatch{flex:0 0 32px;width:32px;height:32px;border:2px solid #e2e8f0;border-radius:999px;background:#fff;color:#334155;font-size:16px;line-height:1;padding:0}
         .logyq-swatch.is-active{border-color:#0f172a;box-shadow:0 0 0 2px rgba(15,23,42,.18)}
@@ -277,15 +277,13 @@
       @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
         #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0;overflow:visible}
         #logyq-corner-cluster{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;bottom:auto;width:max-content;height:auto;max-height:calc(100dvh - 16px);padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);overflow:auto}
-        #logyq-corner-cluster img{display:none}
-        #logyq-select-strip{display:flex;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:auto;bottom:auto;width:max-content;max-width:calc(100vw - 88px);height:auto;padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);overflow-x:auto}
-        #logyq-corner-cluster .logiq-icon-btn,#logyq-select-strip .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px;touch-action:manipulation}
-        #logyq-select-strip .logiq-mobile-entry{width:44px;min-width:44px;max-width:44px;height:44px;flex:0 0 44px;padding:0;color:transparent;caret-color:transparent;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E") center/18px no-repeat}
-        #logyq-select-strip .logiq-mobile-entry:not(:placeholder-shown){color:#0f172a;background-image:none;font-size:11px;text-overflow:ellipsis}
-        #logyq-select-strip .logiq-mobile-entry:focus{position:fixed;z-index:3600;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));width:auto;min-width:0;max-width:none;height:48px;padding:0 14px;color:#0f172a;caret-color:#0f172a;background:#fff;font-size:16px;text-align:left;border-radius:14px;box-shadow:0 16px 40px rgba(15,23,42,.24)}
-        #logyq-select-strip .logiq-save-state{width:12px;height:44px;flex:0 0 12px;justify-content:center;overflow:visible}
+        #logyq-corner-cluster img,#logyq-select-strip,#logyq-home-btn{display:none}
+        #logyq-paint-btn{order:-1}
+        #logyq-corner-cluster .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px;touch-action:manipulation}
+        #logyq-corner-cluster .logiq-save-state{display:none}
         svg#canvas{left:0;right:0;top:0;width:100%;height:100dvh}
-        #logyq-paint-strip,#logiq-mobile-panel{top:max(64px,calc(env(safe-area-inset-top) + 56px));left:max(8px,env(safe-area-inset-left));right:max(72px,calc(env(safe-area-inset-right) + 8px))}
+        #logyq-paint-strip{top:max(8px,env(safe-area-inset-top));left:auto;right:max(72px,calc(env(safe-area-inset-right) + 8px));width:max-content;max-width:min(420px,calc(100vw - 88px))}
+        #logiq-mobile-panel{top:max(8px,env(safe-area-inset-top));left:auto;right:max(72px,calc(env(safe-area-inset-right) + 8px));width:min(310px,calc(100vw - 88px))}
         #Dock{left:max(8px,env(safe-area-inset-left));right:max(72px,env(safe-area-inset-right))}
         body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
         body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
@@ -309,13 +307,13 @@
           <img src="/logyq/logos/LOGO_GREEN_Q.svg" alt="LOGYQ">
           <button class="logiq-icon-btn" data-tool="undo" aria-label="Undo">↶</button>
           <button class="logiq-icon-btn" data-tool="fit" aria-label="Recenter map"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"></circle><path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path></svg></button>
+          <button class="logiq-icon-btn" id="logyq-paint-btn" aria-label="Paint colors" aria-expanded="false" aria-haspopup="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><circle cx="8" cy="16" r="3"></circle><circle cx="16" cy="16" r="3"></circle></svg></button>
+          <span class="logiq-save-state" role="status" aria-live="polite"></span>
           <button class="logiq-icon-btn" id="logiq-mobile-menu-btn" aria-label="Open controls" aria-expanded="false">⋮</button>
         </div>
         <div id="logyq-select-strip">
           <input class="logiq-mobile-entry" id="logiq-mobile-word-input" placeholder="Type or speak…" aria-label="Add words">
           <button class="logiq-icon-btn" id="logiq-mobile-mic-btn" aria-label="Speak a word"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="3" width="8" height="12" rx="4"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg></button>
-          <button class="logiq-icon-btn" id="logyq-paint-btn" aria-label="Paint colors" aria-expanded="false" aria-haspopup="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><circle cx="8" cy="16" r="3"></circle><circle cx="16" cy="16" r="3"></circle></svg></button>
-          <span class="logiq-save-state" role="status" aria-live="polite"></span>
         </div>
       </div>`)
     }
@@ -324,7 +322,7 @@
       <section id="logiq-mobile-panel" aria-label="LOGiQ controls">
         <div class="logiq-mobile-tools">
           <button data-tool="add">Add typed words</button><button data-tool="add-child">Add to selected</button>
-          <button data-tool="library">Maps</button><button data-tool="mix">Mix</button>
+          <button data-tool="library">Your maps</button><button data-tool="mix">Mix</button>
           <button data-tool="paint">Paint colors</button><button data-tool="dock">Word Dock</button>
           <button data-tool="help">Help</button>
         </div>

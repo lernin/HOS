@@ -19,7 +19,7 @@ v161 is the tree engine plus the small `LOGiQBridge` integration that `logiq-pre
 - Map and PIN storage uses `logyq_*` keys (`logyq_current_map_v1`, `logyq_pending_save_v1`, `logyq_maps_v1` cache, `logyq_lab_pin_v1`, `logyq_paint_color_v1`).
 - Live maps use the existing PIN RPCs `logiq_map_list` / `logiq_map_save` / `logiq_map_delete` on Procedia `jzaghifuhinkzzhiojre` (same publishable key as LOGiQ / `src/lib/supabase.ts`). Engine still does not call those RPCs.
 - The Lab PIN is `logyq_lab_pin_v1` for maps and `/api/transcribe`. A missing session PIN opens Connect and does not render as an empty library. The recents library is the home for 0 and 1+ maps; **+ New** opens a calm one-card canvas (not already editing). Blank untitled shells are not autosaved.
-- Phone portrait keeps the compact top bar. Phone landscape is edge mode: full-bleed canvas, a corner cluster, a floating type/mic/paint strip, a type sheet, and the library as an overlay. There is no permanent side rail.
+- Phone portrait keeps the compact top bar. Phone landscape is edge mode: full-bleed canvas and a right-hand cluster (paint, undo, recenter, menu). The paint palette hugs its swatches. Type, mic, and the maps grid stay off that landscape chrome; Your maps opens from the menu. There is no permanent side rail.
 
 ### Remaining shared surfaces
 
