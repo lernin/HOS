@@ -1045,52 +1045,40 @@
     return nominated[0]
   }
 
-  // Parent is master. Red → amber broadcasts to the parent and every child
-  // still nominated. Original / deselected kids stay out. Amber → out clears
-  // the whole remaining cast (caller drops the mercy).
-  function smiteParentCommand(marks, castUid, tone) {
-    const current = smiteNominatedTone(marks, castUid, tone)
-    if (current !== 'red') return { action: 'cancel', entries: [] }
-    const entries = []
-    let parentSeen = false
-    let live = false
-    for (const [uid, mark] of smiteTicketEntries(marks)) {
-      if (mark === 'red' || mark === 'amber') {
-        if (uid === castUid) parentSeen = true
-        entries.push([uid, 'amber'])
-        live = true
-      } else {
-        // Keep original kids in the cast map so they can cycle back in, but
-        // do not paint or retarget them with this broadcast.
-        entries.push([uid, mark])
-      }
-    }
-    if (castUid && !parentSeen) {
-      entries.push([castUid, 'amber'])
-      live = true
-    }
-    if (!live) return { action: 'cancel', entries: [] }
-    return { action: 'rearm', entries }
+  function smiteMember(marks, uid) {
+    if (!uid || !marks) return false
+    if (typeof marks.has === 'function') return marks.has(uid)
+    return Object.prototype.hasOwnProperty.call(marks, uid)
   }
 
-  // Child tap is independent: red → amber → original → red → …
-  // Original keeps the uid in the cast so a later tap can re-include while
-  // the parent mercy is still live. A child tap never starts a new cast.
-  function smiteChildNextMark(mark) {
-    if (mark === 'red') return 'amber'
-    if (mark === 'amber') return 'normal'
-    return 'red'
-  }
-
-  function smiteChildCommand(marks, uid) {
+  // One card flips between the armed fate and out. Out stays in the map so
+  // the same card can come back. Neighbors are not retargeted.
+  function smiteToggleParticipation(marks, uid, tone) {
     const entries = smiteTicketEntries(marks)
-    if (!entries.some(([id]) => id === uid)) return { action: 'noop', entries }
-    const next = smiteChildNextMark(smiteMarkOf(marks, uid))
+    if (!smiteMember(marks, uid)) return { action: 'noop', entries }
+    const armed = tone === 'amber' ? 'amber' : 'red'
+    const current = smiteMarkOf(marks, uid)
+    const next = current === 'red' || current === 'amber' ? 'normal' : armed
     return {
-      action: 'cycle',
+      action: 'toggle',
       next,
       entries: entries.map(([id, mark]) => (id === uid ? [id, next] : [id, mark])),
     }
+  }
+
+  // Down-swipe on the clock card or any nominated card (in or out) executes.
+  // A stationary tap on a nominated card toggles that card only. The clock
+  // card is not tappable into the cast when it was never nominated.
+  function smiteCastReply(marks, castUid, uid, dx, dy, tapMove = 11, triggerDy = 36) {
+    const member = smiteMember(marks, uid)
+    const root = !!uid && uid === castUid
+    if (!member && !root) return 'ignore'
+    const dxN = Number(dx) || 0
+    const dyN = Number(dy) || 0
+    if (dyN > triggerDy && dyN > Math.abs(dxN)) return 'execute'
+    if (!member) return 'ignore'
+    if (Math.hypot(dxN, dyN) >= tapMove) return 'ignore'
+    return 'toggle'
   }
 
   function smiteHasNominated(marks) {
@@ -2712,36 +2700,23 @@
 
   function smiteMercyUp(doc, win, smite, pointer) {
     const live = (smite.mercies || []).filter((mercy) => mercy && !mercy.committing)
-    if (!live.length) return false
+    if (!live.length || !pointer?.uid) return false
     const dx = pointer.lastX - pointer.x
     const dy = pointer.lastY - pointer.y
-    if (pointer.uid && dy > SMITE_TRIGGER_DY && dy > Math.abs(dx)) {
-      const triggered = live.find((mercy) => mercy.castUid === pointer.uid)
-      if (triggered) {
-        commitSmite(doc, win, smite, triggered)
-        return true
-      }
-    }
-    if (Math.hypot(dx, dy) >= v162Constants().TAP_MOVE) return false
-    if (!pointer.uid) return false
-    const asParent = live.find((item) => item.castUid === pointer.uid)
-    const mercy = asParent || live.find((item) => item.marks.has(pointer.uid))
+    const tapMove = v162Constants().TAP_MOVE
+    const mercy = live.find((item) => smiteCastReply(item.marks, item.castUid, pointer.uid, dx, dy, tapMove, SMITE_TRIGGER_DY) !== 'ignore')
     if (!mercy) return false
+    const reply = smiteCastReply(mercy.marks, mercy.castUid, pointer.uid, dx, dy, tapMove, SMITE_TRIGGER_DY)
     const now = win.performance?.now?.() || Date.now()
-    const tone = mercy.direction === 'left' ? 'amber' : 'red'
-    if (mercy.castUid === pointer.uid) {
-      const command = smiteParentCommand(mercy.marks, mercy.castUid, tone)
-      if (command.action === 'cancel') {
-        smiteDropMercy(smite, mercy)
-      } else {
-        smiteApplyEntries(mercy.marks, command.entries)
-        mercy.remaining = SMITE_START_MS
-        mercy.lastTick = now
-      }
-    } else {
-      const command = smiteChildCommand(mercy.marks, pointer.uid)
-      if (command.action === 'cycle') smiteApplyEntries(mercy.marks, command.entries)
+    mercy.remaining = SMITE_START_MS
+    mercy.lastTick = now
+    if (reply === 'execute') {
+      commitSmite(doc, win, smite, mercy)
+      return true
     }
+    const tone = mercy.direction === 'left' ? 'amber' : 'red'
+    const command = smiteToggleParticipation(mercy.marks, pointer.uid, tone)
+    if (command.action === 'toggle') smiteApplyEntries(mercy.marks, command.entries)
     smiteRefresh(doc, smite)
     smiteEnsureTick(doc, win, smite)
     return true
