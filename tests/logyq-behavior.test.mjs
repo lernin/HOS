@@ -1491,3 +1491,131 @@ test('card hit-test prefers the visual face and the deepest overlapping card', (
   assert.equal(rankCardHits([parent], 100, 90)[0].id, 'parent', 'grabzone-only fallback still finds the parent')
   assert.equal(rankCardHits([child, sibling], 110, 140)[0].id, 'child')
 })
+
+function loadSmitePure() {
+  const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const start = source.indexOf('// SMITE_PURE_START')
+  const end = source.indexOf('// SMITE_PURE_END')
+  assert.ok(start >= 0 && end > start)
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit };`)()
+}
+
+function smiteSampleTree() {
+  return {
+    name: 'Root',
+    _uid: 'r',
+    color: '#111',
+    children: [
+      {
+        name: 'A',
+        _uid: 'a',
+        color: '#aaa',
+        children: [
+          { name: 'A1', _uid: 'a1', color: '#a1a' },
+          { name: '  ', _uid: 'blank', color: '#bbb' },
+        ],
+      },
+      { name: 'B', _uid: 'b', color: '#bbb' },
+    ],
+  }
+}
+
+test('smite cake zones, directions, marks, and the mercy ring', () => {
+  const smite = loadSmitePure()
+  assert.equal(smite.smiteZone(0, 300), 'top')
+  assert.equal(smite.smiteZone(99, 300), 'top')
+  assert.equal(smite.smiteZone(100, 300), 'middle')
+  assert.equal(smite.smiteZone(199, 300), 'middle')
+  assert.equal(smite.smiteZone(200, 300), 'bottom')
+
+  assert.equal(smite.smiteCastDirection(0, 60), 'down')
+  assert.equal(smite.smiteCastDirection(-60, 10), 'left')
+  assert.equal(smite.smiteCastDirection(60, 0), null)
+  assert.equal(smite.smiteCastDirection(0, -60), null)
+  assert.equal(smite.smiteCastDirection(-20, 20), null)
+  assert.equal(smite.smiteCastDirection(-40, 50), 'down')
+
+  const node = smiteSampleTree()
+  assert.deepEqual(smite.smiteAffected(node, 'top'), ['r'])
+  assert.deepEqual(smite.smiteAffected(node, 'bottom'), ['a', 'b'])
+  assert.deepEqual(smite.smiteAffected(node, 'middle'), ['r', 'a', 'a1', 'blank', 'b'])
+  assert.deepEqual(smite.smiteAffected({ data: { _uid: 'h' }, children: [{ data: { _uid: 'c' } }] }, 'bottom'), ['c'])
+
+  assert.equal(smite.smiteNextMark('red', false), 'amber')
+  assert.equal(smite.smiteNextMark('amber', false), 'normal')
+  assert.equal(smite.smiteNextMark('normal', false), 'red')
+  assert.equal(smite.smiteNextMark('red', true), 'amber')
+  assert.equal(smite.smiteNextMark('amber', true), 'normal')
+  assert.equal(smite.smiteNextMark('normal', true), 'normal')
+
+  assert.equal(smite.smiteRingFraction(15000), 1)
+  assert.equal(smite.smiteRingFraction(12000), 1)
+  assert.equal(smite.smiteRingFraction(6000), 0.5)
+  assert.equal(smite.smiteRingFraction(0), 0)
+  assert.equal(smite.smiteRefillMs(15000), 15000)
+  assert.equal(smite.smiteRefillMs(14500), 15000)
+  assert.equal(smite.smiteRefillMs(1000), 2000)
+})
+
+test('smite commit kills red, banks amber, and climbs the cards that stay', () => {
+  const smite = loadSmitePure()
+  const original = smiteSampleTree()
+  const snapshot = JSON.stringify(original)
+
+  const top = smite.planSmiteCommit(original, { a: 'red' })
+  assert.equal(JSON.stringify(original), snapshot)
+  assert.deepEqual(top.bank, [])
+  assert.deepEqual(top.scars.map((scar) => scar.uid), ['a'])
+  assert.equal(top.scars[0].parentUid, 'r')
+  assert.equal(top.scars[0].color, '#aaa')
+  assert.deepEqual(top.tree.children.map((child) => child._uid), ['a1', 'blank', 'b'])
+  assert.equal(top.tree.children[0].color, '#a1a')
+
+  const middle = smite.planSmiteCommit(original, { a: 'red', a1: 'red', blank: 'red' })
+  assert.deepEqual(middle.tree.children.map((child) => child._uid), ['b'])
+  assert.deepEqual(middle.scars.map((scar) => scar.uid), ['a1', 'blank', 'a'])
+
+  const bottom = smite.planSmiteCommit(original, new Map([['a', 'red'], ['b', 'red']]))
+  assert.equal(bottom.tree._uid, 'r')
+  assert.deepEqual(bottom.tree.children.map((child) => child._uid), ['a1', 'blank'])
+  assert.deepEqual(bottom.scars.map((scar) => scar.parentUid), ['r', 'r'])
+
+  const banked = smite.planSmiteCommit(original, { a: 'amber', blank: 'amber', a1: 'normal' })
+  assert.deepEqual(banked.bank, ['A'])
+  assert.deepEqual(banked.scars, [])
+  assert.deepEqual(banked.tree.children.map((child) => child._uid), ['a1', 'b'])
+
+  const promoted = smite.planSmiteCommit(original, { r: 'red' })
+  assert.equal(promoted.tree._uid, 'a')
+  assert.deepEqual(promoted.tree.children.map((child) => child._uid), ['a1', 'blank', 'b'])
+  assert.equal(promoted.scars[0].uid, 'r')
+  assert.equal(promoted.scars[0].parentUid, null)
+
+  const emptied = smite.planSmiteCommit({ name: 'Only', _uid: 'r' }, { r: 'amber' })
+  assert.equal(emptied.tree, null)
+  assert.deepEqual(emptied.bank, ['Only'])
+
+  const blankAmber = smite.planSmiteCommit({ name: ' ', _uid: 'r', children: [{ name: 'Keep', _uid: 'k' }] }, { r: 'amber' })
+  assert.deepEqual(blankAmber.bank, [])
+  assert.equal(blankAmber.tree._uid, 'k')
+})
+
+test('smite cake is a solid clock and does not reopen a long-press Word Bank dump', () => {
+  const v162 = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
+  const mix = readFileSync(new URL('../public/logyq/js/engine/15-mix-and-context.js', import.meta.url), 'utf8')
+  assert.match(v162, /function bindSmiteGestures/)
+  assert.match(v162, /function commitSmite/)
+  assert.match(v162, /__logyqV2ConsumedPointers\.add\(event\.pointerId\)/)
+  assert.match(v162, /smite\.pinched/)
+  assert.match(v162, /addWords\(name, 'bank'\)/)
+  assert.match(v162, /Contextmenu is never a Word Bank write|swallowBankContextMenu/)
+  assert.match(mix, /Contextmenu is never a Word Bank write/)
+  assert.match(styles, /logyq-smite-red/)
+  assert.match(styles, /logyq-smite-amber/)
+  assert.match(styles, /logyq-smite-scar/)
+  const clock = styles.slice(styles.indexOf('rect.logyq-smite-clock'), styles.indexOf('.logyq-smite-scar'))
+  assert.doesNotMatch(clock, /#22c55e/)
+  assert.doesNotMatch(clock, /stroke-dasharray:\s*5\s+4/)
+  assert.doesNotMatch(v162, /Sent subtree to Word Dock/)
+})

@@ -23,6 +23,128 @@
     return target.matchMedia('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px))').matches
   }
 
+  // SMITE_PURE_START
+  // Parked-thumb smite. These stay pure so the mercy rules can be tested
+  // without a phone: zone, cast direction, affected set, toggle, ring, commit.
+  function smiteZone(y, height) {
+    const span = Number(height) > 0 ? Number(height) : 1
+    const ratio = Number(y) / span
+    if (ratio < 1 / 3) return 'top'
+    if (ratio < 2 / 3) return 'middle'
+    return 'bottom'
+  }
+
+  function smiteCastDirection(dx, dy, min = 52) {
+    const adx = Math.abs(Number(dx) || 0)
+    const ady = Math.abs(Number(dy) || 0)
+    if (Math.hypot(Number(dx) || 0, Number(dy) || 0) < min) return null
+    if (ady >= adx && dy > 0) return 'down'
+    if (adx > ady && dx < 0) return 'left'
+    return null
+  }
+
+  function smiteNodeId(node) {
+    if (!node) return null
+    return node.uid || node._uid || node.data?._uid || null
+  }
+
+  function smiteChildList(node) {
+    if (Array.isArray(node?.children)) return node.children
+    if (Array.isArray(node?.data?.children)) return node.data.children
+    return []
+  }
+
+  function smiteAffected(node, zone) {
+    const id = smiteNodeId(node)
+    if (!id) return []
+    if (zone === 'top') return [id]
+    if (zone === 'bottom') return smiteChildList(node).map(smiteNodeId).filter(Boolean)
+    const out = []
+    const walk = (current) => {
+      const uid = smiteNodeId(current)
+      if (uid) out.push(uid)
+      for (const kid of smiteChildList(current)) walk(kid)
+    }
+    walk(node)
+    return out
+  }
+
+  // Tree root stops at normal. Every other marked card cycles back to red.
+  function smiteNextMark(mark, isTreeRoot) {
+    if (mark === 'red') return 'amber'
+    if (mark === 'amber') return 'normal'
+    return isTreeRoot ? 'normal' : 'red'
+  }
+
+  // Full ring at and above 12s. Only the last 12s drains.
+  function smiteRingFraction(remainingMs, fullMs = 12000) {
+    const full = Number(fullMs) > 0 ? Number(fullMs) : 12000
+    const remaining = Number(remainingMs) || 0
+    if (remaining >= full) return 1
+    if (remaining <= 0) return 0
+    return remaining / full
+  }
+
+  function smiteRefillMs(remainingMs, addMs = 1000, maxMs = 15000) {
+    const next = Math.max(0, Number(remainingMs) || 0) + (Number(addMs) || 0)
+    return Math.min(Number(maxMs) > 0 ? Number(maxMs) : 15000, next)
+  }
+
+  function smiteMarkOf(marks, uid) {
+    if (!marks || uid == null) return null
+    const value = typeof marks.get === 'function' ? marks.get(uid) : marks[uid]
+    return value === 'red' || value === 'amber' || value === 'normal' ? value : null
+  }
+
+  function smiteCloneCard(node) {
+    const copy = JSON.parse(JSON.stringify(node))
+    delete copy.children
+    return copy
+  }
+
+  function smiteVisit(node, keptAncestorUid, marks, bank, scars) {
+    if (!node || typeof node !== 'object') return []
+    const uid = node._uid || node.uid || null
+    const mark = smiteMarkOf(marks, uid)
+    const fate = mark === 'red' || mark === 'amber' ? mark : 'keep'
+    const nextAncestor = fate === 'keep' ? uid : keptAncestorUid
+    const lifted = []
+    const kids = Array.isArray(node.children) ? node.children : []
+    for (const kid of kids) lifted.push(...smiteVisit(kid, nextAncestor, marks, bank, scars))
+    if (fate === 'keep') {
+      const copy = smiteCloneCard(node)
+      copy.children = lifted.length ? lifted : null
+      return [copy]
+    }
+    if (fate === 'amber') {
+      const name = String(node.name || '').trim()
+      if (name) bank.push(name)
+      return lifted
+    }
+    scars.push({
+      name: node.name || '',
+      color: node.color || null,
+      uid,
+      parentUid: keptAncestorUid || null,
+    })
+    return lifted
+  }
+
+  // Does not mutate `tree`. Red scars, amber banks (blank labels do not),
+  // normal and unmarked cards stay and climb to the nearest kept ancestor.
+  function planSmiteCommit(tree, marks) {
+    const bank = []
+    const scars = []
+    if (!tree || typeof tree !== 'object') return { tree: null, bank, scars }
+    const source = JSON.parse(JSON.stringify(tree))
+    const lifted = smiteVisit(source, null, marks, bank, scars)
+    if (!lifted.length) return { tree: null, bank, scars }
+    const root = lifted[0]
+    if (lifted.length > 1) root.children = (root.children || []).concat(lifted.slice(1))
+    return { tree: root, bank, scars }
+  }
+  // SMITE_PURE_END
+
   function bindV162Gestures() {
     const win = window
     const doc = document
@@ -71,6 +193,7 @@
     canvas.addEventListener('pointerup', (event) => onFlickUp(event, doc, win, flickState), true)
     canvas.addEventListener('pointercancel', (event) => onFlickClear(event, win, flickState), true)
     if (preview.gestures) preview.gestures.session = { hold: holdState, flick: flickState }
+    bindSmiteGestures(doc, win, canvas, holdState)
   }
 
   function hardClearBackground(doc, win, { keepStroke = false } = {}) {
@@ -1265,6 +1388,427 @@
     if (root) root.setAttribute('transform', transform.toString())
   }
 
+  const SMITE_PARK_SLOP = 18
+  const SMITE_START_MS = 15000
+  const SMITE_MAX_MS = 15000
+  const SMITE_FULL_MS = 12000
+  const SMITE_REFILL_MS = 1000
+  const SMITE_TRIGGER_DY = 36
+
+  function bindSmiteGestures(doc, win, canvas, holdState) {
+    if (!canvas || canvas.dataset.logyqSmite === '1') return
+    canvas.dataset.logyqSmite = '1'
+    const smite = {
+      pointers: new Map(),
+      pair: false,
+      pinched: false,
+      mercy: null,
+      scars: [],
+      raf: 0,
+    }
+    if (preview.gestures) preview.gestures.smite = smite
+
+    const onCanvas = (event) => event.target === canvas || canvas.contains(event.target)
+    const ignore = (event) => {
+      if (event.pointerType === 'mouse') return true
+      if (bridge.core?.input?.isTextField?.(event.target)) return true
+      if (doc.querySelector('.logiq-backdrop.is-open')) return true
+      return false
+    }
+
+    win.addEventListener('pointerdown', (event) => {
+      if (ignore(event) || !onCanvas(event)) return
+      if (smite.pointers.size > 0) smite.pair = true
+      const source = hitNode(doc, event.clientX, event.clientY, event)
+      const uid = nodeUid(source)
+      smite.pointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        uid,
+      })
+      if (smite.mercy?.marks?.has(uid) && holdState) cancelHold(win, holdState)
+      smiteSetInteracting(win, smite, true)
+    }, true)
+
+    win.addEventListener('pointermove', (event) => {
+      const pointer = smite.pointers.get(event.pointerId)
+      if (!pointer) return
+      pointer.lastX = event.clientX
+      pointer.lastY = event.clientY
+      let moved = 0
+      smite.pointers.forEach((finger) => {
+        if (smiteFingerMoved(finger, SMITE_PARK_SLOP)) moved += 1
+      })
+      if (moved >= 2) {
+        smite.pinched = true
+        if (!smite.mercy) clearSmiteClocks(doc)
+        return
+      }
+      if (!smite.mercy) smitePaintPreview(doc, win, smite)
+    }, true)
+
+    win.addEventListener('pointerup', (event) => {
+      const pointer = smite.pointers.get(event.pointerId)
+      if (!pointer) return
+      pointer.lastX = event.clientX
+      pointer.lastY = event.clientY
+      const paired = smite.pair
+      let handled = false
+      if (smite.mercy && !smite.pinched) handled = smiteMercyUp(doc, win, smite, pointer)
+      if (!handled && !smite.mercy) handled = smiteTryCast(doc, win, smite, pointer, event.pointerId)
+      smite.pointers.delete(event.pointerId)
+      if (handled || paired) win.__logyqV2ConsumedPointers.add(event.pointerId)
+      if (!smite.mercy) clearSmiteClocks(doc)
+      if (smite.pointers.size === 0) {
+        smite.pair = false
+        smite.pinched = false
+        smiteSetInteracting(win, smite, false)
+      } else {
+        smiteSetInteracting(win, smite, true)
+      }
+    }, true)
+
+    win.addEventListener('pointercancel', (event) => {
+      if (!smite.pointers.has(event.pointerId)) return
+      smite.pointers.delete(event.pointerId)
+      if (smite.pointers.size === 0) {
+        smite.pair = false
+        smite.pinched = false
+        smiteSetInteracting(win, smite, false)
+        if (!smite.mercy) clearSmiteClocks(doc)
+      }
+    }, true)
+
+    doc.addEventListener('click', (event) => {
+      if (event.target?.closest?.('[data-tool="undo"], #undoBtn')) clearSmiteScars(doc, smite)
+    }, true)
+    win.addEventListener('keydown', (event) => {
+      if (bridge.core?.input?.isTextField?.(event.target)) return
+      if (doc.querySelector('.logiq-backdrop.is-open, #settingsBackdrop.show')) return
+      if ((event.key || '').toLowerCase() === 'u') clearSmiteScars(doc, smite)
+    }, true)
+  }
+
+  function smiteFingerMoved(pointer, slop) {
+    return Math.hypot(pointer.lastX - pointer.x, pointer.lastY - pointer.y) > slop
+  }
+
+  function smiteSetInteracting(win, smite, on) {
+    const mercy = smite.mercy
+    if (!mercy || mercy.committing) return
+    if (mercy.interacting && !on) mercy.lastTick = win.performance?.now?.() || Date.now()
+    mercy.interacting = !!on
+  }
+
+  function smiteLiveData(uid) {
+    const root = bridge.core?.state?.root
+    if (!root?.descendants || uid == null) return null
+    const node = root.descendants().find((item) => item?.data?._uid === uid)
+    return node?.data || null
+  }
+
+  function smiteToast(text) {
+    try { bridge.core?.selection?.showToast?.(text, 1100) } catch (_error) {}
+  }
+
+  function smiteZoneWord(zone) {
+    if (zone === 'top') return 'parent'
+    if (zone === 'bottom') return 'kids'
+    return 'family'
+  }
+
+  function smitePaintPreview(doc, win, smite) {
+    if (smite.pinched || smite.mercy || smite.pointers.size !== 2) {
+      if (!smite.mercy) clearSmiteClocks(doc)
+      return
+    }
+    const fingers = Array.from(smite.pointers.values())
+    const moved = fingers.filter((finger) => smiteFingerMoved(finger, SMITE_PARK_SLOP))
+    const parked = fingers.filter((finger) => !smiteFingerMoved(finger, SMITE_PARK_SLOP))
+    if (moved.length !== 1 || parked.length !== 1 || !moved[0].uid) {
+      clearSmiteClocks(doc)
+      return
+    }
+    const swipe = moved[0]
+    const direction = smiteCastDirection(swipe.lastX - swipe.x, swipe.lastY - swipe.y, v162Constants().FLICK_MIN)
+    if (!direction) {
+      clearSmiteClocks(doc)
+      return
+    }
+    const data = smiteLiveData(swipe.uid)
+    if (!data) return
+    const marks = new Map()
+    const tone = direction === 'left' ? 'amber' : 'red'
+    for (const id of smiteAffected(data, smiteZone(parked[0].y, win.innerHeight))) marks.set(id, tone)
+    if (!marks.size) {
+      clearSmiteClocks(doc)
+      return
+    }
+    paintSmiteClocks(doc, marks, 1)
+  }
+
+  function smiteTryCast(doc, win, smite, pointer, pointerId) {
+    if (smite.pinched || !pointer?.uid) return false
+    const others = []
+    smite.pointers.forEach((finger, id) => { if (id !== pointerId) others.push(finger) })
+    if (others.length !== 1 || smiteFingerMoved(others[0], SMITE_PARK_SLOP)) return false
+    if (!smiteFingerMoved(pointer, SMITE_PARK_SLOP)) return false
+    const direction = smiteCastDirection(pointer.lastX - pointer.x, pointer.lastY - pointer.y, v162Constants().FLICK_MIN)
+    if (!direction) return false
+    const data = smiteLiveData(pointer.uid)
+    if (!data) return true
+    const zone = smiteZone(others[0].y, win.innerHeight)
+    const ids = smiteAffected(data, zone)
+    if (!ids.length) {
+      smiteToast('Nothing to smite')
+      clearSmiteClocks(doc)
+      return true
+    }
+    const tone = direction === 'left' ? 'amber' : 'red'
+    const marks = new Map()
+    for (const id of ids) marks.set(id, tone)
+    beginSmiteMercy(doc, win, smite, { uid: pointer.uid, zone, direction, marks })
+    return true
+  }
+
+  function beginSmiteMercy(doc, win, smite, cast) {
+    if (smite.raf) win.cancelAnimationFrame(smite.raf)
+    const now = win.performance?.now?.() || Date.now()
+    smite.mercy = {
+      marks: cast.marks,
+      castUid: cast.uid,
+      zone: cast.zone,
+      direction: cast.direction,
+      remaining: SMITE_START_MS,
+      lastTick: now,
+      interacting: smite.pointers.size > 0,
+      committing: false,
+    }
+    smiteToast(`${cast.direction === 'left' ? 'Bank' : 'Mercy'} · ${smiteZoneWord(cast.zone)}`)
+    paintSmiteClocks(doc, cast.marks, 1)
+    smite.raf = win.requestAnimationFrame(() => smiteTick(doc, win, smite))
+    try { win.navigator.vibrate?.(12) } catch (_error) {}
+  }
+
+  function smiteTick(doc, win, smite) {
+    smite.raf = 0
+    const mercy = smite.mercy
+    if (!mercy || mercy.committing) return
+    const now = win.performance?.now?.() || Date.now()
+    const dt = Math.max(0, now - mercy.lastTick)
+    mercy.lastTick = now
+    if (!mercy.interacting) mercy.remaining -= dt
+    if (mercy.remaining <= 0) {
+      commitSmite(doc, win, smite)
+      return
+    }
+    paintSmiteClocks(doc, mercy.marks, smiteRingFraction(mercy.remaining, SMITE_FULL_MS))
+    smite.raf = win.requestAnimationFrame(() => smiteTick(doc, win, smite))
+  }
+
+  function smiteMercyUp(doc, win, smite, pointer) {
+    const mercy = smite.mercy
+    if (!mercy || mercy.committing) return false
+    const dx = pointer.lastX - pointer.x
+    const dy = pointer.lastY - pointer.y
+    if (pointer.uid && pointer.uid === mercy.castUid && dy > SMITE_TRIGGER_DY && dy > Math.abs(dx)) {
+      commitSmite(doc, win, smite)
+      return true
+    }
+    if (Math.hypot(dx, dy) >= v162Constants().TAP_MOVE) return false
+    if (!pointer.uid || !mercy.marks.has(pointer.uid)) return false
+    const treeRoot = bridge.core?.state?.root?.data?._uid
+    const current = mercy.marks.get(pointer.uid)
+    const next = smiteNextMark(current, pointer.uid === treeRoot)
+    if (next === current) return true
+    mercy.marks.set(pointer.uid, next)
+    mercy.remaining = smiteRefillMs(mercy.remaining, SMITE_REFILL_MS, SMITE_MAX_MS)
+    paintSmiteClocks(doc, mercy.marks, smiteRingFraction(mercy.remaining, SMITE_FULL_MS))
+    return true
+  }
+
+  function commitSmite(doc, win, smite) {
+    const mercy = smite.mercy
+    if (!mercy || mercy.committing) return
+    mercy.committing = true
+    if (smite.raf) {
+      win.cancelAnimationFrame(smite.raf)
+      smite.raf = 0
+    }
+    const core = bridge.core
+    const state = core?.state
+    const utils = core?.utils
+    if (!state?.root || !utils?.deepClone) {
+      smite.mercy = null
+      clearSmiteClocks(doc)
+      return
+    }
+    const prev = utils.deepClone(state.root.data)
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : []
+    const plan = planSmiteCommit(prev, mercy.marks)
+    const placed = []
+    for (const scar of plan.scars) {
+      const point = smiteScarPoint(doc, win, scar.uid)
+      if (!point) continue
+      placed.push({ ...scar, x: point.x, y: point.y })
+    }
+    doc.body.classList.remove('v2-branch-drag', 'v2-cancel', 'v2-dock-target')
+    win.__logyqHoldArming = false
+    win.__logyqHoldDragSession = false
+    try { core.history.pushHistory({ type: 'replace-root', prev, prevBank }) } catch (_error) {}
+    core.selection?.clearGroup?.()
+    core.selection?.clearSelection?.()
+    if (plan.tree) {
+      state.root = win.d3.hierarchy(plan.tree)
+      utils.assignIds(state.root)
+      core.treeManager.layoutAndRender(false)
+    } else {
+      state.root = null
+      core.treeManager.renderEmpty()
+    }
+    if (plan.bank.length) {
+      win.__logyqHoldDragAllowBank = true
+      try {
+        for (const name of plan.bank) core.wordDock.addWords(name, 'bank')
+      } finally {
+        win.__logyqHoldDragAllowBank = false
+      }
+    }
+    core.wordDock.render?.()
+    try { bridge.notifyChange?.() } catch (_error) {}
+    smite.mercy = null
+    clearSmiteClocks(doc)
+    mountSmiteScars(doc, win, smite, placed)
+    try { win.navigator.vibrate?.(18) } catch (_error) {}
+  }
+
+  function paintSmiteClocks(doc, marks, fraction) {
+    const nodes = doc.querySelectorAll('svg#canvas g.node')
+    nodes.forEach((node) => {
+      const uid = nodeUid(node)
+      const mark = uid ? smiteMarkOf(marks, uid) : null
+      let clock = null
+      for (const child of node.children || []) {
+        if (child.classList?.contains?.('logyq-smite-clock')) clock = child
+      }
+      if (mark !== 'red' && mark !== 'amber') {
+        clock?.remove()
+        return
+      }
+      const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-clock)')
+      if (!face) return
+      const svg = 'http://www.w3.org/2000/svg'
+      if (!clock) {
+        clock = doc.createElementNS(svg, 'rect')
+        clock.setAttribute('class', 'logyq-smite-clock')
+        clock.setAttribute('fill', 'none')
+        clock.setAttribute('stroke-width', '3')
+        clock.setAttribute('stroke-linecap', 'round')
+        clock.setAttribute('pointer-events', 'none')
+        clock.setAttribute('pathLength', '100')
+        node.appendChild(clock)
+      }
+      for (const attr of ['x', 'y', 'width', 'height', 'rx', 'ry']) {
+        if (face.hasAttribute(attr)) clock.setAttribute(attr, face.getAttribute(attr))
+      }
+      clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}`)
+      clock.setAttribute('stroke', mark === 'amber' ? '#d97706' : '#dc2626')
+      const gap = 100 * (1 - (Number(fraction) || 0))
+      clock.setAttribute('stroke-dasharray', '100')
+      clock.setAttribute('stroke-dashoffset', String(gap))
+    })
+  }
+
+  function smiteScarPoint(doc, win, uid) {
+    const nodes = Array.from(doc.querySelectorAll('svg#canvas g.node')).filter((node) => nodeUid(node) === uid)
+    for (const node of nodes) {
+      const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-clock)')
+      const rect = face?.getBoundingClientRect?.()
+      if (rect && rect.width >= 1 && rect.height >= 1) {
+        return { x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2 }
+      }
+    }
+    const laid = nodes.find((node) => Number.isFinite(node.__data__?.x) && Number.isFinite(node.__data__?.y))
+    const host = doc.getElementById('canvas')?.querySelector('g')
+    const ctm = host?.getScreenCTM?.()
+    if (laid && ctm && typeof win.DOMPoint === 'function') {
+      const point = new win.DOMPoint(laid.__data__.x, laid.__data__.y).matrixTransform(ctm)
+      if (Number.isFinite(point.x) && Number.isFinite(point.y)) return { x: point.x, y: point.y }
+    }
+    return null
+  }
+
+  function clearSmiteClocks(doc) {
+    doc.querySelectorAll('svg#canvas rect.logyq-smite-clock').forEach((clock) => clock.remove())
+  }
+
+  function clearSmiteScars(doc, smite) {
+    smite.scars = []
+    doc.querySelectorAll('.logyq-smite-scar').forEach((scar) => scar.remove())
+  }
+
+  function mountSmiteScars(doc, win, smite, placed) {
+    placed.forEach((scar, index) => {
+      const button = doc.createElement('button')
+      button.type = 'button'
+      button.className = 'logyq-smite-scar'
+      button.dataset.uid = scar.uid || ''
+      button.dataset.name = scar.name || ''
+      button.setAttribute('aria-label', 'Restore smitten card')
+      button.style.left = `${scar.x + index * 8}px`
+      button.style.top = `${scar.y}px`
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      })
+      button.addEventListener('pointerup', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        const now = win.performance?.now?.() || Date.now()
+        if (button._smiteTap && now - button._smiteTap <= v162Constants().DOUBLE_TAP_MS) {
+          button._smiteTap = 0
+          restoreSmiteScar(doc, win, smite, scar, button)
+        } else {
+          button._smiteTap = now
+        }
+      })
+      doc.body.appendChild(button)
+      smite.scars.push(scar)
+    })
+  }
+
+  function restoreSmiteScar(doc, win, smite, scar, button) {
+    const core = bridge.core
+    const state = core?.state
+    const utils = core?.utils
+    if (!state || !utils) return
+    const card = { name: scar.name || '', _uid: scar.uid }
+    if (scar.color) card.color = scar.color
+    utils.assignUids?.(card)
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : []
+    if (!state.root) {
+      try { core.history.pushHistory({ type: 'add-root' }) } catch (_error) {}
+      state.root = win.d3.hierarchy(card)
+      utils.assignIds(state.root)
+      core.treeManager.layoutAndRender(false)
+    } else {
+      const prev = utils.deepClone(state.root.data)
+      const parent = scar.parentUid ? utils.findByUid(state.root.data, scar.parentUid) : null
+      const host = parent || state.root.data
+      try { core.history.pushHistory({ type: 'replace-root', prev, prevBank }) } catch (_error) {}
+      host.children = host.children || []
+      host.children.push(card)
+      state.root = win.d3.hierarchy(state.root.data)
+      utils.assignIds(state.root)
+      core.treeManager.layoutAndRender(false)
+    }
+    button.remove()
+    smite.scars = smite.scars.filter((item) => item !== scar)
+    try { bridge.notifyChange?.() } catch (_error) {}
+  }
+
   function mouse(target, win, type, x, y, buttons) {
     try {
       target.dispatchEvent(new win.MouseEvent(type, {
@@ -1321,4 +1865,11 @@
     preview.gestures.hitEditUid = hitEditUid
     preview.gestures.hitLayoutSlot = hitLayoutSlot
     preview.gestures.layoutFaceRect = layoutFaceRect
+    preview.gestures.smiteZone = smiteZone
+    preview.gestures.smiteCastDirection = smiteCastDirection
+    preview.gestures.smiteAffected = smiteAffected
+    preview.gestures.smiteNextMark = smiteNextMark
+    preview.gestures.smiteRingFraction = smiteRingFraction
+    preview.gestures.smiteRefillMs = smiteRefillMs
+    preview.gestures.planSmiteCommit = planSmiteCommit
   }

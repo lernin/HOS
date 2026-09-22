@@ -2072,3 +2072,212 @@ test('LOGYQ flick left/right reserve non-overlapping sibling slots', async () =>
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amber path', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [
+        { name: 'A', children: [{ name: 'A1' }, { name: '' }] },
+        { name: 'B' },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => document.body.classList.contains('logyq-mobile-v162') && document.getElementById('canvas')?.dataset.logyqSmite === '1')
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'A')
+    const rect = node?.getBoundingClientRect()
+    return rect && rect.width > 20 && rect.bottom > 48 && rect.top < window.innerHeight
+  })
+
+  const chrome = await page.evaluate(() => {
+    const header = document.getElementById('logiq-mobile-header')
+    const strip = document.getElementById('logyq-select-strip')
+    return {
+      display: getComputedStyle(header).display,
+      height: header.getBoundingClientRect().height,
+      strip: getComputedStyle(strip).display,
+    }
+  })
+  assert.equal(chrome.display, 'flex')
+  assert.ok(chrome.height > 40 && chrome.height <= 52)
+  assert.equal(chrome.strip, 'none')
+
+  async function center(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid: node.__data__.data._uid }
+    }, name)
+  }
+  async function settle() {
+    await page.waitForFunction(() => !document.body.classList.contains('logyq-layout-settling'))
+  }
+  async function touch(type, x, y, pointerId, uid = null) {
+    await page.evaluate(({ type, x, y, pointerId, uid }) => {
+      const node = uid
+        ? Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => (el.__data__?.data?._uid || el.getAttribute('data-uid')) === uid)
+        : null
+      const target = node || document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: false,
+        button: 0,
+        buttons: type === 'pointerup' || type === 'pointercancel' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId, uid })
+  }
+  async function park(zone, pointerId) {
+    const point = await page.evaluate((which) => {
+      const height = window.innerHeight
+      const y = which === 'top' ? height * 0.16 : which === 'bottom' ? height * 0.84 : height * 0.5
+      return { x: 16, y }
+    }, zone)
+    await touch('pointerdown', point.x, point.y, pointerId)
+    return point
+  }
+  async function clocks() {
+    return page.evaluate(() => Array.from(document.querySelectorAll('rect.logyq-smite-clock')).map((clock) => ({
+      name: clock.parentElement.__data__?.data?.name ?? null,
+      red: clock.classList.contains('logyq-smite-red'),
+      amber: clock.classList.contains('logyq-smite-amber'),
+      dash: clock.getAttribute('stroke-dasharray'),
+      offset: Number(clock.getAttribute('stroke-dashoffset')),
+      stroke: clock.getAttribute('stroke'),
+    })))
+  }
+  async function names() {
+    return page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name))
+  }
+
+  const beforePinch = await names()
+  await touch('pointerdown', 30, 220, 11)
+  await touch('pointerdown', 180, 360, 12)
+  await touch('pointermove', 30, 280, 11)
+  await touch('pointermove', 80, 470, 12)
+  await touch('pointerup', 80, 470, 12)
+  await touch('pointerup', 30, 280, 11)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
+  assert.deepEqual(await clocks(), [])
+  assert.deepEqual(await names(), beforePinch)
+
+  await settle()
+  const root = await center('Root')
+  await park('top', 21)
+  await touch('pointerdown', root.x, root.y, 22, root.uid)
+  await touch('pointermove', root.x, root.y + 80, 22, root.uid)
+  let armed = await clocks()
+  assert.deepEqual(armed.map((clock) => clock.name), ['Root'])
+  assert.equal(armed[0].red, true)
+  assert.equal(armed[0].dash, '100')
+  assert.equal(armed[0].offset, 0)
+  assert.equal(armed[0].stroke, '#dc2626')
+  await touch('pointerup', root.x, root.y + 80, 22, root.uid)
+  await touch('pointerup', 16, 120, 21)
+  const cycle = async (pointerId) => {
+    const point = await center('Root')
+    await touch('pointerdown', point.x, point.y, pointerId, point.uid)
+    await touch('pointerup', point.x, point.y, pointerId, point.uid)
+    return page.evaluate(() => {
+      const mercy = window.LOGYQPreview.gestures.smite.mercy
+      const uid = window.LOGYQBridge.core.state.root.data._uid
+      return mercy.marks.get(uid)
+    })
+  }
+  assert.equal(await cycle(23), 'amber')
+  assert.equal(await cycle(25), 'normal')
+  assert.equal(await cycle(27), 'normal')
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  const pull = await center('Root')
+  await touch('pointerdown', pull.x, pull.y, 24, pull.uid)
+  await touch('pointermove', pull.x, pull.y + 80, 24, pull.uid)
+  await touch('pointerup', pull.x, pull.y + 80, 24, pull.uid)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
+  assert.ok((await names()).includes('A'))
+  await page.locator('[data-tool="undo"]').click()
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.root?.data?.name === 'Root')
+  assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
+
+  await settle()
+  const leaf = await center('B')
+  await park('middle', 31)
+  await touch('pointerdown', leaf.x, leaf.y, 32, leaf.uid)
+  await touch('pointermove', leaf.x - 80, leaf.y, 32, leaf.uid)
+  const bankArmed = await clocks()
+  assert.deepEqual(bankArmed.map((clock) => clock.name), ['B'])
+  assert.equal(bankArmed[0].amber, true)
+  assert.equal(bankArmed[0].stroke, '#d97706')
+  await touch('pointerup', leaf.x - 80, leaf.y, 32, leaf.uid)
+  await touch('pointerup', 16, 400, 31)
+  const triggerB = await center('B')
+  await touch('pointerdown', triggerB.x, triggerB.y, 33, triggerB.uid)
+  await touch('pointermove', triggerB.x, triggerB.y + 70, 33, triggerB.uid)
+  await touch('pointerup', triggerB.x, triggerB.y + 70, 33, triggerB.uid)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['B'])
+  assert.equal((await names()).includes('B'), false)
+  assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
+  await page.locator('[data-tool="undo"]').click()
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.length === 0)
+
+  await settle()
+  const card = await center('A')
+  await park('middle', 41)
+  await touch('pointerdown', card.x, card.y, 42, card.uid)
+  await touch('pointermove', card.x, card.y + 84, 42, card.uid)
+  const family = await clocks()
+  assert.deepEqual(family.map((clock) => clock.name).sort(), ['', 'A', 'A1'])
+  assert.ok(family.every((clock) => clock.red && clock.dash === '100' && clock.offset === 0))
+  await touch('pointerup', card.x, card.y + 84, 42, card.uid)
+  await touch('pointerup', 16, 422, 41)
+  const child = await center('A1')
+  await touch('pointerdown', child.x, child.y, 43, child.uid)
+  await touch('pointerup', child.x, child.y, 43, child.uid)
+  const toggled = await clocks()
+  assert.equal(toggled.find((clock) => clock.name === 'A1')?.amber, true)
+  assert.equal(toggled.find((clock) => clock.name === 'A')?.red, true)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  const again = await center('A')
+  await touch('pointerdown', again.x, again.y, 44, again.uid)
+  await touch('pointermove', again.x, again.y + 76, 44, again.uid)
+  await touch('pointerup', again.x, again.y + 76, 44, again.uid)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['A1'])
+  assert.deepEqual((await names()).slice().sort(), ['B', 'Root'])
+  const scarNames = await page.evaluate(() => Array.from(document.querySelectorAll('.logyq-smite-scar')).map((el) => el.dataset.name))
+  assert.deepEqual(scarNames.slice().sort(), ['', 'A'])
+  await page.evaluate(() => {
+    const button = Array.from(document.querySelectorAll('.logyq-smite-scar')).find((el) => el.dataset.name === 'A')
+    const fire = () => button.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      pointerType: 'touch',
+      pointerId: 45,
+    }))
+    fire()
+    fire()
+  })
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A'))
+  await page.locator('[data-tool="undo"]').click()
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A'))
+  assert.equal(await page.locator('.logyq-smite-scar').count(), 0)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['A1'])
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
