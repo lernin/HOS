@@ -987,30 +987,56 @@
     return nominated[0]
   }
 
-  // Parent is master. Red promotes the parent and every ticket still in the
-  // cast to amber. The caller restarts the full ring and the 3s hold.
-  // A child already removed from the cast is not put back. Any other state
-  // cancels whatever tickets remain.
+  // Parent is master. Red → amber broadcasts to the parent and every child
+  // still nominated. Original / deselected kids stay out. Amber → out clears
+  // the whole remaining cast (caller drops the mercy).
   function smiteParentCommand(marks, castUid, tone) {
     const current = smiteNominatedTone(marks, castUid, tone)
     if (current !== 'red') return { action: 'cancel', entries: [] }
     const entries = []
     let parentSeen = false
+    let live = false
     for (const [uid, mark] of smiteTicketEntries(marks)) {
-      if (mark !== 'red' && mark !== 'amber') continue
-      if (uid === castUid) parentSeen = true
-      entries.push([uid, 'amber'])
+      if (mark === 'red' || mark === 'amber') {
+        if (uid === castUid) parentSeen = true
+        entries.push([uid, 'amber'])
+        live = true
+      } else {
+        // Keep original kids in the cast map so they can cycle back in, but
+        // do not paint or retarget them with this broadcast.
+        entries.push([uid, mark])
+      }
     }
-    if (castUid && !parentSeen) entries.push([castUid, 'amber'])
-    if (!entries.length) return { action: 'cancel', entries: [] }
+    if (castUid && !parentSeen) {
+      entries.push([castUid, 'amber'])
+      live = true
+    }
+    if (!live) return { action: 'cancel', entries: [] }
     return { action: 'rearm', entries }
   }
 
-  // A child tap drops that one ticket. The cast ends only when none remain.
+  // Child tap is independent: red → amber → original → red → …
+  // Original keeps the uid in the cast so a later tap can re-include while
+  // the parent mercy is still live. A child tap never starts a new cast.
+  function smiteChildNextMark(mark) {
+    if (mark === 'red') return 'amber'
+    if (mark === 'amber') return 'normal'
+    return 'red'
+  }
+
   function smiteChildCommand(marks, uid) {
-    const entries = smiteTicketEntries(marks).filter(([id]) => id !== uid)
-    const live = entries.some(([, mark]) => mark === 'red' || mark === 'amber')
-    return { action: live ? 'drop' : 'cancel', entries }
+    const entries = smiteTicketEntries(marks)
+    if (!entries.some(([id]) => id === uid)) return { action: 'noop', entries }
+    const next = smiteChildNextMark(smiteMarkOf(marks, uid))
+    return {
+      action: 'cycle',
+      next,
+      entries: entries.map(([id, mark]) => (id === uid ? [id, next] : [id, mark])),
+    }
+  }
+
+  function smiteHasNominated(marks) {
+    return smiteMarkList(marks).some((mark) => mark === 'red' || mark === 'amber')
   }
 
   function smiteTicketEntries(marks) {
@@ -2603,9 +2629,11 @@
         if (!mercy || mercy.committing) continue
         const dt = Math.max(0, now - mercy.lastTick)
         mercy.lastTick = now
-        if (!mercy.interacting) mercy.remaining = Math.max(0, mercy.remaining - dt)
-        // Empty line and delete are this tick. Nothing holds the cards after remaining hits 0.
-        if (mercy.remaining <= 0) due.push(mercy)
+        const nominated = smiteHasNominated(mercy.marks)
+        // Original-only casts stay alive for re-include, but the clock does
+        // not drain or commit until someone is nominated again.
+        if (!mercy.interacting && nominated) mercy.remaining = Math.max(0, mercy.remaining - dt)
+        if (nominated && mercy.remaining <= 0) due.push(mercy)
       }
       for (const mercy of due) commitSmite(doc, win, smite, mercy)
       if (smite.mercies.some((mercy) => mercy && !mercy.committing)) {
@@ -2649,8 +2677,7 @@
       }
     } else {
       const command = smiteChildCommand(mercy.marks, pointer.uid)
-      if (command.action === 'cancel') smiteDropMercy(smite, mercy)
-      else smiteApplyEntries(mercy.marks, command.entries)
+      if (command.action === 'cycle') smiteApplyEntries(mercy.marks, command.entries)
     }
     smiteRefresh(doc, smite)
     smiteEnsureTick(doc, win, smite)
