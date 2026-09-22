@@ -37,6 +37,10 @@ First render run `34543470624` had zero WebGL/JavaScript console errors and capt
 
 The managed preview browser rejected the internal preview address before loading the app. GitHub Actions uses Chromium SwiftShader for rendered evidence. Neither result establishes Samsung S23 Ultra GPU performance, physical touch comfort or audio quality.
 
+## Walkability
+
+Tap-to-walk samples each floor's own height along the view ray. Court and mid-step taps land on the arrival ramp (about 6 down to 4.8) and path up it. They no longer stick to the flat court or the foyer behind the steps. Railings and collision close the ocean edge, the sunrise cliff, the lookout lip, and the raised garden and gallery edges above the court. The pool walks and the court–foyer–great room–terrace links stay open. Arrival column heights already meet the stair treads, so prop Y was left alone.
+
 ## Next decisive step
 
 Review the corrected render artifacts and complete the automated phone UI gate, then open a separately authorized preview on Ashley's S23 Ultra. Walk entry → great room → pool → courtyard → kitchen → primary suite → entry, try drag/tap discrimination and Walk mode, pause/background/resume, and verify that speed, visibility and warmth feel comfortable. Keep any production merge/release separate from this acceptance.
