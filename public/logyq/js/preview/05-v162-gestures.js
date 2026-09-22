@@ -2002,18 +2002,27 @@
     node.style?.removeProperty?.('--smite-ink')
   }
 
-  // The clock root's own border is hidden so the mercy path is the only ring.
-  // Descendants keep a solid fate stroke. Neither one is dashed or animated.
-  function smitePaintFaceStroke(face, heat, isClock) {
+  // The card's own border stays hidden so it cannot paint a second shade.
+  function smitePaintFaceStroke(face) {
     if (!face?.style) return
     face.style.animation = 'none'
     face.style.strokeDasharray = 'none'
-    if (isClock) {
-      face.style.stroke = 'none'
-      return
+    face.style.stroke = 'none'
+  }
+
+  function smiteFaceBox(face) {
+    const rxAttr = parseFloat(face?.getAttribute?.('rx'))
+    const ryAttr = parseFloat(face?.getAttribute?.('ry'))
+    const rx = rxAttr > 0 ? rxAttr : 10
+    const ry = ryAttr > 0 ? ryAttr : rx
+    return {
+      rx,
+      ry,
+      x: parseFloat(face?.getAttribute?.('x')) || 0,
+      y: parseFloat(face?.getAttribute?.('y')) || 0,
+      w: parseFloat(face?.getAttribute?.('width')) || 0,
+      h: parseFloat(face?.getAttribute?.('height')) || 0,
     }
-    face.style.stroke = heat.stroke
-    face.style.strokeWidth = '2.5px'
   }
 
   function smiteTakeClock(node) {
@@ -2032,19 +2041,24 @@
     link.style.animation = ''
     link.style.opacity = '0.5'
     link.style.strokeWidth = '2.8px'
+    link.style.vectorEffect = ''
+    link.style.transition = ''
     delete link.dataset.smiteEdge
   }
 
   function smitePaintEdge(link, heat) {
+    try { link.ownerDocument?.defaultView?.d3?.select(link).interrupt() } catch (_error) {}
     link.dataset.smiteEdge = '1'
     link.style.stroke = heat.stroke
-    link.style.strokeWidth = '2.8px'
+    link.style.strokeWidth = '3.5px'
     link.style.opacity = '1'
     link.style.strokeDasharray = 'none'
     link.style.animation = 'none'
+    link.style.transition = 'none'
+    link.style.vectorEffect = 'non-scaling-stroke'
   }
 
-  function smitePaintCard(node, heat, rx, ry) {
+  function smitePaintCard(node, heat, rx, ry, outline) {
     const face = smiteFace(node)
     if (!face) return
     const doc = node.ownerDocument
@@ -2066,7 +2080,17 @@
     wash.setAttribute('ry', String(ry))
     wash.setAttribute('fill', heat.wash)
     wash.setAttribute('fill-opacity', String(heat.washOpacity))
-    wash.setAttribute('stroke', 'none')
+    wash.style.animation = 'none'
+    if (outline) {
+      wash.setAttribute('stroke', heat.stroke)
+      wash.setAttribute('stroke-width', '3.5')
+      wash.style.strokeDasharray = 'none'
+      wash.style.vectorEffect = 'non-scaling-stroke'
+    } else {
+      wash.setAttribute('stroke', 'none')
+      wash.style.strokeDasharray = ''
+      wash.style.vectorEffect = ''
+    }
     node.dataset.smiteHeat = '1'
   }
 
@@ -2113,7 +2137,7 @@
       const take = (uid, mark) => {
         if (!uid || byUid.has(uid) || owned.has(uid)) return
         owned.set(uid, mark)
-        byUid.set(uid, { mark, fraction })
+        byUid.set(uid, { mark, fraction, layer })
       }
       if (typeof marks.forEach === 'function') marks.forEach((mark, uid) => take(uid, mark))
       else Object.keys(marks).forEach((uid) => take(uid, marks[uid]))
@@ -2124,6 +2148,24 @@
     nodes.forEach((node) => {
       const uid = nodeUid(node)
       if (uid) nodeByUid.set(uid, node)
+    })
+    // One heat stop per mercy. Every card and connector in that set uses it.
+    const phaseOf = new Map()
+    for (const layer of layers || []) {
+      if (phaseOf.has(layer)) continue
+      let box = null
+      for (const uid of clockRoots) {
+        const entry = byUid.get(uid)
+        if (!entry || entry.layer !== layer) continue
+        const face = smiteFace(nodeByUid.get(uid))
+        if (!face) continue
+        box = smiteFaceBox(face)
+        break
+      }
+      phaseOf.set(layer, smiteLinePhase(layer?.fraction, box?.w || 140, box?.h || 63, box?.rx || 10, box?.ry || 10))
+    }
+    nodes.forEach((node) => {
+      const uid = nodeUid(node)
       const entry = uid ? byUid.get(uid) : null
       const mark = entry?.mark
       const fraction = entry?.fraction
@@ -2136,19 +2178,12 @@
       const face = smiteFace(node)
       if (!face) return
       const svg = 'http://www.w3.org/2000/svg'
-      const rxAttr = parseFloat(face.getAttribute('rx'))
-      const ryAttr = parseFloat(face.getAttribute('ry'))
-      const rx = rxAttr > 0 ? rxAttr : 10
-      const ry = ryAttr > 0 ? ryAttr : rx
-      const x = parseFloat(face.getAttribute('x')) || 0
-      const y = parseFloat(face.getAttribute('y')) || 0
-      const w = parseFloat(face.getAttribute('width')) || 0
-      const h = parseFloat(face.getAttribute('height')) || 0
-      const phase = smiteLinePhase(fraction, w, h, rx, ry)
+      const { rx, ry, x, y, w, h } = smiteFaceBox(face)
+      const phase = phaseOf.get(entry.layer) || 'l1'
       const heat = smiteHeat(phase, mark)
       const isClock = clockRoots.has(uid)
-      smitePaintCard(node, heat, rx, ry)
-      smitePaintFaceStroke(face, heat, isClock)
+      smitePaintCard(node, heat, rx, ry, !isClock)
+      smitePaintFaceStroke(face)
       node.dataset.smitePhase = phase
       node.style.setProperty('--smite-ink', heat.stroke)
       if (!isClock) {

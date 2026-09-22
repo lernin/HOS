@@ -2197,6 +2197,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
           washOpacity: Number(wash?.getAttribute('fill-opacity')),
           glow: node.querySelector('rect.logyq-smite-glow') ? Number(node.querySelector('rect.logyq-smite-glow').getAttribute('fill-opacity')) : 0,
           faceStroke: cssHex(node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')?.style?.stroke || ''),
+          washStroke: cssHex(wash?.getAttribute('stroke') || ''),
           clocks: node.querySelectorAll('path.logyq-smite-clock').length,
         }
       })
@@ -2214,6 +2215,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
         name: link.__data__?.target?.data?.name ?? null,
         stroke: cssHex(link.style.stroke || ''),
         dash: link.style.strokeDasharray || '',
+        opacity: link.style.opacity || '',
         edge: link.dataset.smiteEdge || '',
         animation: link.style.animationName || link.style.animation || '',
       }))
@@ -2451,28 +2453,52 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   const family = await heats()
   assert.deepEqual(family.map((card) => card.name).sort(), ['', 'A', 'A1'])
   assert.deepEqual(family.filter((card) => card.clock).map((card) => card.name), ['A'])
-  assert.ok(family.every((card) => card.phase === 'l1' && card.wash === '#f6b6b6' && card.glow === 0 && card.clocks <= 1))
-  assert.equal(family.find((card) => card.name === 'A')?.faceStroke, 'none')
-  assert.equal(family.find((card) => card.name === 'A1')?.faceStroke, '#f6b6b6')
+  assert.ok(family.every((card) => card.phase === 'l1' && card.wash === '#f6b6b6' && card.glow === 0 && card.clocks <= 1 && card.faceStroke === 'none'))
+  assert.equal(new Set(family.map((card) => card.washOpacity)).size, 1)
+  assert.equal(family.find((card) => card.name === 'A')?.washStroke, 'none')
+  assert.equal(family.find((card) => card.name === 'A1')?.washStroke, '#f6b6b6')
+  assert.equal(family.find((card) => card.name === '')?.washStroke, '#f6b6b6')
   assert.equal(family.find((card) => card.name === '')?.clock, false)
   assert.equal((await clocks()).length, 1)
   assert.equal((await clocks())[0].name, 'A')
+  assert.equal((await clocks())[0].stroke, '#f6b6b6')
   const familyEdges = await edges()
   const doomedEdges = familyEdges.filter((edge) => edge.edge === '1')
   assert.deepEqual(doomedEdges.map((edge) => edge.name).sort(), ['', 'A', 'A1'])
-  assert.ok(doomedEdges.every((edge) => edge.stroke === '#f6b6b6' && edge.dash === 'none' && edge.animation === 'none'))
+  assert.ok(doomedEdges.every((edge) => edge.stroke === '#f6b6b6' && edge.opacity === '1' && edge.dash === 'none' && edge.animation === 'none'))
   assert.equal(familyEdges.find((edge) => edge.name === 'B')?.edge || '', '')
   await touch('pointerup', card.x, card.y + 84, 42, card.uid)
   await touch('pointerup', 16, 422, 41)
+  await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 1600 })
+  await page.waitForFunction(() => {
+    const nodes = Array.from(document.querySelectorAll('svg#canvas g.node')).filter((node) => node.dataset.smiteHeat === '1')
+    return nodes.length >= 3 && nodes.every((node) => node.dataset.smitePhase === 'l5')
+  })
+  const locked = await heats()
+  const lockedEdges = (await edges()).filter((edge) => edge.edge === '1')
+  assert.ok(locked.every((card) => card.phase === 'l5' && card.wash === '#ff0000' && card.washOpacity === locked[0].washOpacity))
+  assert.equal(locked.find((card) => card.name === 'A1')?.washStroke, '#ff0000')
+  assert.equal(locked.find((card) => card.name === '')?.washStroke, '#ff0000')
+  assert.equal((await clocks())[0].stroke, '#ff0000')
+  assert.ok(lockedEdges.every((edge) => edge.stroke === '#ff0000'))
+  await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 15000 })
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'A')
+    return node?.dataset?.smitePhase === 'l1'
+  })
   const child = await center('A1')
   await touch('pointerdown', child.x, child.y, 43, child.uid)
   await touch('pointerup', child.x, child.y, 43, child.uid)
   const toggled = await heats()
   assert.equal(toggled.find((card) => card.name === 'A1')?.clock, false)
   assert.equal(toggled.find((card) => card.name === 'A1')?.wash, '#f6dfb6')
+  assert.equal(toggled.find((card) => card.name === 'A1')?.washStroke, '#f6dfb6')
+  assert.equal(toggled.find((card) => card.name === 'A1')?.phase, toggled.find((card) => card.name === 'A')?.phase)
   assert.equal(toggled.find((card) => card.name === 'A1')?.clocks, 0)
   assert.equal(toggled.find((card) => card.name === 'A')?.clock, true)
   assert.equal(toggled.find((card) => card.name === 'A')?.wash, '#f6b6b6')
+  assert.equal(toggled.find((card) => card.name === '')?.wash, '#f6b6b6')
+  assert.equal(toggled.find((card) => card.name === '')?.washStroke, '#f6b6b6')
   const toggledEdges = await edges()
   assert.equal(toggledEdges.find((edge) => edge.name === 'A1')?.stroke, '#f6dfb6')
   assert.equal(toggledEdges.find((edge) => edge.name === 'A')?.stroke, '#f6b6b6')
