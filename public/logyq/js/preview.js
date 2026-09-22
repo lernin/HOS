@@ -987,14 +987,22 @@
     return nominated[0]
   }
 
-  // Parent is master. Red re-arms every remaining ticket as amber and the
-  // caller restarts the 3s hold. Any other state cancels the whole cast.
+  // Parent is master. Red promotes the parent and every ticket still in the
+  // cast to amber. The caller restarts the full ring and the 3s hold.
+  // A child already removed from the cast is not put back. Any other state
+  // cancels whatever tickets remain.
   function smiteParentCommand(marks, castUid, tone) {
     const current = smiteNominatedTone(marks, castUid, tone)
     if (current !== 'red') return { action: 'cancel', entries: [] }
-    const entries = smiteTicketEntries(marks).map(([uid, mark]) => (
-      mark === 'red' || mark === 'amber' ? [uid, 'amber'] : [uid, mark]
-    ))
+    const entries = []
+    let parentSeen = false
+    for (const [uid, mark] of smiteTicketEntries(marks)) {
+      if (mark !== 'red' && mark !== 'amber') continue
+      if (uid === castUid) parentSeen = true
+      entries.push([uid, 'amber'])
+    }
+    if (castUid && !parentSeen) entries.push([castUid, 'amber'])
+    if (!entries.length) return { action: 'cancel', entries: [] }
     return { action: 'rearm', entries }
   }
 
