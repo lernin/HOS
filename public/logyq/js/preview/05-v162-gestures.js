@@ -209,31 +209,32 @@
     return { array: `${visible} ${eaten}`, offset: eaten }
   }
 
-  // Heat follows the leading edge as it leaves 12 toward the left.
-  // Very light until the top-left corner is rounded, then stronger after
-  // each corner, and a behind-glow only on the last stretch.
+  // Five levels from where the drain tip is along the stroke.
+  // l1 just staged, l2 after the first corner off the top, l3 after the
+  // bottom-left corner, l4 after the bottom-right corner, l5 after the
+  // last top corner.
   function smiteLinePhase(fraction, width, height, rx = 10, ry = 10) {
     const f = Number(fraction)
-    if (!Number.isFinite(f) || f >= 1) return 'veil'
-    if (f <= 0) return 'glow'
+    if (!Number.isFinite(f) || f >= 1) return 'l1'
+    if (f <= 0) return 'l5'
     const { w, h, capX, capY } = smiteRoundCaps(width, height, rx, ry)
-    if (w <= 0 || h <= 0) return 'veil'
+    if (w <= 0 || h <= 0) return 'l1'
     const topHalf = Math.max(0, w / 2 - capX)
     const side = Math.max(0, h - 2 * capY)
     const bottom = Math.max(0, w - 2 * capX)
     const arc = smiteQuarterArc(capX, capY)
     const total = topHalf + arc + side + arc + bottom + arc + side + arc + topHalf
-    if (total <= 0) return 'veil'
+    if (total <= 0) return 'l1'
     const eaten = (1 - Math.min(1, f)) * total
-    const topLeft = topHalf + arc
-    const bottomLeft = topLeft + side + arc
+    const firstCorner = topHalf + arc
+    const bottomLeft = firstCorner + side + arc
     const bottomRight = bottomLeft + bottom + arc
-    const topRight = bottomRight + side + arc
-    if (eaten <= topLeft) return 'veil'
-    if (eaten <= bottomLeft) return 'light'
-    if (eaten <= bottomRight) return 'medium'
-    if (eaten <= topRight) return 'dark'
-    return 'glow'
+    const finalTop = bottomRight + side + arc
+    if (eaten <= firstCorner) return 'l1'
+    if (eaten <= bottomLeft) return 'l2'
+    if (eaten <= bottomRight) return 'l3'
+    if (eaten <= finalTop) return 'l4'
+    return 'l5'
   }
 
   // A clock card is a dying node whose parent is not also dying.
@@ -252,26 +253,32 @@
     return roots
   }
 
-  // Fate hue, stepped by how many corners the edge has rounded.
-  // Wash stays translucent so painted color still reads underneath.
+  function smiteHsl(hue, sat, light) {
+    const s = sat / 100
+    const l = light / 100
+    const a = s * Math.min(l, 1 - l)
+    const channel = (n) => {
+      const k = (n + hue / 30) % 12
+      const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1)
+      return Math.round(c * 255).toString(16).padStart(2, '0')
+    }
+    return `#${channel(0)}${channel(8)}${channel(4)}`
+  }
+
+  // One ladder for both fates. Same hue, saturation up, lightness down
+  // toward the pure primary. l5 red is #ff0000. l5 amber is #ffa100.
   function smiteHeat(phase, mark = 'red') {
-    const amber = mark === 'amber'
-    const table = amber
-      ? {
-          veil: { stroke: '#fde68a', wash: '#fde68a', washOpacity: 0.22, glow: 0 },
-          light: { stroke: '#fcd34d', wash: '#fbbf24', washOpacity: 0.34, glow: 0 },
-          medium: { stroke: '#f59e0b', wash: '#f59e0b', washOpacity: 0.48, glow: 0 },
-          dark: { stroke: '#b45309', wash: '#92400e', washOpacity: 0.58, glow: 0 },
-          glow: { stroke: '#ffb000', wash: '#f59e0b', washOpacity: 0.72, glow: 0.95 },
-        }
-      : {
-          veil: { stroke: '#fecaca', wash: '#fecaca', washOpacity: 0.22, glow: 0 },
-          light: { stroke: '#fca5a5', wash: '#f87171', washOpacity: 0.34, glow: 0 },
-          medium: { stroke: '#ef4444', wash: '#ef4444', washOpacity: 0.48, glow: 0 },
-          dark: { stroke: '#b91c1c', wash: '#991b1b', washOpacity: 0.58, glow: 0 },
-          glow: { stroke: '#ff2d2d', wash: '#ef4444', washOpacity: 0.72, glow: 0.95 },
-        }
-    return table[phase] || table.veil
+    const hue = mark === 'amber' ? 38 : 0
+    const ladder = {
+      l1: [78, 84, 0.38],
+      l2: [86, 72, 0.52],
+      l3: [92, 62, 0.66],
+      l4: [96, 55, 0.8],
+      l5: [100, 50, 0.94],
+    }
+    const stop = ladder[phase] || ladder.l1
+    const color = smiteHsl(hue, stop[0], stop[1])
+    return { stroke: color, wash: color, washOpacity: stop[2], glow: 0 }
   }
 
   // Full residue, then a soft ease-out. 0 means the scar is gone.
@@ -2019,7 +2026,7 @@
       }
       const dash = smiteLineDash(fraction)
       clock.setAttribute('d', d)
-      clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}${phase === 'glow' ? ' is-glow' : ''}`)
+      clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}`)
       clock.setAttribute('stroke', heat.stroke)
       clock.setAttribute('stroke-dasharray', dash.array)
       clock.setAttribute('stroke-dashoffset', String(dash.offset))
