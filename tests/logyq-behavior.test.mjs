@@ -1497,7 +1497,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteCastOverlaps, smiteHeat, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1599,6 +1599,12 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   for (let i = 1; i < red.length; i += 1) assert.ok(red[i].washOpacity > red[i - 1].washOpacity)
   assert.equal(red[4].stroke, '#ff0000')
   assert.equal(amber[4].stroke, '#ffa100')
+  assert.deepEqual(smite.smitePastel('red'), { fill: '#ffb8b8', opacity: 0.88 })
+  assert.deepEqual(smite.smitePastel('amber'), { fill: '#ffcc80', opacity: 0.88 })
+  assert.equal(smite.smiteNominatedTone(new Map([['a1', 'red'], ['blank', 'red']]), 'a', 'red'), 'red')
+  assert.equal(smite.smiteNominatedTone(new Map([['a', 'amber'], ['a1', 'amber']]), 'a', 'red'), 'amber')
+  assert.equal(smite.smiteNominatedTone(new Map([['a', 'normal'], ['a1', 'amber']]), 'a', 'red'), 'amber')
+  assert.equal(smite.smiteNominatedTone(new Map([['a', 'normal']]), 'a', 'red'), null)
 
   const tree = smiteSampleTree()
   assert.deepEqual(smite.smiteClockRoots(tree, { r: 'red', a: 'red', a1: 'red' }), ['r'])

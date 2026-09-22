@@ -314,6 +314,31 @@
     return { stroke: color, wash: color, washOpacity: stop[2], glow: 0 }
   }
 
+  function smitePastel(mark) {
+    if (mark === 'amber') return { fill: '#ffcc80', opacity: 0.88 }
+    return { fill: '#ffb8b8', opacity: 0.88 }
+  }
+
+  function smiteMarkList(marks) {
+    const out = []
+    if (!marks) return out
+    if (typeof marks.forEach === 'function') marks.forEach((mark) => out.push(mark))
+    else Object.keys(marks).forEach((uid) => out.push(marks[uid]))
+    return out
+  }
+
+  // Clock color for the swiped card. Null when nothing is still nominated,
+  // so a parent toggled all the way off does not keep a ring.
+  function smiteNominatedTone(marks, castUid, tone) {
+    const own = smiteMarkOf(marks, castUid)
+    const nominated = smiteMarkList(marks).filter((mark) => mark === 'red' || mark === 'amber')
+    if (!nominated.length) return null
+    if (own === 'red' || own === 'amber') return own
+    if (nominated.every((mark) => mark === nominated[0])) return nominated[0]
+    if (tone === 'amber' || tone === 'red') return tone
+    return nominated[0]
+  }
+
   // Full residue, then a soft ease-out. 0 means the scar is gone.
   function smiteScarOpacity(ageMs, holdMs = 2800, fadeMs = 7200) {
     const age = Math.max(0, Number(ageMs) || 0)
@@ -1760,6 +1785,8 @@
     return (smite.mercies || []).filter((mercy) => mercy && !mercy.committing).map((mercy) => ({
       marks: mercy.marks,
       fraction: smiteRingFraction(mercy.remaining, SMITE_FULL_MS),
+      castUid: mercy.castUid,
+      tone: mercy.direction === 'left' ? 'amber' : 'red',
     }))
   }
 
@@ -1833,7 +1860,7 @@
       return
     }
     for (const id of ids) marks.set(id, tone)
-    smiteRefresh(doc, smite, { marks, fraction: 1 })
+    smiteRefresh(doc, smite, { marks, fraction: 1, castUid: swipe.uid, tone })
   }
 
   function smiteTryCast(doc, win, smite, pointer, pointerId) {
@@ -2006,6 +2033,7 @@
     })
     delete node.dataset.smiteHeat
     delete node.dataset.smitePhase
+    delete node.dataset.smiteClock
     node.style?.removeProperty?.('--smite-ink')
   }
 
@@ -2087,6 +2115,8 @@
     wash.setAttribute('ry', String(ry))
     wash.setAttribute('fill', heat.wash)
     wash.setAttribute('fill-opacity', String(heat.washOpacity))
+    wash.style.fill = heat.wash
+    wash.style.fillOpacity = String(heat.washOpacity)
     wash.style.animation = 'none'
     wash.style.filter = 'none'
     // Inline stroke wins over `.node rect`, which would otherwise keep a full white ring.
@@ -2140,7 +2170,7 @@
   function paintSmiteLayers(doc, layers) {
     const tree = bridge.core?.state?.root?.data
     const byUid = new Map()
-    const clockRoots = new Set()
+    const clockHosts = new Map()
     for (const layer of layers || []) {
       const marks = layer?.marks
       if (!marks) continue
@@ -2153,43 +2183,59 @@
       }
       if (typeof marks.forEach === 'function') marks.forEach((mark, uid) => take(uid, mark))
       else Object.keys(marks).forEach((uid) => take(uid, marks[uid]))
-      for (const uid of smiteClockRoots(tree, owned)) clockRoots.add(uid)
+      const castUid = layer.castUid || null
+      const tone = smiteNominatedTone(marks, castUid, layer.tone)
+      if (castUid && tone && !clockHosts.has(castUid)) {
+        clockHosts.set(castUid, { mark: tone, fraction })
+      } else if (!castUid) {
+        for (const uid of smiteClockRoots(tree, owned)) {
+          const mark = owned.get(uid)
+          if ((mark === 'red' || mark === 'amber') && !clockHosts.has(uid)) {
+            clockHosts.set(uid, { mark, fraction })
+          }
+        }
+      }
     }
     const nodes = doc.querySelectorAll('svg#canvas g.node')
-    const nodeByUid = new Map()
-    nodes.forEach((node) => {
-      const uid = nodeUid(node)
-      if (uid) nodeByUid.set(uid, node)
-    })
     nodes.forEach((node) => {
       const uid = nodeUid(node)
       const entry = uid ? byUid.get(uid) : null
       const mark = entry?.mark
-      const fraction = entry?.fraction
+      const nominated = mark === 'red' || mark === 'amber'
+      const host = uid ? clockHosts.get(uid) : null
       let clock = smiteTakeClock(node)
-      node.querySelectorAll('rect.logyq-smite-wash, rect.logyq-smite-glow').forEach((layer) => layer.remove())
+      node.querySelectorAll('rect.logyq-smite-glow').forEach((layer) => layer.remove())
       delete node.dataset.smitePhase
       node.style?.removeProperty?.('--smite-ink')
-      if (mark !== 'red' && mark !== 'amber') {
-        if (clock || node.dataset.smiteHeat === '1') smiteRestoreCard(node)
+      if (!nominated && !host) {
+        if (clock || node.dataset.smiteHeat === '1' || node.dataset.smiteClock === '1' || node.querySelector('rect.logyq-smite-wash')) {
+          smiteRestoreCard(node)
+        }
         clock?.remove()
+        delete node.dataset.smiteClock
         return
       }
       const face = smiteFace(node)
       if (!face) return
-      const isClock = clockRoots.has(uid)
-      if (!isClock) {
-        clock?.remove()
-        smiteRestoreFace(face)
+      const { rx, ry, x, y, w, h } = smiteFaceBox(face)
+      if (nominated) {
+        const pastel = smitePastel(mark)
+        smitePaintCard(node, { wash: pastel.fill, washOpacity: pastel.opacity, stroke: pastel.fill }, rx, ry, false)
+      } else {
+        node.querySelectorAll('rect.logyq-smite-wash').forEach((layer) => layer.remove())
         delete node.dataset.smiteHeat
+      }
+      if (!host) {
+        clock?.remove()
+        delete node.dataset.smiteClock
+        smiteRestoreFace(face)
         return
       }
       const svg = 'http://www.w3.org/2000/svg'
-      const { rx, ry, x, y, w, h } = smiteFaceBox(face)
-      // One steady line. The card keeps its own fill. No wash, glow, or heat step.
+      // The clock hides the card border so that white stroke is not a second ring.
       smitePaintFaceStroke(face)
-      node.dataset.smiteHeat = '1'
-      const color = mark === 'amber' ? '#ffa100' : '#ff0000'
+      node.dataset.smiteClock = '1'
+      const color = host.mark === 'amber' ? '#ffa100' : '#ff0000'
       const d = smiteClockPath(x, y, w, h, rx, ry)
       if (!d) {
         clock?.remove()
@@ -2209,7 +2255,7 @@
         node.appendChild(clock)
       }
       clock.setAttribute('d', d)
-      clock.setAttribute('class', `logyq-smite-clock logyq-smite-${mark}`)
+      clock.setAttribute('class', `logyq-smite-clock logyq-smite-${host.mark}`)
       clock.setAttribute('stroke', color)
       clock.style.animation = 'none'
       clock.style.transition = 'none'
@@ -2221,7 +2267,7 @@
       // Dash lives on the SVG attributes, in this one path length.
       // A CSS pixel length would shrink faster than the 12s drain when the map is scaled.
       clock.setAttribute('pathLength', String(length))
-      const dash = smiteLineDash(fraction, length)
+      const dash = smiteLineDash(host.fraction, length)
       clock.setAttribute('stroke-dasharray', dash.array)
       clock.setAttribute('stroke-dashoffset', String(dash.offset))
       clock.style.removeProperty('stroke-dasharray')
