@@ -118,6 +118,29 @@
         #logiq-mobile-panel{top:48px;left:auto;width:min(310px,calc(100vw - 16px))}
         #logiq-voice-bar{bottom:62px}
       }
+      @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
+        html{--logyq-rail:calc(52px + env(safe-area-inset-left, 0px))}
+        #logiq-mobile-header{top:0;right:auto;bottom:0;left:0;width:var(--logyq-rail);height:auto;max-height:100dvh;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;padding:max(4px, env(safe-area-inset-top)) 4px max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));border-bottom:0;border-right:1px solid rgba(226,232,240,.9);box-shadow:1px 0 4px rgba(15,23,42,.08);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;backdrop-filter:none;-webkit-backdrop-filter:none}
+        #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto}
+        #logiq-mobile-header .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px;touch-action:manipulation}
+        #logiq-mobile-header .logiq-mobile-entry{width:44px;min-width:44px;max-width:44px;height:44px;flex:0 0 44px;padding:0;color:transparent;caret-color:transparent;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23334155' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z'/%3E%3C/svg%3E") center/18px no-repeat}
+        #logiq-mobile-header .logiq-mobile-entry:not(:placeholder-shown){color:#0f172a;background-image:none;font-size:11px;text-overflow:ellipsis}
+        #logiq-mobile-header .logiq-mobile-entry:focus{position:fixed;z-index:3400;left:calc(var(--logyq-rail) + 8px);right:auto;top:max(8px, env(safe-area-inset-top));width:calc(100vw - var(--logyq-rail) - 16px - env(safe-area-inset-right, 0px));min-width:120px;max-width:none;height:44px;padding:0 12px;color:#0f172a;caret-color:#0f172a;background:#fff;font-size:16px;text-align:left}
+        #logiq-mobile-header .logiq-save-state{width:44px;height:12px;flex:0 0 12px;justify-content:center;overflow:visible}
+        svg#canvas{left:var(--logyq-rail);right:auto;top:0;bottom:0;width:calc(100% - var(--logyq-rail) - env(safe-area-inset-right, 0px));height:100dvh;max-width:none}
+        #Dock{left:calc(var(--logyq-rail) + 8px);right:max(8px, env(safe-area-inset-right))}
+        #Dock.dock-left{top:max(8px, env(safe-area-inset-top));left:calc(var(--logyq-rail) + 8px);bottom:max(8px, env(safe-area-inset-bottom))}
+        #logyq-paint-strip{top:max(8px, env(safe-area-inset-top));left:calc(var(--logyq-rail) + 8px);right:max(8px, env(safe-area-inset-right))}
+        #logiq-mobile-panel{top:max(8px, env(safe-area-inset-top));bottom:max(8px, env(safe-area-inset-bottom));left:calc(var(--logyq-rail) + 8px);right:auto;width:min(280px, calc(100vw - var(--logyq-rail) - 16px));overflow:auto}
+        #logiq-voice-bar{left:calc(50% + (var(--logyq-rail) / 2));bottom:max(8px, env(safe-area-inset-bottom))}
+        body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:row;align-items:stretch;overflow:hidden}
+        body.logyq-home #logiq-library .logiq-modal-head{position:relative;top:auto;flex:0 0 var(--logyq-rail);flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;width:var(--logyq-rail);height:auto;align-self:stretch;box-sizing:border-box;padding:max(8px, env(safe-area-inset-top)) 4px max(8px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));border-bottom:0;border-right:1px solid #e2e8f0;overflow:auto}
+        body.logyq-home #logiq-library .logiq-modal-head h2{flex:0 0 auto;writing-mode:vertical-rl;text-orientation:mixed;font-size:13px;letter-spacing:.06em}
+        body.logyq-home #logiq-library-close{order:-1;flex:0 0 44px;width:44px;height:44px}
+        body.logyq-home #logiq-new-map{flex:0 0 44px;width:44px;height:44px;padding:0;font-size:0}
+        body.logyq-home #logiq-new-map::before{content:"+";font-size:26px;line-height:44px}
+        body.logyq-home #logiq-library .logiq-library-body{flex:1 1 auto;min-width:0;overflow:auto}
+      }
     `
     document.head.append(style)
   }

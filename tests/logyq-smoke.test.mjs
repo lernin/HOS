@@ -277,6 +277,75 @@ test('LOGYQ phone shell keeps Fit, hides Trash, and can edit a selected card', a
   await context.close()
 })
 
+test('LOGYQ phone landscape turns the header and map library into a side rail', async () => {
+  const context = await newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+
+  const library = await page.evaluate(() => {
+    const head = document.querySelector('#logiq-library .logiq-modal-head')?.getBoundingClientRect()
+    const body = document.querySelector('#logiq-library .logiq-library-body')?.getBoundingClientRect()
+    const title = document.getElementById('logiq-library-title')?.getBoundingClientRect()
+    return {
+      home: document.body.classList.contains('logyq-home'),
+      coarse: matchMedia('(pointer:coarse), (hover:none), (max-width:700px)').matches,
+      landscape: matchMedia('(orientation: landscape)').matches,
+      head: head && { x: head.x, y: head.y, width: head.width, height: head.height },
+      body: body && { x: body.x, width: body.width },
+      title: title && { height: title.height, width: title.width },
+    }
+  })
+  assert.equal(library.home, true)
+  assert.equal(library.landscape, true)
+  assert.equal(library.coarse, true)
+  assert.ok(library.head, 'library header should be laid out')
+  assert.ok(library.head.width < library.head.height, `library header ${library.head.width}x${library.head.height} should be a vertical rail`)
+  assert.ok(library.head.width <= 80, `library rail width ${library.head.width} should stay thin`)
+  assert.ok(library.head.x <= 1, `library rail x ${library.head.x} should sit on the left`)
+  assert.ok(library.body.x >= library.head.x + library.head.width - 2, 'map list should sit to the right of the library rail')
+  assert.ok(library.title.height > library.title.width, 'library title should run down the rail')
+
+  await loadSampleTree(page)
+  await page.waitForTimeout(400)
+  const map = await page.evaluate(() => {
+    const header = document.getElementById('logiq-mobile-header').getBoundingClientRect()
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    const mic = document.getElementById('logiq-mobile-mic-btn').getBoundingClientRect()
+    const home = document.getElementById('logyq-home-btn').getBoundingClientRect()
+    return {
+      vw: window.innerWidth,
+      vh: window.innerHeight,
+      header: { x: header.x, y: header.y, width: header.width, height: header.height, right: header.right },
+      canvas: { x: canvas.x, y: canvas.y, width: canvas.width, height: canvas.height, right: canvas.right },
+      mic: { x: mic.x, y: mic.y, width: mic.width, height: mic.height },
+      home: { x: home.x, width: home.width, height: home.height },
+    }
+  })
+  assert.ok(map.header.height > map.header.width, `map header ${map.header.width}x${map.header.height} should be a vertical rail`)
+  assert.ok(map.header.width <= 80, `map rail width ${map.header.width} should stay thin`)
+  assert.ok(map.header.x <= 1 && map.header.y <= 1, 'map rail should anchor to the top-left')
+  assert.ok(map.header.height >= map.vh - 2, `map rail height ${map.header.height} should fill the landscape viewport`)
+  assert.ok(map.canvas.x >= map.header.right - 2, `canvas x ${map.canvas.x} should start after the rail`)
+  assert.ok(map.canvas.right >= map.vw - 2, `canvas should reach the right edge, right=${map.canvas.right}`)
+  assert.ok(map.canvas.width >= map.vw - map.header.width - 4, 'map should keep the width beside the rail')
+  assert.ok(map.canvas.height >= map.vh - 2, 'map should keep the full landscape height')
+  assert.ok(map.mic.width >= 40 && map.mic.height >= 40, 'landscape rail controls should stay tappable')
+  assert.ok(map.home.width >= 40 && map.home.height >= 40, 'maps control should stay tappable')
+  assert.ok(map.mic.x + map.mic.width <= map.header.right + 1, 'mic should stay inside the rail')
+
+  const entry = page.locator('#logiq-mobile-word-input')
+  await entry.focus()
+  const focused = await entry.boundingBox()
+  assert.ok(focused.width > map.header.width + 80, `focused type field width ${focused?.width} should expand beside the rail`)
+  assert.ok(focused.x >= map.header.right - 2, 'focused type field should open to the right of the rail')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap edits', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)

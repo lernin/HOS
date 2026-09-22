@@ -480,7 +480,10 @@ centerOnSelected(opts = {}) {
     if(!b||!b.width||!b.height) return;
     const phone = typeof window !== 'undefined' && window.matchMedia
       && window.matchMedia('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px)),(max-width:700px)').matches;
-    const headerH = phone ? (document.getElementById('logiq-mobile-header')?.getBoundingClientRect().height || 48) : 0;
+    const headerEl = phone ? document.getElementById('logiq-mobile-header') : null;
+    const headerBox = headerEl ? headerEl.getBoundingClientRect() : null;
+    const sideRail = !!(headerBox && headerBox.width > 0 && headerBox.width < 120 && headerBox.height > headerBox.width);
+    const headerH = sideRail ? 0 : (phone ? ((headerBox && headerBox.height) || 48) : 0);
     const dockEl = phone ? document.getElementById('Dock') : null;
     const dockBox = dockEl && !dockEl.classList.contains('dock-hidden') ? dockEl.getBoundingClientRect() : null;
     const dockH = dockBox && dockBox.height > 8 ? dockBox.height + 8 : 16;
