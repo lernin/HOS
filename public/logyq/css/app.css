@@ -677,8 +677,8 @@ svg.delete-intent g.links path.link.is-parent-link {
     background: transparent;
     pointer-events: none;
     opacity: 0;
-    transition: none !important;
-    transform: none;
+    transition: none;
+    transform: translate3d(0, 100%, 0);
   }
   body.logyq-mobile-v162 .node-edit-stack.is-placed{
     opacity: 1;
@@ -726,9 +726,9 @@ svg.delete-intent g.links path.link.is-parent-link {
     padding: 0;
     background: #fff;
     border: 0;
-    border-top: 1px solid rgba(15, 23, 42, .12);
+    border-top: 1px solid rgba(15, 23, 42, .28);
     border-radius: 0;
-    box-shadow: 0 -2px 6px rgba(15, 23, 42, .2), 0 -14px 36px rgba(15, 23, 42, .42);
+    box-shadow: 0 -1px 0 rgba(15, 23, 42, .28), 0 -10px 18px rgba(15, 23, 42, .38), 0 -28px 52px rgba(15, 23, 42, .62);
   }
   body.logyq-mobile-v162 .node-edit-dock .node-edit-input{
     position: relative;

@@ -1826,18 +1826,39 @@ if (dir === +1){
  // Keyboard inset is the covered height only. Subtracting the visual
  // viewport's scroll offset made the bar hop while the keyboard rose.
  // The bar stays hidden until that inset has been still, or until
- // PHONE_BAR_CAP_MS, so it appears once already flush with the keyboard.
+ // PHONE_BAR_CAP_MS. It then slides up from under the keyboard.
  const PHONE_BAR_QUIET_MS = 80
  const PHONE_BAR_CAP_MS = 500
+ const PHONE_BAR_SLIDE_MS = 340
  function keyboardInset(){
   const vv = window.visualViewport
   return vv ? Math.max(0, Math.round(window.innerHeight - vv.height)) : 0
  }
- function applyMobileInset(stack, inset){
-  if (stack._logyqInset === inset && stack.classList.contains('is-placed')) return
+ function mobileLift(inset){
+  return inset ? 'translate3d(0,' + (-inset) + 'px,0)' : 'translate3d(0,0,0)'
+ }
+ function applyMobileInset(stack, inset, slide){
+  if (stack._logyqInset === inset && stack.classList.contains('is-placed') && stack.dataset.drawer === 'open') return
   stack._logyqInset = inset
   stack.style.bottom = '0px'
-  stack.style.transform = inset ? 'translate3d(0,' + (-inset) + 'px,0)' : 'none'
+  if (slide && stack.dataset.drawer !== 'open') {
+    stack.style.transition = 'none'
+    stack.style.transform = 'translate3d(0,100%,0)'
+    void stack.offsetWidth
+    stack.dataset.drawerFrom = String(Math.round(stack.getBoundingClientRect().bottom))
+    stack.style.transition = 'transform ' + PHONE_BAR_SLIDE_MS + 'ms cubic-bezier(0.22, 1, 0.36, 1)'
+    stack.style.transform = mobileLift(inset)
+    stack.dataset.drawer = 'open'
+    delete stack.dataset.drawerSettled
+    const settle = (event) => {
+      if (event.propertyName !== 'transform') return
+      stack.dataset.drawerSettled = '1'
+      stack.removeEventListener('transitionend', settle)
+    }
+    stack.addEventListener('transitionend', settle)
+    return
+  }
+  stack.style.transform = mobileLift(inset)
  }
  function dockMobileEditor(){
   const { state } = logyq
@@ -2085,7 +2106,7 @@ if (dir === +1){
         // A zero inset is the gap under a rising keyboard, not a resting spot.
         if ((inset > 0 && quiet) || capped) {
           stack.classList.add('is-placed');
-          applyMobileInset(stack, inset);
+          applyMobileInset(stack, inset, true);
           return;
         }
         state._editPlaceTimer = setTimeout(placeTick, 40);

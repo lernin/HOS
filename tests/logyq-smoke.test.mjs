@@ -4329,6 +4329,11 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   await page.waitForSelector('.node-edit-stack')
   assert.equal(await page.evaluate(() => document.querySelector('.node-edit-stack').classList.contains('is-placed')), false, 'bar stays hidden while the keyboard rises')
   await page.waitForSelector('.node-edit-stack.is-placed', { timeout: 2000 })
+  await page.waitForFunction(() => {
+    const stack = document.querySelector('.node-edit-stack')
+    const box = stack?.getBoundingClientRect()
+    return stack?.dataset?.drawerSettled === '1' && box && Math.abs(window.innerHeight - box.bottom) < 2
+  })
   const opened = await page.evaluate(() => {
     const input = document.querySelector('.node-edit-input')
     const dock = document.querySelector('.node-edit-dock')
@@ -4356,6 +4361,8 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
       crossWidth: cross.width,
       shadow: dockStyle.boxShadow,
       placed: document.querySelector('.node-edit-stack').classList.contains('is-placed'),
+      drawerFrom: Number(document.querySelector('.node-edit-stack').dataset.drawerFrom || 0),
+      inner: window.innerHeight,
     }
   })
   assert.equal(opened.uid, fruit.uid)
@@ -4374,6 +4381,8 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   assert.ok(opened.crossLeft >= 12, `X must sit in from the screen edge, left=${opened.crossLeft}`)
   assert.ok(opened.crossWidth >= 44, `X hit target must be at least 44px, width=${opened.crossWidth}`)
   assert.ok(opened.shadow && opened.shadow !== 'none', 'bar shadow must separate it from the map')
+  assert.match(opened.shadow, /52px/, `top shadow must be deeper, shadow=${opened.shadow}`)
+  assert.ok(opened.drawerFrom > opened.inner + 8, `rename bar must slide up from below the screen, from=${opened.drawerFrom}`)
   await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/edit_rename_bar.png' })
   sameCamera(before, await view(), 'double-tap')
   await page.waitForTimeout(280)
@@ -4750,6 +4759,11 @@ test('LOGYQ double-tap renames only the card under the finger', async () => {
     await page.waitForSelector('.node-edit-input')
     assert.equal(await page.evaluate(() => document.querySelector('.node-edit-stack')?.classList.contains('is-placed') === true), false, 'bar waits for the keyboard')
     await page.waitForSelector('.node-edit-stack.is-placed', { timeout: 2000 })
+    await page.waitForFunction(() => {
+      const stack = document.querySelector('.node-edit-stack')
+      const box = stack?.getBoundingClientRect()
+      return stack?.dataset?.drawerSettled === '1' && box && Math.abs(window.innerHeight - box.bottom) < 2
+    })
     return card
   }
 
