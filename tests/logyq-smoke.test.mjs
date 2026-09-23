@@ -4124,6 +4124,119 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   await context.close()
 })
 
+test('LOGYQ saved-map blank double-tap does not rename the root', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      _uid: 'n1',
+      children: [{ name: 'Fruit', _uid: 'n2' }],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Food', 'Fruit'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    const rect = node?.getBoundingClientRect()
+    return rect && rect.width > 20
+  }))
+  await page.waitForTimeout(400)
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid: node?.__data__?.data?._uid }
+    }, name)
+  }
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const canvas = document.getElementById('canvas')
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+        isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const fruit = await face('Fruit')
+  const before = await page.locator('svg#canvas g.node').count()
+  await touch('pointerdown', fruit.x, fruit.y, 11)
+  await touch('pointerup', fruit.x, fruit.y + 74, 11)
+  await page.waitForFunction((n) => document.querySelectorAll('svg#canvas g.node').length > n, before)
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.layoutSettling)
+  const blank = await page.evaluate(() => {
+    const rootUid = window.LOGYQBridge.core.state.root.data._uid
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => !(el.__data__?.data?.name || '').trim())
+    const uid = node?.__data__?.data?._uid || null
+    if (!uid) return { uid: null, rootUid }
+    const svg = document.getElementById('canvas')
+    const box = node.querySelector('rect:not(.grabzone)') || node
+    const rect = box.getBoundingClientRect()
+    const cy = rect.top + rect.height / 2
+    const targetY = Math.min(window.innerHeight * 0.55, window.innerHeight - 180)
+    if (cy < 80 || cy > window.innerHeight - 120) {
+      const t = window.d3.zoomTransform(svg)
+      const next = window.d3.zoomIdentity.translate(t.x, t.y + (targetY - cy)).scale(t.k)
+      svg.__zoom = next
+      const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+      if (root) root.setAttribute('transform', next.toString())
+    }
+    const placed = box.getBoundingClientRect()
+    return {
+      x: placed.left + placed.width / 2,
+      y: placed.top + placed.height / 2,
+      uid,
+      rootUid,
+    }
+  })
+  assert.ok(blank.uid)
+  assert.notEqual(blank.uid, blank.rootUid, 'a new blank must not reuse the root uid')
+  const onBlank = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y)
+    const host = hit?.closest?.('g.node')
+    return host?.__data__?.data?._uid || null
+  }, { x: blank.x, y: blank.y })
+  assert.equal(onBlank, blank.uid, 'double-tap point must be the blank face')
+  await touch('pointerdown', blank.x, blank.y, 21)
+  await touch('pointerup', blank.x, blank.y, 21)
+  await touch('pointerdown', blank.x, blank.y, 22)
+  await touch('pointerup', blank.x, blank.y, 22)
+  await page.waitForSelector('.node-edit-input')
+  const bound = await page.evaluate(() => ({
+    editing: window.LOGYQBridge.core.state.editingUid,
+    stamp: document.querySelector('.node-edit-input')?.dataset?.editUid || null,
+    value: document.querySelector('.node-edit-input')?.value ?? null,
+  }))
+  assert.equal(bound.editing, blank.uid)
+  assert.equal(bound.stamp, blank.uid)
+  assert.equal(bound.value, '')
+  await page.locator('.node-edit-input').fill('Lime')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Lime'
+  }, blank.uid)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.root.data.name), 'Food')
+  assert.equal(await page.evaluate(() => {
+    const fruit = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data._uid === 'n2')
+    return fruit?.data?.name
+  }), 'Fruit')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ double-tap renames only the card under the finger', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   await stubMaps(context)

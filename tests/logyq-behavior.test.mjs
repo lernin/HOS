@@ -31,6 +31,22 @@ test('utils assign unique uids even when labels are blank', () => {
   assert.notEqual(a._uid, b._uid)
 })
 
+test('utils do not reissue a saved map uid to a new blank', () => {
+  const utils = loadUtils()
+  const tree = { name: 'Food', _uid: 'n1', children: [{ name: 'Fruit', _uid: 'n2' }] }
+  utils.assignUids(tree)
+  assert.equal(tree._uid, 'n1')
+  assert.equal(tree.children[0]._uid, 'n2')
+  const blank = { name: '' }
+  utils.assignUids(blank)
+  assert.notEqual(blank._uid, 'n1')
+  assert.notEqual(blank._uid, 'n2')
+  const dup = { name: 'Food', _uid: 'n1', children: [{ name: '', _uid: 'n1' }] }
+  utils.assignUids(dup)
+  assert.equal(dup._uid, 'n1')
+  assert.notEqual(dup.children[0]._uid, 'n1')
+})
+
 test('utils assign stable uids, clone trees, and resolve paths', () => {
   const utils = loadUtils()
   const tree = { name: 'root', children: [{ name: 'a' }, { name: 'b', children: [{ name: 'c' }] }] }
