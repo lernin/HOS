@@ -5948,3 +5948,137 @@ test('LOGYQ kids-only parent tap steps delete to Word Bank then clears', async (
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instead of rename', async () => {
+  const calls = []
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  await context.route('https://jzaghifuhinkzzhiojre.supabase.co/**', async (route) => {
+    const url = route.request().url()
+    if (!url.includes('/rpc/lab_thekonym_')) return route.fallback()
+    const name = url.split('/rpc/')[1].split('?')[0]
+    calls.push(name)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(name === 'lab_thekonym_read'
+        ? [{ id: 'row-1', term: 'Zephyronym', essence: 'a test essence' }]
+        : { refused: true }),
+    })
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-thekonym')), false)
+  assert.equal(await page.locator('#logyq-thekonym-ask').isVisible(), false)
+
+  await page.evaluate(() => {
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    const library = document.getElementById('logiq-library')
+    library?.classList.remove('is-open')
+    library?.setAttribute('aria-hidden', 'true')
+    window.LOGYQPreview.app.hasOpenMap = true
+  })
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.locator('#logyq-thekonym-mobile').click()
+  await page.waitForFunction(() => window.LOGYQPreview.thekonym.face('Zephyronym')?.essence === 'a test essence')
+  assert.equal(await page.locator('#logyq-thekonym-ask').isVisible(), true)
+  await page.evaluate(() => document.getElementById('settingsBtn').click())
+  assert.equal(await page.locator('#logyq-thekonym-toggle').isChecked(), true)
+  await page.evaluate(() => document.getElementById('settingsClose').click())
+
+  await page.evaluate(() => {
+    window.LOGYQBridge.loadMap({ name: 'Zephyronym', children: [{ name: 'Other' }] }, [])
+  })
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Zephyronym')
+    return node?.querySelector('tspan.logyq-essence')?.textContent === 'a test essence'
+      && node.querySelector('tspan.logyq-onym')?.textContent === 'Zephyronym'
+  })
+
+  const uid = await page.evaluate(() => window.LOGYQBridge.core.state.root.data._uid)
+  await page.evaluate((id) => {
+    const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
+    const rect = face.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    for (const pointerId of [41, 42]) {
+      for (const type of ['pointerdown', 'pointerup']) {
+        face.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+          isPrimary: true, button: 0, buttons: type === 'pointerdown' ? 1 : 0,
+          clientX: x, clientY: y,
+        }))
+      }
+    }
+  }, uid)
+  await page.waitForSelector('#logyq-thekonym-card.is-open')
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  assert.match(await page.locator('#logyq-thekonym-card .logyq-tk-essence').innerText(), /a test essence/)
+  await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
+  await page.waitForFunction(() => !document.getElementById('logyq-thekonym-card').classList.contains('is-open'))
+
+  const other = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Other').dataset.uid
+  })
+  await page.evaluate((id) => window.LOGYQPreview.thekonym.openUid(id), other)
+  await page.waitForSelector('#logyq-thekonym-card.is-open')
+  assert.match(await page.locator('#logyq-thekonym-card .logyq-tk-empty').innerText(), /not in Thekonyms yet/)
+  await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
+
+  await page.locator('#logyq-thekonym-ask').click()
+  await page.locator('#logyq-thekonym-letters [data-letter="Z"]').click()
+  await page.waitForSelector('.logyq-tk-row')
+  assert.match(await page.locator('.logyq-tk-row').innerText(), /Zephyronym/)
+  assert.match(await page.locator('.logyq-tk-row').innerText(), /a test essence/)
+  await page.locator('.logyq-tk-add').click()
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.includes('Zephyronym'))
+  assert.equal(await page.locator('#Dock .chip', { hasText: 'Zephyronym' }).count(), 1)
+  await page.locator('#logyq-thekonym-browser-close').click()
+  await page.evaluate((id) => window.LOGYQPreview.thekonym.openUid(id), uid)
+  await page.waitForSelector('#logyq-thekonym-card.is-open .logyq-tk-essence')
+  await page.evaluate(() => {
+    const field = document.querySelector('#logyq-thekonym-card .logyq-tk-essence')
+    for (let i = 0; i < 2; i += 1) {
+      field.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }))
+    }
+  })
+  await page.locator('#logyq-thekonym-card .logyq-tk-input').fill('local essence')
+  await page.locator('#logyq-thekonym-card .logyq-tk-input').press('Enter')
+  await page.waitForFunction(() => {
+    const edits = JSON.parse(sessionStorage.getItem('logyq_thekonym_local_edits_v1') || '{}')
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Zephyronym')
+    return edits['row-1']?.essence === 'local essence' && node?.querySelector('tspan.logyq-essence')?.textContent === 'local essence'
+  })
+  await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.locator('#logyq-thekonym-mobile').click()
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Zephyronym')
+    return node && !node.querySelector('tspan.logyq-essence') && !document.body.classList.contains('logyq-thekonym')
+  })
+  await page.evaluate((id) => {
+    const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
+    const rect = face.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    for (const pointerId of [51, 52]) {
+      for (const type of ['pointerdown', 'pointerup']) {
+        face.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+          isPrimary: true, button: 0, buttons: type === 'pointerdown' ? 1 : 0,
+          clientX: x, clientY: y,
+        }))
+      }
+    }
+  }, uid)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.locator('#logyq-thekonym-card.is-open').count(), 0)
+  assert.deepEqual(calls.filter((name) => name !== 'lab_thekonym_read'), [])
+  assert.ok(calls.includes('lab_thekonym_read'))
+  assert.deepEqual(errors, [])
+  await context.close()
+})

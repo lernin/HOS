@@ -2236,3 +2236,34 @@ test('curriculum pack matches parent structure and ignores sibling order', () =>
   assert.match(source, /state\.root = null/)
   assert.match(source, /function checkCurriculum/)
 })
+
+test('thekonym join matches term exactly and reads essence from the row', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/08-thekonym.js', import.meta.url), 'utf8')
+  const start = source.indexOf('// THEKONYM_PURE_START')
+  const end = source.indexOf('// THEKONYM_PURE_END')
+  assert.ok(start >= 0 && end > start)
+  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine };`)()
+  const rows = [
+    { id: '1', term: 'Fruit', essence: 'stored essence' },
+    { id: '2', term: 'fruit', essence: 'other' },
+  ]
+  assert.equal(api.thekonymMatch(rows, 'Fruit').id, '1')
+  assert.equal(api.thekonymMatch(rows, 'fruit').id, '2')
+  assert.equal(api.thekonymMatch(rows, 'fruity'), null)
+  assert.equal(api.thekonymMatch(rows, 'Fruit ').id, '1')
+  const face = api.thekonymFace(rows, 'Fruit', { 1: { essence: 'local essence' } })
+  assert.equal(face.essence, 'local essence')
+  assert.equal(face.onym, 'Fruit')
+  assert.equal(face.storedTerm, 'Fruit')
+  const renamed = api.thekonymFace(rows, 'Fruit', { 1: { term: 'Shown' } })
+  assert.equal(renamed.onym, 'Shown')
+  assert.equal(api.thekonymMatch(rows, 'Shown'), null)
+  assert.equal(api.thekonymByLetter(rows, 'F').length, 2)
+  assert.equal(api.thekonymAlphabetLetter('fruit'), 'F')
+  assert.equal(api.thekonymFaceLine('short'), 'short')
+  assert.equal(api.thekonymFaceLine('1234567890123456789012345').endsWith('…'), true)
+  assert.match(source, /lab_thekonym_read/)
+  assert.match(source, /not in Thekonyms yet/)
+  assert.doesNotMatch(source, /rpc\('lab_thekonym_update'/)
+  assert.match(source, /logyq_thekonym_mode_v1/)
+})

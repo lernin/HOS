@@ -1317,6 +1317,7 @@
       if (label) text.textContent = label
       text.style.fill = '#374151'
       text.style.opacity = ''
+      if (preview.thekonym?.enabled?.()) preview.thekonym.paintLabel(text, label)
     }
     clone.querySelectorAll('rect:not(.grabzone)').forEach((rect) => {
       rect.style.fill = color || '#ffffff'
@@ -1649,6 +1650,10 @@
       state.lastTap = null
       clearCardMic(state.mic)
       smiteSetArm(doc, null)
+      if (preview.thekonym?.enabled?.()) {
+        preview.thekonym.openUid(uid)
+        return
+      }
       bridge.editSelected({ uid })
       return
     }

@@ -227,5 +227,3 @@
   }
 
   bindCurriculum()
-  bootSession()
-})()
