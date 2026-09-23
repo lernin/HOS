@@ -215,87 +215,32 @@
     }
   }
 
-  // Right-swipe open: the map card lifts, travels a little further right, and flips into the dossier.
+  // Right-swipe open: the dossier flips in at full size. A few pixels of rightward drift sit inside that turn.
   function playDossierFlip(origin) {
     const root = document.getElementById('logyq-thekonym-card')
     const card = root?.querySelector('.logyq-tk-card')
     if (!root || !card || !origin) return
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return
     clearDossierFlip(root)
-    const final = card.getBoundingClientRect()
-    if (final.width < 8 || final.height < 8) return
-    const face = currentCardFace()
-    const fly = document.createElement('div')
-    fly.className = 'logyq-tk-fly'
-    fly.setAttribute('aria-hidden', 'true')
-    fly.style.left = `${origin.left}px`
-    fly.style.top = `${origin.top}px`
-    fly.style.width = `${origin.width}px`
-    fly.style.height = `${origin.height}px`
-    const faceEl = document.createElement('div')
-    faceEl.className = 'logyq-tk-fly-face'
-    const onymEl = document.createElement('span')
-    onymEl.className = 'logyq-onym'
-    onymEl.textContent = face?.onym || thekonymState.card?.name || ''
-    faceEl.append(onymEl)
-    if (face?.essence) {
-      const essenceEl = document.createElement('span')
-      essenceEl.className = 'logyq-essence'
-      essenceEl.textContent = face.essence
-      faceEl.append(essenceEl)
-    }
-    fly.append(faceEl)
-    document.body.append(fly)
-    if (origin.node) origin.node.style.opacity = '0'
-
-    const startCx = origin.left + origin.width / 2
-    const startCy = origin.top + origin.height / 2
-    const endCx = final.left + final.width / 2
-    const endCy = final.top + final.height / 2
-    const bias = 36
-    const vx = endCx - startCx
-    const vy = endCy - startCy
-    const liftX = vx * 0.34 + bias
-    const liftY = vy * 0.22 - 18
-    const edgeX = vx * 0.62 + bias * 0.45
-    const edgeY = vy * 0.5 - 8
-    const scaleX = final.width / origin.width
-    const scaleY = final.height / origin.height
-    const liftS = 1 + (Math.min(scaleX, 2.4) - 1) * 0.72
-    const edgeS = liftS * 1.12
-    const cardEdgeTX = (startCx + edgeX) - endCx
-    const cardEdgeTY = (startCy + edgeY) - endCy
-    const cardEdgeSX = (origin.width * edgeS) / final.width
-    const cardEdgeSY = (origin.height * edgeS) / final.height
-    const turnSX = cardEdgeSX + (1 - cardEdgeSX) * 0.45
-    const turnSY = cardEdgeSY + (1 - cardEdgeSY) * 0.45
+    if (card.getBoundingClientRect().width < 8) return
     const duration = 420
-    const easing = 'linear'
     root.classList.add('is-flipping')
     root.dataset.flip = 'open'
     root.style.backgroundColor = 'rgba(22,46,39,0)'
-    card.style.opacity = '0'
+    card.style.opacity = ''
     card.style.transformOrigin = 'center center'
+    card.style.transform = 'translateX(-16px) rotateY(-88deg)'
 
-    const flyAnim = faceEl.animate([
-      { transform: 'translate(0px, 0px) rotateY(0deg) scale(1, 1)', opacity: 1, offset: 0 },
-      { transform: `translate(${liftX}px, ${liftY}px) rotateY(-16deg) scale(${liftS}, ${liftS})`, opacity: 1, offset: 0.36 },
-      { transform: `translate(${edgeX}px, ${edgeY}px) rotateY(-90deg) scale(${edgeS}, ${edgeS})`, opacity: 1, offset: 0.54 },
-      { transform: `translate(${edgeX}px, ${edgeY}px) rotateY(-90deg) scale(${edgeS}, ${edgeS})`, opacity: 0, offset: 0.6 },
-      { transform: `translate(${edgeX}px, ${edgeY}px) rotateY(-90deg) scale(${edgeS}, ${edgeS})`, opacity: 0, offset: 1 },
-    ], { duration, easing, fill: 'both' })
     const cardAnim = card.animate([
-      { transform: `translate(${cardEdgeTX}px, ${cardEdgeTY}px) rotateY(90deg) scale(${cardEdgeSX}, ${cardEdgeSY})`, opacity: 0, offset: 0 },
-      { transform: `translate(${cardEdgeTX}px, ${cardEdgeTY}px) rotateY(90deg) scale(${cardEdgeSX}, ${cardEdgeSY})`, opacity: 0, offset: 0.54 },
-      { transform: `translate(${cardEdgeTX * 0.42 + 14}px, ${cardEdgeTY * 0.42}px) rotateY(58deg) scale(${turnSX}, ${turnSY})`, opacity: 1, offset: 0.7 },
-      { transform: 'translate(0px, 0px) rotateY(0deg) scale(1, 1)', opacity: 1, offset: 1 },
-    ], { duration, easing, fill: 'both' })
+      { transform: 'translateX(-16px) rotateY(-88deg)', offset: 0, easing: 'linear' },
+      { transform: 'translateX(18px) rotateY(-46deg)', offset: 0.42, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+      { transform: 'translateX(0px) rotateY(0deg)', offset: 1 },
+    ], { duration, easing: 'linear', fill: 'both' })
     const scrimAnim = root.animate([
       { backgroundColor: 'rgba(22,46,39,0)', offset: 0 },
-      { backgroundColor: 'rgba(22,46,39,0.08)', offset: 0.36 },
       { backgroundColor: 'rgba(22,46,39,0.28)', offset: 1 },
-    ], { duration, easing, fill: 'both' })
-    const flip = { anims: [flyAnim, cardAnim, scrimAnim], fly, node: origin.node, timer: 0, closing: false }
+    ], { duration, easing: 'linear', fill: 'both' })
+    const flip = { anims: [cardAnim, scrimAnim], fly: null, node: null, timer: 0, closing: false }
     dossierFlip = flip
     const settle = () => {
       if (dossierFlip !== flip || flip.closing) return
@@ -304,7 +249,7 @@
       card.style.transform = ''
       root.style.backgroundColor = ''
       root.classList.remove('is-flipping')
-      fly.remove()
+      flip.fly?.remove()
       flip.anims.forEach((anim) => { try { anim.cancel() } catch (_error) {} })
       if (flip.node) flip.node.style.opacity = ''
       clearTimeout(flip.timer)

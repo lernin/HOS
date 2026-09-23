@@ -6112,8 +6112,33 @@ test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right 
   assert.equal(await page.evaluate((id) => document.querySelector(`svg#canvas g.node[data-uid="${id}"]`)?.dataset.smiteArm, uid), '1')
   await stroke(uid, 96, 45)
   await page.waitForSelector('#logyq-thekonym-card.is-open')
-  assert.equal(await page.evaluate(() => document.getElementById('logyq-thekonym-card')?.dataset.flip), 'open')
-  assert.equal(await page.locator('.logyq-tk-fly').count(), 1)
+  const flipMotion = await page.evaluate(() => {
+    const card = document.querySelector('#logyq-thekonym-card .logyq-tk-card')
+    const anim = card.getAnimations().find((item) => item.effect?.target === card)
+    const frames = anim.effect.getKeyframes().map((frame) => frame.transform || '')
+    anim.pause()
+    anim.currentTime = 0
+    const edge = card.getBoundingClientRect()
+    anim.currentTime = Math.max(0, (anim.effect.getTiming().duration || 400) - 1)
+    const face = card.getBoundingClientRect()
+    anim.play()
+    return {
+      flip: document.getElementById('logyq-thekonym-card')?.dataset.flip || '',
+      fly: document.querySelectorAll('.logyq-tk-fly').length,
+      layoutWide: card.offsetWidth > window.innerWidth * 0.8,
+      layoutTall: card.offsetHeight > window.innerHeight * 0.8,
+      frames,
+      edgeW: edge.width,
+      faceW: face.width,
+    }
+  })
+  assert.equal(flipMotion.flip, 'open')
+  assert.equal(flipMotion.fly, 0)
+  assert.equal(flipMotion.layoutWide, true)
+  assert.equal(flipMotion.layoutTall, true)
+  assert.ok(flipMotion.frames.length >= 2, 'the dossier has a flip')
+  assert.ok(flipMotion.frames.every((value) => value.includes('rotateY') && !value.includes('scale')), flipMotion.frames.join(' | '))
+  assert.ok(flipMotion.edgeW < flipMotion.faceW * 0.5, 'the flip starts edge-on')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
   assert.equal(await nodeCount(), beforeNodes)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
