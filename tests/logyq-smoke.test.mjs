@@ -6166,6 +6166,15 @@ test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right 
   assert.equal(dossier.bank, 0)
   assert.equal(dossier.addText, false)
   await page.waitForFunction(() => document.getElementById('logyq-thekonym-card')?.dataset.flip === 'settled')
+  const frost = await page.evaluate(() => {
+    const layer = document.getElementById('logyq-tk-frost')
+    const css = getComputedStyle(layer)
+    const card = getComputedStyle(document.querySelector('.logyq-tk-card'))
+    return { blur: css.backdropFilter, opacity: Number(css.opacity), cardBlur: card.backdropFilter }
+  })
+  assert.match(frost.blur, /blur\(1[0-6]px/)
+  assert.ok(frost.opacity > 0.9, 'the frost is up while the dossier is open')
+  assert.equal(frost.cardBlur, 'none')
   const dossierSwipe = (dx) => page.evaluate((delta) => {
     const card = document.querySelector('.logyq-tk-card')
     const rect = card.getBoundingClientRect()

@@ -347,7 +347,9 @@
       body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;stroke:#1c3329;stroke-width:0.65px;stroke-linejoin:round;paint-order:stroke fill;vector-effect:non-scaling-stroke}
       body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#66706a;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:500;stroke:none}
       body.logyq-thekonym::before{animation:none;filter:none;background:radial-gradient(ellipse at center, rgba(247,245,233,0) 40%, rgba(22,46,39,0.05) 72%, rgba(22,46,39,0.16) 100%), radial-gradient(ellipse at 50% 40%, #fbf8ef 0%, #f7f5e9 58%, #efe6d2 100%)}
-      .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:rgba(22,46,39,.28);padding:5dvh 5vw;touch-action:none}
+      .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:transparent;padding:5dvh 5vw;touch-action:none}
+      #logyq-tk-frost{position:fixed;inset:0;z-index:6150;pointer-events:none;opacity:0;background:rgba(244,241,228,.36);backdrop-filter:blur(14px) saturate(1.08);-webkit-backdrop-filter:blur(14px) saturate(1.08)}
+      body:has(#logyq-thekonym-card.is-open) #logyq-tk-frost{opacity:1}
       .logyq-tk-scrim.is-open{display:flex}
       .logyq-tk-scrim.is-flipping{perspective:1400px}
       .logyq-tk-scrim.is-flipping .logyq-tk-card{transform-style:preserve-3d;backface-visibility:hidden}
@@ -5055,6 +5057,21 @@
       root.style.opacity = ''
       delete root.dataset.flip
     }
+    const frost = document.getElementById('logyq-tk-frost')
+    if (frost) {
+      frost.getAnimations().forEach((anim) => { try { anim.cancel() } catch (_error) {} })
+      frost.style.opacity = ''
+    }
+  }
+
+  function dossierFrostFade(from, to, duration, easing) {
+    const frost = document.getElementById('logyq-tk-frost')
+    if (!frost) return null
+    frost.style.opacity = String(from)
+    return frost.animate(
+      [{ opacity: from }, { opacity: to }],
+      { duration, easing, fill: 'both' },
+    )
   }
 
   const DOSSIER_FLIP_MS = 420
@@ -5087,16 +5104,13 @@
     const duration = DOSSIER_FLIP_MS
     root.classList.add('is-flipping')
     root.dataset.flip = 'open'
-    root.style.backgroundColor = 'rgba(22,46,39,0)'
+    root.style.backgroundColor = 'transparent'
     card.style.opacity = ''
     card.style.transformOrigin = 'center center'
     card.style.transform = 'translateX(-16px) rotateY(-88deg)'
 
     const cardAnim = card.animate(dossierFlipFrames(), { duration, easing: 'linear', fill: 'both' })
-    const scrimAnim = root.animate([
-      { backgroundColor: 'rgba(22,46,39,0)', offset: 0 },
-      { backgroundColor: 'rgba(22,46,39,0.28)', offset: 1 },
-    ], { duration, easing: 'linear', fill: 'both' })
+    const scrimAnim = dossierFrostFade(0, 1, duration, 'linear')
     const flip = { anims: [cardAnim, scrimAnim], fly: null, node: null, timer: 0, closing: false }
     dossierFlip = flip
     const settle = () => {
@@ -5105,6 +5119,8 @@
       card.style.opacity = ''
       card.style.transform = ''
       root.style.backgroundColor = ''
+      const frost = document.getElementById('logyq-tk-frost')
+      if (frost) frost.style.opacity = ''
       root.classList.remove('is-flipping')
       flip.fly?.remove()
       flip.anims.forEach((anim) => { try { anim.cancel() } catch (_error) {} })
@@ -5136,10 +5152,7 @@
       { transform: 'translateX(0px) rotateY(0deg)' },
       { transform: 'translateX(-16px) rotateY(-88deg)' },
     ], { duration, easing, fill: 'both' })
-    const scrimAnim = root.animate([
-      { backgroundColor: 'rgba(22,46,39,0.28)' },
-      { backgroundColor: 'rgba(22,46,39,0)' },
-    ], { duration, easing, fill: 'both' })
+    const scrimAnim = dossierFrostFade(1, 0, duration, easing)
     let closed = false
     const done = () => {
       if (closed) return
@@ -5518,6 +5531,12 @@
       scrim.className = 'logyq-tk-scrim'
       scrim.innerHTML = '<article class="logyq-tk-card" role="dialog" aria-label="Thekonym"><button type="button" class="logyq-tk-x" aria-label="Close">×</button><div class="logyq-tk-body"><p class="logyq-tk-kicker">Thekonym</p><h1 class="logyq-tk-onym" data-edit="term"></h1><p class="logyq-tk-pron" hidden></p><p class="logyq-tk-essence" data-edit="essence"></p><div class="logyq-tk-fields"><section class="logyq-tk-block" data-block="kids" hidden><h2>Kids definition</h2><p></p></section><section class="logyq-tk-block" data-block="definition" hidden><h2>Definition</h2><p></p></section><section class="logyq-tk-block logyq-tk-technical" data-block="technical" hidden><h2>Technical definition</h2><p></p></section><section class="logyq-tk-block" data-block="examples" hidden><h2>Examples</h2><ul class="logyq-tk-examples"></ul></section></div><p class="logyq-tk-empty" hidden>not in Thekonyms yet.</p></div></article>'
       document.body.append(scrim)
+      if (!document.getElementById('logyq-tk-frost')) {
+        const frost = document.createElement('div')
+        frost.id = 'logyq-tk-frost'
+        frost.setAttribute('aria-hidden', 'true')
+        document.body.append(frost)
+      }
       let lastField = ''
       let lastAt = 0
       scrim.addEventListener('click', (event) => {
