@@ -257,7 +257,7 @@
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash,body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important;filter:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{stroke:none!important;filter:none!important;vector-effect:none}
-        body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-dasharray:8 6;animation:logyq-smite-ants .7s linear infinite!important;transition:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;transition:none!important;vector-effect:none}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red,body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:none}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation;pointer-events:auto;transform-origin:center}
@@ -267,6 +267,7 @@
         #logyq-v162-action.show{display:grid}#logyq-v162-action.rec{background:#ef4444}
         #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
+        @keyframes logyq-smite-ants{to{stroke-dashoffset:-14px}}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
       }
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
@@ -944,35 +945,81 @@
     return mark === 'amber' ? '#ffa100' : '#ff0000'
   }
 
+  function smiteNodeUid(node) {
+    return node?._uid || node?.uid || node?.data?._uid || null
+  }
+
+  function smiteNodeKids(node) {
+    return Array.isArray(node?.children) ? node.children
+      : (Array.isArray(node?.data?.children) ? node.data.children : [])
+  }
+
+  function smiteFindNode(tree, uid) {
+    let found = null
+    const find = (node) => {
+      if (found || !node || typeof node !== 'object') return
+      if (smiteNodeUid(node) === uid) {
+        found = node
+        return
+      }
+      for (const kid of smiteNodeKids(node)) find(kid)
+    }
+    find(tree)
+    return found
+  }
+
   // Connectors whose target is strictly below the clock parent. The edge
   // into that parent, and anything above it, keeps the normal link color.
   function smiteMoodTargets(tree, castUid) {
     const out = []
     if (!tree || !castUid) return out
-    const uidOf = (node) => node?._uid || node?.uid || node?.data?._uid || null
-    const kidsOf = (node) => (
-      Array.isArray(node?.children) ? node.children
-        : (Array.isArray(node?.data?.children) ? node.data.children : [])
-    )
-    let found = null
-    const find = (node) => {
-      if (found || !node || typeof node !== 'object') return
-      if (uidOf(node) === castUid) {
-        found = node
-        return
-      }
-      for (const kid of kidsOf(node)) find(kid)
-    }
+    const found = smiteFindNode(tree, castUid)
     const collect = (node) => {
-      for (const kid of kidsOf(node)) {
-        const uid = uidOf(kid)
+      for (const kid of smiteNodeKids(node)) {
+        const uid = smiteNodeUid(kid)
         if (uid) out.push(uid)
         collect(kid)
       }
     }
-    find(tree)
     if (found) collect(found)
     return out
+  }
+
+  // The flicked card plus every structural descendant. Siblings and
+  // ancestors are outside this set, so a partial commit leaves them.
+  function smiteSubtreeIds(tree, uid) {
+    const out = []
+    if (!tree || !uid) return out
+    const found = smiteFindNode(tree, uid)
+    const collect = (node) => {
+      const id = smiteNodeUid(node)
+      if (id) out.push(id)
+      for (const kid of smiteNodeKids(node)) collect(kid)
+    }
+    if (found) collect(found)
+    return out
+  }
+
+  // Still-in fates only. Out and unmarked cards in the pocket stay.
+  function smiteScopeMarks(marks, ids) {
+    const want = new Set(ids || [])
+    const scoped = new Map()
+    for (const [id, mark] of smiteTicketEntries(marks)) {
+      if (!want.has(id)) continue
+      if (mark === 'red' || mark === 'amber') scoped.set(id, mark)
+    }
+    return scoped
+  }
+
+  function smiteFlickScope(tree, marks, uid) {
+    return smiteScopeMarks(marks, smiteSubtreeIds(tree, uid))
+  }
+
+  // Ants follow the child. The parent fate does not gate the edge.
+  function smiteEdgeAnt(parentMark, childMark) {
+    if (childMark === 'amber') return '#ffa100'
+    if (childMark === 'red') return '#ff0000'
+    return null
   }
 
   // Live windows are branches of the one open map, not separate documents.
@@ -2737,7 +2784,7 @@
     mercy.remaining = SMITE_START_MS
     mercy.lastTick = now
     if (reply === 'execute') {
-      commitSmite(doc, win, smite, mercy)
+      commitSmite(doc, win, smite, mercy, pointer.uid)
       return true
     }
     const descendants = smiteMoodTargets(bridge.core?.state?.root?.data, mercy.castUid)
@@ -2757,7 +2804,7 @@
     for (const [uid, mark] of entries) marks.set(uid, mark)
   }
 
-  function commitSmite(doc, win, smite, mercy = smite.mercy) {
+  function commitSmite(doc, win, smite, mercy = smite.mercy, scopeUid = null) {
     if (!mercy || mercy.committing) return
     mercy.committing = true
     const core = bridge.core
@@ -2771,7 +2818,19 @@
     }
     const prev = utils.deepClone(state.root.data)
     const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : []
-    const plan = planSmiteCommit(prev, mercy.marks)
+    let marks = mercy.marks
+    let scoped = null
+    if (scopeUid) {
+      scoped = smiteFlickScope(prev, mercy.marks, scopeUid)
+      if (!smiteHasNominated(scoped)) {
+        mercy.committing = false
+        smiteRefresh(doc, smite)
+        smiteEnsureTick(doc, win, smite)
+        return
+      }
+      marks = scoped
+    }
+    const plan = planSmiteCommit(prev, marks)
     doc.body.classList.remove('v2-branch-drag', 'v2-cancel', 'v2-dock-target')
     win.__logyqHoldArming = false
     win.__logyqHoldDragSession = false
@@ -2796,7 +2855,16 @@
     }
     core.wordDock.render?.()
     try { bridge.notifyChange?.() } catch (_error) {}
-    smiteDropMercy(smite, mercy)
+    if (scopeUid) {
+      for (const [uid, mark] of smiteTicketEntries(scoped)) {
+        if (mark === 'red' || mark === 'amber') mercy.marks.delete(uid)
+      }
+      const tookClock = smiteMarkOf(scoped, mercy.castUid) === 'red' || smiteMarkOf(scoped, mercy.castUid) === 'amber'
+      if (tookClock || !state.root) smiteDropMercy(smite, mercy)
+      else mercy.committing = false
+    } else {
+      smiteDropMercy(smite, mercy)
+    }
     clearSmiteScars(doc, smite)
     smiteRefresh(doc, smite)
     smiteEnsureTick(doc, win, smite)
@@ -2867,6 +2935,8 @@
     if (!link || link.dataset.smiteEdge !== '1') return
     link.style.stroke = ''
     link.style.strokeDasharray = ''
+    link.style.strokeDashoffset = ''
+    link.style.strokeLinecap = ''
     link.style.animation = ''
     link.style.opacity = '0.5'
     link.style.strokeWidth = '2.8px'
@@ -2881,8 +2951,10 @@
     link.style.setProperty('stroke', heat.stroke, 'important')
     link.style.strokeWidth = '3.5px'
     link.style.opacity = '1'
-    link.style.strokeDasharray = 'none'
-    link.style.animation = 'none'
+    link.style.strokeDasharray = '8 6'
+    link.style.strokeDashoffset = '0'
+    link.style.strokeLinecap = 'round'
+    link.style.animation = 'logyq-smite-ants 0.7s linear infinite'
     link.style.transition = 'none'
     link.style.vectorEffect = 'non-scaling-stroke'
   }
@@ -2980,12 +3052,12 @@
       const castUid = layer.castUid || null
       const tone = smiteNominatedTone(marks, castUid, layer.tone)
       if (castUid && tone && !clockHosts.has(castUid)) {
-        clockHosts.set(castUid, { mark: tone, fraction })
+        clockHosts.set(castUid, { mark: tone, fraction, marks })
       } else if (!castUid) {
         for (const uid of smiteClockRoots(tree, owned)) {
           const mark = owned.get(uid)
           if ((mark === 'red' || mark === 'amber') && !clockHosts.has(uid)) {
-            clockHosts.set(uid, { mark, fraction })
+            clockHosts.set(uid, { mark, fraction, marks: owned })
           }
         }
       }
@@ -3069,9 +3141,11 @@
     })
     const mood = new Map()
     for (const [castUid, host] of clockHosts) {
-      const color = smiteMoodColor(host.mark)
+      const parentMark = smiteMarkOf(host.marks, castUid)
       for (const uid of smiteMoodTargets(tree, castUid)) {
-        if (!mood.has(uid)) mood.set(uid, color)
+        if (mood.has(uid)) continue
+        const color = smiteEdgeAnt(parentMark, smiteMarkOf(host.marks, uid))
+        if (color) mood.set(uid, color)
       }
     }
     doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => {

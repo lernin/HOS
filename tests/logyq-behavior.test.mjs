@@ -1583,7 +1583,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgeAnt, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1820,6 +1820,67 @@ test('smite commit kills red, banks amber, and climbs the cards that stay', () =
   assert.equal(blankAmber.tree._uid, 'k')
 })
 
+test('a down-flick commits only the still-in pocket under that card', () => {
+  const smite = loadSmitePure()
+  const tree = smiteSampleTree()
+  const marks = new Map([
+    ['r', 'red'],
+    ['a', 'red'],
+    ['a1', 'normal'],
+    ['blank', 'red'],
+    ['b', 'amber'],
+  ])
+  assert.deepEqual(smite.smiteSubtreeIds(tree, 'a').slice().sort(), ['a', 'a1', 'blank'])
+  assert.deepEqual(smite.smiteSubtreeIds(tree, 'b'), ['b'])
+  assert.deepEqual(smite.smiteSubtreeIds(tree, 'r').slice().sort(), ['a', 'a1', 'b', 'blank', 'r'])
+
+  const pocket = smite.smiteFlickScope(tree, marks, 'a')
+  assert.deepEqual([...pocket.entries()].sort(), [['a', 'red'], ['blank', 'red']])
+  const plan = smite.planSmiteCommit(tree, pocket)
+  assert.equal(plan.tree._uid, 'r')
+  assert.deepEqual(plan.tree.children.map((child) => child._uid), ['a1', 'b'])
+  assert.equal(plan.tree.children[0].name, 'A1')
+  assert.deepEqual(plan.scars.map((scar) => scar.uid).sort(), ['a', 'blank'])
+  assert.deepEqual(plan.bank, [])
+  assert.equal(JSON.stringify(tree), JSON.stringify(smiteSampleTree()))
+
+  const sibling = smite.smiteFlickScope(tree, marks, 'b')
+  assert.deepEqual([...sibling.entries()], [['b', 'amber']])
+  const banked = smite.planSmiteCommit(tree, sibling)
+  assert.deepEqual(banked.bank, ['B'])
+  assert.deepEqual(banked.tree.children.map((child) => child._uid), ['a'])
+  assert.equal(banked.tree.children[0]._uid, 'a')
+  assert.deepEqual(banked.tree.children[0].children.map((child) => child._uid), ['a1', 'blank'])
+
+  assert.equal(smite.smiteFlickScope(tree, marks, 'a1').size, 0)
+  const above = smite.smiteFlickScope(tree, marks, 'missing')
+  assert.equal(above.size, 0)
+})
+
+test('cast edge ants follow the child fate and ignore the parent', () => {
+  const smite = loadSmitePure()
+  const pairs = [
+    ['red', 'red', '#ff0000'],
+    ['amber', 'amber', '#ffa100'],
+    ['red', 'amber', '#ffa100'],
+    ['amber', 'red', '#ff0000'],
+    ['red', 'normal', null],
+    ['amber', 'normal', null],
+    ['normal', 'red', '#ff0000'],
+    ['normal', 'amber', '#ffa100'],
+    ['normal', 'normal', null],
+    [null, 'red', '#ff0000'],
+    ['red', null, null],
+    ['amber', undefined, null],
+  ]
+  for (const [parent, child, color] of pairs) {
+    assert.equal(smite.smiteEdgeAnt(parent, child), color, `${parent} → ${child}`)
+  }
+  const tree = smiteSampleTree()
+  assert.equal(smite.smiteMoodTargets(tree, 'a').includes('a'), false)
+  assert.deepEqual(smite.smiteMoodTargets(tree, 'a').slice().sort(), ['a1', 'blank'])
+})
+
 test('smite cake is a solid clock and does not reopen a long-press Word Bank dump', () => {
   const v162 = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
   const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
@@ -1835,7 +1896,22 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   assert.match(mercyUp, /smiteCastReply\(/)
   assert.match(mercyUp, /smiteCastTap\(/)
   assert.match(mercyUp, /command\.action === 'clear'/)
+  assert.match(mercyUp, /commitSmite\(doc, win, smite, mercy, pointer\.uid\)/)
   assert.doesNotMatch(mercyUp, /smiteParentCommand|smiteChildCommand|smiteToggleParticipation/)
+  const tick = v162.slice(v162.indexOf('function smiteTick('), v162.indexOf('function smiteMercyUp'))
+  assert.match(tick, /for \(const mercy of due\) commitSmite\(doc, win, smite, mercy\)/)
+  assert.doesNotMatch(tick, /pointer\.uid/)
+  const commit = v162.slice(v162.indexOf('function commitSmite'), v162.indexOf('function smiteFace'))
+  assert.match(commit, /smiteFlickScope\(/)
+  assert.match(commit, /scopeUid/)
+  assert.match(commit, /mercy\.committing = false/)
+  assert.match(v162, /function smiteEdgeAnt/)
+  assert.match(v162, /strokeDasharray = '8 6'/)
+  assert.match(v162, /logyq-smite-ants/)
+  const edge = styles.slice(styles.indexOf('data-smite-edge'), styles.indexOf('path.logyq-smite-clock'))
+  assert.match(edge, /logyq-smite-ants/)
+  assert.match(edge, /stroke-width:\s*3\.5px/)
+  assert.doesNotMatch(edge, /animation:\s*none/)
   assert.match(v162, /__logyqV2ConsumedPointers\.add\(event\.pointerId\)/)
   assert.match(v162, /smite\.pinched/)
   assert.match(v162, /smite\.mercies/)
@@ -1854,6 +1930,7 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   assert.match(clock, /vector-effect:\s*none/)
   assert.match(clock, /animation:\s*none/)
   assert.match(clock, /transition:\s*none/)
+  assert.match(styles, /@keyframes logyq-smite-ants/)
   assert.doesNotMatch(v162, /Sent subtree to Word Dock/)
   assert.match(v162, /setAttribute\('pathLength'/)
   assert.match(v162, /SMITE_BUFFER_MS = 3000/)
