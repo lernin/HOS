@@ -3,15 +3,15 @@
   try { return document.body.classList.contains('logyq-mobile-v162') } catch (_e) { return false }
  }
 
- // The phone field sits above the keyboard. It never follows the card.
+ // The phone field is a full-width bar on the keyboard. It never follows the card.
  function dockMobileEditor(){
   const { state } = logyq
   const el = state.editorEl
-  const dock = el?.closest?.('.node-edit-dock')
-  if (!dock) return
+  const stack = el?.closest?.('.node-edit-stack')
+  if (!stack) return
   const vv = window.visualViewport
   const keyboard = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0
-  dock.style.bottom = (keyboard + 8) + 'px'
+  stack.style.bottom = keyboard + 'px'
  }
 
  function updateNodeEditorPosition(){
@@ -86,7 +86,7 @@
     if (state._editFocusTimer) { try { clearTimeout(state._editFocusTimer); } catch (_e) {} state._editFocusTimer = 0; }
     if (typeof state._editViewportOff === 'function') { try { state._editViewportOff(); } catch (_e) {} state._editViewportOff = null; }
     state.editingUid = null; state.editorEl = null;
-    if(el && el.parentNode && !el.closest?.('.node-edit-dock')) el.parentNode.removeChild(el);
+    if(el && el.parentNode && !el.closest?.('.node-edit-stack')) el.parentNode.removeChild(el);
     if(apply){
       const target = utils.findByUid(state.root.data, uid);
       if(target){
@@ -111,7 +111,7 @@
         elements.svg.transition().duration(360).ease(d3.easeCubicOut).call(state.zoom.transform, t);
       }
     }
-    const host = el?.closest?.('.node-edit-dock')
+    const host = el?.closest?.('.node-edit-stack') || el?.closest?.('.node-edit-dock')
     if (host && host.parentNode) host.parentNode.removeChild(host)
     state.prevZoom = null;
     state.editZoom = null;
@@ -144,16 +144,24 @@
     input.setAttribute("spellcheck", "false");
     input.value = (d.data && d.data.name) ? d.data.name : "";
     if (mobileQuietEdit()) {
+      const stack = document.createElement("div");
+      stack.className = "node-edit-stack";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "node-edit-cancel";
+      cancel.setAttribute("aria-label", "Cancel rename");
+      cancel.textContent = "\u00d7";
       const dock = document.createElement("div");
       dock.className = "node-edit-dock";
-      const done = document.createElement("button");
-      done.type = "button";
-      done.className = "node-edit-done";
-      done.textContent = "Done";
       dock.appendChild(input);
-      dock.appendChild(done);
-      document.body.appendChild(dock);
-      done.addEventListener("click", function(){ closeNodeEditor(true, true); });
+      stack.appendChild(cancel);
+      stack.appendChild(dock);
+      document.body.appendChild(stack);
+      const armCancel = function(event){ event.preventDefault(); };
+      cancel.addEventListener("pointerdown", armCancel);
+      cancel.addEventListener("mousedown", armCancel);
+      cancel.addEventListener("touchstart", armCancel, { passive: false });
+      cancel.addEventListener("click", function(){ closeNodeEditor(false, true); });
     } else {
       document.body.appendChild(input);
     }
@@ -184,23 +192,42 @@
 
 
 
-    input.addEventListener("blur", function(){ closeNodeEditor(true, true); });
+    input.addEventListener("blur", function(){
+      // A phone tap on the map must not save and close. Enter commits.
+      // The X and Escape cancel. Desktop still commits on blur.
+      if (mobileQuietEdit()) return;
+      closeNodeEditor(true, true);
+    });
     updateNodeEditorPosition();
     setTimeout(function(){ try{ input.focus(); var L=input.value.length; input.setSelectionRange(L,L); }catch(_e){} }, 0);
     if (mobileQuietEdit()) {
       const vv = window.visualViewport;
+      const onViewport = () => {
+        if (state.editingUid !== uid) return;
+        dockMobileEditor();
+      };
+      const keepMapFocus = (event) => {
+        if (state.editingUid !== uid) return;
+        const stack = input.closest?.('.node-edit-stack');
+        if (stack && stack.contains(event.target)) return;
+        const canvas = document.getElementById('canvas');
+        if (!canvas || (event.target !== canvas && !canvas.contains(event.target))) return;
+        if (event.cancelable) event.preventDefault();
+      };
       if (vv) {
-        const onViewport = () => {
-          if (state.editingUid !== uid) return;
-          dockMobileEditor();
-        };
         vv.addEventListener('resize', onViewport);
         vv.addEventListener('scroll', onViewport);
-        state._editViewportOff = () => {
+      }
+      document.addEventListener('touchstart', keepMapFocus, { capture: true, passive: false });
+      document.addEventListener('mousedown', keepMapFocus, { capture: true, passive: false });
+      state._editViewportOff = () => {
+        if (vv) {
           vv.removeEventListener('resize', onViewport);
           vv.removeEventListener('scroll', onViewport);
-        };
-      }
+        }
+        document.removeEventListener('touchstart', keepMapFocus, { capture: true });
+        document.removeEventListener('mousedown', keepMapFocus, { capture: true });
+      };
     }
   }
 

@@ -3916,27 +3916,50 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   await touch('pointerup', fruit.x, fruit.y, 11)
   await touch('pointerdown', fruit.x, fruit.y, 12)
   await touch('pointerup', fruit.x, fruit.y, 12)
-  await page.waitForSelector('.node-edit-dock')
+  await page.waitForSelector('.node-edit-stack')
   const opened = await page.evaluate(() => {
     const input = document.querySelector('.node-edit-input')
-    const box = input.getBoundingClientRect()
+    const dock = document.querySelector('.node-edit-dock')
+    const cancel = document.querySelector('.node-edit-cancel')
+    const box = dock.getBoundingClientRect()
+    const field = input.getBoundingClientRect()
+    const cross = cancel.getBoundingClientRect()
     const card = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit').getBoundingClientRect()
+    const dockStyle = getComputedStyle(dock)
+    const fieldStyle = getComputedStyle(input)
     return {
       uid: window.LOGYQBridge.core.state.editingUid,
       value: input.value,
-      docked: box.bottom > window.innerHeight - 120 && box.top > card.bottom,
+      docked: field.bottom > window.innerHeight - 80 && field.top > card.bottom,
+      left: box.left,
+      right: box.right,
+      bottomGap: window.innerHeight - box.bottom,
+      radius: dockStyle.borderRadius,
+      fontSize: fieldStyle.fontSize,
+      done: document.querySelectorAll('.node-edit-done').length,
+      cancel: cancel?.getAttribute('aria-label') || '',
+      crossAbove: cross.bottom <= box.top + 1,
+      crossRound: getComputedStyle(cancel).borderRadius,
     }
   })
   assert.equal(opened.uid, fruit.uid)
   assert.equal(opened.value, 'Fruit')
   assert.equal(opened.docked, true)
-  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/edit_keyboard_field.png' })
+  assert.ok(opened.left <= 1, `rename bar must be full bleed, left=${opened.left}`)
+  assert.ok(opened.right >= 389, `rename bar must reach the right edge, right=${opened.right}`)
+  assert.ok(opened.bottomGap < 2, `rename bar must sit on the bottom edge, gap=${opened.bottomGap}`)
+  assert.equal(opened.radius, '0px')
+  assert.equal(opened.fontSize, '16px')
+  assert.equal(opened.done, 0)
+  assert.equal(opened.cancel, 'Cancel rename')
+  assert.equal(opened.crossAbove, true)
+  assert.equal(opened.crossRound, '999px')
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/edit_rename_bar.png' })
   sameCamera(before, await view(), 'double-tap')
   await page.waitForTimeout(280)
   sameCamera(before, await view(), 'double-tap after the old zoom delay')
-  assert.equal(await page.locator('.node-edit-done').innerText(), 'Done')
   await page.locator('.node-edit-input').fill('Citrus')
-  await page.locator('.node-edit-done').evaluate((button) => button.click())
+  await page.locator('.node-edit-input').press('Enter')
   await page.waitForFunction(() => {
     const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data.name === 'Citrus')
     return node && !window.LOGYQBridge.core.state.editingUid
@@ -3945,7 +3968,7 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
     return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
   }, fruit.uid)
   assert.equal(renamed, 'Citrus')
-  sameCamera(before, await view(), 'Done')
+  sameCamera(before, await view(), 'Enter')
 
   const citrus = await face('Citrus')
   const count = await page.locator('svg#canvas g.node').count()
@@ -3999,6 +4022,73 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
     return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
   }, created.editing), 'Lime')
   sameCamera(before, await view(), 'Escape')
+
+  await touch('pointerdown', lime.x, lime.y, 16)
+  await touch('pointerup', lime.x, lime.y, 16)
+  await touch('pointerdown', lime.x, lime.y, 17)
+  await touch('pointerup', lime.x, lime.y, 17)
+  await page.waitForSelector('.node-edit-cancel')
+  await page.locator('.node-edit-input').fill('Discard me')
+  const panSpot = await page.evaluate(() => {
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    for (let y = 80; y < window.innerHeight - 120; y += 16) {
+      for (let x = canvas.left + 8; x < canvas.right - 8; x += 18) {
+        const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot, .node-edit-stack')
+        if (!hit) return { x, y }
+      }
+    }
+    return { x: 40, y: 180 }
+  })
+  const panBefore = await view()
+  await page.evaluate(({ x, y }) => {
+    const canvas = document.getElementById('canvas')
+    const point = (px, py) => new Touch({ identifier: 7, target: canvas, clientX: px, clientY: py })
+    canvas.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true, touches: [point(x, y)], targetTouches: [point(x, y)], changedTouches: [point(x, y)] }))
+    canvas.dispatchEvent(new TouchEvent('touchmove', { bubbles: true, cancelable: true, touches: [point(x + 90, y + 48)], targetTouches: [point(x + 90, y + 48)], changedTouches: [point(x + 90, y + 48)] }))
+    canvas.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true, touches: [], targetTouches: [], changedTouches: [point(x + 90, y + 48)] }))
+  }, panSpot)
+  const panned = await view()
+  assert.ok(Math.hypot(panned.x - panBefore.x, panned.y - panBefore.y) > 30, `map must pan while the rename bar is open, before=${panBefore.x},${panBefore.y} after=${panned.x},${panned.y}`)
+  const duringPan = await page.evaluate((uid) => {
+    return {
+      editing: window.LOGYQBridge.core.state.editingUid,
+      name: window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name,
+      value: document.querySelector('.node-edit-input')?.value || '',
+    }
+  }, created.editing)
+  assert.equal(duringPan.editing, created.editing)
+  assert.equal(duringPan.name, 'Lime')
+  assert.equal(duringPan.value, 'Discard me')
+  const pinchBefore = await view()
+  await page.evaluate(({ x, y }) => {
+    const canvas = document.getElementById('canvas')
+    const touch = (id, px, py) => new Touch({ identifier: id, target: canvas, clientX: px, clientY: py })
+    const fire = (type, points, changed) => {
+      canvas.dispatchEvent(new TouchEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        touches: points,
+        targetTouches: points,
+        changedTouches: changed,
+      }))
+    }
+    const start = [touch(3, x, y), touch(4, x + 80, y)]
+    fire('touchstart', start, start)
+    const spread = [touch(3, x - 40, y), touch(4, x + 150, y)]
+    fire('touchmove', spread, spread)
+    fire('touchend', [], spread)
+  }, panSpot)
+  const pinched = await view()
+  assert.ok(pinched.k > pinchBefore.k + 0.05, `map must pinch-zoom while renaming, before=${pinchBefore.k} after=${pinched.k}`)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), created.editing)
+  await page.locator('.node-edit-cancel').click()
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
+  assert.equal(await page.evaluate((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
+  }, created.editing), 'Lime')
+  const afterCancel = await view()
+  assert.ok(Math.abs(afterCancel.k - pinched.k) < 0.05, 'cancel must not snap the zoom')
+  assert.ok(Math.hypot(afterCancel.x - pinched.x, afterCancel.y - pinched.y) < 2, 'cancel must not snap the pan')
 
   assert.deepEqual(errors, [])
   await context.close()
