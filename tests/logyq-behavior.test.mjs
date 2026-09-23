@@ -1583,7 +1583,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastShape, smiteCardChrome, smiteLinkLive, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1859,7 +1859,7 @@ test('a down-flick commits only the still-in pocket under that card', () => {
 
 test('cast edges gradient from parent fate to child fate, and ants follow the child', () => {
   const smite = loadSmitePure()
-  const clear = '#e6e8ee'
+  const clear = '#ffffff'
   const red = '#ff0000'
   const amber = '#ffa100'
   const pairs = [
@@ -1891,6 +1891,59 @@ test('cast edges gradient from parent fate to child fate, and ants follow the ch
   )
   assert.deepEqual(smite.smiteMoodEdges(tree, 'b'), [])
   assert.equal(smite.smiteMoodEdges(tree, 'r').some((edge) => edge.childUid === 'r'), false)
+})
+
+test('cast chrome is an outline with no fill, and connectors move only for a whole pocket', () => {
+  const smite = loadSmitePure()
+  const red = '#ff0000'
+  const amber = '#ffa100'
+  const white = '#ffffff'
+  assert.equal(smite.smiteCastShape(new Map([['r', 'red'], ['a', 'normal'], ['b', 'normal']]), 'r', ['a', 'b']), 'parent')
+  assert.equal(smite.smiteCastShape(new Map([['r', 'normal'], ['a', 'red'], ['b', 'amber']]), 'r', ['a', 'b']), 'kids')
+  assert.equal(smite.smiteCastShape(new Map([['a', 'red']]), 'r', ['a', 'b']), 'kids')
+  assert.equal(smite.smiteCastShape(new Map([['r', 'red'], ['a', 'red'], ['b', 'normal']]), 'r', ['a', 'b']), 'pocket')
+  assert.equal(smite.smiteCastShape(new Map([['r', 'amber'], ['a', 'amber'], ['b', 'normal']]), 'r', ['a', 'b']), 'pocket')
+  assert.equal(smite.smiteCastShape(new Map([['r', 'normal'], ['a', 'normal']]), 'r', ['a']), 'idle')
+  assert.equal(smite.smiteCardChrome('red', true), null)
+  assert.deepEqual(smite.smiteCardChrome('red', false), { stroke: red, ants: true, fill: 'none' })
+  assert.deepEqual(smite.smiteCardChrome('amber', false), { stroke: amber, ants: true, fill: 'none' })
+  assert.deepEqual(smite.smiteCardChrome('normal', false), { stroke: white, ants: true, fill: 'none' })
+  assert.equal(smite.smiteCardChrome('normal', true), null)
+  assert.equal(smite.smiteCardChrome(null, false), null)
+  assert.equal(smite.smiteLinkLive('parent', 'red', 'normal'), null)
+  assert.equal(smite.smiteLinkLive('parent', 'red', 'red'), null)
+  assert.equal(smite.smiteLinkLive('kids', 'normal', 'red'), null)
+  assert.equal(smite.smiteLinkLive('kids', 'red', 'amber'), null)
+  assert.equal(smite.smiteLinkLive('idle', 'red', 'red'), null)
+  assert.equal(smite.smiteLinkLive('pocket', 'normal', 'normal'), null)
+  assert.equal(smite.smiteLinkLive('pocket', null, 'red'), null)
+  const same = smite.smiteLinkLive('pocket', 'red', 'red')
+  assert.equal(same.from, red)
+  assert.equal(same.to, red)
+  assert.equal(same.ants, red)
+  const mixed = smite.smiteLinkLive('pocket', 'red', 'amber')
+  assert.equal(mixed.from, red)
+  assert.equal(mixed.to, amber)
+  assert.equal(mixed.ants, amber)
+  const fade = smite.smiteLinkLive('pocket', 'red', 'normal')
+  assert.equal(fade.from, red)
+  assert.equal(fade.to, white)
+  assert.equal(fade.ants, null)
+  const rising = smite.smiteLinkLive('pocket', 'normal', 'red')
+  assert.equal(rising.from, white)
+  assert.equal(rising.to, red)
+  assert.equal(rising.ants, red)
+  const v162 = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
+  const paint = v162.slice(v162.indexOf('function paintSmiteLayers'), v162.indexOf('function smiteScarPoint'))
+  assert.match(paint, /smiteCardChrome\(/)
+  assert.match(paint, /smiteLinkLive\(/)
+  assert.doesNotMatch(paint, /smitePastel\(/)
+  assert.match(v162, /setAttribute\('fill', 'none'\)/)
+  const wash = styles.slice(styles.indexOf('rect.logyq-smite-wash{'), styles.indexOf('path.logyq-smite-clock'))
+  assert.match(wash, /fill:\s*none/)
+  assert.match(wash, /data-smite-outline="ants"/)
+  assert.doesNotMatch(wash, /stroke:\s*none/)
 })
 
 test('smite cake is a solid clock and does not reopen a long-press Word Bank dump', () => {

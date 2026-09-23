@@ -343,11 +343,19 @@
     return smiteScopeMarks(marks, smiteSubtreeIds(tree, uid))
   }
 
-  // Out fades to a soft gray. Delete and Word Bank keep the mercy colors.
+  // Out-in-cast is white. Delete and Word Bank keep the mercy colors.
   function smiteFateTone(mark) {
     if (mark === 'red') return '#ff0000'
     if (mark === 'amber') return '#ffa100'
-    return '#e6e8ee'
+    return '#ffffff'
+  }
+
+  function smiteStillIn(mark) {
+    return mark === 'red' || mark === 'amber'
+  }
+
+  function smiteInCast(mark) {
+    return mark === 'red' || mark === 'amber' || mark === 'normal'
   }
 
   // Gradient runs parent → child. Ants ride only when the child is still in.
@@ -357,6 +365,33 @@
       to: smiteFateTone(childMark),
       ants: childMark === 'amber' ? '#ffa100' : (childMark === 'red' ? '#ff0000' : null),
     }
+  }
+
+  // Parent-only, kids-only, or a whole pocket. Connectors move only for a pocket.
+  function smiteCastShape(marks, castUid, descendantUids) {
+    const rootIn = smiteStillIn(smiteMarkOf(marks, castUid))
+    const kidIn = (descendantUids || []).some((uid) => smiteStillIn(smiteMarkOf(marks, uid)))
+    if (rootIn && kidIn) return 'pocket'
+    if (rootIn) return 'parent'
+    if (kidIn) return 'kids'
+    return 'idle'
+  }
+
+  // Clock cards wear the mercy timer, not a second ants outline. No fills.
+  function smiteCardChrome(mark, isClockCard) {
+    if (isClockCard) return null
+    if (mark === 'red') return { stroke: '#ff0000', ants: true, fill: 'none' }
+    if (mark === 'amber') return { stroke: '#ffa100', ants: true, fill: 'none' }
+    if (mark === 'normal') return { stroke: '#ffffff', ants: true, fill: 'none' }
+    return null
+  }
+
+  // Quiet unless this is a whole pocket and at least one end is still in.
+  function smiteLinkLive(shape, parentMark, childMark) {
+    if (shape !== 'pocket') return null
+    if (!smiteInCast(parentMark) || !smiteInCast(childMark)) return null
+    if (!smiteStillIn(parentMark) && !smiteStillIn(childMark)) return null
+    return smiteEdgePaint(parentMark, childMark)
   }
 
   function smiteEdgeAnt(parentMark, childMark) {
@@ -2448,26 +2483,25 @@
     wash.setAttribute('height', face.getAttribute('height') || '0')
     wash.setAttribute('rx', String(rx))
     wash.setAttribute('ry', String(ry))
-    wash.setAttribute('fill', heat.wash)
-    wash.setAttribute('fill-opacity', String(heat.washOpacity))
-    wash.style.fill = heat.wash
-    wash.style.fillOpacity = String(heat.washOpacity)
-    wash.style.animation = 'none'
-    wash.style.filter = 'none'
-    // Inline stroke wins over `.node rect`, which would otherwise keep a full white ring.
-    if (outline) {
-      wash.setAttribute('stroke', heat.stroke)
-      wash.style.stroke = heat.stroke
-      wash.style.strokeWidth = '3.5px'
-      wash.style.strokeDasharray = 'none'
-      wash.style.vectorEffect = 'non-scaling-stroke'
+    wash.setAttribute('fill', 'none')
+    wash.setAttribute('fill-opacity', '0')
+    wash.style.fill = 'none'
+    wash.style.fillOpacity = '0'
+    wash.setAttribute('stroke', heat.stroke)
+    wash.style.stroke = heat.stroke
+    wash.style.strokeWidth = '3.5px'
+    wash.style.strokeLinecap = 'round'
+    wash.style.vectorEffect = 'non-scaling-stroke'
+    if (heat.ants) {
+      wash.dataset.smiteOutline = 'ants'
+      wash.style.strokeDasharray = '8 6'
+      wash.style.animation = 'logyq-smite-ants 0.7s linear infinite'
     } else {
-      wash.setAttribute('stroke', 'none')
-      wash.style.stroke = 'none'
-      wash.style.strokeWidth = '0'
+      delete wash.dataset.smiteOutline
       wash.style.strokeDasharray = 'none'
-      wash.style.vectorEffect = 'none'
+      wash.style.animation = 'none'
     }
+    wash.style.filter = heat.stroke === '#ffffff' ? 'drop-shadow(0 0 1px rgba(15,23,42,.7))' : 'none'
     node.dataset.smiteHeat = '1'
   }
 
@@ -2536,13 +2570,13 @@
       const uid = nodeUid(node)
       const entry = uid ? byUid.get(uid) : null
       const mark = entry?.mark
-      const nominated = mark === 'red' || mark === 'amber'
+      const inScope = mark === 'red' || mark === 'amber' || mark === 'normal'
       const host = uid ? clockHosts.get(uid) : null
       let clock = smiteTakeClock(node)
       node.querySelectorAll('rect.logyq-smite-glow').forEach((layer) => layer.remove())
       delete node.dataset.smitePhase
       node.style?.removeProperty?.('--smite-ink')
-      if (!nominated && !host) {
+      if (!inScope && !host) {
         if (clock || node.dataset.smiteHeat === '1' || node.dataset.smiteClock === '1' || node.querySelector('rect.logyq-smite-wash')) {
           smiteRestoreCard(node)
         }
@@ -2553,12 +2587,11 @@
       const face = smiteFace(node)
       if (!face) return
       const { rx, ry, x, y, w, h } = smiteFaceBox(face)
-      if (nominated) {
-        const pastel = smitePastel(mark)
-        smitePaintCard(node, { wash: pastel.fill, washOpacity: pastel.opacity, stroke: pastel.fill }, rx, ry, false)
-      } else {
+      const chrome = smiteCardChrome(mark, !!host)
+      if (chrome) smitePaintCard(node, chrome, rx, ry)
+      else {
         node.querySelectorAll('rect.logyq-smite-wash').forEach((layer) => layer.remove())
-        delete node.dataset.smiteHeat
+        if (!host) delete node.dataset.smiteHeat
       }
       if (!host) {
         clock?.remove()
@@ -2610,12 +2643,15 @@
     })
     const mood = new Map()
     for (const [castUid, host] of clockHosts) {
+      const shape = smiteCastShape(host.marks, castUid, smiteMoodTargets(tree, castUid))
       for (const edge of smiteMoodEdges(tree, castUid)) {
         if (mood.has(edge.childUid)) continue
-        mood.set(edge.childUid, smiteEdgePaint(
+        const live = smiteLinkLive(
+          shape,
           smiteMarkOf(host.marks, edge.parentUid),
           smiteMarkOf(host.marks, edge.childUid),
-        ))
+        )
+        if (live) mood.set(edge.childUid, live)
       }
     }
     const liveGrads = new Set()
