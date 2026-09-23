@@ -1024,6 +1024,12 @@
     return '#ffffff'
   }
 
+  // Soft slate, not charcoal. The map is #f0f2f5, so this deeper of the
+  // two trial grays still reads around a white core.
+  function smiteHaloTone(mark) {
+    return smiteFateTone(mark) === '#ffffff' ? '#7C8491' : '#ffffff'
+  }
+
   function smiteStillIn(mark) {
     return mark === 'red' || mark === 'amber'
   }
@@ -1032,13 +1038,16 @@
     return mark === 'red' || mark === 'amber' || mark === 'normal'
   }
 
-  // Gradient runs parent → child. Every pocket edge is the same outlined
-  // stroke: a thick fate core with a white halo, including white / out.
+  // Gradient runs parent → child. Every pocket edge is the same weight:
+  // a thick fate core over a wider halo. Red and amber keep a white halo.
+  // A white fate, including the white end of a mixed edge, uses slate.
   function smiteEdgePaint(parentMark, childMark) {
     return {
       from: smiteFateTone(parentMark),
       to: smiteFateTone(childMark),
       ants: smiteFateTone(childMark),
+      haloFrom: smiteHaloTone(parentMark),
+      haloTo: smiteHaloTone(childMark),
       weight: 'strong',
     }
   }
@@ -3064,7 +3073,9 @@
   function smiteRestoreEdge(link) {
     if (!link || link.dataset.smiteEdge !== '1') return
     const gradId = link.dataset.smiteGrad
+    const haloId = link.dataset.smiteHalo
     if (gradId) link.ownerDocument?.getElementById(gradId)?.remove()
+    if (haloId) link.ownerDocument?.getElementById(haloId)?.remove()
     smiteDropAnts(link, gradId)
     link.style.stroke = ''
     link.style.strokeDasharray = ''
@@ -3080,10 +3091,11 @@
     link.style.transition = ''
     delete link.dataset.smiteEdge
     delete link.dataset.smiteGrad
+    delete link.dataset.smiteHalo
     delete link.dataset.smiteWeight
   }
 
-  function smiteEnsureEdgeGradient(link, from, to) {
+  function smiteEnsureEdgeGradient(link, from, to, suffix) {
     const doc = link.ownerDocument
     const svg = doc.getElementById('canvas')
     const xml = 'http://www.w3.org/2000/svg'
@@ -3093,7 +3105,7 @@
       defs.setAttribute('class', 'logyq-smite-grads')
       svg.insertBefore(defs, svg.firstChild)
     }
-    const id = smiteEdgeGradientId(link)
+    const id = smiteEdgeGradientId(link) + (suffix || '')
     let grad = doc.getElementById(id)
     if (!grad && defs) {
       grad = doc.createElementNS(xml, 'linearGradient')
@@ -3130,7 +3142,7 @@
     return id
   }
 
-  function smitePaintAnts(link, color, gradId) {
+  function smitePaintAnts(link, color, gradId, haloId) {
     const doc = link.ownerDocument
     const found = []
     let sib = link.nextElementSibling
@@ -3171,10 +3183,10 @@
       return path
     }
     // Dashes use the same parent→child gradient, so a mixed edge does not
-    // swap color at a hard midline. The white halo is the same weight on
-    // delete, Word Bank, and out.
+    // swap color at a hard midline. The halo follows fate: white beside
+    // red and amber, slate beside a white segment.
     ensure('color', `url(#${gradId})`, '3.5px', '1')
-    ensure('halo', '#ffffff', '6px', '0.9')
+    ensure('halo', `url(#${haloId})`, '6px', '0.9')
   }
 
   // A live layout tween owns `d` and should finish with the cards.
@@ -3201,7 +3213,9 @@
     link.dataset.smiteEdge = '1'
     link.dataset.smiteWeight = 'strong'
     const gradId = smiteEnsureEdgeGradient(link, paint.from, paint.to)
+    const haloId = smiteEnsureEdgeGradient(link, paint.haloFrom, paint.haloTo, '-halo')
     link.dataset.smiteGrad = gradId
+    link.dataset.smiteHalo = haloId
     link.style.setProperty('stroke', `url(#${gradId})`, 'important')
     link.style.setProperty('stroke-width', '3.5px', 'important')
     link.style.setProperty('opacity', '1', 'important')
@@ -3211,7 +3225,7 @@
     link.style.animation = 'none'
     link.style.transition = 'none'
     link.style.vectorEffect = 'non-scaling-stroke'
-    smitePaintAnts(link, paint.ants, gradId)
+    smitePaintAnts(link, paint.ants, gradId, haloId)
   }
 
   function smitePaintCard(node, heat, rx, ry, outline) {
@@ -3413,6 +3427,7 @@
       if (paint) {
         smitePaintEdge(link, paint)
         if (link.dataset.smiteGrad) liveGrads.add(link.dataset.smiteGrad)
+        if (link.dataset.smiteHalo) liveGrads.add(link.dataset.smiteHalo)
       } else smiteRestoreEdge(link)
     })
     doc.querySelectorAll('svg#canvas path.logyq-smite-ant').forEach((path) => {
