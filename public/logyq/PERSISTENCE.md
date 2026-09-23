@@ -20,7 +20,7 @@ Existing rows are updated in place. Unknown JSON fields on tree nodes JSON-clone
 `logiq_map_save` replaces the whole row and sets `updated_at = now()`. Nodes have no timestamps; the row's `updated_at` is the revision. An open map remembers that stamp when it loads or after a save.
 
 - UI edits still debounce into `logiq_map_save`.
-- While a saved map is open, the preview polls `logiq_map_list` about every 2s. A newer `updated_at` with a different tree is applied when she is not renaming a card.
+- While a saved map is open, the preview polls `logiq_map_list` about every 2s. A newer `updated_at` with a different tree is applied when she is not renaming a card. A finger that is still down on a card (flick or pan) waits until pointer-up, so the poll does not rebuild the canvas mid-swipe.
 - Before a save of an existing id, the same check runs. If the database moved and this tab has not edited since the last ack, the stale local tree is not posted.
 - If both sides changed and no rename field is open, the trees merge by `_uid`. A field only one side changed keeps that side. If both changed the same field, the newer row wins.
 - If a rename input is open, the remote row is held and the field keeps what she is typing. A note ("Database change came in.") sits on that input, just above it. The note is informational. Enter keeps her value for that card and then saves the merge. Escape or cancel takes the remote row.

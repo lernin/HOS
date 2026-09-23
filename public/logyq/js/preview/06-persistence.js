@@ -768,6 +768,8 @@
   async function pullRemoteNow() {
     if (app.curriculum || !app.hasOpenMap || !app.current?.id || app.saving || app.applyingRemote) return
     if (document.body.classList.contains('v2-branch-drag') || document.body.classList.contains('dragging-mode')) return
+    const gesture = preview.gestures?.session
+    if (gesture?.flick?.active?.size || gesture?.hold?.race || gesture?.hold?.pan) return
     const pin = readStoredPin()
     if (!pin) return
     let rows

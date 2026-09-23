@@ -3,6 +3,7 @@
 ## Map sync preview
 
 - **Open maps follow `logiq_maps.updated_at`.** A newer database row updates the canvas when no rename field is open. A save of an existing map checks that stamp first and does not post a stale full tree over it. Mid-rename keeps the typed name and shows an informational “Database change came in.” note on the input. Enter still saves that name. No schema change. Thekonym device edits stay local.
+- **Thekonym dossier opens on a right flick.** A clear right swipe opens the flip dossier and does not add a sibling. An armed card uses the same flip. Double-tap still renames. A left swipe, or the X, plays the reverse flip. The map poll waits until that finger is up.
 
 LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were dropped on purpose so layout/structure could sit on a single `logyq` bag. Production LOGiQ is unchanged.
 
