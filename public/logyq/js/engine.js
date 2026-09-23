@@ -1798,14 +1798,19 @@ if (dir === +1){
  }
 
  // The phone field is a full-width bar on the keyboard. It never follows the card.
+ // Keyboard inset is the covered height only. Subtracting the visual
+ // viewport's scroll offset made the bar hop while the keyboard rose.
  function dockMobileEditor(){
   const { state } = logyq
   const el = state.editorEl
   const stack = el?.closest?.('.node-edit-stack')
   if (!stack) return
   const vv = window.visualViewport
-  const keyboard = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0
-  stack.style.bottom = keyboard + 'px'
+  const inset = vv ? Math.max(0, Math.round(window.innerHeight - vv.height)) : 0
+  if (stack._logyqInset === inset) return
+  stack._logyqInset = inset
+  stack.style.bottom = '0px'
+  stack.style.transform = inset ? 'translate3d(0,' + (-inset) + 'px,0)' : 'none'
  }
 
  function updateNodeEditorPosition(){
@@ -1876,7 +1881,7 @@ if (dir === +1){
   function closeNodeEditor(apply, restoreZoom){
     const { state, elements, utils } = logyq
     if(!state.editingUid) return;
-    const uid = state.editingUid; const el = state.editorEl;
+    const uid = state.editorEl?.dataset?.editUid || state.editingUid; const el = state.editorEl;
     if (state._editFocusTimer) { try { clearTimeout(state._editFocusTimer); } catch (_e) {} state._editFocusTimer = 0; }
     if (typeof state._editViewportOff === 'function') { try { state._editViewportOff(); } catch (_e) {} state._editViewportOff = null; }
     state.editingUid = null; state.editorEl = null;
@@ -1937,6 +1942,7 @@ if (dir === +1){
     input.setAttribute("autocorrect", "off");
     input.setAttribute("spellcheck", "false");
     input.value = (d.data && d.data.name) ? d.data.name : "";
+    input.dataset.editUid = String(uid);
     if (mobileQuietEdit()) {
       const stack = document.createElement("div");
       stack.className = "node-edit-stack";
@@ -1993,12 +1999,20 @@ if (dir === +1){
       closeNodeEditor(true, true);
     });
     updateNodeEditorPosition();
-    setTimeout(function(){ try{ input.focus(); var L=input.value.length; input.setSelectionRange(L,L); }catch(_e){} }, 0);
+    state._editFocusTimer = setTimeout(function(){
+      try { input.focus({ preventScroll: true }); var L=input.value.length; input.setSelectionRange(L,L); } catch (_e) {}
+    }, 0);
     if (mobileQuietEdit()) {
       const vv = window.visualViewport;
+      let dockFrame = 0;
       const onViewport = () => {
         if (state.editingUid !== uid) return;
-        dockMobileEditor();
+        if (dockFrame) return;
+        dockFrame = requestAnimationFrame(() => {
+          dockFrame = 0;
+          if (state.editingUid !== uid) return;
+          dockMobileEditor();
+        });
       };
       const keepMapFocus = (event) => {
         if (state.editingUid !== uid) return;
@@ -2015,6 +2029,8 @@ if (dir === +1){
       document.addEventListener('touchstart', keepMapFocus, { capture: true, passive: false });
       document.addEventListener('mousedown', keepMapFocus, { capture: true, passive: false });
       state._editViewportOff = () => {
+        if (dockFrame) cancelAnimationFrame(dockFrame);
+        dockFrame = 0;
         if (vv) {
           vv.removeEventListener('resize', onViewport);
           vv.removeEventListener('scroll', onViewport);

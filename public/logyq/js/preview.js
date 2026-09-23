@@ -2122,7 +2122,6 @@
         if (!createdUid) return
         restoreView(doc, win, candidate.view)
         bridge.selectByUid(createdUid)
-        bridge.editSelected({ uid: createdUid })
         clearCardMic(state.mic)
         win.requestAnimationFrame(() => {
           restoreView(doc, win, candidate.view)
@@ -2367,10 +2366,20 @@
     return rankCardHits(scored, x, y)[0]?.node || null
   }
 
+  function faceUnderFinger(event) {
+    const target = event?.target
+    if (!target || typeof target.closest !== 'function') return null
+    if (target.closest('g.hit-slot, .node-edit-stack')) return null
+    const painted = target.closest('rect, text')
+    if (!painted || painted.classList?.contains('grabzone')) return null
+    return painted.closest('g.node') || null
+  }
+
   function hitNode(doc, x, y, event) {
-    // Painted face first. A raised neighbor's grab zone and a layout slot
-    // that has already moved both used to name a different card than the
-    // one under the finger.
+    // The painted face under the finger is that card. A hit-slot or grab
+    // zone can name a neighbor, so those fall through to the face geometry.
+    const face = faceUnderFinger(event)
+    if (face) return face
     const visual = hitVisualNode(doc, x, y)
     if (visual) return visual
     const uid = hitEditUid(doc, x, y, event)

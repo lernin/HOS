@@ -360,10 +360,10 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.locator('#logyq-v162-action.show').count(), 0)
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.recorder), false)
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.actionUid), false)
-  await page.waitForSelector('.node-edit-input')
   const flickEdit = await page.evaluate((prev) => {
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return {
+      editors: document.querySelectorAll('.node-edit-input').length,
       editing: window.LOGYQBridge.core.state.editingUid,
       selected: window.LOGYQBridge.core.state.selectedUid,
       k: t.k,
@@ -371,11 +371,11 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
       y: t.y,
     }
   }, flickView)
-  assert.equal(flickEdit.editing, flickEdit.selected)
-  assert.ok(Math.abs(flickEdit.k - flickView.k) < 0.02, 'create edit must not zoom')
-  assert.ok(Math.hypot(flickEdit.x - flickView.x, flickEdit.y - flickView.y) < 2, 'create edit must not pan')
-  await page.locator('.node-edit-input').press('Escape')
-  await page.waitForFunction(() => document.querySelectorAll('.node-edit-input').length === 0)
+  assert.equal(flickEdit.editors, 0, 'flick-create must not open the rename bar')
+  assert.equal(flickEdit.editing, null)
+  assert.ok(flickEdit.selected)
+  assert.ok(Math.abs(flickEdit.k - flickView.k) < 0.02, 'create must not zoom')
+  assert.ok(Math.hypot(flickEdit.x - flickView.x, flickEdit.y - flickView.y) < 2, 'create must not pan')
   await page.waitForTimeout(400)
 
   const panCard = await nodeCenter('Node 12')
@@ -1275,10 +1275,8 @@ test('LOGYQ flick left/right/up create as calmly as down-on-leaf', async () => {
       }
     })
     assert.ok(Math.hypot(after.x - view.x, after.y - view.y) < 2, `${name} flick must leave the camera`)
-    assert.equal(after.editors, 1, `${name} flick opens the keyboard field on the new card`)
-    assert.equal(after.editing, after.selected)
-    await page.locator('.node-edit-input').press('Escape')
-    await page.waitForFunction(() => document.querySelectorAll('.node-edit-input').length === 0)
+    assert.equal(after.editors, 0, `${name} flick must not open the rename bar`)
+    assert.equal(after.editing, null)
     assert.equal(after.mic, 0, `${name} flick must not arm MIC`)
     assert.notEqual(after.selected, origin.uid)
     assert.equal(after.createdName, '')
@@ -1876,7 +1874,7 @@ test('LOGYQ sequential flick-downs after background clear and pan do not overlap
     }
   }, view0)
   assert.ok(Math.hypot(after1.dx, after1.dy) < 2, 'first flick must leave the camera')
-  assert.equal(after1.editors, 1)
+  assert.equal(after1.editors, 0, 'flick-create must not open the rename bar')
   assert.equal(after1.overlap, 0)
   assert.ok(after1.selected)
   assert.notEqual(after1.selected, after1.rootUid)
@@ -1946,7 +1944,7 @@ test('LOGYQ sequential flick-downs after background clear and pan do not overlap
     }
   }, panned)
   assert.ok(Math.hypot(after2.dx, after2.dy) < 2, 'second flick after pan must leave the camera')
-  assert.equal(after2.editors, 1)
+  assert.equal(after2.editors, 0, 'flick-create must not open the rename bar')
   assert.equal(after2.overlap, 0)
   assert.ok(after2.selected)
   assert.notEqual(after2.selected, after2.rootUid)
@@ -3977,28 +3975,38 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   await page.waitForTimeout(16)
   await touch('pointerup', citrus.x, citrus.y + 74, 13)
   await page.waitForFunction((n) => document.querySelectorAll('svg#canvas g.node').length > n, count)
-  await page.waitForSelector('.node-edit-input')
   const created = await page.evaluate((parentUid) => {
-    const editing = window.LOGYQBridge.core.state.editingUid
-    const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data._uid === editing)
+    const selected = window.LOGYQBridge.core.state.selectedUid
+    const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data._uid === selected)
     return {
-      editing,
+      editors: document.querySelectorAll('.node-edit-input').length,
+      selected,
       name: node?.data?.name ?? null,
       parent: node?.parent?.data?._uid || null,
-      value: document.querySelector('.node-edit-input')?.value ?? null,
     }
   }, citrus.uid)
-  assert.ok(created.editing)
-  assert.notEqual(created.editing, citrus.uid)
+  assert.equal(created.editors, 0, 'flick-create must not open the rename bar')
+  assert.notEqual(created.selected, citrus.uid)
   assert.equal(created.parent, citrus.uid)
   assert.equal(created.name, '')
-  assert.equal(created.value, '')
-  sameCamera(before, await view(), 'flick-create edit')
+  sameCamera(before, await view(), 'flick-create')
+  const blank = await page.evaluate((uid) => {
+    const face = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?._uid === uid)
+    const box = face?.querySelector('rect:not(.grabzone)') || face
+    const rect = box.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }, created.selected)
+  await touch('pointerdown', blank.x, blank.y, 131)
+  await touch('pointerup', blank.x, blank.y, 131)
+  await touch('pointerdown', blank.x, blank.y, 132)
+  await touch('pointerup', blank.x, blank.y, 132)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), created.selected)
   await page.locator('.node-edit-input').fill('Lime')
   await page.locator('.node-edit-input').press('Enter')
   await page.waitForFunction((uid) => {
     return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Lime'
-  }, created.editing)
+  }, created.selected)
   sameCamera(before, await view(), 'Enter on the new card')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
 
@@ -4008,7 +4016,7 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
     const box = face?.querySelector('rect:not(.grabzone)') || face
     const rect = box.getBoundingClientRect()
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, parent: node?.parent?.data?.name }
-  }, created.editing)
+  }, created.selected)
   assert.equal(lime.parent, 'Citrus')
   await touch('pointerdown', lime.x, lime.y, 14)
   await touch('pointerup', lime.x, lime.y, 14)
@@ -4020,7 +4028,7 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
   assert.equal(await page.evaluate((uid) => {
     return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
-  }, created.editing), 'Lime')
+  }, created.selected), 'Lime')
   sameCamera(before, await view(), 'Escape')
 
   await touch('pointerdown', lime.x, lime.y, 16)
@@ -4060,8 +4068,8 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
       name: window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name,
       value: document.querySelector('.node-edit-input')?.value || '',
     }
-  }, created.editing)
-  assert.equal(duringPan.editing, created.editing)
+  }, created.selected)
+  assert.equal(duringPan.editing, created.selected)
   assert.equal(duringPan.name, 'Lime')
   assert.equal(duringPan.value, 'Discard me')
   const pinchBefore = await view()
@@ -4092,15 +4100,214 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   }, panSpot)
   const pinched = await view()
   assert.ok(pinchBefore.k - pinched.k > 0.05, `map must pinch-zoom while renaming, before=${pinchBefore.k} after=${pinched.k}`)
-  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), created.editing)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), created.selected)
   await page.locator('.node-edit-cancel').click()
   await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
   assert.equal(await page.evaluate((uid) => {
     return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
-  }, created.editing), 'Lime')
+  }, created.selected), 'Lime')
   const afterCancel = await view()
   assert.ok(Math.abs(afterCancel.k - pinched.k) < 0.05, 'cancel must not snap the zoom')
   assert.ok(Math.hypot(afterCancel.x - pinched.x, afterCancel.y - pinched.y) < 2, 'cancel must not snap the pan')
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ double-tap renames only the card under the finger', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      children: [{ name: 'Fruit' }, { name: 'Meat' }],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Food', 'Fruit', 'Meat'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    const rect = node?.getBoundingClientRect()
+    return rect && rect.width > 20
+  }))
+  await page.waitForFunction(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    const prev = window.__logyqCamSettle
+    const now = performance.now()
+    const still = !!(prev && Math.abs(prev.k - t.k) < 0.001 && Math.hypot(prev.x - t.x, prev.y - t.y) < 0.5)
+    window.__logyqCamSettle = { x: t.x, y: t.y, k: t.k, since: still ? prev.since : now }
+    return still && now - prev.since > 150
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid: node?.__data__?.data?._uid }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const canvas = document.getElementById('canvas')
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function label(uid) {
+    return page.evaluate((id) => {
+      return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, id)?.name
+    }, uid)
+  }
+
+  const fruit = await face('Fruit')
+  const beforeFlick = await page.locator('svg#canvas g.node').count()
+  await touch('pointerdown', fruit.x, fruit.y, 21)
+  await touch('pointerup', fruit.x, fruit.y + 74, 21)
+  await page.waitForFunction((n) => document.querySelectorAll('svg#canvas g.node').length > n, beforeFlick)
+  const flicked = await page.evaluate((parentUid) => {
+    const selected = window.LOGYQBridge.core.state.selectedUid
+    const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data._uid === selected)
+    return {
+      editors: document.querySelectorAll('.node-edit-input, .node-edit-stack').length,
+      selected,
+      parent: node?.parent?.data?._uid || null,
+      name: node?.data?.name ?? null,
+    }
+  }, fruit.uid)
+  assert.equal(flicked.editors, 0, 'flick-create must not open the rename bar')
+  assert.equal(flicked.parent, fruit.uid)
+  assert.equal(flicked.name, '')
+  const food = await face('Food')
+  const meatCard = await face('Meat')
+  assert.equal(await label(food.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Fruit')
+  assert.equal(await label(meatCard.uid), 'Meat')
+
+  async function doubleTap(label, pointerId) {
+    const card = await face(label)
+    await touch('pointerdown', card.x, card.y, pointerId)
+    await touch('pointerup', card.x, card.y, pointerId)
+    await touch('pointerdown', card.x, card.y, pointerId + 1)
+    await touch('pointerup', card.x, card.y, pointerId + 1)
+    await page.waitForSelector('.node-edit-input')
+    return card
+  }
+
+  const opened = await doubleTap('Fruit', 31)
+  const bound = await page.evaluate(() => {
+    const input = document.querySelector('.node-edit-input')
+    const stack = document.querySelector('.node-edit-stack')
+    const box = stack.getBoundingClientRect()
+    return {
+      uid: window.LOGYQBridge.core.state.editingUid,
+      stamp: input.dataset.editUid,
+      value: input.value,
+      left: box.left,
+      right: box.right,
+      bottom: box.bottom,
+      inner: window.innerHeight,
+    }
+  })
+  assert.equal(bound.uid, opened.uid)
+  assert.equal(bound.stamp, opened.uid)
+  assert.equal(bound.value, 'Fruit')
+  assert.ok(bound.left <= 1 && bound.right >= 389, 'bar stays full width')
+  assert.ok(Math.abs(bound.inner - bound.bottom) < 2, 'bar stays flush')
+  const hop = await page.evaluate(() => {
+    const stack = document.querySelector('.node-edit-stack')
+    const before = stack.getBoundingClientRect().bottom
+    let writes = 0
+    const obs = new MutationObserver(() => { writes += 1 })
+    obs.observe(stack, { attributes: true, attributeFilter: ['style'] })
+    const vv = window.visualViewport
+    vv?.dispatchEvent(new Event('resize'))
+    vv?.dispatchEvent(new Event('scroll'))
+    window.dispatchEvent(new Event('resize'))
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        obs.disconnect()
+        resolve({ before, after: stack.getBoundingClientRect().bottom, writes })
+      }))
+    })
+  })
+  assert.equal(hop.writes, 0, 'viewport events must not reposition the bar again')
+  assert.ok(Math.abs(hop.after - hop.before) < 1, 'bar must not hop')
+  await page.locator('.node-edit-input').fill('Berry')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Berry'
+  }, opened.uid)
+  assert.equal(await label(food.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Berry')
+  assert.equal(await label(meatCard.uid), 'Meat')
+  assert.equal(await label(flicked.selected), '')
+
+  const meat = await doubleTap('Meat', 41)
+  await page.locator('.node-edit-input').fill('Steak')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Steak'
+  }, meat.uid)
+  assert.equal(await label(food.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Berry')
+  assert.equal(await label(meat.uid), 'Steak')
+  assert.equal(await label(flicked.selected), '')
+
+  const foodEdit = await doubleTap('Food', 51)
+  assert.equal(await page.evaluate(() => document.querySelector('.node-edit-input').value), 'Food')
+  await page.locator('.node-edit-input').fill('Nope')
+  await page.locator('.node-edit-cancel').click()
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
+  assert.equal(await page.evaluate((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
+  }, foodEdit.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Berry')
+  assert.equal(await label(meat.uid), 'Steak')
+
+  const blankFace = await page.evaluate((uid) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?._uid === uid)
+    const box = node?.querySelector('rect:not(.grabzone)') || node
+    const rect = box.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid }
+  }, flicked.selected)
+  await touch('pointerdown', blankFace.x, blankFace.y, 61)
+  await touch('pointerup', blankFace.x, blankFace.y, 61)
+  await touch('pointerdown', blankFace.x, blankFace.y, 62)
+  await touch('pointerup', blankFace.x, blankFace.y, 62)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), flicked.selected)
+  await page.locator('.node-edit-input').fill('Lime')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Lime'
+  }, flicked.selected)
+  assert.equal(await label(food.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Berry')
+  assert.equal(await label(meat.uid), 'Steak')
+  assert.equal(await label(flicked.selected), 'Lime')
 
   assert.deepEqual(errors, [])
   await context.close()

@@ -676,6 +676,8 @@ svg.delete-intent g.links path.link.is-parent-link {
     padding: 0;
     background: transparent;
     pointer-events: none;
+    transition: none !important;
+    transform: none;
   }
   body.logyq-mobile-v162 .node-edit-cancel{
     pointer-events: auto;
