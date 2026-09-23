@@ -189,11 +189,12 @@
       body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;stroke:#1c3329;stroke-width:0.65px;stroke-linejoin:round;paint-order:stroke fill;vector-effect:non-scaling-stroke}
       body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#66706a;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:500;stroke:none}
       body.logyq-thekonym::before{animation:none;filter:none;background:radial-gradient(ellipse at center, rgba(247,245,233,0) 40%, rgba(22,46,39,0.05) 72%, rgba(22,46,39,0.16) 100%), radial-gradient(ellipse at 50% 40%, #fbf8ef 0%, #f7f5e9 58%, #efe6d2 100%)}
-      .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:rgba(22,46,39,.28);padding:5dvh 5vw}
+      .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:rgba(22,46,39,.28);padding:5dvh 5vw;touch-action:none}
       .logyq-tk-scrim.is-open{display:flex}
       .logyq-tk-scrim.is-flipping{perspective:1400px}
       .logyq-tk-scrim.is-flipping .logyq-tk-card{transform-style:preserve-3d;backface-visibility:hidden}
-      .logyq-tk-card{position:relative;box-sizing:border-box;width:90vw;height:90dvh;max-width:720px;overflow:hidden;display:flex;flex-direction:column;text-align:center;padding:0;background:#f7f5e9;color:#29382f;border-radius:18px;box-shadow:0 24px 70px rgba(22,46,39,.28);font-family:'DM Sans',system-ui,sans-serif}
+      .logyq-tk-card{position:relative;box-sizing:border-box;width:90vw;height:90dvh;max-width:720px;overflow:hidden;display:flex;flex-direction:column;text-align:center;padding:0;background:#f7f5e9;color:#29382f;border-radius:18px;box-shadow:0 24px 70px rgba(22,46,39,.28);font-family:'DM Sans',system-ui,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+      .logyq-tk-input{user-select:text;-webkit-user-select:text;touch-action:manipulation}
       .logyq-tk-x{position:absolute;top:8px;right:8px;z-index:1;width:36px;height:36px;border:0;border-radius:8px;background:transparent;color:#162e27;font-size:22px;line-height:1}
       .logyq-tk-body{box-sizing:border-box;width:100%;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:16px 22px 14px}
       .logyq-tk-body.is-miss{justify-content:center}

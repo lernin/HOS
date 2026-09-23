@@ -283,27 +283,27 @@
       return
     }
     clearDossierFlip(root)
-    const duration = DOSSIER_FLIP_MS
+    const duration = 400
     root.classList.add('is-flipping')
     root.dataset.flip = 'close'
     card.style.opacity = ''
     card.style.transformOrigin = 'center center'
     card.style.transform = 'translateX(0px) rotateY(0deg)'
+    const easing = 'cubic-bezier(0.4, 0, 0.2, 1)'
     const cardAnim = card.animate([
-      { transform: 'translateX(0px) rotateY(0deg)', offset: 0, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
-      { transform: 'translateX(18px) rotateY(-46deg)', offset: 0.58, easing: 'linear' },
-      { transform: 'translateX(-16px) rotateY(-88deg)', offset: 1 },
-    ], { duration, easing: 'linear', fill: 'both' })
+      { transform: 'translateX(0px) rotateY(0deg)' },
+      { transform: 'translateX(-16px) rotateY(-88deg)' },
+    ], { duration, easing, fill: 'both' })
     const scrimAnim = root.animate([
-      { backgroundColor: 'rgba(22,46,39,0.28)', offset: 0 },
-      { backgroundColor: 'rgba(22,46,39,0)', offset: 1 },
-    ], { duration, easing: 'linear', fill: 'both' })
+      { backgroundColor: 'rgba(22,46,39,0.28)' },
+      { backgroundColor: 'rgba(22,46,39,0)' },
+    ], { duration, easing, fill: 'both' })
     let closed = false
     const done = () => {
       if (closed) return
       closed = true
-      clearDossierFlip(root)
       root.classList.remove('is-open')
+      clearDossierFlip(root)
     }
     cardAnim.onfinish = done
     dossierFlip = { anims: [cardAnim, scrimAnim], fly: null, node: null, timer: setTimeout(done, duration + 80), closing: true }
@@ -683,12 +683,25 @@
       })
       scrim.querySelector('.logyq-tk-x').addEventListener('click', () => closeThekonymCard())
       let gesture = null
+      const editingTarget = (target) => target?.closest?.('.logyq-tk-x, input, textarea, .logyq-tk-input')
+      const endGesture = (id, x, y) => {
+        if (!gesture || gesture.id !== id) return
+        if (x != null) gesture.lastX = x
+        if (y != null) gesture.lastY = y
+        const dx = gesture.lastX - gesture.x
+        const dy = gesture.lastY - gesture.y
+        gesture = null
+        if (!thekonymDismissSwipe(dx, dy)) return
+        lastField = ''
+        closeThekonymCard()
+      }
       scrim.addEventListener('pointerdown', (event) => {
         if (event.button) return
-        if (event.target.closest?.('.logyq-tk-x, input, textarea, .logyq-tk-input')) {
+        if (editingTarget(event.target)) {
           gesture = null
           return
         }
+        if (gesture) return
         gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY }
         try { scrim.setPointerCapture(event.pointerId) } catch (_error) {}
       })
@@ -696,18 +709,32 @@
         if (!gesture || event.pointerId !== gesture.id) return
         gesture.lastX = event.clientX
         gesture.lastY = event.clientY
+        if (event.cancelable && Math.abs(gesture.lastX - gesture.x) > Math.abs(gesture.lastY - gesture.y)) event.preventDefault()
       })
-      scrim.addEventListener('pointerup', (event) => {
-        if (!gesture || event.pointerId !== gesture.id) return
-        const dx = gesture.lastX - gesture.x
-        const dy = gesture.lastY - gesture.y
-        gesture = null
-        if (!thekonymDismissSwipe(dx, dy)) return
-        lastField = ''
-        closeThekonymCard()
+      scrim.addEventListener('pointerup', (event) => endGesture(event.pointerId, event.clientX, event.clientY))
+      scrim.addEventListener('pointercancel', (event) => endGesture(event.pointerId, event.clientX, event.clientY))
+      scrim.addEventListener('touchstart', (event) => {
+        if (gesture || editingTarget(event.target)) return
+        const touch = event.changedTouches[0]
+        if (!touch) return
+        gesture = { id: `t${touch.identifier}`, x: touch.clientX, y: touch.clientY, lastX: touch.clientX, lastY: touch.clientY }
+      }, { passive: true })
+      scrim.addEventListener('touchmove', (event) => {
+        const touch = [...event.changedTouches].find((item) => gesture?.id === `t${item.identifier}`)
+        if (!touch) return
+        gesture.lastX = touch.clientX
+        gesture.lastY = touch.clientY
+        if (event.cancelable) event.preventDefault()
+      }, { passive: false })
+      scrim.addEventListener('touchend', (event) => {
+        const touch = [...event.changedTouches].find((item) => gesture?.id === `t${item.identifier}`)
+        if (!touch) return
+        endGesture(gesture.id, touch.clientX, touch.clientY)
       })
-      scrim.addEventListener('pointercancel', (event) => {
-        if (gesture?.id === event.pointerId) gesture = null
+      scrim.addEventListener('touchcancel', (event) => {
+        const touch = [...event.changedTouches].find((item) => gesture?.id === `t${item.identifier}`)
+        if (!touch) return
+        endGesture(gesture.id, touch.clientX, touch.clientY)
       })
       scrim.querySelector('.logyq-tk-card').addEventListener('pointerup', (event) => {
         if (gesture && thekonymDismissSwipe(gesture.lastX - gesture.x, gesture.lastY - gesture.y)) return

@@ -347,11 +347,12 @@
       body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;stroke:#1c3329;stroke-width:0.65px;stroke-linejoin:round;paint-order:stroke fill;vector-effect:non-scaling-stroke}
       body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#66706a;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:500;stroke:none}
       body.logyq-thekonym::before{animation:none;filter:none;background:radial-gradient(ellipse at center, rgba(247,245,233,0) 40%, rgba(22,46,39,0.05) 72%, rgba(22,46,39,0.16) 100%), radial-gradient(ellipse at 50% 40%, #fbf8ef 0%, #f7f5e9 58%, #efe6d2 100%)}
-      .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:rgba(22,46,39,.28);padding:5dvh 5vw}
+      .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:rgba(22,46,39,.28);padding:5dvh 5vw;touch-action:none}
       .logyq-tk-scrim.is-open{display:flex}
       .logyq-tk-scrim.is-flipping{perspective:1400px}
       .logyq-tk-scrim.is-flipping .logyq-tk-card{transform-style:preserve-3d;backface-visibility:hidden}
-      .logyq-tk-card{position:relative;box-sizing:border-box;width:90vw;height:90dvh;max-width:720px;overflow:hidden;display:flex;flex-direction:column;text-align:center;padding:0;background:#f7f5e9;color:#29382f;border-radius:18px;box-shadow:0 24px 70px rgba(22,46,39,.28);font-family:'DM Sans',system-ui,sans-serif}
+      .logyq-tk-card{position:relative;box-sizing:border-box;width:90vw;height:90dvh;max-width:720px;overflow:hidden;display:flex;flex-direction:column;text-align:center;padding:0;background:#f7f5e9;color:#29382f;border-radius:18px;box-shadow:0 24px 70px rgba(22,46,39,.28);font-family:'DM Sans',system-ui,sans-serif;touch-action:none;user-select:none;-webkit-user-select:none}
+      .logyq-tk-input{user-select:text;-webkit-user-select:text;touch-action:manipulation}
       .logyq-tk-x{position:absolute;top:8px;right:8px;z-index:1;width:36px;height:36px;border:0;border-radius:8px;background:transparent;color:#162e27;font-size:22px;line-height:1}
       .logyq-tk-body{box-sizing:border-box;width:100%;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:16px 22px 14px}
       .logyq-tk-body.is-miss{justify-content:center}
@@ -5124,27 +5125,27 @@
       return
     }
     clearDossierFlip(root)
-    const duration = DOSSIER_FLIP_MS
+    const duration = 400
     root.classList.add('is-flipping')
     root.dataset.flip = 'close'
     card.style.opacity = ''
     card.style.transformOrigin = 'center center'
     card.style.transform = 'translateX(0px) rotateY(0deg)'
+    const easing = 'cubic-bezier(0.4, 0, 0.2, 1)'
     const cardAnim = card.animate([
-      { transform: 'translateX(0px) rotateY(0deg)', offset: 0, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
-      { transform: 'translateX(18px) rotateY(-46deg)', offset: 0.58, easing: 'linear' },
-      { transform: 'translateX(-16px) rotateY(-88deg)', offset: 1 },
-    ], { duration, easing: 'linear', fill: 'both' })
+      { transform: 'translateX(0px) rotateY(0deg)' },
+      { transform: 'translateX(-16px) rotateY(-88deg)' },
+    ], { duration, easing, fill: 'both' })
     const scrimAnim = root.animate([
-      { backgroundColor: 'rgba(22,46,39,0.28)', offset: 0 },
-      { backgroundColor: 'rgba(22,46,39,0)', offset: 1 },
-    ], { duration, easing: 'linear', fill: 'both' })
+      { backgroundColor: 'rgba(22,46,39,0.28)' },
+      { backgroundColor: 'rgba(22,46,39,0)' },
+    ], { duration, easing, fill: 'both' })
     let closed = false
     const done = () => {
       if (closed) return
       closed = true
-      clearDossierFlip(root)
       root.classList.remove('is-open')
+      clearDossierFlip(root)
     }
     cardAnim.onfinish = done
     dossierFlip = { anims: [cardAnim, scrimAnim], fly: null, node: null, timer: setTimeout(done, duration + 80), closing: true }
@@ -5524,12 +5525,25 @@
       })
       scrim.querySelector('.logyq-tk-x').addEventListener('click', () => closeThekonymCard())
       let gesture = null
+      const editingTarget = (target) => target?.closest?.('.logyq-tk-x, input, textarea, .logyq-tk-input')
+      const endGesture = (id, x, y) => {
+        if (!gesture || gesture.id !== id) return
+        if (x != null) gesture.lastX = x
+        if (y != null) gesture.lastY = y
+        const dx = gesture.lastX - gesture.x
+        const dy = gesture.lastY - gesture.y
+        gesture = null
+        if (!thekonymDismissSwipe(dx, dy)) return
+        lastField = ''
+        closeThekonymCard()
+      }
       scrim.addEventListener('pointerdown', (event) => {
         if (event.button) return
-        if (event.target.closest?.('.logyq-tk-x, input, textarea, .logyq-tk-input')) {
+        if (editingTarget(event.target)) {
           gesture = null
           return
         }
+        if (gesture) return
         gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY }
         try { scrim.setPointerCapture(event.pointerId) } catch (_error) {}
       })
@@ -5537,18 +5551,32 @@
         if (!gesture || event.pointerId !== gesture.id) return
         gesture.lastX = event.clientX
         gesture.lastY = event.clientY
+        if (event.cancelable && Math.abs(gesture.lastX - gesture.x) > Math.abs(gesture.lastY - gesture.y)) event.preventDefault()
       })
-      scrim.addEventListener('pointerup', (event) => {
-        if (!gesture || event.pointerId !== gesture.id) return
-        const dx = gesture.lastX - gesture.x
-        const dy = gesture.lastY - gesture.y
-        gesture = null
-        if (!thekonymDismissSwipe(dx, dy)) return
-        lastField = ''
-        closeThekonymCard()
+      scrim.addEventListener('pointerup', (event) => endGesture(event.pointerId, event.clientX, event.clientY))
+      scrim.addEventListener('pointercancel', (event) => endGesture(event.pointerId, event.clientX, event.clientY))
+      scrim.addEventListener('touchstart', (event) => {
+        if (gesture || editingTarget(event.target)) return
+        const touch = event.changedTouches[0]
+        if (!touch) return
+        gesture = { id: `t${touch.identifier}`, x: touch.clientX, y: touch.clientY, lastX: touch.clientX, lastY: touch.clientY }
+      }, { passive: true })
+      scrim.addEventListener('touchmove', (event) => {
+        const touch = [...event.changedTouches].find((item) => gesture?.id === `t${item.identifier}`)
+        if (!touch) return
+        gesture.lastX = touch.clientX
+        gesture.lastY = touch.clientY
+        if (event.cancelable) event.preventDefault()
+      }, { passive: false })
+      scrim.addEventListener('touchend', (event) => {
+        const touch = [...event.changedTouches].find((item) => gesture?.id === `t${item.identifier}`)
+        if (!touch) return
+        endGesture(gesture.id, touch.clientX, touch.clientY)
       })
-      scrim.addEventListener('pointercancel', (event) => {
-        if (gesture?.id === event.pointerId) gesture = null
+      scrim.addEventListener('touchcancel', (event) => {
+        const touch = [...event.changedTouches].find((item) => gesture?.id === `t${item.identifier}`)
+        if (!touch) return
+        endGesture(gesture.id, touch.clientX, touch.clientY)
       })
       scrim.querySelector('.logyq-tk-card').addEventListener('pointerup', (event) => {
         if (gesture && thekonymDismissSwipe(gesture.lastX - gesture.x, gesture.lastY - gesture.y)) return
