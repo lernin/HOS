@@ -2574,7 +2574,7 @@
     if (heat.ants) {
       wash.dataset.smiteOutline = 'ants'
       wash.style.strokeDasharray = '8 6'
-      wash.style.animation = 'logyq-smite-ants 0.7s linear infinite'
+      wash.style.animation = 'logyq-smite-march 0.7s linear infinite'
     } else {
       delete wash.dataset.smiteOutline
       wash.style.strokeDasharray = 'none'

@@ -257,7 +257,7 @@
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important;filter:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{pointer-events:none!important;fill:none!important;fill-opacity:0!important;stroke-width:3.5px!important;stroke-linecap:round;vector-effect:non-scaling-stroke}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash[data-smite-outline="ants"]{stroke-dasharray:8 6!important;animation:logyq-smite-ants .7s linear infinite!important}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash[data-smite-outline="ants"]{stroke-dasharray:8 6!important;animation:logyq-smite-march .7s linear infinite!important}
         body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-dasharray:none!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"][data-smite-weight="soft"]{opacity:.45!important;stroke-width:2px!important}
         body.logyq-mobile-v162 svg#canvas g.links path.logyq-smite-ant{fill:none!important;stroke-linecap:round;stroke-dasharray:8 6!important;animation:logyq-smite-march .7s linear infinite!important;pointer-events:none!important;transition:none!important;vector-effect:non-scaling-stroke}
@@ -271,7 +271,6 @@
         #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
         @keyframes logyq-smite-march{from{stroke-dashoffset:0}to{stroke-dashoffset:-14px}}
-        @keyframes logyq-smite-ants{0%{stroke-dashoffset:0;stroke-opacity:.45}50%{stroke-opacity:1}100%{stroke-dashoffset:-14px;stroke-opacity:.45}}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
       }
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
@@ -3250,7 +3249,7 @@
     if (heat.ants) {
       wash.dataset.smiteOutline = 'ants'
       wash.style.strokeDasharray = '8 6'
-      wash.style.animation = 'logyq-smite-ants 0.7s linear infinite'
+      wash.style.animation = 'logyq-smite-march 0.7s linear infinite'
     } else {
       delete wash.dataset.smiteOutline
       wash.style.strokeDasharray = 'none'

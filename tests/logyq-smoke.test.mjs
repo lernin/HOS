@@ -3712,7 +3712,23 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
           ants,
         }
       }
-      return { bank: read('Bank'), out: read('Out') }
+      const card = (name) => {
+        const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === name)
+        const wash = node?.querySelector('rect.logyq-smite-wash')
+        const clock = node?.querySelector('path.logyq-smite-clock')
+        return {
+          stroke: wash?.getAttribute('stroke') || null,
+          outline: wash?.dataset?.smiteOutline || null,
+          animation: wash ? getComputedStyle(wash).animationName : null,
+          clock: !!clock,
+          clockAnimation: clock ? getComputedStyle(clock).animationName : null,
+        }
+      }
+      return {
+        bank: read('Bank'),
+        out: read('Out'),
+        cards: { root: card('Root'), bank: card('Bank'), out: card('Out') },
+      }
     }, marksFor)
   }
 
@@ -3726,6 +3742,12 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
   assert.equal(pocket.out.weight, 'soft')
   assert.ok(pocket.out.ants.some((ant) => ant.role === 'color' && ant.weight === 'soft' && ant.width === '2px'))
   assert.ok(pocket.out.ants.every((ant) => ant.animation === 'logyq-smite-march'))
+  assert.equal(pocket.cards.root.clock, true)
+  assert.equal(pocket.cards.root.clockAnimation, 'none')
+  assert.equal(pocket.cards.bank.stroke, '#ffa100')
+  assert.equal(pocket.cards.bank.animation, 'logyq-smite-march')
+  assert.equal(pocket.cards.out.stroke, '#ffffff')
+  assert.equal(pocket.cards.out.animation, 'logyq-smite-march')
 
   const parentOnly = await paint('parent')
   assert.equal(parentOnly.bank.edge, null)
