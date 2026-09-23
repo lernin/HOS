@@ -380,24 +380,51 @@
     return Object.prototype.hasOwnProperty.call(marks, uid)
   }
 
-  // One card flips between the armed fate and out. Out stays in the map so
-  // the same card can come back. Neighbors are not retargeted.
-  function smiteToggleParticipation(marks, uid, tone) {
+  // One card, one step: delete → Word Bank → out → delete.
+  function smiteCardNext(mark) {
+    if (mark === 'red') return 'amber'
+    if (mark === 'amber') return 'normal'
+    return 'red'
+  }
+
+  function smiteCycleMember(marks, uid) {
     const entries = smiteTicketEntries(marks)
     if (!smiteMember(marks, uid)) return { action: 'noop', entries }
-    const armed = tone === 'amber' ? 'amber' : 'red'
-    const current = smiteMarkOf(marks, uid)
-    const next = current === 'red' || current === 'amber' ? 'normal' : armed
+    const next = smiteCardNext(smiteMarkOf(marks, uid))
     return {
-      action: 'toggle',
+      action: 'cycle',
       next,
       entries: entries.map(([id, mark]) => (id === uid ? [id, next] : [id, mark])),
     }
   }
 
+  // Root tap steps the cast down. Delete becomes Word Bank for the root and
+  // every descendant still on delete. Word Bank and out stay put. A root
+  // that is already Word Bank ends the nomination.
+  function smiteRootStep(marks, castUid, descendantUids) {
+    const entries = smiteTicketEntries(marks)
+    const own = smiteMarkOf(marks, castUid)
+    if (own === 'amber') return { action: 'clear', entries: [] }
+    if (own !== 'red') return { action: 'noop', entries }
+    const kids = new Set(descendantUids || [])
+    return {
+      action: 'degrade',
+      entries: entries.map(([id, mark]) => {
+        if (mark !== 'red') return [id, mark]
+        if (id === castUid || kids.has(id)) return [id, 'amber']
+        return [id, mark]
+      }),
+    }
+  }
+
+  function smiteCastTap(marks, castUid, uid, descendantUids) {
+    if (uid && uid === castUid) return smiteRootStep(marks, castUid, descendantUids)
+    return smiteCycleMember(marks, uid)
+  }
+
   // Down-swipe on the clock card or any nominated card (in or out) executes.
-  // A stationary tap on a nominated card toggles that card only. The clock
-  // card is not tappable into the cast when it was never nominated.
+  // A stationary tap on a nominated card cycles that card. A tap on the
+  // clock card steps the whole cast down instead.
   function smiteCastReply(marks, castUid, uid, dx, dy, tapMove = 11, triggerDy = 36) {
     const member = smiteMember(marks, uid)
     const root = !!uid && uid === castUid
@@ -405,9 +432,8 @@
     const dxN = Number(dx) || 0
     const dyN = Number(dy) || 0
     if (dyN > triggerDy && dyN > Math.abs(dxN)) return 'execute'
-    if (!member) return 'ignore'
     if (Math.hypot(dxN, dyN) >= tapMove) return 'ignore'
-    return 'toggle'
+    return 'tap'
   }
 
   function smiteHasNominated(marks) {
@@ -2043,9 +2069,10 @@
       commitSmite(doc, win, smite, mercy)
       return true
     }
-    const tone = mercy.direction === 'left' ? 'amber' : 'red'
-    const command = smiteToggleParticipation(mercy.marks, pointer.uid, tone)
-    if (command.action === 'toggle') smiteApplyEntries(mercy.marks, command.entries)
+    const descendants = smiteMoodTargets(bridge.core?.state?.root?.data, mercy.castUid)
+    const command = smiteCastTap(mercy.marks, mercy.castUid, pointer.uid, descendants)
+    if (command.action === 'clear') smiteDropMercy(smite, mercy)
+    else if (command.action === 'degrade' || command.action === 'cycle') smiteApplyEntries(mercy.marks, command.entries)
     smiteRefresh(doc, smite)
     smiteEnsureTick(doc, win, smite)
     return true
