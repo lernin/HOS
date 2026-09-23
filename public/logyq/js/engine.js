@@ -125,9 +125,9 @@ function __selectedUid(){
       || null;
 }
 
-/* Phone has no select UX. Do not follow-focus / re-center from tap, moat, or
-   create-relative fly. Desktop keyboard IJKL-style center-on-select stays.
-   Inline-edit magnification uses flyEditFocusToUID and is not gated here. */
+/* Phone has no select UX. Do not follow-focus / re-center from tap, moat,
+   create-relative fly, or inline edit. Desktop keyboard IJKL-style
+   center-on-select stays. */
 function phoneNoFollowCamera(){
   try {
     if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true;
@@ -171,9 +171,10 @@ function copyZoom(t){
   return d3.zoomIdentity.translate(t.x, t.y).scale(t.k)
 }
 
-/* Phone inline-edit: center the card in the remaining visual viewport and
-   magnify at least to a readable scale. Never zoom out. */
+/* Desktop-only leftover. Phone edit uses the keyboard field and must not
+   move the map, so this returns immediately on a phone. */
 function flyEditFocusToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
+  if (phoneNoFollowCamera()) return;
   const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
@@ -345,7 +346,7 @@ const state = {
 
   root:null, lastNodes:[], zoom:null, layout:null,
   dragState:{ trashZone:'far', drop:null, solo:false, groupAbandon:false },
-  history:[], wordBank:[], selectedUid:null, /* [patch] multiselect-state */ selectedUids:new Set(),
+  history:[], redo:[], wordBank:[], selectedUid:null, /* [patch] multiselect-state */ selectedUids:new Set(),
   chipDrag:{ active:false, word:null, words:[], drop:null },
   editingUid:null, editorEl:null, prevZoom:null,
   detectors:[], tabHold:false, /* [patch] tab-hold-flag */
@@ -688,7 +689,32 @@ applyDockSide();
 
   const utils = (() => {
     let UID = 1;
-    const assignUids = (n)=>{ if(!n._uid) n._uid=`n${UID++}`; (n.children||[]).forEach(assignUids); };
+    const usedUids = new Set();
+    const noteUid = (id)=>{
+      const key = String(id);
+      usedUids.add(key);
+      const match = /^n(\d+)$/.exec(key);
+      if(match) UID = Math.max(UID, Number(match[1]) + 1);
+    };
+    const mintUid = ()=>{
+      let id = `n${UID++}`;
+      while(usedUids.has(id)) id = `n${UID++}`;
+      usedUids.add(id);
+      return id;
+    };
+    // Saved maps already carry n1, n2, … . A fresh counter would hand the
+    // next blank the root's id, and Enter would rename the root.
+    const assignUids = (n)=>{
+      const seen = new Set();
+      const walk = (node)=>{
+        if(!node || typeof node !== 'object') return;
+        if(!node._uid || seen.has(String(node._uid))) node._uid = mintUid();
+        else noteUid(node._uid);
+        seen.add(String(node._uid));
+        (node.children||[]).forEach(walk);
+      };
+      walk(n);
+    };
     const deepClone = (o)=> JSON.parse(JSON.stringify(o));
     const pathToUid = (data, target, path=[])=>{ if(!data) return null; path.push(data._uid); if(data._uid===target) return path.slice(); for(const c of (data.children||[])){ const p=pathToUid(c,target,path); if(p) return p; } path.pop(); return null; };
     const findByPath = (data, path)=>{ let cur = (path[0]===data._uid)? data : null; if(!cur) return null; for(let i=1;i<path.length;i++){ const u=path[i]; cur=(cur.children||[]).find(x=>x._uid===u); if(!cur) return null; } return cur; };
@@ -866,6 +892,7 @@ applyDockSide();
   function pushHistory(action){
     const { state, elements, config: CONFIG } = logyq
     state.history.push(action);
+    state.redo = [];
     if(state.history.length>CONFIG.HISTORY_LIMIT) state.history.shift();
       /* [patch] dock-bounds-init start */
       try{ logyq.dock.updateDockBounds(); }catch(_e){}
@@ -897,6 +924,11 @@ function autoFitSoon(delay){
       /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
     if(!a) return;
+    // Forward snapshot so redo puts the tree and the Word Bank back together.
+    a.redoRoot = state.root ? utils.deepClone(state.root.data) : null;
+    a.redoBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
+    state.redo = state.redo || [];
+    state.redo.push(a);
 
     if(a.type==='delete'){
       const parent = utils.findByPath(state.root.data, a.parentPath);
@@ -968,9 +1000,27 @@ function autoFitSoon(delay){
       utils.assignIds(state.root);
       logyq.treeManager.layoutAndRender(false);
     }
+    if ('prevBank' in a) {
+      state.wordBank = (a.prevBank || []).slice();
+      try { logyq.wordDock.render(); } catch (_e) {}
+    }
   }
 
-  attach('history', { pushHistory, undo, autoFitSoon })
+  function redo(){
+    const { state, elements, utils } = logyq
+    const a = (state.redo || []).pop();
+    if (!a || !('redoRoot' in a)) return;
+    state.history.push(a);
+    if (elements.undoBtn) elements.undoBtn.disabled = state.history.length === 0;
+    state.root = a.redoRoot ? d3.hierarchy(a.redoRoot) : null;
+    if (state.root) utils.assignIds(state.root);
+    state.wordBank = (a.redoBank || []).slice();
+    if (state.root) logyq.treeManager.layoutAndRender(false);
+    else logyq.treeManager.renderEmpty();
+    try { logyq.wordDock.render(); } catch (_e) {}
+  }
+
+  attach('history', { pushHistory, undo, redo, autoFitSoon })
 
   /* ======================= SAMPLE DATA ======================= */
   const dataManager = {
@@ -1768,8 +1818,62 @@ if (dir === +1){
   attach('detectors', Detectors)
 
   /* ======================= EDITOR ======================= */
+ function mobileQuietEdit(){
+  try { return document.body.classList.contains('logyq-mobile-v162') } catch (_e) { return false }
+ }
+
+ // The phone field is a full-width bar on the keyboard. It never follows the card.
+ // Keyboard inset is the covered height only. Subtracting the visual
+ // viewport's scroll offset made the bar hop while the keyboard rose.
+ // The bar stays hidden until that inset has been still, or until
+ // PHONE_BAR_CAP_MS. It then slides up from under the keyboard.
+ const PHONE_BAR_QUIET_MS = 80
+ const PHONE_BAR_CAP_MS = 500
+ const PHONE_BAR_SLIDE_MS = 600
+ function keyboardInset(){
+  const vv = window.visualViewport
+  return vv ? Math.max(0, Math.round(window.innerHeight - vv.height)) : 0
+ }
+ function mobileLift(inset){
+  return inset ? 'translate3d(0,' + (-inset) + 'px,0)' : 'translate3d(0,0,0)'
+ }
+ function applyMobileInset(stack, inset, slide){
+  if (stack._logyqInset === inset && stack.classList.contains('is-placed') && stack.dataset.drawer === 'open') return
+  stack._logyqInset = inset
+  stack.style.bottom = '0px'
+  if (slide && stack.dataset.drawer !== 'open') {
+    stack.style.transition = 'none'
+    stack.style.transform = 'translate3d(0,100%,0)'
+    void stack.offsetWidth
+    stack.dataset.drawerFrom = String(Math.round(stack.getBoundingClientRect().bottom))
+    stack.style.transition = 'transform ' + PHONE_BAR_SLIDE_MS + 'ms cubic-bezier(0.22, 1, 0.36, 1)'
+    stack.style.transform = mobileLift(inset)
+    stack.dataset.drawer = 'open'
+    delete stack.dataset.drawerSettled
+    const settle = (event) => {
+      if (event.propertyName !== 'transform') return
+      stack.dataset.drawerSettled = '1'
+      stack.removeEventListener('transitionend', settle)
+    }
+    stack.addEventListener('transitionend', settle)
+    return
+  }
+  stack.style.transform = mobileLift(inset)
+ }
+ function dockMobileEditor(){
+  const { state } = logyq
+  const el = state.editorEl
+  const stack = el?.closest?.('.node-edit-stack')
+  if (!stack || !stack.classList.contains('is-placed')) return
+  applyMobileInset(stack, keyboardInset())
+ }
+
  function updateNodeEditorPosition(){
   const { state, elements, config: CONFIG } = logyq
+  if (mobileQuietEdit()) {
+    dockMobileEditor()
+    return
+  }
   if(!state.editingUid || !state.editorEl || !elements.gRoot) return;
   try{
     const h = state.root?.descendants().find(n => n.data?._uid === state.editingUid);
@@ -1829,18 +1933,43 @@ if (dir === +1){
  
  
  
+  function mirrorEditLabel(uid, text){
+    const { state, utils } = logyq
+    const target = utils.findByUid(state.root?.data, uid)
+    if (!target) return
+    const next = text == null ? '' : String(text)
+    if ((target.name ?? '') === next) return
+    target.name = next
+    try { logyq.layout.LabelWrap.apply() } catch (_e) {}
+  }
+  function showEditFocus(uid){
+    try { logyq.setEditFocus?.(uid || null) } catch (_e) {}
+  }
+  function restoreEditName(uid, prev){
+    if (prev == null || uid == null) return
+    const { state, utils } = logyq
+    const target = utils.findByUid(state.root?.data, uid)
+    if (!target || (target.name ?? '') === prev) return
+    target.name = prev
+    try { logyq.layout.LabelWrap.apply() } catch (_e) {}
+  }
+
   function closeNodeEditor(apply, restoreZoom){
     const { state, elements, utils } = logyq
     if(!state.editingUid) return;
-    const uid = state.editingUid; const el = state.editorEl;
+    const uid = state.editorEl?.dataset?.editUid || state.editingUid; const el = state.editorEl;
+    const prevName = state.editPrevName
+    state.editPrevName = null
+    showEditFocus(null)
     if (state._editFocusTimer) { try { clearTimeout(state._editFocusTimer); } catch (_e) {} state._editFocusTimer = 0; }
+    if (state._editPlaceTimer) { try { clearTimeout(state._editPlaceTimer); } catch (_e) {} state._editPlaceTimer = 0; }
     if (typeof state._editViewportOff === 'function') { try { state._editViewportOff(); } catch (_e) {} state._editViewportOff = null; }
     state.editingUid = null; state.editorEl = null;
-    if(el && el.parentNode) el.parentNode.removeChild(el);
+    if(el && el.parentNode && !el.closest?.('.node-edit-stack')) el.parentNode.removeChild(el);
     if(apply){
       const target = utils.findByUid(state.root.data, uid);
       if(target){
-        const prev = target.name ?? "";
+        const prev = prevName != null ? prevName : (target.name ?? "");
         const next = (el && typeof el.value === "string") ? el.value.trim() : prev;
         if(next !== prev){
           logyq.history.pushHistory({ type:"rename", uid, prev, next });
@@ -1849,16 +1978,24 @@ if (dir === +1){
           utils.assignIds(state.root);
           logyq.treeManager.layoutAndRender(false);
           setSelected(uid);
+        } else {
+          restoreEditName(uid, prev);
         }
       }
+    } else {
+      restoreEditName(uid, prevName);
     }
-    const svg = elements.svg?.node?.();
-    if (svg) d3.select(svg).interrupt();
-    const shouldRestore = state.prevZoom && (restoreZoom || state.editFocusArmed) && !state.editUserZoom;
-    if(shouldRestore){
-      const t = state.prevZoom;
-      elements.svg.transition().duration(360).ease(d3.easeCubicOut).call(state.zoom.transform, t);
+    if (!mobileQuietEdit()) {
+      const svg = elements.svg?.node?.();
+      if (svg) d3.select(svg).interrupt();
+      const shouldRestore = state.prevZoom && (restoreZoom || state.editFocusArmed) && !state.editUserZoom;
+      if(shouldRestore){
+        const t = state.prevZoom;
+        elements.svg.transition().duration(360).ease(d3.easeCubicOut).call(state.zoom.transform, t);
+      }
     }
+    const host = el?.closest?.('.node-edit-stack') || el?.closest?.('.node-edit-dock')
+    if (host && host.parentNode) host.parentNode.removeChild(host)
     state.prevZoom = null;
     state.editZoom = null;
     state.editFocusArmed = false;
@@ -1873,17 +2010,77 @@ if (dir === +1){
     const uid = d?.data?._uid;
     if(!d || uid == null || String(uid) === '') return;
     state.editingUid = uid;
-    const current = d3.zoomTransform(elements.svg.node());
-    state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
+    state.editPrevName = (d.data && d.data.name) ? String(d.data.name) : '';
+    showEditFocus(uid);
     state.editZoom = null;
     state.editFocusArmed = false;
     state.editUserZoom = false;
+    if (mobileQuietEdit()) {
+      state.prevZoom = null;
+    } else {
+      const current = d3.zoomTransform(elements.svg.node());
+      state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
+    }
     const input = document.createElement("input");
     input.type = "text"; input.className = "node-edit-input";
+    input.enterKeyHint = "done";
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("autocorrect", "off");
+    input.setAttribute("spellcheck", "false");
     input.value = (d.data && d.data.name) ? d.data.name : "";
-    document.body.appendChild(input);
+    input.dataset.editUid = String(uid);
+    if (mobileQuietEdit()) {
+      const stack = document.createElement("div");
+      stack.className = "node-edit-stack";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "node-edit-cancel";
+      cancel.setAttribute("aria-label", "Cancel rename");
+      cancel.textContent = "\u00d7";
+      const dock = document.createElement("div");
+      dock.className = "node-edit-dock";
+      dock.appendChild(input);
+      stack.appendChild(cancel);
+      stack.appendChild(dock);
+      document.body.appendChild(stack);
+      // preventDefault on touchstart keeps the field focused, but it also
+      // swallows the click. Close on pointerup / touchend, and keep click
+      // for a plain mouse activation.
+      let cancelArmed = false;
+      const armCancel = function(event){
+        if (event.button != null && event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        cancelArmed = true;
+      };
+      const fireCancel = function(event){
+        if (!cancelArmed) return;
+        cancelArmed = false;
+        event.preventDefault();
+        event.stopPropagation();
+        closeNodeEditor(false, true);
+      };
+      cancel.addEventListener("pointerdown", armCancel);
+      cancel.addEventListener("mousedown", armCancel);
+      cancel.addEventListener("touchstart", armCancel, { passive: false });
+      cancel.addEventListener("pointerup", fireCancel);
+      cancel.addEventListener("touchend", fireCancel, { passive: false });
+      cancel.addEventListener("pointercancel", function(){ cancelArmed = false; });
+      cancel.addEventListener("click", function(event){
+        event.preventDefault();
+        event.stopPropagation();
+        closeNodeEditor(false, true);
+      });
+    } else {
+      document.body.appendChild(input);
+    }
     state.editorEl = input;
 
+
+    input.addEventListener("input", function(){
+      if (state.editingUid !== uid) return;
+      mirrorEditLabel(uid, input.value);
+    });
 
     input.addEventListener("keydown", function(e){
   if (e.key === "Enter"){
@@ -1909,24 +2106,85 @@ if (dir === +1){
 
 
 
-    input.addEventListener("blur", function(){ closeNodeEditor(true, true); });
+    input.addEventListener("blur", function(){
+      // A phone tap on the map must not save and close. Enter commits.
+      // The X and Escape cancel. Desktop still commits on blur.
+      if (mobileQuietEdit()) return;
+      closeNodeEditor(true, true);
+    });
     updateNodeEditorPosition();
-    setTimeout(function(){ try{ input.focus(); var L=input.value.length; input.setSelectionRange(L,L); }catch(_e){} }, 0);
-    if (document.body.classList.contains('logyq-mobile-v162')) {
-      const uid = d.data._uid;
-      state._editFocusTimer = setTimeout(() => {
+    state._editFocusTimer = setTimeout(function(){
+      try { input.focus({ preventScroll: true }); var L=input.value.length; input.setSelectionRange(L,L); } catch (_e) {}
+    }, 0);
+    if (mobileQuietEdit()) {
+      const vv = window.visualViewport;
+      let dockFrame = 0;
+      let lastInset = keyboardInset();
+      let lastChange = performance.now();
+      const started = lastChange;
+      const placeTick = () => {
+        state._editPlaceTimer = 0;
         if (state.editingUid !== uid) return;
-        state.editFocusArmed = true;
-        logyq.camera.flyEditFocusToUID(uid);
-        const vv = window.visualViewport;
-        if (!vv) return;
-        const onResize = () => {
-          if (state.editingUid !== uid || state.editUserZoom) return;
-          logyq.camera.flyEditFocusToUID(uid, { duration: 220 });
-        };
-        vv.addEventListener('resize', onResize);
-        state._editViewportOff = () => vv.removeEventListener('resize', onResize);
-      }, 0);
+        const stack = input.closest?.('.node-edit-stack');
+        if (!stack || stack.classList.contains('is-placed')) {
+          dockMobileEditor();
+          return;
+        }
+        const inset = keyboardInset();
+        const now = performance.now();
+        if (inset !== lastInset) {
+          lastInset = inset;
+          lastChange = now;
+        }
+        const quiet = now - lastChange >= PHONE_BAR_QUIET_MS;
+        const capped = now - started >= PHONE_BAR_CAP_MS;
+        // A zero inset is the gap under a rising keyboard, not a resting spot.
+        if ((inset > 0 && quiet) || capped) {
+          stack.classList.add('is-placed');
+          applyMobileInset(stack, inset, true);
+          return;
+        }
+        state._editPlaceTimer = setTimeout(placeTick, 40);
+      };
+      state._editPlaceTimer = setTimeout(placeTick, 40);
+      const onViewport = () => {
+        if (state.editingUid !== uid) return;
+        if (dockFrame) return;
+        dockFrame = requestAnimationFrame(() => {
+          dockFrame = 0;
+          if (state.editingUid !== uid) return;
+          const stack = input.closest?.('.node-edit-stack');
+          if (stack && !stack.classList.contains('is-placed')) {
+            if (!state._editPlaceTimer) state._editPlaceTimer = setTimeout(placeTick, 0);
+            return;
+          }
+          dockMobileEditor();
+        });
+      };
+      const keepMapFocus = (event) => {
+        if (state.editingUid !== uid) return;
+        const stack = input.closest?.('.node-edit-stack');
+        if (stack && stack.contains(event.target)) return;
+        const canvas = document.getElementById('canvas');
+        if (!canvas || (event.target !== canvas && !canvas.contains(event.target))) return;
+        if (event.cancelable) event.preventDefault();
+      };
+      if (vv) {
+        vv.addEventListener('resize', onViewport);
+        vv.addEventListener('scroll', onViewport);
+      }
+      document.addEventListener('touchstart', keepMapFocus, { capture: true, passive: false });
+      document.addEventListener('mousedown', keepMapFocus, { capture: true, passive: false });
+      state._editViewportOff = () => {
+        if (dockFrame) cancelAnimationFrame(dockFrame);
+        dockFrame = 0;
+        if (vv) {
+          vv.removeEventListener('resize', onViewport);
+          vv.removeEventListener('scroll', onViewport);
+        }
+        document.removeEventListener('touchstart', keepMapFocus, { capture: true });
+        document.removeEventListener('mousedown', keepMapFocus, { capture: true });
+      };
     }
   }
 
@@ -2165,6 +2423,7 @@ function selectSingle(uid){
 
 function onNodeMouseDown(event, d){
   const { state, config: CONFIG } = logyq
+  if (window.__logyqChipPlacing) return
   if (event.button !== 0) return;                  // left only
   if (logyq.input.isTextField(event.target)) return;
 
@@ -2955,7 +3214,19 @@ function insertParentAbove(uid, newName = '', opts = {}){
   const { state, utils } = logyq
   if (!state.root || !uid) return null;
   const h = state.root.descendants().find(n => n?.data?._uid === uid);
-  if (!h?.parent) return null;
+  if (!h) return null;
+  // Flick up on the root has no parent slot to splice into. Wrap the
+  // whole tree: a new card becomes root and the current root is its child.
+  if (!h.parent) {
+    if (h.data !== state.root.data) return null;
+    const prevTree = utils.deepClone(state.root.data);
+    logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
+    const newParent = { name: newName, children: [h.data] };
+    utils.assignUids(newParent);
+    state.root = d3.hierarchy(newParent);
+    utils.assignIds(state.root);
+    return commitCreatedNode(newParent._uid, { noEdit, select, layout: opts.layout !== false });
+  }
 
   const parentData = h.parent.data;
   parentData.children = parentData.children || [];
@@ -3215,13 +3486,14 @@ function sendSubtreeToWordBank(h){
     const labels = (h?.descendants?.() || []).map(n => (n?.data?.name || '').trim()).filter(Boolean);
     // Blank cards are not words. Skip the bank write and the delete.
     if (!labels.length) return;
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
     labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));
 
 
     // Remove subtree (with history)
     if (!h.parent){
       // Deleting the root means clear the tree
-      logyq.history.pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data) });
+      logyq.history.pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data), prevBank });
       state.root = null;
       state.lastNodes = [];
       logyq.drag?.clear?.();
@@ -3236,7 +3508,8 @@ function sendSubtreeToWordBank(h){
       type: 'delete',
       parentPath: utils.pathToUid(state.root.data, parentData._uid),
       index: idx,
-      subtree: utils.deepClone(h.data)
+      subtree: utils.deepClone(h.data),
+      prevBank
     });
     if (idx > -1) parentData.children.splice(idx, 1);
     if (parentData.children && parentData.children.length === 0) parentData.children = null;
@@ -3255,13 +3528,17 @@ function sendNodeToWordBank_abandon(h){
   try{
     const label = (h?.data?.name || '').trim();
     if (!label) return;
+    if (!h.parent){
+      const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
+      if (!kidsH.length){ showToast('Root has no child to promote'); return; }
+    }
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
     logyq.wordDock.addWords(label, 'bank');
 
     if (!h.parent){
       // Root: promote leftmost child as new root; old root (this label) already banked
       const prevTree = utils.deepClone(state.root.data);
       const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
-      if (!kidsH.length){ showToast('Root has no child to promote'); return; }
 
       const newRootData = kidsH[0].data;
       const others = kidsH.slice(1).map(hh => hh.data);
@@ -3274,7 +3551,7 @@ function sendNodeToWordBank_abandon(h){
       if (idx > -1) prevTree.children.splice(idx, 1);
       newRootData.children = (newRootData.children || []).concat(others);
 
-      logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
+      logyq.history.pushHistory({ type: 'replace-root', prev: prevTree, prevBank });
       state.root = d3.hierarchy(newRootData); utils.assignIds(state.root);
       logyq.treeManager.layoutAndRender(false);
       showToast(`Saved "${label}" to Word Dock`);
@@ -3296,7 +3573,8 @@ function sendNodeToWordBank_abandon(h){
       type: 'delete',
       parentPath: fromParentPath,
       index: fromIndex,
-      subtree: utils.deepClone(moving)
+      subtree: utils.deepClone(moving),
+      prevBank
     });
 
     state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
@@ -4098,25 +4376,90 @@ attach('drag', dragManager)
 
 
   /* ======================= CHIPS & INPUT ======================= */
-  function clearChipSelection(){ document.querySelectorAll("#Dock .chip.is-outlined").forEach(el=>el.classList.remove("is-outlined")); }
-  function getSelectedChipNames(){ return Array.from(document.querySelectorAll("#Dock .chip.is-outlined")).map(el=>el.textContent.trim()).filter(Boolean); }
+  // Tap order. The first name tapped is the parent when a multi-select
+  // starts an empty canvas. Render rebuilds the chips, so this lives here.
+  let chipOrder = []
+
+  function chipNamesInBank(){
+    return (logyq.state.wordBank || []).map(w => String(w || '').trim()).filter(Boolean)
+  }
+
+  function pruneChipOrder(){
+    const bank = chipNamesInBank()
+    const seen = new Set()
+    chipOrder = chipOrder.filter((name) => {
+      if (!name || seen.has(name) || !bank.includes(name)) return false
+      seen.add(name)
+      return true
+    })
+  }
+
+  function everyChipSelected(){
+    const bank = chipNamesInBank()
+    if (!bank.length) return false
+    const selected = new Set(chipOrder)
+    return bank.every((name) => selected.has(name))
+  }
+
+  function paintChipSelection(){
+    pruneChipOrder()
+    const selected = new Set(chipOrder)
+    document.querySelectorAll('#Dock .chip').forEach((el) => {
+      el.classList.toggle('is-outlined', selected.has(el.textContent.trim()))
+    })
+    const button = typeof document.getElementById === 'function' ? document.getElementById('logyq-bank-all') : null
+    if (button) button.textContent = everyChipSelected() ? 'None' : 'All'
+  }
+
+  function clearChipSelection(){
+    chipOrder = []
+    paintChipSelection()
+  }
+
+  function getSelectedChipNames(){
+    pruneChipOrder()
+    return chipOrder.slice()
+  }
+
+  function toggleChipName(name){
+    const clean = String(name || '').trim()
+    if (!clean || !chipNamesInBank().includes(clean)) return
+    const index = chipOrder.indexOf(clean)
+    if (index >= 0) chipOrder.splice(index, 1)
+    else chipOrder.push(clean)
+    paintChipSelection()
+  }
+
+  function flipBankSelection(){
+    if (everyChipSelected()) chipOrder = []
+    else {
+      const seen = new Set()
+      chipOrder = chipNamesInBank().filter((name) => {
+        if (seen.has(name)) return false
+        seen.add(name)
+        return true
+      })
+    }
+    paintChipSelection()
+  }
 
   function render(){
     const { state, elements, utils } = logyq
     const list = elements.Dock; list.innerHTML = '';
     state.wordBank.forEach((w)=>{
       const chip = document.createElement('div');
-      chip.className='chip'; chip.textContent=w; chip.draggable=true;
-      chip.addEventListener('click',(e)=>{
-        const chips=document.querySelectorAll("#Dock .chip");
-        if(e.shiftKey){ chip.classList.toggle("is-outlined"); }
-        else { chips.forEach(c=>c.classList.remove("is-outlined")); chip.classList.add("is-outlined"); }
+      chip.className='chip'; chip.textContent=w;
+      // Native HTML5 drag cancels the pointer as soon as it moves, so a
+      // finger never finishes the gesture. Press-drag below places the chip.
+      chip.draggable=false;
+      chip.addEventListener('click',()=>{
+        if (chip.dataset.skipClick === '1') return
+        toggleChipName(w)
       });
       chip.addEventListener('dragstart',(e)=>{
         state.chipDrag.active = true;
-        const group = getSelectedChipNames(); // assumes you already track multi-selection
-        const words = (group && group.length ? group.slice() : [w]);
-        if (!words.includes(w)) words.push(w); // make sure the dragged one is in there
+        const group = getSelectedChipNames()
+        const words = group.includes(w) ? group.slice() : [w]
         state.chipDrag.words = words;
         state.chipDrag.word = w; // keep old field for compatibility
         state.chipDrag.drop = null;
@@ -4124,15 +4467,7 @@ attach('drag', dragManager)
         e.dataTransfer.effectAllowed = 'copyMove';
 });
 
-chip.addEventListener('dragend',()=>{
-elements.caretDot.style('opacity', 0);
-d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false);
-
-  state.chipDrag.active = false;
-  state.chipDrag.words = [];
-  state.chipDrag.drop = null;
-  elements.trash.classList.remove('open','over','wiggle','near');
-});
+chip.addEventListener('dragend', () => endChipDragVisuals());
 
       chip.addEventListener("contextmenu", (e) => {e.preventDefault();
         e.stopPropagation(); const sel = Array.from((state.selectedUids || new Set()).values());
@@ -4157,6 +4492,22 @@ const target = utils.findByUid(state.root.data, sel[0]);
       });
       list.appendChild(chip);
     });
+    if (state.wordBank.length) {
+      const allButton = document.createElement('button');
+      allButton.type = 'button';
+      allButton.id = 'logyq-bank-all';
+      allButton.className = 'chip-bank-all';
+      allButton.textContent = everyChipSelected() ? 'None' : 'All';
+      allButton.ariaLabel = allButton.textContent === 'None' ? 'Clear Word Bank selection' : 'Select every Word Bank chip';
+      allButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        flipBankSelection();
+        allButton.ariaLabel = allButton.textContent === 'None' ? 'Clear Word Bank selection' : 'Select every Word Bank chip';
+      });
+      list.appendChild(allButton);
+    }
+    paintChipSelection();
   }
 
   function addWords(raw, to){
@@ -4296,6 +4647,209 @@ function normalizeToTree(value) {
 
 
 
+function endChipDragVisuals() {
+  const { state, elements } = logyq
+  elements.caretDot.style('opacity', 0)
+  d3.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
+  state.chipDrag.active = false
+  state.chipDrag.words = []
+  state.chipDrag.word = null
+  state.chipDrag.drop = null
+  elements.trash.classList.remove('open', 'over', 'wiggle', 'near')
+  document.getElementById('logyq-chip-ghost')?.remove()
+  document.querySelectorAll('#Dock .chip.is-lifting').forEach((el) => el.classList.remove('is-lifting'))
+  document.body.classList.remove('logyq-chip-drag')
+}
+
+// Press-drag for a finger or a mouse. The dock is a scroll container, so a
+// chip has to claim the gesture itself; native drag cancels the pointer.
+function bindChipPointerPlace() {
+  const dock = logyq.elements.Dock
+  if (!dock || typeof dock.addEventListener !== 'function' || dock.dataset?.chipPointer === '1') return
+  dock.dataset.chipPointer = '1'
+  let session = null
+
+  const overDock = (x, y) => {
+    if (dock.classList.contains('dock-hidden')) return false
+    const style = getComputedStyle(dock)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+    const rect = dock.getBoundingClientRect()
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+  }
+
+  const placeGhost = (words, x, y) => {
+    let stack = document.getElementById('logyq-chip-ghost')
+    if (!stack) {
+      stack = document.createElement('div')
+      stack.id = 'logyq-chip-ghost'
+      document.body.appendChild(stack)
+    }
+    const label = words.join('\n')
+    if (stack.dataset.words !== label) {
+      stack.dataset.words = label
+      stack.replaceChildren(...words.map((word) => {
+        const ghost = document.createElement('div')
+        ghost.className = 'chip'
+        ghost.textContent = word
+        ghost.style.opacity = '0.55'
+        return ghost
+      }))
+    }
+    stack.style.left = `${x}px`
+    stack.style.top = `${y}px`
+  }
+
+  // The ghost is lifted above the finger by CSS. Aim at that card, not the touch.
+  const raisedGhostPoint = (x, y) => {
+    const stack = document.getElementById('logyq-chip-ghost')
+    const rect = stack?.getBoundingClientRect?.()
+    if (!rect || rect.width < 1 || rect.height < 1) return { x, y }
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }
+
+  const hoverMap = (x, y) => {
+    const svg = logyq.elements.svg.node()
+    if (!svg) return
+    if (overDock(x, y)) {
+      logyq.state.chipDrag.drop = null
+      logyq.elements.caretDot.style('opacity', 0)
+      d3.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
+      return
+    }
+    const aim = raisedGhostPoint(x, y)
+    svg.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX: aim.x, clientY: aim.y }))
+  }
+
+  const chipUnderPoint = (x, y) => {
+    if (typeof document.elementsFromPoint !== 'function') return null
+    const stack = document.elementsFromPoint(x, y) || []
+    for (const el of stack) {
+      const chip = el?.closest?.('.chip')
+      if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') continue
+      return chip
+    }
+    return null
+  }
+
+  dock.addEventListener('pointerdown', (event) => {
+    if (event.button != null && event.button !== 0) return
+    const direct = event.target?.closest?.('.chip')
+    const chip = chipUnderPoint(event.clientX, event.clientY) || direct
+    if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') return
+    const rect = chip.getBoundingClientRect?.()
+    if (rect && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) return
+    const word = chip.textContent.trim()
+    if (!word) return
+    session = { pointerId: event.pointerId, word, x: event.clientX, y: event.clientY, dragging: false, chip }
+  })
+
+  const swipeWords = (word) => {
+    const selected = getSelectedChipNames()
+    // A down-swipe on a selected chip deletes the whole selection. Otherwise just that chip.
+    return selected.includes(word) ? selected.slice() : [word]
+  }
+
+  const removeBankWords = (words) => {
+    const drop = new Set((words || []).map((word) => String(word || '').trim()).filter(Boolean))
+    if (!drop.size) return false
+    const prevBank = logyq.state.wordBank.slice()
+    const next = prevBank.filter((word) => !drop.has(String(word || '').trim()))
+    if (next.length === prevBank.length) return false
+    logyq.history.pushHistory({ type: 'bank-delete', prevBank })
+    logyq.state.wordBank = next
+    render()
+    try { window.LOGYQBridge?.notifyChange?.() } catch (_error) {}
+    return true
+  }
+
+  window.addEventListener('pointermove', (event) => {
+    if (!session || event.pointerId !== session.pointerId) return
+    const dx = event.clientX - session.x
+    const dy = event.clientY - session.y
+    const moved = Math.hypot(dx, dy) >= 10
+    if (!session.dragging && !session.deleting) {
+      // Claim the gesture while the finger is still on the chip. Waiting
+      // until it has left the dock lets the browser cancel the pointer first.
+      if (!moved) return
+      // Down stays a delete. Up and out still lift the chip onto the map.
+      if (dy > 0 && dy >= Math.abs(dx)) {
+        session.deleting = true
+        session.words = swipeWords(session.word)
+        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      } else {
+        const words = swipeWords(session.word)
+        logyq.state.chipDrag.active = true
+        logyq.state.chipDrag.words = words
+        logyq.state.chipDrag.word = words[0]
+        logyq.state.chipDrag.drop = null
+        session.dragging = true
+        session.words = words
+        window.__logyqChipPlacing = true
+        document.body.classList.add('logyq-chip-drag')
+        document.querySelectorAll('#Dock .chip').forEach((el) => {
+          el.classList.toggle('is-lifting', words.includes(el.textContent.trim()))
+        })
+        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      }
+    }
+    if (session.deleting) {
+      event.preventDefault()
+      return
+    }
+    event.preventDefault()
+    placeGhost(session.words, event.clientX, event.clientY)
+    hoverMap(event.clientX, event.clientY)
+  }, { passive: false })
+
+  const finishPointer = (event, commit) => {
+    if (!session || event.pointerId !== session.pointerId) return
+    const dragging = session.dragging
+    const deleting = session.deleting
+    const chip = session.chip
+    const word = session.word
+    const words = session.words
+    const dx = event.clientX - session.x
+    const dy = event.clientY - session.y
+    session = null
+    if (deleting) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (chip) {
+        chip.dataset.skipClick = '1'
+        window.setTimeout(() => { delete chip.dataset.skipClick }, 0)
+      }
+      if (commit && dy >= 36 && dy >= Math.abs(dx)) removeBankWords(words)
+      return
+    }
+    if (!dragging) {
+      if (commit && chip && word) {
+        chip.dataset.skipClick = '1'
+        toggleChipName(word)
+        window.setTimeout(() => { delete chip.dataset.skipClick }, 0)
+      }
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    if (commit && !overDock(event.clientX, event.clientY)) {
+      if (words) placeGhost(words, event.clientX, event.clientY)
+      const aim = raisedGhostPoint(event.clientX, event.clientY)
+      hoverMap(event.clientX, event.clientY)
+      logyq.elements.svg.node()?.dispatchEvent(new DragEvent('drop', {
+        bubbles: true,
+        cancelable: true,
+        clientX: aim.x,
+        clientY: aim.y,
+      }))
+    }
+    endChipDragVisuals()
+    window.setTimeout(() => { window.__logyqChipPlacing = false }, 400)
+  }
+
+  window.addEventListener('pointerup', (event) => finishPointer(event, true))
+  window.addEventListener('pointercancel', (event) => finishPointer(event, false))
+}
+
 /* ======================= CHIP DROP OVER SVG (uses detectors) ======================= */
 logyq.elements.svg.on('dragover', (event) => {
   const { state, elements, config: CONFIG } = logyq
@@ -4391,18 +4945,9 @@ state.chipDrag.drop = {
 
 
 } else if (drop.type === 'rootAbove') {
-  // clear previous hover marks
-  elements.gNodes.selectAll("g.node")
-    .classed("hover-adopt hover-adopt-sub drop-target", false);
-
-  const [cx, cy] = logyq.selection.caretXYFromHit(drop._hit);
-  elements.caretDot
-    .attr('cx', cx)
-    .attr('cy', cy)
-    .attr('r', CONFIG.CARET_DOT_RADIUS)
-    .style('opacity', 1);
-
-  state.chipDrag.drop = { type: 'rootAbove' };
+  // A tree is already on the canvas. Only a card or a gap places chips.
+  // The zone above the root, and any other miss, leaves them in the bank.
+  state.chipDrag.drop = null
 }
 
 
@@ -4561,9 +5106,12 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
   }
 });
 
+  bindChipPointerPlace()
+
   attach('wordDock', {
     clearChipSelection,
     getSelectedChipNames,
+    flipBankSelection,
     render,
     addWords,
     parseGIQ,
@@ -4603,24 +5151,24 @@ function randomizeTree(includeBank){
     // A card in the tree is mixable even when its label is "". Paint on a
     // blank card has to travel with that card; name length is not presence.
     const treeNodes = state.root ? state.root.descendants() : [];
-    const pool = treeNodes.slice(1).map((n) => mixCard(cardLabel(n.data), n.data));
+    // The root card is in the pool with everyone else. It used to be copied
+    // out first, so Mix froze it on top and only shuffled descendants.
+    const pool = treeNodes.map((n) => mixCard(cardLabel(n.data), n.data));
     if (includeBank && prevBank.length) {
       for (const word of prevBank) {
         if (word) pool.push(mixCard(word, null));
       }
     }
-    const root = state.root
-      ? mixCard(cardLabel(state.root.data), state.root.data)
-      : pool.shift();
-    if (!root){ logyq.selection.showToast("Nothing to mix"); return; }
+    if (!pool.length){ logyq.selection.showToast("Nothing to mix"); return; }
     for (let i = pool.length - 1; i > 0; i--){
       const j = (Math.random() * (i + 1)) | 0;
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
+    const root = mixCard(pool[0].name, pool[0]);
     function ri(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
 
     root.children = [];
-    let q = [{ node: root, cap: ri(1,3), used: 0 }], k = 0;
+    let q = [{ node: root, cap: ri(1,3), used: 0 }], k = 1;
     while (k < pool.length){
       if (!q.length) q.push({ node: root, cap: ri(1,3), used: 0 });
       const p = q[0];
@@ -4648,7 +5196,6 @@ function randomizeTree(includeBank){
     utils.assignIds(state.root);
     logyq.selection.setSelected(null);
 
-    // Remix instantly with stable root
     state.repositionMode = "mix"; /* [patch] mix-reposition-activate */
     logyq.treeManager.layoutAndRender(false);
 
@@ -5006,8 +5553,46 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     utils.assignIds(scratch)
     this.applyLayout(scratch)
     state.root = scratch
-    this.syncHitSlots(scratch.descendants())
-    this.ensureCreateNodes(scratch.descendants())
+    const nodes = scratch.descendants()
+    this.syncHitSlots(nodes)
+    this.ensureCreateNodes(nodes)
+    this.retargetLiveNodes(nodes)
+    state.layoutVisualReady = true
+  },
+
+  // A second create while the first settle is still playing used to leave
+  // painted cards on the old layout and then animate again when the queue
+  // flushed. Point the live cards at the latest layout now, and let the
+  // flush land without a second glide.
+  retargetLiveNodes(nodes){
+    const { elements } = logyq
+    const want = new Map()
+    for (const d of nodes || []) {
+      if (d?.data?._uid != null && String(d.data._uid) !== '') want.set(d.data._uid, d)
+    }
+    elements.gNodes?.selectAll('g.node').each(function (d) {
+      const next = want.get(d?.data?._uid)
+      if (!next) return
+      const sel = d3.select(this)
+      sel.datum(next)
+      sel.interrupt()
+      sel.transition().duration(180).attr('transform', `translate(${next.x},${next.y})`)
+    })
+    const root = (nodes || []).find((d) => d && !d.parent) || null
+    if (elements.gLinks && root?.links) {
+      const byTarget = new Map()
+      for (const link of root.links()) {
+        if (link?.target?.data?._uid != null) byTarget.set(link.target.data._uid, link)
+      }
+      elements.gLinks.selectAll('path.link').each(function (d) {
+        const next = byTarget.get(d?.target?.data?._uid)
+        if (!next) return
+        const sel = d3.select(this)
+        sel.datum(next)
+        sel.interrupt()
+        sel.transition().duration(180).attr('d', logyq.visual.vLink(next))
+      })
+    }
   },
 
   ensureCreateNodes(nodes){
@@ -5029,11 +5614,11 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       g.insert('rect', ':first-child')
         .attr('class', 'grabzone')
         .attr('x', -CONFIG.CARD_WIDTH / 2)
-        .attr('y', -CONFIG.CARD_HEIGHT * 0.5)
+        .attr('y', -CONFIG.CARD_HEIGHT / 2)
         .attr('width', CONFIG.CARD_WIDTH)
-        .attr('height', CONFIG.CARD_HEIGHT * 1.5)
+        .attr('height', CONFIG.CARD_HEIGHT)
         .style('fill', 'transparent')
-        .style('pointer-events', 'all')
+        .style('pointer-events', 'none')
       g.append('rect')
         .attr('x', -CONFIG.CARD_WIDTH / 2)
         .attr('y', -CONFIG.CARD_HEIGHT / 2)
@@ -5068,20 +5653,30 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
   flushCreateLayout(){
     const { state, utils } = logyq
     if (!state.root?.data) return
+    const instant = !!state.layoutVisualReady
+    state.layoutVisualReady = false
     state.layoutFlushQueued = false
     const after = state.layoutAfterFlush
     state.layoutAfterFlush = null
     state.root = d3.hierarchy(state.root.data)
     utils.assignIds(state.root)
+    state.layoutMotionMs = instant ? 0 : 260
     this.layoutAndRender(false)
+    state.layoutMotionMs = null
     try { after?.() } catch (_e) {}
   },
 
   armLayoutSettle(){
     const { state } = logyq
     const delay = this.CREATE_SETTLE_MS || 260
-    state.layoutSettling = true
     state.layoutGeneration = (state.layoutGeneration || 0) + 1
+    if (state.layoutMotionMs === 0) {
+      state.layoutSettling = false
+      state.layoutSettleTimer = 0
+      try { document.body.classList.remove('logyq-layout-settling') } catch (_e) {}
+      return
+    }
+    state.layoutSettling = true
     try { document.body.classList.add('logyq-layout-settling') } catch (_e) {}
     try { clearTimeout(state.layoutSettleTimer) } catch (_e) {}
     state.layoutSettleTimer = setTimeout(() => {
@@ -5152,12 +5747,18 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     const { state, elements, config: CONFIG } = logyq
     const nodes=state.root.descendants();
     const links=state.root.links();
+    const motion = Number.isFinite(state.layoutMotionMs) ? state.layoutMotionMs : 260
+    const glide = (sel) => {
+      if (motion > 0) return sel.transition().duration(motion)
+      sel.interrupt()
+      return sel
+    }
 
     const selLinks=elements.gLinks.selectAll("path.link").data(links, d=>d.target.data._uid);
-    selLinks.enter().append("path").attr("class","link").style("stroke-width", 2.8).style("opacity", 0.5)
+    const enteredLinks = selLinks.enter().append("path").attr("class","link").style("stroke-width", 2.8).style("opacity", 0.5)
       .attr("d", d=> logyq.visual.vLink({source:d.source, target:d.source}))
-      .transition().duration(260).attr("d", d=> logyq.visual.vLink(d));
-    selLinks.transition().duration(260).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> logyq.visual.vLink(d));
+    glide(enteredLinks).attr("d", d=> logyq.visual.vLink(d));
+    glide(selLinks).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> logyq.visual.vLink(d));
     selLinks.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
 
@@ -5194,22 +5795,28 @@ const nEnter = selNodes.enter()
     nEnter.insert("rect",":first-child")
       .attr("class","grabzone")
       .attr("x",-CONFIG.CARD_WIDTH/2)
-      .attr("y",-CONFIG.CARD_HEIGHT*0.5)
+      .attr("y",-CONFIG.CARD_HEIGHT/2)
       .attr("width",CONFIG.CARD_WIDTH)
-      .attr("height",CONFIG.CARD_HEIGHT*1.5)
+      .attr("height",CONFIG.CARD_HEIGHT)
       .style("fill","transparent")
-      .style("cursor","grab").style("pointer-events","all");
+      .style("cursor","grab").style("pointer-events","none");
     /* [patch] grabzone-behind end */
     nEnter.append("rect").attr("x", -CONFIG.CARD_WIDTH/2).attr("y", -CONFIG.CARD_HEIGHT/2).attr("width", CONFIG.CARD_WIDTH).attr("height", CONFIG.CARD_HEIGHT);
     nEnter.append("text").attr("class","label").attr("x",0).attr("y",0).style("font-size", `${CONFIG.FONT_SIZE}px`).text(d=>d.data.name);
 
     const allNodes = nEnter.merge(selNodes);
     allNodes.attr("data-uid", d => d.data._uid);
+    allNodes.select("rect.grabzone")
+      .attr("x", -CONFIG.CARD_WIDTH/2)
+      .attr("y", -CONFIG.CARD_HEIGHT/2)
+      .attr("width", CONFIG.CARD_WIDTH)
+      .attr("height", CONFIG.CARD_HEIGHT)
+      .style("pointer-events", "none");
     allNodes.select("rect:not(.grabzone)")
       .attr("data-uid", d => d.data._uid)
       .style("fill", d => d.data.color || null);
     this.bindUidStamp(allNodes);
-    allNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
+    glide(allNodes).attr("transform", d=>`translate(${d.x},${d.y})`);
     allNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
@@ -5442,10 +6049,7 @@ function keyDispatcher(e){
   /* [patch] dock-ctrlA toggle start */
   if (!modalOpen && !typing && document.querySelector("#Dock:hover") && e.shiftKey && lower==="a") {
     e.preventDefault();
-    const chips = document.querySelectorAll("#Dock .chip");
-    const list = Array.from(chips);
-    const allSelected = list.length > 0 && list.every(c => c.classList.contains("is-outlined"));
-    list.forEach(c => c.classList.toggle("is-outlined", !allSelected));
+    logyq.wordDock.flipBankSelection?.();
     return;
   }
   /* [patch] dock-ctrlA toggle end */
@@ -5478,6 +6082,7 @@ function keyDispatcher(e){
       logyq.selection.showToast(logyq.dock.sideLabel(side), 900);
       return;
     }
+    if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }
     if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}
 

@@ -360,7 +360,22 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.equal(await page.locator('#logyq-v162-action.show').count(), 0)
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.recorder), false)
   assert.equal(await page.evaluate(() => !!window.LOGYQPreview.gestures.cardMic?.actionUid), false)
-  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  const flickEdit = await page.evaluate((prev) => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return {
+      editors: document.querySelectorAll('.node-edit-input').length,
+      editing: window.LOGYQBridge.core.state.editingUid,
+      selected: window.LOGYQBridge.core.state.selectedUid,
+      k: t.k,
+      x: t.x,
+      y: t.y,
+    }
+  }, flickView)
+  assert.equal(flickEdit.editors, 0, 'flick-create must not open the rename bar')
+  assert.equal(flickEdit.editing, null)
+  assert.ok(flickEdit.selected)
+  assert.ok(Math.abs(flickEdit.k - flickView.k) < 0.02, 'create must not zoom')
+  assert.ok(Math.hypot(flickEdit.x - flickView.x, flickEdit.y - flickView.y) < 2, 'create must not pan')
   await page.waitForTimeout(400)
 
   const panCard = await nodeCenter('Node 12')
@@ -375,9 +390,11 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
     }
   })
   await touch('pointerdown', panCard.x, panCard.y, 81)
-  for (const step of [12, 24, 36, 48, 64, 88]) {
-    await page.waitForTimeout(60)
-    await touch('pointermove', panCard.x + step, panCard.y + Math.round(step * 0.6), 81)
+  // Slow 1:1 diagonal: under the flick speed and under ratio 1.45, so the
+  // map pans after 48ms. A fast or axis-aligned stroke stays flick-gated.
+  for (const step of [10, 22, 34, 46, 58, 74, 92]) {
+    await page.waitForTimeout(90)
+    await touch('pointermove', panCard.x + step, panCard.y + step, 81)
   }
   assert.equal(await page.evaluate(() => document.body.classList.contains('v2-branch-drag')), false, 'slow slide must not lift the card')
   const panDuring = await page.evaluate(() => {
@@ -392,8 +409,8 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   })
   assert.equal(panDuring.drag, false)
   assert.equal(panDuring.transform, panOrigin.transform, 'card stays put while the map pans')
-  assert.ok(Math.hypot(panDuring.x - panOrigin.x, panDuring.y - panOrigin.y) > 40, `map should follow an early card slide, before=${panOrigin.x},${panOrigin.y} during=${panDuring.x},${panDuring.y}`)
-  await touch('pointerup', panCard.x + 88, panCard.y + 54, 81)
+  assert.ok(Math.hypot(panDuring.x - panOrigin.x, panDuring.y - panOrigin.y) > 40, `map should follow a diagonal card slide, before=${panOrigin.x},${panOrigin.y} during=${panDuring.x},${panDuring.y}`)
+  await touch('pointerup', panCard.x + 92, panCard.y + 92, 81)
   const panAfter = await page.evaluate(() => {
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return { x: t.x, y: t.y, nodes: document.querySelectorAll('g.node').length }
@@ -451,6 +468,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
       offset: window.LOGYQPreview.gestures.fingerOffset(),
       lift: window.LOGYQPreview.gestures.liftPx(),
       previewTransform: document.getElementById('logyq-v162-branch-preview')?.style.transform || '',
+      previewOpacity: getComputedStyle(document.getElementById('logyq-v162-branch-preview')).opacity,
       y: t.y,
     }
   })
@@ -462,6 +480,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.deepEqual(ghost.offset, { x: 0, y: -D })
   assert.ok(Math.abs(ghost.y - beforeHold.y) < 2, `map must stay put on latch, before=${beforeHold.y} during=${ghost.y}`)
   assert.match(ghost.previewTransform, /translate3d\(/)
+  assert.equal(ghost.previewOpacity, '0.55', 'map-card drag ghost uses the Word Bank chip opacity')
   const previewY = Number((ghost.previewTransform.match(/translate3d\([^,]+,\s*([-0-9.]+)px/) || [])[1])
   assert.ok(Number.isFinite(previewY) && Math.abs(previewY - (-D)) < 2, `floating card should pop north by 1.1cm, transform=${ghost.previewTransform}`)
   assert.equal(await page.locator('#logyq-v162-branch-preview .v2-float-node').count(), 0)
@@ -608,7 +627,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.deepEqual(await page.evaluate(() => (window.LOGYQBridge.core.state.wordBank || []).slice()), bankWordsBefore, 'still hold / long-press contextmenu must not copy into Word Bank')
   assert.equal(await page.evaluate(() => !!window.LOGYQBridge.core?.holdDrag?.blocksBank?.()), true)
   assert.ok(Number(still.opacity) > 0.2, `origin ghost opacity vanished: ${still.opacity}`)
-  assert.ok(still.width > 8 && still.height > 8, `origin ghost box collapsed: ${still.width}x${still.height}`)
+  assert.ok(still.width > 6 && still.height > 6, `origin ghost box collapsed: ${still.width}x${still.height}`)
   assert.ok(Math.abs(still.y - beforeHold.y) < 2, `map must stay put while holding still, before=${beforeHold.y} during=${still.y}`)
   assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
   const slotStill = await page.evaluate(() => {
@@ -700,14 +719,34 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   await touch('pointerdown', edit.x, edit.y, 44)
   await touch('pointerup', edit.x, edit.y, 44)
   await page.waitForSelector('.node-edit-input')
-  await page.waitForFunction(() => window.d3.zoomTransform(document.getElementById('canvas')).k >= 1.34)
+  const duringEdit = await page.evaluate((prev) => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    const input = document.querySelector('.node-edit-input')
+    const box = input.getBoundingClientRect()
+    const card = Array.from(document.querySelectorAll('g.node')).find((node) => node.__data__?.data?.name === 'Node 08')?.getBoundingClientRect()
+    return {
+      k: t.k,
+      x: t.x,
+      y: t.y,
+      docked: !!input.closest('.node-edit-dock'),
+      aboveCard: !card || box.top > card.bottom || box.bottom < card.top,
+      nearKeyboard: box.bottom > window.innerHeight - 120,
+    }
+  }, beforeEdit)
+  assert.ok(Math.abs(duringEdit.k - beforeEdit.k) < 0.02, 'double-tap edit must not zoom')
+  assert.ok(Math.hypot(duringEdit.x - beforeEdit.x, duringEdit.y - beforeEdit.y) < 2, 'double-tap edit must not pan')
+  assert.equal(duringEdit.docked, true)
+  assert.equal(duringEdit.aboveCard, true)
+  assert.equal(duringEdit.nearKeyboard, true)
   await page.locator('.node-edit-input').fill('Tapped 08')
   await page.locator('.node-edit-input').press('Enter')
   await page.waitForFunction(() => Array.from(document.querySelectorAll('g.node')).some((node) => node.textContent.includes('Tapped 08')))
-  await page.waitForFunction((prev) => {
+  const afterEdit = await page.evaluate(() => {
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
-    return Math.abs(t.k - prev.k) < 0.06 && Math.hypot(t.x - prev.x, t.y - prev.y) < 24
-  }, beforeEdit)
+    return { x: t.x, y: t.y, k: t.k }
+  })
+  assert.ok(Math.abs(afterEdit.k - beforeEdit.k) < 0.02, 'committing an edit must not zoom back')
+  assert.ok(Math.hypot(afterEdit.x - beforeEdit.x, afterEdit.y - beforeEdit.y) < 2, 'committing an edit must not pan back')
 
   assert.deepEqual(errors, [])
   await context.close()
@@ -875,6 +914,57 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   await context.close()
 })
 
+test('LOGYQ map-card drag ghost uses the Word Bank chip opacity', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+  const hold = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, parent: node.__data__?.parent?.data?._uid || null }
+  })
+  await page.evaluate(({ x, y }) => {
+    document.getElementById('canvas').dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 77,
+      isPrimary: true, button: 0, buttons: 1, clientX: x, clientY: y,
+    }))
+  }, hold)
+  await page.waitForFunction(() => document.body.classList.contains('v2-branch-drag'))
+  const ghost = await page.evaluate(() => {
+    const preview = document.getElementById('logyq-v162-branch-preview')
+    const chipRule = Array.from(document.styleSheets).flatMap((sheet) => {
+      try { return Array.from(sheet.cssRules || []) } catch (_error) { return [] }
+    }).find((rule) => rule.selectorText === '#logyq-chip-ghost .chip')
+    return {
+      opacity: preview ? getComputedStyle(preview).opacity : '',
+      chip: chipRule?.style?.opacity || '',
+    }
+  })
+  assert.equal(ghost.chip, '0.55')
+  assert.equal(ghost.opacity, ghost.chip, 'map-card ghost must match the chip ghost opacity')
+  await page.evaluate(({ x, y }) => {
+    const canvas = document.getElementById('canvas')
+    canvas.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 77,
+      isPrimary: true, button: 0, buttons: 0, clientX: x, clientY: y,
+    }))
+  }, hold)
+  await page.waitForFunction(() => !document.body.classList.contains('v2-branch-drag'))
+  assert.equal(await page.locator('#logyq-v162-branch-preview').count(), 0)
+  const after = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    return node?.__data__?.parent?.data?._uid || null
+  })
+  assert.equal(after, hold.parent, 'releasing the faded ghost must not reparent')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ empty library stays a library, not a chooser or editor', async () => {
   const capture = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
@@ -888,8 +978,96 @@ test('LOGYQ empty library stays a library, not a chooser or editor', async () =>
   await page.waitForSelector('#logiq-library.is-open')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
   assert.equal(await page.locator('#logiq-new-map').count(), 1)
+  assert.equal(await page.locator('#logyq-tab-maps').getAttribute('aria-selected'), 'true')
   assert.match((await page.locator('#logiq-map-list').innerText()), /No maps yet/)
+  assert.equal(await page.locator('#logiq-new-map').isVisible(), true)
+  assert.equal(await page.locator('#logyq-curriculum').isVisible(), false)
+  await page.locator('#logyq-tab-curriculum').click()
+  assert.equal(await page.locator('#logyq-tab-curriculum').getAttribute('aria-selected'), 'true')
+  assert.equal(await page.locator('#logyq-curriculum [data-level]').count(), 8)
+  assert.equal(await page.locator('[data-level="fruit"]').isDisabled(), false)
+  assert.equal(await page.locator('[data-level="food"]').isDisabled(), true)
+  assert.match(await page.locator('[data-level="food"]').getAttribute('aria-label'), /locked/)
+  assert.doesNotMatch(await page.locator('#logyq-curriculum').innerText(), /Levels coming soon|lunch|recess/)
+  assert.equal(await page.locator('#logiq-map-list').isVisible(), false)
+  assert.equal(await page.locator('#logiq-new-map').isVisible(), false)
+  assert.equal(await page.locator('#logyq-curriculum .logiq-map-row').count(), 0)
+  await page.locator('#logyq-tab-maps').click()
+  assert.equal(await page.locator('#logyq-tab-maps').getAttribute('aria-selected'), 'true')
+  assert.match((await page.locator('#logiq-map-list').innerText()), /No maps yet/)
+  assert.equal(await page.locator('#logiq-new-map').isVisible(), true)
   await page.waitForTimeout(950)
+  assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ curriculum level 1 clears into an empty map and unlocks level 2', async () => {
+  const capture = []
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context, { capture })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.locator('#logyq-tab-curriculum').click()
+  await page.locator('[data-level="fruit"]').click()
+  await page.waitForFunction(() => document.querySelector('#Dock .chip')?.textContent === 'fruit'
+    || document.querySelectorAll('#Dock .chip').length === 3)
+  const opened = await page.evaluate(() => ({
+    chips: Array.from(document.querySelectorAll('#Dock .chip')).map((el) => el.textContent.trim()).sort(),
+    nodes: document.querySelectorAll('g.node').length,
+    title: document.getElementById('logyq-curriculum-status')?.textContent || '',
+    playing: document.body.classList.contains('logyq-curriculum'),
+  }))
+  assert.deepEqual(opened.chips, ['apple', 'banana', 'fruit'])
+  assert.equal(opened.nodes, 0)
+  assert.equal(opened.playing, true)
+  assert.match(opened.title, /Fruit/)
+  assert.equal(await page.locator('#logyq-curriculum-check').isVisible(), true)
+
+  await page.evaluate(() => {
+    const core = window.LOGYQBridge.core
+    const tree = { name: 'fruit', children: [{ name: 'apple', children: [{ name: 'banana' }] }] }
+    core.utils.assignUids(tree)
+    core.state.wordBank = []
+    core.state.root = window.d3.hierarchy(tree)
+    core.utils.assignIds(core.state.root)
+    core.wordDock.render()
+    core.treeManager.layoutAndRender(false)
+  })
+  await page.locator('#logyq-curriculum-check').click()
+  assert.match(await page.locator('#logyq-curriculum-status').innerText(), /Not yet/)
+  assert.equal(await page.evaluate(() => localStorage.getItem('logyq_curriculum_progress_v1')), null)
+
+  await page.evaluate(() => {
+    const core = window.LOGYQBridge.core
+    const tree = { name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] }
+    core.utils.assignUids(tree)
+    core.state.wordBank = []
+    core.state.root = window.d3.hierarchy(tree)
+    core.utils.assignIds(core.state.root)
+    core.wordDock.render()
+    core.treeManager.layoutAndRender(false)
+  })
+  await page.locator('#logyq-curriculum-check').click()
+  await page.waitForFunction(() => /Fruit cleared/.test(document.getElementById('logyq-curriculum-status')?.textContent || ''))
+  const progress = await page.evaluate(() => JSON.parse(localStorage.getItem('logyq_curriculum_progress_v1')))
+  assert.equal(typeof progress.levels.fruit.clearedAt, 'string')
+  assert.equal(typeof progress.levels.fruit.ms, 'number')
+  await page.locator('#logyq-curriculum-levels').click()
+  await page.waitForFunction(() => {
+    const food = document.querySelector('[data-level="food"]')
+    const tab = document.getElementById('logyq-tab-curriculum')
+    return food && !food.disabled && tab?.getAttribute('aria-selected') === 'true'
+  })
+  assert.match(await page.locator('[data-level="fruit"]').getAttribute('aria-label'), /cleared/)
+  assert.equal(await page.locator('[data-level="body"]').isDisabled(), true)
+  await page.locator('#logyq-tab-maps').click()
+  assert.match(await page.locator('#logiq-map-list').innerText(), /No maps yet/)
+  assert.equal(await page.locator('#logiq-new-map').isVisible(), true)
+  await page.waitForTimeout(1000)
   assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
   assert.deepEqual(errors, [])
   await context.close()
@@ -1221,6 +1399,7 @@ test('LOGYQ flick left/right/up create as calmly as down-on-leaf', async () => {
         x: t.x,
         y: t.y,
         editors: document.querySelectorAll('.node-edit-input').length,
+        editing: window.LOGYQBridge.core.state.editingUid,
         mic: document.querySelectorAll('#logyq-v162-action.show').length,
         selected,
         createdName: created?.data?.name || '',
@@ -1239,7 +1418,8 @@ test('LOGYQ flick left/right/up create as calmly as down-on-leaf', async () => {
       }
     })
     assert.ok(Math.hypot(after.x - view.x, after.y - view.y) < 2, `${name} flick must leave the camera`)
-    assert.equal(after.editors, 0, `${name} flick must not open the editor`)
+    assert.equal(after.editors, 0, `${name} flick must not open the rename bar`)
+    assert.equal(after.editing, null)
     assert.equal(after.mic, 0, `${name} flick must not arm MIC`)
     assert.notEqual(after.selected, origin.uid)
     assert.equal(after.createdName, '')
@@ -1837,7 +2017,7 @@ test('LOGYQ sequential flick-downs after background clear and pan do not overlap
     }
   }, view0)
   assert.ok(Math.hypot(after1.dx, after1.dy) < 2, 'first flick must leave the camera')
-  assert.equal(after1.editors, 0)
+  assert.equal(after1.editors, 0, 'flick-create must not open the rename bar')
   assert.equal(after1.overlap, 0)
   assert.ok(after1.selected)
   assert.notEqual(after1.selected, after1.rootUid)
@@ -1907,7 +2087,7 @@ test('LOGYQ sequential flick-downs after background clear and pan do not overlap
     }
   }, panned)
   assert.ok(Math.hypot(after2.dx, after2.dy) < 2, 'second flick after pan must leave the camera')
-  assert.equal(after2.editors, 0)
+  assert.equal(after2.editors, 0, 'flick-create must not open the rename bar')
   assert.equal(after2.overlap, 0)
   assert.ok(after2.selected)
   assert.notEqual(after2.selected, after2.rootUid)
@@ -2205,20 +2385,18 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   }
   async function edges() {
     return page.evaluate(() => {
-      const cssHex = (value) => {
-        const rgb = String(value || '').match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
-        if (!rgb) return String(value || '')
-        const hex = (n) => Number(n).toString(16).padStart(2, '0')
-        return `#${hex(rgb[1])}${hex(rgb[2])}${hex(rgb[3])}`
-      }
-      return Array.from(document.querySelectorAll('svg#canvas g.links path.link')).map((link) => ({
-        name: link.__data__?.target?.data?.name ?? null,
-        stroke: cssHex(getComputedStyle(link).stroke || link.style.stroke || ''),
-        dash: link.style.strokeDasharray || '',
-        opacity: link.style.opacity || '',
-        edge: link.dataset.smiteEdge || '',
-        animation: link.style.animationName || link.style.animation || '',
-      }))
+      return Array.from(document.querySelectorAll('svg#canvas g.links path.link')).map((link) => {
+        const grad = link.dataset.smiteGrad ? document.getElementById(link.dataset.smiteGrad) : null
+        const stops = grad ? Array.from(grad.querySelectorAll('stop')).map((stop) => (stop.getAttribute('stop-color') || '').toLowerCase()) : []
+        return {
+          name: link.__data__?.target?.data?.name ?? null,
+          stroke: stops[1] || stops[0] || '',
+          dash: link.style.strokeDasharray || '',
+          opacity: link.style.opacity || '',
+          edge: link.dataset.smiteEdge || '',
+          animation: link.style.animationName || link.style.animation || '',
+        }
+      })
     })
   }
   async function zoomK() {
@@ -2263,13 +2441,9 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(armed[0].stroke, '#ff0000')
   assert.equal(armed[0].glow, 0)
   assert.ok(armed[0].faceFill === '#2563eb' || armed[0].faceFill === 'rgb(37, 99, 235)', 'paint stays on the card')
-  assert.equal(armed[0].wash, '#ffb8b8')
-  assert.ok(armed[0].washOpacity > 0.8)
+  assert.equal(armed[0].wash, '', 'the clock card is an outline timer, not a fill')
   const rootMood = await edges()
-  for (const name of ['A', 'A1', '', 'B']) {
-    assert.equal(rootMood.find((edge) => edge.name === name)?.edge, '1')
-    assert.equal(rootMood.find((edge) => edge.name === name)?.stroke, '#ff0000')
-  }
+  assert.equal(rootMood.some((edge) => edge.edge === '1'), false, 'a parent-only cast leaves connectors quiet')
   assert.equal(armed[0].text, '')
   const noon = await page.evaluate(() => {
     const clock = document.querySelector('path.logyq-smite-clock')
@@ -2393,7 +2567,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   })
   const late = await clocks()
   assert.equal(late[0].stroke, '#ff0000')
-  assert.equal(late[0].wash, '#ffb8b8')
+  assert.equal(late[0].wash, '')
   assert.equal(late[0].glow, 0)
   assert.ok(late[0].faceFill === '#2563eb' || late[0].faceFill === 'rgb(37, 99, 235)')
   await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 15000 })
@@ -2413,8 +2587,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.ok(rearmed.remaining >= 14000, 're-arming restarts the 3s hold')
   assert.equal(rearmed.dash, 'none')
   assert.equal(rearmed.stroke, '#ffa100')
-  assert.equal((await edges()).find((edge) => edge.name === 'A')?.stroke, '#ffa100')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false, 'parent-only amber still leaves connectors quiet')
   assert.equal(await cycle(25), null)
   const restored = await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Root')
@@ -2444,7 +2617,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(bankArmed[0].amber, true)
   assert.equal(bankArmed[0].stroke, '#ffa100')
   assert.equal(bankArmed[0].phase, '')
-  assert.equal(bankArmed[0].wash, '#ffcc80')
+  assert.equal(bankArmed[0].wash, '')
   assert.equal(bankArmed[0].glow, 0)
   await touch('pointerup', leaf.x - 80, leaf.y, 32, leaf.uid)
   await touch('pointerup', 16, 400, 31)
@@ -2464,11 +2637,13 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', card.x, card.y, 42, card.uid)
   await touch('pointermove', card.x, card.y + 84, 42, card.uid)
   const family = await heats()
-  assert.deepEqual(family.map((card) => card.name).sort(), ['', 'A', 'A1'])
-  assert.equal(family.find((card) => card.name === 'A')?.clock, true)
+  assert.deepEqual(family.map((card) => card.name).sort(), ['', 'A1'])
   assert.equal(family.find((card) => card.name === 'A1')?.clock, false)
-  assert.equal(family.every((card) => card.wash === '#ffb8b8' && card.glow === 0), true)
-  assert.equal(family.find((card) => card.name === 'A')?.faceStroke, 'none')
+  assert.equal(family.every((card) => card.glow === 0), true)
+  assert.equal(family.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((family.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ff0000')
+  assert.equal(family.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((family.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
   assert.equal((await clocks()).length, 1)
   assert.equal((await clocks())[0].name, 'A')
   assert.equal((await clocks())[0].stroke, '#ff0000')
@@ -2487,7 +2662,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     return clock?.getAttribute('stroke') === '#ff0000' && parts.length === 2 && parts[0] < clock.getTotalLength() * 0.2
   })
   assert.equal((await clocks())[0].stroke, '#ff0000')
-  assert.equal((await clocks())[0].wash, '#ffb8b8')
+  assert.equal((await clocks())[0].wash, '')
   assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
   assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
   await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 8000 })
@@ -2495,28 +2670,31 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', child.x, child.y, 45, child.uid)
   await touch('pointerup', child.x, child.y, 45, child.uid)
   const childAmber = await heats()
-  assert.equal(childAmber.find((card) => card.name === 'A1')?.wash, '#ffcc80')
-  assert.equal(childAmber.find((card) => card.name === 'A')?.wash, '#ffb8b8')
-  assert.equal(childAmber.find((card) => card.name === '')?.wash, '#ffb8b8')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
+  assert.equal(childAmber.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((childAmber.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffa100')
+  assert.equal(childAmber.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((childAmber.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
   await touch('pointerdown', child.x, child.y, 46, child.uid)
   await touch('pointerup', child.x, child.y, 46, child.uid)
   const droppedChild = await heats()
-  assert.equal(droppedChild.find((card) => card.name === 'A1'), undefined)
-  assert.equal(droppedChild.find((card) => card.name === 'A')?.wash, '#ffb8b8')
-  assert.equal(droppedChild.find((card) => card.name === '')?.wash, '#ffb8b8')
+  assert.equal(droppedChild.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((droppedChild.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
+  assert.equal(droppedChild.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((droppedChild.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.marks.get(
     Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'A1')?.__data__.data._uid
   )), 'normal')
-  assert.ok(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.remaining < 14000), 'a child cycle does not restart the parent clock')
+  assert.ok(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.remaining >= 14000), 'a mercy tap restarts the hold')
   const parentPoint = await center('A')
   await touch('pointerdown', parentPoint.x, parentPoint.y, 43, parentPoint.uid)
   await touch('pointerup', parentPoint.x, parentPoint.y, 43, parentPoint.uid)
   const rearmedFamily = await heats()
-  assert.deepEqual(rearmedFamily.map((card) => card.name).sort(), ['', 'A'])
-  assert.equal(rearmedFamily.every((card) => card.wash === '#ffcc80'), true)
-  assert.equal(rearmedFamily.find((card) => card.name === 'A')?.clock, true)
-  assert.equal(rearmedFamily.find((card) => card.name === 'A1'), undefined)
+  assert.deepEqual(rearmedFamily.map((card) => card.name).sort(), ['', 'A1'])
+  assert.equal(rearmedFamily.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((rearmedFamily.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ffa100')
+  assert.equal(rearmedFamily.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((rearmedFamily.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.marks.get(
     Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'A1')?.__data__.data._uid
   )), 'normal')
@@ -2528,16 +2706,17 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', child.x, child.y, 47, child.uid)
   await touch('pointerup', child.x, child.y, 47, child.uid)
   const reincluded = await heats()
-  assert.equal(reincluded.find((card) => card.name === 'A1')?.wash, '#ffb8b8')
-  assert.equal(reincluded.find((card) => card.name === 'A')?.wash, '#ffcc80')
-  assert.equal(reincluded.find((card) => card.name === 'A')?.clock, true)
+  assert.equal(reincluded.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((reincluded.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ff0000')
+  assert.equal((await clocks())[0].name, 'A')
   assert.equal((await clocks())[0].stroke, '#ffa100')
   await touch('pointerdown', child.x, child.y, 48, child.uid)
   await touch('pointerup', child.x, child.y, 48, child.uid)
   await touch('pointerdown', child.x, child.y, 49, child.uid)
   await touch('pointerup', child.x, child.y, 49, child.uid)
-  assert.equal((await heats()).find((card) => card.name === 'A1'), undefined)
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffffff')
   assert.equal((await edges()).find((edge) => edge.name === '')?.stroke, '#ffa100')
   assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
@@ -2562,46 +2741,53 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   const kidsOnly = await heats()
   assert.equal(kidsOnly.find((card) => card.name === 'A'), undefined)
   assert.equal(kidsOnly.find((card) => card.name === 'A1')?.clock, false)
-  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.wash, '#ffb8b8')
-  assert.equal(kidsOnly.find((card) => card.name === '')?.wash, '#ffb8b8')
+  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((kidsOnly.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ff0000')
+  assert.equal(kidsOnly.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((kidsOnly.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
   const kidClocks = await clocks()
   assert.deepEqual(kidClocks.map((clock) => clock.name), ['A'])
   assert.equal(kidClocks[0].stroke, '#ff0000')
   assert.equal(kidClocks[0].wash, '')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
-  assert.equal((await edges()).find((edge) => edge.name === '')?.stroke, '#ff0000')
-  assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false, 'a kids-only cast leaves connectors quiet')
   await touch('pointerup', kidParent.x, kidParent.y + 84, 92, kidParent.uid)
   await touch('pointerup', thumbKids.x, thumbKids.y, 91)
   const kidTicket = await center('A1')
   await touch('pointerdown', kidTicket.x, kidTicket.y, 94, kidTicket.uid)
   await touch('pointerup', kidTicket.x, kidTicket.y, 94, kidTicket.uid)
-  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, '#ffcc80')
+  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffa100')
   await touch('pointerdown', kidTicket.x, kidTicket.y, 194, kidTicket.uid)
   await touch('pointerup', kidTicket.x, kidTicket.y, 194, kidTicket.uid)
   const afterKid = await heats()
-  assert.equal(afterKid.find((card) => card.name === 'A1'), undefined)
-  assert.equal(afterKid.find((card) => card.name === '')?.wash, '#ffb8b8')
+  assert.equal(afterKid.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((afterKid.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
+  assert.equal(afterKid.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((afterKid.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
   assert.deepEqual((await clocks()).map((clock) => clock.name), ['A'])
   const master = await center('A')
   await touch('pointerdown', master.x, master.y, 95, master.uid)
   await touch('pointerup', master.x, master.y, 95, master.uid)
   const kidRearm = await heats()
-  assert.equal(kidRearm.find((card) => card.name === 'A')?.wash, '#ffcc80')
-  assert.equal(kidRearm.find((card) => card.name === 'A')?.clock, true)
-  assert.equal(kidRearm.find((card) => card.name === 'A1'), undefined)
-  assert.equal(kidRearm.find((card) => card.name === '')?.wash, '#ffcc80')
+  assert.equal(kidRearm.find((card) => card.name === 'A'), undefined)
+  assert.equal(kidRearm.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((kidRearm.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
+  assert.equal(kidRearm.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((kidRearm.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ffa100')
   assert.deepEqual((await clocks()).map((clock) => clock.name), ['A'])
   assert.equal((await clocks())[0].stroke, '#ffa100')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
-  assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false, 'kids-only amber still leaves connectors quiet')
   assert.ok(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.remaining >= 14000))
   await touch('pointerdown', kidTicket.x, kidTicket.y, 195, kidTicket.uid)
   await touch('pointerup', kidTicket.x, kidTicket.y, 195, kidTicket.uid)
-  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, '#ffb8b8')
-  assert.equal((await heats()).find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ff0000')
   await touch('pointerdown', master.x, master.y, 96, master.uid)
   await touch('pointerup', master.x, master.y, 96, master.uid)
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffa100')
+  assert.notEqual(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
+  await touch('pointerdown', master.x, master.y, 97, master.uid)
+  await touch('pointerup', master.x, master.y, 97, master.uid)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
   assert.deepEqual(await clocks(), [])
   assert.equal((await edges()).some((edge) => edge.edge === '1'), false)
@@ -2609,7 +2795,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', kidTicket.x, kidTicket.y, 196, kidTicket.uid)
   await touch('pointerup', kidTicket.x, kidTicket.y, 196, kidTicket.uid)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
-  assert.equal((await heats()).find((card) => card.name === 'A1'), undefined)
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#16a34a')
   await page.evaluate(() => {
     document.querySelectorAll('.node-edit-input').forEach((input) => input.blur())
     document.body.click()
@@ -2630,12 +2816,11 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerup', branch.x - 86, branch.y, 82, branch.uid)
   await touch('pointerup', thumbA.x, thumbA.y, 81)
   const parallel = await heats()
-  assert.equal(parallel.find((card) => card.name === 'B')?.clock, true)
-  assert.equal(parallel.find((card) => card.name === 'B')?.wash, '#ffb8b8')
-  assert.equal(parallel.find((card) => card.name === 'A')?.clock, true)
-  assert.equal(parallel.find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal(parallel.find((card) => card.name === 'B'), undefined)
+  assert.equal(parallel.find((card) => card.name === 'A'), undefined)
   assert.equal(parallel.find((card) => card.name === 'A1')?.clock, false)
-  assert.equal(parallel.find((card) => card.name === 'A1')?.wash, '#ffcc80')
+  assert.equal(parallel.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((parallel.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffa100')
   assert.equal(await page.evaluate(() => document.querySelectorAll('path.logyq-smite-clock').length), 2)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
   const parallelClocks = await clocks()
@@ -2675,12 +2860,12 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', childAgain.x, childAgain.y, 83, childAgain.uid)
   await touch('pointerup', childAgain.x, childAgain.y, 83, childAgain.uid)
   const afterToggle = await heats()
-  assert.equal(afterToggle.find((card) => card.name === 'A1'), undefined)
-  assert.equal(afterToggle.find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal(afterToggle.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((afterToggle.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
   assert.equal((await clocks()).find((clock) => clock.name === 'A')?.stroke, '#ffa100')
   assert.equal((await clocks()).find((clock) => clock.name === 'B')?.stroke, '#ff0000')
   assert.equal((await edges()).find((edge) => edge.name === 'A1')?.edge, '1')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffffff')
   assert.equal(await page.evaluate(() => document.querySelectorAll('path.logyq-smite-clock').length), 2)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
   const overlapThumb = await park('middle', 97)
@@ -2710,6 +2895,3323 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
   assert.equal(both.find((clock) => clock.name === 'Root')?.stroke, '#ff0000')
   assert.equal(both.find((clock) => clock.name === 'A')?.stroke, '#ffa100')
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ attach follows the raised ghost center, not the finger', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [{ name: 'Upper', children: [{ name: 'Lower' }] }],
+    }, ['Chip'])
+  })
+  await page.waitForSelector('#Dock .chip')
+  await page.waitForFunction(() => {
+    const upper = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Upper')
+    return upper?.getBoundingClientRect().width > 20
+  })
+
+  const chip = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === 'Chip')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const cdp = await page.context().newCDPSession(page)
+  const nudge = { x: chip.x, y: chip.y - 36 }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...chip, id: 1 }] })
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...nudge, id: 1 }] })
+  await page.waitForTimeout(40)
+  const lift = await page.evaluate((finger) => {
+    const rect = document.getElementById('logyq-chip-ghost')?.getBoundingClientRect()
+    return {
+      x: rect.left + rect.width / 2 - finger.x,
+      y: rect.top + rect.height / 2 - finger.y,
+    }
+  }, nudge)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...chip, id: 1 }] })
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  assert.ok(lift.y < -30, `chip ghost should sit above the finger, lift=${lift.y}`)
+
+  await page.evaluate((gap) => {
+    const state = window.LOGYQBridge.core.state
+    const svg = document.getElementById('canvas')
+    const upper = state.root.descendants().find((node) => node.data.name === 'Upper')
+    const lower = state.root.descendants().find((node) => node.data.name === 'Lower')
+    const k = gap / (lower.y - upper.y)
+    const tx = 200 - k * lower.x
+    const ty = 460 - k * lower.y
+    state._lastMoat = Date.now()
+    window.d3.select(svg).call(state.zoom.transform, window.d3.zoomIdentity.translate(tx, ty).scale(k))
+    state._lastMoat = Date.now()
+  }, -lift.y)
+  const cards = await page.evaluate(() => {
+    const box = (name) => {
+      const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === name)
+      const rect = node.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, top: rect.top, bottom: rect.bottom }
+    }
+    return { upper: box('Upper'), lower: box('Lower') }
+  })
+  const aim = { x: cards.upper.x - lift.x, y: cards.upper.y - lift.y }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...chip, id: 2 }] })
+  const steps = 8
+  for (let i = 1; i <= steps; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: chip.x + ((aim.x - chip.x) * i) / steps,
+        y: chip.y + ((aim.y - chip.y) * i) / steps,
+        id: 2,
+      }],
+    })
+    await page.waitForTimeout(16)
+  }
+  const liveUpper = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Upper')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const corrected = { x: liveUpper.x - lift.x, y: liveUpper.y - lift.y }
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: corrected.x, y: corrected.y, id: 2 }],
+  })
+  await page.waitForTimeout(40)
+  const claim = await page.evaluate((finger) => {
+    const ghost = document.getElementById('logyq-chip-ghost')?.getBoundingClientRect()
+    const ghostPoint = ghost ? { x: ghost.left + ghost.width / 2, y: ghost.top + ghost.height / 2 } : null
+    const svg = document.getElementById('canvas')
+    const origin = svg.getBoundingClientRect()
+    const graph = (point) => {
+      const [x, y] = window.d3.zoomTransform(svg).invert([point.x - origin.left, point.y - origin.top])
+      return window.LOGYQBridge.core.detectors.pick({ x, y })
+    }
+    const nameOf = (uid) => window.LOGYQBridge.core.state.root.descendants().find((node) => node.data._uid === uid)?.data.name || null
+    const ghostPick = ghostPoint ? graph(ghostPoint) : null
+    const fingerPick = graph(finger)
+    const marked = document.querySelector('g.node.drop-target')?.__data__?.data?.name || null
+    return {
+      ghost: ghostPoint,
+      marked,
+      ghostTarget: ghostPick?.type === 'node' ? nameOf(ghostPick.targetUid) : ghostPick?.type || null,
+      fingerTarget: fingerPick?.type === 'node' ? nameOf(fingerPick.targetUid) : fingerPick?.type || null,
+      drop: window.LOGYQBridge.core.state.chipDrag.drop?.targetUid
+        ? nameOf(window.LOGYQBridge.core.state.chipDrag.drop.targetUid)
+        : window.LOGYQBridge.core.state.chipDrag.drop?.type || null,
+    }
+  }, corrected)
+  assert.equal(claim.marked, 'Upper', JSON.stringify(claim))
+  assert.equal(claim.drop, 'Upper', JSON.stringify(claim))
+  assert.notEqual(claim.fingerTarget, 'Upper', JSON.stringify(claim))
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await page.waitForFunction(() => {
+    const upper = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'Upper')
+    return upper?.children?.some((child) => child.data.name === 'Chip')
+  })
+  assert.equal(await page.evaluate(() => {
+    const lower = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'Lower')
+    return lower?.children?.some((child) => child.data.name === 'Chip') || false
+  }), false)
+
+  await page.evaluate(() => {
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [{ name: 'Upper', children: [{ name: 'Lower' }] }],
+    }, [])
+  })
+  await page.waitForFunction(() => document.querySelectorAll('g.node').length >= 3)
+  await page.waitForTimeout(400)
+  await page.evaluate(() => {
+    const state = window.LOGYQBridge.core.state
+    const svg = document.getElementById('canvas')
+    const upper = state.root.descendants().find((node) => node.data.name === 'Upper')
+    const lower = state.root.descendants().find((node) => node.data.name === 'Lower')
+    const k = 80 / (lower.y - upper.y)
+    state._lastMoat = Date.now()
+    window.d3.select(svg).call(state.zoom.transform, window.d3.zoomIdentity.translate(200 - k * lower.x, 500 - k * lower.y).scale(k))
+    state._lastMoat = Date.now()
+  })
+  const lower = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Lower')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  await page.evaluate((point) => {
+    document.getElementById('canvas').dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
+      isPrimary: true, button: 0, buttons: 1, clientX: point.x, clientY: point.y,
+    }))
+  }, lower)
+  await page.waitForFunction(() => document.body.classList.contains('v2-branch-drag'))
+  const upper = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Upper')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right }
+  })
+  const parked = await page.evaluate(() => {
+    const ghost = document.querySelector('#logyq-v162-branch-preview svg')?.getBoundingClientRect()
+    return ghost ? { x: ghost.left + ghost.width / 2, y: ghost.top + ghost.height / 2 } : null
+  })
+  const moved = {
+    x: lower.x + (upper.x - (parked?.x || lower.x)),
+    y: lower.y + (upper.y - (parked?.y || lower.y)) + 24,
+  }
+  await page.evaluate((point) => {
+    document.getElementById('canvas').dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
+      isPrimary: true, button: 0, buttons: 1, clientX: point.x, clientY: point.y,
+    }))
+  }, moved)
+  await page.waitForTimeout(80)
+  const landed = await page.evaluate(() => {
+    const ghost = document.querySelector('#logyq-v162-branch-preview svg')?.getBoundingClientRect()
+    return ghost ? { x: ghost.left + ghost.width / 2, y: ghost.top + ghost.height / 2 } : null
+  })
+  const correction = { x: moved.x + (upper.x - landed.x), y: moved.y + (upper.y - landed.y) }
+  await page.evaluate((point) => {
+    document.getElementById('canvas').dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
+      isPrimary: true, button: 0, buttons: 1, clientX: point.x, clientY: point.y,
+    }))
+  }, correction)
+  await page.waitForTimeout(80)
+  const cardClaim = await page.evaluate((finger) => {
+    const ghost = document.querySelector('#logyq-v162-branch-preview svg')?.getBoundingClientRect()
+    const ghostPoint = ghost ? { x: ghost.left + ghost.width / 2, y: ghost.top + ghost.height / 2 } : null
+    const upperNode = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Upper')
+    const upperBox = upperNode.getBoundingClientRect()
+    const inside = (point, box) => point && point.x >= box.left && point.x <= box.right && point.y >= box.top && point.y <= box.bottom
+    return {
+      marked: document.querySelector('g.node.drop-target')?.__data__?.data?.name || null,
+      ghost: ghostPoint,
+      finger,
+      ghostOnUpper: inside(ghostPoint, upperBox),
+      fingerOnUpper: inside(finger, upperBox),
+      opacity: getComputedStyle(document.getElementById('logyq-v162-branch-preview')).opacity,
+    }
+  }, correction)
+  assert.equal(cardClaim.opacity, '0.55')
+  assert.equal(cardClaim.ghostOnUpper, true, JSON.stringify(cardClaim))
+  assert.equal(cardClaim.fingerOnUpper, false, JSON.stringify(cardClaim))
+  assert.equal(cardClaim.marked, 'Upper', JSON.stringify(cardClaim))
+  await page.evaluate((point) => {
+    document.getElementById('canvas').dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
+      isPrimary: true, button: 0, buttons: 0, clientX: point.x, clientY: point.y,
+    }))
+  }, correction)
+  await page.waitForFunction(() => !document.body.classList.contains('v2-branch-drag'))
+  assert.equal(await page.evaluate(() => {
+    const upperNode = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'Upper')
+    return upperNode?.children?.some((child) => child.data.name === 'Lower') || false
+  }), true)
+  assert.deepEqual(errors, [])
+  await cdp.detach()
+  await context.close()
+})
+
+test('LOGYQ Word Bank chip drag pans the map with the card-drag follow', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [{ name: 'Far' }],
+    }, ['Pan'])
+  })
+  await page.waitForSelector('#Dock .chip')
+  await page.waitForFunction(() => {
+    const far = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far')
+    return far?.getBoundingClientRect().width > 20 && !document.body.classList.contains('logyq-layout-settling')
+  })
+  const parked = await page.evaluate(() => {
+    const state = window.LOGYQBridge.core.state
+    const svg = document.getElementById('canvas')
+    const node = state.root.descendants().find((item) => item.data.name === 'Far')
+    const box = svg.getBoundingClientRect()
+    const tx = box.left + box.width + 170 - node.x
+    const ty = box.top + box.height / 2 - node.y
+    state._lastMoat = Date.now() + 30000
+    window.d3.select(svg).call(state.zoom.transform, window.d3.zoomIdentity.translate(tx, ty).scale(1))
+    state._lastMoat = Date.now() + 30000
+    const rect = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far').getBoundingClientRect()
+    const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === 'Pan').getBoundingClientRect()
+    const zoom = window.d3.zoomTransform(svg)
+    return {
+      tx: zoom.x,
+      farX: rect.left + rect.width / 2,
+      chip: { x: chip.left + chip.width / 2, y: chip.top + chip.height / 2 },
+      center: { x: box.left + box.width / 2, y: box.top + box.height / 2 },
+      edge: { x: box.right - 12, y: box.top + box.height / 2 },
+    }
+  })
+  assert.ok(parked.farX > parked.edge.x + 80, `Far should start off the right, x=${parked.farX} edge=${parked.edge.x}`)
+
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...parked.chip, id: 1 }] })
+  const steps = 6
+  for (let i = 1; i <= steps; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: parked.chip.x + ((parked.edge.x - parked.chip.x) * i) / steps,
+        y: parked.chip.y + ((parked.edge.y - parked.chip.y) * i) / steps,
+        id: 1,
+      }],
+    })
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(280)
+  const panned = await page.evaluate(() => {
+    const svg = document.getElementById('canvas')
+    const zoom = window.d3.zoomTransform(svg)
+    const rect = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far').getBoundingClientRect()
+    return {
+      tx: zoom.x,
+      farX: rect.left + rect.width / 2,
+      dragging: document.body.classList.contains('logyq-chip-drag'),
+    }
+  })
+  assert.equal(panned.dragging, true)
+  assert.ok(parked.tx - panned.tx > 24, `zoom x should drop, before=${parked.tx} after=${panned.tx}`)
+  assert.ok(parked.farX - panned.farX > 24, `Far should slide left, before=${parked.farX} after=${panned.farX}`)
+
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: parked.center.x, y: parked.center.y, id: 1 }],
+  })
+  await page.waitForTimeout(50)
+  const held = await page.evaluate(() => window.d3.zoomTransform(document.getElementById('canvas')).x)
+  await page.waitForTimeout(220)
+  const still = await page.evaluate(() => window.d3.zoomTransform(document.getElementById('canvas')).x)
+  assert.ok(Math.abs(still - held) < 2, `center hold should not keep panning, held=${held} still=${still}`)
+
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ ...parked.chip, id: 1 }],
+  })
+  await page.waitForTimeout(40)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await page.waitForFunction(() => !document.body.classList.contains('logyq-chip-drag'))
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Pan')), true)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'Pan')), false)
+  assert.deepEqual(errors, [])
+  await cdp.detach()
+  await context.close()
+})
+
+test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () => {
+  async function openBankMap(page, bank = ['Pop', 'Stay']) {
+    await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+    await waitForBoot(page)
+    await page.evaluate((words) => {
+      window.LOGYQPreview.app.hasOpenMap = true
+      document.body.classList.add('logyq-map-open')
+      document.body.classList.remove('logyq-home')
+      document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+      window.LOGYQBridge.loadMap({
+        name: 'Root',
+        color: '#2563eb',
+        children: [{ name: 'A' }, { name: 'B' }],
+      }, words)
+    }, bank)
+    await page.waitForFunction(() => document.querySelector('#Dock .chip')?.textContent === 'Pop')
+    await centerCard(page, 'A')
+  }
+
+  async function centerCard(page, name) {
+    await page.waitForFunction((label) => {
+      const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.getBoundingClientRect()
+      return rect && rect.width > 20 && rect.height > 20
+    }, name)
+    await page.waitForTimeout(320)
+    await page.evaluate((label) => {
+      const state = window.LOGYQBridge.core.state
+      state._lastMoat = Date.now()
+      try { clearTimeout(window.__centerSoonT) } catch (_error) {}
+      const svg = document.getElementById('canvas')
+      const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node.getBoundingClientRect()
+      const box = svg.getBoundingClientRect()
+      const dx = (box.left + box.width / 2) - (rect.left + rect.width / 2)
+      const dy = (box.top + box.height * 0.42) - (rect.top + rect.height / 2)
+      window.d3.select(svg).call(state.zoom.translateBy, dx, dy)
+      state._lastMoat = Date.now()
+      try { clearTimeout(window.__centerSoonT) } catch (_error) {}
+    }, name)
+    const placed = await page.waitForFunction((label) => {
+      const svg = document.getElementById('canvas')
+      const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.getBoundingClientRect()
+      const box = svg.getBoundingClientRect()
+      const dockTop = document.getElementById('Dock').getBoundingClientRect().top
+      if (!rect || rect.width < 20) return false
+      const cx = rect.left + rect.width / 2
+      const cy = rect.top + rect.height / 2
+      window.__centerCard = { label, cx, cy, box: { t: box.top, b: box.bottom, l: box.left, r: box.right }, dockTop }
+      return cx > box.left + 8 && cx < box.right - 8 && cy > box.top + 8 && cy < Math.min(box.bottom - 8, dockTop - 8)
+    }, name, { timeout: 4000 }).then(() => true).catch(() => false)
+    if (!placed) {
+      const info = await page.evaluate(() => window.__centerCard)
+      throw new Error(`card ${name} stayed off the canvas ${JSON.stringify(info)}`)
+    }
+  }
+
+  async function chipPoint(page, text) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === label)
+      const rect = node.getBoundingClientRect()
+      const x = rect.left + rect.width / 2
+      const y = rect.top + rect.height / 2
+      const hit = document.elementFromPoint(x, y)
+      return {
+        x,
+        y,
+        hitChip: !!hit?.closest?.('.chip'),
+        touchAction: getComputedStyle(node).touchAction,
+        draggable: node.draggable,
+      }
+    }, text)
+  }
+
+  async function cardPoint(page, name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+
+  async function touchPath(page, points) {
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: points[0].x, y: points[0].y, id: 1 }] })
+    for (let index = 1; index < points.length; index += 1) {
+      const from = points[index - 1]
+      const to = points[index]
+      const steps = 5
+      for (let i = 1; i <= steps; i += 1) {
+        await cdp.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{
+            x: from.x + ((to.x - from.x) * i) / steps,
+            y: from.y + ((to.y - from.y) * i) / steps,
+            id: 1,
+          }],
+        })
+        await page.waitForTimeout(16)
+      }
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+  }
+
+  async function touchDragAim(page, from, to, sample) {
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from.x, y: from.y, id: 1 }] })
+    const nudge = {
+      x: from.x + Math.sign(to.x - from.x || 1) * 18,
+      y: Math.max(70, from.y - 28),
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: nudge.x, y: nudge.y, id: 1 }] })
+    await page.waitForTimeout(40)
+    const lift = await page.evaluate((finger) => {
+      const rect = document.getElementById('logyq-chip-ghost')?.getBoundingClientRect()
+      if (!rect || rect.width < 1) return { x: 0, y: 0 }
+      return {
+        x: rect.left + rect.width / 2 - finger.x,
+        y: rect.top + rect.height / 2 - finger.y,
+      }
+    }, nudge)
+    const aimAt = async () => (typeof to === 'function' ? await to() : to)
+    let prev = nudge
+    const steps = 8
+    for (let i = 1; i <= steps; i += 1) {
+      const live = await aimAt()
+      const dest = { x: live.x - lift.x, y: live.y - lift.y }
+      const x = prev.x + (dest.x - prev.x) * 0.45
+      const y = prev.y + (dest.y - prev.y) * 0.45
+      prev = { x, y }
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y, id: 1 }],
+      })
+      await page.waitForTimeout(16)
+      if (sample && i === 4) await sample({ x, y })
+    }
+    const live = await aimAt()
+    let settled = { x: live.x - lift.x, y: live.y - lift.y }
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: settled.x, y: settled.y, id: 1 }],
+    })
+    await page.waitForTimeout(32)
+    const liveAgain = await aimAt()
+    settled = { x: liveAgain.x - lift.x, y: liveAgain.y - lift.y }
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: settled.x, y: settled.y, id: 1 }],
+    })
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+  }
+
+  async function touchDrag(page, from, to, sample) {
+    const cdp = await page.context().newCDPSession(page)
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: from.x, y: from.y, id: 1 }] })
+    const steps = 8
+    for (let i = 1; i <= steps; i += 1) {
+      const x = from.x + ((to.x - from.x) * i) / steps
+      const y = from.y + ((to.y - from.y) * i) / steps
+      await cdp.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: [{ x, y, id: 1 }],
+      })
+      await page.waitForTimeout(16)
+      if (sample && i === 4) await sample({ x, y })
+    }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+    await cdp.detach()
+  }
+
+  async function mouseDrag(page, from, to) {
+    await page.mouse.move(from.x, from.y)
+    await page.mouse.down()
+    await page.mouse.move(to.x, to.y, { steps: 12 })
+    await page.mouse.up()
+  }
+
+  const phone = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(phone)
+  const phonePage = await phone.newPage()
+  const phoneErrors = []
+  phonePage.on('pageerror', (error) => phoneErrors.push(error.message))
+  await openBankMap(phonePage)
+  assert.equal(await phonePage.locator('#logyq-bank-all').textContent(), 'All')
+  await phonePage.locator('#logyq-bank-all').tap()
+  assert.deepEqual(await phonePage.locator('#Dock .chip.is-outlined').allTextContents(), ['Pop', 'Stay'])
+  assert.equal(await phonePage.locator('#logyq-bank-all').textContent(), 'None')
+  await phonePage.locator('#logyq-bank-all').tap()
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').count(), 0)
+  assert.equal(await phonePage.locator('#logyq-bank-all').textContent(), 'All')
+
+  const pop = await chipPoint(phonePage, 'Pop')
+  assert.equal(pop.hitChip, true)
+  assert.equal(pop.touchAction, 'none')
+  assert.equal(pop.draggable, false)
+  const cardA = await cardPoint(phonePage, 'A')
+  await touchDragAim(phonePage, pop, () => cardPoint(phonePage, 'A'), async (point) => {
+    const ghost = await phonePage.evaluate(() => {
+      const stack = document.getElementById('logyq-chip-ghost')
+      const rect = stack?.getBoundingClientRect()
+      const chip = stack?.querySelector('.chip')
+      return {
+        text: chip?.textContent || '',
+        bottom: rect?.bottom ?? null,
+        opacity: chip ? getComputedStyle(chip).opacity : null,
+        lifting: document.querySelector('#Dock .chip.is-lifting')?.textContent || '',
+      }
+    })
+    assert.equal(ghost.text, 'Pop')
+    assert.equal(ghost.lifting, 'Pop')
+    assert.ok(Number(ghost.opacity) < 0.9)
+    assert.ok(ghost.bottom < point.y - 8)
+  })
+  await phonePage.waitForFunction(() => {
+    const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
+    return parent?.children?.some((child) => child.data.name === 'Pop')
+  })
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay'])
+  assert.equal(await phonePage.locator('#logyq-chip-ghost').count(), 0)
+
+  await phonePage.waitForFunction(() => !document.body.classList.contains('logyq-layout-settling'))
+  const stay = await chipPoint(phonePage, 'Stay')
+  await touchPath(phonePage, [stay, { x: stay.x, y: Math.max(64, stay.y - 160) }, stay])
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay'])
+  assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'Stay')), false)
+
+  const beforeTap = await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name).sort())
+  await phonePage.locator('#Dock .chip', { hasText: 'Stay' }).tap()
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').textContent(), 'Stay')
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay'])
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name).sort()), beforeTap)
+  await phonePage.locator('#Dock .chip', { hasText: 'Stay' }).tap()
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').count(), 0)
+
+  await phonePage.evaluate(() => window.LOGYQBridge.core.wordDock.addWords('Mint'))
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay', 'Mint'])
+  await centerCard(phonePage, 'A')
+  const gap = await phonePage.evaluate(() => {
+    const svg = document.getElementById('canvas')
+    const transform = window.d3.zoomTransform(svg)
+    const origin = svg.getBoundingClientRect()
+    const dockTop = document.getElementById('Dock').getBoundingClientRect().top
+    const nameOf = (uid) => window.LOGYQBridge.core.state.root.descendants().find((node) => node.data._uid === uid)?.data.name
+    const dets = window.LOGYQBridge.core.state.detectors.filter((det) => det.kind === 'sibling' || det.kind === 'edgeSibling')
+    for (const det of dets) {
+      const [px, py] = transform.apply([det.x + det.width / 2, det.y + Math.min(28, det.height / 2)])
+      const x = origin.left + px
+      const y = origin.top + py
+      if (x < 12 || y < 56 || x > innerWidth - 12 || y > dockTop - 12) continue
+      const names = window.LOGYQBridge.core.state.root.descendants()
+      const prev = nameOf(det.prevUid)
+      const next = nameOf(det.nextUid)
+      if (!prev || !next) continue
+      return {
+        x,
+        y,
+        gx: det.x + det.width / 2,
+        gy: det.y + Math.min(28, det.height / 2),
+        prev,
+        next,
+        parent: names.find((node) => node.data._uid === det.parentUid)?.data.name || 'Root',
+      }
+    }
+    return null
+  })
+  assert.ok(gap, 'sibling gap is on screen')
+  await touchDragAim(phonePage, await chipPoint(phonePage, 'Mint'), () => phonePage.evaluate((graph) => {
+    const svg = document.getElementById('canvas')
+    const origin = svg.getBoundingClientRect()
+    const [px, py] = window.d3.zoomTransform(svg).apply([graph.gx, graph.gy])
+    return { x: origin.left + px, y: origin.top + py }
+  }, gap))
+  await phonePage.waitForFunction((parentName) => {
+    const root = window.LOGYQBridge.core.state.root
+    const parent = parentName === root.data.name
+      ? root
+      : root.descendants().find((node) => node.data.name === parentName)
+    return parent?.children?.some((child) => child.data.name === 'Mint')
+      && !window.LOGYQBridge.core.state.wordBank.includes('Mint')
+  }, gap.parent)
+  const siblings = await phonePage.evaluate((parentName) => {
+    const root = window.LOGYQBridge.core.state.root
+    const parent = parentName === root.data.name
+      ? root
+      : root.descendants().find((node) => node.data.name === parentName)
+    return parent.children.map((node) => node.data.name)
+  }, gap.parent)
+  assert.ok(siblings.indexOf(gap.prev) < siblings.indexOf('Mint') && siblings.indexOf('Mint') < siblings.indexOf(gap.next))
+
+  await phonePage.evaluate(() => window.LOGYQBridge.core.wordDock.addWords('Miss'))
+  const miss = await phonePage.evaluate(() => {
+    const svg = document.getElementById('canvas')
+    const transform = window.d3.zoomTransform(svg)
+    const origin = svg.getBoundingClientRect()
+    const dockTop = document.getElementById('Dock').getBoundingClientRect().top
+    for (let y = origin.top + 64; y < dockTop - 16; y += 22) {
+      for (let x = origin.left + 10; x < origin.right - 10; x += 26) {
+        const [gx, gy] = transform.invert([x - origin.left, y - origin.top])
+        const drop = window.LOGYQBridge.core.detectors.pick({ x: gx, y: gy })
+        if (!drop || (drop.type !== 'node' && drop.type !== 'gap')) return { x, y, gx, gy }
+      }
+    }
+    return null
+  })
+  assert.ok(miss, 'empty canvas beside the tree is a miss')
+  const beforeMiss = await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.data.name)
+  await touchDragAim(phonePage, await chipPoint(phonePage, 'Miss'), () => phonePage.evaluate((graph) => {
+    const svg = document.getElementById('canvas')
+    const origin = svg.getBoundingClientRect()
+    const [px, py] = window.d3.zoomTransform(svg).apply([graph.gx, graph.gy])
+    return { x: origin.left + px, y: origin.top + py }
+  }, miss))
+  assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.data.name), beforeMiss)
+  assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Miss')), true)
+  assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'Miss')), false)
+
+  await phonePage.evaluate(() => {
+    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, ['Bare'])
+    window.LOGYQBridge.core.state.root = null
+  })
+  const bare = await chipPoint(phonePage, 'Bare')
+  await touchDragAim(phonePage, bare, { x: 180, y: 280 })
+  await phonePage.waitForFunction(() => window.LOGYQBridge.core.state.root?.data?.name === 'Bare')
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), [])
+
+  await phonePage.evaluate(() => {
+    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, ['First', 'Second'])
+    window.LOGYQBridge.core.state.root = null
+  })
+  await phonePage.locator('#Dock .chip', { hasText: 'First' }).tap()
+  await phonePage.locator('#Dock .chip', { hasText: 'Second' }).tap()
+  assert.deepEqual(await phonePage.locator('#Dock .chip.is-outlined').allTextContents(), ['First', 'Second'])
+  await touchDragAim(phonePage, await chipPoint(phonePage, 'Second'), { x: 180, y: 280 })
+  await phonePage.waitForFunction(() => window.LOGYQBridge.core.state.root?.data?.name === 'First')
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.children.map((node) => node.data.name)), ['Second'])
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), [])
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').count(), 0)
+
+  await phonePage.evaluate(() => {
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      color: '#2563eb',
+      children: [{ name: 'A' }],
+    }, ['Pop', 'Stay'])
+  })
+  await centerCard(phonePage, 'A')
+  await phonePage.locator('#Dock .chip', { hasText: 'Pop' }).tap()
+  await phonePage.locator('#Dock .chip', { hasText: 'Stay' }).tap()
+  await touchDragAim(phonePage, await chipPoint(phonePage, 'Stay'), () => cardPoint(phonePage, 'A'))
+  await phonePage.waitForFunction(() => {
+    const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
+    const names = parent?.children?.map((node) => node.data.name) || []
+    return names[0] === 'Pop' && names[1] === 'Stay'
+  })
+  assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), [])
+  assert.equal(await phonePage.locator('#Dock .chip.is-outlined').count(), 0)
+  assert.equal(await phonePage.locator('#logyq-paint-btn').count(), 1)
+  assert.equal(await phonePage.locator('[data-tool="mix"]').count(), 1)
+  assert.deepEqual(phoneErrors, [])
+  await phone.close()
+
+  const desktop = await newContext({ viewport: { width: 1440, height: 900 } })
+  await stubMaps(desktop)
+  const desktopPage = await desktop.newPage()
+  const desktopErrors = []
+  desktopPage.on('pageerror', (error) => desktopErrors.push(error.message))
+  await openBankMap(desktopPage)
+  await desktopPage.locator('#wordInput').fill('Typed')
+  await desktopPage.locator('#wordInput').press('Enter')
+  assert.deepEqual(await desktopPage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Pop', 'Stay', 'Typed'])
+  const desktopChip = await chipPoint(desktopPage, 'Pop')
+  assert.equal(desktopChip.hitChip, true)
+  await desktopPage.mouse.move(desktopChip.x, desktopChip.y)
+  await desktopPage.mouse.down()
+  const lifted = { x: desktopChip.x, y: Math.max(120, desktopChip.y - 160) }
+  await desktopPage.mouse.move(lifted.x, lifted.y, { steps: 8 })
+  const mouseGhost = await desktopPage.evaluate(() => {
+    const stack = document.getElementById('logyq-chip-ghost')
+    const rect = stack?.getBoundingClientRect()
+    return { text: stack?.querySelector('.chip')?.textContent || '', bottom: rect?.bottom ?? null }
+  })
+  assert.equal(mouseGhost.text, 'Pop')
+  assert.ok(mouseGhost.bottom < lifted.y - 8)
+  const desktopCard = await cardPoint(desktopPage, 'A')
+  const desktopLift = await desktopPage.evaluate((finger) => {
+    const rect = document.getElementById('logyq-chip-ghost')?.getBoundingClientRect()
+    if (!rect) return { x: 0, y: 0 }
+    return {
+      x: rect.left + rect.width / 2 - finger.x,
+      y: rect.top + rect.height / 2 - finger.y,
+    }
+  }, lifted)
+  await desktopPage.mouse.move(desktopCard.x - desktopLift.x, desktopCard.y - desktopLift.y, { steps: 8 })
+  await desktopPage.mouse.up()
+  await desktopPage.waitForFunction(() => {
+    const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
+    return parent?.children?.some((child) => child.data.name === 'Pop')
+  })
+  const stayDesk = await chipPoint(desktopPage, 'Stay')
+  await desktopPage.mouse.move(stayDesk.x, stayDesk.y)
+  await desktopPage.mouse.down()
+  await desktopPage.mouse.move(stayDesk.x, Math.max(80, stayDesk.y - 180), { steps: 8 })
+  await desktopPage.mouse.move(stayDesk.x, stayDesk.y, { steps: 8 })
+  await desktopPage.mouse.up()
+  assert.equal(await desktopPage.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Stay')), true)
+  assert.equal(await desktopPage.locator('#logyq-chip-ghost').count(), 0)
+  assert.deepEqual(desktopErrors, [])
+  await desktop.close()
+})
+
+test('LOGYQ repeated flicks keep the camera still and the touched card', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+
+  async function bootTree(tree, bank = []) {
+    await page.evaluate(({ tree, bank }) => {
+      window.LOGYQPreview.app.hasOpenMap = true
+      document.body.classList.add('logyq-map-open')
+      document.body.classList.remove('logyq-home')
+      document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+      window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+      window.LOGYQPreview.paint.active = false
+      window.LOGYQBridge.loadMap(tree, bank)
+    }, { tree, bank })
+    await page.waitForFunction(() => document.body.classList.contains('logyq-mobile-v162'))
+    await page.waitForFunction((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.getBoundingClientRect()
+      return rect && rect.width > 20 && rect.top > 40 && rect.bottom < window.innerHeight
+    }, tree.name)
+    let prev = await view()
+    for (let i = 0; i < 12; i += 1) {
+      await page.waitForTimeout(80)
+      const now = await view()
+      if (Math.hypot(now.x - prev.x, now.y - prev.y) < 0.4 && Math.abs(now.k - prev.k) < 0.001) break
+      prev = now
+    }
+  }
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        uid: node?.__data__?.data?._uid || '',
+      }
+    }, name)
+  }
+
+  async function view() {
+    return page.evaluate(() => {
+      const t = window.d3.zoomTransform(document.getElementById('canvas'))
+      return { x: t.x, y: t.y, k: t.k }
+    })
+  }
+
+  async function counts() {
+    return page.evaluate(() => ({
+      nodes: document.querySelectorAll('svg#canvas g.node').length,
+      overlap: window.LOGYQBridge.core.state.layoutOverlapCount || 0,
+      settling: !!window.LOGYQBridge.core.state.layoutSettling,
+      queued: !!window.LOGYQBridge.core.state.layoutFlushQueued,
+    }))
+  }
+
+  async function parentOfSelected() {
+    return page.evaluate(() => {
+      const uid = window.LOGYQBridge.getSelectedUid()
+      const node = window.LOGYQBridge.core.state.root?.descendants().find((item) => item.data?._uid === uid)
+      return {
+        uid,
+        parent: node?.parent ? (node.parent.data?.name ?? '') : null,
+        name: node?.data?.name ?? null,
+      }
+    })
+  }
+
+  async function settle() {
+    await page.waitForFunction(() => !window.LOGYQBridge.core.state.layoutSettling && !window.LOGYQBridge.core.state.layoutFlushQueued)
+  }
+
+  let pointerSerial = 40
+  async function play(points) {
+    const pointerId = pointerSerial++
+    const start = await view()
+    let max = 0
+    for (let i = 0; i < points.length; i += 1) {
+      const type = i === 0 ? 'pointerdown' : (i === points.length - 1 ? 'pointerup' : 'pointermove')
+      await page.evaluate(({ type, x, y, pointerId }) => {
+        const hit = document.elementFromPoint(x, y)
+        const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+        target.dispatchEvent(new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerType: 'touch',
+          pointerId,
+          isPrimary: true,
+          button: 0,
+          buttons: type === 'pointerup' ? 0 : 1,
+          clientX: x,
+          clientY: y,
+        }))
+      }, { type, x: points[i].x, y: points[i].y, pointerId })
+      if (points[i].wait) await page.waitForTimeout(points[i].wait)
+      const now = await view()
+      max = Math.max(max, Math.hypot(now.x - start.x, now.y - start.y))
+    }
+    await page.waitForTimeout(40)
+    const end = await view()
+    return { max, dx: end.x - start.x, dy: end.y - start.y }
+  }
+
+  function line(from, dx, dy, steps, wait) {
+    const points = []
+    for (let i = 0; i <= steps; i += 1) {
+      points.push({
+        x: from.x + (dx * i) / steps,
+        y: from.y + (dy * i) / steps,
+        wait: i === 0 ? 0 : wait,
+      })
+    }
+    return points
+  }
+
+  function creepDown(from) {
+    const points = [{ x: from.x, y: from.y, wait: 0 }]
+    for (let i = 1; i <= 6; i += 1) points.push({ x: from.x, y: from.y + i * 3, wait: 20 })
+    for (let i = 1; i <= 4; i += 1) points.push({ x: from.x, y: from.y + 18 + i * 16, wait: 12 })
+    return points
+  }
+
+  async function flickCard(name, dx, dy, { creep = false } = {}) {
+    const origin = await face(name)
+    const before = (await counts()).nodes
+    const motion = await play(creep ? creepDown(origin) : line(origin, dx, dy, 5, 14))
+    await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before)
+    const made = await parentOfSelected()
+    return { origin, motion, made, before }
+  }
+
+  await bootTree({
+    name: 'Root',
+    children: [
+      { name: 'A', children: [{ name: 'A1' }] },
+      { name: 'B' },
+    ],
+  })
+
+  const first = await flickCard('A', 0, 78, { creep: true })
+  assert.ok(first.motion.max < 6, `slow-start down-flick dragged the map ${first.motion.max.toFixed(1)}px`)
+  assert.ok(Math.hypot(first.motion.dx, first.motion.dy) < 2, 'flick must restore the camera')
+  assert.equal(first.made.parent, 'A')
+  await settle()
+
+  for (let i = 0; i < 6; i += 1) {
+    const name = i % 2 === 0 ? 'B' : 'A'
+    const again = await flickCard(name, 0, 76)
+    assert.ok(again.motion.max < 6, `repeat ${i} on ${name} drifted ${again.motion.max.toFixed(1)}px`)
+    assert.equal(again.made.parent, name)
+    await settle()
+  }
+
+  const overlapBefore = (await counts()).overlap
+  const rapidOrigin = await face('A')
+  const rapidBefore = (await counts()).nodes
+  const rapid1 = await play(line(rapidOrigin, 0, 76, 4, 10))
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, rapidBefore)
+  const mid = await face('A')
+  const rapid2 = await play(line(mid, 0, 76, 4, 10))
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, rapidBefore + 1)
+  await settle()
+  const rapidAfter = await counts()
+  assert.equal(rapidAfter.nodes, rapidBefore + 2)
+  assert.equal(rapidAfter.overlap, overlapBefore)
+  assert.ok(rapid1.max < 6 && rapid2.max < 6, 'a second flick during settle must not snap the map')
+  const latest = await parentOfSelected()
+  assert.equal(latest.parent, 'A', 'the second flick before settle still hits A')
+
+  await settle()
+  const left = await flickCard('B', -78, 8)
+  assert.equal(left.made.parent, 'Root', 'left flick adds a sibling under the parent')
+  assert.ok(left.motion.max < 6)
+  await settle()
+  const downAfterLeft = await flickCard('B', 0, 76)
+  assert.equal(downAfterLeft.made.parent, 'B')
+  assert.ok(downAfterLeft.motion.max < 6)
+
+  await settle()
+  const horizontal = await flickCard('A', 72, 18)
+  assert.equal(horizontal.made.parent, 'Root', 'a near-horizontal flick is a sibling, not a child')
+  assert.ok(horizontal.motion.max < 6)
+
+  await settle()
+  const rootUp = await flickCard('Root', 0, -78)
+  assert.equal(rootUp.made.parent, null, 'swipe-up wraps the root')
+  assert.ok(rootUp.motion.max < 6)
+  await settle()
+  const downOldRoot = await flickCard('Root', 0, 76)
+  assert.equal(downOldRoot.made.parent, 'Root')
+  assert.ok(downOldRoot.motion.max < 6)
+
+  const panFrom = await face('B')
+  const panStart = await view()
+  const panBefore = (await counts()).nodes
+  const panPoints = []
+  for (let i = 0; i <= 12; i += 1) {
+    panPoints.push({ x: panFrom.x + i * 4, y: panFrom.y + i * 3, wait: 45 })
+  }
+  await play(panPoints)
+  await page.waitForTimeout(60)
+  const panEnd = await view()
+  const panDelta = Math.hypot(panEnd.x - panStart.x, panEnd.y - panStart.y)
+  assert.equal((await counts()).nodes, panBefore, 'a long diagonal drag is a pan, not a flick')
+  assert.ok(panDelta > 8, `a diagonal pan still moves the map (${panDelta.toFixed(1)}px)`)
+  const afterPan = await flickCard('A', 0, 76, { creep: true })
+  assert.equal(afterPan.made.parent, 'A')
+  assert.ok(afterPan.motion.max < 6, 'a down-flick after a pan must not snap the map')
+
+  await page.evaluate(() => window.LOGYQBridge.mix(false))
+  await page.waitForTimeout(700)
+  await settle()
+  let mixPrev = await view()
+  for (let i = 0; i < 12; i += 1) {
+    await page.waitForTimeout(80)
+    const now = await view()
+    if (Math.hypot(now.x - mixPrev.x, now.y - mixPrev.y) < 0.4) break
+    mixPrev = now
+  }
+  const mixedName = await page.evaluate(() => {
+    const nodes = window.LOGYQBridge.core.state.root.descendants()
+    return nodes.find((node) => node.parent && node.data?.name)?.data?.name
+      || nodes.find((node) => node.parent)?.data?.name
+      || nodes[0].data.name
+  })
+  const afterMix = await flickCard(mixedName, 0, 74)
+  assert.equal(afterMix.made.parent, mixedName)
+  assert.ok(afterMix.motion.max < 6, 'a down-flick after Mix must not snap the map')
+
+  await settle()
+  const beforeUndo = (await counts()).nodes
+  await page.evaluate(() => window.LOGYQBridge.undo())
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length < count, beforeUndo)
+  await settle()
+  const afterUndo = await flickCard(mixedName, 0, 74)
+  assert.equal(afterUndo.made.parent, mixedName)
+  assert.ok(afterUndo.motion.max < 6)
+
+  await page.evaluate(() => window.LOGYQBridge.core.wordDock.addWords('Mint'))
+  await settle()
+  const chip = await page.evaluate(() => {
+    const el = Array.from(document.querySelectorAll('#Dock .chip')).find((node) => node.textContent.trim() === 'Mint')
+    const rect = el.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: chip.x, y: chip.y, id: 1 }] })
+  const nudge = { x: chip.x, y: Math.max(70, chip.y - 36) }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: nudge.x, y: nudge.y, id: 1 }] })
+  await page.waitForTimeout(40)
+  const lift = await page.evaluate((finger) => {
+    const rect = document.getElementById('logyq-chip-ghost')?.getBoundingClientRect()
+    if (!rect || rect.width < 1) return { x: 0, y: 0 }
+    return {
+      x: rect.left + rect.width / 2 - finger.x,
+      y: rect.top + rect.height / 2 - finger.y,
+    }
+  }, nudge)
+  let prev = nudge
+  for (let i = 1; i <= 8; i += 1) {
+    const live = await face(mixedName)
+    const dest = { x: live.x - lift.x, y: live.y - lift.y }
+    prev = { x: prev.x + (dest.x - prev.x) * 0.5, y: prev.y + (dest.y - prev.y) * 0.5 }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: prev.x, y: prev.y, id: 1 }] })
+    await page.waitForTimeout(16)
+  }
+  const landed = await face(mixedName)
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: landed.x - lift.x, y: landed.y - lift.y, id: 1 }],
+  })
+  await page.waitForTimeout(32)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await cdp.detach()
+  await page.waitForFunction((label) => {
+    const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === label)
+    return parent?.children?.some((child) => child.data.name === 'Mint')
+  }, mixedName)
+  await settle()
+  const afterBank = await flickCard(mixedName, 0, 74)
+  assert.equal(afterBank.made.parent, mixedName)
+  assert.ok(afterBank.motion.max < 6, 'a down-flick after a bank drop must not snap the map')
+
+  await bootTree({
+    name: 'Root',
+    children: [
+      { name: 'A', children: [{ name: 'A1' }] },
+      { name: 'B' },
+    ],
+  })
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: pointerId === 1,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const thumb = await page.evaluate(() => {
+    const height = window.innerHeight
+    const y = height * 0.5
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    for (let x = canvas.left + 8; x < canvas.right - 8; x += 12) {
+      const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+      if (!hit) return { x, y }
+    }
+    return { x: canvas.left + 10, y }
+  })
+  const castCard = await face('A')
+  const k0 = (await view()).k
+  await touch('pointerdown', thumb.x, thumb.y, 81)
+  await touch('pointerdown', castCard.x, castCard.y, 82)
+  await touch('pointermove', castCard.x, castCard.y + 30, 82)
+  await page.waitForTimeout(20)
+  await touch('pointermove', castCard.x, castCard.y + 70, 82)
+  await touch('pointerup', castCard.x, castCard.y + 70, 82)
+  await touch('pointerup', thumb.x, thumb.y, 81)
+  assert.ok(Math.abs((await view()).k - k0) < 0.02)
+  const nominated = await page.evaluate(() => {
+    const mercy = window.LOGYQPreview.gestures.smite.mercy
+    return mercy ? Array.from(mercy.marks.keys()).length : 0
+  })
+  assert.ok(nominated >= 2, 'the cast nominates the card and its subtree')
+
+  const a1 = await face('A1')
+  const execute = await play(creepDown(a1))
+  assert.ok(execute.max < 6, 'a cast execute flick must not drag the map')
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A1'))
+  await settle()
+  const afterExecute = await page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name))
+  assert.ok(afterExecute.includes('A'))
+  assert.ok(afterExecute.includes('B'))
+  const mercyLeft = await page.evaluate(() => {
+    const mercy = window.LOGYQPreview.gestures.smite.mercy
+    if (!mercy) return null
+    return {
+      committing: !!mercy.committing,
+      names: window.LOGYQBridge.core.state.root.descendants()
+        .filter((node) => mercy.marks.has(node.data._uid))
+        .map((node) => node.data.name),
+    }
+  })
+  assert.ok(mercyLeft, 'executing a child leaves the rest of the cast up')
+  assert.equal(mercyLeft.committing, false)
+  assert.ok(mercyLeft.names.includes('A'))
+
+  const aFace = await face('A')
+  const againCast = await play(creepDown(aFace))
+  assert.ok(againCast.max < 6, 'a second cast flick must not drag the map')
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A'))
+  await settle()
+  const afterSecond = await page.evaluate(() => ({
+    names: window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name),
+    mercy: window.LOGYQPreview.gestures.smite.mercy,
+  }))
+  assert.ok(afterSecond.names.includes('B'))
+  assert.ok(afterSecond.names.includes('Root'))
+  assert.equal(afterSecond.mercy, null)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ ends a cast when nothing is left on delete or Word Bank', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [
+        { name: 'A', children: [{ name: 'A1' }, { name: 'C' }] },
+        { name: 'B' },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'A')
+    const rect = node?.getBoundingClientRect()
+    return rect && rect.width > 20 && rect.bottom < window.innerHeight
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function castKids() {
+    const thumb = await page.evaluate(() => {
+      const y = window.innerHeight * 0.84
+      const canvas = document.getElementById('canvas').getBoundingClientRect()
+      for (let x = canvas.left + 8; x < canvas.right - 8; x += 14) {
+        const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+        if (!hit) return { x, y }
+      }
+      return { x: canvas.left + 12, y }
+    })
+    const card = await face('A')
+    await touch('pointerdown', thumb.x, thumb.y, 91)
+    await touch('pointerdown', card.x, card.y, 92)
+    await touch('pointermove', card.x, card.y + 70, 92)
+    await touch('pointerup', card.x, card.y + 70, 92)
+    await touch('pointerup', thumb.x, thumb.y, 91)
+    await page.waitForFunction(() => {
+      const mercy = window.LOGYQPreview.gestures.smite.mercy
+      return mercy && mercy.marks.size >= 2
+    })
+  }
+
+  async function tap(name, pointerId) {
+    const point = await face(name)
+    await touch('pointerdown', point.x, point.y, pointerId)
+    await touch('pointerup', point.x, point.y, pointerId)
+    await page.waitForTimeout(40)
+  }
+
+  async function chrome() {
+    return page.evaluate(() => ({
+      mercy: !!window.LOGYQPreview.gestures.smite.mercy,
+      washes: document.querySelectorAll('rect.logyq-smite-wash').length,
+      clocks: document.querySelectorAll('path.logyq-smite-clock').length,
+      names: window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name),
+    }))
+  }
+
+  await castKids()
+  await tap('A1', 93)
+  await tap('A1', 94)
+  let mid = await chrome()
+  assert.equal(mid.mercy, true, 'one kid still on delete keeps the cast')
+  await tap('C', 95)
+  await tap('C', 96)
+  let cleared = await chrome()
+  assert.equal(cleared.mercy, false, 'the last kid leaving delete or Word Bank ends the cast')
+  assert.equal(cleared.washes, 0)
+  assert.equal(cleared.clocks, 0)
+  await page.waitForTimeout(250)
+  cleared = await chrome()
+  assert.equal(cleared.mercy, false, 'the timer does not start again after a white-only cast')
+  assert.equal(cleared.clocks, 0)
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_white_cleared.png' })
+
+  await castKids()
+  await tap('A1', 97)
+  await tap('A1', 98)
+  const flick = await face('C')
+  await touch('pointerdown', flick.x, flick.y, 99)
+  await touch('pointermove', flick.x, flick.y + 40, 99)
+  await page.waitForTimeout(16)
+  await touch('pointerup', flick.x, flick.y + 74, 99)
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'C'))
+  const afterFlick = await chrome()
+  assert.equal(afterFlick.mercy, false, 'a flick that leaves only white cards ends the cast')
+  assert.equal(afterFlick.washes, 0)
+  assert.equal(afterFlick.clocks, 0)
+  assert.ok(afterFlick.names.includes('A1'))
+
+  await page.evaluate(() => {
+    const smite = window.LOGYQPreview.gestures.smite
+    if (smite.raf) cancelAnimationFrame(smite.raf)
+    smite.raf = 0
+    const a = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
+    const a1 = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A1')
+    const mercy = {
+      marks: new Map([[a.data._uid, 'normal'], [a1.data._uid, 'normal']]),
+      castUid: a.data._uid,
+      zone: 'middle',
+      direction: 'down',
+      remaining: 9000,
+      lastTick: performance.now(),
+      interacting: false,
+      committing: false,
+    }
+    smite.mercies = [mercy]
+    smite.mercy = mercy
+  })
+  await tap('A', 100)
+  const afterParent = await chrome()
+  assert.equal(afterParent.mercy, false, 'tapping the clock card clears a white-only cast')
+  assert.equal(afterParent.washes, 0)
+  assert.equal(afterParent.clocks, 0)
+  await page.waitForTimeout(200)
+  assert.equal((await chrome()).mercy, false)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [{ name: 'Cut' }, { name: 'Bank' }, { name: 'Out', children: [{ name: 'Pale' }] }],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Root', 'Cut', 'Bank', 'Out', 'Pale'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    return node && node.getBoundingClientRect().width > 20
+  }))
+
+  async function paint(marksFor) {
+    return page.evaluate(async (mode) => {
+      const core = window.LOGYQBridge.core
+      const byName = (label) => core.state.root.descendants().find((node) => node.data.name === label)
+      const root = byName('Root')
+      const cut = byName('Cut')
+      const bank = byName('Bank')
+      const out = byName('Out')
+      const pale = byName('Pale')
+      const marks = mode === 'pocket'
+        ? new Map([
+          [root.data._uid, 'red'],
+          [cut.data._uid, 'red'],
+          [bank.data._uid, 'amber'],
+          [out.data._uid, 'normal'],
+          [pale.data._uid, 'normal'],
+        ])
+        : new Map([
+          [root.data._uid, 'red'],
+          [cut.data._uid, 'normal'],
+          [bank.data._uid, 'normal'],
+          [out.data._uid, 'normal'],
+          [pale.data._uid, 'normal'],
+        ])
+      const smite = window.LOGYQPreview.gestures.smite
+      smite.mercies = [{
+        marks,
+        castUid: root.data._uid,
+        zone: 'middle',
+        direction: 'down',
+        remaining: 9000,
+        lastTick: performance.now(),
+        interacting: false,
+        committing: false,
+      }]
+      smite.mercy = smite.mercies[0]
+      const canvas = document.getElementById('canvas')
+      const box = canvas.getBoundingClientRect()
+      let point = null
+      for (let y = box.top + 8; y < box.bottom - 8 && !point; y += 18) {
+        for (let x = box.left + 8; x < box.right - 8; x += 18) {
+          const hit = document.elementFromPoint(x, y)
+          if (hit && canvas.contains(hit) && !hit.closest('g.node, g.hit-slot')) {
+            point = { x, y }
+            break
+          }
+        }
+      }
+      const target = point ? document.elementFromPoint(point.x, point.y) : canvas
+      const fire = (type, buttons) => target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 7,
+        isPrimary: true, button: 0, buttons, clientX: point?.x || 12, clientY: point?.y || 80,
+      }))
+      fire('pointerdown', 1)
+      fire('pointerup', 0)
+      const read = (name) => {
+        const link = Array.from(document.querySelectorAll('svg#canvas g.links path.link')).find((el) => el.__data__?.target?.data?.name === name)
+        const ants = []
+        let sib = link?.nextElementSibling
+        while (sib && sib.classList?.contains('logyq-smite-ant')) {
+          ants.push({
+            role: sib.dataset.antRole,
+            weight: sib.dataset.smiteWeight || null,
+            width: sib.style.strokeWidth,
+            stroke: sib.getAttribute('stroke'),
+            opacity: sib.style.opacity,
+            animation: getComputedStyle(sib).animationName,
+            duration: getComputedStyle(sib).animationDuration,
+          })
+          sib = sib.nextElementSibling
+        }
+        const stopsOf = (id) => id ? Array.from(document.getElementById(id)?.querySelectorAll('stop') || []).map((stop) => stop.getAttribute('stop-color')) : []
+        const linkStyle = link ? getComputedStyle(link) : null
+        return {
+          weight: link?.dataset?.smiteWeight || null,
+          edge: link?.dataset?.smiteEdge || null,
+          width: linkStyle?.strokeWidth || null,
+          opacity: linkStyle?.opacity || null,
+          stops: stopsOf(link?.dataset?.smiteGrad),
+          haloStops: stopsOf(link?.dataset?.smiteHalo),
+          ants,
+        }
+      }
+      const card = (name) => {
+        const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === name)
+        const wash = node?.querySelector('rect.logyq-smite-wash')
+        const clock = node?.querySelector('path.logyq-smite-clock')
+        return {
+          stroke: wash?.getAttribute('stroke') || null,
+          outline: wash?.dataset?.smiteOutline || null,
+          animation: wash ? getComputedStyle(wash).animationName : null,
+          duration: wash ? getComputedStyle(wash).animationDuration : null,
+          clock: !!clock,
+          clockAnimation: clock ? getComputedStyle(clock).animationName : null,
+        }
+      }
+      return {
+        cut: read('Cut'),
+        bank: read('Bank'),
+        out: read('Out'),
+        pale: read('Pale'),
+        cards: { root: card('Root'), bank: card('Bank'), out: card('Out') },
+      }
+    }, marksFor)
+  }
+
+  const pocket = await paint('pocket')
+  const slate = '#7C8491'
+  assert.deepEqual(pocket.cut.stops, ['#ff0000', '#ff0000'])
+  assert.deepEqual(pocket.cut.haloStops, ['#ffffff', '#ffffff'])
+  assert.deepEqual(pocket.bank.stops, ['#ff0000', '#ffa100'])
+  assert.deepEqual(pocket.bank.haloStops, ['#ffffff', '#ffffff'])
+  assert.deepEqual(pocket.out.stops, ['#ff0000', '#ffffff'])
+  assert.deepEqual(pocket.out.haloStops, ['#ffffff', slate])
+  assert.deepEqual(pocket.pale.stops, ['#ffffff', '#ffffff'])
+  assert.deepEqual(pocket.pale.haloStops, [slate, slate])
+  for (const edge of [pocket.cut, pocket.bank, pocket.out, pocket.pale]) {
+    assert.equal(edge.weight, 'strong')
+    assert.equal(edge.edge, '1')
+    assert.equal(edge.width, '3.5px')
+    assert.equal(edge.opacity, '1')
+    const color = edge.ants.find((ant) => ant.role === 'color')
+    const halo = edge.ants.find((ant) => ant.role === 'halo')
+    assert.equal(color.weight, 'strong')
+    assert.equal(color.width, '3.5px')
+    assert.equal(color.opacity, '1')
+    assert.ok(color.stroke.startsWith('url('))
+    assert.ok(halo.stroke.startsWith('url('))
+    assert.notEqual(halo.stroke, '#ffffff')
+    assert.equal(halo.width, '6px')
+    assert.ok(edge.ants.every((ant) => ant.animation === 'logyq-smite-march' && (ant.duration === '1.4s' || ant.duration === '1400ms')))
+  }
+  assert.ok(pocket.cards.bank.duration === '1.4s' || pocket.cards.bank.duration === '1400ms')
+  assert.ok(pocket.cards.out.duration === '1.4s' || pocket.cards.out.duration === '1400ms')
+  assert.equal(pocket.cards.root.clock, true)
+  assert.equal(pocket.cards.root.clockAnimation, 'none')
+  assert.equal(pocket.cards.bank.stroke, '#ffa100')
+  assert.equal(pocket.cards.bank.animation, 'logyq-smite-march')
+  assert.equal(pocket.cards.out.stroke, '#ffffff')
+  assert.equal(pocket.cards.out.animation, 'logyq-smite-march')
+
+  const parentOnly = await paint('parent')
+  assert.equal(parentOnly.cut.edge, null)
+  assert.equal(parentOnly.bank.edge, null)
+  assert.equal(parentOnly.out.edge, null)
+  assert.equal(parentOnly.pale.edge, null)
+  assert.equal(parentOnly.bank.ants.length, 0)
+  assert.equal(parentOnly.out.ants.length, 0)
+  assert.equal(parentOnly.pale.ants.length, 0)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ one-thumb tap arms green and a swipe nominates by target', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      children: [
+        {
+          name: 'Fruit',
+          children: [
+            { name: 'Lime', children: [{ name: 'Peel' }] },
+            { name: 'Zest' },
+          ],
+        },
+        { name: 'Meat' },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Food', 'Fruit', 'Lime', 'Peel', 'Zest', 'Meat'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    return node && node.getBoundingClientRect().width > 20
+  }))
+
+  const read = () => page.evaluate(() => {
+    const chrome = (name) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === name)
+      const wash = node?.querySelector('rect.logyq-smite-wash')
+      const clock = node?.querySelector('path.logyq-smite-clock')
+      return {
+        arm: node?.dataset?.smiteArm || null,
+        stroke: wash?.getAttribute('stroke') || null,
+        fill: wash?.getAttribute('fill') || null,
+        ants: wash?.dataset?.smiteOutline || null,
+        animation: wash ? getComputedStyle(wash).animationName : null,
+        width: wash ? getComputedStyle(wash).strokeWidth : null,
+        clock: node?.dataset?.smiteClock === '1',
+        clockStroke: clock?.getAttribute('stroke') || null,
+      }
+    }
+    const smite = window.LOGYQPreview.gestures.smite
+    const marked = []
+    smite.mercies[0]?.marks?.forEach((mark, uid) => {
+      const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data._uid === uid)
+      marked.push(`${node?.data?.name}:${mark}`)
+    })
+    marked.sort()
+    return {
+      armed: smite.armed,
+      mercies: smite.mercies.length,
+      cast: smite.mercy?.castUid || null,
+      marked,
+      editor: !!document.querySelector('.node-edit-input'),
+      cards: {
+        Food: chrome('Food'),
+        Fruit: chrome('Fruit'),
+        Lime: chrome('Lime'),
+        Peel: chrome('Peel'),
+        Zest: chrome('Zest'),
+        Meat: chrome('Meat'),
+      },
+    }
+  })
+
+  const point = async (name) => page.evaluate((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    const face = node?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')
+    const rect = (face || node).getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right }
+  }, name)
+
+  const gesture = async (x, y, dx, dy) => {
+    await page.evaluate(({ x, y, dx, dy }) => {
+      const canvas = document.getElementById('canvas')
+      const fire = (type, px, py) => {
+        const hit = document.elementFromPoint(px, py)
+        const target = hit && canvas.contains(hit) ? hit : canvas
+        target.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 8,
+          isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: px, clientY: py,
+        }))
+      }
+      fire('pointerdown', x, y)
+      fire('pointerup', x + dx, y + dy)
+    }, { x, y, dx, dy })
+  }
+
+  const reset = async () => {
+    await page.evaluate(() => {
+      const smite = window.LOGYQPreview.gestures.smite
+      smite.mercies = []
+      smite.mercy = null
+      window.LOGYQPreview.gestures.clearSmiteArm()
+    })
+  }
+
+  const meat = await point('Meat')
+  await gesture(meat.x, meat.y, 0, 0)
+  await gesture(meat.x, meat.y, 0, 0)
+  await page.waitForSelector('.node-edit-input')
+  const editing = await read()
+  assert.equal(editing.editor, true)
+  assert.equal(editing.cards.Meat.arm, null)
+  await page.locator('.node-edit-input').press('Escape')
+  await page.waitForFunction(() => !document.querySelector('.node-edit-input'))
+
+  await reset()
+  const fruit = await point('Fruit')
+  await gesture(fruit.x, fruit.y, 0, 0)
+  const armed = await read()
+  assert.equal(armed.cards.Fruit.arm, '1')
+  assert.equal(armed.cards.Fruit.stroke, '#16a34a')
+  assert.equal(armed.cards.Fruit.fill, 'none')
+  assert.equal(armed.cards.Fruit.ants, null)
+  assert.equal(armed.cards.Fruit.animation, 'none')
+  assert.equal(armed.cards.Fruit.width, '3.5px')
+  assert.equal(armed.cards.Fruit.clock, false)
+  assert.equal(armed.mercies, 0)
+  assert.equal(armed.editor, false)
+
+  const empty = await page.evaluate(() => {
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    for (let y = 70; y < 220; y += 18) {
+      for (let x = canvas.left + 12; x < canvas.right - 12; x += 22) {
+        const hit = document.elementFromPoint(x, y)
+        if (hit && !hit.closest('g.node, g.hit-slot, .node-edit-stack')) return { x, y }
+      }
+    }
+    return null
+  })
+  assert.ok(empty, 'need an empty map point')
+  await gesture(empty.x, empty.y, 0, 0)
+  const cleared = await read()
+  assert.equal(cleared.armed, null)
+  assert.equal(cleared.cards.Fruit.arm, null)
+  assert.equal(cleared.cards.Fruit.stroke, null)
+
+  const swipe = async (name, dx, dy) => {
+    const spot = await point(name)
+    await gesture(spot.x, spot.y, dx, dy)
+  }
+
+  await swipe('Fruit', 0, 0)
+  await swipe('Fruit', 0, 80)
+  const branch = await read()
+  assert.deepEqual(branch.marked, ['Fruit:red', 'Lime:red', 'Peel:red', 'Zest:red'])
+  assert.equal(branch.cards.Fruit.clock, true)
+  assert.equal(branch.cards.Fruit.clockStroke, '#ff0000')
+  assert.equal(branch.cards.Lime.stroke, '#ff0000')
+  assert.equal(branch.cards.Lime.ants, 'ants')
+  assert.equal(branch.cards.Peel.stroke, '#ff0000')
+  assert.equal(branch.cards.Zest.stroke, '#ff0000')
+  assert.equal(branch.cards.Meat.stroke, null)
+  assert.equal(branch.cards.Food.stroke, null)
+  assert.equal(branch.cards.Fruit.arm, null)
+
+  await reset()
+  await swipe('Fruit', 0, 0)
+  await swipe('Fruit', 0, -80)
+  const alone = await read()
+  assert.deepEqual(alone.marked, ['Fruit:red'])
+  assert.equal(alone.cards.Fruit.clock, true)
+  assert.equal(alone.cards.Fruit.clockStroke, '#ff0000')
+  assert.equal(alone.cards.Lime.stroke, null)
+  assert.equal(alone.cards.Peel.stroke, null)
+  assert.equal(alone.cards.Zest.stroke, null)
+  assert.equal(alone.cards.Food.stroke, null)
+
+  await reset()
+  await swipe('Fruit', 0, 0)
+  await swipe('Lime', 0, 80)
+  const kids = await read()
+  assert.deepEqual(kids.marked, ['Lime:red', 'Zest:red'])
+  assert.equal(kids.cards.Fruit.clock, true)
+  assert.equal(kids.cards.Fruit.stroke, null)
+  assert.equal(kids.cards.Lime.stroke, '#ff0000')
+  assert.equal(kids.cards.Zest.stroke, '#ff0000')
+  assert.equal(kids.cards.Peel.stroke, null)
+  assert.equal(kids.cards.Meat.stroke, null)
+
+  await reset()
+  await swipe('Fruit', 0, 0)
+  await swipe('Zest', 0, 80)
+  const kidsAgain = await read()
+  assert.deepEqual(kidsAgain.marked, ['Lime:red', 'Zest:red'])
+  assert.equal(kidsAgain.cards.Peel.stroke, null)
+  assert.equal(kidsAgain.cards.Fruit.clock, true)
+
+  await reset()
+  await swipe('Fruit', 0, 0)
+  await swipe('Fruit', -80, 0)
+  const bank = await read()
+  assert.deepEqual(bank.marked, ['Fruit:amber', 'Lime:amber', 'Peel:amber', 'Zest:amber'])
+  assert.equal(bank.cards.Fruit.clock, true)
+  assert.equal(bank.cards.Fruit.clockStroke, '#ffa100')
+  assert.equal(bank.cards.Lime.stroke, '#ffa100')
+  assert.equal(bank.cards.Peel.stroke, '#ffa100')
+  assert.equal(bank.cards.Zest.stroke, '#ffa100')
+  assert.equal(bank.cards.Meat.stroke, null)
+
+  await reset()
+  await swipe('Fruit', 0, 0)
+  await swipe('Lime', -80, 0)
+  const kidBank = await read()
+  assert.deepEqual(kidBank.marked, ['Lime:amber', 'Zest:amber'])
+  assert.equal(kidBank.cards.Fruit.clock, true)
+  assert.equal(kidBank.cards.Fruit.clockStroke, '#ffa100')
+  assert.equal(kidBank.cards.Lime.stroke, '#ffa100')
+  assert.equal(kidBank.cards.Zest.stroke, '#ffa100')
+  assert.equal(kidBank.cards.Peel.stroke, null)
+
+  await reset()
+  await swipe('Fruit', 0, 0)
+  await swipe('Peel', 0, 80)
+  const deeper = await read()
+  assert.equal(deeper.mercies, 0)
+  assert.equal(deeper.cards.Lime.stroke, null)
+  assert.equal(deeper.cards.Zest.stroke, null)
+  assert.equal(deeper.cards.Fruit.clock, false)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ rename mirrors onto the card and clears the green focus', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({ name: 'Food', children: [{ name: 'Fruit' }] }, [])
+  })
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit')
+    return node && node.getBoundingClientRect().width > 20
+  })
+  const read = () => page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.dataset.editFocus === '1')
+      || Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit' || el.__data__?.data?._uid)
+    const fruit = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => {
+      const uid = el.__data__?.data?._uid
+      return uid && uid === document.querySelector('.node-edit-input')?.dataset?.editUid
+    }) || Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit' || el.__data__?.data?.name === 'Peel' || el.__data__?.data?.name === 'Citrus')
+    const ring = fruit?.querySelector('rect.logyq-edit-focus')
+    const label = fruit?.querySelector('text.label')
+    return {
+      name: fruit?.__data__?.data?.name ?? null,
+      label: label?.textContent || '',
+      focus: fruit?.dataset?.editFocus || null,
+      arm: fruit?.dataset?.smiteArm || null,
+      armed: window.LOGYQPreview.gestures.smite.armed,
+      stroke: ring?.getAttribute('stroke') || null,
+      fill: ring?.getAttribute('fill') || null,
+      width: ring ? getComputedStyle(ring).strokeWidth : null,
+      value: document.querySelector('.node-edit-input')?.value ?? null,
+      editing: window.LOGYQBridge.core.state.editingUid,
+    }
+  })
+  const point = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const tap = async () => {
+    await page.evaluate(({ x, y }) => {
+      const canvas = document.getElementById('canvas')
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      const fire = (type) => target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
+        isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+      }))
+      fire('pointerdown')
+      fire('pointerup')
+    }, point)
+  }
+  await tap()
+  await tap()
+  await page.waitForSelector('.node-edit-input')
+  await page.waitForFunction(() => document.activeElement?.classList?.contains('node-edit-input'))
+  const opened = await read()
+  assert.equal(opened.value, 'Fruit')
+  assert.equal(opened.focus, '1')
+  assert.equal(opened.stroke, '#16a34a')
+  assert.equal(opened.fill, 'none')
+  assert.equal(opened.width, '3.5px')
+  assert.equal(opened.arm, null)
+  assert.equal(opened.armed, null)
+  await page.locator('.node-edit-input').pressSequentially('Pe')
+  const mid = await read()
+  assert.equal(mid.value, 'FruitPe')
+  assert.equal(mid.name, 'FruitPe')
+  assert.equal(mid.label, 'FruitPe')
+  assert.equal(mid.focus, '1')
+  await page.locator('.node-edit-input').fill('Peel')
+  const typed = await read()
+  assert.equal(typed.name, 'Peel')
+  assert.equal(typed.label, 'Peel')
+  await page.locator('.node-edit-cancel').click()
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
+  const cancelled = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit')
+    return {
+      name: node?.__data__?.data?.name ?? null,
+      label: node?.querySelector('text.label')?.textContent || '',
+      focus: document.querySelectorAll('rect.logyq-edit-focus').length,
+      armed: window.LOGYQPreview.gestures.smite.armed,
+    }
+  })
+  assert.equal(cancelled.name, 'Fruit')
+  assert.equal(cancelled.label, 'Fruit')
+  assert.equal(cancelled.focus, 0)
+  assert.equal(cancelled.armed, null)
+  const again = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const tapAt = async (spot) => {
+    await page.evaluate(({ x, y }) => {
+      const canvas = document.getElementById('canvas')
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      const fire = (type) => target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
+        isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+      }))
+      fire('pointerdown')
+      fire('pointerup')
+    }, spot)
+  }
+  await tapAt(again)
+  await tapAt(again)
+  const second = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y)
+    return {
+      editing: window.LOGYQBridge.core.state.editingUid,
+      editors: document.querySelectorAll('.node-edit-input').length,
+      hit: hit ? `${hit.tagName}.${hit.getAttribute('class') || ''}` : null,
+      armed: window.LOGYQPreview.gestures.smite.armed,
+    }
+  }, again)
+  assert.equal(second.editors, 1, JSON.stringify(second))
+  await page.locator('.node-edit-input').fill('Citrus')
+  const live = await read()
+  assert.equal(live.name, 'Citrus')
+  assert.equal(live.label, 'Citrus')
+  assert.equal(live.stroke, '#16a34a')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
+  const saved = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Citrus')
+    return {
+      name: node?.__data__?.data?.name ?? null,
+      label: node?.querySelector('text.label')?.textContent || '',
+      focus: document.querySelectorAll('rect.logyq-edit-focus').length,
+      armed: window.LOGYQPreview.gestures.smite.armed,
+    }
+  })
+  assert.equal(saved.name, 'Citrus')
+  assert.equal(saved.label, 'Citrus')
+  assert.equal(saved.focus, 0)
+  assert.equal(saved.armed, null)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ an ancestor cast absorbs a nested branch and disjoint branches stay live', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [
+        { name: 'A', children: [{ name: 'B', children: [{ name: 'B1' }] }] },
+        { name: 'C' },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => ['A', 'B', 'B1', 'C'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    return node && node.getBoundingClientRect().width > 20
+  }))
+  const report = await page.evaluate(() => {
+    const core = window.LOGYQBridge.core
+    const byName = (label) => core.state.root.descendants().find((node) => node.data.name === label)
+    const uid = (label) => byName(label).data._uid
+    const clock = (label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      return node?.dataset?.smiteClock === '1'
+    }
+    const gestures = window.LOGYQPreview.gestures
+    gestures.smite.mercies = []
+    gestures.smite.mercy = null
+    const child = gestures.openSmiteCast({
+      uid: uid('B'),
+      direction: 'right',
+      ids: [uid('B'), uid('B1')],
+    })
+    const nested = gestures.smite.mercies[0]
+    nested.marks.set(uid('B1'), 'amber')
+    const ancestor = gestures.openSmiteCast({
+      uid: uid('A'),
+      direction: 'right',
+      ids: [uid('A'), uid('B'), uid('B1')],
+    })
+    const absorbed = {
+      child,
+      ancestor,
+      count: gestures.smite.mercies.length,
+      castUid: gestures.smite.mercy?.castUid,
+      primaryIsA: gestures.smite.mercy?.castUid === uid('A'),
+      marks: [...(gestures.smite.mercy?.marks || [])],
+      clocks: { a: clock('A'), b: clock('B'), b1: clock('B1'), c: clock('C') },
+    }
+    gestures.smite.mercies = []
+    gestures.smite.mercy = null
+    const left = gestures.openSmiteCast({
+      uid: uid('A'),
+      direction: 'right',
+      ids: [uid('A'), uid('B'), uid('B1')],
+    })
+    const right = gestures.openSmiteCast({
+      uid: uid('C'),
+      direction: 'left',
+      ids: [uid('C')],
+    })
+    const live = gestures.smite.mercies.map((mercy) => mercy.castUid)
+    return {
+      absorbed,
+      disjoint: {
+        left,
+        right,
+        count: gestures.smite.mercies.length,
+        live,
+        clocks: { a: clock('A'), b: clock('B'), c: clock('C') },
+        a: live.includes(uid('A')),
+        c: live.includes(uid('C')),
+      },
+    }
+  })
+  assert.equal(report.absorbed.child, 'clear')
+  assert.equal(report.absorbed.ancestor, 'absorb')
+  assert.equal(report.absorbed.count, 1)
+  assert.equal(report.absorbed.primaryIsA, true)
+  assert.deepEqual(report.absorbed.marks.map((entry) => entry[1]), ['red', 'red', 'amber'])
+  assert.equal(report.absorbed.clocks.a, true)
+  assert.equal(report.absorbed.clocks.b, false)
+  assert.equal(report.absorbed.clocks.b1, false)
+  assert.equal(report.disjoint.left, 'clear')
+  assert.equal(report.disjoint.right, 'clear')
+  assert.equal(report.disjoint.count, 2)
+  assert.equal(report.disjoint.a, true)
+  assert.equal(report.disjoint.c, true)
+  assert.equal(report.disjoint.clocks.a, true)
+  assert.equal(report.disjoint.clocks.c, true)
+  assert.equal(report.disjoint.clocks.b, false)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ partial smite conclude redraws connectors with the cards', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [
+        { name: 'Gone' },
+        { name: 'Stay', children: [{ name: 'Leaf' }] },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Root', 'Gone', 'Stay', 'Leaf'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    return node && node.getBoundingClientRect().width > 20
+  }))
+  await page.evaluate(() => window.LOGYQBridge.core.treeManager.autoFit())
+  await page.waitForFunction(() => {
+    const names = ['Root', 'Gone', 'Stay']
+    return names.every((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.querySelector('rect:not(.grabzone)')?.getBoundingClientRect()
+      return rect && rect.top > 40 && rect.bottom < window.innerHeight - 80 && rect.left > 0 && rect.right < window.innerWidth
+    })
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const canvas = document.getElementById('canvas')
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+        isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const planted = await page.evaluate(() => {
+    const core = window.LOGYQBridge.core
+    const byName = (label) => core.state.root.descendants().find((node) => node.data.name === label)
+    const root = byName('Root')
+    const gone = byName('Gone')
+    const stay = byName('Stay')
+    const leaf = byName('Leaf')
+    const mercy = {
+      marks: new Map([
+        [root.data._uid, 'red'],
+        [gone.data._uid, 'red'],
+        [stay.data._uid, 'red'],
+        [leaf.data._uid, 'amber'],
+      ]),
+      castUid: root.data._uid,
+      zone: 'middle',
+      direction: 'down',
+      remaining: 9000,
+      lastTick: performance.now(),
+      interacting: false,
+      committing: false,
+    }
+    const smite = window.LOGYQPreview.gestures.smite
+    smite.mercies = [mercy]
+    smite.mercy = mercy
+    const stayLink = Array.from(document.querySelectorAll('svg#canvas g.links path.link')).find((link) => link.__data__?.target?.data?.name === 'Stay')
+    return { before: stayLink?.getAttribute('d') || '' }
+  })
+  assert.ok(planted.before)
+
+  const gone = await face('Gone')
+  await touch('pointerdown', gone.x, gone.y, 41)
+  await touch('pointerup', gone.x, gone.y + 74, 41)
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'Gone'))
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.layoutSettling)
+
+  const geometry = await page.evaluate(() => {
+    const vLink = window.LOGYQBridge.core.visual.vLink
+    const links = Array.from(document.querySelectorAll('svg#canvas g.links path.link')).map((link) => {
+      const name = link.__data__?.target?.data?.name || ''
+      const want = vLink(link.__data__)
+      const d = link.getAttribute('d') || ''
+      return { name, d, want, match: d === want }
+    })
+    const ants = Array.from(document.querySelectorAll('svg#canvas path.logyq-smite-ant')).map((path) => {
+      let link = path.previousElementSibling
+      while (link && !link.classList?.contains('link')) link = link.previousElementSibling
+      return {
+        d: path.getAttribute('d') || '',
+        link: link?.getAttribute('d') || '',
+        match: (path.getAttribute('d') || '') === (link?.getAttribute('d') || ''),
+      }
+    })
+    return {
+      names: window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name),
+      links,
+      ants,
+      mercy: window.LOGYQPreview.gestures.smite.mercies.length,
+    }
+  })
+  assert.deepEqual(geometry.names.slice().sort(), ['Leaf', 'Root', 'Stay'])
+  assert.equal(geometry.mercy, 1, 'the rest of the cast stays live')
+  assert.ok(geometry.links.length >= 2, 'root, stay, and leaf still have connectors')
+  for (const link of geometry.links) {
+    assert.equal(link.match, true, `${link.name} connector should sit on the new layout`)
+  }
+  const stay = geometry.links.find((link) => link.name === 'Stay')
+  assert.ok(stay)
+  assert.notEqual(stay.d, planted.before, 'the stay connector must leave its pre-conclude curve')
+  assert.ok(geometry.ants.length >= 2, 'cast ants should still be on the live edges')
+  for (const ant of geometry.ants) assert.equal(ant.match, true, 'cast ants should follow the link they decorate')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ clears white outlines on the midfield parents Ashley photographed', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      children: [
+        { name: 'Fruit', children: [{ name: 'Apple' }, { name: 'Banana' }] },
+        { name: 'Meat', children: [{ name: 'Chicken' }, { name: 'Beef' }] },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => {
+    const names = ['Food', 'Fruit', 'Meat', 'Apple', 'Banana', 'Chicken', 'Beef']
+    return names.every((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.getBoundingClientRect()
+      return rect && rect.width > 20 && rect.top > 40 && rect.bottom < window.innerHeight
+    })
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function castKidsOfFood() {
+    const thumb = await page.evaluate(() => {
+      const canvas = document.getElementById('canvas').getBoundingClientRect()
+      const yStart = Math.floor(window.innerHeight * (2 / 3)) + 8
+      for (let y = window.innerHeight - 6; y >= yStart; y -= 10) {
+        for (let x = canvas.left + 6; x < canvas.right - 6; x += 12) {
+          const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+          if (!hit) return { x, y }
+        }
+      }
+      return null
+    })
+    assert.ok(thumb, 'bottom third needs an empty thumb park')
+    const card = await face('Food')
+    await touch('pointerdown', thumb.x, thumb.y, 111)
+    await touch('pointerdown', card.x, card.y, 112)
+    await touch('pointermove', card.x, card.y + 70, 112)
+    await touch('pointerup', card.x, card.y + 70, 112)
+    await touch('pointerup', thumb.x, thumb.y, 111)
+    await page.waitForFunction(() => window.LOGYQPreview.gestures.smite.mercy?.marks?.size === 2)
+  }
+
+  async function tap(name, pointerId) {
+    const point = await face(name)
+    await touch('pointerdown', point.x, point.y, pointerId)
+    await touch('pointerup', point.x, point.y, pointerId)
+    await page.waitForTimeout(40)
+  }
+
+  async function chrome() {
+    return page.evaluate(() => {
+      const read = (label) => {
+        const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+        const wash = node?.querySelector('rect.logyq-smite-wash')
+        const clock = node?.querySelector('path.logyq-smite-clock')
+        const raw = wash ? (wash.getAttribute('stroke') || '') : ''
+        const stroke = raw === 'rgb(255, 0, 0)' ? '#ff0000' : (raw === 'rgb(255, 255, 255)' ? '#ffffff' : (raw === 'rgb(255, 161, 0)' ? '#ffa100' : (raw || null)))
+        return {
+          stroke,
+          ants: wash?.dataset?.smiteOutline || null,
+          clock: !!clock,
+        }
+      }
+      const mercy = window.LOGYQPreview.gestures.smite.mercy
+      const root = window.LOGYQBridge.core.state.root
+      const nameOf = (uid) => root.descendants().find((node) => node.data._uid === uid)?.data?.name || null
+      return {
+        mercy: !!mercy,
+        raf: window.LOGYQPreview.gestures.smite.raf || 0,
+        remaining: mercy ? mercy.remaining : null,
+        marks: mercy ? [...mercy.marks.entries()].map(([uid, mark]) => [nameOf(uid), mark]).sort() : [],
+        names: root.descendants().map((node) => node.data.name),
+        Food: read('Food'),
+        Fruit: read('Fruit'),
+        Meat: read('Meat'),
+        Apple: read('Apple'),
+        Banana: read('Banana'),
+        Chicken: read('Chicken'),
+        Beef: read('Beef'),
+      }
+    })
+  }
+
+  await castKidsOfFood()
+  let nominated = await chrome()
+  assert.deepEqual(nominated.marks, [['Fruit', 'red'], ['Meat', 'red']])
+  assert.equal(nominated.Food.clock, true)
+  assert.equal(nominated.Food.stroke, null)
+  assert.equal(nominated.Fruit.stroke, '#ff0000')
+  assert.equal(nominated.Meat.stroke, '#ff0000')
+  for (const kid of ['Apple', 'Banana', 'Chicken', 'Beef']) {
+    assert.equal(nominated[kid].stroke, null, `${kid} stays quiet during a kids-only cast`)
+  }
+
+  await tap('Fruit', 113)
+  await tap('Fruit', 114)
+  const oneWhite = await chrome()
+  assert.equal(oneWhite.mercy, true, 'Meat still on delete keeps the cast')
+  assert.equal(oneWhite.Fruit.stroke, '#ffffff')
+  assert.equal(oneWhite.Fruit.ants, 'ants')
+  assert.equal(oneWhite.Meat.stroke, '#ff0000')
+  assert.equal(oneWhite.Apple.stroke, null)
+
+  await tap('Meat', 115)
+  await tap('Meat', 116)
+  let cleared = await chrome()
+  assert.equal(cleared.mercy, false, 'Fruit and Meat both white ends the cast')
+  assert.equal(cleared.raf, 0, 'the mercy timer does not keep a frame')
+  for (const name of ['Food', 'Fruit', 'Meat', 'Apple', 'Banana', 'Chicken', 'Beef']) {
+    assert.equal(cleared[name].stroke, null, `${name} has no outline after the cast ends`)
+    assert.equal(cleared[name].clock, false)
+  }
+  assert.deepEqual(cleared.names.slice().sort(), ['Apple', 'Banana', 'Beef', 'Chicken', 'Food', 'Fruit', 'Meat'])
+  await page.waitForTimeout(300)
+  cleared = await chrome()
+  assert.equal(cleared.mercy, false)
+  assert.equal(cleared.raf, 0)
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_food_white_cleared.png' })
+
+  await page.evaluate(() => {
+    const smite = window.LOGYQPreview.gestures.smite
+    if (smite.raf) cancelAnimationFrame(smite.raf)
+    smite.raf = 0
+    const root = window.LOGYQBridge.core.state.root
+    const uid = (label) => root.descendants().find((node) => node.data.name === label).data._uid
+    const mercy = {
+      marks: new Map([[uid('Fruit'), 'normal'], [uid('Meat'), 'normal']]),
+      castUid: uid('Food'),
+      zone: 'bottom',
+      direction: 'down',
+      remaining: 9000,
+      lastTick: performance.now(),
+      interacting: false,
+      committing: false,
+    }
+    smite.mercies = [mercy]
+    smite.mercy = mercy
+  })
+  const empty = await page.evaluate(() => {
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    for (let y = 80; y < window.innerHeight - 8; y += 14) {
+      for (let x = canvas.left + 6; x < canvas.right - 6; x += 16) {
+        const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+        if (!hit) return { x, y }
+      }
+    }
+    return null
+  })
+  assert.ok(empty)
+  await touch('pointerdown', empty.x, empty.y, 117)
+  await touch('pointerup', empty.x, empty.y, 117)
+  const stuck = await chrome()
+  assert.equal(stuck.mercy, true)
+  assert.equal(stuck.Food.stroke, null)
+  assert.equal(stuck.Food.clock, false)
+  assert.equal(stuck.Fruit.stroke, '#ffffff')
+  assert.equal(stuck.Fruit.ants, 'ants')
+  assert.equal(stuck.Meat.stroke, '#ffffff')
+  assert.equal(stuck.Meat.ants, 'ants')
+  for (const kid of ['Apple', 'Banana', 'Chicken', 'Beef']) {
+    assert.equal(stuck[kid].stroke, null)
+    assert.equal(stuck[kid].clock, false)
+  }
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_food_white_stuck.png' })
+
+  await tap('Food', 118)
+  const afterFood = await chrome()
+  assert.equal(afterFood.mercy, false, 'tapping Food clears the white-only midfield cast')
+  assert.equal(afterFood.raf, 0)
+  assert.equal(afterFood.Fruit.stroke, null)
+  assert.equal(afterFood.Meat.stroke, null)
+  assert.equal(afterFood.Food.clock, false)
+  await page.waitForTimeout(300)
+  assert.equal((await chrome()).mercy, false)
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_food_after_parent.png' })
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ phone edit uses a keyboard field and does not move the map', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      children: [{ name: 'Fruit' }],
+    }, [])
+  })
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit')
+    const rect = node?.getBoundingClientRect()
+    return rect && rect.width > 20 && rect.bottom < window.innerHeight
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid: node?.__data__?.data?._uid }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function view() {
+    return page.evaluate(() => {
+      const t = window.d3.zoomTransform(document.getElementById('canvas'))
+      return { x: t.x, y: t.y, k: t.k }
+    })
+  }
+
+  function sameCamera(before, after, label) {
+    assert.ok(Math.abs(after.k - before.k) < 0.02, `${label} must not zoom before=${before.k} after=${after.k}`)
+    assert.ok(Math.hypot(after.x - before.x, after.y - before.y) < 2, `${label} must not pan before=${before.x},${before.y} after=${after.x},${after.y}`)
+  }
+
+  await page.waitForFunction(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    const prev = window.__logyqCamSettle
+    const now = performance.now()
+    const still = !!(prev && Math.abs(prev.k - t.k) < 0.001 && Math.hypot(prev.x - t.x, prev.y - t.y) < 0.5)
+    window.__logyqCamSettle = { x: t.x, y: t.y, k: t.k, since: still ? prev.since : now }
+    return still && now - prev.since > 150
+  })
+  const before = await view()
+  const fruit = await face('Fruit')
+  await touch('pointerdown', fruit.x, fruit.y, 11)
+  await touch('pointerup', fruit.x, fruit.y, 11)
+  await touch('pointerdown', fruit.x, fruit.y, 12)
+  await touch('pointerup', fruit.x, fruit.y, 12)
+  await page.waitForSelector('.node-edit-stack')
+  assert.equal(await page.evaluate(() => document.querySelector('.node-edit-stack').classList.contains('is-placed')), false, 'bar stays hidden while the keyboard rises')
+  await page.waitForSelector('.node-edit-stack.is-placed', { timeout: 2000 })
+  await page.waitForFunction(() => {
+    const stack = document.querySelector('.node-edit-stack')
+    const box = stack?.getBoundingClientRect()
+    return stack?.dataset?.drawerSettled === '1' && box && Math.abs(window.innerHeight - box.bottom) < 2
+  })
+  const opened = await page.evaluate(() => {
+    const input = document.querySelector('.node-edit-input')
+    const dock = document.querySelector('.node-edit-dock')
+    const cancel = document.querySelector('.node-edit-cancel')
+    const box = dock.getBoundingClientRect()
+    const field = input.getBoundingClientRect()
+    const cross = cancel.getBoundingClientRect()
+    const card = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit').getBoundingClientRect()
+    const dockStyle = getComputedStyle(dock)
+    const fieldStyle = getComputedStyle(input)
+    return {
+      uid: window.LOGYQBridge.core.state.editingUid,
+      value: input.value,
+      docked: field.bottom > window.innerHeight - 80 && field.top > card.bottom,
+      left: box.left,
+      right: box.right,
+      bottomGap: window.innerHeight - box.bottom,
+      radius: dockStyle.borderRadius,
+      fontSize: fieldStyle.fontSize,
+      done: document.querySelectorAll('.node-edit-done').length,
+      cancel: cancel?.getAttribute('aria-label') || '',
+      crossAbove: cross.bottom <= box.top + 1,
+      crossRound: getComputedStyle(cancel).borderRadius,
+      crossLeft: cross.left,
+      crossWidth: cross.width,
+      shadow: dockStyle.boxShadow,
+      placed: document.querySelector('.node-edit-stack').classList.contains('is-placed'),
+      drawerFrom: Number(document.querySelector('.node-edit-stack').dataset.drawerFrom || 0),
+      inner: window.innerHeight,
+    }
+  })
+  assert.equal(opened.uid, fruit.uid)
+  assert.equal(opened.value, 'Fruit')
+  assert.equal(opened.docked, true)
+  assert.ok(opened.left <= 1, `rename bar must be full bleed, left=${opened.left}`)
+  assert.ok(opened.right >= 389, `rename bar must reach the right edge, right=${opened.right}`)
+  assert.ok(opened.bottomGap < 2, `rename bar must sit on the bottom edge, gap=${opened.bottomGap}`)
+  assert.equal(opened.radius, '0px')
+  assert.equal(opened.fontSize, '16px')
+  assert.equal(opened.done, 0)
+  assert.equal(opened.cancel, 'Cancel rename')
+  assert.equal(opened.crossAbove, true)
+  assert.equal(opened.crossRound, '999px')
+  assert.equal(opened.placed, true)
+  assert.ok(opened.crossLeft >= 12, `X must sit in from the screen edge, left=${opened.crossLeft}`)
+  assert.ok(opened.crossWidth >= 44, `X hit target must be at least 44px, width=${opened.crossWidth}`)
+  assert.ok(opened.shadow && opened.shadow !== 'none', 'bar shadow must separate it from the map')
+  assert.match(opened.shadow, /12px/, `top shadow must stay a light wash, shadow=${opened.shadow}`)
+  assert.doesNotMatch(opened.shadow, /52px/, `top shadow must not wash up the map, shadow=${opened.shadow}`)
+  assert.ok(opened.drawerFrom > opened.inner + 8, `rename bar must slide up from below the screen, from=${opened.drawerFrom}`)
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/edit_rename_bar.png' })
+  sameCamera(before, await view(), 'double-tap')
+  await page.waitForTimeout(280)
+  sameCamera(before, await view(), 'double-tap after the old zoom delay')
+  await page.locator('.node-edit-input').fill('Citrus')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction(() => {
+    const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data.name === 'Citrus')
+    return node && !window.LOGYQBridge.core.state.editingUid
+  })
+  const renamed = await page.evaluate((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
+  }, fruit.uid)
+  assert.equal(renamed, 'Citrus')
+  sameCamera(before, await view(), 'Enter')
+
+  const citrus = await face('Citrus')
+  const count = await page.locator('svg#canvas g.node').count()
+  await touch('pointerdown', citrus.x, citrus.y, 13)
+  await touch('pointermove', citrus.x, citrus.y + 40, 13)
+  await page.waitForTimeout(16)
+  await touch('pointerup', citrus.x, citrus.y + 74, 13)
+  await page.waitForFunction((n) => document.querySelectorAll('svg#canvas g.node').length > n, count)
+  const created = await page.evaluate((parentUid) => {
+    const selected = window.LOGYQBridge.core.state.selectedUid
+    const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data._uid === selected)
+    return {
+      editors: document.querySelectorAll('.node-edit-input').length,
+      selected,
+      name: node?.data?.name ?? null,
+      parent: node?.parent?.data?._uid || null,
+    }
+  }, citrus.uid)
+  assert.equal(created.editors, 0, 'flick-create must not open the rename bar')
+  assert.notEqual(created.selected, citrus.uid)
+  assert.equal(created.parent, citrus.uid)
+  assert.equal(created.name, '')
+  sameCamera(before, await view(), 'flick-create')
+  const blank = await page.evaluate((uid) => {
+    const face = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?._uid === uid)
+    const box = face?.querySelector('rect:not(.grabzone)') || face
+    const rect = box.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }, created.selected)
+  await touch('pointerdown', blank.x, blank.y, 131)
+  await touch('pointerup', blank.x, blank.y, 131)
+  await touch('pointerdown', blank.x, blank.y, 132)
+  await touch('pointerup', blank.x, blank.y, 132)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), created.selected)
+  await page.locator('.node-edit-input').fill('Lime')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Lime'
+  }, created.selected)
+  sameCamera(before, await view(), 'Enter on the new card')
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+
+  const lime = await page.evaluate((uid) => {
+    const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data._uid === uid)
+    const face = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?._uid === uid)
+    const box = face?.querySelector('rect:not(.grabzone)') || face
+    const rect = box.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, parent: node?.parent?.data?.name }
+  }, created.selected)
+  assert.equal(lime.parent, 'Citrus')
+  await touch('pointerdown', lime.x, lime.y, 14)
+  await touch('pointerup', lime.x, lime.y, 14)
+  await touch('pointerdown', lime.x, lime.y, 15)
+  await touch('pointerup', lime.x, lime.y, 15)
+  await page.waitForSelector('.node-edit-input')
+  await page.locator('.node-edit-input').fill('Discard me')
+  await page.locator('.node-edit-input').press('Escape')
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
+  assert.equal(await page.evaluate((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
+  }, created.selected), 'Lime')
+  sameCamera(before, await view(), 'Escape')
+
+  await touch('pointerdown', lime.x, lime.y, 16)
+  await touch('pointerup', lime.x, lime.y, 16)
+  await touch('pointerdown', lime.x, lime.y, 17)
+  await touch('pointerup', lime.x, lime.y, 17)
+  await page.waitForSelector('.node-edit-cancel')
+  await page.locator('.node-edit-input').evaluate((el) => {
+    el.focus()
+    el.value = ''
+    el.setSelectionRange(0, 0)
+  })
+  await page.locator('.node-edit-input').pressSequentially('Discard me')
+  const panSpot = await page.evaluate(() => {
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    for (let y = 80; y < window.innerHeight - 120; y += 16) {
+      for (let x = canvas.left + 8; x < canvas.right - 8; x += 18) {
+        const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot, .node-edit-stack')
+        if (!hit) return { x, y }
+      }
+    }
+    return { x: 40, y: 180 }
+  })
+  const panBefore = await view()
+  await page.evaluate(({ x, y }) => {
+    const canvas = document.getElementById('canvas')
+    const point = (px, py) => new Touch({ identifier: 7, target: canvas, clientX: px, clientY: py })
+    canvas.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, cancelable: true, touches: [point(x, y)], targetTouches: [point(x, y)], changedTouches: [point(x, y)] }))
+    canvas.dispatchEvent(new TouchEvent('touchmove', { bubbles: true, cancelable: true, touches: [point(x + 90, y + 48)], targetTouches: [point(x + 90, y + 48)], changedTouches: [point(x + 90, y + 48)] }))
+    canvas.dispatchEvent(new TouchEvent('touchend', { bubbles: true, cancelable: true, touches: [], targetTouches: [], changedTouches: [point(x + 90, y + 48)] }))
+  }, panSpot)
+  const panned = await view()
+  assert.ok(Math.hypot(panned.x - panBefore.x, panned.y - panBefore.y) > 30, `map must pan while the rename bar is open, before=${panBefore.x},${panBefore.y} after=${panned.x},${panned.y}`)
+  const duringPan = await page.evaluate((uid) => {
+    return {
+      editing: window.LOGYQBridge.core.state.editingUid,
+      name: window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name,
+      value: document.querySelector('.node-edit-input')?.value || '',
+    }
+  }, created.selected)
+  assert.equal(duringPan.editing, created.selected)
+  assert.equal(duringPan.name, 'Discard me')
+  assert.equal(duringPan.value, 'Discard me')
+  const pinchBefore = await view()
+  await page.evaluate(({ x, y }) => {
+    const canvas = document.getElementById('canvas')
+    const fire = (type, px, py, pointerId) => {
+      canvas.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: pointerId === 21,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: px,
+        clientY: py,
+      }))
+    }
+    fire('pointerdown', x, y, 21)
+    fire('pointerdown', x + 160, y, 22)
+    fire('pointermove', x + 24, y, 21)
+    fire('pointermove', x + 136, y, 22)
+    fire('pointermove', x + 50, y, 21)
+    fire('pointermove', x + 90, y, 22)
+    fire('pointerup', x + 50, y, 21)
+    fire('pointerup', x + 90, y, 22)
+  }, panSpot)
+  const pinched = await view()
+  assert.ok(pinchBefore.k - pinched.k > 0.05, `map must pinch-zoom while renaming, before=${pinchBefore.k} after=${pinched.k}`)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), created.selected)
+  await page.locator('.node-edit-cancel').click()
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
+  assert.equal(await page.evaluate((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
+  }, created.selected), 'Lime')
+  const afterCancel = await view()
+  assert.ok(Math.abs(afterCancel.k - pinched.k) < 0.05, 'cancel must not snap the zoom')
+  assert.ok(Math.hypot(afterCancel.x - pinched.x, afterCancel.y - pinched.y) < 2, 'cancel must not snap the pan')
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ saved-map blank double-tap does not rename the root', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      _uid: 'n1',
+      children: [{ name: 'Fruit', _uid: 'n2' }],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Food', 'Fruit'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    const rect = node?.getBoundingClientRect()
+    return rect && rect.width > 20
+  }))
+  await page.waitForTimeout(400)
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid: node?.__data__?.data?._uid }
+    }, name)
+  }
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const canvas = document.getElementById('canvas')
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+        isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const fruit = await face('Fruit')
+  const before = await page.locator('svg#canvas g.node').count()
+  await touch('pointerdown', fruit.x, fruit.y, 11)
+  await touch('pointerup', fruit.x, fruit.y + 74, 11)
+  await page.waitForFunction((n) => document.querySelectorAll('svg#canvas g.node').length > n, before)
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.layoutSettling)
+  const blank = await page.evaluate(() => {
+    const rootUid = window.LOGYQBridge.core.state.root.data._uid
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => !(el.__data__?.data?.name || '').trim())
+    const uid = node?.__data__?.data?._uid || null
+    if (!uid) return { uid: null, rootUid }
+    const svg = document.getElementById('canvas')
+    const box = node.querySelector('rect:not(.grabzone)') || node
+    const rect = box.getBoundingClientRect()
+    const cy = rect.top + rect.height / 2
+    const targetY = Math.min(window.innerHeight * 0.55, window.innerHeight - 180)
+    if (cy < 80 || cy > window.innerHeight - 120) {
+      const t = window.d3.zoomTransform(svg)
+      const next = window.d3.zoomIdentity.translate(t.x, t.y + (targetY - cy)).scale(t.k)
+      svg.__zoom = next
+      const root = Array.from(svg.children).find((child) => child.tagName?.toLowerCase() === 'g')
+      if (root) root.setAttribute('transform', next.toString())
+    }
+    const placed = box.getBoundingClientRect()
+    return {
+      x: placed.left + placed.width / 2,
+      y: placed.top + placed.height / 2,
+      uid,
+      rootUid,
+    }
+  })
+  assert.ok(blank.uid)
+  assert.notEqual(blank.uid, blank.rootUid, 'a new blank must not reuse the root uid')
+  const onBlank = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y)
+    const host = hit?.closest?.('g.node')
+    return host?.__data__?.data?._uid || null
+  }, { x: blank.x, y: blank.y })
+  assert.equal(onBlank, blank.uid, 'double-tap point must be the blank face')
+  await touch('pointerdown', blank.x, blank.y, 21)
+  await touch('pointerup', blank.x, blank.y, 21)
+  await touch('pointerdown', blank.x, blank.y, 22)
+  await touch('pointerup', blank.x, blank.y, 22)
+  await page.waitForSelector('.node-edit-input')
+  const bound = await page.evaluate(() => ({
+    editing: window.LOGYQBridge.core.state.editingUid,
+    stamp: document.querySelector('.node-edit-input')?.dataset?.editUid || null,
+    value: document.querySelector('.node-edit-input')?.value ?? null,
+  }))
+  assert.equal(bound.editing, blank.uid)
+  assert.equal(bound.stamp, blank.uid)
+  assert.equal(bound.value, '')
+  await page.locator('.node-edit-input').fill('Lime')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Lime'
+  }, blank.uid)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.root.data.name), 'Food')
+  assert.equal(await page.evaluate(() => {
+    const fruit = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data._uid === 'n2')
+    return fruit?.data?.name
+  }), 'Fruit')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ double-tap renames only the card under the finger', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      children: [{ name: 'Fruit' }, { name: 'Meat' }],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Food', 'Fruit', 'Meat'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    const rect = node?.getBoundingClientRect()
+    return rect && rect.width > 20
+  }))
+  await page.waitForFunction(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    const prev = window.__logyqCamSettle
+    const now = performance.now()
+    const still = !!(prev && Math.abs(prev.k - t.k) < 0.001 && Math.hypot(prev.x - t.x, prev.y - t.y) < 0.5)
+    window.__logyqCamSettle = { x: t.x, y: t.y, k: t.k, since: still ? prev.since : now }
+    return still && now - prev.since > 150
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid: node?.__data__?.data?._uid }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const canvas = document.getElementById('canvas')
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function label(uid) {
+    return page.evaluate((id) => {
+      return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, id)?.name
+    }, uid)
+  }
+
+  const fruit = await face('Fruit')
+  const beforeFlick = await page.locator('svg#canvas g.node').count()
+  await touch('pointerdown', fruit.x, fruit.y, 21)
+  await touch('pointerup', fruit.x, fruit.y + 74, 21)
+  await page.waitForFunction((n) => document.querySelectorAll('svg#canvas g.node').length > n, beforeFlick)
+  const flicked = await page.evaluate((parentUid) => {
+    const selected = window.LOGYQBridge.core.state.selectedUid
+    const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data._uid === selected)
+    return {
+      editors: document.querySelectorAll('.node-edit-input, .node-edit-stack').length,
+      selected,
+      parent: node?.parent?.data?._uid || null,
+      name: node?.data?.name ?? null,
+    }
+  }, fruit.uid)
+  assert.equal(flicked.editors, 0, 'flick-create must not open the rename bar')
+  assert.equal(flicked.parent, fruit.uid)
+  assert.equal(flicked.name, '')
+  const food = await face('Food')
+  const meatCard = await face('Meat')
+  assert.equal(await label(food.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Fruit')
+  assert.equal(await label(meatCard.uid), 'Meat')
+
+  async function doubleTap(label, pointerId) {
+    const card = await face(label)
+    await touch('pointerdown', card.x, card.y, pointerId)
+    await touch('pointerup', card.x, card.y, pointerId)
+    await touch('pointerdown', card.x, card.y, pointerId + 1)
+    await touch('pointerup', card.x, card.y, pointerId + 1)
+    await page.waitForSelector('.node-edit-input')
+    assert.equal(await page.evaluate(() => document.querySelector('.node-edit-stack')?.classList.contains('is-placed') === true), false, 'bar waits for the keyboard')
+    await page.waitForSelector('.node-edit-stack.is-placed', { timeout: 2000 })
+    await page.waitForFunction(() => {
+      const stack = document.querySelector('.node-edit-stack')
+      const box = stack?.getBoundingClientRect()
+      return stack?.dataset?.drawerSettled === '1' && box && Math.abs(window.innerHeight - box.bottom) < 2
+    })
+    return card
+  }
+
+  const opened = await doubleTap('Fruit', 31)
+  const bound = await page.evaluate(() => {
+    const input = document.querySelector('.node-edit-input')
+    const stack = document.querySelector('.node-edit-stack')
+    const box = stack.getBoundingClientRect()
+    return {
+      uid: window.LOGYQBridge.core.state.editingUid,
+      stamp: input.dataset.editUid,
+      value: input.value,
+      left: box.left,
+      right: box.right,
+      bottom: box.bottom,
+      inner: window.innerHeight,
+    }
+  })
+  assert.equal(bound.uid, opened.uid)
+  assert.equal(bound.stamp, opened.uid)
+  assert.equal(bound.value, 'Fruit')
+  assert.ok(bound.left <= 1 && bound.right >= 389, 'bar stays full width')
+  assert.ok(Math.abs(bound.inner - bound.bottom) < 2, 'bar stays flush')
+  const hop = await page.evaluate(() => {
+    const stack = document.querySelector('.node-edit-stack')
+    const before = stack.getBoundingClientRect().bottom
+    let writes = 0
+    const obs = new MutationObserver(() => { writes += 1 })
+    obs.observe(stack, { attributes: true, attributeFilter: ['style'] })
+    const vv = window.visualViewport
+    vv?.dispatchEvent(new Event('resize'))
+    vv?.dispatchEvent(new Event('scroll'))
+    window.dispatchEvent(new Event('resize'))
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        obs.disconnect()
+        resolve({ before, after: stack.getBoundingClientRect().bottom, writes })
+      }))
+    })
+  })
+  assert.equal(hop.writes, 0, 'viewport events must not reposition the bar again')
+  assert.ok(Math.abs(hop.after - hop.before) < 1, 'bar must not hop')
+  await page.locator('.node-edit-input').fill('Berry')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Berry'
+  }, opened.uid)
+  assert.equal(await label(food.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Berry')
+  assert.equal(await label(meatCard.uid), 'Meat')
+  assert.equal(await label(flicked.selected), '')
+
+  const meat = await doubleTap('Meat', 41)
+  await page.locator('.node-edit-input').fill('Steak')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Steak'
+  }, meat.uid)
+  assert.equal(await label(food.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Berry')
+  assert.equal(await label(meat.uid), 'Steak')
+  assert.equal(await label(flicked.selected), '')
+
+  const foodEdit = await doubleTap('Food', 51)
+  assert.equal(await page.evaluate(() => document.querySelector('.node-edit-input').value), 'Food')
+  await page.locator('.node-edit-input').fill('Nope')
+  await page.evaluate(() => {
+    const cancel = document.querySelector('.node-edit-cancel')
+    const rect = cancel.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const base = { bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 7, isPrimary: true, button: 0, clientX: x, clientY: y }
+    cancel.dispatchEvent(new PointerEvent('pointerdown', { ...base, buttons: 1 }))
+    cancel.dispatchEvent(new PointerEvent('pointerup', { ...base, buttons: 0 }))
+  })
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
+  assert.equal(await page.evaluate((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name
+  }, foodEdit.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Berry')
+  assert.equal(await label(meat.uid), 'Steak')
+
+  const blankFace = await page.evaluate((uid) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?._uid === uid)
+    const box = node?.querySelector('rect:not(.grabzone)') || node
+    const rect = box.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, uid }
+  }, flicked.selected)
+  await touch('pointerdown', blankFace.x, blankFace.y, 61)
+  await touch('pointerup', blankFace.x, blankFace.y, 61)
+  await touch('pointerdown', blankFace.x, blankFace.y, 62)
+  await touch('pointerup', blankFace.x, blankFace.y, 62)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), flicked.selected)
+  await page.locator('.node-edit-input').fill('Lime')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction((uid) => {
+    return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Lime'
+  }, flicked.selected)
+  assert.equal(await label(food.uid), 'Food')
+  assert.equal(await label(fruit.uid), 'Berry')
+  assert.equal(await label(meat.uid), 'Steak')
+  assert.equal(await label(flicked.selected), 'Lime')
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ kids-only parent tap steps delete to Word Bank then clears', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      children: [
+        { name: 'Fruit', children: [{ name: 'Apple' }, { name: 'Banana' }] },
+        { name: 'Meat', children: [{ name: 'Chicken' }, { name: 'Beef' }] },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => {
+    return ['Food', 'Fruit', 'Meat', 'Apple'].every((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.getBoundingClientRect()
+      return rect && rect.width > 20 && rect.bottom < window.innerHeight
+    })
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function thumb() {
+    return page.evaluate(() => {
+      const canvas = document.getElementById('canvas').getBoundingClientRect()
+      const yStart = Math.floor(window.innerHeight * (2 / 3)) + 8
+      for (let y = window.innerHeight - 6; y >= yStart; y -= 10) {
+        for (let x = canvas.left + 6; x < canvas.right - 6; x += 12) {
+          const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+          if (!hit) return { x, y }
+        }
+      }
+      return null
+    })
+  }
+
+  async function castKids(dx, pointerId) {
+    const park = await thumb()
+    assert.ok(park, 'bottom third needs an empty thumb park')
+    const card = await face('Food')
+    await touch('pointerdown', park.x, park.y, pointerId)
+    await touch('pointerdown', card.x, card.y, pointerId + 1)
+    await touch('pointermove', card.x + dx, card.y + (dx ? 0 : 70), pointerId + 1)
+    await touch('pointerup', card.x + dx, card.y + (dx ? 0 : 70), pointerId + 1)
+    await touch('pointerup', park.x, park.y, pointerId)
+    await page.waitForFunction(() => window.LOGYQPreview.gestures.smite.mercy?.marks?.size === 2)
+  }
+
+  async function tapFood(pointerId) {
+    const card = await face('Food')
+    await touch('pointerdown', card.x, card.y, pointerId)
+    await touch('pointerup', card.x, card.y, pointerId)
+    await page.waitForTimeout(40)
+  }
+
+  async function castState() {
+    return page.evaluate(() => {
+      const mercy = window.LOGYQPreview.gestures.smite.mercy
+      const root = window.LOGYQBridge.core.state.root
+      const nameOf = (uid) => root.descendants().find((node) => node.data._uid === uid)?.data?.name || null
+      const wash = (label) => {
+        const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+        return node?.querySelector('rect.logyq-smite-wash')?.getAttribute('stroke') || null
+      }
+      const clock = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.querySelector('path.logyq-smite-clock'))
+      return {
+        mercy: !!mercy,
+        marks: mercy ? [...mercy.marks.entries()].map(([uid, mark]) => [nameOf(uid), mark]).sort() : [],
+        clock: clock?.__data__?.data?.name || null,
+        Fruit: wash('Fruit'),
+        Meat: wash('Meat'),
+        Apple: wash('Apple'),
+        editors: document.querySelectorAll('.node-edit-input').length,
+      }
+    })
+  }
+
+  await castKids(0, 21)
+  let live = await castState()
+  assert.deepEqual(live.marks, [['Fruit', 'red'], ['Meat', 'red']])
+  assert.equal(live.clock, 'Food')
+  assert.equal(live.Apple, null)
+  await tapFood(23)
+  live = await castState()
+  assert.equal(live.mercy, true, 'Word Bank kids keep the cast')
+  assert.deepEqual(live.marks, [['Fruit', 'amber'], ['Meat', 'amber']])
+  assert.equal(live.clock, 'Food')
+  assert.equal(live.Fruit, '#ffa100')
+  assert.equal(live.Meat, '#ffa100')
+  assert.equal(live.Apple, null)
+  assert.equal(live.editors, 0)
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_kids_parent_bank.png' })
+  await page.waitForTimeout(400)
+  await tapFood(24)
+  live = await castState()
+  assert.equal(live.mercy, false, 'the next parent tap clears a Word Bank kids-only cast')
+  assert.equal(live.clock, null)
+  assert.equal(live.Fruit, null)
+  assert.equal(live.Meat, null)
+  assert.equal(live.editors, 0)
+
+  await castKids(-70, 31)
+  live = await castState()
+  assert.deepEqual(live.marks, [['Fruit', 'amber'], ['Meat', 'amber']])
+  assert.equal(live.clock, 'Food')
+  await tapFood(33)
+  live = await castState()
+  assert.equal(live.mercy, false, 'a Word Bank kids-only cast clears on the first parent tap')
+  assert.equal(live.clock, null)
+  assert.equal(live.Fruit, null)
+  assert.equal(live.Meat, null)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instead of rename', async () => {
+  const calls = []
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  await context.route('https://jzaghifuhinkzzhiojre.supabase.co/**', async (route) => {
+    const url = route.request().url()
+    if (!url.includes('/rpc/lab_thekonym_')) return route.fallback()
+    const name = url.split('/rpc/')[1].split('?')[0]
+    calls.push(name)
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(name === 'lab_thekonym_read'
+        ? [{
+          id: 'row-1',
+          term: 'Zephyronym',
+          term_pronunciation: 'ZEF • ee • oh • nim',
+          essence: 'a test essence',
+          kid_explanation: 'A kid line for the test.',
+          definition: 'A short definition.',
+          technical_definition: 'A longer technical definition kept on the dossier.',
+          example: 'First example.\nSecond example.\nThird example.',
+        }, {
+          id: 'row-2',
+          term: 'Quillonym',
+          essence: 'not on the map',
+        }]
+        : { refused: true }),
+    })
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-thekonym')), false)
+  assert.equal(await page.locator('#logyq-thekonym-ask').isVisible(), false)
+
+  await page.evaluate(() => {
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    const library = document.getElementById('logiq-library')
+    library?.classList.remove('is-open')
+    library?.setAttribute('aria-hidden', 'true')
+    window.LOGYQPreview.app.hasOpenMap = true
+  })
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.locator('#logyq-thekonym-mobile').click()
+  await page.waitForFunction(() => window.LOGYQPreview.thekonym.face('Zephyronym')?.essence === 'a test essence')
+  assert.equal(await page.locator('#logyq-thekonym-ask').isVisible(), true)
+  await page.evaluate(() => document.getElementById('settingsBtn').click())
+  assert.equal(await page.locator('#logyq-thekonym-toggle').isChecked(), true)
+  await page.evaluate(() => document.getElementById('settingsClose').click())
+
+  await page.evaluate(() => {
+    window.LOGYQBridge.loadMap({ name: 'Zephyronym', children: [{ name: 'Other' }] }, [])
+  })
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Zephyronym')
+    return node?.querySelector('tspan.logyq-essence')?.textContent === 'a test essence'
+      && node.querySelector('tspan.logyq-onym')?.textContent === 'Zephyronym'
+  })
+
+  const uid = await page.evaluate(() => window.LOGYQBridge.core.state.root.data._uid)
+  await page.evaluate((id) => {
+    const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
+    const rect = face.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    for (const pointerId of [41, 42]) {
+      for (const type of ['pointerdown', 'pointerup']) {
+        face.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+          isPrimary: true, button: 0, buttons: type === 'pointerdown' ? 1 : 0,
+          clientX: x, clientY: y,
+        }))
+      }
+    }
+  }, uid)
+  await page.waitForSelector('#logyq-thekonym-card.is-open')
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  const dossier = await page.evaluate(() => {
+    const card = document.getElementById('logyq-thekonym-card')
+    return {
+      word: card.querySelector('.logyq-tk-onym')?.textContent,
+      pron: card.querySelector('.logyq-tk-pron')?.textContent,
+      essence: card.querySelector('.logyq-tk-essence')?.textContent,
+      kids: card.querySelector('[data-block="kids"] p')?.textContent,
+      definition: card.querySelector('[data-block="definition"] p')?.textContent,
+      technical: card.querySelector('[data-block="technical"] p')?.textContent,
+      examples: [...card.querySelectorAll('.logyq-tk-examples li')].filter((item) => !item.hidden).map((item) => item.textContent),
+      bank: card.querySelectorAll('.logyq-tk-bank, .logyq-tk-add').length,
+      addText: /Add to Word Bank/.test(card.innerText),
+    }
+  })
+  assert.equal(dossier.word, 'Zephyronym')
+  assert.equal(dossier.pron, 'ZEF • ee • oh • nim')
+  assert.equal(dossier.essence, 'a test essence')
+  assert.equal(dossier.kids, 'A kid line for the test.')
+  assert.equal(dossier.definition, 'A short definition.')
+  assert.equal(dossier.technical, 'A longer technical definition kept on the dossier.')
+  assert.deepEqual(dossier.examples, ['First example.', 'Second example.', 'Third example.'])
+  assert.equal(dossier.bank, 0)
+  assert.equal(dossier.addText, false)
+  await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
+  await page.waitForFunction(() => !document.getElementById('logyq-thekonym-card').classList.contains('is-open'))
+
+  const other = await page.evaluate(() => {
+    return Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Other').dataset.uid
+  })
+  await page.evaluate((id) => window.LOGYQPreview.thekonym.openUid(id), other)
+  await page.waitForSelector('#logyq-thekonym-card.is-open')
+  assert.match(await page.locator('#logyq-thekonym-card .logyq-tk-empty').innerText(), /not in Thekonyms yet/)
+  await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
+
+  await page.locator('#logyq-thekonym-ask').click()
+  await page.locator('#logyq-thekonym-letters [data-letter="Z"]').click()
+  await page.waitForSelector('.logyq-tk-row')
+  assert.match(await page.locator('.logyq-tk-row').innerText(), /Zephyronym/)
+  assert.match(await page.locator('.logyq-tk-row').innerText(), /a test essence/)
+  assert.equal(await page.locator('.logyq-tk-add').count(), 0)
+  await page.locator('#logyq-thekonym-letters [data-letter="Q"]').click()
+  await page.waitForSelector('.logyq-tk-add')
+  assert.match(await page.locator('.logyq-tk-row').innerText(), /Quillonym/)
+  await page.locator('.logyq-tk-add').click()
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.includes('Quillonym'))
+  assert.equal(await page.locator('#Dock .chip', { hasText: 'Quillonym' }).count(), 1)
+  assert.equal(await page.locator('.logyq-tk-add').count(), 0)
+  await page.locator('#logyq-thekonym-browser-close').click()
+  await page.evaluate((id) => window.LOGYQPreview.thekonym.openUid(id), uid)
+  await page.waitForSelector('#logyq-thekonym-card.is-open .logyq-tk-essence')
+  await page.evaluate(() => {
+    const field = document.querySelector('#logyq-thekonym-card .logyq-tk-essence')
+    for (let i = 0; i < 2; i += 1) {
+      field.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'touch' }))
+    }
+  })
+  await page.locator('#logyq-thekonym-card .logyq-tk-input').fill('local essence')
+  await page.locator('#logyq-thekonym-card .logyq-tk-input').press('Enter')
+  await page.waitForFunction(() => {
+    const edits = JSON.parse(sessionStorage.getItem('logyq_thekonym_local_edits_v1') || '{}')
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Zephyronym')
+    return edits['row-1']?.essence === 'local essence' && node?.querySelector('tspan.logyq-essence')?.textContent === 'local essence'
+  })
+  await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.locator('#logyq-thekonym-mobile').click()
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Zephyronym')
+    return node && !node.querySelector('tspan.logyq-essence') && !document.body.classList.contains('logyq-thekonym')
+  })
+  await page.evaluate((id) => {
+    const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
+    const rect = face.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    for (const pointerId of [51, 52]) {
+      for (const type of ['pointerdown', 'pointerup']) {
+        face.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+          isPrimary: true, button: 0, buttons: type === 'pointerdown' ? 1 : 0,
+          clientX: x, clientY: y,
+        }))
+      }
+    }
+  }, uid)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.locator('#logyq-thekonym-card.is-open').count(), 0)
+  assert.deepEqual(calls.filter((name) => name !== 'lab_thekonym_read'), [])
+  assert.ok(calls.includes('lab_thekonym_read'))
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ swipe down on a Word Bank chip deletes it, and a selected set goes together', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, ['Pop', 'Stay', 'Keep'])
+  })
+  await page.waitForFunction(() => document.querySelectorAll('#Dock .chip').length === 3)
+
+  const swipeChip = (label, dx, dy) => page.evaluate(({ label, dx, dy }) => {
+    const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === label)
+    if (!chip) throw new Error(`missing chip ${label}`)
+    const rect = chip.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const point = (type, buttons, ox, oy) => chip.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerId: 9, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons, clientX: x + ox, clientY: y + oy,
+    }))
+    point('pointerdown', 1, 0, 0)
+    point('pointermove', 1, Math.sign(dx) * 8, Math.sign(dy || 1) * 12)
+    point('pointermove', 1, dx, dy)
+    window.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, cancelable: true, composed: true, pointerId: 9, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons: 0, clientX: x + dx, clientY: y + dy,
+    }))
+  }, { label, dx, dy })
+
+  const tapChip = (label) => page.evaluate((label) => {
+    const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === label)
+    const rect = chip.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    for (const type of ['pointerdown', 'pointerup']) {
+      chip.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerId: 8, pointerType: 'touch',
+        isPrimary: true, button: 0, buttons: type === 'pointerdown' ? 1 : 0, clientX: x, clientY: y,
+      }))
+    }
+  }, label)
+
+  await swipeChip('Pop', 0, 18)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Pop', 'Stay', 'Keep'])
+
+  await swipeChip('Pop', 0, 64)
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.wordBank.includes('Pop'))
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay', 'Keep'])
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.some((child) => child.name === 'Pop')), false)
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-chip-drag')), false)
+
+  await tapChip('Stay')
+  await tapChip('Keep')
+  assert.deepEqual(await page.locator('#Dock .chip.is-outlined').allTextContents(), ['Stay', 'Keep'])
+  await swipeChip('Stay', 4, 70)
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.length === 0)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.children.map((child) => child.name)), ['A'])
+
+  await page.evaluate(() => window.LOGYQBridge.undo())
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.join(',') === 'Stay,Keep')
+  await page.evaluate(() => window.LOGYQBridge.undo())
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.join(',') === 'Pop,Stay,Keep')
 
   assert.deepEqual(errors, [])
   await context.close()

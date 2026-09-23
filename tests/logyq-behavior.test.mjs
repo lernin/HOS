@@ -31,6 +31,22 @@ test('utils assign unique uids even when labels are blank', () => {
   assert.notEqual(a._uid, b._uid)
 })
 
+test('utils do not reissue a saved map uid to a new blank', () => {
+  const utils = loadUtils()
+  const tree = { name: 'Food', _uid: 'n1', children: [{ name: 'Fruit', _uid: 'n2' }] }
+  utils.assignUids(tree)
+  assert.equal(tree._uid, 'n1')
+  assert.equal(tree.children[0]._uid, 'n2')
+  const blank = { name: '' }
+  utils.assignUids(blank)
+  assert.notEqual(blank._uid, 'n1')
+  assert.notEqual(blank._uid, 'n2')
+  const dup = { name: 'Food', _uid: 'n1', children: [{ name: '', _uid: 'n1' }] }
+  utils.assignUids(dup)
+  assert.equal(dup._uid, 'n1')
+  assert.notEqual(dup.children[0]._uid, 'n1')
+})
+
 test('utils assign stable uids, clone trees, and resolve paths', () => {
   const utils = loadUtils()
   const tree = { name: 'root', children: [{ name: 'a' }, { name: 'b', children: [{ name: 'c' }] }] }
@@ -103,6 +119,11 @@ test('LOGYQ blank drafts are untitled empty roots with no children', () => {
   assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '' }, wordBank: ['alpha'] }), false)
   assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled map', tree: { name: '', color: '#fde68a' }, wordBank: [] }), false)
   assert.equal(maps.isBlankDraft({ id: 'saved', name: 'Untitled map', tree: { name: '' }, wordBank: [] }), false)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled 1', tree: { name: '' }, wordBank: [] }), true)
+  assert.equal(maps.isBlankDraft({ id: null, name: 'Untitled 2', tree: { name: '', children: [{ name: '' }] }, wordBank: [] }), false)
+  assert.equal(maps.nextUntitledName(['Animals', 'Untitled 1', 'Untitled 2']), 'Untitled 3')
+  assert.equal(maps.nextUntitledName([]), 'Untitled 1')
+  assert.equal(maps.nextUntitledName(['untitled 4', 'Untitled 1']), 'Untitled 2')
 })
 
 test('GIQ and JSON import parsing keep v161 normalization rules', () => {
@@ -317,7 +338,38 @@ test('inline edit goes through openNodeEditor, not a second helper', () => {
   assert.doesNotMatch(editing, /function startInlineEdit/)
   assert.doesNotMatch(editing, /function zoomToNodeCenter/)
   assert.match(editing, /function openNodeEditor/)
-  assert.match(editing, /logyq\.camera\.flyEditFocusToUID/)
+  assert.match(editing, /function dockMobileEditor/)
+  assert.match(editing, /node-edit-dock/)
+  assert.match(editing, /node-edit-stack/)
+  assert.match(editing, /node-edit-cancel/)
+  assert.match(editing, /Cancel rename/)
+  assert.match(editing, /innerHeight - vv\.height/)
+  assert.match(editing, /stack\._logyqInset === inset/)
+  assert.match(editing, /preventScroll: true/)
+  assert.match(editing, /dataset\.editUid/)
+  assert.match(editing, /PHONE_BAR_QUIET_MS = 80/)
+  assert.match(editing, /PHONE_BAR_CAP_MS = 500/)
+  assert.match(editing, /PHONE_BAR_SLIDE_MS = 600/)
+  assert.match(editing, /function mirrorEditLabel/)
+  assert.match(editing, /state\.editPrevName/)
+  assert.match(editing, /addEventListener\("input"/)
+  assert.match(editing, /showEditFocus\(null\)/)
+  assert.match(editing, /translate3d\(0,100%,0\)/)
+  assert.match(editing, /is-placed/)
+  assert.match(editing, /pointerup/)
+  assert.match(editing, /touchend/)
+  const css = readFileSync(new URL('../public/logyq/css/app.css', import.meta.url), 'utf8')
+  assert.match(css, /node-edit-stack\.is-placed/)
+  assert.match(css, /margin: 0 0 9px 13px/)
+  assert.match(css, /width: 44px;\n    height: 44px;/)
+  assert.match(css, /0 -1px 0 rgba\(0, 0, 0, \.06\), 0 -4px 12px rgba\(0, 0, 0, \.08\)/)
+  assert.doesNotMatch(css, /0 -28px 52px/)
+  assert.match(css, /translate3d\(0, 100%, 0\)/)
+  assert.doesNotMatch(editing, /node-edit-done/)
+  assert.doesNotMatch(editing, /keyboard \+ 8/)
+  assert.doesNotMatch(editing, /innerHeight - vv\.height - vv\.offsetTop/)
+  assert.match(editing, /if \(mobileQuietEdit\(\)\) return/)
+  assert.doesNotMatch(editing, /flyEditFocusToUID/)
   assert.match(editing, /closeNodeEditor\(false, true\)/)
   assert.match(editing, /closeNodeEditor\(true, true\)/)
   assert.match(keyboard, /logyq\.editing\.openNodeEditor\(h\)/)
@@ -442,6 +494,12 @@ test('chip-drop cases keep empty-canvas, rootAbove, gap, then node order', () =>
   const gap = source.indexOf("if (drop.type === 'gap')", dropStart)
   const node = source.indexOf("if (drop.type === 'node')", dropStart)
   assert.ok(dropStart > 0 && empty > dropStart && above > empty && gap > above && node > gap)
+  assert.match(source, /raisedGhostPoint/)
+  assert.match(source, /clientX: aim\.x, clientY: aim\.y/)
+  assert.match(source, /if \(overDock\(x, y\)\)/)
+  assert.match(source, /session\.deleting/)
+  assert.match(source, /dy >= 36 && dy >= Math\.abs\(dx\)/)
+  assert.match(source, /type: 'bank-delete', prevBank/)
 })
 
 test('undo still recognizes the original action types', () => {
@@ -623,7 +681,7 @@ test('addSiblingRightOf on the root falls back to addChildOf', () => {
 })
 
 test('left sibling and insert-parent stay calm when noEdit is set', () => {
-  const { logyq, addSiblingLeftOf, insertParentAbove } = loadTreeOps()
+  const { logyq, history, addSiblingLeftOf, insertParentAbove } = loadTreeOps()
   const tree = { name: 'root', children: [{ name: 'a' }, { name: 'c' }] }
   logyq.utils.assignUids(tree)
   logyq.state.root = fakeHierarchy(tree)
@@ -639,7 +697,16 @@ test('left sibling and insert-parent stay calm when noEdit is set', () => {
   assert.equal(tree.children[0].children[0].name, 'a')
   assert.equal(logyq.state.selectedUid, parentUid)
   assert.equal(logyq._opened, undefined)
-  assert.equal(insertParentAbove(tree._uid, '', { noEdit: true }), null)
+
+  const wrappedUid = insertParentAbove(tree._uid, '', { noEdit: true })
+  assert.equal(logyq.state.root.data._uid, wrappedUid)
+  assert.equal(logyq.state.root.data.name, '')
+  assert.equal(logyq.state.root.data.children[0].name, 'root')
+  assert.equal(logyq.state.root.data.children[0].children[0].name, '')
+  assert.equal(logyq.state.selectedUid, wrappedUid)
+  assert.equal(logyq._opened, undefined)
+  assert.equal(history.at(-1).type, 'replace-root')
+  assert.equal(history.at(-1).prev.name, 'root')
 })
 
 test('create inserts go through requestCreateLayout instead of overlapping layoutAndRender', () => {
@@ -736,7 +803,7 @@ function sourceMix() {
   return readFileSync(new URL('../public/logyq/js/engine/15-mix-and-context.js', import.meta.url), 'utf8')
 }
 
-test('randomizeTree keeps the root label, records randomize history, and clears the bank only when asked', () => {
+test('randomizeTree shuffles the root with the other cards and clears the bank only when asked', () => {
   const { logyq, history, toasts, randomizeTree, rendered } = loadMix()
   randomizeTree(false)
   assert.equal(logyq.state.root, null)
@@ -746,8 +813,17 @@ test('randomizeTree keeps the root label, records randomize history, and clears 
   logyq.utils.assignUids(tree)
   logyq.state.root = fakeHierarchy(tree)
   logyq.state.wordBank = ['C']
-  randomizeTree(false)
-  assert.equal(logyq.state.root.data.name, 'Root')
+  const random = Math.random
+  Math.random = () => 0
+  try { randomizeTree(false) } finally { Math.random = random }
+  const names = []
+  const walk = (node) => {
+    names.push(node.name)
+    for (const child of node.children || []) walk(child)
+  }
+  walk(logyq.state.root.data)
+  assert.deepEqual(names.slice().sort(), ['A', 'B', 'Root'])
+  assert.notEqual(logyq.state.root.data.name, 'Root')
   assert.deepEqual(logyq.state.wordBank, ['C'])
   assert.equal(history[0].type, 'randomize')
   assert.deepEqual(history[0].nextBank, ['C'])
@@ -755,10 +831,16 @@ test('randomizeTree keeps the root label, records randomize history, and clears 
   assert.equal(rendered(), 1)
 
   randomizeTree(true)
-  assert.equal(logyq.state.root.data.name, 'Root')
   assert.deepEqual(logyq.state.wordBank, [])
   assert.deepEqual(history.at(-1).nextBank, [])
   assert.equal(logyq.state.repositionMode, 'mix')
+  const mixed = []
+  const walkMixed = (node) => {
+    mixed.push(node.name)
+    for (const child of node.children || []) walkMixed(child)
+  }
+  walkMixed(logyq.state.root.data)
+  assert.deepEqual(mixed.slice().sort(), ['A', 'B', 'C', 'Root'])
 })
 
 test('randomizeTree and snapshot keep each card color', () => {
@@ -783,8 +865,18 @@ test('randomizeTree and snapshot keep each card color', () => {
   }
   walk(logyq.state.root.data)
   assert.deepEqual(bag.sort(), ['A:#fde68a', 'B:#bfdbfe', 'C:', 'Root:#fecaca'].sort())
-  assert.equal(logyq.state.root.data.name, 'Root')
-  assert.equal(logyq.state.root.data.color, '#fecaca')
+  const rootCard = (() => {
+    const find = (node) => {
+      if (node.name === 'Root') return node
+      for (const child of node.children || []) {
+        const hit = find(child)
+        if (hit) return hit
+      }
+      return null
+    }
+    return find(logyq.state.root.data)
+  })()
+  assert.equal(rootCard.color, '#fecaca')
 
   const snap = logyq.utils.deepClone(logyq.state.root.data)
   const again = []
@@ -809,10 +901,12 @@ test('randomizeTree mixes blank painted cards and keeps their colors', () => {
   }
   logyq.utils.assignUids(tree)
   logyq.state.root = fakeHierarchy(tree)
-  randomizeTree(false)
+  const random = Math.random
+  Math.random = () => 0
+  try { randomizeTree(false) } finally { Math.random = random }
   assert.deepEqual(toasts, [])
   assert.equal(logyq.state.root.data.name, '')
-  assert.equal(logyq.state.root.data.color, '#fde68a')
+  assert.notEqual(logyq.state.root.data.color, '#fde68a')
   const colors = []
   const walk = (node) => {
     colors.push(node.color || '')
@@ -936,6 +1030,42 @@ test('Word Bank contextmenu never copies a card, including desktop right-click',
     globalThis.window = previousWindow
     globalThis.document = previousDocument
   }
+})
+
+test('undo after a bank send restores the Word Bank and redo puts the chips back', () => {
+  const source = readFileSync(new URL('../public/logyq/js/engine/05-history.js', import.meta.url), 'utf8')
+  const state = {
+    history: [],
+    redo: [],
+    root: null,
+    wordBank: ['Leaf'],
+  }
+  let dockRenders = 0
+  const logyq = {
+    state,
+    elements: { undoBtn: { disabled: false } },
+    config: { HISTORY_LIMIT: 50 },
+    utils: {
+      deepClone: (value) => JSON.parse(JSON.stringify(value)),
+      assignIds() {},
+      findByPath() { return null },
+      findByUid() { return null },
+    },
+    dock: { updateDockBounds() {} },
+    treeManager: { layoutAndRender() {}, renderEmpty() {}, autoFit() {} },
+    wordDock: { render() { dockRenders += 1 } },
+  }
+  const d3 = { hierarchy: (data) => ({ data }) }
+  let historyApi = null
+  new Function('logyq', 'd3', 'attach', source)(logyq, d3, (_name, value) => { historyApi = value })
+  state.history.push({ type: 'delete-root', subtree: { name: 'Leaf', _uid: 'a' }, prevBank: [] })
+  historyApi.undo()
+  assert.equal(state.root.data.name, 'Leaf')
+  assert.deepEqual(state.wordBank, [])
+  assert.ok(dockRenders >= 1)
+  historyApi.redo()
+  assert.equal(state.root, null)
+  assert.deepEqual(state.wordBank, ['Leaf'])
 })
 
 test('sendSubtreeToWordBank ignores blank cards', () => {
@@ -1200,6 +1330,8 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /function hardClearBackground/)
   assert.match(v162, /hardClearBackground\(doc, win/)
   assert.match(v162, /bridge\.editSelected\(\{ uid \}\)/)
+  assert.match(v162, /function faceUnderFinger/)
+  assert.doesNotMatch(v162, /editSelected\(\{ uid: createdUid \}\)/)
   assert.match(v162, /function uidFromEvent/)
   assert.match(v162, /function uidFromTouchedNode/)
   assert.match(v162, /function uidFromVisualPoint/)
@@ -1220,6 +1352,9 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /logyq-v162-action/)
   assert.match(v162, /clearCardMic\(state\.mic\)/)
   assert.match(v162, /function edgePan/)
+  assert.match(v162, /function bindChipEdgePan/)
+  assert.match(v162, /bindChipEdgePan\(doc, win\)/)
+  assert.match(v162, /edgePan\(doc, win, finger\.x, finger\.y\)/)
   assert.match(v162, /function centerPanVector/)
   assert.match(v162, /function clampPanToContent/)
   assert.match(v162, /function beginCardPan/)
@@ -1250,6 +1385,8 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /STILL_PX: 16/)
   assert.match(v162, /function fingerMovedFromLatch/)
   assert.match(v162, /function dragMousePoint/)
+  assert.match(v162, /function dragAimPoint/)
+  assert.match(v162, /function previewCardCenter/)
   assert.match(v162, /function activeDockKind/)
   assert.match(v162, /function paintCloneCard/)
   assert.match(v162, /if \(!fingerMovedFromLatch\(drag, x, y\)\) return 'none'/)
@@ -1320,6 +1457,20 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(styles, /v2-branch-origin-ghost\.hover-adopt-sub/)
   assert.match(styles, /v2-branch-origin-ghost\.drop-target rect:not\(\.grabzone\)/)
   assert.match(styles, /#logyq-v162-branch-preview g\.node text/)
+  assert.match(styles, /#logyq-v162-branch-preview\{opacity:0\.55\}/)
+  assert.match(styles, /#logyq-v162-branch-preview\{[^}]*opacity:0\.55\}/)
+  assert.doesNotMatch(styles, /#logyq-v162-branch-preview g\.node rect:not\(\.grabzone\)\{opacity:1/)
+  const chipCss = readFileSync(new URL('../public/logyq/css/app.css', import.meta.url), 'utf8')
+  assert.match(chipCss, /#logyq-chip-ghost \.chip\{\s*opacity:\s*0\.55/)
+  assert.match(ui, /id="logyq-tab-maps"/)
+  assert.match(ui, />My maps</)
+  assert.match(ui, /id="logyq-tab-curriculum"/)
+  assert.match(ui, />Curriculum</)
+  assert.match(ui, /id="logyq-level-path"/)
+  assert.match(ui, /id="logyq-curriculum-check"/)
+  assert.doesNotMatch(ui, /Levels coming soon/)
+  assert.match(ui, /function setHomeTab/)
+  assert.match(styles, /#logiq-library\[data-shelf="curriculum"\] #logiq-new-map/)
   assert.match(styles, /v2-branch-drag svg#canvas g\.node\.drop-target text/)
   assert.doesNotMatch(styles, /v2-float-node/)
   assert.doesNotMatch(v162, /startCardRecording\([^)]*createdUid/)
@@ -1445,10 +1596,16 @@ test('card contact race classifies hold vs slow pan vs flick-speed', () => {
   assert.ok(Math.abs(helpers.flickFastSpeed(C) - (52 / 180)) < 1e-6)
   assert.equal(helpers.classifyCardIntent(4, 80, 0, false, C), 'excited', 'inside slop stays excited')
   assert.equal(helpers.classifyCardIntent(20, 30, 0.1, false, C), 'excited', 'too early to call a slow pan')
-  assert.equal(helpers.classifyCardIntent(24, 80, 0.12, false, C), 'pan', 'slow/medium slide becomes pan')
+  assert.equal(helpers.classifyCardIntent(24, 80, 0.12, false, C), 'pan', 'undirected slow slide becomes pan')
+  assert.equal(helpers.classifyCardIntent(24, 80, 0.12, false, C, 22, 18), 'pan', 'a diagonal slide still pans')
+  assert.equal(helpers.classifyCardIntent(24, 80, 0.12, false, C, 0, 24), 'flickish', 'a straight stroke can still finish as a flick')
+  assert.equal(helpers.classifyCardIntent(80, 200, 0.12, false, C, 0, 80), 'flickish', 'a slow axial flick must not pan the map')
+  assert.equal(helpers.classifyCardIntent(80, 360, 0.12, false, C, 0, 80), 'pan', 'after the flick window a straight drag may pan')
   assert.equal(helpers.classifyCardIntent(70, 80, 0.5, false, C), 'flickish', 'high recent speed stays gated')
   assert.equal(helpers.classifyCardIntent(70, 100, 0.05, true, C), 'flickish', 'a prior whip stays flickish inside the window')
   assert.equal(helpers.classifyCardIntent(70, 360, 0.5, true, C), 'pan', 'after 340ms a held stroke may pan from now')
+  assert.match(source, /if \(!race \|\| race\.mode === 'drag'\) return/)
+  assert.doesNotMatch(source, /race\.mode === 'pan' \|\| race\.mode === 'drag'/)
   const samples = [
     { t: 0, x: 0, y: 0 },
     { t: 40, x: 0, y: 4 },
@@ -1478,6 +1635,15 @@ test('uidFromEvent reads data-uid from the tapped hit-slot or node', () => {
   assert.equal(uidFromEvent({ target: slot }), 'n-blank-2')
 })
 
+test('card hit-test uses the painted face before a layout slot', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const start = source.indexOf('function hitNode(doc, x, y, event) {')
+  const end = source.indexOf('function cardText(node) {', start)
+  assert.ok(start >= 0 && end > start)
+  const body = source.slice(start, end)
+  assert.ok(body.indexOf('hitVisualNode') < body.indexOf('hitEditUid'), 'a painted card beats a moved slot or grab zone')
+})
+
 test('card hit-test prefers the visual face and the deepest overlapping card', () => {
   const source = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
   const start = source.indexOf('function rankCardHits(hits, x, y) {')
@@ -1497,7 +1663,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteParentCommand, smiteChildCommand, smiteChildNextMark, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastShape, smiteCardChrome, smiteLinkLive, smiteCastOverlaps, smiteFoldCast, smiteArmDirection, smiteArmTarget, smiteArmScope, smiteArmChrome, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1519,6 +1685,25 @@ function smiteSampleTree() {
     ],
   }
 }
+
+test('smite deletes a blank card and does not turn it into a chip', () => {
+  const smite = loadSmitePure()
+  const tree = {
+    name: 'Root',
+    _uid: 'r',
+    children: [
+      { name: '', _uid: 'blank', color: '#fde68a' },
+      { name: 'Kept', _uid: 'k' },
+    ],
+  }
+  const red = smite.planSmiteCommit(tree, new Map([['blank', 'red']]))
+  assert.deepEqual(red.bank, [])
+  assert.equal(red.tree.name, 'Root')
+  assert.deepEqual(red.tree.children.map((child) => child.name), ['Kept'])
+  const amber = smite.planSmiteCommit(tree, new Map([['blank', 'amber']]))
+  assert.deepEqual(amber.bank, [], 'an empty label is not a Word Bank chip')
+  assert.deepEqual(amber.tree.children.map((child) => child.name), ['Kept'])
+})
 
 test('smite cake zones, directions, marks, and the mercy ring', () => {
   const smite = loadSmitePure()
@@ -1605,33 +1790,62 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.equal(smite.smiteNominatedTone(new Map([['a', 'amber'], ['a1', 'amber']]), 'a', 'red'), 'amber')
   assert.equal(smite.smiteNominatedTone(new Map([['a', 'normal'], ['a1', 'amber']]), 'a', 'red'), 'amber')
   assert.equal(smite.smiteNominatedTone(new Map([['a', 'normal']]), 'a', 'red'), null)
-  const rearm = smite.smiteParentCommand(new Map([['a', 'red'], ['a1', 'red'], ['blank', 'red']]), 'a', 'red')
-  assert.equal(rearm.action, 'rearm')
-  assert.deepEqual(rearm.entries, [['a', 'amber'], ['a1', 'amber'], ['blank', 'amber']])
-  assert.equal(smite.smiteParentCommand(new Map(rearm.entries), 'a', 'red').action, 'cancel')
-  assert.equal(smite.smiteParentCommand(new Map([['a1', 'amber'], ['blank', 'amber']]), 'a', 'red').action, 'cancel')
-  const stayedOut = smite.smiteParentCommand(new Map([['a', 'red'], ['a1', 'normal'], ['blank', 'red']]), 'a', 'red')
-  assert.deepEqual(stayedOut.entries, [['a', 'amber'], ['a1', 'normal'], ['blank', 'amber']])
-  const kidsJoin = smite.smiteParentCommand(new Map([['blank', 'red'], ['a1', 'normal']]), 'a', 'red')
-  assert.equal(kidsJoin.action, 'rearm')
-  assert.deepEqual(kidsJoin.entries, [['blank', 'amber'], ['a1', 'normal'], ['a', 'amber']])
-  assert.equal(smite.smiteChildNextMark('red'), 'amber')
-  assert.equal(smite.smiteChildNextMark('amber'), 'normal')
-  assert.equal(smite.smiteChildNextMark('normal'), 'red')
-  assert.equal(smite.smiteChildNextMark(null), 'red')
-  const toAmber = smite.smiteChildCommand(new Map([['a', 'red'], ['a1', 'red'], ['blank', 'red']]), 'a1')
+  assert.equal(smite.smiteCardNext('red'), 'amber')
+  assert.equal(smite.smiteCardNext('amber'), 'normal')
+  assert.equal(smite.smiteCardNext('normal'), 'red')
+  const toAmber = smite.smiteCycleMember(new Map([['a', 'red'], ['a1', 'red'], ['blank', 'red']]), 'a1')
   assert.equal(toAmber.action, 'cycle')
   assert.equal(toAmber.next, 'amber')
   assert.deepEqual(toAmber.entries, [['a', 'red'], ['a1', 'amber'], ['blank', 'red']])
-  const toOriginal = smite.smiteChildCommand(new Map(toAmber.entries), 'a1')
-  assert.equal(toOriginal.next, 'normal')
-  assert.deepEqual(toOriginal.entries, [['a', 'red'], ['a1', 'normal'], ['blank', 'red']])
-  const reinclude = smite.smiteChildCommand(new Map(toOriginal.entries), 'a1')
-  assert.equal(reinclude.next, 'red')
-  assert.deepEqual(reinclude.entries, [['a', 'red'], ['a1', 'red'], ['blank', 'red']])
+  const toOut = smite.smiteCycleMember(new Map(toAmber.entries), 'a1')
+  assert.equal(toOut.next, 'normal')
+  assert.deepEqual(toOut.entries, [['a', 'red'], ['a1', 'normal'], ['blank', 'red']])
+  const toDelete = smite.smiteCycleMember(new Map(toOut.entries), 'a1')
+  assert.equal(toDelete.next, 'red')
+  assert.deepEqual(toDelete.entries, [['a', 'red'], ['a1', 'red'], ['blank', 'red']])
+  assert.equal(smite.smiteCycleMember(new Map([['blank', 'red']]), 'a1').action, 'noop')
+  const mixed = new Map([['a', 'red'], ['a1', 'red'], ['blank', 'amber'], ['b', 'normal'], ['side', 'red']])
+  const degraded = smite.smiteRootStep(mixed, 'a', ['a1', 'blank', 'b'])
+  assert.equal(degraded.action, 'degrade')
+  assert.deepEqual(degraded.entries, [['a', 'amber'], ['a1', 'amber'], ['blank', 'amber'], ['b', 'normal'], ['side', 'red']])
+  const cleared = smite.smiteRootStep(new Map(degraded.entries), 'a', ['a1', 'blank', 'b'])
+  assert.equal(cleared.action, 'clear')
+  assert.deepEqual(cleared.entries, [])
+  const remote = smite.smiteRootStep(new Map([['a', 'normal'], ['a1', 'red']]), 'a', ['a1'])
+  assert.equal(remote.action, 'degrade')
+  assert.deepEqual(remote.entries, [['a', 'normal'], ['a1', 'amber']])
+  const kidsOnly = new Map([['a1', 'red'], ['blank', 'red'], ['b', 'normal']])
+  const kidsBank = smite.smiteRootStep(kidsOnly, 'a', ['a1', 'blank', 'b'])
+  assert.equal(kidsBank.action, 'degrade')
+  assert.deepEqual(kidsBank.entries, [['a1', 'amber'], ['blank', 'amber'], ['b', 'normal']])
+  assert.equal(smite.smiteRootStep(new Map(kidsBank.entries), 'a', ['a1', 'blank', 'b']).action, 'clear')
+  assert.equal(smite.smiteCastTap(kidsOnly, 'a', 'a', ['a1', 'blank', 'b']).action, 'degrade')
+  assert.equal(smite.smiteRootStep(new Map([['a1', 'amber'], ['blank', 'amber']]), 'a', ['a1', 'blank']).action, 'clear')
+  const sideStays = smite.smiteRootStep(new Map([['a', 'normal'], ['a1', 'red'], ['side', 'red']]), 'a', ['a1'])
+  assert.deepEqual(sideStays.entries, [['a', 'normal'], ['a1', 'amber'], ['side', 'red']])
+  assert.equal(smite.smiteCastTap(mixed, 'a', 'a1', ['a1', 'blank', 'b']).next, 'amber')
+  assert.equal(smite.smiteCastTap(mixed, 'a', 'a', ['a1', 'blank', 'b']).action, 'degrade')
+  assert.equal(smite.smiteCastReply(new Map([['a', 'red'], ['a1', 'normal']]), 'a', 'a1', 0, 40), 'execute')
+  assert.equal(smite.smiteCastReply(new Map([['a', 'red'], ['a1', 'normal']]), 'a', 'a', 0, 40), 'execute')
+  assert.equal(smite.smiteCastReply(new Map([['a1', 'red']]), 'a', 'a', 0, 40), 'execute')
+  assert.equal(smite.smiteCastReply(new Map([['a', 'red'], ['a1', 'normal']]), 'a', 'a1', 2, 3), 'tap')
+  assert.equal(smite.smiteCastReply(new Map([['a', 'red']]), 'a', 'a', 4, 2), 'tap')
+  assert.equal(smite.smiteCastReply(new Map([['a1', 'red']]), 'a', 'a', 2, 3), 'tap')
+  assert.equal(smite.smiteCastReply(new Map([['a', 'red'], ['a1', 'normal']]), 'a', 'a1', 30, 20), 'ignore')
+  assert.equal(smite.smiteCastReply(new Map([['a', 'red']]), 'a', 'b', 0, 80), 'ignore')
   assert.equal(smite.smiteHasNominated(new Map([['a1', 'normal']])), false)
   assert.equal(smite.smiteHasNominated(new Map([['a1', 'normal'], ['blank', 'amber']])), true)
-  assert.equal(smite.smiteChildCommand(new Map([['blank', 'red']]), 'a1').action, 'noop')
+  const whites = new Map([['a', 'normal'], ['a1', 'normal'], ['blank', 'normal']])
+  assert.equal(smite.smiteRootStep(whites, 'a', ['a1', 'blank']).action, 'clear')
+  assert.equal(smite.smiteCastTap(whites, 'a', 'a', ['a1', 'blank']).action, 'clear')
+  assert.equal(smite.smiteRootStep(new Map([['a1', 'normal'], ['blank', 'normal']]), 'a', ['a1', 'blank']).action, 'clear')
+  const pocket = new Map([['a', 'normal'], ['a1', 'red'], ['blank', 'normal']])
+  const scoped = smite.smiteFlickScope(smiteSampleTree(), pocket, 'a1')
+  assert.equal(smite.smiteHasNominated(scoped), true)
+  for (const [uid, mark] of scoped) {
+    if (mark === 'red' || mark === 'amber') pocket.delete(uid)
+  }
+  assert.equal(smite.smiteHasNominated(pocket), false)
 
   const tree = smiteSampleTree()
   assert.deepEqual(smite.smiteClockRoots(tree, { r: 'red', a: 'red', a1: 'red' }), ['r'])
@@ -1649,6 +1863,53 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.equal(smite.smiteCastOverlaps([{ marks: new Map([['a', 'red'], ['a1', 'red']]) }], ['b']), false)
   assert.equal(smite.smiteCastOverlaps([{ marks: { a: 'red', a1: 'amber' } }], ['a1']), true)
   assert.equal(smite.smiteCastOverlaps([{ marks: new Map([['a', 'normal']]) }], ['a']), true)
+
+  const branchB = { castUid: 'b', committing: false, marks: new Map([['b', 'red'], ['b1', 'amber']]) }
+  const branchC = { castUid: 'c', committing: false, marks: new Map([['c', 'amber']]) }
+  const nested = smite.smiteFoldCast([branchB], ['a', 'b', 'b1'], 'red')
+  assert.equal(nested.action, 'absorb')
+  assert.deepEqual(nested.absorb.map((mercy) => mercy.castUid), ['b'])
+  assert.deepEqual([...nested.marks], [['a', 'red'], ['b', 'red'], ['b1', 'amber']])
+  const both = smite.smiteFoldCast([branchB, branchC], ['r', 'a', 'b', 'b1', 'c'], 'red')
+  assert.equal(both.action, 'absorb')
+  assert.deepEqual(both.absorb.map((mercy) => mercy.castUid), ['b', 'c'])
+  assert.equal(both.marks.get('c'), 'amber')
+  assert.equal(both.marks.get('r'), 'red')
+  const sibling = smite.smiteFoldCast([branchB], ['c'], 'amber')
+  assert.equal(sibling.action, 'clear')
+  assert.deepEqual(sibling.absorb, [])
+  assert.deepEqual([...sibling.marks], [['c', 'amber']])
+  const inside = smite.smiteFoldCast([branchB], ['b1'], 'red')
+  assert.equal(inside.action, 'block')
+  assert.equal(inside.marks, null)
+  const partial = smite.smiteFoldCast([branchB], ['b', 'other'], 'red')
+  assert.equal(partial.action, 'block')
+
+  assert.equal(smite.smiteArmDirection(0, 80), 'down')
+  assert.equal(smite.smiteArmDirection(0, -80), 'up')
+  assert.equal(smite.smiteArmDirection(-80, 0), 'left')
+  assert.equal(smite.smiteArmDirection(80, 0), null)
+  assert.equal(smite.smiteCastDirection(0, -80), null)
+  const kids = ['lime', 'zest']
+  assert.equal(smite.smiteArmTarget('fruit', 'fruit', kids), 'self')
+  assert.equal(smite.smiteArmTarget('fruit', 'lime', kids), 'child')
+  assert.equal(smite.smiteArmTarget('fruit', 'zest', kids), 'child')
+  assert.equal(smite.smiteArmTarget('fruit', 'peel', kids), null)
+  assert.equal(smite.smiteArmTarget('fruit', 'meat', kids), null)
+  const branch = {
+    _uid: 'fruit',
+    children: [
+      { _uid: 'lime', children: [{ _uid: 'peel' }] },
+      { _uid: 'zest' },
+    ],
+  }
+  assert.deepEqual(smite.smiteArmScope(branch, 'self', 'down'), ['fruit', 'lime', 'peel', 'zest'])
+  assert.deepEqual(smite.smiteArmScope(branch, 'self', 'left'), ['fruit', 'lime', 'peel', 'zest'])
+  assert.deepEqual(smite.smiteArmScope(branch, 'self', 'up'), ['fruit'])
+  assert.deepEqual(smite.smiteArmScope(branch, 'child', 'down'), ['lime', 'zest'])
+  assert.deepEqual(smite.smiteArmScope(branch, 'child', 'left'), ['lime', 'zest'])
+  assert.deepEqual(smite.smiteArmScope(branch, 'child', 'up'), [])
+  assert.deepEqual(smite.smiteArmChrome(), { stroke: '#16a34a', ants: false, fill: 'none' })
 
   assert.equal(smite.smiteScarOpacity(0), 1)
   assert.equal(smite.smiteScarOpacity(2800), 1)
@@ -1688,6 +1949,11 @@ test('smite commit kills red, banks amber, and climbs the cards that stay', () =
   assert.deepEqual(banked.scars, [])
   assert.deepEqual(banked.tree.children.map((child) => child._uid), ['a1', 'b'])
 
+  const optedOut = smite.planSmiteCommit(original, new Map([['a', 'red'], ['a1', 'normal'], ['blank', 'red'], ['b', 'red']]))
+  assert.deepEqual(optedOut.bank, [])
+  assert.deepEqual(optedOut.scars.map((scar) => scar.uid), ['blank', 'a', 'b'])
+  assert.deepEqual(optedOut.tree.children.map((child) => child._uid), ['a1'])
+
   const promoted = smite.planSmiteCommit(original, { r: 'red' })
   assert.equal(promoted.tree._uid, 'a')
   assert.deepEqual(promoted.tree.children.map((child) => child._uid), ['a1', 'blank', 'b'])
@@ -1703,12 +1969,208 @@ test('smite commit kills red, banks amber, and climbs the cards that stay', () =
   assert.equal(blankAmber.tree._uid, 'k')
 })
 
+test('a down-flick commits only the still-in pocket under that card', () => {
+  const smite = loadSmitePure()
+  const tree = smiteSampleTree()
+  const marks = new Map([
+    ['r', 'red'],
+    ['a', 'red'],
+    ['a1', 'normal'],
+    ['blank', 'red'],
+    ['b', 'amber'],
+  ])
+  assert.deepEqual(smite.smiteSubtreeIds(tree, 'a').slice().sort(), ['a', 'a1', 'blank'])
+  assert.deepEqual(smite.smiteSubtreeIds(tree, 'b'), ['b'])
+  assert.deepEqual(smite.smiteSubtreeIds(tree, 'r').slice().sort(), ['a', 'a1', 'b', 'blank', 'r'])
+
+  const pocket = smite.smiteFlickScope(tree, marks, 'a')
+  assert.deepEqual([...pocket.entries()].sort(), [['a', 'red'], ['blank', 'red']])
+  const plan = smite.planSmiteCommit(tree, pocket)
+  assert.equal(plan.tree._uid, 'r')
+  assert.deepEqual(plan.tree.children.map((child) => child._uid), ['a1', 'b'])
+  assert.equal(plan.tree.children[0].name, 'A1')
+  assert.deepEqual(plan.scars.map((scar) => scar.uid).sort(), ['a', 'blank'])
+  assert.deepEqual(plan.bank, [])
+  assert.equal(JSON.stringify(tree), JSON.stringify(smiteSampleTree()))
+
+  const sibling = smite.smiteFlickScope(tree, marks, 'b')
+  assert.deepEqual([...sibling.entries()], [['b', 'amber']])
+  const banked = smite.planSmiteCommit(tree, sibling)
+  assert.deepEqual(banked.bank, ['B'])
+  assert.deepEqual(banked.tree.children.map((child) => child._uid), ['a'])
+  assert.equal(banked.tree.children[0]._uid, 'a')
+  assert.deepEqual(banked.tree.children[0].children.map((child) => child._uid), ['a1', 'blank'])
+
+  assert.equal(smite.smiteFlickScope(tree, marks, 'a1').size, 0)
+  const above = smite.smiteFlickScope(tree, marks, 'missing')
+  assert.equal(above.size, 0)
+})
+
+test('cast edges gradient from parent fate to child fate, and ants follow the child', () => {
+  const smite = loadSmitePure()
+  const clear = '#ffffff'
+  const red = '#ff0000'
+  const amber = '#ffa100'
+  const pairs = [
+    ['red', 'red', red, red, red, 'strong'],
+    ['amber', 'amber', amber, amber, amber, 'strong'],
+    ['red', 'amber', red, amber, amber, 'strong'],
+    ['amber', 'red', amber, red, red, 'strong'],
+    ['normal', 'red', clear, red, red, 'strong'],
+    ['normal', 'amber', clear, amber, amber, 'strong'],
+    ['red', 'normal', red, clear, clear, 'strong'],
+    ['amber', 'normal', amber, clear, clear, 'strong'],
+    ['normal', 'normal', clear, clear, clear, 'strong'],
+    [null, 'red', clear, red, red, 'strong'],
+    ['red', null, red, clear, clear, 'strong'],
+    ['amber', undefined, amber, clear, clear, 'strong'],
+  ]
+  for (const [parent, child, from, to, ants, weight] of pairs) {
+    const paint = smite.smiteEdgePaint(parent, child)
+    assert.equal(paint.from, from, `${parent} → ${child} from`)
+    assert.equal(paint.to, to, `${parent} → ${child} to`)
+    assert.equal(paint.ants, ants, `${parent} → ${child} ants`)
+    assert.equal(paint.weight, weight, `${parent} → ${child} weight`)
+    assert.equal(paint.haloFrom, from === clear ? '#7C8491' : clear, `${parent} → ${child} halo from`)
+    assert.equal(paint.haloTo, to === clear ? '#7C8491' : clear, `${parent} → ${child} halo to`)
+    assert.equal(smite.smiteEdgeAnt(parent, child), ants)
+  }
+  const tree = smiteSampleTree()
+  assert.equal(smite.smiteMoodTargets(tree, 'a').includes('a'), false)
+  assert.deepEqual(
+    smite.smiteMoodEdges(tree, 'a').map((edge) => `${edge.parentUid}>${edge.childUid}`).sort(),
+    ['a>a1', 'a>blank'],
+  )
+  assert.deepEqual(smite.smiteMoodEdges(tree, 'b'), [])
+  assert.equal(smite.smiteMoodEdges(tree, 'r').some((edge) => edge.childUid === 'r'), false)
+})
+
+test('cast chrome is an outline with no fill, and connectors move only for a whole pocket', () => {
+  const smite = loadSmitePure()
+  const red = '#ff0000'
+  const amber = '#ffa100'
+  const white = '#ffffff'
+  assert.equal(smite.smiteCastShape(new Map([['r', 'red'], ['a', 'normal'], ['b', 'normal']]), 'r', ['a', 'b']), 'parent')
+  assert.equal(smite.smiteCastShape(new Map([['r', 'normal'], ['a', 'red'], ['b', 'amber']]), 'r', ['a', 'b']), 'kids')
+  assert.equal(smite.smiteCastShape(new Map([['a', 'red']]), 'r', ['a', 'b']), 'kids')
+  assert.equal(smite.smiteCastShape(new Map([['r', 'red'], ['a', 'red'], ['b', 'normal']]), 'r', ['a', 'b']), 'pocket')
+  assert.equal(smite.smiteCastShape(new Map([['r', 'amber'], ['a', 'amber'], ['b', 'normal']]), 'r', ['a', 'b']), 'pocket')
+  assert.equal(smite.smiteCastShape(new Map([['r', 'normal'], ['a', 'normal']]), 'r', ['a']), 'idle')
+  assert.equal(smite.smiteCardChrome('red', true), null)
+  assert.deepEqual(smite.smiteCardChrome('red', false), { stroke: red, ants: true, fill: 'none' })
+  assert.deepEqual(smite.smiteCardChrome('amber', false), { stroke: amber, ants: true, fill: 'none' })
+  assert.deepEqual(smite.smiteCardChrome('normal', false), { stroke: white, ants: true, fill: 'none' })
+  assert.equal(smite.smiteCardChrome('normal', true), null)
+  assert.equal(smite.smiteCardChrome(null, false), null)
+  assert.equal(smite.smiteLinkLive('parent', 'red', 'normal'), null)
+  assert.equal(smite.smiteLinkLive('parent', 'red', 'red'), null)
+  assert.equal(smite.smiteLinkLive('kids', 'normal', 'red'), null)
+  assert.equal(smite.smiteLinkLive('kids', 'red', 'amber'), null)
+  assert.equal(smite.smiteLinkLive('idle', 'red', 'red'), null)
+  const whiteEdge = smite.smiteLinkLive('pocket', 'normal', 'normal')
+  assert.equal(whiteEdge.from, white)
+  assert.equal(whiteEdge.to, white)
+  assert.equal(whiteEdge.ants, white)
+  assert.equal(whiteEdge.haloFrom, '#7C8491')
+  assert.equal(whiteEdge.haloTo, '#7C8491')
+  assert.equal(whiteEdge.weight, 'strong')
+  assert.equal(smite.smiteLinkLive('pocket', null, 'red'), null)
+  const same = smite.smiteLinkLive('pocket', 'red', 'red')
+  assert.equal(same.from, red)
+  assert.equal(same.to, red)
+  assert.equal(same.ants, red)
+  assert.equal(same.haloFrom, white)
+  assert.equal(same.haloTo, white)
+  assert.equal(same.weight, 'strong')
+  const mixed = smite.smiteLinkLive('pocket', 'red', 'amber')
+  assert.equal(mixed.from, red)
+  assert.equal(mixed.to, amber)
+  assert.equal(mixed.ants, amber)
+  assert.equal(mixed.haloFrom, white)
+  assert.equal(mixed.haloTo, white)
+  assert.equal(mixed.weight, 'strong')
+  const fade = smite.smiteLinkLive('pocket', 'red', 'normal')
+  assert.equal(fade.from, red)
+  assert.equal(fade.to, white)
+  assert.equal(fade.ants, white)
+  assert.equal(fade.haloFrom, white)
+  assert.equal(fade.haloTo, '#7C8491')
+  assert.equal(fade.weight, 'strong')
+  const rising = smite.smiteLinkLive('pocket', 'normal', 'red')
+  assert.equal(rising.from, white)
+  assert.equal(rising.to, red)
+  assert.equal(rising.ants, red)
+  assert.equal(rising.haloFrom, '#7C8491')
+  assert.equal(rising.haloTo, white)
+  assert.equal(rising.weight, 'strong')
+  const v162 = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
+  const paint = v162.slice(v162.indexOf('function paintSmiteLayers'), v162.indexOf('function smiteScarPoint'))
+  assert.match(paint, /smiteCardChrome\(/)
+  assert.match(paint, /smiteLinkLive\(/)
+  assert.doesNotMatch(paint, /smitePastel\(/)
+  assert.match(v162, /setAttribute\('fill', 'none'\)/)
+  const wash = styles.slice(styles.indexOf('rect.logyq-smite-wash{'), styles.indexOf('path.logyq-smite-clock'))
+  assert.match(wash, /fill:\s*none/)
+  assert.match(wash, /data-smite-outline="ants"/)
+  assert.doesNotMatch(wash, /stroke:\s*none/)
+})
+
 test('smite cake is a solid clock and does not reopen a long-press Word Bank dump', () => {
   const v162 = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
   const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
   const mix = readFileSync(new URL('../public/logyq/js/engine/15-mix-and-context.js', import.meta.url), 'utf8')
   assert.match(v162, /function bindSmiteGestures/)
   assert.match(v162, /function commitSmite/)
+  assert.match(v162, /function smiteCycleMember/)
+  assert.match(v162, /function smiteRootStep/)
+  assert.match(v162, /function smiteCastTap/)
+  assert.match(v162, /function smiteCastReply/)
+  const mercyUp = v162.slice(v162.indexOf('function smiteMercyUp'), v162.indexOf('function smiteApplyEntries'))
+  assert.match(mercyUp, /mercy\.remaining = SMITE_START_MS/)
+  assert.match(mercyUp, /smiteCastReply\(/)
+  assert.match(mercyUp, /smiteCastTap\(/)
+  assert.match(mercyUp, /command\.action === 'clear'/)
+  assert.match(mercyUp, /!smiteHasNominated\(mercy\.marks\)/)
+  assert.match(mercyUp, /commitSmite\(doc, win, smite, mercy, pointer\.uid\)/)
+  assert.doesNotMatch(mercyUp, /smiteParentCommand|smiteChildCommand|smiteToggleParticipation/)
+  const tick = v162.slice(v162.indexOf('function smiteTick('), v162.indexOf('function smiteMercyUp'))
+  assert.match(tick, /for \(const mercy of due\) commitSmite\(doc, win, smite, mercy\)/)
+  assert.match(tick, /if \(!smiteHasNominated\(mercy\.marks\)\)/)
+  assert.match(tick, /for \(const mercy of idle\) smiteDropMercy\(smite, mercy\)/)
+  assert.doesNotMatch(tick, /pointer\.uid/)
+  const commit = v162.slice(v162.indexOf('function commitSmite'), v162.indexOf('function smiteFace'))
+  assert.match(commit, /smiteFlickScope\(/)
+  assert.match(commit, /scopeUid/)
+  assert.match(commit, /mercy\.committing = false/)
+  assert.match(commit, /!smiteHasNominated\(mercy\.marks\)/)
+  assert.match(v162, /function smiteEdgePaint/)
+  assert.match(v162, /function smiteEdgeAnt/)
+  assert.match(v162, /function smiteMoodEdges/)
+  const edgePaint = v162.slice(v162.indexOf('function smitePaintEdge'), v162.indexOf('function smitePaintCard'))
+  assert.match(edgePaint, /smiteEnsureLinkGeometry/)
+  assert.doesNotMatch(edgePaint, /\.interrupt\(/)
+  assert.match(v162, /logyq-smite-march 1\.4s linear infinite/)
+  assert.doesNotMatch(v162, /logyq-smite-march 0\.7s/)
+  assert.match(v162, /function smiteFoldCast/)
+  assert.match(v162, /strokeDasharray = '8 6'/)
+  assert.match(v162, /strokeDasharray = 'none'/)
+  assert.match(v162, /linearGradient/)
+  const cardPaint = v162.slice(v162.indexOf('function smitePaintCard'), v162.indexOf('function smitePaintGlow'))
+  assert.match(cardPaint, /logyq-smite-march/)
+  assert.doesNotMatch(cardPaint, /logyq-smite-ants/)
+  const edge = styles.slice(styles.indexOf('data-smite-edge'), styles.indexOf('path.logyq-smite-clock'))
+  assert.match(edge, /stroke-dasharray:\s*none/)
+  assert.match(edge, /logyq-smite-ant/)
+  assert.match(edge, /logyq-smite-march 1\.4s linear infinite/)
+  assert.doesNotMatch(edge, /logyq-smite-march \.7s/)
+  assert.doesNotMatch(edge, /data-smite-weight="soft"/)
+  assert.match(edge, /stroke-width:\s*3\.5px/)
+  assert.doesNotMatch(edge, /stroke-width:\s*2px/)
+  const marchAt = styles.indexOf('@keyframes logyq-smite-march')
+  const march = styles.slice(marchAt, marchAt + 90)
+  assert.match(march, /stroke-dashoffset/)
+  assert.doesNotMatch(march, /stroke-opacity/)
   assert.match(v162, /__logyqV2ConsumedPointers\.add\(event\.pointerId\)/)
   assert.match(v162, /smite\.pinched/)
   assert.match(v162, /smite\.mercies/)
@@ -1727,6 +2189,8 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   assert.match(clock, /vector-effect:\s*none/)
   assert.match(clock, /animation:\s*none/)
   assert.match(clock, /transition:\s*none/)
+  assert.doesNotMatch(styles, /@keyframes logyq-smite-ants/)
+  assert.doesNotMatch(styles, /stroke-opacity:\s*\.45/)
   assert.doesNotMatch(v162, /Sent subtree to Word Dock/)
   assert.match(v162, /setAttribute\('pathLength'/)
   assert.match(v162, /SMITE_BUFFER_MS = 3000/)
@@ -1735,4 +2199,111 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   assert.match(v162, /clock\.style\.removeProperty\('stroke-dashoffset'\)/)
   assert.doesNotMatch(v162, /clock\.style\.strokeDasharray\s*=/)
   assert.doesNotMatch(v162, /clock\.style\.strokeDashoffset\s*=/)
+})
+
+test('curriculum pack matches parent structure and ignores sibling order', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/07-curriculum.js', import.meta.url), 'utf8')
+  const start = source.indexOf('// CURRICULUM_PURE_START')
+  const end = source.indexOf('// CURRICULUM_PURE_END')
+  assert.ok(start >= 0 && end > start)
+  const api = new Function(`${source.slice(start, end)}; return { curriculumPack, curriculumWords, curriculumMatches, curriculumUnlocked, curriculumStructureKey };`)()
+  const pack = api.curriculumPack()
+  assert.deepEqual(pack.map((level) => level.title), ['Fruit', 'Food', 'Places', 'Body', 'Body deep', 'Animals', 'School', 'Home'])
+  assert.equal(pack.length, 8)
+  const titles = JSON.stringify(pack)
+  assert.equal(titles.includes('lunch'), false)
+  assert.equal(titles.includes('recess'), false)
+  assert.equal(titles.includes('"break"'), false)
+  const fruit = pack[0].tree
+  assert.deepEqual(api.curriculumWords(fruit).sort(), ['apple', 'banana', 'fruit'])
+  const swapped = { name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] }
+  assert.equal(api.curriculumMatches(fruit, swapped), true)
+  assert.equal(api.curriculumMatches(fruit, { name: 'fruit', children: [{ name: 'apple', children: [{ name: 'banana' }] }] }), false)
+  assert.equal(api.curriculumMatches(fruit, { name: 'fruit', children: [{ name: 'apple' }] }), false)
+  const food = pack[1].tree
+  const foodSwapped = {
+    name: 'food',
+    children: [
+      { name: 'meat', children: [{ name: 'beef' }, { name: 'chicken' }] },
+      { name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] },
+    ],
+  }
+  assert.equal(api.curriculumMatches(food, foodSwapped), true)
+  assert.equal(api.curriculumMatches(food, { name: 'food', children: foodSwapped.children.slice(0, 1) }), false)
+  assert.equal(api.curriculumStructureKey(pack[2].tree).startsWith('Earth['), true)
+  assert.equal(api.curriculumUnlocked(0, { levels: {} }, pack), true)
+  assert.equal(api.curriculumUnlocked(1, { levels: {} }, pack), false)
+  assert.equal(api.curriculumUnlocked(1, { levels: { fruit: { clearedAt: '2026-09-23T00:00:00.000Z', ms: 1200 } } }, pack), true)
+  assert.equal(api.curriculumUnlocked(2, { levels: { fruit: { clearedAt: '2026-09-23T00:00:00.000Z', ms: 10 } } }, pack), false)
+  assert.match(source, /logyq_curriculum_progress_v1/)
+  assert.match(source, /state\.root = null/)
+  assert.match(source, /function checkCurriculum/)
+})
+
+test('thekonym join matches term exactly and reads essence from the row', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/08-thekonym.js', import.meta.url), 'utf8')
+  const start = source.indexOf('// THEKONYM_PURE_START')
+  const end = source.indexOf('// THEKONYM_PURE_END')
+  assert.ok(start >= 0 && end > start)
+  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine, thekonymDossier, thekonymExampleLines, thekonymExampleKeep, thekonymInPlay };`)()
+  const rows = [
+    {
+      id: '1',
+      term: 'Fruit',
+      essence: 'stored essence',
+      term_pronunciation: 'prak • TEH • oh • nim',
+      kid_explanation: 'Kid line.',
+      definition: 'A definition.',
+      technical_definition: 'A technical definition.',
+      example: 'One.\n\nTwo.\r\n Three.',
+    },
+    { id: '2', term: 'fruit', essence: 'other' },
+  ]
+  assert.equal(api.thekonymMatch(rows, 'Fruit').id, '1')
+  assert.equal(api.thekonymMatch(rows, 'fruit').id, '2')
+  assert.equal(api.thekonymMatch(rows, 'fruity'), null)
+  assert.equal(api.thekonymMatch(rows, 'Fruit ').id, '1')
+  const face = api.thekonymFace(rows, 'Fruit', { 1: { essence: 'local essence' } })
+  assert.equal(face.essence, 'local essence')
+  assert.equal(face.onym, 'Fruit')
+  assert.equal(face.storedTerm, 'Fruit')
+  const renamed = api.thekonymFace(rows, 'Fruit', { 1: { term: 'Shown' } })
+  assert.equal(renamed.onym, 'Shown')
+  assert.equal(api.thekonymMatch(rows, 'Shown'), null)
+  assert.equal(api.thekonymByLetter(rows, 'F').length, 2)
+  assert.equal(api.thekonymAlphabetLetter('fruit'), 'F')
+  assert.equal(api.thekonymFaceLine('short'), 'short')
+  assert.equal(api.thekonymFaceLine('1234567890123456789012345').endsWith('…'), true)
+  const dossier = api.thekonymDossier(rows, 'Fruit', {})
+  assert.equal(dossier.pronunciation, 'prak • TEH • oh • nim')
+  assert.equal(dossier.kids, 'Kid line.')
+  assert.equal(dossier.definition, 'A definition.')
+  assert.equal(dossier.technical, 'A technical definition.')
+  assert.deepEqual(dossier.examples, ['One.', 'Two.', 'Three.'])
+  const edited = api.thekonymDossier(rows, 'Fruit', { 1: { essence: 'local essence' } })
+  assert.equal(edited.essence, 'local essence')
+  assert.equal(edited.pronunciation, 'prak • TEH • oh • nim')
+  const bare = api.thekonymDossier([{ id: '9', term: 'Bare' }], 'Bare', {})
+  assert.equal(bare.kids, '')
+  assert.equal(bare.definition, '')
+  assert.deepEqual(bare.examples, [])
+  assert.deepEqual(api.thekonymExampleLines(''), [])
+  const fitsAt = (limit) => (keep) => keep <= limit
+  assert.deepEqual(api.thekonymExampleKeep(5, fitsAt(5)), { keep: 5, fadeTechnical: false })
+  assert.deepEqual(api.thekonymExampleKeep(5, fitsAt(2)), { keep: 2, fadeTechnical: false })
+  assert.deepEqual(api.thekonymExampleKeep(5, fitsAt(1)), { keep: 1, fadeTechnical: false })
+  assert.deepEqual(api.thekonymExampleKeep(5, () => false), { keep: 1, fadeTechnical: true })
+  assert.deepEqual(api.thekonymExampleKeep(0, () => false), { keep: 0, fadeTechnical: true })
+  assert.equal(api.thekonymInPlay('Fruit', ['Fruit', 'Other']), true)
+  assert.equal(api.thekonymInPlay('Fruit', ['fruit']), false)
+  assert.equal(api.thekonymInPlay('Quill', ['Fruit']), false)
+  assert.match(source, /lab_thekonym_read/)
+  assert.match(source, /term_pronunciation/)
+  assert.match(source, /kid_explanation/)
+  assert.match(source, /technical_definition/)
+  assert.match(source, /not in Thekonyms yet/)
+  assert.match(source, /Add to Word Bank/)
+  assert.doesNotMatch(source, /logyq-tk-bank/)
+  assert.doesNotMatch(source, /rpc\('lab_thekonym_update'/)
+  assert.match(source, /logyq_thekonym_mode_v1/)
 })

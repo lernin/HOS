@@ -1,6 +1,60 @@
   /* ======================= EDITOR ======================= */
+ function mobileQuietEdit(){
+  try { return document.body.classList.contains('logyq-mobile-v162') } catch (_e) { return false }
+ }
+
+ // The phone field is a full-width bar on the keyboard. It never follows the card.
+ // Keyboard inset is the covered height only. Subtracting the visual
+ // viewport's scroll offset made the bar hop while the keyboard rose.
+ // The bar stays hidden until that inset has been still, or until
+ // PHONE_BAR_CAP_MS. It then slides up from under the keyboard.
+ const PHONE_BAR_QUIET_MS = 80
+ const PHONE_BAR_CAP_MS = 500
+ const PHONE_BAR_SLIDE_MS = 600
+ function keyboardInset(){
+  const vv = window.visualViewport
+  return vv ? Math.max(0, Math.round(window.innerHeight - vv.height)) : 0
+ }
+ function mobileLift(inset){
+  return inset ? 'translate3d(0,' + (-inset) + 'px,0)' : 'translate3d(0,0,0)'
+ }
+ function applyMobileInset(stack, inset, slide){
+  if (stack._logyqInset === inset && stack.classList.contains('is-placed') && stack.dataset.drawer === 'open') return
+  stack._logyqInset = inset
+  stack.style.bottom = '0px'
+  if (slide && stack.dataset.drawer !== 'open') {
+    stack.style.transition = 'none'
+    stack.style.transform = 'translate3d(0,100%,0)'
+    void stack.offsetWidth
+    stack.dataset.drawerFrom = String(Math.round(stack.getBoundingClientRect().bottom))
+    stack.style.transition = 'transform ' + PHONE_BAR_SLIDE_MS + 'ms cubic-bezier(0.22, 1, 0.36, 1)'
+    stack.style.transform = mobileLift(inset)
+    stack.dataset.drawer = 'open'
+    delete stack.dataset.drawerSettled
+    const settle = (event) => {
+      if (event.propertyName !== 'transform') return
+      stack.dataset.drawerSettled = '1'
+      stack.removeEventListener('transitionend', settle)
+    }
+    stack.addEventListener('transitionend', settle)
+    return
+  }
+  stack.style.transform = mobileLift(inset)
+ }
+ function dockMobileEditor(){
+  const { state } = logyq
+  const el = state.editorEl
+  const stack = el?.closest?.('.node-edit-stack')
+  if (!stack || !stack.classList.contains('is-placed')) return
+  applyMobileInset(stack, keyboardInset())
+ }
+
  function updateNodeEditorPosition(){
   const { state, elements, config: CONFIG } = logyq
+  if (mobileQuietEdit()) {
+    dockMobileEditor()
+    return
+  }
   if(!state.editingUid || !state.editorEl || !elements.gRoot) return;
   try{
     const h = state.root?.descendants().find(n => n.data?._uid === state.editingUid);
@@ -60,18 +114,43 @@
  
  
  
+  function mirrorEditLabel(uid, text){
+    const { state, utils } = logyq
+    const target = utils.findByUid(state.root?.data, uid)
+    if (!target) return
+    const next = text == null ? '' : String(text)
+    if ((target.name ?? '') === next) return
+    target.name = next
+    try { logyq.layout.LabelWrap.apply() } catch (_e) {}
+  }
+  function showEditFocus(uid){
+    try { logyq.setEditFocus?.(uid || null) } catch (_e) {}
+  }
+  function restoreEditName(uid, prev){
+    if (prev == null || uid == null) return
+    const { state, utils } = logyq
+    const target = utils.findByUid(state.root?.data, uid)
+    if (!target || (target.name ?? '') === prev) return
+    target.name = prev
+    try { logyq.layout.LabelWrap.apply() } catch (_e) {}
+  }
+
   function closeNodeEditor(apply, restoreZoom){
     const { state, elements, utils } = logyq
     if(!state.editingUid) return;
-    const uid = state.editingUid; const el = state.editorEl;
+    const uid = state.editorEl?.dataset?.editUid || state.editingUid; const el = state.editorEl;
+    const prevName = state.editPrevName
+    state.editPrevName = null
+    showEditFocus(null)
     if (state._editFocusTimer) { try { clearTimeout(state._editFocusTimer); } catch (_e) {} state._editFocusTimer = 0; }
+    if (state._editPlaceTimer) { try { clearTimeout(state._editPlaceTimer); } catch (_e) {} state._editPlaceTimer = 0; }
     if (typeof state._editViewportOff === 'function') { try { state._editViewportOff(); } catch (_e) {} state._editViewportOff = null; }
     state.editingUid = null; state.editorEl = null;
-    if(el && el.parentNode) el.parentNode.removeChild(el);
+    if(el && el.parentNode && !el.closest?.('.node-edit-stack')) el.parentNode.removeChild(el);
     if(apply){
       const target = utils.findByUid(state.root.data, uid);
       if(target){
-        const prev = target.name ?? "";
+        const prev = prevName != null ? prevName : (target.name ?? "");
         const next = (el && typeof el.value === "string") ? el.value.trim() : prev;
         if(next !== prev){
           logyq.history.pushHistory({ type:"rename", uid, prev, next });
@@ -80,16 +159,24 @@
           utils.assignIds(state.root);
           logyq.treeManager.layoutAndRender(false);
           setSelected(uid);
+        } else {
+          restoreEditName(uid, prev);
         }
       }
+    } else {
+      restoreEditName(uid, prevName);
     }
-    const svg = elements.svg?.node?.();
-    if (svg) d3.select(svg).interrupt();
-    const shouldRestore = state.prevZoom && (restoreZoom || state.editFocusArmed) && !state.editUserZoom;
-    if(shouldRestore){
-      const t = state.prevZoom;
-      elements.svg.transition().duration(360).ease(d3.easeCubicOut).call(state.zoom.transform, t);
+    if (!mobileQuietEdit()) {
+      const svg = elements.svg?.node?.();
+      if (svg) d3.select(svg).interrupt();
+      const shouldRestore = state.prevZoom && (restoreZoom || state.editFocusArmed) && !state.editUserZoom;
+      if(shouldRestore){
+        const t = state.prevZoom;
+        elements.svg.transition().duration(360).ease(d3.easeCubicOut).call(state.zoom.transform, t);
+      }
     }
+    const host = el?.closest?.('.node-edit-stack') || el?.closest?.('.node-edit-dock')
+    if (host && host.parentNode) host.parentNode.removeChild(host)
     state.prevZoom = null;
     state.editZoom = null;
     state.editFocusArmed = false;
@@ -104,17 +191,77 @@
     const uid = d?.data?._uid;
     if(!d || uid == null || String(uid) === '') return;
     state.editingUid = uid;
-    const current = d3.zoomTransform(elements.svg.node());
-    state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
+    state.editPrevName = (d.data && d.data.name) ? String(d.data.name) : '';
+    showEditFocus(uid);
     state.editZoom = null;
     state.editFocusArmed = false;
     state.editUserZoom = false;
+    if (mobileQuietEdit()) {
+      state.prevZoom = null;
+    } else {
+      const current = d3.zoomTransform(elements.svg.node());
+      state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
+    }
     const input = document.createElement("input");
     input.type = "text"; input.className = "node-edit-input";
+    input.enterKeyHint = "done";
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("autocorrect", "off");
+    input.setAttribute("spellcheck", "false");
     input.value = (d.data && d.data.name) ? d.data.name : "";
-    document.body.appendChild(input);
+    input.dataset.editUid = String(uid);
+    if (mobileQuietEdit()) {
+      const stack = document.createElement("div");
+      stack.className = "node-edit-stack";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "node-edit-cancel";
+      cancel.setAttribute("aria-label", "Cancel rename");
+      cancel.textContent = "\u00d7";
+      const dock = document.createElement("div");
+      dock.className = "node-edit-dock";
+      dock.appendChild(input);
+      stack.appendChild(cancel);
+      stack.appendChild(dock);
+      document.body.appendChild(stack);
+      // preventDefault on touchstart keeps the field focused, but it also
+      // swallows the click. Close on pointerup / touchend, and keep click
+      // for a plain mouse activation.
+      let cancelArmed = false;
+      const armCancel = function(event){
+        if (event.button != null && event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        cancelArmed = true;
+      };
+      const fireCancel = function(event){
+        if (!cancelArmed) return;
+        cancelArmed = false;
+        event.preventDefault();
+        event.stopPropagation();
+        closeNodeEditor(false, true);
+      };
+      cancel.addEventListener("pointerdown", armCancel);
+      cancel.addEventListener("mousedown", armCancel);
+      cancel.addEventListener("touchstart", armCancel, { passive: false });
+      cancel.addEventListener("pointerup", fireCancel);
+      cancel.addEventListener("touchend", fireCancel, { passive: false });
+      cancel.addEventListener("pointercancel", function(){ cancelArmed = false; });
+      cancel.addEventListener("click", function(event){
+        event.preventDefault();
+        event.stopPropagation();
+        closeNodeEditor(false, true);
+      });
+    } else {
+      document.body.appendChild(input);
+    }
     state.editorEl = input;
 
+
+    input.addEventListener("input", function(){
+      if (state.editingUid !== uid) return;
+      mirrorEditLabel(uid, input.value);
+    });
 
     input.addEventListener("keydown", function(e){
   if (e.key === "Enter"){
@@ -140,24 +287,85 @@
 
 
 
-    input.addEventListener("blur", function(){ closeNodeEditor(true, true); });
+    input.addEventListener("blur", function(){
+      // A phone tap on the map must not save and close. Enter commits.
+      // The X and Escape cancel. Desktop still commits on blur.
+      if (mobileQuietEdit()) return;
+      closeNodeEditor(true, true);
+    });
     updateNodeEditorPosition();
-    setTimeout(function(){ try{ input.focus(); var L=input.value.length; input.setSelectionRange(L,L); }catch(_e){} }, 0);
-    if (document.body.classList.contains('logyq-mobile-v162')) {
-      const uid = d.data._uid;
-      state._editFocusTimer = setTimeout(() => {
+    state._editFocusTimer = setTimeout(function(){
+      try { input.focus({ preventScroll: true }); var L=input.value.length; input.setSelectionRange(L,L); } catch (_e) {}
+    }, 0);
+    if (mobileQuietEdit()) {
+      const vv = window.visualViewport;
+      let dockFrame = 0;
+      let lastInset = keyboardInset();
+      let lastChange = performance.now();
+      const started = lastChange;
+      const placeTick = () => {
+        state._editPlaceTimer = 0;
         if (state.editingUid !== uid) return;
-        state.editFocusArmed = true;
-        logyq.camera.flyEditFocusToUID(uid);
-        const vv = window.visualViewport;
-        if (!vv) return;
-        const onResize = () => {
-          if (state.editingUid !== uid || state.editUserZoom) return;
-          logyq.camera.flyEditFocusToUID(uid, { duration: 220 });
-        };
-        vv.addEventListener('resize', onResize);
-        state._editViewportOff = () => vv.removeEventListener('resize', onResize);
-      }, 0);
+        const stack = input.closest?.('.node-edit-stack');
+        if (!stack || stack.classList.contains('is-placed')) {
+          dockMobileEditor();
+          return;
+        }
+        const inset = keyboardInset();
+        const now = performance.now();
+        if (inset !== lastInset) {
+          lastInset = inset;
+          lastChange = now;
+        }
+        const quiet = now - lastChange >= PHONE_BAR_QUIET_MS;
+        const capped = now - started >= PHONE_BAR_CAP_MS;
+        // A zero inset is the gap under a rising keyboard, not a resting spot.
+        if ((inset > 0 && quiet) || capped) {
+          stack.classList.add('is-placed');
+          applyMobileInset(stack, inset, true);
+          return;
+        }
+        state._editPlaceTimer = setTimeout(placeTick, 40);
+      };
+      state._editPlaceTimer = setTimeout(placeTick, 40);
+      const onViewport = () => {
+        if (state.editingUid !== uid) return;
+        if (dockFrame) return;
+        dockFrame = requestAnimationFrame(() => {
+          dockFrame = 0;
+          if (state.editingUid !== uid) return;
+          const stack = input.closest?.('.node-edit-stack');
+          if (stack && !stack.classList.contains('is-placed')) {
+            if (!state._editPlaceTimer) state._editPlaceTimer = setTimeout(placeTick, 0);
+            return;
+          }
+          dockMobileEditor();
+        });
+      };
+      const keepMapFocus = (event) => {
+        if (state.editingUid !== uid) return;
+        const stack = input.closest?.('.node-edit-stack');
+        if (stack && stack.contains(event.target)) return;
+        const canvas = document.getElementById('canvas');
+        if (!canvas || (event.target !== canvas && !canvas.contains(event.target))) return;
+        if (event.cancelable) event.preventDefault();
+      };
+      if (vv) {
+        vv.addEventListener('resize', onViewport);
+        vv.addEventListener('scroll', onViewport);
+      }
+      document.addEventListener('touchstart', keepMapFocus, { capture: true, passive: false });
+      document.addEventListener('mousedown', keepMapFocus, { capture: true, passive: false });
+      state._editViewportOff = () => {
+        if (dockFrame) cancelAnimationFrame(dockFrame);
+        dockFrame = 0;
+        if (vv) {
+          vv.removeEventListener('resize', onViewport);
+          vv.removeEventListener('scroll', onViewport);
+        }
+        document.removeEventListener('touchstart', keepMapFocus, { capture: true });
+        document.removeEventListener('mousedown', keepMapFocus, { capture: true });
+      };
     }
   }
 

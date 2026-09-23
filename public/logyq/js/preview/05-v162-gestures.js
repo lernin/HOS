@@ -273,40 +273,204 @@
     return mark === 'amber' ? '#ffa100' : '#ff0000'
   }
 
+  function smiteNodeUid(node) {
+    return node?._uid || node?.uid || node?.data?._uid || null
+  }
+
+  function smiteNodeKids(node) {
+    return Array.isArray(node?.children) ? node.children
+      : (Array.isArray(node?.data?.children) ? node.data.children : [])
+  }
+
+  function smiteFindNode(tree, uid) {
+    let found = null
+    const find = (node) => {
+      if (found || !node || typeof node !== 'object') return
+      if (smiteNodeUid(node) === uid) {
+        found = node
+        return
+      }
+      for (const kid of smiteNodeKids(node)) find(kid)
+    }
+    find(tree)
+    return found
+  }
+
   // Connectors whose target is strictly below the clock parent. The edge
   // into that parent, and anything above it, keeps the normal link color.
   function smiteMoodTargets(tree, castUid) {
     const out = []
     if (!tree || !castUid) return out
-    const uidOf = (node) => node?._uid || node?.uid || node?.data?._uid || null
-    const kidsOf = (node) => (
-      Array.isArray(node?.children) ? node.children
-        : (Array.isArray(node?.data?.children) ? node.data.children : [])
-    )
-    let found = null
-    const find = (node) => {
-      if (found || !node || typeof node !== 'object') return
-      if (uidOf(node) === castUid) {
-        found = node
-        return
-      }
-      for (const kid of kidsOf(node)) find(kid)
-    }
+    const found = smiteFindNode(tree, castUid)
     const collect = (node) => {
-      for (const kid of kidsOf(node)) {
-        const uid = uidOf(kid)
+      for (const kid of smiteNodeKids(node)) {
+        const uid = smiteNodeUid(kid)
         if (uid) out.push(uid)
         collect(kid)
       }
     }
-    find(tree)
     if (found) collect(found)
     return out
   }
 
-  // Live windows are branches of the one open map, not separate documents.
-  // Sibling branches that share no cards each keep a timer. A cast that
-  // touches a card already in a live branch is ignored.
+  // The flicked card plus every structural descendant. Siblings and
+  // ancestors are outside this set, so a partial commit leaves them.
+  function smiteSubtreeIds(tree, uid) {
+    const out = []
+    if (!tree || !uid) return out
+    const found = smiteFindNode(tree, uid)
+    const collect = (node) => {
+      const id = smiteNodeUid(node)
+      if (id) out.push(id)
+      for (const kid of smiteNodeKids(node)) collect(kid)
+    }
+    if (found) collect(found)
+    return out
+  }
+
+  // Still-in fates only. Out and unmarked cards in the pocket stay.
+  function smiteScopeMarks(marks, ids) {
+    const want = new Set(ids || [])
+    const scoped = new Map()
+    for (const [id, mark] of smiteTicketEntries(marks)) {
+      if (!want.has(id)) continue
+      if (mark === 'red' || mark === 'amber') scoped.set(id, mark)
+    }
+    return scoped
+  }
+
+  function smiteFlickScope(tree, marks, uid) {
+    return smiteScopeMarks(marks, smiteSubtreeIds(tree, uid))
+  }
+
+  // Out-in-cast is white. Delete and Word Bank keep the mercy colors.
+  function smiteFateTone(mark) {
+    if (mark === 'red') return '#ff0000'
+    if (mark === 'amber') return '#ffa100'
+    return '#ffffff'
+  }
+
+  // Soft slate, not charcoal. The map is #f0f2f5, so this deeper of the
+  // two trial grays still reads around a white core.
+  function smiteHaloTone(mark) {
+    return smiteFateTone(mark) === '#ffffff' ? '#7C8491' : '#ffffff'
+  }
+
+  function smiteStillIn(mark) {
+    return mark === 'red' || mark === 'amber'
+  }
+
+  function smiteInCast(mark) {
+    return mark === 'red' || mark === 'amber' || mark === 'normal'
+  }
+
+  // Gradient runs parent → child. Every pocket edge is the same weight:
+  // a thick fate core over a wider halo. Red and amber keep a white halo.
+  // A white fate, including the white end of a mixed edge, uses slate.
+  function smiteEdgePaint(parentMark, childMark) {
+    return {
+      from: smiteFateTone(parentMark),
+      to: smiteFateTone(childMark),
+      ants: smiteFateTone(childMark),
+      haloFrom: smiteHaloTone(parentMark),
+      haloTo: smiteHaloTone(childMark),
+      weight: 'strong',
+    }
+  }
+
+  // Parent-only, kids-only, or a whole pocket. Connectors move only for a pocket.
+  function smiteCastShape(marks, castUid, descendantUids) {
+    const rootIn = smiteStillIn(smiteMarkOf(marks, castUid))
+    const kidIn = (descendantUids || []).some((uid) => smiteStillIn(smiteMarkOf(marks, uid)))
+    if (rootIn && kidIn) return 'pocket'
+    if (rootIn) return 'parent'
+    if (kidIn) return 'kids'
+    return 'idle'
+  }
+
+  // Armed select is a calm green outline. Not a fate, so no ants and no clock.
+  function smiteArmChrome() {
+    return { stroke: '#16a34a', ants: false, fill: 'none' }
+  }
+
+  // One-thumb direction. Up is only for a green-armed card.
+  // Two-finger Smite keeps smiteCastDirection, which does not return up.
+  function smiteArmDirection(dx, dy, min = 52) {
+    const x = Number(dx) || 0
+    const y = Number(dy) || 0
+    const adx = Math.abs(x)
+    const ady = Math.abs(y)
+    if (Math.hypot(x, y) < min) return null
+    if (adx > ady && x < 0) return 'left'
+    if (ady >= adx && y > 0) return 'down'
+    if (ady > adx && y < 0) return 'up'
+    return null
+  }
+
+  // The swipe starts on the green card, or on one of its direct children.
+  function smiteArmTarget(armedUid, hitUid, childIds) {
+    if (!armedUid || !hitUid) return null
+    if (hitUid === armedUid) return 'self'
+    if ((childIds || []).some((id) => id === hitUid)) return 'child'
+    return null
+  }
+
+  // self + down/left: the green card and everything under it.
+  // self + up: the green card alone.
+  // child + down/left: every direct child, not grandchildren.
+  function smiteArmScope(node, target, direction) {
+    if (!node || !target || !direction) return []
+    const id = smiteNodeId(node)
+    if (!id) return []
+    if (target === 'child') {
+      if (direction !== 'down' && direction !== 'left') return []
+      return smiteChildList(node).map(smiteNodeId).filter(Boolean)
+    }
+    if (target !== 'self') return []
+    if (direction === 'up') return [id]
+    if (direction === 'down' || direction === 'left') return smiteAffected(node, 'middle')
+    return []
+  }
+
+  // Clock cards wear the mercy timer, not a second ants outline. No fills.
+  function smiteCardChrome(mark, isClockCard) {
+    if (isClockCard) return null
+    if (mark === 'red') return { stroke: '#ff0000', ants: true, fill: 'none' }
+    if (mark === 'amber') return { stroke: '#ffa100', ants: true, fill: 'none' }
+    if (mark === 'normal') return { stroke: '#ffffff', ants: true, fill: 'none' }
+    return null
+  }
+
+  // Parent-only and kids-only leave the connectors alone. A pocket marches
+  // every in-cast edge, including ones that end on a white / out child.
+  function smiteLinkLive(shape, parentMark, childMark) {
+    if (shape !== 'pocket') return null
+    if (!smiteInCast(parentMark) || !smiteInCast(childMark)) return null
+    return smiteEdgePaint(parentMark, childMark)
+  }
+
+  function smiteEdgeAnt(parentMark, childMark) {
+    return smiteEdgePaint(parentMark, childMark).ants
+  }
+
+  // Edges whose target sits strictly below the clock card.
+  function smiteMoodEdges(tree, castUid) {
+    const out = []
+    if (!tree || !castUid) return out
+    const found = smiteFindNode(tree, castUid)
+    const walk = (node) => {
+      const parentUid = smiteNodeUid(node)
+      for (const kid of smiteNodeKids(node)) {
+        const childUid = smiteNodeUid(kid)
+        if (parentUid && childUid) out.push({ parentUid, childUid })
+        walk(kid)
+      }
+    }
+    if (found) walk(found)
+    return out
+  }
+
+  // True when any incoming card is already in a live branch.
   function smiteCastOverlaps(sets, ids) {
     const taken = new Set()
     for (const set of sets || []) {
@@ -319,6 +483,34 @@
       }
     }
     return (ids || []).some((id) => taken.has(id))
+  }
+
+  // Disjoint branches stay side by side. A later cast that fully contains
+  // an earlier branch absorbs it and becomes the primary. A partial overlap,
+  // or a new cast nested inside an existing one, stays blocked.
+  function smiteFoldCast(mercies, ids, tone) {
+    const incoming = new Set(ids || [])
+    const absorb = []
+    for (const mercy of mercies || []) {
+      if (!mercy) continue
+      const held = smiteTicketEntries(mercy.marks).map(([uid]) => uid)
+      if (!held.length) continue
+      const hits = held.filter((id) => incoming.has(id))
+      if (!hits.length) continue
+      if (mercy.committing || hits.length !== held.length) {
+        return { action: 'block', absorb: [], marks: null }
+      }
+      absorb.push(mercy)
+    }
+    const nextTone = tone === 'amber' ? 'amber' : 'red'
+    const marks = new Map()
+    for (const id of ids || []) marks.set(id, nextTone)
+    for (const mercy of absorb) {
+      for (const [uid, mark] of smiteTicketEntries(mercy.marks)) {
+        if (incoming.has(uid) && (mark === 'red' || mark === 'amber' || mark === 'normal')) marks.set(uid, mark)
+      }
+    }
+    return { action: absorb.length ? 'absorb' : 'clear', absorb, marks }
   }
 
   function smiteHsl(hue, sat, light) {
@@ -374,52 +566,73 @@
     return nominated[0]
   }
 
-  // Parent is master. Red → amber broadcasts to the parent and every child
-  // still nominated. Original / deselected kids stay out. Amber → out clears
-  // the whole remaining cast (caller drops the mercy).
-  function smiteParentCommand(marks, castUid, tone) {
-    const current = smiteNominatedTone(marks, castUid, tone)
-    if (current !== 'red') return { action: 'cancel', entries: [] }
-    const entries = []
-    let parentSeen = false
-    let live = false
-    for (const [uid, mark] of smiteTicketEntries(marks)) {
-      if (mark === 'red' || mark === 'amber') {
-        if (uid === castUid) parentSeen = true
-        entries.push([uid, 'amber'])
-        live = true
-      } else {
-        // Keep original kids in the cast map so they can cycle back in, but
-        // do not paint or retarget them with this broadcast.
-        entries.push([uid, mark])
-      }
-    }
-    if (castUid && !parentSeen) {
-      entries.push([castUid, 'amber'])
-      live = true
-    }
-    if (!live) return { action: 'cancel', entries: [] }
-    return { action: 'rearm', entries }
+  function smiteMember(marks, uid) {
+    if (!uid || !marks) return false
+    if (typeof marks.has === 'function') return marks.has(uid)
+    return Object.prototype.hasOwnProperty.call(marks, uid)
   }
 
-  // Child tap is independent: red → amber → original → red → …
-  // Original keeps the uid in the cast so a later tap can re-include while
-  // the parent mercy is still live. A child tap never starts a new cast.
-  function smiteChildNextMark(mark) {
+  // One card, one step: delete → Word Bank → out → delete.
+  function smiteCardNext(mark) {
     if (mark === 'red') return 'amber'
     if (mark === 'amber') return 'normal'
     return 'red'
   }
 
-  function smiteChildCommand(marks, uid) {
+  function smiteCycleMember(marks, uid) {
     const entries = smiteTicketEntries(marks)
-    if (!entries.some(([id]) => id === uid)) return { action: 'noop', entries }
-    const next = smiteChildNextMark(smiteMarkOf(marks, uid))
+    if (!smiteMember(marks, uid)) return { action: 'noop', entries }
+    const next = smiteCardNext(smiteMarkOf(marks, uid))
     return {
       action: 'cycle',
       next,
       entries: entries.map(([id, mark]) => (id === uid ? [id, next] : [id, mark])),
     }
+  }
+
+  // Root tap steps the cast down. Delete becomes Word Bank for the root and
+  // every descendant still on delete. Word Bank and out stay put. A root
+  // that is already Word Bank ends the nomination. So does a clock tap
+  // once nobody is left on delete or Word Bank — white outlines are not
+  // a fate, and the cast must not keep throbbing.
+  // A kids-only clock is not itself on delete. Tapping it still steps the
+  // children: delete becomes Word Bank, and the next tap clears.
+  function smiteRootStep(marks, castUid, descendantUids) {
+    const entries = smiteTicketEntries(marks)
+    const own = smiteMarkOf(marks, castUid)
+    if (own === 'amber') return { action: 'clear', entries: [] }
+    if (!smiteHasNominated(marks)) return { action: 'clear', entries: [] }
+    const kids = new Set(descendantUids || [])
+    const degrade = (includeSelf) => ({
+      action: 'degrade',
+      entries: entries.map(([id, mark]) => {
+        if (mark !== 'red') return [id, mark]
+        if ((includeSelf && id === castUid) || kids.has(id)) return [id, 'amber']
+        return [id, mark]
+      }),
+    })
+    if (own === 'red') return degrade(true)
+    if (entries.some(([id, mark]) => mark === 'red' && kids.has(id))) return degrade(false)
+    return { action: 'clear', entries: [] }
+  }
+
+  function smiteCastTap(marks, castUid, uid, descendantUids) {
+    if (uid && uid === castUid) return smiteRootStep(marks, castUid, descendantUids)
+    return smiteCycleMember(marks, uid)
+  }
+
+  // Down-swipe on the clock card or any nominated card (in or out) executes.
+  // A stationary tap on a nominated card cycles that card. A tap on the
+  // clock card steps the whole cast down instead.
+  function smiteCastReply(marks, castUid, uid, dx, dy, tapMove = 11, triggerDy = 36) {
+    const member = smiteMember(marks, uid)
+    const root = !!uid && uid === castUid
+    if (!member && !root) return 'ignore'
+    const dxN = Number(dx) || 0
+    const dyN = Number(dy) || 0
+    if (dyN > triggerDy && dyN > Math.abs(dxN)) return 'execute'
+    if (Math.hypot(dxN, dyN) >= tapMove) return 'ignore'
+    return 'tap'
   }
 
   function smiteHasNominated(marks) {
@@ -508,6 +721,7 @@
     canvas.addEventListener('pointercancel', (event) => onFlickClear(event, win, flickState), true)
     if (preview.gestures) preview.gestures.session = { hold: holdState, flick: flickState }
     bindSmiteGestures(doc, win, canvas, holdState)
+    bindChipEdgePan(doc, win)
   }
 
   function hardClearBackground(doc, win, { keepStroke = false } = {}) {
@@ -626,8 +840,8 @@
     if (!drag || drag.pointerId !== event.pointerId) return
     drag.lastX = event.clientX
     drag.lastY = event.clientY
-    const feed = dragMousePoint(drag, event.clientX, event.clientY)
     movePreview(drag, event.clientX, event.clientY)
+    const feed = dragAimPoint(doc, drag, event.clientX, event.clientY)
     mouse(win, win, 'mousemove', feed.x, feed.y, 1)
   }
 
@@ -636,6 +850,15 @@
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
+    if (state.race?.pointerId === event.pointerId) {
+      const race = state.race
+      const dx = event.clientX - race.x
+      const dy = event.clientY - race.y
+      if (race.view && isFlick(dx, dy, win.performance.now() - race.t0)) {
+        restoreView(doc, win, race.view)
+        state.pan = null
+      }
+    }
     if (state.pan?.pointerId === event.pointerId) endCardPan(win, state)
     if (state.race?.pointerId === event.pointerId) clearCardRace(win, state)
 
@@ -657,13 +880,15 @@
     // post-cleanup call, not a side effect of d3.drag.end.
     const commitTree = !canceled && !releasedAtOrigin && dockKind === 'none'
       && fingerMovedFromLatch(drag, event.clientX, event.clientY)
+    if (commitTree) movePreview(drag, event.clientX, event.clientY)
     const end = (canceled || dockKind !== 'none' || releasedAtOrigin)
       ? { x: drag.x, y: drag.y }
-      : visualPoint(event.clientX, event.clientY)
+      : dragAimPoint(doc, drag, event.clientX, event.clientY)
 
     if (commitTree) win.__logyqHoldDragCommit = true
     try {
       if (canceled || dockKind !== 'none' || releasedAtOrigin) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+      else mouse(win, win, 'mousemove', end.x, end.y, 1)
       mouse(win, win, 'mouseup', end.x, end.y, 0)
 
       cleanupDrag(doc, win, state, drag)
@@ -729,6 +954,8 @@
       lastX: hold.lastX,
       lastY: hold.lastY,
       preview: previewHost,
+      grabGraph: clientToGraph(doc.getElementById('canvas'), win, hold.x, hold.y),
+      nodeGraph: { x: hierarchy.x, y: hierarchy.y },
       multi: false,
       bankChip: null,
       bankSince: 0,
@@ -812,16 +1039,17 @@
       const dockKind = activeDockKind(doc, drag, drag.lastX, drag.lastY)
       armBankHover(win, drag, dockKind, doc)
       doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
+      movePreview(drag, drag.lastX, drag.lastY)
       if (dockKind === 'none') {
         if (fingerMovedFromLatch(drag, drag.lastX, drag.lastY)) {
           edgePan(doc, win, drag.lastX, drag.lastY)
-          const visual = visualPoint(drag.lastX, drag.lastY)
-          mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+          movePreview(drag, drag.lastX, drag.lastY)
+          const aim = dragAimPoint(doc, drag, drag.lastX, drag.lastY)
+          mouse(win, win, 'mousemove', aim.x, aim.y, 1)
         }
       } else {
         mouse(win, win, 'mousemove', drag.x, drag.y, 1)
       }
-      movePreview(drag, drag.lastX, drag.lastY)
       state.feedbackRaf = win.requestAnimationFrame(tick)
     }
     state.feedbackRaf = win.requestAnimationFrame(tick)
@@ -947,6 +1175,43 @@
     return { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight, width: win.innerWidth, height: win.innerHeight }
   }
 
+  // Same center-follow as a map-card hold. The ghost stays on the finger;
+  // only the map moves, and only while the finger is clear of the bank.
+  function bindChipEdgePan(doc, win) {
+    let raf = 0
+    let finger = null
+    const stop = () => {
+      if (raf) win.cancelAnimationFrame(raf)
+      raf = 0
+      finger = null
+    }
+    const tick = () => {
+      raf = 0
+      if (!finger || !doc.body.classList.contains('logyq-chip-drag')) return
+      if (dockDropKind(doc, finger.x, finger.y) === 'none' && edgePan(doc, win, finger.x, finger.y)) {
+        const stack = doc.getElementById('logyq-chip-ghost')
+        const rect = stack?.getBoundingClientRect?.()
+        const svg = doc.getElementById('canvas')
+        if (rect && rect.width > 1 && svg) {
+          svg.dispatchEvent(new win.DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2,
+          }))
+        }
+      }
+      raf = win.requestAnimationFrame(tick)
+    }
+    win.addEventListener('pointermove', (event) => {
+      if (!doc.body.classList.contains('logyq-chip-drag')) return
+      finger = { x: event.clientX, y: event.clientY }
+      if (!raf) raf = win.requestAnimationFrame(tick)
+    })
+    win.addEventListener('pointerup', stop)
+    win.addEventListener('pointercancel', stop)
+  }
+
   function edgePan(doc, win, x, y) {
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3) return false
@@ -995,6 +1260,50 @@
     return visualPoint(x, y)
   }
 
+  function previewCardCenter(drag) {
+    const card = drag?.preview?.querySelector?.('svg')
+    const rect = card?.getBoundingClientRect?.()
+    if (!rect || rect.width < 1 || rect.height < 1) return null
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }
+
+  function clientToGraph(svg, win, x, y) {
+    if (!svg || !win?.d3 || typeof svg.createSVGPoint !== 'function' || !svg.getScreenCTM?.()) return null
+    const point = svg.createSVGPoint()
+    point.x = x
+    point.y = y
+    const local = point.matrixTransform(svg.getScreenCTM().inverse())
+    const [gx, gy] = win.d3.zoomTransform(svg).invert([local.x, local.y])
+    return { x: gx, y: gy }
+  }
+
+  function graphToClient(svg, win, x, y) {
+    if (!svg || !win?.d3 || typeof svg.createSVGPoint !== 'function' || !svg.getScreenCTM?.()) return null
+    const [lx, ly] = win.d3.zoomTransform(svg).apply([x, y])
+    const point = svg.createSVGPoint()
+    point.x = lx
+    point.y = ly
+    const screen = point.matrixTransform(svg.getScreenCTM())
+    return { x: screen.x, y: screen.y }
+  }
+
+  // Engine hit-testing treats the pointer as the grabbed point. Feed the
+  // pointer that puts the virtual card center on the raised ghost's center.
+  function dragAimPoint(doc, drag, x, y) {
+    if (!fingerMovedFromLatch(drag, x, y)) return { x: drag.x, y: drag.y }
+    const win = doc.defaultView
+    const svg = doc.getElementById('canvas')
+    const ghost = previewCardCenter(drag)
+    if (!ghost || !drag?.grabGraph || !drag?.nodeGraph) return visualPoint(x, y)
+    const ghostGraph = clientToGraph(svg, win, ghost.x, ghost.y)
+    if (!ghostGraph) return visualPoint(x, y)
+    const pointerGraph = {
+      x: ghostGraph.x - drag.nodeGraph.x + drag.grabGraph.x,
+      y: ghostGraph.y - drag.nodeGraph.y + drag.grabGraph.y,
+    }
+    return graphToClient(svg, win, pointerGraph.x, pointerGraph.y) || visualPoint(x, y)
+  }
+
   function activeDockKind(doc, drag, x, y) {
     if (!fingerMovedFromLatch(drag, x, y)) return 'none'
     return dockDropKind(doc, x, y)
@@ -1007,12 +1316,13 @@
     if (text) {
       if (label) text.textContent = label
       text.style.fill = '#374151'
-      text.style.opacity = '1'
+      text.style.opacity = ''
+      if (preview.thekonym?.enabled?.()) preview.thekonym.paintLabel(text, label)
     }
     clone.querySelectorAll('rect:not(.grabzone)').forEach((rect) => {
       rect.style.fill = color || '#ffffff'
       rect.style.stroke = '#e2e8f0'
-      rect.style.opacity = '1'
+      rect.style.opacity = ''
     })
   }
 
@@ -1108,13 +1418,20 @@
     return Math.hypot(last.x - first.x, last.y - first.y) / dt
   }
 
-  // excited → hold / pan / flickish. Flick-speed strokes stay gated so
-  // d3.zoom never applies; slow/medium slides become pan; still 160ms is hold.
-  function classifyCardIntent(dist, elapsed, speed, sawFast, C) {
+  // excited → hold / pan / flickish. A straight stroke inside the flick
+  // window stays gated even when it starts slow: locking "pan" on the
+  // first 48ms made the 2nd down-flick drag the map and then snap it
+  // back. Diagonal slides can still pan. After the flick window, pan.
+  function classifyCardIntent(dist, elapsed, speed, sawFast, C, dx, dy) {
     const cfg = C || v162Constants()
     if (dist <= cfg.HOLD_SLOP) return 'excited'
     if (elapsed >= cfg.FLICK_MAX_MS) return 'pan'
     if (sawFast || speed >= flickFastSpeed(cfg)) return 'flickish'
+    if (dx != null && dy != null && elapsed <= cfg.FLICK_MAX_MS) {
+      const major = Math.max(Math.abs(dx), Math.abs(dy))
+      const minor = Math.max(1, Math.min(Math.abs(dx), Math.abs(dy)))
+      if (major / minor >= cfg.FLICK_RATIO) return 'flickish'
+    }
     if (elapsed >= 48) return 'pan'
     return 'excited'
   }
@@ -1129,6 +1446,7 @@
       samples: [{ t: now, x: event.clientX, y: event.clientY }],
       mode: 'excited',
       sawFast: false,
+      view: captureView(doc, win),
     }
     win.__logyqSuppressZoom = true
     stopZoomGesture(doc)
@@ -1136,22 +1454,29 @@
 
   function resolveCardRace(doc, win, state, event) {
     const race = state.race
-    if (!race || race.mode === 'pan' || race.mode === 'drag') return
+    if (!race || race.mode === 'drag') return
     const now = win.performance.now()
     race.samples.push({ t: now, x: event.clientX, y: event.clientY })
     if (race.samples.length > 24) race.samples.splice(0, race.samples.length - 24)
-    const dist = Math.hypot(event.clientX - race.x, event.clientY - race.y)
+    const dx = event.clientX - race.x
+    const dy = event.clientY - race.y
+    const dist = Math.hypot(dx, dy)
     const elapsed = now - race.t0
     const speed = recentSpeedPxPerMs(race.samples, now)
     if (speed >= flickFastSpeed()) race.sawFast = true
-    const intent = classifyCardIntent(dist, elapsed, speed, race.sawFast)
+    const intent = classifyCardIntent(dist, elapsed, speed, race.sawFast, null, dx, dy)
     if (intent === 'flickish') {
+      if (race.mode === 'pan' || state.pan) {
+        restoreView(doc, win, race.view)
+        state.pan = null
+      }
       race.mode = 'flickish'
       win.__logyqSuppressZoom = true
       stopZoomGesture(doc)
       return
     }
     if (intent !== 'pan') return
+    if (race.mode === 'pan') return
     race.mode = 'pan'
     win.__logyqSuppressZoom = false
     win.__logyqHoldArming = false
@@ -1238,7 +1563,7 @@
     if (alreadyActive) state.candidates.forEach((candidate) => { candidate.multi = true })
     state.active.add(event.pointerId)
 
-    const uid = uidFromTouchedNode(event) || nodeUid(hitNode(doc, event.clientX, event.clientY, event))
+    const uid = nodeUid(hitNode(doc, event.clientX, event.clientY, event))
     if (!uid) hardClearBackground(doc, win, { keepStroke: true })
     state.candidates.set(event.pointerId, {
       uid,
@@ -1258,6 +1583,7 @@
 
     if (win.__logyqV2ConsumedPointers.has(event.pointerId)) {
       win.__logyqV2ConsumedPointers.delete(event.pointerId)
+      state.lastTap = null
       return
     }
     if (!candidate || candidate.multi) {
@@ -1315,6 +1641,7 @@
     const node = uid ? nodeByUid(doc, uid) : null
     if (!uid) {
       hardClearBackground(doc, win, { keepStroke: true })
+      smiteSetArm(doc, null)
       return
     }
 
@@ -1322,6 +1649,11 @@
     if (state.lastTap?.uid === uid && now - state.lastTap.time <= v162Constants().DOUBLE_TAP_MS) {
       state.lastTap = null
       clearCardMic(state.mic)
+      smiteSetArm(doc, null)
+      if (preview.thekonym?.enabled?.()) {
+        preview.thekonym.openUid(uid)
+        return
+      }
       bridge.editSelected({ uid })
       return
     }
@@ -1336,6 +1668,8 @@
     state.lastTap = { uid, time: now }
     if (blank(node)) armBlankCardMic(state.mic, doc, uid)
     else clearCardMic(state.mic)
+    const live = preview.gestures?.smite
+    if (!live || !smiteOwnsUid(live, uid)) smiteSetArm(doc, uid)
   }
 
   function onFlickClear(event, win, state) {
@@ -1378,7 +1712,7 @@
   }
 
   function cardFaceRect(node) {
-    const vis = node?.querySelector?.('rect:not(.grabzone)')
+    const vis = node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)')
     return vis?.getBoundingClientRect?.() || node?.getBoundingClientRect?.() || null
   }
 
@@ -1536,10 +1870,25 @@
     return rankCardHits(scored, x, y)[0]?.node || null
   }
 
+  function faceUnderFinger(event) {
+    const target = event?.target
+    if (!target || typeof target.closest !== 'function') return null
+    if (target.closest('g.hit-slot, .node-edit-stack')) return null
+    const painted = target.closest('rect, text')
+    if (!painted || painted.classList?.contains('grabzone')) return null
+    return painted.closest('g.node') || null
+  }
+
   function hitNode(doc, x, y, event) {
+    // The painted face under the finger is that card. A hit-slot or grab
+    // zone can name a neighbor, so those fall through to the face geometry.
+    const face = faceUnderFinger(event)
+    if (face) return face
+    const visual = hitVisualNode(doc, x, y)
+    if (visual) return visual
     const uid = hitEditUid(doc, x, y, event)
     if (uid) return nodeByUid(doc, uid) || null
-    return hitVisualNode(doc, x, y)
+    return null
   }
 
   function cardText(node) {
@@ -1747,6 +2096,8 @@
         y: event.clientY,
         lastX: event.clientX,
         lastY: event.clientY,
+        t0: win.performance?.now?.() || Date.now(),
+        view: captureView(doc, win),
         uid,
       })
       if (smiteOwnsUid(smite, uid) && holdState) cancelHold(win, holdState)
@@ -1782,6 +2133,7 @@
       const paired = smite.pair
       let handled = false
       if (!smite.pinched) handled = smiteMercyUp(doc, win, smite, pointer)
+      if (!handled && !smite.pinched && !paired) handled = smiteTryArmSwipe(doc, win, smite, pointer)
       if (!handled && !smite.pinched) handled = smiteTryCast(doc, win, smite, pointer, event.pointerId)
       smite.pointers.delete(event.pointerId)
       if (handled || paired) win.__logyqV2ConsumedPointers.add(event.pointerId)
@@ -1876,8 +2228,8 @@
     if (smite.mercy === mercy) smite.mercy = smite.mercies[smite.mercies.length - 1] || null
   }
 
-  function smiteActiveLayers(smite) {
-    return (smite.mercies || []).filter((mercy) => mercy && !mercy.committing).map((mercy) => ({
+  function smiteActiveLayers(smite, skip) {
+    return (smite.mercies || []).filter((mercy) => mercy && !mercy.committing && !(skip && skip.has(mercy))).map((mercy) => ({
       marks: mercy.marks,
       fraction: smiteRingFraction(mercy.remaining, SMITE_FULL_MS),
       castUid: mercy.castUid,
@@ -1885,14 +2237,89 @@
     }))
   }
 
-  function smiteRefresh(doc, smite, extra) {
-    const layers = smiteActiveLayers(smite)
+  function smiteRefresh(doc, smite, extra, skip) {
+    const layers = smiteActiveLayers(smite, skip)
     if (extra?.marks) layers.push(extra)
     if (!layers.length) {
       clearSmiteClocks(doc)
+      paintSmiteArm(doc, smite.armed)
+      paintEditFocus(doc, smite.editUid)
       return
     }
     paintSmiteLayers(doc, layers)
+    paintSmiteArm(doc, smite.armed)
+    paintEditFocus(doc, smite.editUid)
+  }
+
+  function paintSmiteArm(doc, uid) {
+    doc.querySelectorAll('svg#canvas g.node[data-smite-arm="1"]').forEach((node) => {
+      if (nodeUid(node) === uid) return
+      delete node.dataset.smiteArm
+      if (node.dataset.smiteClock === '1') return
+      const wash = node.querySelector('rect.logyq-smite-wash')
+      if (wash && wash.dataset.smiteOutline !== 'ants') wash.remove()
+      if (!node.dataset.smiteClock && !node.querySelector('rect.logyq-smite-wash')) delete node.dataset.smiteHeat
+    })
+    if (!uid) return
+    const node = nodeByUid(doc, uid)
+    if (!node) return
+    if (node.dataset.smiteClock === '1') {
+      delete node.dataset.smiteArm
+      return
+    }
+    const wash = node.querySelector('rect.logyq-smite-wash')
+    if (node.dataset.smiteHeat === '1' && wash && wash.dataset.smiteOutline === 'ants') {
+      delete node.dataset.smiteArm
+      return
+    }
+    const face = smiteFace(node)
+    if (!face) return
+    const box = smiteFaceBox(face)
+    smitePaintCard(node, smiteArmChrome(), box.rx, box.ry)
+    node.dataset.smiteArm = '1'
+  }
+
+  // Rename focus uses the same calm green outline as an armed card.
+  // It is not a Smite arm, so a swipe still needs a separate tap.
+  function paintEditFocus(doc, uid) {
+    doc.querySelectorAll('svg#canvas g.node[data-edit-focus="1"]').forEach((node) => {
+      if (uid && nodeUid(node) === uid) return
+      delete node.dataset.editFocus
+      node.querySelectorAll('rect.logyq-edit-focus').forEach((el) => el.remove())
+    })
+    if (!uid) return
+    const node = nodeByUid(doc, uid)
+    if (!node) return
+    if (node.dataset.smiteClock === '1') {
+      delete node.dataset.editFocus
+      node.querySelectorAll('rect.logyq-edit-focus').forEach((el) => el.remove())
+      return
+    }
+    const face = smiteFace(node)
+    if (!face) return
+    const box = smiteFaceBox(face)
+    const chrome = smiteArmChrome()
+    let ring = node.querySelector('rect.logyq-edit-focus')
+    if (!ring) {
+      ring = doc.createElementNS('http://www.w3.org/2000/svg', 'rect')
+      ring.setAttribute('class', 'logyq-edit-focus')
+      ring.setAttribute('pointer-events', 'none')
+      face.insertAdjacentElement('afterend', ring)
+    }
+    ring.setAttribute('x', face.getAttribute('x') || '0')
+    ring.setAttribute('y', face.getAttribute('y') || '0')
+    ring.setAttribute('width', face.getAttribute('width') || '0')
+    ring.setAttribute('height', face.getAttribute('height') || '0')
+    ring.setAttribute('rx', String(box.rx))
+    ring.setAttribute('ry', String(box.ry))
+    ring.setAttribute('fill', chrome.fill)
+    ring.setAttribute('stroke', chrome.stroke)
+    ring.style.fill = 'none'
+    ring.style.stroke = chrome.stroke
+    ring.style.strokeWidth = '3.5px'
+    ring.style.animation = 'none'
+    ring.style.filter = 'none'
+    node.dataset.editFocus = '1'
   }
 
   function smiteEnsureTick(doc, win, smite) {
@@ -1947,15 +2374,61 @@
     }
     const data = smiteLiveData(swipe.uid)
     if (!data) return
-    const marks = new Map()
     const tone = direction === 'left' ? 'amber' : 'red'
     const ids = smiteAffected(data, smiteZone(parked[0].y, win.innerHeight))
-    if (!ids.length || smiteCastOverlaps(smite.mercies, ids)) {
+    if (!ids.length) {
       smiteRefresh(doc, smite)
       return
     }
-    for (const id of ids) marks.set(id, tone)
-    smiteRefresh(doc, smite, { marks, fraction: 1, castUid: swipe.uid, tone })
+    const plan = smiteFoldCast(smite.mercies, ids, tone)
+    if (plan.action === 'block') {
+      smiteRefresh(doc, smite)
+      return
+    }
+    smiteRefresh(doc, smite, { marks: plan.marks, fraction: 1, castUid: swipe.uid, tone }, new Set(plan.absorb))
+  }
+
+  function smiteSetArm(doc, uid) {
+    const live = preview.gestures?.smite
+    if (!live) return
+    live.armed = uid || null
+    smiteRefresh(doc, live)
+  }
+
+  function smiteTryArmSwipe(doc, win, smite, pointer) {
+    if (!smite.armed || !pointer) return false
+    const dx = pointer.lastX - pointer.x
+    const dy = pointer.lastY - pointer.y
+    const elapsed = (win.performance?.now?.() || Date.now()) - (pointer.t0 || 0)
+    if (!isFlick(dx, dy, elapsed)) return false
+    const direction = smiteArmDirection(dx, dy, v162Constants().FLICK_MIN)
+    if (!direction) return false
+    const data = smiteLiveData(smite.armed)
+    const childIds = smiteChildList(data).map(smiteNodeId).filter(Boolean)
+    const target = smiteArmTarget(smite.armed, pointer.uid, childIds)
+    if (!target) return false
+    const ids = smiteArmScope(data, target, direction)
+    if (!ids.length) return false
+    const flick = preview.gestures?.session?.flick
+    if (flick) flick.lastTap = null
+    const tone = direction === 'left' ? 'amber' : 'red'
+    const plan = smiteFoldCast(smite.mercies, ids, tone)
+    if (plan.action === 'block') {
+      smiteRefresh(doc, smite)
+      return true
+    }
+    if (pointer.view) restoreView(doc, win, pointer.view)
+    for (const mercy of plan.absorb) smiteDropMercy(smite, mercy)
+    const castUid = smite.armed
+    const zone = target === 'child' ? 'bottom' : (direction === 'up' ? 'top' : 'middle')
+    smite.armed = null
+    beginSmiteMercy(doc, win, smite, {
+      uid: castUid,
+      zone,
+      direction: direction === 'left' ? 'left' : 'down',
+      marks: plan.marks,
+    })
+    return true
   }
 
   function smiteTryCast(doc, win, smite, pointer, pointerId) {
@@ -1975,15 +2448,32 @@
       smiteRefresh(doc, smite)
       return true
     }
-    if (smiteCastOverlaps(smite.mercies, ids)) {
+    const tone = direction === 'left' ? 'amber' : 'red'
+    const plan = smiteFoldCast(smite.mercies, ids, tone)
+    if (plan.action === 'block') {
       smiteRefresh(doc, smite)
       return true
     }
-    const tone = direction === 'left' ? 'amber' : 'red'
-    const marks = new Map()
-    for (const id of ids) marks.set(id, tone)
-    beginSmiteMercy(doc, win, smite, { uid: pointer.uid, zone, direction, marks })
+    for (const mercy of plan.absorb) smiteDropMercy(smite, mercy)
+    beginSmiteMercy(doc, win, smite, { uid: pointer.uid, zone, direction, marks: plan.marks })
     return true
+  }
+
+  function openSmiteCast(cast) {
+    const live = preview.gestures?.smite
+    const ids = cast?.ids || []
+    if (!live || !ids.length || !cast?.uid) return 'block'
+    const direction = cast.direction === 'left' ? 'left' : 'right'
+    const plan = smiteFoldCast(live.mercies, ids, direction === 'left' ? 'amber' : 'red')
+    if (plan.action === 'block') return 'block'
+    for (const mercy of plan.absorb) smiteDropMercy(live, mercy)
+    beginSmiteMercy(document, window, live, {
+      uid: cast.uid,
+      zone: cast.zone || 'middle',
+      direction,
+      marks: plan.marks,
+    })
+    return plan.action
   }
 
   function beginSmiteMercy(doc, win, smite, cast) {
@@ -2012,16 +2502,19 @@
     try {
       const now = win.performance?.now?.() || Date.now()
       const due = []
+      const idle = []
       for (const mercy of smite.mercies) {
         if (!mercy || mercy.committing) continue
+        if (!smiteHasNominated(mercy.marks)) {
+          idle.push(mercy)
+          continue
+        }
         const dt = Math.max(0, now - mercy.lastTick)
         mercy.lastTick = now
-        const nominated = smiteHasNominated(mercy.marks)
-        // Original-only casts stay alive for re-include, but the clock does
-        // not drain or commit until someone is nominated again.
-        if (!mercy.interacting && nominated) mercy.remaining = Math.max(0, mercy.remaining - dt)
-        if (nominated && mercy.remaining <= 0) due.push(mercy)
+        if (!mercy.interacting) mercy.remaining = Math.max(0, mercy.remaining - dt)
+        if (mercy.remaining <= 0) due.push(mercy)
       }
+      for (const mercy of idle) smiteDropMercy(smite, mercy)
       for (const mercy of due) commitSmite(doc, win, smite, mercy)
       if (smite.mercies.some((mercy) => mercy && !mercy.committing)) {
         smiteRefresh(doc, smite)
@@ -2036,35 +2529,26 @@
 
   function smiteMercyUp(doc, win, smite, pointer) {
     const live = (smite.mercies || []).filter((mercy) => mercy && !mercy.committing)
-    if (!live.length) return false
+    if (!live.length || !pointer?.uid) return false
     const dx = pointer.lastX - pointer.x
     const dy = pointer.lastY - pointer.y
-    if (pointer.uid && dy > SMITE_TRIGGER_DY && dy > Math.abs(dx)) {
-      const triggered = live.find((mercy) => mercy.castUid === pointer.uid)
-      if (triggered) {
-        commitSmite(doc, win, smite, triggered)
-        return true
-      }
-    }
-    if (Math.hypot(dx, dy) >= v162Constants().TAP_MOVE) return false
-    if (!pointer.uid) return false
-    const asParent = live.find((item) => item.castUid === pointer.uid)
-    const mercy = asParent || live.find((item) => item.marks.has(pointer.uid))
+    const tapMove = v162Constants().TAP_MOVE
+    const mercy = live.find((item) => smiteCastReply(item.marks, item.castUid, pointer.uid, dx, dy, tapMove, SMITE_TRIGGER_DY) !== 'ignore')
     if (!mercy) return false
+    const reply = smiteCastReply(mercy.marks, mercy.castUid, pointer.uid, dx, dy, tapMove, SMITE_TRIGGER_DY)
     const now = win.performance?.now?.() || Date.now()
-    const tone = mercy.direction === 'left' ? 'amber' : 'red'
-    if (mercy.castUid === pointer.uid) {
-      const command = smiteParentCommand(mercy.marks, mercy.castUid, tone)
-      if (command.action === 'cancel') {
-        smiteDropMercy(smite, mercy)
-      } else {
-        smiteApplyEntries(mercy.marks, command.entries)
-        mercy.remaining = SMITE_START_MS
-        mercy.lastTick = now
-      }
-    } else {
-      const command = smiteChildCommand(mercy.marks, pointer.uid)
-      if (command.action === 'cycle') smiteApplyEntries(mercy.marks, command.entries)
+    mercy.remaining = SMITE_START_MS
+    mercy.lastTick = now
+    if (reply === 'execute') {
+      commitSmite(doc, win, smite, mercy, pointer.uid)
+      return true
+    }
+    const descendants = smiteMoodTargets(bridge.core?.state?.root?.data, mercy.castUid)
+    const command = smiteCastTap(mercy.marks, mercy.castUid, pointer.uid, descendants)
+    if (command.action === 'clear') smiteDropMercy(smite, mercy)
+    else if (command.action === 'degrade' || command.action === 'cycle') {
+      smiteApplyEntries(mercy.marks, command.entries)
+      if (!smiteHasNominated(mercy.marks)) smiteDropMercy(smite, mercy)
     }
     smiteRefresh(doc, smite)
     smiteEnsureTick(doc, win, smite)
@@ -2079,7 +2563,7 @@
     for (const [uid, mark] of entries) marks.set(uid, mark)
   }
 
-  function commitSmite(doc, win, smite, mercy = smite.mercy) {
+  function commitSmite(doc, win, smite, mercy = smite.mercy, scopeUid = null) {
     if (!mercy || mercy.committing) return
     mercy.committing = true
     const core = bridge.core
@@ -2093,7 +2577,19 @@
     }
     const prev = utils.deepClone(state.root.data)
     const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : []
-    const plan = planSmiteCommit(prev, mercy.marks)
+    let marks = mercy.marks
+    let scoped = null
+    if (scopeUid) {
+      scoped = smiteFlickScope(prev, mercy.marks, scopeUid)
+      if (!smiteHasNominated(scoped)) {
+        mercy.committing = false
+        smiteRefresh(doc, smite)
+        smiteEnsureTick(doc, win, smite)
+        return
+      }
+      marks = scoped
+    }
+    const plan = planSmiteCommit(prev, marks)
     doc.body.classList.remove('v2-branch-drag', 'v2-cancel', 'v2-dock-target')
     win.__logyqHoldArming = false
     win.__logyqHoldDragSession = false
@@ -2118,7 +2614,16 @@
     }
     core.wordDock.render?.()
     try { bridge.notifyChange?.() } catch (_error) {}
-    smiteDropMercy(smite, mercy)
+    if (scopeUid) {
+      for (const [uid, mark] of smiteTicketEntries(scoped)) {
+        if (mark === 'red' || mark === 'amber') mercy.marks.delete(uid)
+      }
+      const tookClock = smiteMarkOf(scoped, mercy.castUid) === 'red' || smiteMarkOf(scoped, mercy.castUid) === 'amber'
+      if (tookClock || !state.root || !smiteHasNominated(mercy.marks)) smiteDropMercy(smite, mercy)
+      else mercy.committing = false
+    } else {
+      smiteDropMercy(smite, mercy)
+    }
     clearSmiteScars(doc, smite)
     smiteRefresh(doc, smite)
     smiteEnsureTick(doc, win, smite)
@@ -2126,7 +2631,7 @@
   }
 
   function smiteFace(node) {
-    return node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)') || null
+    return node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)') || null
   }
 
   function smiteRestoreFace(face) {
@@ -2185,28 +2690,176 @@
     return found[0] || null
   }
 
+  function smiteEdgeGradientId(link) {
+    const uid = link?.__data__?.target?.data?._uid || link?.__data__?.target?.data?.uid || 'edge'
+    return `logyq-smite-grad-${String(uid).replace(/[^a-zA-Z0-9_-]/g, '')}`
+  }
+
+  function smiteDropAnts(link, gradId) {
+    let sib = link?.nextElementSibling
+    while (sib && sib.classList?.contains('logyq-smite-ant') && (!gradId || sib.dataset.forLink === gradId)) {
+      const next = sib.nextElementSibling
+      sib.remove()
+      sib = next
+    }
+  }
+
   function smiteRestoreEdge(link) {
     if (!link || link.dataset.smiteEdge !== '1') return
+    const gradId = link.dataset.smiteGrad
+    const haloId = link.dataset.smiteHalo
+    if (gradId) link.ownerDocument?.getElementById(gradId)?.remove()
+    if (haloId) link.ownerDocument?.getElementById(haloId)?.remove()
+    smiteDropAnts(link, gradId)
     link.style.stroke = ''
     link.style.strokeDasharray = ''
+    link.style.strokeDashoffset = ''
+    link.style.strokeLinecap = ''
     link.style.animation = ''
+    link.style.removeProperty('stroke')
+    link.style.removeProperty('stroke-width')
+    link.style.removeProperty('opacity')
     link.style.opacity = '0.5'
     link.style.strokeWidth = '2.8px'
     link.style.vectorEffect = ''
     link.style.transition = ''
     delete link.dataset.smiteEdge
+    delete link.dataset.smiteGrad
+    delete link.dataset.smiteHalo
+    delete link.dataset.smiteWeight
   }
 
-  function smitePaintEdge(link, heat) {
-    try { link.ownerDocument?.defaultView?.d3?.select(link).interrupt() } catch (_error) {}
+  function smiteEnsureEdgeGradient(link, from, to, suffix) {
+    const doc = link.ownerDocument
+    const svg = doc.getElementById('canvas')
+    const xml = 'http://www.w3.org/2000/svg'
+    let defs = svg?.querySelector('defs.logyq-smite-grads')
+    if (svg && !defs) {
+      defs = doc.createElementNS(xml, 'defs')
+      defs.setAttribute('class', 'logyq-smite-grads')
+      svg.insertBefore(defs, svg.firstChild)
+    }
+    const id = smiteEdgeGradientId(link) + (suffix || '')
+    let grad = doc.getElementById(id)
+    if (!grad && defs) {
+      grad = doc.createElementNS(xml, 'linearGradient')
+      grad.id = id
+      grad.setAttribute('gradientUnits', 'userSpaceOnUse')
+      defs.appendChild(grad)
+    }
+    if (!grad) return id
+    let start = { x: 0, y: 0 }
+    let end = { x: 0, y: 1 }
+    try {
+      const length = link.getTotalLength()
+      if (length > 0) {
+        start = link.getPointAtLength(0)
+        end = link.getPointAtLength(length)
+      }
+    } catch (_error) {}
+    grad.setAttribute('x1', String(start.x))
+    grad.setAttribute('y1', String(start.y))
+    grad.setAttribute('x2', String(end.x))
+    grad.setAttribute('y2', String(end.y))
+    let stops = grad.querySelectorAll('stop')
+    if (stops.length !== 2) {
+      while (grad.firstChild) grad.removeChild(grad.firstChild)
+      for (const offset of ['0', '1']) {
+        const stop = doc.createElementNS(xml, 'stop')
+        stop.setAttribute('offset', offset)
+        grad.appendChild(stop)
+      }
+      stops = grad.querySelectorAll('stop')
+    }
+    stops[0].setAttribute('stop-color', from)
+    stops[1].setAttribute('stop-color', to)
+    return id
+  }
+
+  function smitePaintAnts(link, color, gradId, haloId) {
+    const doc = link.ownerDocument
+    const found = []
+    let sib = link.nextElementSibling
+    while (sib && sib.classList?.contains('logyq-smite-ant') && sib.dataset.forLink === gradId) {
+      found.push(sib)
+      sib = sib.nextElementSibling
+    }
+    if (!color) {
+      found.forEach((path) => path.remove())
+      return
+    }
+    const xml = 'http://www.w3.org/2000/svg'
+    const d = link.getAttribute('d') || ''
+    const ensure = (role, stroke, width, opacity) => {
+      let path = found.find((item) => item.dataset.antRole === role)
+      if (!path) {
+        path = doc.createElementNS(xml, 'path')
+        path.setAttribute('class', 'logyq-smite-ant')
+        path.dataset.antRole = role
+        path.dataset.forLink = gradId
+        path.setAttribute('fill', 'none')
+        path.setAttribute('pointer-events', 'none')
+        link.parentNode.insertBefore(path, link.nextSibling)
+        found.push(path)
+      }
+      path.dataset.smiteWeight = 'strong'
+      path.setAttribute('d', d)
+      path.setAttribute('stroke', stroke)
+      path.style.stroke = stroke
+      path.style.strokeWidth = width
+      path.style.strokeDasharray = '8 6'
+      path.style.strokeLinecap = 'round'
+      path.style.animation = 'logyq-smite-march 1.4s linear infinite'
+      path.style.opacity = opacity
+      path.style.vectorEffect = 'non-scaling-stroke'
+      path.style.fill = 'none'
+      path.style.pointerEvents = 'none'
+      return path
+    }
+    // Dashes use the same parent→child gradient, so a mixed edge does not
+    // swap color at a hard midline. The halo follows fate: white beside
+    // red and amber, slate beside a white segment.
+    ensure('color', `url(#${gradId})`, '3.5px', '1')
+    ensure('halo', `url(#${haloId})`, '6px', '0.9')
+  }
+
+  // A live layout tween owns `d` and should finish with the cards.
+  // Interrupting it used to freeze cast curves on the pre-reflow path.
+  function smiteLinkTweening(link) {
+    const schedules = link?.__transition
+    if (!schedules) return false
+    for (const _id in schedules) return true
+    return false
+  }
+
+  function smiteEnsureLinkGeometry(link) {
+    if (!link || smiteLinkTweening(link)) return
+    const vLink = link.ownerDocument?.defaultView?.LOGYQBridge?.core?.visual?.vLink
+    const datum = link.__data__
+    if (!datum?.source || !datum?.target || typeof vLink !== 'function') return
+    let next = ''
+    try { next = vLink(datum) || '' } catch (_error) { return }
+    if (next && link.getAttribute('d') !== next) link.setAttribute('d', next)
+  }
+
+  function smitePaintEdge(link, paint) {
+    smiteEnsureLinkGeometry(link)
     link.dataset.smiteEdge = '1'
-    link.style.setProperty('stroke', heat.stroke, 'important')
-    link.style.strokeWidth = '3.5px'
-    link.style.opacity = '1'
+    link.dataset.smiteWeight = 'strong'
+    const gradId = smiteEnsureEdgeGradient(link, paint.from, paint.to)
+    const haloId = smiteEnsureEdgeGradient(link, paint.haloFrom, paint.haloTo, '-halo')
+    link.dataset.smiteGrad = gradId
+    link.dataset.smiteHalo = haloId
+    link.style.setProperty('stroke', `url(#${gradId})`, 'important')
+    link.style.setProperty('stroke-width', '3.5px', 'important')
+    link.style.setProperty('opacity', '1', 'important')
     link.style.strokeDasharray = 'none'
+    link.style.strokeDashoffset = ''
+    link.style.strokeLinecap = 'round'
     link.style.animation = 'none'
     link.style.transition = 'none'
     link.style.vectorEffect = 'non-scaling-stroke'
+    smitePaintAnts(link, paint.ants, gradId, haloId)
   }
 
   function smitePaintCard(node, heat, rx, ry, outline) {
@@ -2229,26 +2882,25 @@
     wash.setAttribute('height', face.getAttribute('height') || '0')
     wash.setAttribute('rx', String(rx))
     wash.setAttribute('ry', String(ry))
-    wash.setAttribute('fill', heat.wash)
-    wash.setAttribute('fill-opacity', String(heat.washOpacity))
-    wash.style.fill = heat.wash
-    wash.style.fillOpacity = String(heat.washOpacity)
-    wash.style.animation = 'none'
-    wash.style.filter = 'none'
-    // Inline stroke wins over `.node rect`, which would otherwise keep a full white ring.
-    if (outline) {
-      wash.setAttribute('stroke', heat.stroke)
-      wash.style.stroke = heat.stroke
-      wash.style.strokeWidth = '3.5px'
-      wash.style.strokeDasharray = 'none'
-      wash.style.vectorEffect = 'non-scaling-stroke'
+    wash.setAttribute('fill', 'none')
+    wash.setAttribute('fill-opacity', '0')
+    wash.style.fill = 'none'
+    wash.style.fillOpacity = '0'
+    wash.setAttribute('stroke', heat.stroke)
+    wash.style.stroke = heat.stroke
+    wash.style.strokeWidth = '3.5px'
+    wash.style.strokeLinecap = 'round'
+    wash.style.vectorEffect = 'non-scaling-stroke'
+    if (heat.ants) {
+      wash.dataset.smiteOutline = 'ants'
+      wash.style.strokeDasharray = '8 6'
+      wash.style.animation = 'logyq-smite-march 1.4s linear infinite'
     } else {
-      wash.setAttribute('stroke', 'none')
-      wash.style.stroke = 'none'
-      wash.style.strokeWidth = '0'
+      delete wash.dataset.smiteOutline
       wash.style.strokeDasharray = 'none'
-      wash.style.vectorEffect = 'none'
+      wash.style.animation = 'none'
     }
+    wash.style.filter = heat.stroke === '#ffffff' ? 'drop-shadow(0 0 1px rgba(15,23,42,.7))' : 'none'
     node.dataset.smiteHeat = '1'
   }
 
@@ -2302,12 +2954,12 @@
       const castUid = layer.castUid || null
       const tone = smiteNominatedTone(marks, castUid, layer.tone)
       if (castUid && tone && !clockHosts.has(castUid)) {
-        clockHosts.set(castUid, { mark: tone, fraction })
+        clockHosts.set(castUid, { mark: tone, fraction, marks })
       } else if (!castUid) {
         for (const uid of smiteClockRoots(tree, owned)) {
           const mark = owned.get(uid)
           if ((mark === 'red' || mark === 'amber') && !clockHosts.has(uid)) {
-            clockHosts.set(uid, { mark, fraction })
+            clockHosts.set(uid, { mark, fraction, marks: owned })
           }
         }
       }
@@ -2317,13 +2969,13 @@
       const uid = nodeUid(node)
       const entry = uid ? byUid.get(uid) : null
       const mark = entry?.mark
-      const nominated = mark === 'red' || mark === 'amber'
+      const inScope = mark === 'red' || mark === 'amber' || mark === 'normal'
       const host = uid ? clockHosts.get(uid) : null
       let clock = smiteTakeClock(node)
       node.querySelectorAll('rect.logyq-smite-glow').forEach((layer) => layer.remove())
       delete node.dataset.smitePhase
       node.style?.removeProperty?.('--smite-ink')
-      if (!nominated && !host) {
+      if (!inScope && !host) {
         if (clock || node.dataset.smiteHeat === '1' || node.dataset.smiteClock === '1' || node.querySelector('rect.logyq-smite-wash')) {
           smiteRestoreCard(node)
         }
@@ -2334,12 +2986,11 @@
       const face = smiteFace(node)
       if (!face) return
       const { rx, ry, x, y, w, h } = smiteFaceBox(face)
-      if (nominated) {
-        const pastel = smitePastel(mark)
-        smitePaintCard(node, { wash: pastel.fill, washOpacity: pastel.opacity, stroke: pastel.fill }, rx, ry, false)
-      } else {
+      const chrome = smiteCardChrome(mark, !!host)
+      if (chrome) smitePaintCard(node, chrome, rx, ry)
+      else {
         node.querySelectorAll('rect.logyq-smite-wash').forEach((layer) => layer.remove())
-        delete node.dataset.smiteHeat
+        if (!host) delete node.dataset.smiteHeat
       }
       if (!host) {
         clock?.remove()
@@ -2391,16 +3042,33 @@
     })
     const mood = new Map()
     for (const [castUid, host] of clockHosts) {
-      const color = smiteMoodColor(host.mark)
-      for (const uid of smiteMoodTargets(tree, castUid)) {
-        if (!mood.has(uid)) mood.set(uid, color)
+      const shape = smiteCastShape(host.marks, castUid, smiteMoodTargets(tree, castUid))
+      for (const edge of smiteMoodEdges(tree, castUid)) {
+        if (mood.has(edge.childUid)) continue
+        const live = smiteLinkLive(
+          shape,
+          smiteMarkOf(host.marks, edge.parentUid),
+          smiteMarkOf(host.marks, edge.childUid),
+        )
+        if (live) mood.set(edge.childUid, live)
       }
     }
+    const liveGrads = new Set()
     doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => {
+      smiteEnsureLinkGeometry(link)
       const uid = link.__data__?.target?.data?._uid || link.__data__?.target?.data?.uid || null
-      const color = uid ? mood.get(uid) : null
-      if (color) smitePaintEdge(link, { stroke: color })
-      else smiteRestoreEdge(link)
+      const paint = uid ? mood.get(uid) : null
+      if (paint) {
+        smitePaintEdge(link, paint)
+        if (link.dataset.smiteGrad) liveGrads.add(link.dataset.smiteGrad)
+        if (link.dataset.smiteHalo) liveGrads.add(link.dataset.smiteHalo)
+      } else smiteRestoreEdge(link)
+    })
+    doc.querySelectorAll('svg#canvas path.logyq-smite-ant').forEach((path) => {
+      if (!liveGrads.has(path.dataset.forLink)) path.remove()
+    })
+    doc.querySelectorAll('svg#canvas defs.logyq-smite-grads linearGradient').forEach((grad) => {
+      if (!liveGrads.has(grad.id)) grad.remove()
     })
   }
 
@@ -2429,6 +3097,8 @@
     })
     doc.querySelectorAll('svg#canvas .logyq-smite-clock').forEach((clock) => clock.remove())
     doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => smiteRestoreEdge(link))
+    doc.querySelectorAll('svg#canvas path.logyq-smite-ant').forEach((path) => path.remove())
+    doc.querySelectorAll('svg#canvas defs.logyq-smite-grads').forEach((defs) => defs.remove())
   }
 
   function clearSmiteScars(doc, smite) {
@@ -2620,6 +3290,20 @@
     preview.gestures.smiteLinePhase = smiteLinePhase
     preview.gestures.smiteClockRoots = smiteClockRoots
     preview.gestures.smiteCastOverlaps = smiteCastOverlaps
+    preview.gestures.smiteFoldCast = smiteFoldCast
+    preview.gestures.smiteArmDirection = smiteArmDirection
+    preview.gestures.smiteArmTarget = smiteArmTarget
+    preview.gestures.smiteArmScope = smiteArmScope
+    preview.gestures.smiteArmChrome = smiteArmChrome
+    preview.gestures.openSmiteCast = openSmiteCast
+    preview.gestures.clearSmiteArm = () => smiteSetArm(document, null)
+    if (bridge.core) {
+      bridge.core.setEditFocus = (uid) => {
+        const live = preview.gestures?.smite
+        if (live) live.editUid = uid || null
+        paintEditFocus(document, uid || null)
+      }
+    }
     preview.gestures.smiteHeat = smiteHeat
     preview.gestures.smiteScarOpacity = smiteScarOpacity
     preview.gestures.smiteScarBlocked = smiteScarBlocked

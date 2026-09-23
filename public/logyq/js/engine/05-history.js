@@ -2,6 +2,7 @@
   function pushHistory(action){
     const { state, elements, config: CONFIG } = logyq
     state.history.push(action);
+    state.redo = [];
     if(state.history.length>CONFIG.HISTORY_LIMIT) state.history.shift();
       /* [patch] dock-bounds-init start */
       try{ logyq.dock.updateDockBounds(); }catch(_e){}
@@ -33,6 +34,11 @@ function autoFitSoon(delay){
       /* [/patch] dock-bounds-init end */
     elements.undoBtn.disabled = state.history.length===0;
     if(!a) return;
+    // Forward snapshot so redo puts the tree and the Word Bank back together.
+    a.redoRoot = state.root ? utils.deepClone(state.root.data) : null;
+    a.redoBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
+    state.redo = state.redo || [];
+    state.redo.push(a);
 
     if(a.type==='delete'){
       const parent = utils.findByPath(state.root.data, a.parentPath);
@@ -104,7 +110,25 @@ function autoFitSoon(delay){
       utils.assignIds(state.root);
       logyq.treeManager.layoutAndRender(false);
     }
+    if ('prevBank' in a) {
+      state.wordBank = (a.prevBank || []).slice();
+      try { logyq.wordDock.render(); } catch (_e) {}
+    }
   }
 
-  attach('history', { pushHistory, undo, autoFitSoon })
+  function redo(){
+    const { state, elements, utils } = logyq
+    const a = (state.redo || []).pop();
+    if (!a || !('redoRoot' in a)) return;
+    state.history.push(a);
+    if (elements.undoBtn) elements.undoBtn.disabled = state.history.length === 0;
+    state.root = a.redoRoot ? d3.hierarchy(a.redoRoot) : null;
+    if (state.root) utils.assignIds(state.root);
+    state.wordBank = (a.redoBank || []).slice();
+    if (state.root) logyq.treeManager.layoutAndRender(false);
+    else logyq.treeManager.renderEmpty();
+    try { logyq.wordDock.render(); } catch (_e) {}
+  }
+
+  attach('history', { pushHistory, undo, redo, autoFitSoon })
 

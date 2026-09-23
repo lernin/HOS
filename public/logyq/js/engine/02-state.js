@@ -3,7 +3,7 @@ const state = {
 
   root:null, lastNodes:[], zoom:null, layout:null,
   dragState:{ trashZone:'far', drop:null, solo:false, groupAbandon:false },
-  history:[], wordBank:[], selectedUid:null, /* [patch] multiselect-state */ selectedUids:new Set(),
+  history:[], redo:[], wordBank:[], selectedUid:null, /* [patch] multiselect-state */ selectedUids:new Set(),
   chipDrag:{ active:false, word:null, words:[], drop:null },
   editingUid:null, editorEl:null, prevZoom:null,
   detectors:[], tabHold:false, /* [patch] tab-hold-flag */

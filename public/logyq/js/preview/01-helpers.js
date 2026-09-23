@@ -33,8 +33,19 @@
     const bank = Array.isArray(wordBank) ? wordBank : []
     if (children.length || bank.length) return false
     if (tree?.color) return false
-    const untitled = (value) => !value || value === DEFAULT_NAME.toLowerCase() || ['new', 'new card', 'untitled', 'untitled map', '…', '...'].includes(value)
+    const untitled = (value) => !value || value === DEFAULT_NAME.toLowerCase() || ['new', 'new card', 'untitled', 'untitled map', '…', '...'].includes(value) || /^untitled \d+$/.test(value)
     return untitled(rootName) && untitled(title)
+  }
+
+  function nextUntitledName(names) {
+    const used = new Set()
+    for (const name of names || []) {
+      const value = String(name || '').trim().toLowerCase()
+      if (value) used.add(value)
+    }
+    let n = 1
+    while (used.has(`untitled ${n}`)) n += 1
+    return `Untitled ${n}`
   }
 
   function formatUpdatedAt(iso) {
@@ -55,6 +66,7 @@
     decodeMapTree,
     encodeMapRecord,
     isBlankDraft,
+    nextUntitledName,
     formatUpdatedAt,
   }
 

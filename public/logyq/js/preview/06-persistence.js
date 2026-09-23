@@ -43,6 +43,11 @@
   }
 
   function queueAutosave(snapshot) {
+    if (app.curriculum) {
+      setSaveState('saved')
+      maybeCurriculumClear(snapshot)
+      return
+    }
     if (!app.hasOpenMap) return
     if (isBlankDraft({
       id: app.current.id,
@@ -81,6 +86,13 @@
   }
 
   async function savePending() {
+    if (app.curriculum) {
+      if (localStorage.getItem(PENDING_KEY)) {
+        clearTimeout(app.timer)
+        app.timer = setTimeout(savePending, 850)
+      }
+      return
+    }
     if (app.saving) {
       app.saveAgain = true
       return
@@ -185,6 +197,7 @@
   function showLibrary() {
     document.body.classList.add('logyq-home')
     document.body.classList.toggle('logyq-map-open', !!app.hasOpenMap)
+    setHomeTab('maps')
     ui.library.classList.add('is-open')
     ui.library.setAttribute('aria-hidden', 'false')
   }
@@ -346,6 +359,7 @@
   }
 
   function enterEditor(row, { edit = false } = {}) {
+    leaveCurriculumPlay()
     const tree = decodeMapTree(row.tree)
     const wordBank = Array.isArray(row.word_bank) ? row.word_bank : (row.wordBank || [])
     app.current = { id: row.id || null, name: row.name || DEFAULT_NAME }
@@ -371,7 +385,12 @@
   }
 
   function createMap({ edit = false } = {}) {
-    app.current = { id: null, name: DEFAULT_NAME }
+    leaveCurriculumPlay()
+    const taken = []
+    for (const row of app.libraryRows || []) taken.push(row?.name)
+    for (const row of readCachedLibrary()) taken.push(row?.name)
+    if (app.current?.name) taken.push(app.current.name)
+    app.current = { id: null, name: nextUntitledName(taken) }
     const tree = encodeMapTree({ name: '' })
     app.hasOpenMap = true
     document.body.classList.add('logyq-map-open')
@@ -465,7 +484,4 @@
     await refreshLibrary()
     app.booted = true
   }
-
-  bootSession()
-})()
 

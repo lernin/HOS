@@ -1,23 +1,88 @@
   /* ======================= CHIPS & INPUT ======================= */
-  function clearChipSelection(){ document.querySelectorAll("#Dock .chip.is-outlined").forEach(el=>el.classList.remove("is-outlined")); }
-  function getSelectedChipNames(){ return Array.from(document.querySelectorAll("#Dock .chip.is-outlined")).map(el=>el.textContent.trim()).filter(Boolean); }
+  // Tap order. The first name tapped is the parent when a multi-select
+  // starts an empty canvas. Render rebuilds the chips, so this lives here.
+  let chipOrder = []
+
+  function chipNamesInBank(){
+    return (logyq.state.wordBank || []).map(w => String(w || '').trim()).filter(Boolean)
+  }
+
+  function pruneChipOrder(){
+    const bank = chipNamesInBank()
+    const seen = new Set()
+    chipOrder = chipOrder.filter((name) => {
+      if (!name || seen.has(name) || !bank.includes(name)) return false
+      seen.add(name)
+      return true
+    })
+  }
+
+  function everyChipSelected(){
+    const bank = chipNamesInBank()
+    if (!bank.length) return false
+    const selected = new Set(chipOrder)
+    return bank.every((name) => selected.has(name))
+  }
+
+  function paintChipSelection(){
+    pruneChipOrder()
+    const selected = new Set(chipOrder)
+    document.querySelectorAll('#Dock .chip').forEach((el) => {
+      el.classList.toggle('is-outlined', selected.has(el.textContent.trim()))
+    })
+    const button = typeof document.getElementById === 'function' ? document.getElementById('logyq-bank-all') : null
+    if (button) button.textContent = everyChipSelected() ? 'None' : 'All'
+  }
+
+  function clearChipSelection(){
+    chipOrder = []
+    paintChipSelection()
+  }
+
+  function getSelectedChipNames(){
+    pruneChipOrder()
+    return chipOrder.slice()
+  }
+
+  function toggleChipName(name){
+    const clean = String(name || '').trim()
+    if (!clean || !chipNamesInBank().includes(clean)) return
+    const index = chipOrder.indexOf(clean)
+    if (index >= 0) chipOrder.splice(index, 1)
+    else chipOrder.push(clean)
+    paintChipSelection()
+  }
+
+  function flipBankSelection(){
+    if (everyChipSelected()) chipOrder = []
+    else {
+      const seen = new Set()
+      chipOrder = chipNamesInBank().filter((name) => {
+        if (seen.has(name)) return false
+        seen.add(name)
+        return true
+      })
+    }
+    paintChipSelection()
+  }
 
   function render(){
     const { state, elements, utils } = logyq
     const list = elements.Dock; list.innerHTML = '';
     state.wordBank.forEach((w)=>{
       const chip = document.createElement('div');
-      chip.className='chip'; chip.textContent=w; chip.draggable=true;
-      chip.addEventListener('click',(e)=>{
-        const chips=document.querySelectorAll("#Dock .chip");
-        if(e.shiftKey){ chip.classList.toggle("is-outlined"); }
-        else { chips.forEach(c=>c.classList.remove("is-outlined")); chip.classList.add("is-outlined"); }
+      chip.className='chip'; chip.textContent=w;
+      // Native HTML5 drag cancels the pointer as soon as it moves, so a
+      // finger never finishes the gesture. Press-drag below places the chip.
+      chip.draggable=false;
+      chip.addEventListener('click',()=>{
+        if (chip.dataset.skipClick === '1') return
+        toggleChipName(w)
       });
       chip.addEventListener('dragstart',(e)=>{
         state.chipDrag.active = true;
-        const group = getSelectedChipNames(); // assumes you already track multi-selection
-        const words = (group && group.length ? group.slice() : [w]);
-        if (!words.includes(w)) words.push(w); // make sure the dragged one is in there
+        const group = getSelectedChipNames()
+        const words = group.includes(w) ? group.slice() : [w]
         state.chipDrag.words = words;
         state.chipDrag.word = w; // keep old field for compatibility
         state.chipDrag.drop = null;
@@ -25,15 +90,7 @@
         e.dataTransfer.effectAllowed = 'copyMove';
 });
 
-chip.addEventListener('dragend',()=>{
-elements.caretDot.style('opacity', 0);
-d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false);
-
-  state.chipDrag.active = false;
-  state.chipDrag.words = [];
-  state.chipDrag.drop = null;
-  elements.trash.classList.remove('open','over','wiggle','near');
-});
+chip.addEventListener('dragend', () => endChipDragVisuals());
 
       chip.addEventListener("contextmenu", (e) => {e.preventDefault();
         e.stopPropagation(); const sel = Array.from((state.selectedUids || new Set()).values());
@@ -58,6 +115,22 @@ const target = utils.findByUid(state.root.data, sel[0]);
       });
       list.appendChild(chip);
     });
+    if (state.wordBank.length) {
+      const allButton = document.createElement('button');
+      allButton.type = 'button';
+      allButton.id = 'logyq-bank-all';
+      allButton.className = 'chip-bank-all';
+      allButton.textContent = everyChipSelected() ? 'None' : 'All';
+      allButton.ariaLabel = allButton.textContent === 'None' ? 'Clear Word Bank selection' : 'Select every Word Bank chip';
+      allButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        flipBankSelection();
+        allButton.ariaLabel = allButton.textContent === 'None' ? 'Clear Word Bank selection' : 'Select every Word Bank chip';
+      });
+      list.appendChild(allButton);
+    }
+    paintChipSelection();
   }
 
   function addWords(raw, to){
@@ -197,6 +270,209 @@ function normalizeToTree(value) {
 
 
 
+function endChipDragVisuals() {
+  const { state, elements } = logyq
+  elements.caretDot.style('opacity', 0)
+  d3.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
+  state.chipDrag.active = false
+  state.chipDrag.words = []
+  state.chipDrag.word = null
+  state.chipDrag.drop = null
+  elements.trash.classList.remove('open', 'over', 'wiggle', 'near')
+  document.getElementById('logyq-chip-ghost')?.remove()
+  document.querySelectorAll('#Dock .chip.is-lifting').forEach((el) => el.classList.remove('is-lifting'))
+  document.body.classList.remove('logyq-chip-drag')
+}
+
+// Press-drag for a finger or a mouse. The dock is a scroll container, so a
+// chip has to claim the gesture itself; native drag cancels the pointer.
+function bindChipPointerPlace() {
+  const dock = logyq.elements.Dock
+  if (!dock || typeof dock.addEventListener !== 'function' || dock.dataset?.chipPointer === '1') return
+  dock.dataset.chipPointer = '1'
+  let session = null
+
+  const overDock = (x, y) => {
+    if (dock.classList.contains('dock-hidden')) return false
+    const style = getComputedStyle(dock)
+    if (style.display === 'none' || style.visibility === 'hidden') return false
+    const rect = dock.getBoundingClientRect()
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+  }
+
+  const placeGhost = (words, x, y) => {
+    let stack = document.getElementById('logyq-chip-ghost')
+    if (!stack) {
+      stack = document.createElement('div')
+      stack.id = 'logyq-chip-ghost'
+      document.body.appendChild(stack)
+    }
+    const label = words.join('\n')
+    if (stack.dataset.words !== label) {
+      stack.dataset.words = label
+      stack.replaceChildren(...words.map((word) => {
+        const ghost = document.createElement('div')
+        ghost.className = 'chip'
+        ghost.textContent = word
+        ghost.style.opacity = '0.55'
+        return ghost
+      }))
+    }
+    stack.style.left = `${x}px`
+    stack.style.top = `${y}px`
+  }
+
+  // The ghost is lifted above the finger by CSS. Aim at that card, not the touch.
+  const raisedGhostPoint = (x, y) => {
+    const stack = document.getElementById('logyq-chip-ghost')
+    const rect = stack?.getBoundingClientRect?.()
+    if (!rect || rect.width < 1 || rect.height < 1) return { x, y }
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }
+
+  const hoverMap = (x, y) => {
+    const svg = logyq.elements.svg.node()
+    if (!svg) return
+    if (overDock(x, y)) {
+      logyq.state.chipDrag.drop = null
+      logyq.elements.caretDot.style('opacity', 0)
+      d3.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
+      return
+    }
+    const aim = raisedGhostPoint(x, y)
+    svg.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX: aim.x, clientY: aim.y }))
+  }
+
+  const chipUnderPoint = (x, y) => {
+    if (typeof document.elementsFromPoint !== 'function') return null
+    const stack = document.elementsFromPoint(x, y) || []
+    for (const el of stack) {
+      const chip = el?.closest?.('.chip')
+      if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') continue
+      return chip
+    }
+    return null
+  }
+
+  dock.addEventListener('pointerdown', (event) => {
+    if (event.button != null && event.button !== 0) return
+    const direct = event.target?.closest?.('.chip')
+    const chip = chipUnderPoint(event.clientX, event.clientY) || direct
+    if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') return
+    const rect = chip.getBoundingClientRect?.()
+    if (rect && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) return
+    const word = chip.textContent.trim()
+    if (!word) return
+    session = { pointerId: event.pointerId, word, x: event.clientX, y: event.clientY, dragging: false, chip }
+  })
+
+  const swipeWords = (word) => {
+    const selected = getSelectedChipNames()
+    // A down-swipe on a selected chip deletes the whole selection. Otherwise just that chip.
+    return selected.includes(word) ? selected.slice() : [word]
+  }
+
+  const removeBankWords = (words) => {
+    const drop = new Set((words || []).map((word) => String(word || '').trim()).filter(Boolean))
+    if (!drop.size) return false
+    const prevBank = logyq.state.wordBank.slice()
+    const next = prevBank.filter((word) => !drop.has(String(word || '').trim()))
+    if (next.length === prevBank.length) return false
+    logyq.history.pushHistory({ type: 'bank-delete', prevBank })
+    logyq.state.wordBank = next
+    render()
+    try { window.LOGYQBridge?.notifyChange?.() } catch (_error) {}
+    return true
+  }
+
+  window.addEventListener('pointermove', (event) => {
+    if (!session || event.pointerId !== session.pointerId) return
+    const dx = event.clientX - session.x
+    const dy = event.clientY - session.y
+    const moved = Math.hypot(dx, dy) >= 10
+    if (!session.dragging && !session.deleting) {
+      // Claim the gesture while the finger is still on the chip. Waiting
+      // until it has left the dock lets the browser cancel the pointer first.
+      if (!moved) return
+      // Down stays a delete. Up and out still lift the chip onto the map.
+      if (dy > 0 && dy >= Math.abs(dx)) {
+        session.deleting = true
+        session.words = swipeWords(session.word)
+        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      } else {
+        const words = swipeWords(session.word)
+        logyq.state.chipDrag.active = true
+        logyq.state.chipDrag.words = words
+        logyq.state.chipDrag.word = words[0]
+        logyq.state.chipDrag.drop = null
+        session.dragging = true
+        session.words = words
+        window.__logyqChipPlacing = true
+        document.body.classList.add('logyq-chip-drag')
+        document.querySelectorAll('#Dock .chip').forEach((el) => {
+          el.classList.toggle('is-lifting', words.includes(el.textContent.trim()))
+        })
+        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      }
+    }
+    if (session.deleting) {
+      event.preventDefault()
+      return
+    }
+    event.preventDefault()
+    placeGhost(session.words, event.clientX, event.clientY)
+    hoverMap(event.clientX, event.clientY)
+  }, { passive: false })
+
+  const finishPointer = (event, commit) => {
+    if (!session || event.pointerId !== session.pointerId) return
+    const dragging = session.dragging
+    const deleting = session.deleting
+    const chip = session.chip
+    const word = session.word
+    const words = session.words
+    const dx = event.clientX - session.x
+    const dy = event.clientY - session.y
+    session = null
+    if (deleting) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (chip) {
+        chip.dataset.skipClick = '1'
+        window.setTimeout(() => { delete chip.dataset.skipClick }, 0)
+      }
+      if (commit && dy >= 36 && dy >= Math.abs(dx)) removeBankWords(words)
+      return
+    }
+    if (!dragging) {
+      if (commit && chip && word) {
+        chip.dataset.skipClick = '1'
+        toggleChipName(word)
+        window.setTimeout(() => { delete chip.dataset.skipClick }, 0)
+      }
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    if (commit && !overDock(event.clientX, event.clientY)) {
+      if (words) placeGhost(words, event.clientX, event.clientY)
+      const aim = raisedGhostPoint(event.clientX, event.clientY)
+      hoverMap(event.clientX, event.clientY)
+      logyq.elements.svg.node()?.dispatchEvent(new DragEvent('drop', {
+        bubbles: true,
+        cancelable: true,
+        clientX: aim.x,
+        clientY: aim.y,
+      }))
+    }
+    endChipDragVisuals()
+    window.setTimeout(() => { window.__logyqChipPlacing = false }, 400)
+  }
+
+  window.addEventListener('pointerup', (event) => finishPointer(event, true))
+  window.addEventListener('pointercancel', (event) => finishPointer(event, false))
+}
+
 /* ======================= CHIP DROP OVER SVG (uses detectors) ======================= */
 logyq.elements.svg.on('dragover', (event) => {
   const { state, elements, config: CONFIG } = logyq
@@ -292,18 +568,9 @@ state.chipDrag.drop = {
 
 
 } else if (drop.type === 'rootAbove') {
-  // clear previous hover marks
-  elements.gNodes.selectAll("g.node")
-    .classed("hover-adopt hover-adopt-sub drop-target", false);
-
-  const [cx, cy] = logyq.selection.caretXYFromHit(drop._hit);
-  elements.caretDot
-    .attr('cx', cx)
-    .attr('cy', cy)
-    .attr('r', CONFIG.CARET_DOT_RADIUS)
-    .style('opacity', 1);
-
-  state.chipDrag.drop = { type: 'rootAbove' };
+  // A tree is already on the canvas. Only a card or a gap places chips.
+  // The zone above the root, and any other miss, leaves them in the bank.
+  state.chipDrag.drop = null
 }
 
 
@@ -462,9 +729,12 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
   }
 });
 
+  bindChipPointerPlace()
+
   attach('wordDock', {
     clearChipSelection,
     getSelectedChipNames,
+    flipBankSelection,
     render,
     addWords,
     parseGIQ,

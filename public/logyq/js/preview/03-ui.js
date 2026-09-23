@@ -5,6 +5,10 @@
     desktopState.setAttribute('aria-live', 'polite')
     document.querySelector('header .controls')?.prepend(desktopState)
 
+    if (!document.getElementById('logyq-map-title')) {
+      document.body.insertAdjacentHTML('afterbegin', '<div id="logyq-map-title"></div>')
+    }
+
     if (!document.getElementById('logiq-mobile-header')) {
       document.body.insertAdjacentHTML('afterbegin', `
       <div id="logiq-mobile-header">
@@ -34,11 +38,30 @@
         </div>
       </section>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
-      <div class="logiq-backdrop logyq-home-screen" id="logiq-library" aria-hidden="true">
+      <div class="logiq-backdrop logyq-home-screen" id="logiq-library" data-shelf="maps" aria-hidden="true">
         <section class="logiq-modal" role="dialog" aria-modal="true" aria-labelledby="logiq-library-title">
-          <header class="logiq-modal-head"><h2 id="logiq-library-title">Your maps</h2><button class="logiq-primary" id="logiq-new-map" type="button">+ New</button><button class="logiq-icon-btn" id="logiq-library-close" aria-label="Back to map">×</button></header>
-          <div class="logiq-library-body"><div class="logiq-map-list" id="logiq-map-list"></div></div>
+          <header class="logiq-modal-head">
+            <div class="logyq-home-tabs" role="tablist" aria-label="Maps home">
+              <button type="button" class="logyq-home-tab is-active" id="logyq-tab-maps" role="tab" aria-selected="true" aria-controls="logiq-map-list" data-shelf="maps">My maps</button>
+              <button type="button" class="logyq-home-tab" id="logyq-tab-curriculum" role="tab" aria-selected="false" aria-controls="logyq-curriculum" data-shelf="curriculum">Curriculum</button>
+            </div>
+            <h2 id="logiq-library-title" class="logyq-sr">Your maps</h2>
+            <button class="logiq-primary" id="logiq-new-map" type="button">+ New</button>
+            <button class="logiq-icon-btn" id="logiq-library-close" aria-label="Back to map">×</button>
+          </header>
+          <div class="logiq-library-body">
+            <div class="logiq-map-list" id="logiq-map-list" role="tabpanel" aria-labelledby="logyq-tab-maps"></div>
+            <div id="logyq-curriculum" role="tabpanel" aria-labelledby="logyq-tab-curriculum" hidden>
+              <p class="logyq-level-intro">Build each tree from the Word Bank. Sibling order can differ.</p>
+              <ol id="logyq-level-path"></ol>
+            </div>
+          </div>
         </section>
+      </div>
+      <div id="logyq-curriculum-bar">
+        <p id="logyq-curriculum-status" role="status"></p>
+        <button type="button" id="logyq-curriculum-check">Check</button>
+        <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
       <div class="logiq-backdrop" id="logiq-pin" aria-hidden="true">
         <form class="logiq-pin-card" id="logiq-pin-form"><h2>Connect</h2><p>Enter the Lab PIN to open live maps. It stays in this LOGYQ session only.</p><input id="logiq-pin-input" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Lab PIN" required><span class="logiq-pin-error">That PIN was not accepted.</span><div class="logiq-pin-actions"><button type="button" class="logiq-icon-btn" id="logiq-pin-cancel" aria-label="Cancel">×</button><button class="logiq-primary" type="submit">Connect</button></div></form>
@@ -217,6 +240,9 @@
     document.getElementById('logiq-library-close').addEventListener('click', closeLibrary)
     ui.library.addEventListener('click', (event) => { if (event.target === ui.library) closeLibrary() })
     document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: false }))
+    ui.library.querySelectorAll('.logyq-home-tab').forEach((button) => {
+      button.addEventListener('click', () => setHomeTab(button.dataset.shelf))
+    })
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool
@@ -273,6 +299,24 @@
     closeMobilePanel()
   }
 
+  function setHomeTab(shelf) {
+    const curriculum = shelf === 'curriculum'
+    const library = document.getElementById('logiq-library')
+    if (!library) return
+    library.dataset.shelf = curriculum ? 'curriculum' : 'maps'
+    const mapsBtn = document.getElementById('logyq-tab-maps')
+    const currBtn = document.getElementById('logyq-tab-curriculum')
+    const list = document.getElementById('logiq-map-list')
+    const panel = document.getElementById('logyq-curriculum')
+    mapsBtn?.classList.toggle('is-active', !curriculum)
+    currBtn?.classList.toggle('is-active', curriculum)
+    mapsBtn?.setAttribute('aria-selected', String(!curriculum))
+    currBtn?.setAttribute('aria-selected', String(curriculum))
+    if (list) list.hidden = curriculum
+    if (panel) panel.hidden = !curriculum
+    if (curriculum) renderCurriculumPath()
+  }
+
   function closeMobilePanel() {
     ui.mobilePanel.classList.remove('is-open')
     ui.menuButton.setAttribute('aria-expanded', 'false')
@@ -280,5 +324,7 @@
 
   function updateMapName() {
     localStorage.setItem(CURRENT_KEY, JSON.stringify(app.current))
+    const title = document.getElementById('logyq-map-title')
+    if (title) title.textContent = app.current?.name || ''
   }
 

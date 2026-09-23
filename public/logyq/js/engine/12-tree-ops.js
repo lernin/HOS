@@ -77,7 +77,19 @@ function insertParentAbove(uid, newName = '', opts = {}){
   const { state, utils } = logyq
   if (!state.root || !uid) return null;
   const h = state.root.descendants().find(n => n?.data?._uid === uid);
-  if (!h?.parent) return null;
+  if (!h) return null;
+  // Flick up on the root has no parent slot to splice into. Wrap the
+  // whole tree: a new card becomes root and the current root is its child.
+  if (!h.parent) {
+    if (h.data !== state.root.data) return null;
+    const prevTree = utils.deepClone(state.root.data);
+    logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
+    const newParent = { name: newName, children: [h.data] };
+    utils.assignUids(newParent);
+    state.root = d3.hierarchy(newParent);
+    utils.assignIds(state.root);
+    return commitCreatedNode(newParent._uid, { noEdit, select, layout: opts.layout !== false });
+  }
 
   const parentData = h.parent.data;
   parentData.children = parentData.children || [];
@@ -337,13 +349,14 @@ function sendSubtreeToWordBank(h){
     const labels = (h?.descendants?.() || []).map(n => (n?.data?.name || '').trim()).filter(Boolean);
     // Blank cards are not words. Skip the bank write and the delete.
     if (!labels.length) return;
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
     labels.forEach(lbl => logyq.wordDock.addWords(lbl, 'bank'));
 
 
     // Remove subtree (with history)
     if (!h.parent){
       // Deleting the root means clear the tree
-      logyq.history.pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data) });
+      logyq.history.pushHistory({ type: 'delete-root', subtree: utils.deepClone(state.root.data), prevBank });
       state.root = null;
       state.lastNodes = [];
       logyq.drag?.clear?.();
@@ -358,7 +371,8 @@ function sendSubtreeToWordBank(h){
       type: 'delete',
       parentPath: utils.pathToUid(state.root.data, parentData._uid),
       index: idx,
-      subtree: utils.deepClone(h.data)
+      subtree: utils.deepClone(h.data),
+      prevBank
     });
     if (idx > -1) parentData.children.splice(idx, 1);
     if (parentData.children && parentData.children.length === 0) parentData.children = null;
@@ -377,13 +391,17 @@ function sendNodeToWordBank_abandon(h){
   try{
     const label = (h?.data?.name || '').trim();
     if (!label) return;
+    if (!h.parent){
+      const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
+      if (!kidsH.length){ showToast('Root has no child to promote'); return; }
+    }
+    const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
     logyq.wordDock.addWords(label, 'bank');
 
     if (!h.parent){
       // Root: promote leftmost child as new root; old root (this label) already banked
       const prevTree = utils.deepClone(state.root.data);
       const kidsH = (state.root.children || []).slice().sort((a,b)=>a.x-b.x);
-      if (!kidsH.length){ showToast('Root has no child to promote'); return; }
 
       const newRootData = kidsH[0].data;
       const others = kidsH.slice(1).map(hh => hh.data);
@@ -396,7 +414,7 @@ function sendNodeToWordBank_abandon(h){
       if (idx > -1) prevTree.children.splice(idx, 1);
       newRootData.children = (newRootData.children || []).concat(others);
 
-      logyq.history.pushHistory({ type: 'replace-root', prev: prevTree });
+      logyq.history.pushHistory({ type: 'replace-root', prev: prevTree, prevBank });
       state.root = d3.hierarchy(newRootData); utils.assignIds(state.root);
       logyq.treeManager.layoutAndRender(false);
       showToast(`Saved "${label}" to Word Dock`);
@@ -418,7 +436,8 @@ function sendNodeToWordBank_abandon(h){
       type: 'delete',
       parentPath: fromParentPath,
       index: fromIndex,
-      subtree: utils.deepClone(moving)
+      subtree: utils.deepClone(moving),
+      prevBank
     });
 
     state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);

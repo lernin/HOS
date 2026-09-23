@@ -18,6 +18,34 @@
       .logyq-choice-card,.logyq-chooser{display:none!important}
       .logiq-modal-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:16px;background:rgba(255,255,255,.96);border-bottom:1px solid #e2e8f0}
       .logiq-modal-head h2{font-size:18px;margin:0;flex:1}
+      .logyq-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+      .logyq-home-tabs{display:flex;align-items:center;gap:4px;flex:1;min-width:0}
+      .logyq-home-tab{border:0;background:transparent;color:#64748b;font:750 16px/1.2 system-ui,sans-serif;padding:6px 10px;border-radius:999px;cursor:pointer}
+      .logyq-home-tab.is-active{color:#14532d;background:#dcfce7}
+      #logiq-library[data-shelf="curriculum"] #logiq-new-map,
+      #logiq-library[data-shelf="curriculum"] #logiq-map-list,
+      #logyq-curriculum{display:none}
+      #logiq-library[data-shelf="curriculum"] #logyq-curriculum{display:block}
+      #logyq-curriculum .logiq-empty p{margin:0}
+      .logyq-level-intro{margin:4px 0 14px;color:#64748b;font-size:13px}
+      #logyq-level-path{list-style:none;margin:0 auto 28px;padding:8px 0 12px;width:min(440px,100%);display:grid;gap:16px;position:relative}
+      #logyq-level-path::before{content:"";position:absolute;left:50%;top:28px;bottom:28px;width:4px;border-radius:999px;background:#bbf7d0;transform:translateX(-50%)}
+      .logyq-level{position:relative;display:flex;z-index:1}
+      .logyq-level:nth-child(odd){justify-content:flex-start;padding-left:4%}
+      .logyq-level:nth-child(even){justify-content:flex-end;padding-right:4%}
+      .logyq-level button{display:flex;align-items:center;gap:10px;border:1px solid #e2e8f0;background:#fff;border-radius:999px;padding:6px 14px 6px 6px;font:700 15px/1.2 system-ui,sans-serif;color:#14532d;cursor:pointer;box-shadow:0 6px 16px rgba(15,23,42,.06)}
+      .logyq-level-num{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#16a34a;color:#fff;font-weight:800}
+      .logyq-level.is-cleared .logyq-level-num{background:#14532d}
+      .logyq-level.is-locked button{color:#94a3b8;cursor:not-allowed;box-shadow:none}
+      .logyq-level.is-locked .logyq-level-num{background:#e2e8f0;color:#64748b}
+      .logyq-level-lock{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
+      #logyq-curriculum-bar{position:fixed;z-index:42;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:14px;background:rgba(255,255,255,.96);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{display:flex}
+      #logyq-curriculum-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
+      #logyq-curriculum-status[data-tone="clear"]{color:#14532d}
+      #logyq-curriculum-status[data-tone="wait"]{color:#64748b}
+      #logyq-curriculum-check,#logyq-curriculum-levels{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
+      #logyq-curriculum-levels{background:#fff;color:#14532d;border:1px solid #bbf7d0}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
       .logiq-primary{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:9px 13px;font-weight:750;cursor:pointer}
       .logiq-library-body{padding:12px 16px 18px}
@@ -41,6 +69,8 @@
       .logiq-pin-actions{display:flex;justify-content:flex-end;gap:8px}
       .logiq-pin-error{display:none;color:#dc2626;font-size:12px}.logiq-pin-error.is-visible{display:block}
       #logiq-mobile-header,#logiq-mobile-panel,#logiq-voice-bar{display:none}
+      #logyq-map-title{position:fixed;z-index:40;top:58px;left:14px;max-width:min(240px,46vw);pointer-events:none;color:#94a3b8;font:500 12px/1.2 system-ui,sans-serif;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      body.logyq-home #logyq-map-title{display:none}
 
       /* Ghost-hold is not media-query gated: desktop drag-mode hides is-others (opacity:0),
          which makes the tree look like it collapsed around the moving card. While a finger
@@ -56,6 +86,7 @@
       body.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
       body.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
       body.v2-branch-drag .drag-mini,body.v2-branch-drag g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
+      #logyq-v162-branch-preview{opacity:0.55}
       body.v2-branch-drag.v2-dock-target #Dock{outline:3px solid #22c55e;outline-offset:2px;background:rgba(220,252,231,.72)}
 
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
@@ -64,9 +95,11 @@
         svg#canvas{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;touch-action:none;overflow:visible;z-index:0}
         #trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
         #Dock{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));padding:0 4px;min-height:48px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
+        #Dock .chip{touch-action:none;-webkit-user-drag:none}
         #Dock.dock-left{top:54px;bottom:max(8px,env(safe-area-inset-bottom));left:8px;right:auto;width:min(220px,72vw);padding:8px}
         #Toast{bottom:72px;max-width:calc(100vw - 36px);text-align:center}
         #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px);overflow:hidden;flex-wrap:nowrap}
+        #logyq-map-title{top:52px;left:12px}
         #logyq-corner-cluster{display:contents}
         #logyq-select-strip{display:none!important}
         #logiq-mobile-header img{width:28px;height:28px;flex:0 0 auto;order:2}
@@ -93,9 +126,12 @@
         svg#canvas g.node:not(.is-outlined){pointer-events:none}
         body.logyq-mobile-v162 svg#canvas g.node,body.logyq-mobile-v162 svg#canvas g.node *{pointer-events:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash,body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important;filter:none!important}
-        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{stroke:none!important;filter:none!important;vector-effect:none}
-        body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important;filter:none!important}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{pointer-events:none!important;fill:none!important;fill-opacity:0!important;stroke-width:3.5px!important;stroke-linecap:round;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-edit-focus{pointer-events:none!important;fill:none!important;fill-opacity:0!important;stroke:#16a34a!important;stroke-width:3.5px!important;stroke-linecap:round;vector-effect:non-scaling-stroke;filter:none!important;animation:none!important}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash[data-smite-outline="ants"]{stroke-dasharray:8 6!important;animation:logyq-smite-march 1.4s linear infinite!important}
+        body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-dasharray:none!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.links path.logyq-smite-ant{fill:none!important;stroke-linecap:round;stroke-dasharray:8 6!important;animation:logyq-smite-march 1.4s linear infinite!important;pointer-events:none!important;transition:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;transition:none!important;vector-effect:none}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red,body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:none}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation;pointer-events:auto;transform-origin:center}
@@ -105,15 +141,15 @@
         #logyq-v162-action.show{display:grid}#logyq-v162-action.rec{background:#ef4444}
         #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
+        @keyframes logyq-smite-march{from{stroke-dashoffset:0}to{stroke-dashoffset:-14px}}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
       }
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
         body.logyq-mobile-v162 #logiq-v2-drag-card,body.logyq-mobile-v162 .drag-mini,body.logyq-mobile-v162 g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
         body.logyq-mobile-v162.v2-branch-drag .drag-mini{display:none!important;opacity:0!important}
-        #logyq-v162-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
+        #logyq-v162-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform;opacity:0.55}
         #logyq-v162-branch-preview svg{position:absolute;overflow:visible;pointer-events:none}
-        #logyq-v162-branch-preview g.node text,#logyq-v162-branch-preview g.node text.label{fill:#374151!important;opacity:1!important}
-        #logyq-v162-branch-preview g.node rect:not(.grabzone){opacity:1!important}
+        #logyq-v162-branch-preview g.node text,#logyq-v162-branch-preview g.node text.label{fill:#374151!important}
         body.logyq-mobile-v162.v2-cancel #logyq-v162-branch-preview g.node rect:not(.grabzone){stroke:#ef4444!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost{opacity:.44!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
@@ -132,6 +168,7 @@
       }
       @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
         #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0;overflow:visible}
+        #logyq-map-title{top:max(8px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}
         #logyq-corner-cluster{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;bottom:auto;width:max-content;height:auto;max-height:calc(100dvh - 16px);padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16);overflow:auto}
         #logyq-corner-cluster img,#logyq-select-strip,#logyq-home-btn{display:none}
         #logyq-paint-btn{order:-1}
@@ -143,6 +180,55 @@
         #Dock{left:max(8px,env(safe-area-inset-left));right:max(72px,env(safe-area-inset-right))}
         body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
         body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
+      }
+      #logyq-thekonym-ask{display:none}
+      body.logyq-thekonym #logyq-thekonym-ask{display:grid;place-items:center;position:fixed;z-index:3300;top:58px;right:10px;width:36px;height:36px;border:1px solid #3c4d43;border-radius:10px;background:#162e27;color:#faf8f1;font:18px Georgia,serif;padding:0}
+      #logyq-thekonym-mobile{grid-column:1 / -1}
+      #logyq-thekonym-mobile[aria-pressed="true"]{background:#162e27;color:#faf8f1;border-color:#162e27}
+      body.logyq-thekonym svg#canvas g.node text.label{dominant-baseline:alphabetic}
+      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400}
+      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#4e5b54;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400}
+      .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:rgba(22,46,39,.28);padding:5dvh 5vw}
+      .logyq-tk-scrim.is-open{display:flex}
+      .logyq-tk-card{position:relative;box-sizing:border-box;width:90vw;height:90dvh;max-width:720px;overflow:hidden;display:flex;flex-direction:column;text-align:center;padding:0;background:#f7f5e9;color:#29382f;border-radius:18px;box-shadow:0 24px 70px rgba(22,46,39,.28);font-family:'DM Sans',system-ui,sans-serif}
+      .logyq-tk-x{position:absolute;top:8px;right:8px;z-index:1;width:36px;height:36px;border:0;border-radius:8px;background:transparent;color:#162e27;font-size:22px;line-height:1}
+      .logyq-tk-body{box-sizing:border-box;width:100%;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:16px 22px 14px}
+      .logyq-tk-body.is-miss{justify-content:center}
+      .logyq-tk-kicker{margin:0;letter-spacing:.18em;font-size:11px;font-weight:650;text-transform:uppercase;color:#284f38}
+      .logyq-tk-kicker::after{content:"";display:block;width:22px;height:1px;margin:8px auto 0;background:#9a7846}
+      .logyq-tk-onym{margin:8px 0 0;max-width:100%;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:clamp(40px,10vw,64px);line-height:.96;color:#162e27;overflow-wrap:anywhere}
+      .logyq-tk-pron{margin:7px 0 0;max-width:100%;font-family:Georgia,serif;font-size:15px;line-height:1.3;color:#737969}
+      .logyq-tk-essence{margin:8px 0 0;max-width:16em;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:clamp(22px,5.6vw,32px);line-height:1.12;color:#9a7846}
+      .logyq-tk-essence.is-blank{min-height:1.15em}
+      .logyq-tk-fields{width:100%;margin-top:14px;display:flex;flex-direction:column;gap:10px;text-align:left}
+      .logyq-tk-block h2{margin:0;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:650;color:#6d6248}
+      .logyq-tk-block p{margin:2px 0 0;font-size:15.5px;line-height:1.32;color:#29382f}
+      .logyq-tk-technical.is-fade p{max-height:4.5em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 58%,transparent);mask-image:linear-gradient(#000 58%,transparent)}
+      .logyq-tk-examples{margin:2px 0 0;padding:0 0 0 1.05em}
+      .logyq-tk-examples li{margin:1px 0;font-size:15.5px;line-height:1.3;color:#29382f}
+      .logyq-tk-empty{margin:14px 0 0;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:clamp(26px,6vw,40px);line-height:1.2;color:#73786e}
+      .logyq-tk-input{width:min(100%,16em);box-sizing:border-box;text-align:center;background:#fffef8;border:1px solid #b6bdac;border-radius:6px;padding:6px 10px;color:#29382f;font:inherit}
+      .logyq-tk-browser{position:fixed;inset:0;z-index:6100;display:none;flex-direction:column;background:#f7f5e9;color:#29382f;font-family:'DM Sans',system-ui,sans-serif}
+      .logyq-tk-browser.is-open{display:flex}
+      .logyq-tk-browser header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:#162e27;color:#eeeadd;flex:0 0 auto}
+      .logyq-tk-browser h2{margin:0;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:26px}
+      .logyq-tk-browser header button{border:0;background:transparent;color:inherit;width:40px;height:40px;font-size:22px}
+      .logyq-tk-az{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:12px 14px;border-bottom:1px solid #d8d8c9;flex:0 0 auto}
+      .logyq-tk-az button{border:0;background:transparent;min-height:40px;border-radius:3px;color:#3e5142;font-family:Georgia,serif;font-size:18px}
+      .logyq-tk-az button[aria-pressed="true"]{background:#284f38;color:#fff}
+      .logyq-tk-az button:disabled{opacity:.25}
+      .logyq-tk-list{flex:1;min-height:0;overflow:auto;padding:6px 12px 28px}
+      .logyq-tk-prompt,.logyq-tk-none{margin:18px 8px;color:#73786e;font-size:15px}
+      .logyq-tk-item{display:flex;align-items:center;gap:8px;border-bottom:1px solid #e6e5db}
+      .logyq-tk-row{flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-height:54px;padding:8px 4px;border:0;background:transparent;text-align:left;color:#29382f}
+      .logyq-tk-row span{font-family:Georgia,serif;font-size:19px}
+      .logyq-tk-row small{font-size:12px;color:#73786e}
+      .logyq-tk-add{flex:0 0 auto;border:1px solid #b6bdac;border-radius:6px;background:#faf8f1;color:#284e43;min-height:36px;padding:6px 8px;font:600 12px/1.2 'DM Sans',system-ui,sans-serif}
+      @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
+        body.logyq-thekonym #logyq-thekonym-ask{top:8px;left:8px;right:auto}
+      }
+      @media (min-width:701px){
+        body.logyq-thekonym #logyq-thekonym-ask{top:12px;right:12px}
       }
     `
     document.head.append(style)

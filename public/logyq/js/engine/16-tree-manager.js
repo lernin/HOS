@@ -248,8 +248,46 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     utils.assignIds(scratch)
     this.applyLayout(scratch)
     state.root = scratch
-    this.syncHitSlots(scratch.descendants())
-    this.ensureCreateNodes(scratch.descendants())
+    const nodes = scratch.descendants()
+    this.syncHitSlots(nodes)
+    this.ensureCreateNodes(nodes)
+    this.retargetLiveNodes(nodes)
+    state.layoutVisualReady = true
+  },
+
+  // A second create while the first settle is still playing used to leave
+  // painted cards on the old layout and then animate again when the queue
+  // flushed. Point the live cards at the latest layout now, and let the
+  // flush land without a second glide.
+  retargetLiveNodes(nodes){
+    const { elements } = logyq
+    const want = new Map()
+    for (const d of nodes || []) {
+      if (d?.data?._uid != null && String(d.data._uid) !== '') want.set(d.data._uid, d)
+    }
+    elements.gNodes?.selectAll('g.node').each(function (d) {
+      const next = want.get(d?.data?._uid)
+      if (!next) return
+      const sel = d3.select(this)
+      sel.datum(next)
+      sel.interrupt()
+      sel.transition().duration(180).attr('transform', `translate(${next.x},${next.y})`)
+    })
+    const root = (nodes || []).find((d) => d && !d.parent) || null
+    if (elements.gLinks && root?.links) {
+      const byTarget = new Map()
+      for (const link of root.links()) {
+        if (link?.target?.data?._uid != null) byTarget.set(link.target.data._uid, link)
+      }
+      elements.gLinks.selectAll('path.link').each(function (d) {
+        const next = byTarget.get(d?.target?.data?._uid)
+        if (!next) return
+        const sel = d3.select(this)
+        sel.datum(next)
+        sel.interrupt()
+        sel.transition().duration(180).attr('d', logyq.visual.vLink(next))
+      })
+    }
   },
 
   ensureCreateNodes(nodes){
@@ -271,11 +309,11 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       g.insert('rect', ':first-child')
         .attr('class', 'grabzone')
         .attr('x', -CONFIG.CARD_WIDTH / 2)
-        .attr('y', -CONFIG.CARD_HEIGHT * 0.5)
+        .attr('y', -CONFIG.CARD_HEIGHT / 2)
         .attr('width', CONFIG.CARD_WIDTH)
-        .attr('height', CONFIG.CARD_HEIGHT * 1.5)
+        .attr('height', CONFIG.CARD_HEIGHT)
         .style('fill', 'transparent')
-        .style('pointer-events', 'all')
+        .style('pointer-events', 'none')
       g.append('rect')
         .attr('x', -CONFIG.CARD_WIDTH / 2)
         .attr('y', -CONFIG.CARD_HEIGHT / 2)
@@ -310,20 +348,30 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
   flushCreateLayout(){
     const { state, utils } = logyq
     if (!state.root?.data) return
+    const instant = !!state.layoutVisualReady
+    state.layoutVisualReady = false
     state.layoutFlushQueued = false
     const after = state.layoutAfterFlush
     state.layoutAfterFlush = null
     state.root = d3.hierarchy(state.root.data)
     utils.assignIds(state.root)
+    state.layoutMotionMs = instant ? 0 : 260
     this.layoutAndRender(false)
+    state.layoutMotionMs = null
     try { after?.() } catch (_e) {}
   },
 
   armLayoutSettle(){
     const { state } = logyq
     const delay = this.CREATE_SETTLE_MS || 260
-    state.layoutSettling = true
     state.layoutGeneration = (state.layoutGeneration || 0) + 1
+    if (state.layoutMotionMs === 0) {
+      state.layoutSettling = false
+      state.layoutSettleTimer = 0
+      try { document.body.classList.remove('logyq-layout-settling') } catch (_e) {}
+      return
+    }
+    state.layoutSettling = true
     try { document.body.classList.add('logyq-layout-settling') } catch (_e) {}
     try { clearTimeout(state.layoutSettleTimer) } catch (_e) {}
     state.layoutSettleTimer = setTimeout(() => {
@@ -394,12 +442,18 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     const { state, elements, config: CONFIG } = logyq
     const nodes=state.root.descendants();
     const links=state.root.links();
+    const motion = Number.isFinite(state.layoutMotionMs) ? state.layoutMotionMs : 260
+    const glide = (sel) => {
+      if (motion > 0) return sel.transition().duration(motion)
+      sel.interrupt()
+      return sel
+    }
 
     const selLinks=elements.gLinks.selectAll("path.link").data(links, d=>d.target.data._uid);
-    selLinks.enter().append("path").attr("class","link").style("stroke-width", 2.8).style("opacity", 0.5)
+    const enteredLinks = selLinks.enter().append("path").attr("class","link").style("stroke-width", 2.8).style("opacity", 0.5)
       .attr("d", d=> logyq.visual.vLink({source:d.source, target:d.source}))
-      .transition().duration(260).attr("d", d=> logyq.visual.vLink(d));
-    selLinks.transition().duration(260).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> logyq.visual.vLink(d));
+    glide(enteredLinks).attr("d", d=> logyq.visual.vLink(d));
+    glide(selLinks).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> logyq.visual.vLink(d));
     selLinks.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
 
@@ -436,22 +490,28 @@ const nEnter = selNodes.enter()
     nEnter.insert("rect",":first-child")
       .attr("class","grabzone")
       .attr("x",-CONFIG.CARD_WIDTH/2)
-      .attr("y",-CONFIG.CARD_HEIGHT*0.5)
+      .attr("y",-CONFIG.CARD_HEIGHT/2)
       .attr("width",CONFIG.CARD_WIDTH)
-      .attr("height",CONFIG.CARD_HEIGHT*1.5)
+      .attr("height",CONFIG.CARD_HEIGHT)
       .style("fill","transparent")
-      .style("cursor","grab").style("pointer-events","all");
+      .style("cursor","grab").style("pointer-events","none");
     /* [patch] grabzone-behind end */
     nEnter.append("rect").attr("x", -CONFIG.CARD_WIDTH/2).attr("y", -CONFIG.CARD_HEIGHT/2).attr("width", CONFIG.CARD_WIDTH).attr("height", CONFIG.CARD_HEIGHT);
     nEnter.append("text").attr("class","label").attr("x",0).attr("y",0).style("font-size", `${CONFIG.FONT_SIZE}px`).text(d=>d.data.name);
 
     const allNodes = nEnter.merge(selNodes);
     allNodes.attr("data-uid", d => d.data._uid);
+    allNodes.select("rect.grabzone")
+      .attr("x", -CONFIG.CARD_WIDTH/2)
+      .attr("y", -CONFIG.CARD_HEIGHT/2)
+      .attr("width", CONFIG.CARD_WIDTH)
+      .attr("height", CONFIG.CARD_HEIGHT)
+      .style("pointer-events", "none");
     allNodes.select("rect:not(.grabzone)")
       .attr("data-uid", d => d.data._uid)
       .style("fill", d => d.data.color || null);
     this.bindUidStamp(allNodes);
-    allNodes.transition().duration(260).attr("transform", d=>`translate(${d.x},${d.y})`);
+    glide(allNodes).attr("transform", d=>`translate(${d.x},${d.y})`);
     allNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
     selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 

@@ -12,10 +12,7 @@ function keyDispatcher(e){
   /* [patch] dock-ctrlA toggle start */
   if (!modalOpen && !typing && document.querySelector("#Dock:hover") && e.shiftKey && lower==="a") {
     e.preventDefault();
-    const chips = document.querySelectorAll("#Dock .chip");
-    const list = Array.from(chips);
-    const allSelected = list.length > 0 && list.every(c => c.classList.contains("is-outlined"));
-    list.forEach(c => c.classList.toggle("is-outlined", !allSelected));
+    logyq.wordDock.flipBankSelection?.();
     return;
   }
   /* [patch] dock-ctrlA toggle end */
@@ -48,6 +45,7 @@ function keyDispatcher(e){
       logyq.selection.showToast(logyq.dock.sideLabel(side), 900);
       return;
     }
+    if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }
     if (lower === 'u')               { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'p')               { e.preventDefault(); elements.settings.exportBackdrop && elements.settings.exportBackdrop.classList.add("show"); return;}
 
