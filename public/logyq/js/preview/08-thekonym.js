@@ -50,6 +50,15 @@
     return typeof value === 'string' ? value.trim() : ''
   }
 
+  // Display only. Syllable marks from the row become bullets; the stored string is left alone.
+  function thekonymPronunciation(value) {
+    const text = thekonymText(value)
+    if (!text) return ''
+    const parts = text.split(/\s*(?:[•·∙⋅|/]|[,;]|[–—-])\s*|\s+/).map((part) => part.trim()).filter(Boolean)
+    if (parts.length < 2) return text
+    return parts.join(' • ')
+  }
+
   function thekonymExampleLines(example) {
     return thekonymText(example).split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
   }
@@ -59,7 +68,7 @@
     const row = thekonymMatch(catalogue, name)
     return {
       ...face,
-      pronunciation: thekonymText(row?.term_pronunciation),
+      pronunciation: thekonymPronunciation(row?.term_pronunciation),
       kids: thekonymText(row?.kid_explanation),
       definition: thekonymText(row?.definition),
       technical: thekonymText(row?.technical_definition),

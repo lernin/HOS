@@ -2251,7 +2251,7 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   const start = source.indexOf('// THEKONYM_PURE_START')
   const end = source.indexOf('// THEKONYM_PURE_END')
   assert.ok(start >= 0 && end > start)
-  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine, thekonymDossier, thekonymExampleLines, thekonymExampleKeep, thekonymInPlay };`)()
+  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine, thekonymPronunciation, thekonymDossier, thekonymExampleLines, thekonymExampleKeep, thekonymInPlay };`)()
   const rows = [
     {
       id: '1',
@@ -2280,6 +2280,10 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   assert.equal(api.thekonymAlphabetLetter('fruit'), 'F')
   assert.equal(api.thekonymFaceLine('short'), 'short')
   assert.equal(api.thekonymFaceLine('1234567890123456789012345').endsWith('…'), true)
+  assert.equal(api.thekonymPronunciation('TEL-oh-nim'), 'TEL • oh • nim')
+  assert.equal(api.thekonymPronunciation('the  ko   nym'), 'the • ko • nym')
+  assert.equal(api.thekonymPronunciation('prak·TEH·oh'), 'prak • TEH • oh')
+  assert.equal(api.thekonymPronunciation('Telonym'), 'Telonym')
   const dossier = api.thekonymDossier(rows, 'Fruit', {})
   assert.equal(dossier.pronunciation, 'prak • TEH • oh • nim')
   assert.equal(dossier.kids, 'Kid line.')

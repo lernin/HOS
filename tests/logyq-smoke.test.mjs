@@ -5985,7 +5985,7 @@ test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right 
         ? [{
           id: 'row-1',
           term: 'Zephyronym',
-          term_pronunciation: 'ZEF • ee • oh • nim',
+          term_pronunciation: 'ZEF-ee-oh-nim',
           essence: 'a test essence',
           kid_explanation: 'A kid line for the test.',
           definition: 'A short definition.',
@@ -6061,8 +6061,8 @@ test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right 
   assert.match(faceType.essenceFill, /102,\s*112,\s*106|66706a/i)
   assert.match(faceType.dossierOnym, /Libre Caslon Display/)
   assert.match(faceType.dossierEssence, /Libre Caslon Display/)
-  assert.equal(faceType.animation, 'none')
-  assert.match(faceType.background, /247,\s*245,\s*233|251,\s*248,\s*239/)
+  assert.equal(faceType.animation, 'swirl')
+  assert.doesNotMatch(faceType.background, /247,\s*245,\s*233|239,\s*230,\s*210|efe6d2/i)
 
   const uid = await page.evaluate(() => window.LOGYQBridge.core.state.root.data._uid)
   const nodeCount = () => page.evaluate(() => document.querySelectorAll('svg#canvas g.node').length)

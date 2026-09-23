@@ -346,7 +346,6 @@
       body.logyq-thekonym svg#canvas g.node text.label{dominant-baseline:alphabetic}
       body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;stroke:#1c3329;stroke-width:0.65px;stroke-linejoin:round;paint-order:stroke fill;vector-effect:non-scaling-stroke}
       body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#66706a;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:500;stroke:none}
-      body.logyq-thekonym::before{animation:none;filter:none;background:radial-gradient(ellipse at center, rgba(247,245,233,0) 40%, rgba(22,46,39,0.05) 72%, rgba(22,46,39,0.16) 100%), radial-gradient(ellipse at 50% 40%, #fbf8ef 0%, #f7f5e9 58%, #efe6d2 100%)}
       .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:transparent;padding:5dvh 5vw;touch-action:none}
       #logyq-tk-frost{position:fixed;inset:0;z-index:6150;pointer-events:none;opacity:0;background:rgba(244,241,228,.36);backdrop-filter:blur(14px) saturate(1.08);-webkit-backdrop-filter:blur(14px) saturate(1.08)}
       body:has(#logyq-thekonym-card.is-open) #logyq-tk-frost{opacity:1}
@@ -4894,6 +4893,15 @@
     return typeof value === 'string' ? value.trim() : ''
   }
 
+  // Display only. Syllable marks from the row become bullets; the stored string is left alone.
+  function thekonymPronunciation(value) {
+    const text = thekonymText(value)
+    if (!text) return ''
+    const parts = text.split(/\s*(?:[•·∙⋅|/]|[,;]|[–—-])\s*|\s+/).map((part) => part.trim()).filter(Boolean)
+    if (parts.length < 2) return text
+    return parts.join(' • ')
+  }
+
   function thekonymExampleLines(example) {
     return thekonymText(example).split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
   }
@@ -4903,7 +4911,7 @@
     const row = thekonymMatch(catalogue, name)
     return {
       ...face,
-      pronunciation: thekonymText(row?.term_pronunciation),
+      pronunciation: thekonymPronunciation(row?.term_pronunciation),
       kids: thekonymText(row?.kid_explanation),
       definition: thekonymText(row?.definition),
       technical: thekonymText(row?.technical_definition),
