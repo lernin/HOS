@@ -50,6 +50,15 @@
     return typeof value === 'string' ? value.trim() : ''
   }
 
+  // Display only. Syllable marks from the row become bullets; the stored string is left alone.
+  function thekonymPronunciation(value) {
+    const text = thekonymText(value)
+    if (!text) return ''
+    const parts = text.split(/\s*(?:[•·∙⋅|/]|[,;]|[–—-])\s*|\s+/).map((part) => part.trim()).filter(Boolean)
+    if (parts.length < 2) return text
+    return parts.join(' • ')
+  }
+
   function thekonymExampleLines(example) {
     return thekonymText(example).split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
   }
@@ -59,7 +68,7 @@
     const row = thekonymMatch(catalogue, name)
     return {
       ...face,
-      pronunciation: thekonymText(row?.term_pronunciation),
+      pronunciation: thekonymPronunciation(row?.term_pronunciation),
       kids: thekonymText(row?.kid_explanation),
       definition: thekonymText(row?.definition),
       technical: thekonymText(row?.technical_definition),
@@ -71,6 +80,17 @@
     const key = thekonymJoinKey(name)
     if (!key) return true
     return (Array.isArray(playing) ? playing : []).some((item) => thekonymJoinKey(item) === key)
+  }
+
+  // Missing content is red. A present field whose confidence is not 3 is amber. Example is ignored.
+  function thekonymHeat(row) {
+    if (!row) return ''
+    const missing = ['essence', 'kid_explanation', 'definition', 'technical_definition', 'term_pronunciation']
+      .some((key) => !String(row[key] ?? '').trim())
+    if (missing) return 'red'
+    const unsure = ['essence_confidence', 'kid_explanation_confidence', 'definition_confidence', 'technical_definition_confidence']
+      .some((key) => Number(row[key]) !== 3)
+    return unsure ? 'amber' : ''
   }
 
   // Drop examples from the end until two fit, then one. Fade technical only after that.
@@ -154,8 +174,36 @@
   function paintThekonymFaces() {
     if (!thekonymState.on || typeof d3 === 'undefined') return
     d3.selectAll('svg#canvas g.nodes g.node text.label').each(function paintFace(d) {
-      paintLabelElement(this, d?.data?.name || '')
+      const name = d?.data?.name || ''
+      paintLabelElement(this, name)
+      paintThekonymHeat(this.closest('g.node'), name)
     })
+  }
+
+  function paintThekonymHeat(node, name) {
+    const wash = node?.querySelector('rect.logyq-tk-heat')
+    const heat = thekonymState.on ? thekonymHeat(thekonymMatch(thekonymState.rows, name)) : ''
+    if (!node || !heat) {
+      wash?.remove()
+      if (node) delete node.dataset.tkHeat
+      return
+    }
+    node.dataset.tkHeat = heat
+    const card = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus):not(.logyq-tk-heat)')
+    const layer = wash || document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    layer.setAttribute('class', 'logyq-tk-heat')
+    for (const attr of ['x', 'y', 'width', 'height', 'rx', 'ry']) {
+      const value = card?.getAttribute(attr)
+      if (value) layer.setAttribute(attr, value)
+    }
+    if (!layer.getAttribute('rx')) {
+      layer.setAttribute('rx', '10')
+      layer.setAttribute('ry', '10')
+    }
+    if (!layer.isConnected) {
+      if (card) card.after(layer)
+      else node.append(layer)
+    }
   }
 
   function installThekonymFaces() {
@@ -169,6 +217,8 @@
         document.querySelectorAll('svg#canvas g.node text.label').forEach((el) => {
           el.style.dominantBaseline = ''
         })
+        document.querySelectorAll('svg#canvas rect.logyq-tk-heat').forEach((el) => el.remove())
+        document.querySelectorAll('svg#canvas g.node[data-tk-heat]').forEach((el) => { delete el.dataset.tkHeat })
       }
     }
     apply.__thekonym = true
@@ -183,9 +233,181 @@
     document.body.classList.toggle('logyq-thekonym', thekonymState.on)
   }
 
-  function closeThekonymCard() {
+  let dossierFlip = null
+
+  function thekonymCardOrigin(uid) {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => (
+      el.dataset.uid === String(uid) || el.__data__?.data?._uid === uid
+    ))
+    const face = node?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus):not(.logyq-tk-heat)')
+    const rect = (face || node)?.getBoundingClientRect?.()
+    if (!rect || rect.width < 8 || rect.height < 8) return null
+    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height, node }
+  }
+
+  function clearDossierFlip(root) {
+    const flip = dossierFlip
+    dossierFlip = null
+    if (flip?.timer) clearTimeout(flip.timer)
+    flip?.anims?.forEach((anim) => { try { anim.cancel() } catch (_error) {} })
+    flip?.fly?.remove()
+    if (flip?.node) flip.node.style.opacity = ''
+    const card = root?.querySelector?.('.logyq-tk-card')
+    if (card) {
+      card.style.transform = ''
+      card.style.opacity = ''
+    }
+    if (root) {
+      root.classList.remove('is-flipping')
+      root.style.backgroundColor = ''
+      root.style.opacity = ''
+      delete root.dataset.flip
+    }
+    const frost = document.getElementById('logyq-tk-frost')
+    if (frost) {
+      frost.getAnimations().forEach((anim) => { try { anim.cancel() } catch (_error) {} })
+      frost.style.opacity = ''
+    }
+  }
+
+  function dossierFrostFade(from, to, duration, easing) {
+    const frost = document.getElementById('logyq-tk-frost')
+    if (!frost) return null
+    frost.style.opacity = String(from)
+    return frost.animate(
+      [{ opacity: from }, { opacity: to }],
+      { duration, easing, fill: 'both' },
+    )
+  }
+
+  const DOSSIER_FLIP_MS = 420
+
+  function dossierFlipFrames() {
+    return [
+      { transform: 'translateX(-16px) rotateY(-88deg)', offset: 0, easing: 'linear' },
+      { transform: 'translateX(18px) rotateY(-46deg)', offset: 0.42, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+      { transform: 'translateX(0px) rotateY(0deg)', offset: 1 },
+    ]
+  }
+
+  // A clear left swipe on the dossier. A short nudge does not count.
+  function thekonymDismissSwipe(dx, dy, min = 52) {
+    const x = Number(dx) || 0
+    const y = Number(dy) || 0
+    if (x >= 0) return false
+    if (Math.hypot(x, y) < min) return false
+    return Math.abs(x) > Math.abs(y)
+  }
+
+  // Right-swipe open: the dossier flips in at full size. A few pixels of rightward drift sit inside that turn.
+  function playDossierFlip(origin) {
+    const root = document.getElementById('logyq-thekonym-card')
+    const card = root?.querySelector('.logyq-tk-card')
+    if (!root || !card || !origin) return
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return
+    clearDossierFlip(root)
+    if (card.getBoundingClientRect().width < 8) return
+    const duration = DOSSIER_FLIP_MS
+    root.classList.add('is-flipping')
+    root.dataset.flip = 'open'
+    root.style.backgroundColor = 'transparent'
+    card.style.opacity = ''
+    card.style.transformOrigin = 'center center'
+    card.style.transform = 'translateX(-16px) rotateY(-88deg)'
+
+    const cardAnim = card.animate(dossierFlipFrames(), { duration, easing: 'linear', fill: 'both' })
+    const scrimAnim = dossierFrostFade(0, 1, duration, 'linear')
+    const flip = { anims: [cardAnim, scrimAnim], fly: null, node: null, timer: 0, closing: false }
+    dossierFlip = flip
+    const settle = () => {
+      if (dossierFlip !== flip || flip.closing) return
+      root.dataset.flip = 'settled'
+      card.style.opacity = ''
+      card.style.transform = ''
+      root.style.backgroundColor = ''
+      const frost = document.getElementById('logyq-tk-frost')
+      if (frost) frost.style.opacity = ''
+      root.classList.remove('is-flipping')
+      flip.fly?.remove()
+      flip.anims.forEach((anim) => { try { anim.cancel() } catch (_error) {} })
+      if (flip.node) flip.node.style.opacity = ''
+      clearTimeout(flip.timer)
+      dossierFlip = null
+    }
+    cardAnim.onfinish = settle
+    flip.timer = setTimeout(settle, duration + 90)
+  }
+
+  // Settled close: the same turn, played backward, until the dossier is edge-on and gone.
+  function playDossierUnflip(root) {
+    const card = root.querySelector('.logyq-tk-card')
+    if (!card || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+      clearDossierFlip(root)
+      root.classList.remove('is-open')
+      return
+    }
+    clearDossierFlip(root)
+    const duration = 400
+    root.classList.add('is-flipping')
+    root.dataset.flip = 'close'
+    card.style.opacity = ''
+    card.style.transformOrigin = 'center center'
+    card.style.transform = 'translateX(0px) rotateY(0deg)'
+    const easing = 'cubic-bezier(0.4, 0, 0.2, 1)'
+    const cardAnim = card.animate([
+      { transform: 'translateX(0px) rotateY(0deg)' },
+      { transform: 'translateX(-16px) rotateY(-88deg)' },
+    ], { duration, easing, fill: 'both' })
+    const scrimAnim = dossierFrostFade(1, 0, duration, easing)
+    let closed = false
+    const done = () => {
+      if (closed) return
+      closed = true
+      root.classList.remove('is-open')
+      clearDossierFlip(root)
+    }
+    cardAnim.onfinish = done
+    dossierFlip = { anims: [cardAnim, scrimAnim], fly: null, node: null, timer: setTimeout(done, duration + 80), closing: true }
+  }
+
+  function closeThekonymCard(immediate) {
+    const root = document.getElementById('logyq-thekonym-card')
     thekonymState.card = null
-    document.getElementById('logyq-thekonym-card')?.classList.remove('is-open')
+    if (!root?.classList.contains('is-open')) return
+    if (root.dataset.flip === 'close' || dossierFlip?.closing) {
+      if (immediate) {
+        clearDossierFlip(root)
+        root.classList.remove('is-open')
+      }
+      return
+    }
+    const flipping = root.dataset.flip === 'open' || root.dataset.flip === 'settled'
+    if (immediate || !flipping) {
+      clearDossierFlip(root)
+      root.classList.remove('is-open')
+      return
+    }
+    const flip = dossierFlip
+    if (flip && root.dataset.flip === 'open') {
+      let closed = false
+      const done = () => {
+        if (closed) return
+        closed = true
+        clearDossierFlip(root)
+        root.classList.remove('is-open')
+      }
+      flip.closing = true
+      clearTimeout(flip.timer)
+      flip.anims.forEach((anim) => {
+        try {
+          anim.onfinish = done
+          anim.reverse()
+        } catch (_error) {}
+      })
+      flip.timer = setTimeout(done, 480)
+      return
+    }
+    playDossierUnflip(root)
   }
 
   function closeThekonymBrowser() {
@@ -197,7 +419,7 @@
     writeThekonymMode(thekonymState.on)
     syncThekonymToggles()
     if (!thekonymState.on) {
-      closeThekonymCard()
+      closeThekonymCard(true)
       closeThekonymBrowser()
       try { bridge.core.layout.LabelWrap.apply() } catch (_error) {}
       return
@@ -356,12 +578,14 @@
     }).join('')
   }
 
-  function openThekonymUid(uid) {
+  function openThekonymUid(uid, options) {
     if (!thekonymState.on) return false
     const node = bridge.core.utils.findByUid(bridge.core.state.root?.data, uid)
+    const origin = options?.flip ? thekonymCardOrigin(uid) : null
     thekonymState.card = { name: node?.name || '', uid }
     closeThekonymBrowser()
     renderThekonymCard()
+    if (origin) playDossierFlip(origin)
     return true
   }
 
@@ -438,7 +662,7 @@
       const link = document.createElement('link')
       link.id = 'logyq-thekonym-fonts'
       link.rel = 'stylesheet'
-      link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Libre+Caslon+Display&display=swap'
+      link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Inter:wght@500&family=Roboto+Condensed:wght@400&display=swap'
       document.head.append(link)
     }
     if (!document.getElementById('logyq-thekonym-ask')) {
@@ -513,13 +737,74 @@
       scrim.className = 'logyq-tk-scrim'
       scrim.innerHTML = '<article class="logyq-tk-card" role="dialog" aria-label="Thekonym"><button type="button" class="logyq-tk-x" aria-label="Close">×</button><div class="logyq-tk-body"><p class="logyq-tk-kicker">Thekonym</p><h1 class="logyq-tk-onym" data-edit="term"></h1><p class="logyq-tk-pron" hidden></p><p class="logyq-tk-essence" data-edit="essence"></p><div class="logyq-tk-fields"><section class="logyq-tk-block" data-block="kids" hidden><h2>Kids definition</h2><p></p></section><section class="logyq-tk-block" data-block="definition" hidden><h2>Definition</h2><p></p></section><section class="logyq-tk-block logyq-tk-technical" data-block="technical" hidden><h2>Technical definition</h2><p></p></section><section class="logyq-tk-block" data-block="examples" hidden><h2>Examples</h2><ul class="logyq-tk-examples"></ul></section></div><p class="logyq-tk-empty" hidden>not in Thekonyms yet.</p></div></article>'
       document.body.append(scrim)
+      if (!document.getElementById('logyq-tk-frost')) {
+        const frost = document.createElement('div')
+        frost.id = 'logyq-tk-frost'
+        frost.setAttribute('aria-hidden', 'true')
+        document.body.append(frost)
+      }
       let lastField = ''
       let lastAt = 0
       scrim.addEventListener('click', (event) => {
         if (event.target === scrim) closeThekonymCard()
       })
-      scrim.querySelector('.logyq-tk-x').addEventListener('click', closeThekonymCard)
+      scrim.querySelector('.logyq-tk-x').addEventListener('click', () => closeThekonymCard())
+      let gesture = null
+      const editingTarget = (target) => target?.closest?.('.logyq-tk-x, input, textarea, .logyq-tk-input')
+      const endGesture = (id, x, y) => {
+        if (!gesture || gesture.id !== id) return
+        if (x != null) gesture.lastX = x
+        if (y != null) gesture.lastY = y
+        const dx = gesture.lastX - gesture.x
+        const dy = gesture.lastY - gesture.y
+        gesture = null
+        if (!thekonymDismissSwipe(dx, dy)) return
+        lastField = ''
+        closeThekonymCard()
+      }
+      scrim.addEventListener('pointerdown', (event) => {
+        if (event.button) return
+        if (editingTarget(event.target)) {
+          gesture = null
+          return
+        }
+        if (gesture) return
+        gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY }
+        try { scrim.setPointerCapture(event.pointerId) } catch (_error) {}
+      })
+      scrim.addEventListener('pointermove', (event) => {
+        if (!gesture || event.pointerId !== gesture.id) return
+        gesture.lastX = event.clientX
+        gesture.lastY = event.clientY
+        if (event.cancelable && Math.abs(gesture.lastX - gesture.x) > Math.abs(gesture.lastY - gesture.y)) event.preventDefault()
+      })
+      scrim.addEventListener('pointerup', (event) => endGesture(event.pointerId, event.clientX, event.clientY))
+      scrim.addEventListener('pointercancel', (event) => endGesture(event.pointerId, event.clientX, event.clientY))
+      scrim.addEventListener('touchstart', (event) => {
+        if (gesture || editingTarget(event.target)) return
+        const touch = event.changedTouches[0]
+        if (!touch) return
+        gesture = { id: `t${touch.identifier}`, x: touch.clientX, y: touch.clientY, lastX: touch.clientX, lastY: touch.clientY }
+      }, { passive: true })
+      scrim.addEventListener('touchmove', (event) => {
+        const touch = [...event.changedTouches].find((item) => gesture?.id === `t${item.identifier}`)
+        if (!touch) return
+        gesture.lastX = touch.clientX
+        gesture.lastY = touch.clientY
+        if (event.cancelable) event.preventDefault()
+      }, { passive: false })
+      scrim.addEventListener('touchend', (event) => {
+        const touch = [...event.changedTouches].find((item) => gesture?.id === `t${item.identifier}`)
+        if (!touch) return
+        endGesture(gesture.id, touch.clientX, touch.clientY)
+      })
+      scrim.addEventListener('touchcancel', (event) => {
+        const touch = [...event.changedTouches].find((item) => gesture?.id === `t${item.identifier}`)
+        if (!touch) return
+        endGesture(gesture.id, touch.clientX, touch.clientY)
+      })
       scrim.querySelector('.logyq-tk-card').addEventListener('pointerup', (event) => {
+        if (gesture && thekonymDismissSwipe(gesture.lastX - gesture.x, gesture.lastY - gesture.y)) return
         const field = event.target.closest?.('[data-edit]')
         if (!field || field.querySelector('input')) return
         const now = performance.now()

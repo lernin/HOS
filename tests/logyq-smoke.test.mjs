@@ -5969,7 +5969,7 @@ test('LOGYQ kids-only parent tap steps delete to Word Bank then clears', async (
   await context.close()
 })
 
-test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instead of rename', async () => {
+test('LOGYQ Thekonym mode pairs a Roboto Condensed onym with a sans essence, and a right swipe opens the dossier', async () => {
   const calls = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)
@@ -5985,7 +5985,7 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
         ? [{
           id: 'row-1',
           term: 'Zephyronym',
-          term_pronunciation: 'ZEF • ee • oh • nim',
+          term_pronunciation: 'ZEF-ee-oh-nim',
           essence: 'a test essence',
           kid_explanation: 'A kid line for the test.',
           definition: 'A short definition.',
@@ -6031,8 +6031,63 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
     return node?.querySelector('tspan.logyq-essence')?.textContent === 'a test essence'
       && node.querySelector('tspan.logyq-onym')?.textContent === 'Zephyronym'
   })
+  const heat = await page.evaluate(() => {
+    const node = (name) => Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === name)
+    const fill = (name) => {
+      const wash = node(name)?.querySelector('rect.logyq-tk-heat')
+      return wash ? getComputedStyle(wash).fill : ''
+    }
+    return {
+      z: node('Zephyronym')?.dataset.tkHeat || '',
+      other: node('Other')?.dataset.tkHeat || '',
+      zFill: fill('Zephyronym'),
+    }
+  })
+  assert.equal(heat.z, 'amber')
+  assert.equal(heat.other, '')
+  assert.match(heat.zFill, /214,\s*148,\s*42/)
+
+  const faceType = await page.evaluate(() => {
+    const onym = document.querySelector('tspan.logyq-onym')
+    const essence = document.querySelector('tspan.logyq-essence')
+    const onymCss = getComputedStyle(onym)
+    const essenceCss = getComputedStyle(essence)
+    const wash = getComputedStyle(document.body, '::before')
+    const dossierOnym = getComputedStyle(document.querySelector('.logyq-tk-onym'))
+    const dossierEssence = getComputedStyle(document.querySelector('.logyq-tk-essence'))
+    return {
+      onymFamily: onymCss.fontFamily,
+      onymWeight: onymCss.fontWeight,
+      onymStroke: onymCss.strokeWidth,
+      essenceFamily: essenceCss.fontFamily,
+      essenceWeight: essenceCss.fontWeight,
+      essenceFill: essenceCss.fill,
+      dossierOnym: dossierOnym.fontFamily,
+      dossierOnymWeight: dossierOnym.fontWeight,
+      dossierEssence: dossierEssence.fontFamily,
+      dossierEssenceWeight: dossierEssence.fontWeight,
+      typeLab: !!document.querySelector('#logyq-thekonym-type-lab, #logyq-thekonym-type-mobile, a[href*="thekonym-type"]'),
+      animation: wash.animationName,
+      background: wash.backgroundImage,
+    }
+  })
+  assert.match(faceType.onymFamily, /Roboto Condensed/)
+  assert.equal(faceType.onymWeight, '400')
+  assert.ok(parseFloat(faceType.onymStroke) === 0, 'map onym stays regular, with no optical stroke')
+  assert.match(faceType.essenceFamily, /Inter/)
+  assert.equal(faceType.essenceWeight, '500')
+  assert.match(faceType.essenceFill, /102,\s*112,\s*106|66706a/i)
+  assert.match(faceType.dossierOnym, /Roboto Condensed/)
+  assert.equal(faceType.dossierOnymWeight, '400')
+  assert.match(faceType.dossierEssence, /Inter/)
+  assert.equal(faceType.dossierEssenceWeight, '500')
+  assert.equal(faceType.typeLab, false)
+  assert.equal(faceType.animation, 'swirl')
+  assert.doesNotMatch(faceType.background, /247,\s*245,\s*233|239,\s*230,\s*210|efe6d2/i)
 
   const uid = await page.evaluate(() => window.LOGYQBridge.core.state.root.data._uid)
+  const nodeCount = () => page.evaluate(() => document.querySelectorAll('svg#canvas g.node').length)
+  const beforeNodes = await nodeCount()
   await page.evaluate((id) => {
     const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
     const rect = face.getBoundingClientRect()
@@ -6048,8 +6103,66 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
       }
     }
   }, uid)
-  await page.waitForSelector('#logyq-thekonym-card.is-open')
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.locator('#logyq-thekonym-card.is-open').count(), 0)
+  await page.locator('.node-edit-cancel').click()
+  await page.waitForFunction(() => !document.querySelector('.node-edit-input'))
+
+  const stroke = (id, dx, pointerId) => page.evaluate(({ id, dx, pointerId }) => {
+    const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
+    const rect = face.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const point = (type, px) => face.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+      isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1,
+      clientX: px, clientY: y,
+    }))
+    point('pointerdown', x)
+    point('pointermove', x + dx / 2)
+    point('pointermove', x + dx)
+    point('pointerup', x + dx)
+  }, { id, dx, pointerId })
+
+  await stroke(uid, 0, 43)
+  await page.waitForFunction((id) => document.querySelector(`svg#canvas g.node[data-uid="${id}"]`)?.dataset.smiteArm === '1', uid)
+  await stroke(uid, 28, 44)
+  assert.equal(await page.locator('#logyq-thekonym-card.is-open').count(), 0)
   assert.equal(await page.locator('.node-edit-input').count(), 0)
+  assert.equal(await nodeCount(), beforeNodes)
+  assert.equal(await page.evaluate((id) => document.querySelector(`svg#canvas g.node[data-uid="${id}"]`)?.dataset.smiteArm, uid), '1')
+  await stroke(uid, 96, 45)
+  await page.waitForSelector('#logyq-thekonym-card.is-open')
+  const flipMotion = await page.evaluate(() => {
+    const card = document.querySelector('#logyq-thekonym-card .logyq-tk-card')
+    const anim = card.getAnimations().find((item) => item.effect?.target === card)
+    const frames = anim.effect.getKeyframes().map((frame) => frame.transform || '')
+    anim.pause()
+    anim.currentTime = 0
+    const edge = card.getBoundingClientRect()
+    anim.currentTime = Math.max(0, (anim.effect.getTiming().duration || 400) - 1)
+    const face = card.getBoundingClientRect()
+    anim.play()
+    return {
+      flip: document.getElementById('logyq-thekonym-card')?.dataset.flip || '',
+      fly: document.querySelectorAll('.logyq-tk-fly').length,
+      layoutWide: card.offsetWidth > window.innerWidth * 0.8,
+      layoutTall: card.offsetHeight > window.innerHeight * 0.8,
+      frames,
+      edgeW: edge.width,
+      faceW: face.width,
+    }
+  })
+  assert.equal(flipMotion.flip, 'open')
+  assert.equal(flipMotion.fly, 0)
+  assert.equal(flipMotion.layoutWide, true)
+  assert.equal(flipMotion.layoutTall, true)
+  assert.ok(flipMotion.frames.length >= 2, 'the dossier has a flip')
+  assert.ok(flipMotion.frames.every((value) => value.includes('rotateY') && !value.includes('scale')), flipMotion.frames.join(' | '))
+  assert.ok(flipMotion.edgeW < flipMotion.faceW * 0.5, 'the flip starts edge-on')
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  assert.equal(await nodeCount(), beforeNodes)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
   const dossier = await page.evaluate(() => {
     const card = document.getElementById('logyq-thekonym-card')
     return {
@@ -6073,7 +6186,111 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
   assert.deepEqual(dossier.examples, ['First example.', 'Second example.', 'Third example.'])
   assert.equal(dossier.bank, 0)
   assert.equal(dossier.addText, false)
+  await page.waitForFunction(() => document.getElementById('logyq-thekonym-card')?.dataset.flip === 'settled')
+  const frost = await page.evaluate(() => {
+    const layer = document.getElementById('logyq-tk-frost')
+    const css = getComputedStyle(layer)
+    const card = getComputedStyle(document.querySelector('.logyq-tk-card'))
+    return { blur: css.backdropFilter, opacity: Number(css.opacity), cardBlur: card.backdropFilter }
+  })
+  assert.match(frost.blur, /blur\(1[0-6]px/)
+  assert.ok(frost.opacity > 0.9, 'the frost is up while the dossier is open')
+  assert.equal(frost.cardBlur, 'none')
+  const dossierSwipe = (dx) => page.evaluate((delta) => {
+    const card = document.querySelector('.logyq-tk-card')
+    const rect = card.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const point = (type, px) => card.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 7,
+      isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1,
+      clientX: px, clientY: y,
+    }))
+    point('pointerdown', x)
+    point('pointermove', x + delta / 2)
+    point('pointermove', x + delta)
+    point('pointerup', x + delta)
+  }, dx)
+  await dossierSwipe(-28)
+  assert.equal(await page.locator('#logyq-thekonym-card.is-open').count(), 1)
+  await page.evaluate(() => {
+    const card = document.querySelector('.logyq-tk-card')
+    const rect = card.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const fire = (type, px) => {
+      const touch = new Touch({ identifier: 4, target: card, clientX: px, clientY: y })
+      card.dispatchEvent(new TouchEvent(type, {
+        bubbles: true, cancelable: true,
+        touches: type === 'touchend' ? [] : [touch],
+        targetTouches: type === 'touchend' ? [] : [touch],
+        changedTouches: [touch],
+      }))
+    }
+    fire('touchstart', x)
+    fire('touchmove', x - 48)
+    fire('touchmove', x - 110)
+    fire('touchend', x - 110)
+  })
+  const closeMotion = await page.evaluate(() => {
+    const card = document.querySelector('#logyq-thekonym-card .logyq-tk-card')
+    const anim = card.getAnimations().find((item) => item.effect?.target === card)
+    const frames = anim.effect.getKeyframes().map((frame) => frame.transform || '')
+    const duration = anim.effect.getTiming().duration || 400
+    anim.pause()
+    const widths = []
+    for (let time = 0; time <= duration; time += 40) {
+      anim.currentTime = time
+      widths.push(Math.round(card.getBoundingClientRect().width))
+    }
+    let flat = 0
+    let maxFlat = 0
+    for (let index = 1; index < widths.length - 2; index += 1) {
+      if (Math.abs(widths[index] - widths[index - 1]) < 6) {
+        flat += 1
+        maxFlat = Math.max(maxFlat, flat)
+      } else flat = 0
+    }
+    return {
+      flip: document.getElementById('logyq-thekonym-card')?.dataset.flip || '',
+      frames,
+      faceW: widths[0],
+      edgeW: widths[widths.length - 1],
+      tall: card.offsetHeight > window.innerHeight * 0.8,
+      maxFlat,
+      widths,
+    }
+  })
+  assert.equal(closeMotion.flip, 'close')
+  assert.equal(closeMotion.tall, true)
+  assert.ok(closeMotion.frames.length === 2, closeMotion.frames.join(' | '))
+  assert.ok(closeMotion.frames.every((value) => value.includes('rotateY') && !value.includes('scale')), closeMotion.frames.join(' | '))
+  assert.ok(closeMotion.edgeW < closeMotion.faceW * 0.5, 'the reverse flip ends edge-on')
+  assert.ok(closeMotion.maxFlat < 3, `reverse flip paused: ${closeMotion.widths.join(',')}`)
+  await page.waitForFunction(() => !document.getElementById('logyq-thekonym-card').classList.contains('is-open'))
+  await page.evaluate((id) => window.LOGYQPreview.thekonym.openUid(id, { flip: true }), uid)
+  await page.waitForFunction(() => document.getElementById('logyq-thekonym-card')?.dataset.flip === 'settled')
+  await page.evaluate(() => {
+    const card = document.querySelector('.logyq-tk-card')
+    const rect = card.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const point = (type, px) => card.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 8,
+      isPrimary: true, button: 0, buttons: type === 'pointercancel' ? 0 : 1,
+      clientX: px, clientY: y,
+    }))
+    point('pointerdown', x)
+    point('pointermove', x - 48)
+    point('pointermove', x - 110)
+    point('pointercancel', x - 110)
+  })
+  assert.equal(await page.evaluate(() => document.getElementById('logyq-thekonym-card')?.dataset.flip), 'close')
+  await page.waitForFunction(() => !document.getElementById('logyq-thekonym-card').classList.contains('is-open'))
+  await page.evaluate((id) => window.LOGYQPreview.thekonym.openUid(id, { flip: true }), uid)
+  await page.waitForFunction(() => document.getElementById('logyq-thekonym-card')?.dataset.flip === 'settled')
   await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
+  assert.equal(await page.evaluate(() => document.getElementById('logyq-thekonym-card')?.dataset.flip), 'close')
   await page.waitForFunction(() => !document.getElementById('logyq-thekonym-card').classList.contains('is-open'))
 
   const other = await page.evaluate(() => {
@@ -6120,6 +6337,13 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Zephyronym')
     return node && !node.querySelector('tspan.logyq-essence') && !document.body.classList.contains('logyq-thekonym')
   })
+  const plain = await page.evaluate(() => {
+    const label = Array.from(document.querySelectorAll('svg#canvas g.node text.label')).find((el) => el.textContent === 'Zephyronym')
+    const wash = getComputedStyle(document.body, '::before')
+    return { weight: label ? getComputedStyle(label).fontWeight : '', animation: wash.animationName }
+  })
+  assert.equal(plain.weight, '600')
+  assert.equal(plain.animation, 'swirl')
   await page.evaluate((id) => {
     const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
     const rect = face.getBoundingClientRect()

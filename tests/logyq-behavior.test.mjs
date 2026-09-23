@@ -1663,7 +1663,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastShape, smiteCardChrome, smiteLinkLive, smiteCastOverlaps, smiteFoldCast, smiteArmDirection, smiteArmTarget, smiteArmScope, smiteArmChrome, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastShape, smiteCardChrome, smiteLinkLive, smiteCastOverlaps, smiteFoldCast, smiteArmDirection, smiteArmTarget, smiteArmScope, smiteArmChrome, thekonymDossierSwipe, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1889,6 +1889,12 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.equal(smite.smiteArmDirection(0, -80), 'up')
   assert.equal(smite.smiteArmDirection(-80, 0), 'left')
   assert.equal(smite.smiteArmDirection(80, 0), null)
+  assert.equal(smite.thekonymDossierSwipe(80, 0), true)
+  assert.equal(smite.thekonymDossierSwipe(80, 30), true)
+  assert.equal(smite.thekonymDossierSwipe(28, 0), false)
+  assert.equal(smite.thekonymDossierSwipe(-80, 0), false)
+  assert.equal(smite.thekonymDossierSwipe(40, 80), false)
+  assert.equal(smite.thekonymDossierSwipe(0, 80), false)
   assert.equal(smite.smiteCastDirection(0, -80), null)
   const kids = ['lime', 'zest']
   assert.equal(smite.smiteArmTarget('fruit', 'fruit', kids), 'self')
@@ -2245,7 +2251,7 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   const start = source.indexOf('// THEKONYM_PURE_START')
   const end = source.indexOf('// THEKONYM_PURE_END')
   assert.ok(start >= 0 && end > start)
-  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine, thekonymDossier, thekonymExampleLines, thekonymExampleKeep, thekonymInPlay };`)()
+  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine, thekonymPronunciation, thekonymDossier, thekonymExampleLines, thekonymExampleKeep, thekonymInPlay, thekonymHeat };`)()
   const rows = [
     {
       id: '1',
@@ -2274,6 +2280,19 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   assert.equal(api.thekonymAlphabetLetter('fruit'), 'F')
   assert.equal(api.thekonymFaceLine('short'), 'short')
   assert.equal(api.thekonymFaceLine('1234567890123456789012345').endsWith('…'), true)
+  assert.equal(api.thekonymPronunciation('TEL-oh-nim'), 'TEL • oh • nim')
+  assert.equal(api.thekonymPronunciation('the  ko   nym'), 'the • ko • nym')
+  assert.equal(api.thekonymPronunciation('prak·TEH·oh'), 'prak • TEH • oh')
+  assert.equal(api.thekonymPronunciation('Telonym'), 'Telonym')
+  const full = {
+    essence: 'e', kid_explanation: 'k', definition: 'd', technical_definition: 't', term_pronunciation: 'p',
+    essence_confidence: 3, kid_explanation_confidence: 3, definition_confidence: 3, technical_definition_confidence: 3,
+  }
+  assert.equal(api.thekonymHeat(null), '')
+  assert.equal(api.thekonymHeat({ ...full, term_pronunciation: '  ' }), 'red')
+  assert.equal(api.thekonymHeat({ ...full, essence_confidence: 2 }), 'amber')
+  assert.equal(api.thekonymHeat({ ...full, kid_explanation_confidence: null }), 'amber')
+  assert.equal(api.thekonymHeat({ ...full, example: '' }), '')
   const dossier = api.thekonymDossier(rows, 'Fruit', {})
   assert.equal(dossier.pronunciation, 'prak • TEH • oh • nim')
   assert.equal(dossier.kids, 'Kid line.')
