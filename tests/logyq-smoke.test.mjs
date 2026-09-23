@@ -3051,3 +3051,373 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
   assert.deepEqual(desktopErrors, [])
   await desktop.close()
 })
+
+test('LOGYQ repeated flicks keep the camera still and the touched card', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+
+  async function bootTree(tree, bank = []) {
+    await page.evaluate(({ tree, bank }) => {
+      window.LOGYQPreview.app.hasOpenMap = true
+      document.body.classList.add('logyq-map-open')
+      document.body.classList.remove('logyq-home')
+      document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+      window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+      window.LOGYQPreview.paint.active = false
+      window.LOGYQBridge.loadMap(tree, bank)
+    }, { tree, bank })
+    await page.waitForFunction(() => document.body.classList.contains('logyq-mobile-v162'))
+    await page.waitForFunction((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.getBoundingClientRect()
+      return rect && rect.width > 20 && rect.top > 40 && rect.bottom < window.innerHeight
+    }, tree.name)
+    let prev = await view()
+    for (let i = 0; i < 12; i += 1) {
+      await page.waitForTimeout(80)
+      const now = await view()
+      if (Math.hypot(now.x - prev.x, now.y - prev.y) < 0.4 && Math.abs(now.k - prev.k) < 0.001) break
+      prev = now
+    }
+  }
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return {
+        x: rect.left + rect.width / 2,
+        y: rect.top + rect.height / 2,
+        uid: node?.__data__?.data?._uid || '',
+      }
+    }, name)
+  }
+
+  async function view() {
+    return page.evaluate(() => {
+      const t = window.d3.zoomTransform(document.getElementById('canvas'))
+      return { x: t.x, y: t.y, k: t.k }
+    })
+  }
+
+  async function counts() {
+    return page.evaluate(() => ({
+      nodes: document.querySelectorAll('svg#canvas g.node').length,
+      overlap: window.LOGYQBridge.core.state.layoutOverlapCount || 0,
+      settling: !!window.LOGYQBridge.core.state.layoutSettling,
+      queued: !!window.LOGYQBridge.core.state.layoutFlushQueued,
+    }))
+  }
+
+  async function parentOfSelected() {
+    return page.evaluate(() => {
+      const uid = window.LOGYQBridge.getSelectedUid()
+      const node = window.LOGYQBridge.core.state.root?.descendants().find((item) => item.data?._uid === uid)
+      return {
+        uid,
+        parent: node?.parent ? (node.parent.data?.name ?? '') : null,
+        name: node?.data?.name ?? null,
+      }
+    })
+  }
+
+  async function settle() {
+    await page.waitForFunction(() => !window.LOGYQBridge.core.state.layoutSettling && !window.LOGYQBridge.core.state.layoutFlushQueued)
+  }
+
+  let pointerSerial = 40
+  async function play(points) {
+    const pointerId = pointerSerial++
+    const start = await view()
+    let max = 0
+    for (let i = 0; i < points.length; i += 1) {
+      const type = i === 0 ? 'pointerdown' : (i === points.length - 1 ? 'pointerup' : 'pointermove')
+      await page.evaluate(({ type, x, y, pointerId }) => {
+        const hit = document.elementFromPoint(x, y)
+        const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+        target.dispatchEvent(new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerType: 'touch',
+          pointerId,
+          isPrimary: true,
+          button: 0,
+          buttons: type === 'pointerup' ? 0 : 1,
+          clientX: x,
+          clientY: y,
+        }))
+      }, { type, x: points[i].x, y: points[i].y, pointerId })
+      if (points[i].wait) await page.waitForTimeout(points[i].wait)
+      const now = await view()
+      max = Math.max(max, Math.hypot(now.x - start.x, now.y - start.y))
+    }
+    await page.waitForTimeout(40)
+    const end = await view()
+    return { max, dx: end.x - start.x, dy: end.y - start.y }
+  }
+
+  function line(from, dx, dy, steps, wait) {
+    const points = []
+    for (let i = 0; i <= steps; i += 1) {
+      points.push({
+        x: from.x + (dx * i) / steps,
+        y: from.y + (dy * i) / steps,
+        wait: i === 0 ? 0 : wait,
+      })
+    }
+    return points
+  }
+
+  function creepDown(from) {
+    const points = [{ x: from.x, y: from.y, wait: 0 }]
+    for (let i = 1; i <= 6; i += 1) points.push({ x: from.x, y: from.y + i * 3, wait: 20 })
+    for (let i = 1; i <= 4; i += 1) points.push({ x: from.x, y: from.y + 18 + i * 16, wait: 12 })
+    return points
+  }
+
+  async function flickCard(name, dx, dy, { creep = false } = {}) {
+    const origin = await face(name)
+    const before = (await counts()).nodes
+    const motion = await play(creep ? creepDown(origin) : line(origin, dx, dy, 5, 14))
+    await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, before)
+    const made = await parentOfSelected()
+    return { origin, motion, made, before }
+  }
+
+  await bootTree({
+    name: 'Root',
+    children: [
+      { name: 'A', children: [{ name: 'A1' }] },
+      { name: 'B' },
+    ],
+  })
+
+  const first = await flickCard('A', 0, 78, { creep: true })
+  assert.ok(first.motion.max < 6, `slow-start down-flick dragged the map ${first.motion.max.toFixed(1)}px`)
+  assert.ok(Math.hypot(first.motion.dx, first.motion.dy) < 2, 'flick must restore the camera')
+  assert.equal(first.made.parent, 'A')
+  await settle()
+
+  for (let i = 0; i < 6; i += 1) {
+    const name = i % 2 === 0 ? 'B' : 'A'
+    const again = await flickCard(name, 0, 76)
+    assert.ok(again.motion.max < 6, `repeat ${i} on ${name} drifted ${again.motion.max.toFixed(1)}px`)
+    assert.equal(again.made.parent, name)
+    await settle()
+  }
+
+  const overlapBefore = (await counts()).overlap
+  const rapidOrigin = await face('A')
+  const rapidBefore = (await counts()).nodes
+  const rapid1 = await play(line(rapidOrigin, 0, 76, 4, 10))
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, rapidBefore)
+  const mid = await face('A')
+  const rapid2 = await play(line(mid, 0, 76, 4, 10))
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length > count, rapidBefore + 1)
+  await settle()
+  const rapidAfter = await counts()
+  assert.equal(rapidAfter.nodes, rapidBefore + 2)
+  assert.equal(rapidAfter.overlap, overlapBefore)
+  assert.ok(rapid1.max < 6 && rapid2.max < 6, 'a second flick during settle must not snap the map')
+  const latest = await parentOfSelected()
+  assert.equal(latest.parent, 'A', 'the second flick before settle still hits A')
+
+  await settle()
+  const left = await flickCard('B', -78, 8)
+  assert.equal(left.made.parent, 'Root', 'left flick adds a sibling under the parent')
+  assert.ok(left.motion.max < 6)
+  await settle()
+  const downAfterLeft = await flickCard('B', 0, 76)
+  assert.equal(downAfterLeft.made.parent, 'B')
+  assert.ok(downAfterLeft.motion.max < 6)
+
+  await settle()
+  const horizontal = await flickCard('A', 72, 18)
+  assert.equal(horizontal.made.parent, 'Root', 'a near-horizontal flick is a sibling, not a child')
+  assert.ok(horizontal.motion.max < 6)
+
+  await settle()
+  const rootUp = await flickCard('Root', 0, -78)
+  assert.equal(rootUp.made.parent, null, 'swipe-up wraps the root')
+  assert.ok(rootUp.motion.max < 6)
+  await settle()
+  const downOldRoot = await flickCard('Root', 0, 76)
+  assert.equal(downOldRoot.made.parent, 'Root')
+  assert.ok(downOldRoot.motion.max < 6)
+
+  const panFrom = await face('B')
+  const panStart = await view()
+  const panBefore = (await counts()).nodes
+  const panPoints = []
+  for (let i = 0; i <= 12; i += 1) {
+    panPoints.push({ x: panFrom.x + i * 4, y: panFrom.y + i * 3, wait: 45 })
+  }
+  await play(panPoints)
+  await page.waitForTimeout(60)
+  const panEnd = await view()
+  const panDelta = Math.hypot(panEnd.x - panStart.x, panEnd.y - panStart.y)
+  assert.equal((await counts()).nodes, panBefore, 'a long diagonal drag is a pan, not a flick')
+  assert.ok(panDelta > 8, `a diagonal pan still moves the map (${panDelta.toFixed(1)}px)`)
+  const afterPan = await flickCard('A', 0, 76, { creep: true })
+  assert.equal(afterPan.made.parent, 'A')
+  assert.ok(afterPan.motion.max < 6, 'a down-flick after a pan must not snap the map')
+
+  await page.evaluate(() => window.LOGYQBridge.mix(false))
+  await page.waitForTimeout(700)
+  await settle()
+  let mixPrev = await view()
+  for (let i = 0; i < 12; i += 1) {
+    await page.waitForTimeout(80)
+    const now = await view()
+    if (Math.hypot(now.x - mixPrev.x, now.y - mixPrev.y) < 0.4) break
+    mixPrev = now
+  }
+  const mixedName = await page.evaluate(() => {
+    const nodes = window.LOGYQBridge.core.state.root.descendants()
+    return nodes.find((node) => node.parent && node.data?.name)?.data?.name
+      || nodes.find((node) => node.parent)?.data?.name
+      || nodes[0].data.name
+  })
+  const afterMix = await flickCard(mixedName, 0, 74)
+  assert.equal(afterMix.made.parent, mixedName)
+  assert.ok(afterMix.motion.max < 6, 'a down-flick after Mix must not snap the map')
+
+  await settle()
+  const beforeUndo = (await counts()).nodes
+  await page.evaluate(() => window.LOGYQBridge.undo())
+  await page.waitForFunction((count) => document.querySelectorAll('svg#canvas g.node').length < count, beforeUndo)
+  await settle()
+  const afterUndo = await flickCard(mixedName, 0, 74)
+  assert.equal(afterUndo.made.parent, mixedName)
+  assert.ok(afterUndo.motion.max < 6)
+
+  await page.evaluate(() => window.LOGYQBridge.core.wordDock.addWords('Mint'))
+  await settle()
+  const chip = await page.evaluate(() => {
+    const el = Array.from(document.querySelectorAll('#Dock .chip')).find((node) => node.textContent.trim() === 'Mint')
+    const rect = el.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const host = await face(mixedName)
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: chip.x, y: chip.y, id: 1 }] })
+  for (let i = 1; i <= 8; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: chip.x + ((host.x - chip.x) * i) / 8,
+        y: chip.y + ((host.y - chip.y) * i) / 8,
+        id: 1,
+      }],
+    })
+    await page.waitForTimeout(16)
+  }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await cdp.detach()
+  await page.waitForFunction((label) => {
+    const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === label)
+    return parent?.children?.some((child) => child.data.name === 'Mint')
+  }, mixedName)
+  await settle()
+  const afterBank = await flickCard(mixedName, 0, 74)
+  assert.equal(afterBank.made.parent, mixedName)
+  assert.ok(afterBank.motion.max < 6, 'a down-flick after a bank drop must not snap the map')
+
+  await bootTree({
+    name: 'Root',
+    children: [
+      { name: 'A', children: [{ name: 'A1' }] },
+      { name: 'B' },
+    ],
+  })
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: pointerId === 1,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const thumb = await page.evaluate(() => {
+    const height = window.innerHeight
+    const y = height * 0.5
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    for (let x = canvas.left + 8; x < canvas.right - 8; x += 12) {
+      const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+      if (!hit) return { x, y }
+    }
+    return { x: canvas.left + 10, y }
+  })
+  const castCard = await face('A')
+  const k0 = (await view()).k
+  await touch('pointerdown', thumb.x, thumb.y, 81)
+  await touch('pointerdown', castCard.x, castCard.y, 82)
+  await touch('pointermove', castCard.x, castCard.y + 30, 82)
+  await page.waitForTimeout(20)
+  await touch('pointermove', castCard.x, castCard.y + 70, 82)
+  await touch('pointerup', castCard.x, castCard.y + 70, 82)
+  await touch('pointerup', thumb.x, thumb.y, 81)
+  assert.ok(Math.abs((await view()).k - k0) < 0.02)
+  const nominated = await page.evaluate(() => {
+    const mercy = window.LOGYQPreview.gestures.smite.mercy
+    return mercy ? Array.from(mercy.marks.keys()).length : 0
+  })
+  assert.ok(nominated >= 2, 'the cast nominates the card and its subtree')
+
+  const a1 = await face('A1')
+  const execute = await play(creepDown(a1))
+  assert.ok(execute.max < 6, 'a cast execute flick must not drag the map')
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A1'))
+  await settle()
+  const afterExecute = await page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name))
+  assert.ok(afterExecute.includes('A'))
+  assert.ok(afterExecute.includes('B'))
+  const mercyLeft = await page.evaluate(() => {
+    const mercy = window.LOGYQPreview.gestures.smite.mercy
+    if (!mercy) return null
+    return {
+      committing: !!mercy.committing,
+      names: window.LOGYQBridge.core.state.root.descendants()
+        .filter((node) => mercy.marks.has(node.data._uid))
+        .map((node) => node.data.name),
+    }
+  })
+  assert.ok(mercyLeft, 'executing a child leaves the rest of the cast up')
+  assert.equal(mercyLeft.committing, false)
+  assert.ok(mercyLeft.names.includes('A'))
+
+  const aFace = await face('A')
+  const againCast = await play(creepDown(aFace))
+  assert.ok(againCast.max < 6, 'a second cast flick must not drag the map')
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'A'))
+  await settle()
+  const afterSecond = await page.evaluate(() => ({
+    names: window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name),
+    mercy: window.LOGYQPreview.gestures.smite.mercy,
+  }))
+  assert.ok(afterSecond.names.includes('B'))
+  assert.ok(afterSecond.names.includes('Root'))
+  assert.equal(afterSecond.mercy, null)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})

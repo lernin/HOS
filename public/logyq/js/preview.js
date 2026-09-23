@@ -1435,6 +1435,15 @@
     state.active.delete(event.pointerId)
     state.pointers.delete(event.pointerId)
     if (state.hold?.pointerId === event.pointerId) cancelHold(win, state)
+    if (state.race?.pointerId === event.pointerId) {
+      const race = state.race
+      const dx = event.clientX - race.x
+      const dy = event.clientY - race.y
+      if (race.view && isFlick(dx, dy, win.performance.now() - race.t0)) {
+        restoreView(doc, win, race.view)
+        state.pan = null
+      }
+    }
     if (state.pan?.pointerId === event.pointerId) endCardPan(win, state)
     if (state.race?.pointerId === event.pointerId) clearCardRace(win, state)
 
@@ -1907,13 +1916,20 @@
     return Math.hypot(last.x - first.x, last.y - first.y) / dt
   }
 
-  // excited → hold / pan / flickish. Flick-speed strokes stay gated so
-  // d3.zoom never applies; slow/medium slides become pan; still 160ms is hold.
-  function classifyCardIntent(dist, elapsed, speed, sawFast, C) {
+  // excited → hold / pan / flickish. A straight stroke inside the flick
+  // window stays gated even when it starts slow: locking "pan" on the
+  // first 48ms made the 2nd down-flick drag the map and then snap it
+  // back. Diagonal slides can still pan. After the flick window, pan.
+  function classifyCardIntent(dist, elapsed, speed, sawFast, C, dx, dy) {
     const cfg = C || v162Constants()
     if (dist <= cfg.HOLD_SLOP) return 'excited'
     if (elapsed >= cfg.FLICK_MAX_MS) return 'pan'
     if (sawFast || speed >= flickFastSpeed(cfg)) return 'flickish'
+    if (dx != null && dy != null && elapsed <= cfg.FLICK_MAX_MS) {
+      const major = Math.max(Math.abs(dx), Math.abs(dy))
+      const minor = Math.max(1, Math.min(Math.abs(dx), Math.abs(dy)))
+      if (major / minor >= cfg.FLICK_RATIO) return 'flickish'
+    }
     if (elapsed >= 48) return 'pan'
     return 'excited'
   }
@@ -1928,6 +1944,7 @@
       samples: [{ t: now, x: event.clientX, y: event.clientY }],
       mode: 'excited',
       sawFast: false,
+      view: captureView(doc, win),
     }
     win.__logyqSuppressZoom = true
     stopZoomGesture(doc)
@@ -1935,22 +1952,29 @@
 
   function resolveCardRace(doc, win, state, event) {
     const race = state.race
-    if (!race || race.mode === 'pan' || race.mode === 'drag') return
+    if (!race || race.mode === 'drag') return
     const now = win.performance.now()
     race.samples.push({ t: now, x: event.clientX, y: event.clientY })
     if (race.samples.length > 24) race.samples.splice(0, race.samples.length - 24)
-    const dist = Math.hypot(event.clientX - race.x, event.clientY - race.y)
+    const dx = event.clientX - race.x
+    const dy = event.clientY - race.y
+    const dist = Math.hypot(dx, dy)
     const elapsed = now - race.t0
     const speed = recentSpeedPxPerMs(race.samples, now)
     if (speed >= flickFastSpeed()) race.sawFast = true
-    const intent = classifyCardIntent(dist, elapsed, speed, race.sawFast)
+    const intent = classifyCardIntent(dist, elapsed, speed, race.sawFast, null, dx, dy)
     if (intent === 'flickish') {
+      if (race.mode === 'pan' || state.pan) {
+        restoreView(doc, win, race.view)
+        state.pan = null
+      }
       race.mode = 'flickish'
       win.__logyqSuppressZoom = true
       stopZoomGesture(doc)
       return
     }
     if (intent !== 'pan') return
+    if (race.mode === 'pan') return
     race.mode = 'pan'
     win.__logyqSuppressZoom = false
     win.__logyqHoldArming = false

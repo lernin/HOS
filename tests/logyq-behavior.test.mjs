@@ -1522,10 +1522,16 @@ test('card contact race classifies hold vs slow pan vs flick-speed', () => {
   assert.ok(Math.abs(helpers.flickFastSpeed(C) - (52 / 180)) < 1e-6)
   assert.equal(helpers.classifyCardIntent(4, 80, 0, false, C), 'excited', 'inside slop stays excited')
   assert.equal(helpers.classifyCardIntent(20, 30, 0.1, false, C), 'excited', 'too early to call a slow pan')
-  assert.equal(helpers.classifyCardIntent(24, 80, 0.12, false, C), 'pan', 'slow/medium slide becomes pan')
+  assert.equal(helpers.classifyCardIntent(24, 80, 0.12, false, C), 'pan', 'undirected slow slide becomes pan')
+  assert.equal(helpers.classifyCardIntent(24, 80, 0.12, false, C, 22, 18), 'pan', 'a diagonal slide still pans')
+  assert.equal(helpers.classifyCardIntent(24, 80, 0.12, false, C, 0, 24), 'flickish', 'a straight stroke can still finish as a flick')
+  assert.equal(helpers.classifyCardIntent(80, 200, 0.12, false, C, 0, 80), 'flickish', 'a slow axial flick must not pan the map')
+  assert.equal(helpers.classifyCardIntent(80, 360, 0.12, false, C, 0, 80), 'pan', 'after the flick window a straight drag may pan')
   assert.equal(helpers.classifyCardIntent(70, 80, 0.5, false, C), 'flickish', 'high recent speed stays gated')
   assert.equal(helpers.classifyCardIntent(70, 100, 0.05, true, C), 'flickish', 'a prior whip stays flickish inside the window')
   assert.equal(helpers.classifyCardIntent(70, 360, 0.5, true, C), 'pan', 'after 340ms a held stroke may pan from now')
+  assert.match(source, /if \(!race \|\| race\.mode === 'drag'\) return/)
+  assert.doesNotMatch(source, /race\.mode === 'pan' \|\| race\.mode === 'drag'/)
   const samples = [
     { t: 0, x: 0, y: 0 },
     { t: 40, x: 0, y: 4 },
