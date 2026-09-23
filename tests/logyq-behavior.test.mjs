@@ -497,6 +497,9 @@ test('chip-drop cases keep empty-canvas, rootAbove, gap, then node order', () =>
   assert.match(source, /raisedGhostPoint/)
   assert.match(source, /clientX: aim\.x, clientY: aim\.y/)
   assert.match(source, /if \(overDock\(x, y\)\)/)
+  assert.match(source, /session\.deleting/)
+  assert.match(source, /dy >= 36 && dy >= Math\.abs\(dx\)/)
+  assert.match(source, /type: 'bank-delete', prevBank/)
 })
 
 test('undo still recognizes the original action types', () => {

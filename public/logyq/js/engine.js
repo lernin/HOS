@@ -4743,28 +4743,58 @@ function bindChipPointerPlace() {
     session = { pointerId: event.pointerId, word, x: event.clientX, y: event.clientY, dragging: false, chip }
   })
 
+  const swipeWords = (word) => {
+    const selected = getSelectedChipNames()
+    // A down-swipe on a selected chip deletes the whole selection. Otherwise just that chip.
+    return selected.includes(word) ? selected.slice() : [word]
+  }
+
+  const removeBankWords = (words) => {
+    const drop = new Set((words || []).map((word) => String(word || '').trim()).filter(Boolean))
+    if (!drop.size) return false
+    const prevBank = logyq.state.wordBank.slice()
+    const next = prevBank.filter((word) => !drop.has(String(word || '').trim()))
+    if (next.length === prevBank.length) return false
+    logyq.history.pushHistory({ type: 'bank-delete', prevBank })
+    logyq.state.wordBank = next
+    render()
+    try { window.LOGYQBridge?.notifyChange?.() } catch (_error) {}
+    return true
+  }
+
   window.addEventListener('pointermove', (event) => {
     if (!session || event.pointerId !== session.pointerId) return
-    const moved = Math.hypot(event.clientX - session.x, event.clientY - session.y) >= 10
-    if (!session.dragging) {
+    const dx = event.clientX - session.x
+    const dy = event.clientY - session.y
+    const moved = Math.hypot(dx, dy) >= 10
+    if (!session.dragging && !session.deleting) {
       // Claim the gesture while the finger is still on the chip. Waiting
       // until it has left the dock lets the browser cancel the pointer first.
       if (!moved) return
-      const selected = getSelectedChipNames()
-      // Keep tap order. The dragged chip is already in that list when it is selected.
-      const words = selected.includes(session.word) ? selected.slice() : [session.word]
-      logyq.state.chipDrag.active = true
-      logyq.state.chipDrag.words = words
-      logyq.state.chipDrag.word = words[0]
-      logyq.state.chipDrag.drop = null
-      session.dragging = true
-      session.words = words
-      window.__logyqChipPlacing = true
-      document.body.classList.add('logyq-chip-drag')
-      document.querySelectorAll('#Dock .chip').forEach((el) => {
-        el.classList.toggle('is-lifting', words.includes(el.textContent.trim()))
-      })
-      try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      // Down stays a delete. Up and out still lift the chip onto the map.
+      if (dy > 0 && dy >= Math.abs(dx)) {
+        session.deleting = true
+        session.words = swipeWords(session.word)
+        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      } else {
+        const words = swipeWords(session.word)
+        logyq.state.chipDrag.active = true
+        logyq.state.chipDrag.words = words
+        logyq.state.chipDrag.word = words[0]
+        logyq.state.chipDrag.drop = null
+        session.dragging = true
+        session.words = words
+        window.__logyqChipPlacing = true
+        document.body.classList.add('logyq-chip-drag')
+        document.querySelectorAll('#Dock .chip').forEach((el) => {
+          el.classList.toggle('is-lifting', words.includes(el.textContent.trim()))
+        })
+        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      }
+    }
+    if (session.deleting) {
+      event.preventDefault()
+      return
     }
     event.preventDefault()
     placeGhost(session.words, event.clientX, event.clientY)
@@ -4774,10 +4804,23 @@ function bindChipPointerPlace() {
   const finishPointer = (event, commit) => {
     if (!session || event.pointerId !== session.pointerId) return
     const dragging = session.dragging
+    const deleting = session.deleting
     const chip = session.chip
     const word = session.word
     const words = session.words
+    const dx = event.clientX - session.x
+    const dy = event.clientY - session.y
     session = null
+    if (deleting) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (chip) {
+        chip.dataset.skipClick = '1'
+        window.setTimeout(() => { delete chip.dataset.skipClick }, 0)
+      }
+      if (commit && dy >= 36 && dy >= Math.abs(dx)) removeBankWords(words)
+      return
+    }
     if (!dragging) {
       if (commit && chip && word) {
         chip.dataset.skipClick = '1'

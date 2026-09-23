@@ -6082,3 +6082,77 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ swipe down on a Word Bank chip deletes it, and a selected set goes together', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, ['Pop', 'Stay', 'Keep'])
+  })
+  await page.waitForFunction(() => document.querySelectorAll('#Dock .chip').length === 3)
+
+  const swipeChip = (label, dx, dy) => page.evaluate(({ label, dx, dy }) => {
+    const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === label)
+    if (!chip) throw new Error(`missing chip ${label}`)
+    const rect = chip.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const point = (type, buttons, ox, oy) => chip.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerId: 9, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons, clientX: x + ox, clientY: y + oy,
+    }))
+    point('pointerdown', 1, 0, 0)
+    point('pointermove', 1, Math.sign(dx) * 8, Math.sign(dy || 1) * 12)
+    point('pointermove', 1, dx, dy)
+    window.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, cancelable: true, composed: true, pointerId: 9, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons: 0, clientX: x + dx, clientY: y + dy,
+    }))
+  }, { label, dx, dy })
+
+  const tapChip = (label) => page.evaluate((label) => {
+    const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === label)
+    const rect = chip.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    for (const type of ['pointerdown', 'pointerup']) {
+      chip.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerId: 8, pointerType: 'touch',
+        isPrimary: true, button: 0, buttons: type === 'pointerdown' ? 1 : 0, clientX: x, clientY: y,
+      }))
+    }
+  }, label)
+
+  await swipeChip('Pop', 0, 18)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Pop', 'Stay', 'Keep'])
+
+  await swipeChip('Pop', 0, 64)
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.wordBank.includes('Pop'))
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay', 'Keep'])
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.some((child) => child.name === 'Pop')), false)
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-chip-drag')), false)
+
+  await tapChip('Stay')
+  await tapChip('Keep')
+  assert.deepEqual(await page.locator('#Dock .chip.is-outlined').allTextContents(), ['Stay', 'Keep'])
+  await swipeChip('Stay', 4, 70)
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.length === 0)
+  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.children.map((child) => child.name)), ['A'])
+
+  await page.evaluate(() => window.LOGYQBridge.undo())
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.join(',') === 'Stay,Keep')
+  await page.evaluate(() => window.LOGYQBridge.undo())
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.join(',') === 'Pop,Stay,Keep')
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
