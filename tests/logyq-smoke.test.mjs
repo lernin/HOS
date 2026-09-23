@@ -2883,20 +2883,31 @@ test('LOGYQ attach follows the raised ghost center, not the finger', async () =>
     }
     return { upper: box('Upper'), lower: box('Lower') }
   })
-  const finger = { x: cards.upper.x - lift.x, y: cards.upper.y - lift.y }
+  const aim = { x: cards.upper.x - lift.x, y: cards.upper.y - lift.y }
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...chip, id: 2 }] })
   const steps = 8
   for (let i = 1; i <= steps; i += 1) {
     await cdp.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
       touchPoints: [{
-        x: chip.x + ((finger.x - chip.x) * i) / steps,
-        y: chip.y + ((finger.y - chip.y) * i) / steps,
+        x: chip.x + ((aim.x - chip.x) * i) / steps,
+        y: chip.y + ((aim.y - chip.y) * i) / steps,
         id: 2,
       }],
     })
     await page.waitForTimeout(16)
   }
+  const liveUpper = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Upper')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const corrected = { x: liveUpper.x - lift.x, y: liveUpper.y - lift.y }
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: corrected.x, y: corrected.y, id: 2 }],
+  })
+  await page.waitForTimeout(40)
   const claim = await page.evaluate((finger) => {
     const ghost = document.getElementById('logyq-chip-ghost')?.getBoundingClientRect()
     const ghostPoint = ghost ? { x: ghost.left + ghost.width / 2, y: ghost.top + ghost.height / 2 } : null
@@ -2919,7 +2930,7 @@ test('LOGYQ attach follows the raised ghost center, not the finger', async () =>
         ? nameOf(window.LOGYQBridge.core.state.chipDrag.drop.targetUid)
         : window.LOGYQBridge.core.state.chipDrag.drop?.type || null,
     }
-  }, finger)
+  }, corrected)
   assert.equal(claim.marked, 'Upper', JSON.stringify(claim))
   assert.equal(claim.drop, 'Upper', JSON.stringify(claim))
   assert.notEqual(claim.fingerTarget, 'Upper', JSON.stringify(claim))
@@ -3025,6 +3036,105 @@ test('LOGYQ attach follows the raised ghost center, not the finger', async () =>
     const upperNode = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'Upper')
     return upperNode?.children?.some((child) => child.data.name === 'Lower') || false
   }), true)
+  assert.deepEqual(errors, [])
+  await cdp.detach()
+  await context.close()
+})
+
+test('LOGYQ Word Bank chip drag pans the map with the card-drag follow', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [{ name: 'Far' }],
+    }, ['Pan'])
+  })
+  await page.waitForSelector('#Dock .chip')
+  await page.waitForFunction(() => {
+    const far = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far')
+    return far?.getBoundingClientRect().width > 20 && !document.body.classList.contains('logyq-layout-settling')
+  })
+  const parked = await page.evaluate(() => {
+    const state = window.LOGYQBridge.core.state
+    const svg = document.getElementById('canvas')
+    const node = state.root.descendants().find((item) => item.data.name === 'Far')
+    const box = svg.getBoundingClientRect()
+    const tx = box.left + box.width + 170 - node.x
+    const ty = box.top + box.height / 2 - node.y
+    state._lastMoat = Date.now() + 30000
+    window.d3.select(svg).call(state.zoom.transform, window.d3.zoomIdentity.translate(tx, ty).scale(1))
+    state._lastMoat = Date.now() + 30000
+    const rect = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far').getBoundingClientRect()
+    const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === 'Pan').getBoundingClientRect()
+    const zoom = window.d3.zoomTransform(svg)
+    return {
+      tx: zoom.x,
+      farX: rect.left + rect.width / 2,
+      chip: { x: chip.left + chip.width / 2, y: chip.top + chip.height / 2 },
+      center: { x: box.left + box.width / 2, y: box.top + box.height / 2 },
+      edge: { x: box.right - 12, y: box.top + box.height / 2 },
+    }
+  })
+  assert.ok(parked.farX > parked.edge.x + 80, `Far should start off the right, x=${parked.farX} edge=${parked.edge.x}`)
+
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...parked.chip, id: 1 }] })
+  const steps = 6
+  for (let i = 1; i <= steps; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: parked.chip.x + ((parked.edge.x - parked.chip.x) * i) / steps,
+        y: parked.chip.y + ((parked.edge.y - parked.chip.y) * i) / steps,
+        id: 1,
+      }],
+    })
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(280)
+  const panned = await page.evaluate(() => {
+    const svg = document.getElementById('canvas')
+    const zoom = window.d3.zoomTransform(svg)
+    const rect = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far').getBoundingClientRect()
+    return {
+      tx: zoom.x,
+      farX: rect.left + rect.width / 2,
+      dragging: document.body.classList.contains('logyq-chip-drag'),
+    }
+  })
+  assert.equal(panned.dragging, true)
+  assert.ok(parked.tx - panned.tx > 24, `zoom x should drop, before=${parked.tx} after=${panned.tx}`)
+  assert.ok(parked.farX - panned.farX > 24, `Far should slide left, before=${parked.farX} after=${panned.farX}`)
+
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: parked.center.x, y: parked.center.y, id: 1 }],
+  })
+  await page.waitForTimeout(50)
+  const held = await page.evaluate(() => window.d3.zoomTransform(document.getElementById('canvas')).x)
+  await page.waitForTimeout(220)
+  const still = await page.evaluate(() => window.d3.zoomTransform(document.getElementById('canvas')).x)
+  assert.ok(Math.abs(still - held) < 2, `center hold should not keep panning, held=${held} still=${still}`)
+
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ ...parked.chip, id: 1 }],
+  })
+  await page.waitForTimeout(40)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await page.waitForFunction(() => !document.body.classList.contains('logyq-chip-drag'))
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Pan')), true)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'Pan')), false)
   assert.deepEqual(errors, [])
   await cdp.detach()
   await context.close()
@@ -3153,11 +3263,15 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
         y: rect.top + rect.height / 2 - finger.y,
       }
     }, nudge)
-    const dest = { x: to.x - lift.x, y: to.y - lift.y }
+    const aimAt = async () => (typeof to === 'function' ? await to() : to)
+    let prev = nudge
     const steps = 8
     for (let i = 1; i <= steps; i += 1) {
-      const x = nudge.x + ((dest.x - nudge.x) * i) / steps
-      const y = nudge.y + ((dest.y - nudge.y) * i) / steps
+      const live = await aimAt()
+      const dest = { x: live.x - lift.x, y: live.y - lift.y }
+      const x = prev.x + (dest.x - prev.x) * 0.45
+      const y = prev.y + (dest.y - prev.y) * 0.45
+      prev = { x, y }
       await cdp.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
         touchPoints: [{ x, y, id: 1 }],
@@ -3165,6 +3279,19 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
       await page.waitForTimeout(16)
       if (sample && i === 4) await sample({ x, y })
     }
+    const live = await aimAt()
+    let settled = { x: live.x - lift.x, y: live.y - lift.y }
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: settled.x, y: settled.y, id: 1 }],
+    })
+    await page.waitForTimeout(32)
+    const liveAgain = await aimAt()
+    settled = { x: liveAgain.x - lift.x, y: liveAgain.y - lift.y }
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{ x: settled.x, y: settled.y, id: 1 }],
+    })
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
     await cdp.detach()
   }
@@ -3213,7 +3340,7 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
   assert.equal(pop.touchAction, 'none')
   assert.equal(pop.draggable, false)
   const cardA = await cardPoint(phonePage, 'A')
-  await touchDragAim(phonePage, pop, cardA, async (point) => {
+  await touchDragAim(phonePage, pop, () => cardPoint(phonePage, 'A'), async (point) => {
     const ghost = await phonePage.evaluate(() => {
       const stack = document.getElementById('logyq-chip-ghost')
       const rect = stack?.getBoundingClientRect()
@@ -3270,12 +3397,25 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
       const prev = nameOf(det.prevUid)
       const next = nameOf(det.nextUid)
       if (!prev || !next) continue
-      return { x, y, prev, next, parent: names.find((node) => node.data._uid === det.parentUid)?.data.name || 'Root' }
+      return {
+        x,
+        y,
+        gx: det.x + det.width / 2,
+        gy: det.y + Math.min(28, det.height / 2),
+        prev,
+        next,
+        parent: names.find((node) => node.data._uid === det.parentUid)?.data.name || 'Root',
+      }
     }
     return null
   })
   assert.ok(gap, 'sibling gap is on screen')
-  await touchDragAim(phonePage, await chipPoint(phonePage, 'Mint'), gap)
+  await touchDragAim(phonePage, await chipPoint(phonePage, 'Mint'), () => phonePage.evaluate((graph) => {
+    const svg = document.getElementById('canvas')
+    const origin = svg.getBoundingClientRect()
+    const [px, py] = window.d3.zoomTransform(svg).apply([graph.gx, graph.gy])
+    return { x: origin.left + px, y: origin.top + py }
+  }, gap))
   await phonePage.waitForFunction((parentName) => {
     const root = window.LOGYQBridge.core.state.root
     const parent = parentName === root.data.name
@@ -3303,14 +3443,19 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
       for (let x = origin.left + 10; x < origin.right - 10; x += 26) {
         const [gx, gy] = transform.invert([x - origin.left, y - origin.top])
         const drop = window.LOGYQBridge.core.detectors.pick({ x: gx, y: gy })
-        if (!drop || (drop.type !== 'node' && drop.type !== 'gap')) return { x, y }
+        if (!drop || (drop.type !== 'node' && drop.type !== 'gap')) return { x, y, gx, gy }
       }
     }
     return null
   })
   assert.ok(miss, 'empty canvas beside the tree is a miss')
   const beforeMiss = await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.data.name)
-  await touchDragAim(phonePage, await chipPoint(phonePage, 'Miss'), miss)
+  await touchDragAim(phonePage, await chipPoint(phonePage, 'Miss'), () => phonePage.evaluate((graph) => {
+    const svg = document.getElementById('canvas')
+    const origin = svg.getBoundingClientRect()
+    const [px, py] = window.d3.zoomTransform(svg).apply([graph.gx, graph.gy])
+    return { x: origin.left + px, y: origin.top + py }
+  }, miss))
   assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.data.name), beforeMiss)
   assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Miss')), true)
   assert.equal(await phonePage.evaluate(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'Miss')), false)
@@ -3347,7 +3492,7 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
   await centerCard(phonePage, 'A')
   await phonePage.locator('#Dock .chip', { hasText: 'Pop' }).tap()
   await phonePage.locator('#Dock .chip', { hasText: 'Stay' }).tap()
-  await touchDragAim(phonePage, await chipPoint(phonePage, 'Stay'), await cardPoint(phonePage, 'A'))
+  await touchDragAim(phonePage, await chipPoint(phonePage, 'Stay'), () => cardPoint(phonePage, 'A'))
   await phonePage.waitForFunction(() => {
     const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
     const names = parent?.children?.map((node) => node.data.name) || []

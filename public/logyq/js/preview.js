@@ -1438,6 +1438,7 @@
     canvas.addEventListener('pointercancel', (event) => onFlickClear(event, win, flickState), true)
     if (preview.gestures) preview.gestures.session = { hold: holdState, flick: flickState }
     bindSmiteGestures(doc, win, canvas, holdState)
+    bindChipEdgePan(doc, win)
   }
 
   function hardClearBackground(doc, win, { keepStroke = false } = {}) {
@@ -1889,6 +1890,43 @@
       return { left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height }
     }
     return { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight, width: win.innerWidth, height: win.innerHeight }
+  }
+
+  // Same center-follow as a map-card hold. The ghost stays on the finger;
+  // only the map moves, and only while the finger is clear of the bank.
+  function bindChipEdgePan(doc, win) {
+    let raf = 0
+    let finger = null
+    const stop = () => {
+      if (raf) win.cancelAnimationFrame(raf)
+      raf = 0
+      finger = null
+    }
+    const tick = () => {
+      raf = 0
+      if (!finger || !doc.body.classList.contains('logyq-chip-drag')) return
+      if (dockDropKind(doc, finger.x, finger.y) === 'none' && edgePan(doc, win, finger.x, finger.y)) {
+        const stack = doc.getElementById('logyq-chip-ghost')
+        const rect = stack?.getBoundingClientRect?.()
+        const svg = doc.getElementById('canvas')
+        if (rect && rect.width > 1 && svg) {
+          svg.dispatchEvent(new win.DragEvent('dragover', {
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + rect.width / 2,
+            clientY: rect.top + rect.height / 2,
+          }))
+        }
+      }
+      raf = win.requestAnimationFrame(tick)
+    }
+    win.addEventListener('pointermove', (event) => {
+      if (!doc.body.classList.contains('logyq-chip-drag')) return
+      finger = { x: event.clientX, y: event.clientY }
+      if (!raf) raf = win.requestAnimationFrame(tick)
+    })
+    win.addEventListener('pointerup', stop)
+    win.addEventListener('pointercancel', stop)
   }
 
   function edgePan(doc, win, x, y) {
