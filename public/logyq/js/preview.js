@@ -2118,6 +2118,7 @@
         if (!createdUid) return
         restoreView(doc, win, candidate.view)
         bridge.selectByUid(createdUid)
+        bridge.editSelected({ uid: createdUid })
         clearCardMic(state.mic)
         win.requestAnimationFrame(() => {
           restoreView(doc, win, candidate.view)

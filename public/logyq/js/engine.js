@@ -125,9 +125,9 @@ function __selectedUid(){
       || null;
 }
 
-/* Phone has no select UX. Do not follow-focus / re-center from tap, moat, or
-   create-relative fly. Desktop keyboard IJKL-style center-on-select stays.
-   Inline-edit magnification uses flyEditFocusToUID and is not gated here. */
+/* Phone has no select UX. Do not follow-focus / re-center from tap, moat,
+   create-relative fly, or inline edit. Desktop keyboard IJKL-style
+   center-on-select stays. */
 function phoneNoFollowCamera(){
   try {
     if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true;
@@ -171,9 +171,10 @@ function copyZoom(t){
   return d3.zoomIdentity.translate(t.x, t.y).scale(t.k)
 }
 
-/* Phone inline-edit: center the card in the remaining visual viewport and
-   magnify at least to a readable scale. Never zoom out. */
+/* Desktop-only leftover. Phone edit uses the keyboard field and must not
+   move the map, so this returns immediately on a phone. */
 function flyEditFocusToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
+  if (phoneNoFollowCamera()) return;
   const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
@@ -1792,8 +1793,27 @@ if (dir === +1){
   attach('detectors', Detectors)
 
   /* ======================= EDITOR ======================= */
+ function mobileQuietEdit(){
+  try { return document.body.classList.contains('logyq-mobile-v162') } catch (_e) { return false }
+ }
+
+ // The phone field sits above the keyboard. It never follows the card.
+ function dockMobileEditor(){
+  const { state } = logyq
+  const el = state.editorEl
+  const dock = el?.closest?.('.node-edit-dock')
+  if (!dock) return
+  const vv = window.visualViewport
+  const keyboard = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0
+  dock.style.bottom = (keyboard + 8) + 'px'
+ }
+
  function updateNodeEditorPosition(){
   const { state, elements, config: CONFIG } = logyq
+  if (mobileQuietEdit()) {
+    dockMobileEditor()
+    return
+  }
   if(!state.editingUid || !state.editorEl || !elements.gRoot) return;
   try{
     const h = state.root?.descendants().find(n => n.data?._uid === state.editingUid);
@@ -1860,7 +1880,7 @@ if (dir === +1){
     if (state._editFocusTimer) { try { clearTimeout(state._editFocusTimer); } catch (_e) {} state._editFocusTimer = 0; }
     if (typeof state._editViewportOff === 'function') { try { state._editViewportOff(); } catch (_e) {} state._editViewportOff = null; }
     state.editingUid = null; state.editorEl = null;
-    if(el && el.parentNode) el.parentNode.removeChild(el);
+    if(el && el.parentNode && !el.closest?.('.node-edit-dock')) el.parentNode.removeChild(el);
     if(apply){
       const target = utils.findByUid(state.root.data, uid);
       if(target){
@@ -1876,13 +1896,17 @@ if (dir === +1){
         }
       }
     }
-    const svg = elements.svg?.node?.();
-    if (svg) d3.select(svg).interrupt();
-    const shouldRestore = state.prevZoom && (restoreZoom || state.editFocusArmed) && !state.editUserZoom;
-    if(shouldRestore){
-      const t = state.prevZoom;
-      elements.svg.transition().duration(360).ease(d3.easeCubicOut).call(state.zoom.transform, t);
+    if (!mobileQuietEdit()) {
+      const svg = elements.svg?.node?.();
+      if (svg) d3.select(svg).interrupt();
+      const shouldRestore = state.prevZoom && (restoreZoom || state.editFocusArmed) && !state.editUserZoom;
+      if(shouldRestore){
+        const t = state.prevZoom;
+        elements.svg.transition().duration(360).ease(d3.easeCubicOut).call(state.zoom.transform, t);
+      }
     }
+    const host = el?.closest?.('.node-edit-dock')
+    if (host && host.parentNode) host.parentNode.removeChild(host)
     state.prevZoom = null;
     state.editZoom = null;
     state.editFocusArmed = false;
@@ -1897,15 +1921,36 @@ if (dir === +1){
     const uid = d?.data?._uid;
     if(!d || uid == null || String(uid) === '') return;
     state.editingUid = uid;
-    const current = d3.zoomTransform(elements.svg.node());
-    state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
     state.editZoom = null;
     state.editFocusArmed = false;
     state.editUserZoom = false;
+    if (mobileQuietEdit()) {
+      state.prevZoom = null;
+    } else {
+      const current = d3.zoomTransform(elements.svg.node());
+      state.prevZoom = d3.zoomIdentity.translate(current.x, current.y).scale(current.k);
+    }
     const input = document.createElement("input");
     input.type = "text"; input.className = "node-edit-input";
+    input.enterKeyHint = "done";
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("autocorrect", "off");
+    input.setAttribute("spellcheck", "false");
     input.value = (d.data && d.data.name) ? d.data.name : "";
-    document.body.appendChild(input);
+    if (mobileQuietEdit()) {
+      const dock = document.createElement("div");
+      dock.className = "node-edit-dock";
+      const done = document.createElement("button");
+      done.type = "button";
+      done.className = "node-edit-done";
+      done.textContent = "Done";
+      dock.appendChild(input);
+      dock.appendChild(done);
+      document.body.appendChild(dock);
+      done.addEventListener("click", function(){ closeNodeEditor(true, true); });
+    } else {
+      document.body.appendChild(input);
+    }
     state.editorEl = input;
 
 
@@ -1936,21 +1981,20 @@ if (dir === +1){
     input.addEventListener("blur", function(){ closeNodeEditor(true, true); });
     updateNodeEditorPosition();
     setTimeout(function(){ try{ input.focus(); var L=input.value.length; input.setSelectionRange(L,L); }catch(_e){} }, 0);
-    if (document.body.classList.contains('logyq-mobile-v162')) {
-      const uid = d.data._uid;
-      state._editFocusTimer = setTimeout(() => {
-        if (state.editingUid !== uid) return;
-        state.editFocusArmed = true;
-        logyq.camera.flyEditFocusToUID(uid);
-        const vv = window.visualViewport;
-        if (!vv) return;
-        const onResize = () => {
-          if (state.editingUid !== uid || state.editUserZoom) return;
-          logyq.camera.flyEditFocusToUID(uid, { duration: 220 });
+    if (mobileQuietEdit()) {
+      const vv = window.visualViewport;
+      if (vv) {
+        const onViewport = () => {
+          if (state.editingUid !== uid) return;
+          dockMobileEditor();
         };
-        vv.addEventListener('resize', onResize);
-        state._editViewportOff = () => vv.removeEventListener('resize', onResize);
-      }, 0);
+        vv.addEventListener('resize', onViewport);
+        vv.addEventListener('scroll', onViewport);
+        state._editViewportOff = () => {
+          vv.removeEventListener('resize', onViewport);
+          vv.removeEventListener('scroll', onViewport);
+        };
+      }
     }
   }
 

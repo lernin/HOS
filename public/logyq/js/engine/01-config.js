@@ -85,9 +85,9 @@ function __selectedUid(){
       || null;
 }
 
-/* Phone has no select UX. Do not follow-focus / re-center from tap, moat, or
-   create-relative fly. Desktop keyboard IJKL-style center-on-select stays.
-   Inline-edit magnification uses flyEditFocusToUID and is not gated here. */
+/* Phone has no select UX. Do not follow-focus / re-center from tap, moat,
+   create-relative fly, or inline edit. Desktop keyboard IJKL-style
+   center-on-select stays. */
 function phoneNoFollowCamera(){
   try {
     if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true;
@@ -131,9 +131,10 @@ function copyZoom(t){
   return d3.zoomIdentity.translate(t.x, t.y).scale(t.k)
 }
 
-/* Phone inline-edit: center the card in the remaining visual viewport and
-   magnify at least to a readable scale. Never zoom out. */
+/* Desktop-only leftover. Phone edit uses the keyboard field and must not
+   move the map, so this returns immediately on a phone. */
 function flyEditFocusToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
+  if (phoneNoFollowCamera()) return;
   const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
