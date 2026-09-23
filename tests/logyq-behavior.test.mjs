@@ -126,6 +126,104 @@ test('LOGYQ blank drafts are untitled empty roots with no children', () => {
   assert.equal(maps.nextUntitledName(['untitled 4', 'Untitled 1']), 'Untitled 2')
 })
 
+test('LOGYQ remote sync prefers a newer row and holds an open rename', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/01-helpers.js', import.meta.url), 'utf8')
+  const preview = {}
+  const maps = new Function('preview', 'DEFAULT_NAME', `${source}; return preview.maps;`)(preview, 'Untitled map')
+  const acked = maps.contentKey({ name: 'Sky', _uid: 'root' }, [])
+  const remote = maps.contentKey({ name: 'Storm', _uid: 'root' }, [])
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-22T00:00:00.000Z',
+    localContent: acked,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: false,
+  }).action, 'ignore')
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: remote,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: false,
+  }).action, 'ack')
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: acked,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: false,
+  }).action, 'apply')
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: acked,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: true,
+  }).action, 'hold')
+  const typed = maps.contentKey({ name: 'Hail', _uid: 'root' }, [])
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: typed,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: false,
+  }).action, 'merge')
+  assert.equal(maps.planRemoteSync({
+    localAckAt: null,
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: typed,
+    ackedContent: '',
+    remoteContent: remote,
+    editing: false,
+  }).action, 'ignore')
+})
+
+test('LOGYQ tree merge keeps each side’s untouched cards and lets Enter win one field', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/01-helpers.js', import.meta.url), 'utf8')
+  const preview = {}
+  const maps = new Function('preview', 'DEFAULT_NAME', `${source}; return preview.maps;`)(preview, 'Untitled map')
+  const acked = {
+    name: 'Sky',
+    _uid: 'root',
+    children: [
+      { name: 'Cloud', _uid: 'a' },
+      { name: 'Wind', _uid: 'b' },
+    ],
+  }
+  const local = {
+    name: 'Sky',
+    _uid: 'root',
+    children: [
+      { name: 'Hail', _uid: 'a' },
+      { name: 'Wind', _uid: 'b' },
+    ],
+  }
+  const remote = {
+    name: 'Sky',
+    _uid: 'root',
+    color: '#bae6fd',
+    children: [
+      { name: 'Squall', _uid: 'a' },
+      { name: 'Gust', _uid: 'b' },
+      { name: 'Rain', _uid: 'c' },
+    ],
+  }
+  const merged = maps.mergeMapTrees({ acked, local, remote, localWinsUids: ['a'] })
+  assert.equal(merged.children.find((node) => node._uid === 'a').name, 'Hail')
+  assert.equal(merged.children.find((node) => node._uid === 'b').name, 'Gust')
+  assert.equal(merged.children.find((node) => node._uid === 'c').name, 'Rain')
+  assert.equal(merged.color, '#bae6fd')
+  const remoteWins = maps.mergeMapTrees({ acked, local, remote, localWinsUids: [] })
+  assert.equal(remoteWins.children.find((node) => node._uid === 'a').name, 'Squall')
+  assert.deepEqual(maps.mergeWordBank(['alpha'], ['alpha', 'beta'], ['alpha']), ['alpha', 'beta'])
+  assert.deepEqual(maps.mergeWordBank(['alpha'], ['local'], ['remote']), ['remote'])
+})
+
 test('GIQ and JSON import parsing keep v161 normalization rules', () => {
   const { tryParsePureJSON, tryParseGIQ, parseIncoming } = loadTreeHelpers()
   assert.deepEqual(tryParsePureJSON('{"name":"Root","children":[{"name":"Child"}]}'), {
@@ -1327,6 +1425,8 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /FLICK_MIN: 52/)
   assert.match(v162, /__logyqV2ConsumedPointers/)
   assert.match(v162, /bridge\.createRelative\(direction, candidate\.uid\)/)
+  assert.match(v162, /direction === 'right' && preview\.thekonym\?\.enabled/)
+  assert.match(v162, /preview\.thekonym\.openUid\(candidate\.uid, \{ flip: true \}\)/)
   assert.match(v162, /function hardClearBackground/)
   assert.match(v162, /hardClearBackground\(doc, win/)
   assert.match(v162, /bridge\.editSelected\(\{ uid \}\)/)
@@ -2317,6 +2417,7 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   assert.equal(api.thekonymInPlay('Fruit', ['fruit']), false)
   assert.equal(api.thekonymInPlay('Quill', ['Fruit']), false)
   assert.match(source, /lab_thekonym_read/)
+  assert.match(source, /function thekonymDismissSwipe/)
   assert.match(source, /term_pronunciation/)
   assert.match(source, /kid_explanation/)
   assert.match(source, /technical_definition/)

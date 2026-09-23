@@ -58,9 +58,115 @@
     return new Date(stamp).toLocaleDateString()
   }
 
+  function revisionMillis(iso) {
+    const stamp = iso ? Date.parse(iso) : NaN
+    return Number.isFinite(stamp) ? stamp : 0
+  }
+
+  function findUid(node, uid) {
+    if (!node || uid == null || uid === '') return null
+    if (String(node._uid) === String(uid)) return node
+    for (const child of node.children || []) {
+      const found = findUid(child, uid)
+      if (found) return found
+    }
+    return null
+  }
+
+  function sameJson(a, b) {
+    return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+  }
+
+  function childUids(node) {
+    return (Array.isArray(node?.children) ? node.children : []).map((child) => (child?._uid == null ? '' : String(child._uid)))
+  }
+
+  function pickField(base, local, remote, localWins) {
+    const localChanged = !sameJson(local ?? null, base ?? null)
+    const remoteChanged = !sameJson(remote ?? null, base ?? null)
+    if (localChanged && remoteChanged) return localWins ? local : remote
+    if (localChanged) return local
+    if (remoteChanged) return remote
+    return remote !== undefined ? remote : local
+  }
+
+  function mergeNode(acked, local, remote, localWinsUids) {
+    if (!remote && !local) return null
+    if (!remote) return clonePreserving(local)
+    if (!local) return clonePreserving(remote)
+    const base = acked || {}
+    const uid = remote._uid ?? local._uid
+    const localWins = !!(uid != null && localWinsUids && localWinsUids.has(String(uid)))
+    const localStruct = !sameJson(childUids(local), childUids(acked))
+    const remoteStruct = !sameJson(childUids(remote), childUids(acked))
+    const shape = localStruct && !remoteStruct ? local : remote
+    const merged = clonePreserving(shape) || {}
+    merged.name = pickField(base.name ?? '', local.name ?? '', remote.name ?? '', localWins) ?? ''
+    const color = pickField(base.color ?? null, local.color ?? null, remote.color ?? null, false)
+    if (color) merged.color = color
+    else delete merged.color
+    for (const key of ['label', 'text', 'title', 'value']) {
+      const picked = pickField(base[key] ?? null, local[key] ?? null, remote[key] ?? null, false)
+      if (picked) merged[key] = picked
+      else delete merged[key]
+    }
+    const kids = Array.isArray(shape.children) ? shape.children : []
+    const nextKids = kids.map((child) => {
+      const id = child?._uid
+      if (id == null || id === '') return clonePreserving(child)
+      return mergeNode(findUid(acked, id), findUid(local, id), findUid(remote, id), localWinsUids) || clonePreserving(child)
+    }).filter(Boolean)
+    if (nextKids.length) merged.children = nextKids
+    else delete merged.children
+    return merged
+  }
+
+  function mergeMapTrees({ acked, local, remote, localWinsUids } = {}) {
+    const wins = localWinsUids instanceof Set ? localWinsUids : new Set((localWinsUids || []).map((uid) => String(uid)))
+    return mergeNode(acked || null, local || null, remote || null, wins)
+  }
+
+  function mergeWordBank(acked, local, remote) {
+    const base = Array.isArray(acked) ? acked : []
+    const nextLocal = Array.isArray(local) ? local : []
+    const nextRemote = Array.isArray(remote) ? remote : []
+    if (!sameJson(nextLocal, base) && sameJson(nextRemote, base)) return nextLocal.slice()
+    return nextRemote.slice()
+  }
+
+  // Row authority is logiq_maps.updated_at. Nodes have no timestamps.
+  // ignore: remote is not newer, or we have no server baseline and the trees differ (let a real local save proceed).
+  // ack: same tree, learn the server stamp.
+  // apply: remote is newer and this tab has not edited since the last ack.
+  // hold: a rename field is open — do not overwrite it.
+  // merge: both sides changed and the user is not mid-edit.
+  function planRemoteSync({
+    localAckAt,
+    remoteUpdatedAt,
+    localContent,
+    ackedContent,
+    remoteContent,
+    editing,
+  } = {}) {
+    if (!remoteUpdatedAt) return { action: 'ignore' }
+    const remoteMs = revisionMillis(remoteUpdatedAt)
+    const ackMs = revisionMillis(localAckAt)
+    if (!localAckAt) {
+      return remoteContent === localContent ? { action: 'ack' } : { action: 'ignore' }
+    }
+    if (remoteMs <= ackMs) return { action: 'ignore' }
+    if (remoteContent === localContent) return { action: 'ack' }
+    if (editing) return { action: 'hold' }
+    if (localContent === ackedContent) return { action: 'apply' }
+    return { action: 'merge' }
+  }
+
+  const REMOTE_POLL_MS = 2000
+
   preview.maps = {
     SUPABASE_URL,
     MAP_FORMAT_VERSION,
+    REMOTE_POLL_MS,
     clonePreserving,
     encodeMapTree,
     decodeMapTree,
@@ -68,6 +174,10 @@
     isBlankDraft,
     nextUntitledName,
     formatUpdatedAt,
+    revisionMillis,
+    planRemoteSync,
+    mergeMapTrees,
+    mergeWordBank,
   }
 
   function readJson(key, fallback) {
@@ -85,6 +195,13 @@
       word_bank: Array.isArray(snapshot?.wordBank) ? snapshot.wordBank : [],
     })
   }
+
+  function contentKey(tree, wordBank) {
+    const encoded = encodeMapRecord({ name: DEFAULT_NAME, tree, wordBank })
+    return stableSnapshot({ tree: encoded.tree, wordBank: encoded.word_bank })
+  }
+
+  preview.maps.contentKey = contentKey
 
   function escapeHtml(value) {
     return String(value ?? '')

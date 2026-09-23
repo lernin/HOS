@@ -42,11 +42,26 @@
     return data
   }
 
+  function isFieldEditing() {
+    if (bridge.core?.state?.editingUid) return true
+    const input = document.querySelector('.node-edit-input')
+    return !!(input && input.isConnected)
+  }
+
   function queueAutosave(snapshot) {
     if (app.curriculum) {
       setSaveState('saved')
       maybeCurriculumClear(snapshot)
       return
+    }
+    if (app.applyingRemote) return
+    if (app.heldRemote) {
+      if (isFieldEditing()) {
+        clearTimeout(app.timer)
+        localStorage.removeItem(PENDING_KEY)
+        return
+      }
+      if (settleHeldRemote(snapshot)) return
     }
     if (!app.hasOpenMap) return
     if (isBlankDraft({
@@ -113,14 +128,25 @@
     const pin = await getPin(true)
     if (!pin) return setSaveState('offline')
 
+    let savedOk = false
     app.saving = true
     setSaveState('saving')
     try {
-      const payload = encodeMapRecord({
+      let payload = encodeMapRecord({
         name: pending.name || DEFAULT_NAME,
         tree: pending.tree,
         wordBank: pending.word_bank,
       })
+      if (pending.id) {
+        const gate = await reconcileBeforeSave(pending, pin)
+        if (gate?.skip) {
+          const latest = readJson(PENDING_KEY, null)
+          if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
+          setSaveState(localStorage.getItem(PENDING_KEY) ? 'saving' : 'saved')
+          return
+        }
+        if (gate?.payload) payload = gate.payload
+      }
       const id = await rpc('logiq_map_save', {
         pin,
         map_name: payload.name,
@@ -131,14 +157,21 @@
       acceptPin(pin)
       app.current = { id: typeof id === 'string' ? id : (id?.id || pending.id), name: payload.name }
       updateMapName()
+      app.ackedTree = decodeMapTree(payload.tree)
+      app.ackedWordBank = payload.word_bank.slice()
+      app.ackedName = payload.name
+      app.ackedContent = contentKey(payload.tree, payload.word_bank)
+      app.lastSnapshot = app.ackedContent
       const latest = readJson(PENDING_KEY, null)
       if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
       setSaveState(localStorage.getItem(PENDING_KEY) ? 'saving' : 'saved')
+      savedOk = true
     } catch (error) {
       if (error.auth) forgetPin()
       setSaveState('offline')
     } finally {
       app.saving = false
+      if (savedOk) pullRemote()
       if (app.saveAgain) {
         app.saveAgain = false
         clearTimeout(app.timer)
@@ -358,17 +391,29 @@
     if (!action) openMap(row)
   }
 
-  function enterEditor(row, { edit = false } = {}) {
+  function enterEditor(row, { edit = false, baseline = true } = {}) {
     leaveCurriculumPlay()
     const tree = decodeMapTree(row.tree)
     const wordBank = Array.isArray(row.word_bank) ? row.word_bank : (row.wordBank || [])
     app.current = { id: row.id || null, name: row.name || DEFAULT_NAME }
     app.hasOpenMap = true
     document.body.classList.add('logyq-map-open')
-    app.lastSnapshot = stableSnapshot({ tree, wordBank })
+    app.heldRemote = null
+    hideConflictBubble()
+    app.serverUpdatedAt = baseline && row.updated_at ? row.updated_at : null
+    app.ackedName = app.current.name
+    app.applyingRemote = true
+    app.lastSnapshot = contentKey(tree, wordBank)
+    app.ackedContent = app.lastSnapshot
+    app.ackedTree = tree
+    app.ackedWordBank = wordBank.slice()
     updateMapName()
     hideLibrary()
     bridge.loadMap(tree, wordBank)
+    queueMicrotask(() => {
+      alignAckToLive()
+      app.applyingRemote = false
+    })
     if (edit) {
       const uid = bridge.core?.state?.root?.data?._uid
       if (uid) {
@@ -391,6 +436,13 @@
     for (const row of readCachedLibrary()) taken.push(row?.name)
     if (app.current?.name) taken.push(app.current.name)
     app.current = { id: null, name: nextUntitledName(taken) }
+    app.serverUpdatedAt = null
+    app.ackedContent = ''
+    app.ackedTree = null
+    app.ackedWordBank = []
+    app.ackedName = app.current.name
+    app.heldRemote = null
+    hideConflictBubble()
     const tree = encodeMapTree({ name: '' })
     app.hasOpenMap = true
     document.body.classList.add('logyq-map-open')
@@ -425,6 +477,7 @@
       row.name = payload.name
       if (row.id === app.current.id) {
         app.current.name = payload.name
+        app.ackedName = payload.name
         updateMapName()
       }
       renderLibrary()
@@ -457,6 +510,319 @@
     }
   }
 
+  function alignAckToLive() {
+    const live = bridge.snapshot()
+    const key = contentKey(live?.tree, live?.wordBank)
+    app.lastSnapshot = key
+    app.ackedContent = key
+    app.ackedTree = decodeMapTree(live?.tree)
+    app.ackedWordBank = Array.isArray(live?.wordBank) ? live.wordBank.slice() : []
+  }
+
+  function ensureConflictBubble() {
+    let el = document.getElementById('logyq-db-bubble')
+    if (el) return el
+    el = document.createElement('div')
+    el.id = 'logyq-db-bubble'
+    el.className = 'logyq-db-bubble'
+    el.setAttribute('role', 'status')
+    el.textContent = 'Database change came in.'
+    el.hidden = true
+    document.body.appendChild(el)
+    return el
+  }
+
+  let bubbleFrame = 0
+
+  function hideConflictBubble() {
+    const el = document.getElementById('logyq-db-bubble')
+    if (el) el.hidden = true
+    if (bubbleFrame) cancelAnimationFrame(bubbleFrame)
+    bubbleFrame = 0
+  }
+
+  function placeConflictBubble(el) {
+    const input = document.querySelector('.node-edit-input')
+    const dock = input?.closest?.('.node-edit-dock')
+    const stack = input?.closest?.('.node-edit-stack')
+    if (!input) {
+      el.hidden = true
+      return
+    }
+    if (dock && stack) {
+      if (!stack.classList.contains('is-placed')) {
+        el.hidden = true
+        return
+      }
+      if (el.parentElement !== stack || el.nextElementSibling !== dock) stack.insertBefore(el, dock)
+      el.dataset.anchor = 'field'
+      el.hidden = false
+      return
+    }
+    if (el.parentElement !== document.body) document.body.appendChild(el)
+    delete el.dataset.anchor
+    const rect = input.getBoundingClientRect()
+    if (rect.width < 8 || rect.height < 8) {
+      el.hidden = true
+      return
+    }
+    el.hidden = false
+    el.style.left = `${rect.left + rect.width / 2}px`
+    el.style.top = `${rect.top}px`
+  }
+
+  function showConflictBubble() {
+    const el = ensureConflictBubble()
+    const track = () => {
+      bubbleFrame = 0
+      if (!app.heldRemote) {
+        el.hidden = true
+        return
+      }
+      placeConflictBubble(el)
+      bubbleFrame = requestAnimationFrame(track)
+    }
+    if (!bubbleFrame) {
+      placeConflictBubble(el)
+      bubbleFrame = requestAnimationFrame(track)
+    }
+  }
+
+  function holdRemote(row) {
+    app.heldRemote = row
+    clearTimeout(app.timer)
+    localStorage.removeItem(PENDING_KEY)
+    if (!app.saving) setSaveState('saved')
+    showConflictBubble()
+  }
+
+  function acknowledgeRemote(row) {
+    if (row?.updated_at) app.serverUpdatedAt = row.updated_at
+    if (row?.name && (app.current.name || '') === (app.ackedName || '')) {
+      app.current.name = row.name
+      updateMapName()
+    }
+    app.ackedName = app.current.name || app.ackedName
+    alignAckToLive()
+  }
+
+  function applyRemoteRow(row, options = {}) {
+    if (!row || app.curriculum) return
+    app.applyingRemote = true
+    app.heldRemote = null
+    app.editClaim = null
+    hideConflictBubble()
+    clearTimeout(app.timer)
+    localStorage.removeItem(PENDING_KEY)
+    const tree = decodeMapTree(row.tree)
+    const wordBank = Array.isArray(row.word_bank) ? row.word_bank.slice() : []
+    app.current = { id: row.id || app.current.id, name: row.name || app.current.name || DEFAULT_NAME }
+    if (row.updated_at) app.serverUpdatedAt = row.updated_at
+    app.ackedName = app.current.name
+    updateMapName()
+    bridge.loadMap(tree, wordBank, {
+      keepEditor: !!options.keepEditor && isFieldEditing(),
+      fit: false,
+      keepSelection: true,
+    })
+    queueMicrotask(() => {
+      alignAckToLive()
+      app.applyingRemote = false
+    })
+    setSaveState('saved')
+  }
+
+  function buildMerge(row, live, claim) {
+    const remoteTree = decodeMapTree(row.tree)
+    const remoteBank = Array.isArray(row.word_bank) ? row.word_bank.slice() : []
+    const localTree = live?.tree || remoteTree
+    const localBank = Array.isArray(live?.wordBank) ? live.wordBank.slice() : []
+    const wins = claim?.submit && claim.uid ? [String(claim.uid)] : []
+    const tree = preview.maps.mergeMapTrees({
+      acked: app.ackedTree,
+      local: localTree,
+      remote: remoteTree,
+      localWinsUids: wins,
+    })
+    const wordBank = preview.maps.mergeWordBank(app.ackedWordBank, localBank, remoteBank)
+    let name = app.current.name
+    if ((app.current.name || '') === (app.ackedName || '') && row.name) name = row.name
+    return { tree, wordBank, name }
+  }
+
+  function mergeCommit(row, snapshot, claim) {
+    const merged = buildMerge(row, snapshot, claim)
+    const remoteTree = decodeMapTree(row.tree)
+    const remoteBank = Array.isArray(row.word_bank) ? row.word_bank : []
+    const sameTree = contentKey(merged.tree, merged.wordBank) === contentKey(remoteTree, remoteBank)
+    const sameName = (merged.name || '') === (row.name || app.current.name || '')
+    if (sameTree && sameName) {
+      applyRemoteRow(row)
+      return
+    }
+    // This remote revision is already folded in. A later poll of the same stamp must not undo Enter.
+    if (row.updated_at) app.serverUpdatedAt = row.updated_at
+    app.applyingRemote = true
+    app.heldRemote = null
+    hideConflictBubble()
+    clearTimeout(app.timer)
+    localStorage.removeItem(PENDING_KEY)
+    app.current.name = merged.name || app.current.name
+    updateMapName()
+    bridge.loadMap(merged.tree, merged.wordBank, { fit: false, keepSelection: true })
+    queueMicrotask(() => {
+      app.applyingRemote = false
+      app.lastSnapshot = app.ackedContent || ''
+      queueAutosave(bridge.snapshot())
+    })
+  }
+
+  function settleHeldRemote(snapshot) {
+    if (!app.heldRemote || isFieldEditing()) return false
+    const row = app.heldRemote
+    const claim = app.editClaim
+    app.heldRemote = null
+    app.editClaim = null
+    hideConflictBubble()
+    if (claim?.submit) mergeCommit(row, snapshot || bridge.snapshot(), claim)
+    else applyRemoteRow(row)
+    return true
+  }
+
+  function considerRemoteRow(row) {
+    if (!row || !app.hasOpenMap || app.curriculum || app.applyingRemote || app.saving) return
+    if (row.id && app.current?.id && row.id !== app.current.id) return
+    const remoteBank = Array.isArray(row.word_bank) ? row.word_bank : []
+    const remoteKey = contentKey(decodeMapTree(row.tree), remoteBank)
+    const live = bridge.snapshot()
+    const localKey = contentKey(live?.tree, live?.wordBank)
+    const plan = preview.maps.planRemoteSync({
+      localAckAt: app.serverUpdatedAt,
+      remoteUpdatedAt: row.updated_at,
+      localContent: localKey,
+      ackedContent: app.ackedContent,
+      remoteContent: remoteKey,
+      editing: isFieldEditing(),
+    })
+    if (plan.action === 'ignore') return
+    if (plan.action === 'ack') return acknowledgeRemote(row)
+    if (plan.action === 'hold') return holdRemote(row)
+    if (plan.action === 'apply') return applyRemoteRow(row)
+    if (plan.action === 'merge') return mergeCommit(row, live, app.editClaim?.submit ? app.editClaim : null)
+  }
+
+  async function reconcileBeforeSave(pending, pin) {
+    let rows
+    try { rows = await rpc('logiq_map_list', { pin }) } catch (_error) { return null }
+    if (!Array.isArray(rows)) return null
+    const row = rows.find((item) => item.id === pending.id)
+    if (!row) return null
+    const remoteBank = Array.isArray(row.word_bank) ? row.word_bank : []
+    const remoteKey = contentKey(decodeMapTree(row.tree), remoteBank)
+    const live = bridge.snapshot()
+    const localKey = contentKey(live?.tree, live?.wordBank)
+    const plan = preview.maps.planRemoteSync({
+      localAckAt: app.serverUpdatedAt,
+      remoteUpdatedAt: row.updated_at,
+      localContent: localKey,
+      ackedContent: app.ackedContent,
+      remoteContent: remoteKey,
+      editing: isFieldEditing(),
+    })
+    if (plan.action === 'ignore') return null
+    if (plan.action === 'ack') {
+      acknowledgeRemote(row)
+      return { skip: true }
+    }
+    if (plan.action === 'hold') {
+      holdRemote(row)
+      return { skip: true }
+    }
+    if (plan.action === 'apply') {
+      applyRemoteRow(row)
+      return { skip: true }
+    }
+    const claim = app.editClaim?.submit ? app.editClaim : null
+    const merged = buildMerge(row, live, claim)
+    if (contentKey(merged.tree, merged.wordBank) === remoteKey && (merged.name || '') === (row.name || '')) {
+      applyRemoteRow(row)
+      return { skip: true }
+    }
+    app.current.name = merged.name || app.current.name
+    updateMapName()
+    if (row.updated_at) app.serverUpdatedAt = row.updated_at
+    app.applyingRemote = true
+    bridge.loadMap(merged.tree, merged.wordBank, { fit: false, keepSelection: true })
+    queueMicrotask(() => { app.applyingRemote = false })
+    return {
+      payload: encodeMapRecord({
+        name: app.current.name,
+        tree: merged.tree,
+        wordBank: merged.wordBank,
+      }),
+    }
+  }
+
+  let pullFlight = null
+
+  async function pullRemoteNow() {
+    if (app.curriculum || !app.hasOpenMap || !app.current?.id || app.saving || app.applyingRemote) return
+    if (document.body.classList.contains('v2-branch-drag') || document.body.classList.contains('dragging-mode')) return
+    const gesture = preview.gestures?.session
+    if (gesture?.flick?.active?.size || gesture?.hold?.race || gesture?.hold?.pan) return
+    const pin = readStoredPin()
+    if (!pin) return
+    let rows
+    try { rows = await rpc('logiq_map_list', { pin }) } catch (_error) { return }
+    if (!Array.isArray(rows)) return
+    const row = rows.find((item) => item.id === app.current.id)
+    if (!row) return
+    considerRemoteRow(row)
+  }
+
+  function pullRemote() {
+    if (pullFlight) return pullFlight
+    pullFlight = pullRemoteNow().finally(() => { pullFlight = null })
+    return pullFlight
+  }
+
+  function noteEditClaim(input, claim) {
+    if (!input?.classList?.contains('node-edit-input')) return
+    app.editClaim = {
+      uid: input.dataset.editUid || null,
+      name: input.value,
+      ...claim,
+    }
+  }
+
+  document.addEventListener('keydown', (event) => {
+    const input = event.target
+    if (!input?.classList?.contains?.('node-edit-input')) return
+    if (event.key === 'Enter') noteEditClaim(input, { submit: true })
+    else if (event.key === 'Escape') noteEditClaim(input, { submit: false, cancel: true })
+  }, true)
+
+  document.addEventListener('keyup', (event) => {
+    if (event.key !== 'Enter' && event.key !== 'Escape') return
+    queueMicrotask(() => settleHeldRemote(bridge.snapshot()))
+  }, true)
+
+  document.addEventListener('focusout', (event) => {
+    const input = event.target
+    if (!input?.classList?.contains?.('node-edit-input')) return
+    if (app.editClaim?.submit || app.editClaim?.cancel) return
+    if (document.body.classList.contains('logyq-mobile-v162')) return
+    noteEditClaim(input, { submit: true })
+    queueMicrotask(() => settleHeldRemote(bridge.snapshot()))
+  }, true)
+
+  setInterval(() => { pullRemote() }, preview.maps.REMOTE_POLL_MS)
+
+  preview.sync = {
+    pullRemote,
+    considerRemoteRow,
+  }
+
   async function bootSession() {
     const recovered = readJson(PENDING_KEY, null)
     if (recovered?.tree && !isBlankDraft({
@@ -470,7 +836,7 @@
         name: recovered.name || DEFAULT_NAME,
         tree: recovered.tree,
         word_bank: recovered.word_bank || [],
-      }, { edit: false })
+      }, { edit: false, baseline: false })
       app.booted = true
       setTimeout(retryPending, 500)
       return

@@ -1607,8 +1607,8 @@
     if (Math.hypot(dx, dy) > v162Constants().TAP_MOVE) candidate.moved = true
 
     // Paint vs create: tap is short+stationary (not pan). Flick-down paints a
-    // branch only while a palette color is active. Left/right/up still create.
-    // Hold-to-drag move is not paint. Double-tap edit still wins on tap 2.
+    // branch only while a palette color is active. Left/up/down still create.
+    // Thekonym mode opens the dossier on a right flick. Double-tap still renames.
     if (candidate.uid && isFlick(dx, dy, elapsed)) {
       const direction = flickDirection(dx, dy)
       if (paintFlickDown(direction)) {
@@ -1616,6 +1616,20 @@
         win.requestAnimationFrame(() => {
           restoreView(doc, win, candidate.view)
           bridge.paintBranch(candidate.uid, preview.paint.color)
+          win.navigator.vibrate?.(16)
+        })
+        return
+      }
+      // A right flick must not add a sibling in Thekonym mode. The armed-card
+      // path in smiteTryArmSwipe already opens the flip dossier and consumes
+      // the pointer. This covers a clear right flick that Smite did not take.
+      if (direction === 'right' && preview.thekonym?.enabled?.()) {
+        state.lastTap = null
+        clearCardMic(state.mic)
+        smiteSetArm(doc, null)
+        win.requestAnimationFrame(() => {
+          restoreView(doc, win, candidate.view)
+          preview.thekonym.openUid(candidate.uid, { flip: true })
           win.navigator.vibrate?.(16)
         })
         return

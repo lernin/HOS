@@ -6793,8 +6793,13 @@ elements.svg.on("contextmenu", (event) => {
     undo() { undo(); },
     mix(includeBank = false) { logyq.mix.randomizeTree(!!includeBank); },
     fit() { logyq.treeManager.autoFit(); },
-    loadMap(tree, wordBank = []) {
-      if (logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
+    loadMap(tree, wordBank = [], options = {}) {
+      const keepEditor = !!options.keepEditor;
+      const keepSelection = !!options.keepSelection || keepEditor;
+      const fit = options.fit !== false && !keepEditor;
+      const editingUid = keepEditor ? logyq.state.editingUid : null;
+      const selectedUid = keepSelection ? logyq.state.selectedUid : null;
+      if (!keepEditor && logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
       const next = utils.deepClone(tree || { name: 'New map' });
       utils.assignUids(next);
       state.root = d3.hierarchy(next);
@@ -6802,11 +6807,23 @@ elements.svg.on("contextmenu", (event) => {
       state.wordBank = Array.isArray(wordBank) ? wordBank.slice() : [];
       state.history = [];
       elements.undoBtn.disabled = true;
-      logyq.selection.clearGroup();
-      logyq.selection.clearSelection();
+      if (!keepSelection) {
+        logyq.selection.clearGroup();
+        logyq.selection.clearSelection();
+      }
       logyq.wordDock.render();
       logyq.treeManager.layoutAndRender(false);
-      logyq.treeManager.autoFit();
+      if (fit) logyq.treeManager.autoFit();
+      if (keepSelection && selectedUid) {
+        const still = state.root?.descendants().find((node) => node.data?._uid === selectedUid);
+        if (still) logyq.selection.selectSingle(selectedUid);
+        else logyq.selection.clearSelection();
+      }
+      if (keepEditor) {
+        const stillEditing = editingUid && state.root?.descendants().find((node) => node.data?._uid === editingUid);
+        if (!stillEditing && logyq.state.editingUid) logyq.editing.closeNodeEditor(false, false);
+        else logyq.editing.updateNodeEditorPosition?.();
+      }
     },
     cycleDock() {
       const side = logyq.dock.cycleDockSide();

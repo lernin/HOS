@@ -1213,6 +1213,109 @@ test('LOGYQ library lists recents and New opens a calm one-card canvas', async (
   await context.close()
 })
 
+test('LOGYQ open map pulls a newer database row and notes it above the rename field', async () => {
+  const capture = []
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  const store = await stubMaps(context, {
+    capture,
+    maps: [{
+      id: 'sky',
+      name: 'Recent sky',
+      tree: {
+        name: 'Sky',
+        formatVersion: 2,
+        _uid: 'root',
+        children: [{ name: 'Cloud', _uid: 'cloud' }],
+      },
+      word_bank: [],
+      updated_at: '2026-09-22T00:00:00.000Z',
+    }],
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.locator('.logiq-map-name', { hasText: 'Recent sky' }).click()
+  await page.waitForFunction(() => window.LOGYQBridge.snapshot().tree?.children?.[0]?.name === 'Cloud')
+  await page.waitForFunction(() => document.body.classList.contains('logyq-mobile-v162'))
+
+  store.maps[0].tree = {
+    name: 'Sky',
+    formatVersion: 2,
+    _uid: 'root',
+    children: [{ name: 'Storm', _uid: 'cloud' }],
+  }
+  store.maps[0].updated_at = '2026-09-23T00:00:00.000Z'
+  await page.evaluate(() => window.LOGYQPreview.sync.pullRemote())
+  await page.waitForFunction(() => window.LOGYQBridge.snapshot().tree?.children?.[0]?.name === 'Storm')
+  assert.ok(capture.filter((request) => request.name === 'logiq_map_save').every((request) => {
+    return request.body?.map_tree?.children?.[0]?.name !== 'Cloud'
+  }))
+
+  const uid = await page.evaluate(() => {
+    const id = window.LOGYQBridge.snapshot().tree.children[0]._uid
+    window.LOGYQBridge.editSelected({ uid: id })
+    return id
+  })
+  await page.waitForSelector('.node-edit-stack.is-placed .node-edit-input')
+  await page.locator('.node-edit-input').fill('Hail')
+  store.maps[0].tree = {
+    name: 'Sky',
+    formatVersion: 2,
+    _uid: 'root',
+    children: [{ name: 'Squall', _uid: 'cloud' }],
+  }
+  store.maps[0].updated_at = '2026-09-23T01:00:00.000Z'
+  await page.evaluate(() => window.LOGYQPreview.sync.pullRemote())
+  await page.waitForSelector('#logyq-db-bubble[data-anchor="field"]:not([hidden])')
+  assert.equal(await page.locator('#logyq-db-bubble').innerText(), 'Database change came in.')
+  assert.equal(await page.locator('#logyq-db-bubble').evaluate((el) => el.tagName), 'DIV')
+  const boxes = await page.evaluate(() => {
+    const note = document.getElementById('logyq-db-bubble')
+    const input = document.querySelector('.node-edit-input')
+    const card = document.querySelector('svg#canvas g.node')
+    const noteBox = note.getBoundingClientRect()
+    const inputBox = input.getBoundingClientRect()
+    const cardBox = card.getBoundingClientRect()
+    return {
+      noteTop: noteBox.top,
+      noteBottom: noteBox.bottom,
+      inputTop: inputBox.top,
+      cardBottom: cardBox.bottom,
+      anchor: note.dataset.anchor || '',
+    }
+  })
+  assert.equal(boxes.anchor, 'field')
+  assert.ok(boxes.noteBottom <= boxes.inputTop + 2, `note bottom ${boxes.noteBottom} should sit on the input top ${boxes.inputTop}`)
+  assert.ok(boxes.cardBottom < boxes.noteTop, `map card bottom ${boxes.cardBottom} should stay above the note top ${boxes.noteTop}`)
+  assert.equal(await page.locator('.node-edit-input').inputValue(), 'Hail')
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.children[0].name), 'Hail')
+  assert.equal(await page.locator('#logyq-db-bubble').evaluate((el) => getComputedStyle(el).pointerEvents), 'none')
+  store.maps[0].tree = {
+    name: 'Sky',
+    formatVersion: 2,
+    _uid: 'root',
+    children: [{ name: 'Gust', _uid: 'cloud' }, { name: 'Rain', _uid: 'rain' }],
+  }
+  store.maps[0].updated_at = '2026-09-23T02:00:00.000Z'
+  await page.evaluate(() => window.LOGYQPreview.sync.pullRemote())
+  await page.waitForSelector('#logyq-db-bubble:not([hidden])')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction(() => {
+    const tree = window.LOGYQBridge.snapshot().tree
+    const names = (tree.children || []).map((node) => node.name)
+    return names.includes('Hail') && names.includes('Rain')
+  })
+  await page.waitForTimeout(1200)
+  const hailSave = capture.find((request) => request.name === 'logiq_map_save' && request.body?.map_tree?.children?.some((node) => node.name === 'Hail'))
+  assert.ok(hailSave, 'Enter should save the typed name')
+  assert.ok(hailSave.body.map_tree.children.some((node) => node.name === 'Rain'), 'remote sibling should survive the save')
+  assert.equal(uid, 'cloud')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ flick-created blank double-tap renames only that card', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)

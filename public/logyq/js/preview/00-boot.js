@@ -37,6 +37,14 @@
     recordingChunks: [],
     hasOpenMap: false,
     booted: false,
+    serverUpdatedAt: null,
+    ackedContent: '',
+    ackedTree: null,
+    ackedWordBank: [],
+    ackedName: DEFAULT_NAME,
+    heldRemote: null,
+    applyingRemote: false,
+    editClaim: null,
   }
   preview.app = app
 
