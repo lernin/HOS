@@ -176,6 +176,15 @@
       .logyq-choice-card,.logyq-chooser{display:none!important}
       .logiq-modal-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:16px;background:rgba(255,255,255,.96);border-bottom:1px solid #e2e8f0}
       .logiq-modal-head h2{font-size:18px;margin:0;flex:1}
+      .logyq-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+      .logyq-home-tabs{display:flex;align-items:center;gap:4px;flex:1;min-width:0}
+      .logyq-home-tab{border:0;background:transparent;color:#64748b;font:750 16px/1.2 system-ui,sans-serif;padding:6px 10px;border-radius:999px;cursor:pointer}
+      .logyq-home-tab.is-active{color:#14532d;background:#dcfce7}
+      #logiq-library[data-shelf="curriculum"] #logiq-new-map,
+      #logiq-library[data-shelf="curriculum"] #logiq-map-list,
+      #logyq-curriculum{display:none}
+      #logiq-library[data-shelf="curriculum"] #logyq-curriculum{display:block}
+      #logyq-curriculum .logiq-empty p{margin:0}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
       .logiq-primary{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:9px 13px;font-weight:750;cursor:pointer}
       .logiq-library-body{padding:12px 16px 18px}
@@ -216,6 +225,7 @@
       body.v2-branch-drag svg.dragging-mode g.links path.link{opacity:1!important;stroke:var(--link-color)!important;transition:none!important}
       body.v2-branch-drag svg.dragging-mode g.links path.link.is-sub-link,body.v2-branch-drag svg.dragging-mode g.links path.link.is-parent-link{opacity:.38!important;stroke:#94a3b8!important}
       body.v2-branch-drag .drag-mini,body.v2-branch-drag g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
+      #logyq-v162-branch-preview{opacity:0.55}
       body.v2-branch-drag.v2-dock-target #Dock{outline:3px solid #22c55e;outline-offset:2px;background:rgba(220,252,231,.72)}
 
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
@@ -276,10 +286,9 @@
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
         body.logyq-mobile-v162 #logiq-v2-drag-card,body.logyq-mobile-v162 .drag-mini,body.logyq-mobile-v162 g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
         body.logyq-mobile-v162.v2-branch-drag .drag-mini{display:none!important;opacity:0!important}
-        #logyq-v162-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform}
+        #logyq-v162-branch-preview{position:fixed;inset:0;z-index:3940;pointer-events:none;overflow:visible;transform:translate3d(0,0,0);will-change:transform;opacity:0.55}
         #logyq-v162-branch-preview svg{position:absolute;overflow:visible;pointer-events:none}
-        #logyq-v162-branch-preview g.node text,#logyq-v162-branch-preview g.node text.label{fill:#374151!important;opacity:1!important}
-        #logyq-v162-branch-preview g.node rect:not(.grabzone){opacity:1!important}
+        #logyq-v162-branch-preview g.node text,#logyq-v162-branch-preview g.node text.label{fill:#374151!important}
         body.logyq-mobile-v162.v2-cancel #logyq-v162-branch-preview g.node rect:not(.grabzone){stroke:#ef4444!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost{opacity:.44!important}
         body.logyq-mobile-v162 .v2-branch-origin-ghost rect:not(.grabzone){fill:#fff!important;stroke:#94a3b8!important;stroke-width:2px!important;stroke-dasharray:5 4!important;filter:drop-shadow(0 1px 2px rgba(0,0,0,.08))!important}
@@ -355,10 +364,23 @@
         </div>
       </section>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
-      <div class="logiq-backdrop logyq-home-screen" id="logiq-library" aria-hidden="true">
+      <div class="logiq-backdrop logyq-home-screen" id="logiq-library" data-shelf="maps" aria-hidden="true">
         <section class="logiq-modal" role="dialog" aria-modal="true" aria-labelledby="logiq-library-title">
-          <header class="logiq-modal-head"><h2 id="logiq-library-title">Your maps</h2><button class="logiq-primary" id="logiq-new-map" type="button">+ New</button><button class="logiq-icon-btn" id="logiq-library-close" aria-label="Back to map">×</button></header>
-          <div class="logiq-library-body"><div class="logiq-map-list" id="logiq-map-list"></div></div>
+          <header class="logiq-modal-head">
+            <div class="logyq-home-tabs" role="tablist" aria-label="Maps home">
+              <button type="button" class="logyq-home-tab is-active" id="logyq-tab-maps" role="tab" aria-selected="true" aria-controls="logiq-map-list" data-shelf="maps">My maps</button>
+              <button type="button" class="logyq-home-tab" id="logyq-tab-curriculum" role="tab" aria-selected="false" aria-controls="logyq-curriculum" data-shelf="curriculum">Curriculum</button>
+            </div>
+            <h2 id="logiq-library-title" class="logyq-sr">Your maps</h2>
+            <button class="logiq-primary" id="logiq-new-map" type="button">+ New</button>
+            <button class="logiq-icon-btn" id="logiq-library-close" aria-label="Back to map">×</button>
+          </header>
+          <div class="logiq-library-body">
+            <div class="logiq-map-list" id="logiq-map-list" role="tabpanel" aria-labelledby="logyq-tab-maps"></div>
+            <div id="logyq-curriculum" role="tabpanel" aria-labelledby="logyq-tab-curriculum" hidden>
+              <div class="logiq-empty"><p>Levels coming soon</p></div>
+            </div>
+          </div>
         </section>
       </div>
       <div class="logiq-backdrop" id="logiq-pin" aria-hidden="true">
@@ -538,6 +560,9 @@
     document.getElementById('logiq-library-close').addEventListener('click', closeLibrary)
     ui.library.addEventListener('click', (event) => { if (event.target === ui.library) closeLibrary() })
     document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: false }))
+    ui.library.querySelectorAll('.logyq-home-tab').forEach((button) => {
+      button.addEventListener('click', () => setHomeTab(button.dataset.shelf))
+    })
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool
@@ -592,6 +617,23 @@
     }
     ui.mobileInput.value = ''
     closeMobilePanel()
+  }
+
+  function setHomeTab(shelf) {
+    const curriculum = shelf === 'curriculum'
+    const library = document.getElementById('logiq-library')
+    if (!library) return
+    library.dataset.shelf = curriculum ? 'curriculum' : 'maps'
+    const mapsBtn = document.getElementById('logyq-tab-maps')
+    const currBtn = document.getElementById('logyq-tab-curriculum')
+    const list = document.getElementById('logiq-map-list')
+    const panel = document.getElementById('logyq-curriculum')
+    mapsBtn?.classList.toggle('is-active', !curriculum)
+    currBtn?.classList.toggle('is-active', curriculum)
+    mapsBtn?.setAttribute('aria-selected', String(!curriculum))
+    currBtn?.setAttribute('aria-selected', String(curriculum))
+    if (list) list.hidden = curriculum
+    if (panel) panel.hidden = !curriculum
   }
 
   function closeMobilePanel() {
@@ -1904,12 +1946,12 @@
     if (text) {
       if (label) text.textContent = label
       text.style.fill = '#374151'
-      text.style.opacity = '1'
+      text.style.opacity = ''
     }
     clone.querySelectorAll('rect:not(.grabzone)').forEach((rect) => {
       rect.style.fill = color || '#ffffff'
       rect.style.stroke = '#e2e8f0'
-      rect.style.opacity = '1'
+      rect.style.opacity = ''
     })
   }
 
@@ -4079,6 +4121,7 @@
   function showLibrary() {
     document.body.classList.add('logyq-home')
     document.body.classList.toggle('logyq-map-open', !!app.hasOpenMap)
+    setHomeTab('maps')
     ui.library.classList.add('is-open')
     ui.library.setAttribute('aria-hidden', 'false')
   }

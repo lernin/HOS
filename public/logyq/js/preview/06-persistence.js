@@ -185,6 +185,7 @@
   function showLibrary() {
     document.body.classList.add('logyq-home')
     document.body.classList.toggle('logyq-map-open', !!app.hasOpenMap)
+    setHomeTab('maps')
     ui.library.classList.add('is-open')
     ui.library.setAttribute('aria-hidden', 'false')
   }

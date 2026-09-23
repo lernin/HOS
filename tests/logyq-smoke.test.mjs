@@ -466,6 +466,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
       offset: window.LOGYQPreview.gestures.fingerOffset(),
       lift: window.LOGYQPreview.gestures.liftPx(),
       previewTransform: document.getElementById('logyq-v162-branch-preview')?.style.transform || '',
+      previewOpacity: getComputedStyle(document.getElementById('logyq-v162-branch-preview')).opacity,
       y: t.y,
     }
   })
@@ -477,6 +478,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.deepEqual(ghost.offset, { x: 0, y: -D })
   assert.ok(Math.abs(ghost.y - beforeHold.y) < 2, `map must stay put on latch, before=${beforeHold.y} during=${ghost.y}`)
   assert.match(ghost.previewTransform, /translate3d\(/)
+  assert.equal(ghost.previewOpacity, '0.55', 'map-card drag ghost uses the Word Bank chip opacity')
   const previewY = Number((ghost.previewTransform.match(/translate3d\([^,]+,\s*([-0-9.]+)px/) || [])[1])
   assert.ok(Number.isFinite(previewY) && Math.abs(previewY - (-D)) < 2, `floating card should pop north by 1.1cm, transform=${ghost.previewTransform}`)
   assert.equal(await page.locator('#logyq-v162-branch-preview .v2-float-node').count(), 0)
@@ -910,6 +912,57 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   await context.close()
 })
 
+test('LOGYQ map-card drag ghost uses the Word Bank chip opacity', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await loadSampleTree(page)
+  const hold = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, parent: node.__data__?.parent?.data?._uid || null }
+  })
+  await page.evaluate(({ x, y }) => {
+    document.getElementById('canvas').dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 77,
+      isPrimary: true, button: 0, buttons: 1, clientX: x, clientY: y,
+    }))
+  }, hold)
+  await page.waitForFunction(() => document.body.classList.contains('v2-branch-drag'))
+  const ghost = await page.evaluate(() => {
+    const preview = document.getElementById('logyq-v162-branch-preview')
+    const chipRule = Array.from(document.styleSheets).flatMap((sheet) => {
+      try { return Array.from(sheet.cssRules || []) } catch (_error) { return [] }
+    }).find((rule) => rule.selectorText === '#logyq-chip-ghost .chip')
+    return {
+      opacity: preview ? getComputedStyle(preview).opacity : '',
+      chip: chipRule?.style?.opacity || '',
+    }
+  })
+  assert.equal(ghost.chip, '0.55')
+  assert.equal(ghost.opacity, ghost.chip, 'map-card ghost must match the chip ghost opacity')
+  await page.evaluate(({ x, y }) => {
+    const canvas = document.getElementById('canvas')
+    canvas.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 77,
+      isPrimary: true, button: 0, buttons: 0, clientX: x, clientY: y,
+    }))
+  }, hold)
+  await page.waitForFunction(() => !document.body.classList.contains('v2-branch-drag'))
+  assert.equal(await page.locator('#logyq-v162-branch-preview').count(), 0)
+  const after = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 03')
+    return node?.__data__?.parent?.data?._uid || null
+  })
+  assert.equal(after, hold.parent, 'releasing the faded ghost must not reparent')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ empty library stays a library, not a chooser or editor', async () => {
   const capture = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
@@ -923,7 +976,20 @@ test('LOGYQ empty library stays a library, not a chooser or editor', async () =>
   await page.waitForSelector('#logiq-library.is-open')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
   assert.equal(await page.locator('#logiq-new-map').count(), 1)
+  assert.equal(await page.locator('#logyq-tab-maps').getAttribute('aria-selected'), 'true')
   assert.match((await page.locator('#logiq-map-list').innerText()), /No maps yet/)
+  assert.equal(await page.locator('#logiq-new-map').isVisible(), true)
+  assert.equal(await page.locator('#logyq-curriculum').isVisible(), false)
+  await page.locator('#logyq-tab-curriculum').click()
+  assert.equal(await page.locator('#logyq-tab-curriculum').getAttribute('aria-selected'), 'true')
+  assert.match(await page.locator('#logyq-curriculum').innerText(), /Levels coming soon/)
+  assert.equal(await page.locator('#logiq-map-list').isVisible(), false)
+  assert.equal(await page.locator('#logiq-new-map').isVisible(), false)
+  assert.equal(await page.locator('#logyq-curriculum .logiq-map-row, #logyq-curriculum [data-level]').count(), 0)
+  await page.locator('#logyq-tab-maps').click()
+  assert.equal(await page.locator('#logyq-tab-maps').getAttribute('aria-selected'), 'true')
+  assert.match((await page.locator('#logiq-map-list').innerText()), /No maps yet/)
+  assert.equal(await page.locator('#logiq-new-map').isVisible(), true)
   await page.waitForTimeout(950)
   assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
   assert.deepEqual(errors, [])

@@ -38,10 +38,23 @@
         </div>
       </section>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
-      <div class="logiq-backdrop logyq-home-screen" id="logiq-library" aria-hidden="true">
+      <div class="logiq-backdrop logyq-home-screen" id="logiq-library" data-shelf="maps" aria-hidden="true">
         <section class="logiq-modal" role="dialog" aria-modal="true" aria-labelledby="logiq-library-title">
-          <header class="logiq-modal-head"><h2 id="logiq-library-title">Your maps</h2><button class="logiq-primary" id="logiq-new-map" type="button">+ New</button><button class="logiq-icon-btn" id="logiq-library-close" aria-label="Back to map">×</button></header>
-          <div class="logiq-library-body"><div class="logiq-map-list" id="logiq-map-list"></div></div>
+          <header class="logiq-modal-head">
+            <div class="logyq-home-tabs" role="tablist" aria-label="Maps home">
+              <button type="button" class="logyq-home-tab is-active" id="logyq-tab-maps" role="tab" aria-selected="true" aria-controls="logiq-map-list" data-shelf="maps">My maps</button>
+              <button type="button" class="logyq-home-tab" id="logyq-tab-curriculum" role="tab" aria-selected="false" aria-controls="logyq-curriculum" data-shelf="curriculum">Curriculum</button>
+            </div>
+            <h2 id="logiq-library-title" class="logyq-sr">Your maps</h2>
+            <button class="logiq-primary" id="logiq-new-map" type="button">+ New</button>
+            <button class="logiq-icon-btn" id="logiq-library-close" aria-label="Back to map">×</button>
+          </header>
+          <div class="logiq-library-body">
+            <div class="logiq-map-list" id="logiq-map-list" role="tabpanel" aria-labelledby="logyq-tab-maps"></div>
+            <div id="logyq-curriculum" role="tabpanel" aria-labelledby="logyq-tab-curriculum" hidden>
+              <div class="logiq-empty"><p>Levels coming soon</p></div>
+            </div>
+          </div>
         </section>
       </div>
       <div class="logiq-backdrop" id="logiq-pin" aria-hidden="true">
@@ -221,6 +234,9 @@
     document.getElementById('logiq-library-close').addEventListener('click', closeLibrary)
     ui.library.addEventListener('click', (event) => { if (event.target === ui.library) closeLibrary() })
     document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: false }))
+    ui.library.querySelectorAll('.logyq-home-tab').forEach((button) => {
+      button.addEventListener('click', () => setHomeTab(button.dataset.shelf))
+    })
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool
@@ -275,6 +291,23 @@
     }
     ui.mobileInput.value = ''
     closeMobilePanel()
+  }
+
+  function setHomeTab(shelf) {
+    const curriculum = shelf === 'curriculum'
+    const library = document.getElementById('logiq-library')
+    if (!library) return
+    library.dataset.shelf = curriculum ? 'curriculum' : 'maps'
+    const mapsBtn = document.getElementById('logyq-tab-maps')
+    const currBtn = document.getElementById('logyq-tab-curriculum')
+    const list = document.getElementById('logiq-map-list')
+    const panel = document.getElementById('logyq-curriculum')
+    mapsBtn?.classList.toggle('is-active', !curriculum)
+    currBtn?.classList.toggle('is-active', curriculum)
+    mapsBtn?.setAttribute('aria-selected', String(!curriculum))
+    currBtn?.setAttribute('aria-selected', String(curriculum))
+    if (list) list.hidden = curriculum
+    if (panel) panel.hidden = !curriculum
   }
 
   function closeMobilePanel() {

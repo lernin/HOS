@@ -1229,12 +1229,12 @@
     if (text) {
       if (label) text.textContent = label
       text.style.fill = '#374151'
-      text.style.opacity = '1'
+      text.style.opacity = ''
     }
     clone.querySelectorAll('rect:not(.grabzone)').forEach((rect) => {
       rect.style.fill = color || '#ffffff'
       rect.style.stroke = '#e2e8f0'
-      rect.style.opacity = '1'
+      rect.style.opacity = ''
     })
   }
 
