@@ -126,6 +126,104 @@ test('LOGYQ blank drafts are untitled empty roots with no children', () => {
   assert.equal(maps.nextUntitledName(['untitled 4', 'Untitled 1']), 'Untitled 2')
 })
 
+test('LOGYQ remote sync prefers a newer row and holds an open rename', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/01-helpers.js', import.meta.url), 'utf8')
+  const preview = {}
+  const maps = new Function('preview', 'DEFAULT_NAME', `${source}; return preview.maps;`)(preview, 'Untitled map')
+  const acked = maps.contentKey({ name: 'Sky', _uid: 'root' }, [])
+  const remote = maps.contentKey({ name: 'Storm', _uid: 'root' }, [])
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-22T00:00:00.000Z',
+    localContent: acked,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: false,
+  }).action, 'ignore')
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: remote,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: false,
+  }).action, 'ack')
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: acked,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: false,
+  }).action, 'apply')
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: acked,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: true,
+  }).action, 'hold')
+  const typed = maps.contentKey({ name: 'Hail', _uid: 'root' }, [])
+  assert.equal(maps.planRemoteSync({
+    localAckAt: '2026-09-22T00:00:00.000Z',
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: typed,
+    ackedContent: acked,
+    remoteContent: remote,
+    editing: false,
+  }).action, 'merge')
+  assert.equal(maps.planRemoteSync({
+    localAckAt: null,
+    remoteUpdatedAt: '2026-09-23T00:00:00.000Z',
+    localContent: typed,
+    ackedContent: '',
+    remoteContent: remote,
+    editing: false,
+  }).action, 'ignore')
+})
+
+test('LOGYQ tree merge keeps each side’s untouched cards and lets Enter win one field', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/01-helpers.js', import.meta.url), 'utf8')
+  const preview = {}
+  const maps = new Function('preview', 'DEFAULT_NAME', `${source}; return preview.maps;`)(preview, 'Untitled map')
+  const acked = {
+    name: 'Sky',
+    _uid: 'root',
+    children: [
+      { name: 'Cloud', _uid: 'a' },
+      { name: 'Wind', _uid: 'b' },
+    ],
+  }
+  const local = {
+    name: 'Sky',
+    _uid: 'root',
+    children: [
+      { name: 'Hail', _uid: 'a' },
+      { name: 'Wind', _uid: 'b' },
+    ],
+  }
+  const remote = {
+    name: 'Sky',
+    _uid: 'root',
+    color: '#bae6fd',
+    children: [
+      { name: 'Squall', _uid: 'a' },
+      { name: 'Gust', _uid: 'b' },
+      { name: 'Rain', _uid: 'c' },
+    ],
+  }
+  const merged = maps.mergeMapTrees({ acked, local, remote, localWinsUids: ['a'] })
+  assert.equal(merged.children.find((node) => node._uid === 'a').name, 'Hail')
+  assert.equal(merged.children.find((node) => node._uid === 'b').name, 'Gust')
+  assert.equal(merged.children.find((node) => node._uid === 'c').name, 'Rain')
+  assert.equal(merged.color, '#bae6fd')
+  const remoteWins = maps.mergeMapTrees({ acked, local, remote, localWinsUids: [] })
+  assert.equal(remoteWins.children.find((node) => node._uid === 'a').name, 'Squall')
+  assert.deepEqual(maps.mergeWordBank(['alpha'], ['alpha', 'beta'], ['alpha']), ['alpha', 'beta'])
+  assert.deepEqual(maps.mergeWordBank(['alpha'], ['local'], ['remote']), ['remote'])
+})
+
 test('GIQ and JSON import parsing keep v161 normalization rules', () => {
   const { tryParsePureJSON, tryParseGIQ, parseIncoming } = loadTreeHelpers()
   assert.deepEqual(tryParsePureJSON('{"name":"Root","children":[{"name":"Child"}]}'), {

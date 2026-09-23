@@ -1,5 +1,9 @@
 # LOGYQ changelog (intentional experiment deltas)
 
+## Map sync preview
+
+- **Open maps follow `logiq_maps.updated_at`.** A newer database row updates the canvas when no rename field is open. A save of an existing map checks that stamp first and does not post a stale full tree over it. Mid-rename shows “Database change came in.” Enter keeps the typed name; the bubble takes the remote value. No schema change. Thekonym device edits stay local.
+
 LOGYQ is an isolated maintainability copy. After Wave 4, some v161 oddities were dropped on purpose so layout/structure could sit on a single `logyq` bag. Production LOGiQ is unchanged.
 
 ## Wave 4
