@@ -676,22 +676,41 @@ svg.delete-intent g.links path.link.is-parent-link {
     padding: 0;
     background: transparent;
     pointer-events: none;
+    opacity: 0;
     transition: none !important;
     transform: none;
   }
+  body.logyq-mobile-v162 .node-edit-stack.is-placed{
+    opacity: 1;
+  }
   body.logyq-mobile-v162 .node-edit-cancel{
     pointer-events: auto;
-    width: 28px;
-    height: 28px;
-    margin: 0 0 6px 10px;
+    position: relative;
+    z-index: 1;
+    width: 44px;
+    height: 44px;
+    margin: 0 0 9px 13px;
     padding: 0;
     border: 0;
     border-radius: 999px;
-    background: #fff;
+    background: transparent;
     color: #111827;
-    box-shadow: 0 1px 4px rgba(15, 23, 42, .22);
-    font: 600 18px/28px system-ui, sans-serif;
+    box-shadow: none;
+    font: 600 20px/44px system-ui, sans-serif;
     text-align: center;
+    touch-action: manipulation;
+  }
+  body.logyq-mobile-v162 .node-edit-cancel::before{
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(15, 23, 42, .28);
+    z-index: -1;
   }
   body.logyq-mobile-v162 .node-edit-dock{
     pointer-events: auto;
@@ -709,7 +728,7 @@ svg.delete-intent g.links path.link.is-parent-link {
     border: 0;
     border-top: 1px solid rgba(15, 23, 42, .12);
     border-radius: 0;
-    box-shadow: none;
+    box-shadow: 0 -2px 6px rgba(15, 23, 42, .2), 0 -14px 36px rgba(15, 23, 42, .42);
   }
   body.logyq-mobile-v162 .node-edit-dock .node-edit-input{
     position: relative;

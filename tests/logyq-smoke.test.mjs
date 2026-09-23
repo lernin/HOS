@@ -3915,6 +3915,8 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   await touch('pointerdown', fruit.x, fruit.y, 12)
   await touch('pointerup', fruit.x, fruit.y, 12)
   await page.waitForSelector('.node-edit-stack')
+  assert.equal(await page.evaluate(() => document.querySelector('.node-edit-stack').classList.contains('is-placed')), false, 'bar stays hidden while the keyboard rises')
+  await page.waitForSelector('.node-edit-stack.is-placed', { timeout: 2000 })
   const opened = await page.evaluate(() => {
     const input = document.querySelector('.node-edit-input')
     const dock = document.querySelector('.node-edit-dock')
@@ -3938,6 +3940,10 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
       cancel: cancel?.getAttribute('aria-label') || '',
       crossAbove: cross.bottom <= box.top + 1,
       crossRound: getComputedStyle(cancel).borderRadius,
+      crossLeft: cross.left,
+      crossWidth: cross.width,
+      shadow: dockStyle.boxShadow,
+      placed: document.querySelector('.node-edit-stack').classList.contains('is-placed'),
     }
   })
   assert.equal(opened.uid, fruit.uid)
@@ -3952,6 +3958,10 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   assert.equal(opened.cancel, 'Cancel rename')
   assert.equal(opened.crossAbove, true)
   assert.equal(opened.crossRound, '999px')
+  assert.equal(opened.placed, true)
+  assert.ok(opened.crossLeft >= 12, `X must sit in from the screen edge, left=${opened.crossLeft}`)
+  assert.ok(opened.crossWidth >= 44, `X hit target must be at least 44px, width=${opened.crossWidth}`)
+  assert.ok(opened.shadow && opened.shadow !== 'none', 'bar shadow must separate it from the map')
   await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/edit_rename_bar.png' })
   sameCamera(before, await view(), 'double-tap')
   await page.waitForTimeout(280)
@@ -4213,6 +4223,8 @@ test('LOGYQ double-tap renames only the card under the finger', async () => {
     await touch('pointerdown', card.x, card.y, pointerId + 1)
     await touch('pointerup', card.x, card.y, pointerId + 1)
     await page.waitForSelector('.node-edit-input')
+    assert.equal(await page.evaluate(() => document.querySelector('.node-edit-stack')?.classList.contains('is-placed') === true), false, 'bar waits for the keyboard')
+    await page.waitForSelector('.node-edit-stack.is-placed', { timeout: 2000 })
     return card
   }
 
@@ -4279,7 +4291,15 @@ test('LOGYQ double-tap renames only the card under the finger', async () => {
   const foodEdit = await doubleTap('Food', 51)
   assert.equal(await page.evaluate(() => document.querySelector('.node-edit-input').value), 'Food')
   await page.locator('.node-edit-input').fill('Nope')
-  await page.locator('.node-edit-cancel').click()
+  await page.evaluate(() => {
+    const cancel = document.querySelector('.node-edit-cancel')
+    const rect = cancel.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const base = { bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 7, isPrimary: true, button: 0, clientX: x, clientY: y }
+    cancel.dispatchEvent(new PointerEvent('pointerdown', { ...base, buttons: 1 }))
+    cancel.dispatchEvent(new PointerEvent('pointerup', { ...base, buttons: 0 }))
+  })
   await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
   assert.equal(await page.evaluate((uid) => {
     return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name

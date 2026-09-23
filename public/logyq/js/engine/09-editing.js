@@ -6,17 +6,26 @@
  // The phone field is a full-width bar on the keyboard. It never follows the card.
  // Keyboard inset is the covered height only. Subtracting the visual
  // viewport's scroll offset made the bar hop while the keyboard rose.
+ // The bar stays hidden until that inset has been still, or until
+ // PHONE_BAR_CAP_MS, so it appears once already flush with the keyboard.
+ const PHONE_BAR_QUIET_MS = 80
+ const PHONE_BAR_CAP_MS = 500
+ function keyboardInset(){
+  const vv = window.visualViewport
+  return vv ? Math.max(0, Math.round(window.innerHeight - vv.height)) : 0
+ }
+ function applyMobileInset(stack, inset){
+  if (stack._logyqInset === inset && stack.classList.contains('is-placed')) return
+  stack._logyqInset = inset
+  stack.style.bottom = '0px'
+  stack.style.transform = inset ? 'translate3d(0,' + (-inset) + 'px,0)' : 'none'
+ }
  function dockMobileEditor(){
   const { state } = logyq
   const el = state.editorEl
   const stack = el?.closest?.('.node-edit-stack')
-  if (!stack) return
-  const vv = window.visualViewport
-  const inset = vv ? Math.max(0, Math.round(window.innerHeight - vv.height)) : 0
-  if (stack._logyqInset === inset) return
-  stack._logyqInset = inset
-  stack.style.bottom = '0px'
-  stack.style.transform = inset ? 'translate3d(0,' + (-inset) + 'px,0)' : 'none'
+  if (!stack || !stack.classList.contains('is-placed')) return
+  applyMobileInset(stack, keyboardInset())
  }
 
  function updateNodeEditorPosition(){
@@ -89,6 +98,7 @@
     if(!state.editingUid) return;
     const uid = state.editorEl?.dataset?.editUid || state.editingUid; const el = state.editorEl;
     if (state._editFocusTimer) { try { clearTimeout(state._editFocusTimer); } catch (_e) {} state._editFocusTimer = 0; }
+    if (state._editPlaceTimer) { try { clearTimeout(state._editPlaceTimer); } catch (_e) {} state._editPlaceTimer = 0; }
     if (typeof state._editViewportOff === 'function') { try { state._editViewportOff(); } catch (_e) {} state._editViewportOff = null; }
     state.editingUid = null; state.editorEl = null;
     if(el && el.parentNode && !el.closest?.('.node-edit-stack')) el.parentNode.removeChild(el);
@@ -163,11 +173,34 @@
       stack.appendChild(cancel);
       stack.appendChild(dock);
       document.body.appendChild(stack);
-      const armCancel = function(event){ event.preventDefault(); };
+      // preventDefault on touchstart keeps the field focused, but it also
+      // swallows the click. Close on pointerup / touchend, and keep click
+      // for a plain mouse activation.
+      let cancelArmed = false;
+      const armCancel = function(event){
+        if (event.button != null && event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        cancelArmed = true;
+      };
+      const fireCancel = function(event){
+        if (!cancelArmed) return;
+        cancelArmed = false;
+        event.preventDefault();
+        event.stopPropagation();
+        closeNodeEditor(false, true);
+      };
       cancel.addEventListener("pointerdown", armCancel);
       cancel.addEventListener("mousedown", armCancel);
       cancel.addEventListener("touchstart", armCancel, { passive: false });
-      cancel.addEventListener("click", function(){ closeNodeEditor(false, true); });
+      cancel.addEventListener("pointerup", fireCancel);
+      cancel.addEventListener("touchend", fireCancel, { passive: false });
+      cancel.addEventListener("pointercancel", function(){ cancelArmed = false; });
+      cancel.addEventListener("click", function(event){
+        event.preventDefault();
+        event.stopPropagation();
+        closeNodeEditor(false, true);
+      });
     } else {
       document.body.appendChild(input);
     }
@@ -211,12 +244,45 @@
     if (mobileQuietEdit()) {
       const vv = window.visualViewport;
       let dockFrame = 0;
+      let lastInset = keyboardInset();
+      let lastChange = performance.now();
+      const started = lastChange;
+      const placeTick = () => {
+        state._editPlaceTimer = 0;
+        if (state.editingUid !== uid) return;
+        const stack = input.closest?.('.node-edit-stack');
+        if (!stack || stack.classList.contains('is-placed')) {
+          dockMobileEditor();
+          return;
+        }
+        const inset = keyboardInset();
+        const now = performance.now();
+        if (inset !== lastInset) {
+          lastInset = inset;
+          lastChange = now;
+        }
+        const quiet = now - lastChange >= PHONE_BAR_QUIET_MS;
+        const capped = now - started >= PHONE_BAR_CAP_MS;
+        // A zero inset is the gap under a rising keyboard, not a resting spot.
+        if ((inset > 0 && quiet) || capped) {
+          stack.classList.add('is-placed');
+          applyMobileInset(stack, inset);
+          return;
+        }
+        state._editPlaceTimer = setTimeout(placeTick, 40);
+      };
+      state._editPlaceTimer = setTimeout(placeTick, 40);
       const onViewport = () => {
         if (state.editingUid !== uid) return;
         if (dockFrame) return;
         dockFrame = requestAnimationFrame(() => {
           dockFrame = 0;
           if (state.editingUid !== uid) return;
+          const stack = input.closest?.('.node-edit-stack');
+          if (stack && !stack.classList.contains('is-placed')) {
+            if (!state._editPlaceTimer) state._editPlaceTimer = setTimeout(placeTick, 0);
+            return;
+          }
           dockMobileEditor();
         });
       };
