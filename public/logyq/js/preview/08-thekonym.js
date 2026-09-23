@@ -467,6 +467,15 @@
       else document.querySelector('#settingsBackdrop .settings-modal')?.append(row)
       row.querySelector('input').addEventListener('change', (event) => setThekonymMode(event.target.checked))
     }
+    if (!document.getElementById('logyq-thekonym-type-lab')) {
+      const lab = document.createElement('div')
+      lab.className = 'settings-row'
+      lab.id = 'logyq-thekonym-type-lab'
+      lab.innerHTML = '<label for="logyq-thekonym-type-link"><strong>Onym type lab</strong></label><div style="display:flex;align-items:center;gap:8px;min-width:160px;"><a class="btn" id="logyq-thekonym-type-link" href="/logyq/thekonym-type.html">Open</a></div>'
+      const toggleRow = document.getElementById('logyq-thekonym-settings')
+      if (toggleRow) toggleRow.insertAdjacentElement('afterend', lab)
+      else document.querySelector('#settingsBackdrop .settings-modal')?.append(lab)
+    }
     const tools = document.querySelector('#logiq-mobile-panel .logiq-mobile-tools')
     if (tools && !document.getElementById('logyq-thekonym-mobile')) {
       const button = document.createElement('button')
@@ -479,6 +488,14 @@
         closeMobilePanel()
       })
       tools.append(button)
+    }
+    if (tools && !document.getElementById('logyq-thekonym-type-mobile')) {
+      const labButton = document.createElement('button')
+      labButton.type = 'button'
+      labButton.id = 'logyq-thekonym-type-mobile'
+      labButton.textContent = 'Onym type lab'
+      labButton.addEventListener('click', () => { window.location.href = '/logyq/thekonym-type.html' })
+      tools.append(labButton)
     }
     if (!document.getElementById('logyq-thekonym-browser')) {
       const browser = document.createElement('section')

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Thekonym type lab · LOGYQ</title>
+<meta name="theme-color" content="#d9f99d" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Fraunces:SOFT,opsz,wght@0..100,9..144,400..500&family=Inter:wght@500;600&family=Libre+Baskerville:wght@400&family=Libre+Caslon+Display&family=Literata:opsz,wght@7..72,400..500&family=Lora:wght@400;500&family=Newsreader:opsz,wght@6..72,400..500&family=Source+Serif+4:opsz,wght@8..60,400..500&family=Spectral:wght@400;500&display=swap" />
+<style>
+  :root {
+    --onym-family: Fraunces, Georgia, serif;
+    --onym-weight: 400;
+    --onym-variation: 'SOFT' 100, 'opsz' 18, 'WONK' 0;
+    --ink: #1c3329;
+    --essence: #64748b;
+    --line: #e2e8f0;
+    --green: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    color: #1e293b;
+    background: #f8fafc;
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: max(8px, env(safe-area-inset-top)) 12px 8px;
+    background: rgba(255,255,255,.96);
+    border-bottom: 1px solid var(--line);
+  }
+  header a {
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    color: #334155;
+    text-decoration: none;
+    font-size: 18px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+  }
+  header p {
+    margin: 1px 0 0;
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .stage {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    position: relative;
+    background: radial-gradient(circle at center, hsl(110, 100%, 88%), #eca7e7, #f3f598);
+    background-size: 400% 400%;
+    animation: swirl 270s linear infinite;
+    padding: 14px 14px 18px;
+  }
+  @keyframes swirl {
+    0% { background-position: 0% 50%; filter: hue-rotate(0deg); }
+    50% { background-position: 100% 50%; filter: hue-rotate(180deg); }
+    100% { background-position: 0% 50%; filter: hue-rotate(360deg); }
+  }
+  .zoom {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin: 0 auto 12px;
+  }
+  .zoom button, .weights button, .face {
+    font-family: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .zoom button, .weights button {
+    min-width: 44px;
+    min-height: 36px;
+    border: 1px solid rgba(255,255,255,.8);
+    border-radius: 999px;
+    background: rgba(255,255,255,.88);
+    color: #334155;
+    font-weight: 650;
+    font-size: 13px;
+    box-shadow: 0 6px 16px rgba(15,23,42,.08);
+  }
+  .zoom button[aria-pressed="true"], .weights button[aria-pressed="true"], .face[aria-pressed="true"] {
+    background: #f0fdf4;
+    border-color: var(--green);
+    color: #14532d;
+    box-shadow: 0 0 0 2px rgba(22,163,74,.25);
+  }
+  .sizer { position: relative; margin: 0 auto; }
+  .board {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: min(520px, calc(100vw - 28px));
+    transform-origin: top left;
+  }
+  .pair {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 18px 22px;
+  }
+  figure {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  figcaption {
+    margin: 0;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    text-shadow: 0 1px 0 rgba(255,255,255,.45);
+  }
+  figcaption small {
+    display: block;
+    margin-top: 1px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: #475569;
+    text-align: center;
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 6px 8px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow:
+      0 1px 3px rgba(0,0,0,.12),
+      0 1px 2px rgba(0,0,0,.24);
+  }
+  .card.large {
+    width: min(300px, calc(100vw - 48px));
+    height: 148px;
+    border-radius: 20px;
+    gap: 8px;
+    padding: 14px 18px;
+    box-shadow:
+      0 10px 24px rgba(15,23,42,.12),
+      0 2px 6px rgba(0,0,0,.16);
+  }
+  .card.small {
+    width: 140px;
+    height: 63px;
+    border-radius: 10px;
+  }
+  .onym {
+    display: block;
+    max-width: 100%;
+    color: var(--ink);
+    font-family: var(--onym-family);
+    font-weight: var(--onym-weight);
+    font-variation-settings: var(--onym-variation);
+    font-optical-sizing: none;
+    font-synthesis: none;
+    line-height: 1.05;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .card.large .onym { font-size: 40px; }
+  .card.small .onym { font-size: 22px; }
+  .essence {
+    display: block;
+    max-width: 100%;
+    color: var(--essence);
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 500;
+    font-variation-settings: normal;
+    font-optical-sizing: none;
+    line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .card.large .essence { font-size: 18px; }
+  .card.small .essence { font-size: 13px; }
+  .more {
+    margin-top: 18px;
+  }
+  .more > p {
+    margin: 0 0 8px;
+    text-align: center;
+    color: #334155;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .strip {
+    display: flex;
+    justify-content: flex-start;
+    gap: 10px;
+    width: 100%;
+    overflow-x: auto;
+    padding: 0 2px 4px;
+  }
+  .note {
+    margin: 14px auto 0;
+    max-width: 36em;
+    text-align: center;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 550;
+    line-height: 1.35;
+  }
+  .sheet {
+    flex: 0 0 auto;
+    background: #fff;
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -8px 24px rgba(15,23,42,.06);
+    padding: 10px 12px max(12px, env(safe-area-inset-bottom));
+  }
+  .sheet-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .sheet-row strong {
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .sheet-row span {
+    color: #64748b;
+    font-size: 12px;
+    font-weight: 550;
+  }
+  .weights { display: flex; gap: 6px; }
+  .weights button:disabled {
+    opacity: .38;
+    cursor: not-allowed;
+  }
+  .faces {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 2px 4px;
+    scroll-snap-type: x proximity;
+  }
+  .face {
+    scroll-snap-align: start;
+    flex: 0 0 auto;
+    min-width: 132px;
+    min-height: 64px;
+    padding: 8px 12px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #fff;
+    text-align: left;
+    color: #1e293b;
+  }
+  .face b {
+    display: block;
+    font-size: 16px;
+    font-weight: 500;
+    line-height: 1.15;
+    font-synthesis: none;
+    font-optical-sizing: none;
+  }
+  .face small {
+    display: block;
+    margin-top: 3px;
+    color: #64748b;
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    font-variation-settings: normal;
+  }
+  .face[aria-pressed="true"] small { color: #166534; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/logyq/" aria-label="Back to LOGYQ">←</a>
+  <div>
+    <h1>Thekonym type lab</h1>
+    <p id="status">Onym face only. Essence stays the map sans.</p>
+  </div>
+</header>
+
+<main class="stage">
+  <div class="zoom" role="group" aria-label="Preview zoom">
+    <button type="button" data-zoom="1" aria-pressed="true">S</button>
+    <button type="button" data-zoom="1.2" aria-pressed="false">M</button>
+    <button type="button" data-zoom="1.5" aria-pressed="false">L</button>
+  </div>
+  <div class="sizer" id="sizer">
+  <div class="board" id="board">
+    <div class="pair" id="pair"></div>
+    <div class="more">
+      <p>More map-size samples</p>
+      <div class="strip" id="strip"></div>
+    </div>
+    <p class="note">Type samples only. These strings are not Thekonym definitions. Zoom changes size, not the onym face.</p>
+  </div>
+  </div>
+</main>
+
+<section class="sheet" aria-label="Onym face">
+  <div class="sheet-row">
+    <strong>Onym weight</strong>
+    <div class="weights" role="group" aria-label="Onym weight">
+      <button type="button" data-weight="400" aria-pressed="true">Regular</button>
+      <button type="button" data-weight="500" aria-pressed="false">Medium</button>
+    </div>
+  </div>
+  <div class="sheet-row">
+    <strong id="face-label">Fraunces Soft</strong>
+    <span id="face-note">Recommended</span>
+  </div>
+  <div class="faces" id="faces" role="listbox" aria-label="Onym fonts"></div>
+</section>
+
+<script>
+(() => {
+  const STORE = 'logyq_onym_type_lab_v1'
+  const FONTS = [
+    { id: 'fraunces', label: 'Fraunces Soft', note: 'Recommended', family: 'Fraunces', variation: "'SOFT' 100, 'opsz' 18, 'WONK' 0", weights: [400, 500] },
+    { id: 'literata', label: 'Literata', note: 'Text serif', family: 'Literata', variation: "'opsz' 16", weights: [400, 500] },
+    { id: 'source-serif', label: 'Source Serif 4', note: 'Text serif', family: 'Source Serif 4', variation: "'opsz' 16", weights: [400, 500] },
+    { id: 'lora', label: 'Lora', note: 'Text serif', family: 'Lora', variation: 'normal', weights: [400, 500] },
+    { id: 'newsreader', label: 'Newsreader', note: 'Text serif', family: 'Newsreader', variation: "'opsz' 16", weights: [400, 500] },
+    { id: 'baskerville', label: 'Libre Baskerville', note: 'Regular only', family: 'Libre Baskerville', variation: 'normal', weights: [400] },
+    { id: 'cormorant', label: 'Cormorant Garamond', note: 'Contrast — thin small', family: 'Cormorant Garamond', variation: 'normal', weights: [400, 500] },
+    { id: 'current', label: 'Current', note: 'Libre Caslon Display', family: 'Libre Caslon Display', variation: 'normal', weights: [400] },
+    { id: 'spectral', label: 'Spectral', note: 'Soft readable', family: 'Spectral', variation: 'normal', weights: [400, 500] },
+  ]
+  const HEROES = [
+    { role: 'large', kicker: 'Large · short', onym: 'Symbasonym', essence: 'Agreement', max: 40, min: 26 },
+    { role: 'small', kicker: 'Small · crowded', onym: 'Ergon_Praxon', essence: 'action(s)', max: 22, min: 11 },
+  ]
+  const MORE = [
+    { onym: 'Anthroponym', essence: 'analysis' },
+    { onym: 'Historionym', essence: 'Agreement' },
+    { onym: 'Analysonym', essence: 'action(s)' },
+  ]
+
+  const root = document.documentElement
+  const pair = document.getElementById('pair')
+  const strip = document.getElementById('strip')
+  const faces = document.getElementById('faces')
+  const board = document.getElementById('board')
+  const status = document.getElementById('status')
+  const faceLabel = document.getElementById('face-label')
+  const faceNote = document.getElementById('face-note')
+
+  function readStore() {
+    try { return JSON.parse(localStorage.getItem(STORE) || '{}') } catch (_error) { return {} }
+  }
+  const saved = readStore()
+  const state = {
+    font: FONTS.some((font) => font.id === saved.font) ? saved.font : 'fraunces',
+    weight: saved.weight === 500 ? 500 : 400,
+    zoom: [1, 1.2, 1.5].includes(Number(saved.zoom)) ? Number(saved.zoom) : 1,
+  }
+
+  function card(role, onym, essence) {
+    const figure = document.createElement('figure')
+    figure.innerHTML = `<figcaption>${role === 'large' ? 'Large · short' : 'Small · crowded'}<small data-fit></small></figcaption><div class="card ${role}" data-role="${role}"><span class="onym">${onym}</span><span class="essence">${essence}</span></div>`
+    return figure
+  }
+
+  HEROES.forEach((item) => pair.append(card(item.role, item.onym, item.essence)))
+  MORE.forEach((item) => {
+    const figure = document.createElement('figure')
+    figure.innerHTML = `<figcaption>Map size<small data-fit></small></figcaption><div class="card small"><span class="onym">${item.onym}</span><span class="essence">${item.essence}</span></div>`
+    strip.append(figure)
+  })
+
+  FONTS.forEach((font) => {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'face'
+    button.dataset.font = font.id
+    button.setAttribute('role', 'option')
+    button.innerHTML = `<b style="font-family:'${font.family}',Georgia,serif;font-variation-settings:${font.variation};font-weight:400">${font.label}</b><small>${font.note}</small>`
+    button.addEventListener('click', () => {
+      state.font = font.id
+      apply()
+      button.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
+    })
+    faces.append(button)
+  })
+
+  document.querySelectorAll('.zoom button').forEach((button) => {
+    button.addEventListener('click', () => {
+      state.zoom = Number(button.dataset.zoom)
+      apply()
+    })
+  })
+  document.querySelectorAll('.weights button').forEach((button) => {
+    button.addEventListener('click', () => {
+      if (button.disabled) return
+      state.weight = Number(button.dataset.weight)
+      apply()
+    })
+  })
+
+  function fit(el, max, min) {
+    const cardEl = el.closest('.card')
+    const limit = Math.max(24, cardEl.clientWidth - 16)
+    let size = max
+    el.style.fontSize = `${size}px`
+    while (size > min && el.scrollWidth > limit + 0.5) {
+      size = Math.round((size - 0.5) * 10) / 10
+      el.style.fontSize = `${size}px`
+    }
+    const caption = cardEl.parentElement?.querySelector('[data-fit]')
+    if (caption) caption.textContent = `map ${size}px`
+  }
+
+  function fitAll() {
+    document.querySelectorAll('.card.large .onym').forEach((el) => fit(el, 40, 26))
+    document.querySelectorAll('.card.small .onym').forEach((el) => fit(el, 22, 11))
+  }
+
+  function apply() {
+    const font = FONTS.find((item) => item.id === state.font) || FONTS[0]
+    if (!font.weights.includes(state.weight)) state.weight = font.weights[0]
+    root.style.setProperty('--onym-family', `'${font.family}', Georgia, serif`)
+    root.style.setProperty('--onym-weight', String(state.weight))
+    root.style.setProperty('--onym-variation', font.variation)
+    board.style.transform = `scale(${state.zoom})`
+    const sizer = document.getElementById('sizer')
+    sizer.style.width = `${Math.ceil(board.offsetWidth * state.zoom)}px`
+    sizer.style.height = `${Math.ceil(board.offsetHeight * state.zoom)}px`
+    document.querySelectorAll('.zoom button').forEach((button) => {
+      button.setAttribute('aria-pressed', String(Number(button.dataset.zoom) === state.zoom))
+    })
+    document.querySelectorAll('.weights button').forEach((button) => {
+      const weight = Number(button.dataset.weight)
+      button.disabled = !font.weights.includes(weight)
+      button.setAttribute('aria-pressed', String(weight === state.weight))
+    })
+    document.querySelectorAll('.face').forEach((button) => {
+      const on = button.dataset.font === font.id
+      button.setAttribute('aria-pressed', String(on))
+      button.setAttribute('aria-selected', String(on))
+    })
+    const weightName = state.weight === 500 ? 'medium' : 'regular'
+    faceLabel.textContent = font.label
+    faceNote.textContent = font.weights.includes(500) ? font.note : `${font.note} · regular only`
+    status.textContent = `${font.label} · ${weightName}`
+    try { localStorage.setItem(STORE, JSON.stringify(state)) } catch (_error) {}
+    fitAll()
+  }
+
+  apply()
+  document.fonts?.ready?.then(() => { fitAll() })
+  window.addEventListener('resize', fitAll)
+})()
+</script>
+</body>
+</html>
