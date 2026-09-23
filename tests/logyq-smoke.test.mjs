@@ -3421,3 +3421,160 @@ test('LOGYQ repeated flicks keep the camera still and the touched card', async (
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ ends a cast when nothing is left on delete or Word Bank', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [
+        { name: 'A', children: [{ name: 'A1' }, { name: 'C' }] },
+        { name: 'B' },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'A')
+    const rect = node?.getBoundingClientRect()
+    return rect && rect.width > 20 && rect.bottom < window.innerHeight
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function castKids() {
+    const thumb = await page.evaluate(() => {
+      const y = window.innerHeight * 0.84
+      const canvas = document.getElementById('canvas').getBoundingClientRect()
+      for (let x = canvas.left + 8; x < canvas.right - 8; x += 14) {
+        const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+        if (!hit) return { x, y }
+      }
+      return { x: canvas.left + 12, y }
+    })
+    const card = await face('A')
+    await touch('pointerdown', thumb.x, thumb.y, 91)
+    await touch('pointerdown', card.x, card.y, 92)
+    await touch('pointermove', card.x, card.y + 70, 92)
+    await touch('pointerup', card.x, card.y + 70, 92)
+    await touch('pointerup', thumb.x, thumb.y, 91)
+    await page.waitForFunction(() => {
+      const mercy = window.LOGYQPreview.gestures.smite.mercy
+      return mercy && mercy.marks.size >= 2
+    })
+  }
+
+  async function tap(name, pointerId) {
+    const point = await face(name)
+    await touch('pointerdown', point.x, point.y, pointerId)
+    await touch('pointerup', point.x, point.y, pointerId)
+    await page.waitForTimeout(40)
+  }
+
+  async function chrome() {
+    return page.evaluate(() => ({
+      mercy: !!window.LOGYQPreview.gestures.smite.mercy,
+      washes: document.querySelectorAll('rect.logyq-smite-wash').length,
+      clocks: document.querySelectorAll('path.logyq-smite-clock').length,
+      names: window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name),
+    }))
+  }
+
+  await castKids()
+  await tap('A1', 93)
+  await tap('A1', 94)
+  let mid = await chrome()
+  assert.equal(mid.mercy, true, 'one kid still on delete keeps the cast')
+  await tap('C', 95)
+  await tap('C', 96)
+  let cleared = await chrome()
+  assert.equal(cleared.mercy, false, 'the last kid leaving delete or Word Bank ends the cast')
+  assert.equal(cleared.washes, 0)
+  assert.equal(cleared.clocks, 0)
+  await page.waitForTimeout(250)
+  cleared = await chrome()
+  assert.equal(cleared.mercy, false, 'the timer does not start again after a white-only cast')
+  assert.equal(cleared.clocks, 0)
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_white_cleared.png' })
+
+  await castKids()
+  await tap('A1', 97)
+  await tap('A1', 98)
+  const flick = await face('C')
+  await touch('pointerdown', flick.x, flick.y, 99)
+  await touch('pointermove', flick.x, flick.y + 40, 99)
+  await page.waitForTimeout(16)
+  await touch('pointerup', flick.x, flick.y + 74, 99)
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'C'))
+  const afterFlick = await chrome()
+  assert.equal(afterFlick.mercy, false, 'a flick that leaves only white cards ends the cast')
+  assert.equal(afterFlick.washes, 0)
+  assert.equal(afterFlick.clocks, 0)
+  assert.ok(afterFlick.names.includes('A1'))
+
+  await page.evaluate(() => {
+    const smite = window.LOGYQPreview.gestures.smite
+    if (smite.raf) cancelAnimationFrame(smite.raf)
+    smite.raf = 0
+    const a = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
+    const a1 = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A1')
+    const mercy = {
+      marks: new Map([[a.data._uid, 'normal'], [a1.data._uid, 'normal']]),
+      castUid: a.data._uid,
+      zone: 'middle',
+      direction: 'down',
+      remaining: 9000,
+      lastTick: performance.now(),
+      interacting: false,
+      committing: false,
+    }
+    smite.mercies = [mercy]
+    smite.mercy = mercy
+  })
+  await tap('A', 100)
+  const afterParent = await chrome()
+  assert.equal(afterParent.mercy, false, 'tapping the clock card clears a white-only cast')
+  assert.equal(afterParent.washes, 0)
+  assert.equal(afterParent.clocks, 0)
+  await page.waitForTimeout(200)
+  assert.equal((await chrome()).mercy, false)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})

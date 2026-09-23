@@ -511,11 +511,14 @@
 
   // Root tap steps the cast down. Delete becomes Word Bank for the root and
   // every descendant still on delete. Word Bank and out stay put. A root
-  // that is already Word Bank ends the nomination.
+  // that is already Word Bank ends the nomination. So does a clock tap
+  // once nobody is left on delete or Word Bank — white outlines are not
+  // a fate, and the cast must not keep throbbing.
   function smiteRootStep(marks, castUid, descendantUids) {
     const entries = smiteTicketEntries(marks)
     const own = smiteMarkOf(marks, castUid)
     if (own === 'amber') return { action: 'clear', entries: [] }
+    if (!smiteHasNominated(marks)) return { action: 'clear', entries: [] }
     if (own !== 'red') return { action: 'noop', entries }
     const kids = new Set(descendantUids || [])
     return {
@@ -2166,16 +2169,19 @@
     try {
       const now = win.performance?.now?.() || Date.now()
       const due = []
+      const idle = []
       for (const mercy of smite.mercies) {
         if (!mercy || mercy.committing) continue
+        if (!smiteHasNominated(mercy.marks)) {
+          idle.push(mercy)
+          continue
+        }
         const dt = Math.max(0, now - mercy.lastTick)
         mercy.lastTick = now
-        const nominated = smiteHasNominated(mercy.marks)
-        // Original-only casts stay alive for re-include, but the clock does
-        // not drain or commit until someone is nominated again.
-        if (!mercy.interacting && nominated) mercy.remaining = Math.max(0, mercy.remaining - dt)
-        if (nominated && mercy.remaining <= 0) due.push(mercy)
+        if (!mercy.interacting) mercy.remaining = Math.max(0, mercy.remaining - dt)
+        if (mercy.remaining <= 0) due.push(mercy)
       }
+      for (const mercy of idle) smiteDropMercy(smite, mercy)
       for (const mercy of due) commitSmite(doc, win, smite, mercy)
       if (smite.mercies.some((mercy) => mercy && !mercy.committing)) {
         smiteRefresh(doc, smite)
@@ -2207,7 +2213,10 @@
     const descendants = smiteMoodTargets(bridge.core?.state?.root?.data, mercy.castUid)
     const command = smiteCastTap(mercy.marks, mercy.castUid, pointer.uid, descendants)
     if (command.action === 'clear') smiteDropMercy(smite, mercy)
-    else if (command.action === 'degrade' || command.action === 'cycle') smiteApplyEntries(mercy.marks, command.entries)
+    else if (command.action === 'degrade' || command.action === 'cycle') {
+      smiteApplyEntries(mercy.marks, command.entries)
+      if (!smiteHasNominated(mercy.marks)) smiteDropMercy(smite, mercy)
+    }
     smiteRefresh(doc, smite)
     smiteEnsureTick(doc, win, smite)
     return true
@@ -2277,7 +2286,7 @@
         if (mark === 'red' || mark === 'amber') mercy.marks.delete(uid)
       }
       const tookClock = smiteMarkOf(scoped, mercy.castUid) === 'red' || smiteMarkOf(scoped, mercy.castUid) === 'amber'
-      if (tookClock || !state.root) smiteDropMercy(smite, mercy)
+      if (tookClock || !state.root || !smiteHasNominated(mercy.marks)) smiteDropMercy(smite, mercy)
       else mercy.committing = false
     } else {
       smiteDropMercy(smite, mercy)
