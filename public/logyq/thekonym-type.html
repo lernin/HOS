@@ -7,7 +7,8 @@
 <meta name="theme-color" content="#d9f99d" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Fraunces:SOFT,opsz,wght@0..100,9..144,400..500&family=Inter:wght@500;600&family=Libre+Baskerville:wght@400&family=Libre+Caslon+Display&family=Literata:opsz,wght@7..72,400..500&family=Lora:wght@400;500&family=Newsreader:opsz,wght@6..72,400..500&family=Source+Serif+4:opsz,wght@8..60,400..500&family=Spectral:wght@400;500&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:SOFT,opsz,wght@0..100,9..144,400..500&family=Inter:wght@500;600&family=Literata:opsz,wght@7..72,400..500&family=Newsreader:opsz,wght@6..72,400..500&family=Source+Serif+4:opsz,wght@8..60,400..500&display=swap" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya:wght@400;500&family=Atkinson+Hyperlegible:wght@400&family=Bitter:wght@400;500&family=Crimson+Pro:wght@400;500&family=DM+Serif+Text&family=EB+Garamond:wght@400;500&family=Fredoka:wght@400;500&family=Instrument+Serif&family=Libre+Baskerville:wght@400&family=Libre+Caslon+Display&family=Lora:wght@400;500&family=Nunito:wght@400;500&family=Petrona:wght@400;500&family=Roboto+Condensed:wght@400;500&family=Roboto+Slab:wght@400;500&family=Source+Sans+3:wght@400;500&family=Spectral:wght@400;500&family=Zilla+Slab:wght@400;500&display=swap" />
 <style>
   :root {
     --onym-family: Fraunces, Georgia, serif;
@@ -261,6 +262,29 @@
     opacity: .38;
     cursor: not-allowed;
   }
+  .filters {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    margin: 0 0 8px;
+    padding-bottom: 2px;
+  }
+  .filters button {
+    flex: 0 0 auto;
+    min-height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: #fff;
+    color: #334155;
+    font: 600 12px/1 Inter, system-ui, sans-serif;
+    touch-action: manipulation;
+  }
+  .filters button[aria-pressed="true"] {
+    background: #f0fdf4;
+    border-color: var(--green);
+    color: #14532d;
+  }
   .faces {
     display: flex;
     gap: 8px;
@@ -268,6 +292,7 @@
     padding: 2px 2px 4px;
     scroll-snap-type: x proximity;
   }
+  .face[hidden] { display: none; }
   .face {
     scroll-snap-align: start;
     flex: 0 0 auto;
@@ -339,22 +364,37 @@
     <strong id="face-label">Fraunces Soft</strong>
     <span id="face-note">Recommended</span>
   </div>
+  <div class="filters" id="filters" role="group" aria-label="Face groups"></div>
   <div class="faces" id="faces" role="listbox" aria-label="Onym fonts"></div>
 </section>
 
 <script>
 (() => {
-  const STORE = 'logyq_onym_type_lab_v1'
+  const STORE = 'logyq_onym_type_lab_v2'
+  const GROUPS = ['All', 'Soft serif', 'Slab', 'Old style', 'Display', 'Sans']
   const FONTS = [
-    { id: 'fraunces', label: 'Fraunces Soft', note: 'Recommended', family: 'Fraunces', variation: "'SOFT' 100, 'opsz' 18, 'WONK' 0", weights: [400, 500] },
-    { id: 'literata', label: 'Literata', note: 'Text serif', family: 'Literata', variation: "'opsz' 16", weights: [400, 500] },
-    { id: 'source-serif', label: 'Source Serif 4', note: 'Text serif', family: 'Source Serif 4', variation: "'opsz' 16", weights: [400, 500] },
-    { id: 'lora', label: 'Lora', note: 'Text serif', family: 'Lora', variation: 'normal', weights: [400, 500] },
-    { id: 'newsreader', label: 'Newsreader', note: 'Text serif', family: 'Newsreader', variation: "'opsz' 16", weights: [400, 500] },
-    { id: 'baskerville', label: 'Libre Baskerville', note: 'Regular only', family: 'Libre Baskerville', variation: 'normal', weights: [400] },
-    { id: 'cormorant', label: 'Cormorant Garamond', note: 'Contrast — thin small', family: 'Cormorant Garamond', variation: 'normal', weights: [400, 500] },
-    { id: 'current', label: 'Current', note: 'Libre Caslon Display', family: 'Libre Caslon Display', variation: 'normal', weights: [400] },
-    { id: 'spectral', label: 'Spectral', note: 'Soft readable', family: 'Spectral', variation: 'normal', weights: [400, 500] },
+    { id: 'fraunces', label: 'Fraunces Soft', note: 'Recommended', group: 'Soft serif', family: 'Fraunces', variation: "'SOFT' 100, 'opsz' 18, 'WONK' 0", weights: [400, 500] },
+    { id: 'literata', label: 'Literata', note: 'Soft serif', group: 'Soft serif', family: 'Literata', variation: "'opsz' 16", weights: [400, 500] },
+    { id: 'source-serif', label: 'Source Serif 4', note: 'Soft serif', group: 'Soft serif', family: 'Source Serif 4', variation: "'opsz' 16", weights: [400, 500] },
+    { id: 'newsreader', label: 'Newsreader', note: 'Soft serif', group: 'Soft serif', family: 'Newsreader', variation: "'opsz' 16", weights: [400, 500] },
+    { id: 'lora', label: 'Lora', note: 'Soft serif', group: 'Soft serif', family: 'Lora', variation: 'normal', weights: [400, 500] },
+    { id: 'spectral', label: 'Spectral', note: 'Soft serif', group: 'Soft serif', family: 'Spectral', variation: 'normal', weights: [400, 500] },
+    { id: 'petrona', label: 'Petrona', note: 'Soft serif', group: 'Soft serif', family: 'Petrona', variation: 'normal', weights: [400, 500] },
+    { id: 'bitter', label: 'Bitter', note: 'Slab', group: 'Slab', family: 'Bitter', variation: 'normal', weights: [400, 500] },
+    { id: 'zilla', label: 'Zilla Slab', note: 'Slab', group: 'Slab', family: 'Zilla Slab', variation: 'normal', weights: [400, 500] },
+    { id: 'roboto-slab', label: 'Roboto Slab', note: 'Slab', group: 'Slab', family: 'Roboto Slab', variation: 'normal', weights: [400, 500] },
+    { id: 'alegreya', label: 'Alegreya', note: 'Low contrast', group: 'Slab', family: 'Alegreya', variation: 'normal', weights: [400, 500] },
+    { id: 'eb-garamond', label: 'EB Garamond', note: 'Old style', group: 'Old style', family: 'EB Garamond', variation: 'normal', weights: [400, 500] },
+    { id: 'baskerville', label: 'Libre Baskerville', note: 'Old style', group: 'Old style', family: 'Libre Baskerville', variation: 'normal', weights: [400] },
+    { id: 'crimson', label: 'Crimson Pro', note: 'Old style', group: 'Old style', family: 'Crimson Pro', variation: 'normal', weights: [400, 500] },
+    { id: 'instrument', label: 'Instrument Serif', note: 'Soft display', group: 'Display', family: 'Instrument Serif', variation: 'normal', weights: [400] },
+    { id: 'dm-serif', label: 'DM Serif Text', note: 'Soft display', group: 'Display', family: 'DM Serif Text', variation: 'normal', weights: [400] },
+    { id: 'source-sans', label: 'Source Sans 3', note: 'Calm sans', group: 'Sans', family: 'Source Sans 3', stack: 'sans', variation: 'normal', weights: [400, 500] },
+    { id: 'nunito', label: 'Nunito', note: 'Calm sans', group: 'Sans', family: 'Nunito', stack: 'sans', variation: 'normal', weights: [400, 500] },
+    { id: 'atkinson', label: 'Atkinson Hyperlegible', note: 'Calm sans', group: 'Sans', family: 'Atkinson Hyperlegible', stack: 'sans', variation: 'normal', weights: [400] },
+    { id: 'fredoka', label: 'Fredoka', note: 'Rounded', group: 'Sans', family: 'Fredoka', stack: 'sans', variation: 'normal', weights: [400, 500] },
+    { id: 'roboto-condensed', label: 'Roboto Condensed', note: 'Condensed', group: 'Sans', family: 'Roboto Condensed', stack: 'sans', variation: 'normal', weights: [400, 500] },
+    { id: 'current', label: 'Current', note: 'Libre Caslon Display', group: 'All', family: 'Libre Caslon Display', variation: 'normal', weights: [400] },
   ]
   const HEROES = [
     { role: 'large', kicker: 'Large · short', onym: 'Symbasonym', essence: 'Agreement', max: 40, min: 26 },
@@ -383,6 +423,11 @@
     font: FONTS.some((font) => font.id === saved.font) ? saved.font : 'fraunces',
     weight: saved.weight === 500 ? 500 : 400,
     zoom: [1, 1.2, 1.5].includes(Number(saved.zoom)) ? Number(saved.zoom) : 1,
+    group: 'All',
+  }
+
+  function fallbackStack(font) {
+    return font.stack === 'sans' ? 'system-ui, sans-serif' : 'Georgia, serif'
   }
 
   function card(role, onym, essence) {
@@ -404,13 +449,26 @@
     button.className = 'face'
     button.dataset.font = font.id
     button.setAttribute('role', 'option')
-    button.innerHTML = `<b style="font-family:'${font.family}',Georgia,serif;font-variation-settings:${font.variation};font-weight:400">${font.label}</b><small>${font.note}</small>`
+    button.innerHTML = `<b style="font-family:'${font.family}',${fallbackStack(font)};font-variation-settings:${font.variation};font-weight:400">${font.label}</b><small>${font.note}</small>`
     button.addEventListener('click', () => {
       state.font = font.id
       apply()
       button.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
     })
     faces.append(button)
+  })
+
+  const filters = document.getElementById('filters')
+  GROUPS.forEach((group) => {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.dataset.group = group
+    button.textContent = group === 'All' ? `All ${FONTS.length}` : group
+    button.addEventListener('click', () => {
+      state.group = group
+      apply()
+    })
+    filters.append(button)
   })
 
   document.querySelectorAll('.zoom button').forEach((button) => {
@@ -448,7 +506,7 @@
   function apply() {
     const font = FONTS.find((item) => item.id === state.font) || FONTS[0]
     if (!font.weights.includes(state.weight)) state.weight = font.weights[0]
-    root.style.setProperty('--onym-family', `'${font.family}', Georgia, serif`)
+    root.style.setProperty('--onym-family', `'${font.family}', ${fallbackStack(font)}`)
     root.style.setProperty('--onym-weight', String(state.weight))
     root.style.setProperty('--onym-variation', font.variation)
     board.style.transform = `scale(${state.zoom})`
@@ -463,8 +521,13 @@
       button.disabled = !font.weights.includes(weight)
       button.setAttribute('aria-pressed', String(weight === state.weight))
     })
+    document.querySelectorAll('.filters button').forEach((button) => {
+      button.setAttribute('aria-pressed', String(button.dataset.group === state.group))
+    })
     document.querySelectorAll('.face').forEach((button) => {
+      const item = FONTS.find((entry) => entry.id === button.dataset.font)
       const on = button.dataset.font === font.id
+      button.hidden = state.group !== 'All' && item.group !== state.group
       button.setAttribute('aria-pressed', String(on))
       button.setAttribute('aria-selected', String(on))
     })
