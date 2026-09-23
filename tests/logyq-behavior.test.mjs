@@ -1426,7 +1426,7 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /__logyqV2ConsumedPointers/)
   assert.match(v162, /bridge\.createRelative\(direction, candidate\.uid\)/)
   assert.match(v162, /direction === 'right' && preview\.thekonym\?\.enabled/)
-  assert.match(v162, /preview\.thekonym\.openUid\(candidate\.uid\)/)
+  assert.match(v162, /preview\.thekonym\.openUid\(candidate\.uid, \{ flip: true \}\)/)
   assert.match(v162, /function hardClearBackground/)
   assert.match(v162, /hardClearBackground\(doc, win/)
   assert.match(v162, /bridge\.editSelected\(\{ uid \}\)/)
