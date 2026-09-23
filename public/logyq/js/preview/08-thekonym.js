@@ -662,7 +662,7 @@
       const link = document.createElement('link')
       link.id = 'logyq-thekonym-fonts'
       link.rel = 'stylesheet'
-      link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Inter:wght@500&family=Libre+Caslon+Display&display=swap'
+      link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Inter:wght@500&family=Roboto+Condensed:wght@400&display=swap'
       document.head.append(link)
     }
     if (!document.getElementById('logyq-thekonym-ask')) {

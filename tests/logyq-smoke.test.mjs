@@ -5969,7 +5969,7 @@ test('LOGYQ kids-only parent tap steps delete to Word Bank then clears', async (
   await context.close()
 })
 
-test('LOGYQ Thekonym mode pairs a Libre Caslon Display onym with a sans essence, and a right swipe opens the dossier', async () => {
+test('LOGYQ Thekonym mode pairs a Roboto Condensed onym with a sans essence, and a right swipe opens the dossier', async () => {
   const calls = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)
@@ -6071,13 +6071,13 @@ test('LOGYQ Thekonym mode pairs a Libre Caslon Display onym with a sans essence,
       background: wash.backgroundImage,
     }
   })
-  assert.match(faceType.onymFamily, /Libre Caslon Display/)
+  assert.match(faceType.onymFamily, /Roboto Condensed/)
   assert.equal(faceType.onymWeight, '400')
   assert.ok(parseFloat(faceType.onymStroke) === 0, 'map onym stays regular, with no optical stroke')
   assert.match(faceType.essenceFamily, /Inter/)
   assert.equal(faceType.essenceWeight, '500')
   assert.match(faceType.essenceFill, /102,\s*112,\s*106|66706a/i)
-  assert.match(faceType.dossierOnym, /Libre Caslon Display/)
+  assert.match(faceType.dossierOnym, /Roboto Condensed/)
   assert.equal(faceType.dossierOnymWeight, '400')
   assert.match(faceType.dossierEssence, /Inter/)
   assert.equal(faceType.dossierEssenceWeight, '500')

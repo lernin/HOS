@@ -186,7 +186,7 @@
       #logyq-thekonym-mobile{grid-column:1 / -1}
       #logyq-thekonym-mobile[aria-pressed="true"]{background:#162e27;color:#faf8f1;border-color:#162e27}
       body.logyq-thekonym svg#canvas g.node text.label{dominant-baseline:alphabetic}
-      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-synthesis:none;font-optical-sizing:none;font-variation-settings:normal;stroke:none;stroke-width:0}
+      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Roboto Condensed',system-ui,sans-serif;font-weight:400;font-synthesis:none;stroke:none;stroke-width:0}
       body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#66706a;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:500;stroke:none}
       body.logyq-thekonym svg#canvas g.node>rect.logyq-tk-heat{pointer-events:none;stroke:none;filter:none}
       body.logyq-thekonym svg#canvas g.node[data-tk-heat="red"]>rect.logyq-tk-heat{fill:rgba(214,64,64,.18)}
@@ -204,7 +204,7 @@
       .logyq-tk-body.is-miss{justify-content:center}
       .logyq-tk-kicker{margin:0;letter-spacing:.18em;font-size:11px;font-weight:650;text-transform:uppercase;color:#284f38}
       .logyq-tk-kicker::after{content:"";display:block;width:22px;height:1px;margin:8px auto 0;background:#9a7846}
-      .logyq-tk-onym{margin:8px 0 0;max-width:100%;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-synthesis:none;font-optical-sizing:none;font-variation-settings:normal;font-size:clamp(40px,10vw,64px);line-height:1.05;color:#162e27;overflow-wrap:anywhere}
+      .logyq-tk-onym{margin:8px 0 0;max-width:100%;font-family:'Roboto Condensed',system-ui,sans-serif;font-weight:400;font-synthesis:none;font-size:clamp(40px,10vw,64px);line-height:1.05;color:#162e27;overflow-wrap:anywhere}
       .logyq-tk-pron{margin:7px 0 0;max-width:100%;font-family:Georgia,serif;font-size:15px;line-height:1.3;color:#737969}
       .logyq-tk-essence{margin:8px 0 0;max-width:16em;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:500;font-size:clamp(22px,5.6vw,32px);line-height:1.2;color:#66706a}
       .logyq-tk-essence.is-blank{min-height:1.15em}
