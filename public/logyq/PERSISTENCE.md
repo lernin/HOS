@@ -23,7 +23,7 @@ Existing rows are updated in place. Unknown JSON fields on tree nodes JSON-clone
 - While a saved map is open, the preview polls `logiq_map_list` about every 2s. A newer `updated_at` with a different tree is applied when she is not renaming a card.
 - Before a save of an existing id, the same check runs. If the database moved and this tab has not edited since the last ack, the stale local tree is not posted.
 - If both sides changed and no rename field is open, the trees merge by `_uid`. A field only one side changed keeps that side. If both changed the same field, the newer row wins.
-- If a rename input is open, the remote row is held. A bubble ("Database change came in.") sits above the field. Typing and Enter keep her value for that card and then save the merge. Tapping the bubble puts the remote value into the field and the map. Escape or cancel takes the remote row.
+- If a rename input is open, the remote row is held and the field keeps what she is typing. A note ("Database change came in.") sits on that input, just above it. The note is informational. Enter keeps her value for that card and then saves the merge. Escape or cancel takes the remote row.
 - Thekonym onym/essence edits stay in `sessionStorage` (`logyq_thekonym_local_edits_v1`). This path does not write them.
 
 Offline queue: `logyq_pending_save_v1`. Last-list cache: `logyq_maps_v1`. Current id: `logyq_current_map_v1`.

@@ -289,7 +289,8 @@
       .logiq-save-state::before{content:"";width:7px;height:7px;border-radius:50%;background:#22c55e}
       .logiq-save-state[data-state="saving"]::before{background:#f59e0b;animation:logiq-pulse 900ms ease-in-out infinite}
       .logiq-save-state[data-state="offline"]::before{background:#94a3b8}
-      .logyq-db-bubble{position:fixed;z-index:6500;transform:translate(-50%,-100%);border:0;border-radius:999px;padding:6px 10px;background:#14532d;color:#fff;font:700 12px/1.2 system-ui,sans-serif;box-shadow:0 8px 20px rgba(15,23,42,.22);cursor:pointer;max-width:min(240px,calc(100vw - 16px))}
+      .logyq-db-bubble{position:fixed;z-index:6500;transform:translate(-50%,calc(-100% - 4px));pointer-events:none;border-radius:999px;padding:5px 10px;background:#14532d;color:#fff;font:600 12px/1.3 system-ui,sans-serif;box-shadow:0 4px 12px rgba(15,23,42,.16);max-width:min(240px,calc(100vw - 24px));text-align:center}
+      .logyq-db-bubble[data-anchor="field"]{position:relative;left:auto!important;top:auto!important;transform:none;z-index:1;align-self:center;margin:0 16px 8px;width:max-content;max-width:calc(100vw - 32px)}
       .logyq-db-bubble[hidden]{display:none}
       @keyframes logiq-pulse{50%{opacity:.35}}
       .logiq-backdrop{position:fixed;inset:0;z-index:5000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(15,23,42,.36);backdrop-filter:blur(4px)}
@@ -4779,22 +4780,12 @@
   function ensureConflictBubble() {
     let el = document.getElementById('logyq-db-bubble')
     if (el) return el
-    el = document.createElement('button')
-    el.type = 'button'
+    el = document.createElement('div')
     el.id = 'logyq-db-bubble'
     el.className = 'logyq-db-bubble'
+    el.setAttribute('role', 'status')
     el.textContent = 'Database change came in.'
     el.hidden = true
-    const stop = (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-    }
-    el.addEventListener('pointerdown', stop)
-    el.addEventListener('mousedown', stop)
-    el.addEventListener('click', (event) => {
-      stop(event)
-      acceptHeldRemote()
-    })
     document.body.appendChild(el)
     return el
   }
@@ -4810,26 +4801,49 @@
 
   function placeConflictBubble(el) {
     const input = document.querySelector('.node-edit-input')
+    const dock = input?.closest?.('.node-edit-dock')
+    const stack = input?.closest?.('.node-edit-stack')
     if (!input) {
       el.hidden = true
       return
     }
+    if (dock && stack) {
+      if (!stack.classList.contains('is-placed')) {
+        el.hidden = true
+        return
+      }
+      if (el.parentElement !== stack || el.nextElementSibling !== dock) stack.insertBefore(el, dock)
+      el.dataset.anchor = 'field'
+      el.hidden = false
+      return
+    }
+    if (el.parentElement !== document.body) document.body.appendChild(el)
+    delete el.dataset.anchor
     const rect = input.getBoundingClientRect()
-    const left = rect.left + (rect.width / 2)
-    el.style.left = `${Math.min(window.innerWidth - 12, Math.max(12, left))}px`
-    el.style.top = `${Math.max(28, rect.top - 6)}px`
+    if (rect.width < 8 || rect.height < 8) {
+      el.hidden = true
+      return
+    }
+    el.hidden = false
+    el.style.left = `${rect.left + rect.width / 2}px`
+    el.style.top = `${rect.top}px`
   }
 
   function showConflictBubble() {
     const el = ensureConflictBubble()
-    el.hidden = false
     const track = () => {
       bubbleFrame = 0
-      if (el.hidden) return
+      if (!app.heldRemote) {
+        el.hidden = true
+        return
+      }
       placeConflictBubble(el)
       bubbleFrame = requestAnimationFrame(track)
     }
-    if (!bubbleFrame) bubbleFrame = requestAnimationFrame(track)
+    if (!bubbleFrame) {
+      placeConflictBubble(el)
+      bubbleFrame = requestAnimationFrame(track)
+    }
   }
 
   function holdRemote(row) {
@@ -4931,27 +4945,6 @@
     if (claim?.submit) mergeCommit(row, snapshot || bridge.snapshot(), claim)
     else applyRemoteRow(row)
     return true
-  }
-
-  function acceptHeldRemote() {
-    const row = app.heldRemote
-    if (!row) return
-    const state = bridge.core?.state
-    const input = state?.editorEl
-    const uid = state?.editingUid || input?.dataset?.editUid
-    const tree = decodeMapTree(row.tree)
-    const remoteNode = uid ? bridge.core?.utils?.findByUid(tree, uid) : null
-    const remoteName = remoteNode ? String(remoteNode.name ?? '') : ''
-    app.editClaim = { cancel: true }
-    applyRemoteRow(row, { keepEditor: true })
-    if (input?.isConnected) {
-      input.value = remoteName
-      if (state) state.editPrevName = remoteName
-      const live = uid ? bridge.core.utils.findByUid(state.root?.data, uid) : null
-      if (live) live.name = remoteName
-      try { bridge.core.layout?.LabelWrap?.apply?.() } catch (_error) {}
-    }
-    app.editClaim = null
   }
 
   function considerRemoteRow(row) {
@@ -5084,7 +5077,6 @@
   preview.sync = {
     pullRemote,
     considerRemoteRow,
-    acceptHeldRemote,
   }
 
   async function bootSession() {

@@ -6,7 +6,8 @@
       .logiq-save-state::before{content:"";width:7px;height:7px;border-radius:50%;background:#22c55e}
       .logiq-save-state[data-state="saving"]::before{background:#f59e0b;animation:logiq-pulse 900ms ease-in-out infinite}
       .logiq-save-state[data-state="offline"]::before{background:#94a3b8}
-      .logyq-db-bubble{position:fixed;z-index:6500;transform:translate(-50%,-100%);border:0;border-radius:999px;padding:6px 10px;background:#14532d;color:#fff;font:700 12px/1.2 system-ui,sans-serif;box-shadow:0 8px 20px rgba(15,23,42,.22);cursor:pointer;max-width:min(240px,calc(100vw - 16px))}
+      .logyq-db-bubble{position:fixed;z-index:6500;transform:translate(-50%,calc(-100% - 4px));pointer-events:none;border-radius:999px;padding:5px 10px;background:#14532d;color:#fff;font:600 12px/1.3 system-ui,sans-serif;box-shadow:0 4px 12px rgba(15,23,42,.16);max-width:min(240px,calc(100vw - 24px));text-align:center}
+      .logyq-db-bubble[data-anchor="field"]{position:relative;left:auto!important;top:auto!important;transform:none;z-index:1;align-self:center;margin:0 16px 8px;width:max-content;max-width:calc(100vw - 32px)}
       .logyq-db-bubble[hidden]{display:none}
       @keyframes logiq-pulse{50%{opacity:.35}}
       .logiq-backdrop{position:fixed;inset:0;z-index:5000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(15,23,42,.36);backdrop-filter:blur(4px)}
