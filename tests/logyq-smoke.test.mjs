@@ -3632,10 +3632,10 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
     window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
     window.LOGYQBridge.loadMap({
       name: 'Root',
-      children: [{ name: 'Bank' }, { name: 'Out' }],
+      children: [{ name: 'Cut' }, { name: 'Bank' }, { name: 'Out' }],
     }, [])
   })
-  await page.waitForFunction(() => ['Root', 'Bank', 'Out'].every((label) => {
+  await page.waitForFunction(() => ['Root', 'Cut', 'Bank', 'Out'].every((label) => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
     return node && node.getBoundingClientRect().width > 20
   }))
@@ -3645,16 +3645,19 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
       const core = window.LOGYQBridge.core
       const byName = (label) => core.state.root.descendants().find((node) => node.data.name === label)
       const root = byName('Root')
+      const cut = byName('Cut')
       const bank = byName('Bank')
       const out = byName('Out')
       const marks = mode === 'pocket'
         ? new Map([
           [root.data._uid, 'red'],
+          [cut.data._uid, 'red'],
           [bank.data._uid, 'amber'],
           [out.data._uid, 'normal'],
         ])
         : new Map([
           [root.data._uid, 'red'],
+          [cut.data._uid, 'normal'],
           [bank.data._uid, 'normal'],
           [out.data._uid, 'normal'],
         ])
@@ -3699,15 +3702,19 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
             weight: sib.dataset.smiteWeight || null,
             width: sib.style.strokeWidth,
             stroke: sib.getAttribute('stroke'),
+            opacity: sib.style.opacity,
             animation: getComputedStyle(sib).animationName,
           })
           sib = sib.nextElementSibling
         }
         const gradId = link?.dataset?.smiteGrad
         const stops = gradId ? Array.from(document.getElementById(gradId)?.querySelectorAll('stop') || []).map((stop) => stop.getAttribute('stop-color')) : []
+        const linkStyle = link ? getComputedStyle(link) : null
         return {
           weight: link?.dataset?.smiteWeight || null,
           edge: link?.dataset?.smiteEdge || null,
+          width: linkStyle?.strokeWidth || null,
+          opacity: linkStyle?.opacity || null,
           stops,
           ants,
         }
@@ -3725,6 +3732,7 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
         }
       }
       return {
+        cut: read('Cut'),
         bank: read('Bank'),
         out: read('Out'),
         cards: { root: card('Root'), bank: card('Bank'), out: card('Out') },
@@ -3733,15 +3741,24 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
   }
 
   const pocket = await paint('pocket')
+  assert.deepEqual(pocket.cut.stops, ['#ff0000', '#ff0000'])
   assert.deepEqual(pocket.bank.stops, ['#ff0000', '#ffa100'])
-  assert.equal(pocket.bank.weight, 'strong')
-  assert.equal(pocket.bank.edge, '1')
-  assert.ok(pocket.bank.ants.some((ant) => ant.role === 'color' && ant.weight === 'strong' && ant.width === '3.5px' && ant.stroke.startsWith('url(')))
-  assert.ok(pocket.bank.ants.every((ant) => ant.animation === 'logyq-smite-march'))
   assert.deepEqual(pocket.out.stops, ['#ff0000', '#ffffff'])
-  assert.equal(pocket.out.weight, 'soft')
-  assert.ok(pocket.out.ants.some((ant) => ant.role === 'color' && ant.weight === 'soft' && ant.width === '2px'))
-  assert.ok(pocket.out.ants.every((ant) => ant.animation === 'logyq-smite-march'))
+  for (const edge of [pocket.cut, pocket.bank, pocket.out]) {
+    assert.equal(edge.weight, 'strong')
+    assert.equal(edge.edge, '1')
+    assert.equal(edge.width, '3.5px')
+    assert.equal(edge.opacity, '1')
+    const color = edge.ants.find((ant) => ant.role === 'color')
+    const halo = edge.ants.find((ant) => ant.role === 'halo')
+    assert.equal(color.weight, 'strong')
+    assert.equal(color.width, '3.5px')
+    assert.equal(color.opacity, '1')
+    assert.ok(color.stroke.startsWith('url('))
+    assert.equal(halo.stroke, '#ffffff')
+    assert.equal(halo.width, '6px')
+    assert.ok(edge.ants.every((ant) => ant.animation === 'logyq-smite-march'))
+  }
   assert.equal(pocket.cards.root.clock, true)
   assert.equal(pocket.cards.root.clockAnimation, 'none')
   assert.equal(pocket.cards.bank.stroke, '#ffa100')
@@ -3750,6 +3767,7 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
   assert.equal(pocket.cards.out.animation, 'logyq-smite-march')
 
   const parentOnly = await paint('parent')
+  assert.equal(parentOnly.cut.edge, null)
   assert.equal(parentOnly.bank.edge, null)
   assert.equal(parentOnly.out.edge, null)
   assert.equal(parentOnly.bank.ants.length, 0)

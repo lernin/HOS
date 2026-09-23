@@ -259,7 +259,6 @@
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{pointer-events:none!important;fill:none!important;fill-opacity:0!important;stroke-width:3.5px!important;stroke-linecap:round;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash[data-smite-outline="ants"]{stroke-dasharray:8 6!important;animation:logyq-smite-march .7s linear infinite!important}
         body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-dasharray:none!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
-        body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"][data-smite-weight="soft"]{opacity:.45!important;stroke-width:2px!important}
         body.logyq-mobile-v162 svg#canvas g.links path.logyq-smite-ant{fill:none!important;stroke-linecap:round;stroke-dasharray:8 6!important;animation:logyq-smite-march .7s linear infinite!important;pointer-events:none!important;transition:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;transition:none!important;vector-effect:none}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red,body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:none}
@@ -1033,15 +1032,14 @@
     return mark === 'red' || mark === 'amber' || mark === 'normal'
   }
 
-  // Gradient runs parent → child. A whole pocket marches on every edge.
-  // Still-in children keep a strong dash. White / out children march softer.
+  // Gradient runs parent → child. Every pocket edge is the same outlined
+  // stroke: a thick fate core with a white halo, including white / out.
   function smiteEdgePaint(parentMark, childMark) {
-    const still = smiteStillIn(childMark)
     return {
       from: smiteFateTone(parentMark),
       to: smiteFateTone(childMark),
-      ants: still ? smiteFateTone(childMark) : '#ffffff',
-      weight: still ? 'strong' : 'soft',
+      ants: smiteFateTone(childMark),
+      weight: 'strong',
     }
   }
 
@@ -3132,7 +3130,7 @@
     return id
   }
 
-  function smitePaintAnts(link, color, gradId, weight) {
+  function smitePaintAnts(link, color, gradId) {
     const doc = link.ownerDocument
     const found = []
     let sib = link.nextElementSibling
@@ -3146,7 +3144,6 @@
     }
     const xml = 'http://www.w3.org/2000/svg'
     const d = link.getAttribute('d') || ''
-    const soft = weight === 'soft'
     const ensure = (role, stroke, width, opacity) => {
       let path = found.find((item) => item.dataset.antRole === role)
       if (!path) {
@@ -3159,7 +3156,7 @@
         link.parentNode.insertBefore(path, link.nextSibling)
         found.push(path)
       }
-      path.dataset.smiteWeight = soft ? 'soft' : 'strong'
+      path.dataset.smiteWeight = 'strong'
       path.setAttribute('d', d)
       path.setAttribute('stroke', stroke)
       path.style.stroke = stroke
@@ -3174,9 +3171,10 @@
       return path
     }
     // Dashes use the same parent→child gradient, so a mixed edge does not
-    // swap color at a hard midline. The halo sits under them.
-    ensure('color', `url(#${gradId})`, soft ? '2px' : '3.5px', soft ? '0.7' : '1')
-    ensure('halo', soft ? 'rgba(15,23,42,.28)' : '#ffffff', soft ? '3.4px' : '6px', soft ? '0.35' : '0.9')
+    // swap color at a hard midline. The white halo is the same weight on
+    // delete, Word Bank, and out.
+    ensure('color', `url(#${gradId})`, '3.5px', '1')
+    ensure('halo', '#ffffff', '6px', '0.9')
   }
 
   // A live layout tween owns `d` and should finish with the cards.
@@ -3201,20 +3199,19 @@
   function smitePaintEdge(link, paint) {
     smiteEnsureLinkGeometry(link)
     link.dataset.smiteEdge = '1'
-    const soft = paint.weight === 'soft'
-    link.dataset.smiteWeight = soft ? 'soft' : 'strong'
+    link.dataset.smiteWeight = 'strong'
     const gradId = smiteEnsureEdgeGradient(link, paint.from, paint.to)
     link.dataset.smiteGrad = gradId
     link.style.setProperty('stroke', `url(#${gradId})`, 'important')
-    link.style.setProperty('stroke-width', soft ? '2px' : '3.5px', 'important')
-    link.style.setProperty('opacity', soft ? '0.45' : '1', 'important')
+    link.style.setProperty('stroke-width', '3.5px', 'important')
+    link.style.setProperty('opacity', '1', 'important')
     link.style.strokeDasharray = 'none'
     link.style.strokeDashoffset = ''
     link.style.strokeLinecap = 'round'
     link.style.animation = 'none'
     link.style.transition = 'none'
     link.style.vectorEffect = 'non-scaling-stroke'
-    smitePaintAnts(link, paint.ants, gradId, paint.weight)
+    smitePaintAnts(link, paint.ants, gradId)
   }
 
   function smitePaintCard(node, heat, rx, ry, outline) {
