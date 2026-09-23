@@ -1932,24 +1932,25 @@ test('cast edges gradient from parent fate to child fate, and ants follow the ch
   const red = '#ff0000'
   const amber = '#ffa100'
   const pairs = [
-    ['red', 'red', red, red, red],
-    ['amber', 'amber', amber, amber, amber],
-    ['red', 'amber', red, amber, amber],
-    ['amber', 'red', amber, red, red],
-    ['normal', 'red', clear, red, red],
-    ['normal', 'amber', clear, amber, amber],
-    ['red', 'normal', red, clear, null],
-    ['amber', 'normal', amber, clear, null],
-    ['normal', 'normal', clear, clear, null],
-    [null, 'red', clear, red, red],
-    ['red', null, red, clear, null],
-    ['amber', undefined, amber, clear, null],
+    ['red', 'red', red, red, red, 'strong'],
+    ['amber', 'amber', amber, amber, amber, 'strong'],
+    ['red', 'amber', red, amber, amber, 'strong'],
+    ['amber', 'red', amber, red, red, 'strong'],
+    ['normal', 'red', clear, red, red, 'strong'],
+    ['normal', 'amber', clear, amber, amber, 'strong'],
+    ['red', 'normal', red, clear, clear, 'soft'],
+    ['amber', 'normal', amber, clear, clear, 'soft'],
+    ['normal', 'normal', clear, clear, clear, 'soft'],
+    [null, 'red', clear, red, red, 'strong'],
+    ['red', null, red, clear, clear, 'soft'],
+    ['amber', undefined, amber, clear, clear, 'soft'],
   ]
-  for (const [parent, child, from, to, ants] of pairs) {
+  for (const [parent, child, from, to, ants, weight] of pairs) {
     const paint = smite.smiteEdgePaint(parent, child)
     assert.equal(paint.from, from, `${parent} → ${child} from`)
     assert.equal(paint.to, to, `${parent} → ${child} to`)
     assert.equal(paint.ants, ants, `${parent} → ${child} ants`)
+    assert.equal(paint.weight, weight, `${parent} → ${child} weight`)
     assert.equal(smite.smiteEdgeAnt(parent, child), ants)
   }
   const tree = smiteSampleTree()
@@ -1984,24 +1985,32 @@ test('cast chrome is an outline with no fill, and connectors move only for a who
   assert.equal(smite.smiteLinkLive('kids', 'normal', 'red'), null)
   assert.equal(smite.smiteLinkLive('kids', 'red', 'amber'), null)
   assert.equal(smite.smiteLinkLive('idle', 'red', 'red'), null)
-  assert.equal(smite.smiteLinkLive('pocket', 'normal', 'normal'), null)
+  const whiteEdge = smite.smiteLinkLive('pocket', 'normal', 'normal')
+  assert.equal(whiteEdge.from, white)
+  assert.equal(whiteEdge.to, white)
+  assert.equal(whiteEdge.ants, white)
+  assert.equal(whiteEdge.weight, 'soft')
   assert.equal(smite.smiteLinkLive('pocket', null, 'red'), null)
   const same = smite.smiteLinkLive('pocket', 'red', 'red')
   assert.equal(same.from, red)
   assert.equal(same.to, red)
   assert.equal(same.ants, red)
+  assert.equal(same.weight, 'strong')
   const mixed = smite.smiteLinkLive('pocket', 'red', 'amber')
   assert.equal(mixed.from, red)
   assert.equal(mixed.to, amber)
   assert.equal(mixed.ants, amber)
+  assert.equal(mixed.weight, 'strong')
   const fade = smite.smiteLinkLive('pocket', 'red', 'normal')
   assert.equal(fade.from, red)
   assert.equal(fade.to, white)
-  assert.equal(fade.ants, null)
+  assert.equal(fade.ants, white)
+  assert.equal(fade.weight, 'soft')
   const rising = smite.smiteLinkLive('pocket', 'normal', 'red')
   assert.equal(rising.from, white)
   assert.equal(rising.to, red)
   assert.equal(rising.ants, red)
+  assert.equal(rising.weight, 'strong')
   const v162 = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
   const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
   const paint = v162.slice(v162.indexOf('function paintSmiteLayers'), v162.indexOf('function smiteScarPoint'))
@@ -2056,8 +2065,13 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   const edge = styles.slice(styles.indexOf('data-smite-edge'), styles.indexOf('path.logyq-smite-clock'))
   assert.match(edge, /stroke-dasharray:\s*none/)
   assert.match(edge, /logyq-smite-ant/)
-  assert.match(edge, /logyq-smite-ants/)
+  assert.match(edge, /logyq-smite-march/)
+  assert.match(edge, /data-smite-weight="soft"/)
   assert.match(edge, /stroke-width:\s*3\.5px/)
+  assert.match(edge, /stroke-width:\s*2px/)
+  const march = styles.slice(styles.indexOf('@keyframes logyq-smite-march'), styles.indexOf('@keyframes logyq-smite-ants'))
+  assert.match(march, /stroke-dashoffset/)
+  assert.doesNotMatch(march, /stroke-opacity/)
   assert.match(v162, /__logyqV2ConsumedPointers\.add\(event\.pointerId\)/)
   assert.match(v162, /smite\.pinched/)
   assert.match(v162, /smite\.mercies/)

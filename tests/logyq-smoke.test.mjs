@@ -3616,6 +3616,126 @@ test('LOGYQ ends a cast when nothing is left on delete or Word Bank', async () =
   await context.close()
 })
 
+test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [{ name: 'Bank' }, { name: 'Out' }],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Root', 'Bank', 'Out'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    return node && node.getBoundingClientRect().width > 20
+  }))
+
+  async function paint(marksFor) {
+    return page.evaluate(async (mode) => {
+      const core = window.LOGYQBridge.core
+      const byName = (label) => core.state.root.descendants().find((node) => node.data.name === label)
+      const root = byName('Root')
+      const bank = byName('Bank')
+      const out = byName('Out')
+      const marks = mode === 'pocket'
+        ? new Map([
+          [root.data._uid, 'red'],
+          [bank.data._uid, 'amber'],
+          [out.data._uid, 'normal'],
+        ])
+        : new Map([
+          [root.data._uid, 'red'],
+          [bank.data._uid, 'normal'],
+          [out.data._uid, 'normal'],
+        ])
+      const smite = window.LOGYQPreview.gestures.smite
+      smite.mercies = [{
+        marks,
+        castUid: root.data._uid,
+        zone: 'middle',
+        direction: 'down',
+        remaining: 9000,
+        lastTick: performance.now(),
+        interacting: false,
+        committing: false,
+      }]
+      smite.mercy = smite.mercies[0]
+      const canvas = document.getElementById('canvas')
+      const box = canvas.getBoundingClientRect()
+      let point = null
+      for (let y = box.top + 8; y < box.bottom - 8 && !point; y += 18) {
+        for (let x = box.left + 8; x < box.right - 8; x += 18) {
+          const hit = document.elementFromPoint(x, y)
+          if (hit && canvas.contains(hit) && !hit.closest('g.node, g.hit-slot')) {
+            point = { x, y }
+            break
+          }
+        }
+      }
+      const target = point ? document.elementFromPoint(point.x, point.y) : canvas
+      const fire = (type, buttons) => target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 7,
+        isPrimary: true, button: 0, buttons, clientX: point?.x || 12, clientY: point?.y || 80,
+      }))
+      fire('pointerdown', 1)
+      fire('pointerup', 0)
+      const read = (name) => {
+        const link = Array.from(document.querySelectorAll('svg#canvas g.links path.link')).find((el) => el.__data__?.target?.data?.name === name)
+        const ants = []
+        let sib = link?.nextElementSibling
+        while (sib && sib.classList?.contains('logyq-smite-ant')) {
+          ants.push({
+            role: sib.dataset.antRole,
+            weight: sib.dataset.smiteWeight || null,
+            width: sib.style.strokeWidth,
+            stroke: sib.getAttribute('stroke'),
+            animation: getComputedStyle(sib).animationName,
+          })
+          sib = sib.nextElementSibling
+        }
+        const gradId = link?.dataset?.smiteGrad
+        const stops = gradId ? Array.from(document.getElementById(gradId)?.querySelectorAll('stop') || []).map((stop) => stop.getAttribute('stop-color')) : []
+        return {
+          weight: link?.dataset?.smiteWeight || null,
+          edge: link?.dataset?.smiteEdge || null,
+          stops,
+          ants,
+        }
+      }
+      return { bank: read('Bank'), out: read('Out') }
+    }, marksFor)
+  }
+
+  const pocket = await paint('pocket')
+  assert.deepEqual(pocket.bank.stops, ['#ff0000', '#ffa100'])
+  assert.equal(pocket.bank.weight, 'strong')
+  assert.equal(pocket.bank.edge, '1')
+  assert.ok(pocket.bank.ants.some((ant) => ant.role === 'color' && ant.weight === 'strong' && ant.width === '3.5px' && ant.stroke.startsWith('url(')))
+  assert.ok(pocket.bank.ants.every((ant) => ant.animation === 'logyq-smite-march'))
+  assert.deepEqual(pocket.out.stops, ['#ff0000', '#ffffff'])
+  assert.equal(pocket.out.weight, 'soft')
+  assert.ok(pocket.out.ants.some((ant) => ant.role === 'color' && ant.weight === 'soft' && ant.width === '2px'))
+  assert.ok(pocket.out.ants.every((ant) => ant.animation === 'logyq-smite-march'))
+
+  const parentOnly = await paint('parent')
+  assert.equal(parentOnly.bank.edge, null)
+  assert.equal(parentOnly.out.edge, null)
+  assert.equal(parentOnly.bank.ants.length, 0)
+  assert.equal(parentOnly.out.ants.length, 0)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ partial smite conclude redraws connectors with the cards', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   await stubMaps(context)

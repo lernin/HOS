@@ -259,7 +259,8 @@
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{pointer-events:none!important;fill:none!important;fill-opacity:0!important;stroke-width:3.5px!important;stroke-linecap:round;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash[data-smite-outline="ants"]{stroke-dasharray:8 6!important;animation:logyq-smite-ants .7s linear infinite!important}
         body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-dasharray:none!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
-        body.logyq-mobile-v162 svg#canvas g.links path.logyq-smite-ant{fill:none!important;stroke-linecap:round;stroke-dasharray:8 6!important;animation:logyq-smite-ants .7s linear infinite!important;pointer-events:none!important;transition:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"][data-smite-weight="soft"]{opacity:.45!important;stroke-width:2px!important}
+        body.logyq-mobile-v162 svg#canvas g.links path.logyq-smite-ant{fill:none!important;stroke-linecap:round;stroke-dasharray:8 6!important;animation:logyq-smite-march .7s linear infinite!important;pointer-events:none!important;transition:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;transition:none!important;vector-effect:none}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red,body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:none}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation;pointer-events:auto;transform-origin:center}
@@ -269,6 +270,7 @@
         #logyq-v162-action.show{display:grid}#logyq-v162-action.rec{background:#ef4444}
         #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
+        @keyframes logyq-smite-march{from{stroke-dashoffset:0}to{stroke-dashoffset:-14px}}
         @keyframes logyq-smite-ants{0%{stroke-dashoffset:0;stroke-opacity:.45}50%{stroke-opacity:1}100%{stroke-dashoffset:-14px;stroke-opacity:.45}}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
       }
@@ -1032,12 +1034,15 @@
     return mark === 'red' || mark === 'amber' || mark === 'normal'
   }
 
-  // Gradient runs parent → child. Ants ride only when the child is still in.
+  // Gradient runs parent → child. A whole pocket marches on every edge.
+  // Still-in children keep a strong dash. White / out children march softer.
   function smiteEdgePaint(parentMark, childMark) {
+    const still = smiteStillIn(childMark)
     return {
       from: smiteFateTone(parentMark),
       to: smiteFateTone(childMark),
-      ants: childMark === 'amber' ? '#ffa100' : (childMark === 'red' ? '#ff0000' : null),
+      ants: still ? smiteFateTone(childMark) : '#ffffff',
+      weight: still ? 'strong' : 'soft',
     }
   }
 
@@ -1060,11 +1065,11 @@
     return null
   }
 
-  // Quiet unless this is a whole pocket and at least one end is still in.
+  // Parent-only and kids-only leave the connectors alone. A pocket marches
+  // every in-cast edge, including ones that end on a white / out child.
   function smiteLinkLive(shape, parentMark, childMark) {
     if (shape !== 'pocket') return null
     if (!smiteInCast(parentMark) || !smiteInCast(childMark)) return null
-    if (!smiteStillIn(parentMark) && !smiteStillIn(childMark)) return null
     return smiteEdgePaint(parentMark, childMark)
   }
 
@@ -3069,12 +3074,16 @@
     link.style.strokeDashoffset = ''
     link.style.strokeLinecap = ''
     link.style.animation = ''
+    link.style.removeProperty('stroke')
+    link.style.removeProperty('stroke-width')
+    link.style.removeProperty('opacity')
     link.style.opacity = '0.5'
     link.style.strokeWidth = '2.8px'
     link.style.vectorEffect = ''
     link.style.transition = ''
     delete link.dataset.smiteEdge
     delete link.dataset.smiteGrad
+    delete link.dataset.smiteWeight
   }
 
   function smiteEnsureEdgeGradient(link, from, to) {
@@ -3124,7 +3133,7 @@
     return id
   }
 
-  function smitePaintAnts(link, color, gradId) {
+  function smitePaintAnts(link, color, gradId, weight) {
     const doc = link.ownerDocument
     const found = []
     let sib = link.nextElementSibling
@@ -3138,7 +3147,8 @@
     }
     const xml = 'http://www.w3.org/2000/svg'
     const d = link.getAttribute('d') || ''
-    const ensure = (role, stroke, width) => {
+    const soft = weight === 'soft'
+    const ensure = (role, stroke, width, opacity) => {
       let path = found.find((item) => item.dataset.antRole === role)
       if (!path) {
         path = doc.createElementNS(xml, 'path')
@@ -3150,21 +3160,24 @@
         link.parentNode.insertBefore(path, link.nextSibling)
         found.push(path)
       }
+      path.dataset.smiteWeight = soft ? 'soft' : 'strong'
       path.setAttribute('d', d)
       path.setAttribute('stroke', stroke)
       path.style.stroke = stroke
       path.style.strokeWidth = width
       path.style.strokeDasharray = '8 6'
       path.style.strokeLinecap = 'round'
-      path.style.animation = 'logyq-smite-ants 0.7s linear infinite'
+      path.style.animation = 'logyq-smite-march 0.7s linear infinite'
+      path.style.opacity = opacity
       path.style.vectorEffect = 'non-scaling-stroke'
       path.style.fill = 'none'
       path.style.pointerEvents = 'none'
       return path
     }
-    // Halo goes under the colored dashes so same-fate ants stay visible.
-    ensure('color', color, '3.5px')
-    ensure('halo', '#ffffff', '6px')
+    // Dashes use the same parent→child gradient, so a mixed edge does not
+    // swap color at a hard midline. The halo sits under them.
+    ensure('color', `url(#${gradId})`, soft ? '2px' : '3.5px', soft ? '0.7' : '1')
+    ensure('halo', soft ? 'rgba(15,23,42,.28)' : '#ffffff', soft ? '3.4px' : '6px', soft ? '0.35' : '0.9')
   }
 
   // A live layout tween owns `d` and should finish with the cards.
@@ -3189,18 +3202,20 @@
   function smitePaintEdge(link, paint) {
     smiteEnsureLinkGeometry(link)
     link.dataset.smiteEdge = '1'
+    const soft = paint.weight === 'soft'
+    link.dataset.smiteWeight = soft ? 'soft' : 'strong'
     const gradId = smiteEnsureEdgeGradient(link, paint.from, paint.to)
     link.dataset.smiteGrad = gradId
     link.style.setProperty('stroke', `url(#${gradId})`, 'important')
-    link.style.strokeWidth = '3.5px'
-    link.style.opacity = '1'
+    link.style.setProperty('stroke-width', soft ? '2px' : '3.5px', 'important')
+    link.style.setProperty('opacity', soft ? '0.45' : '1', 'important')
     link.style.strokeDasharray = 'none'
     link.style.strokeDashoffset = ''
     link.style.strokeLinecap = 'round'
     link.style.animation = 'none'
     link.style.transition = 'none'
     link.style.vectorEffect = 'non-scaling-stroke'
-    smitePaintAnts(link, paint.ants, gradId)
+    smitePaintAnts(link, paint.ants, gradId, paint.weight)
   }
 
   function smitePaintCard(node, heat, rx, ry, outline) {
