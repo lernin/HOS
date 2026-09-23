@@ -1634,7 +1634,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastShape, smiteCardChrome, smiteLinkLive, smiteCastOverlaps, smiteFoldCast, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastShape, smiteCardChrome, smiteLinkLive, smiteCastOverlaps, smiteFoldCast, smiteArmPlace, smiteArmScope, smiteArmChrome, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1855,6 +1855,18 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.equal(inside.marks, null)
   const partial = smite.smiteFoldCast([branchB], ['b', 'other'], 'red')
   assert.equal(partial.action, 'block')
+
+  const armRect = { left: 100, top: 200, right: 180, bottom: 260 }
+  assert.equal(smite.smiteArmPlace(armRect, 140, 230), 'on')
+  assert.equal(smite.smiteArmPlace(armRect, 140, 180), 'above')
+  assert.equal(smite.smiteArmPlace(armRect, 140, 280), 'below')
+  assert.equal(smite.smiteArmPlace(armRect, 20, 230), null)
+  const branch = { _uid: 'fruit', children: [{ _uid: 'lime' }, { _uid: 'peel' }] }
+  assert.deepEqual(smite.smiteArmScope(branch, 'on', 'food'), ['fruit', 'lime', 'peel'])
+  assert.deepEqual(smite.smiteArmScope(branch, 'below', 'food'), ['lime', 'peel'])
+  assert.deepEqual(smite.smiteArmScope(branch, 'above', 'food'), ['food'])
+  assert.deepEqual(smite.smiteArmScope(branch, 'above', null), [])
+  assert.deepEqual(smite.smiteArmChrome(), { stroke: '#16a34a', ants: false, fill: 'none' })
 
   assert.equal(smite.smiteScarOpacity(0), 1)
   assert.equal(smite.smiteScarOpacity(2800), 1)

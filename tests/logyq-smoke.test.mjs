@@ -3793,6 +3793,187 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
   await context.close()
 })
 
+test('LOGYQ one-thumb tap arms green and a swipe nominates by zone', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      children: [
+        { name: 'Fruit', children: [{ name: 'Lime' }] },
+        { name: 'Meat' },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Food', 'Fruit', 'Lime', 'Meat'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    return node && node.getBoundingClientRect().width > 20
+  }))
+
+  const read = () => page.evaluate(() => {
+    const chrome = (name) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === name)
+      const wash = node?.querySelector('rect.logyq-smite-wash')
+      const clock = node?.querySelector('path.logyq-smite-clock')
+      return {
+        arm: node?.dataset?.smiteArm || null,
+        stroke: wash?.getAttribute('stroke') || null,
+        fill: wash?.getAttribute('fill') || null,
+        ants: wash?.dataset?.smiteOutline || null,
+        animation: wash ? getComputedStyle(wash).animationName : null,
+        width: wash ? getComputedStyle(wash).strokeWidth : null,
+        clock: node?.dataset?.smiteClock === '1',
+        clockStroke: clock?.getAttribute('stroke') || null,
+      }
+    }
+    const smite = window.LOGYQPreview.gestures.smite
+    const marked = []
+    smite.mercies[0]?.marks?.forEach((mark, uid) => {
+      const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data._uid === uid)
+      marked.push(`${node?.data?.name}:${mark}`)
+    })
+    marked.sort()
+    return {
+      armed: smite.armed,
+      mercies: smite.mercies.length,
+      cast: smite.mercy?.castUid || null,
+      marked,
+      editor: !!document.querySelector('.node-edit-input'),
+      cards: { Food: chrome('Food'), Fruit: chrome('Fruit'), Lime: chrome('Lime'), Meat: chrome('Meat') },
+    }
+  })
+
+  const point = async (name) => page.evaluate((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    const face = node?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')
+    const rect = (face || node).getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right }
+  }, name)
+
+  const gesture = async (x, y, dx, dy) => {
+    await page.evaluate(({ x, y, dx, dy }) => {
+      const canvas = document.getElementById('canvas')
+      const fire = (type, px, py) => {
+        const hit = document.elementFromPoint(px, py)
+        const target = hit && canvas.contains(hit) ? hit : canvas
+        target.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 8,
+          isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: px, clientY: py,
+        }))
+      }
+      fire('pointerdown', x, y)
+      fire('pointerup', x + dx, y + dy)
+    }, { x, y, dx, dy })
+  }
+
+  const reset = async () => {
+    await page.evaluate(() => {
+      const smite = window.LOGYQPreview.gestures.smite
+      smite.mercies = []
+      smite.mercy = null
+      window.LOGYQPreview.gestures.clearSmiteArm()
+    })
+  }
+
+  const meat = await point('Meat')
+  await gesture(meat.x, meat.y, 0, 0)
+  await gesture(meat.x, meat.y, 0, 0)
+  await page.waitForSelector('.node-edit-input')
+  const editing = await read()
+  assert.equal(editing.editor, true)
+  assert.equal(editing.cards.Meat.arm, null)
+  await page.locator('.node-edit-input').press('Escape')
+  await page.waitForFunction(() => !document.querySelector('.node-edit-input'))
+
+  await reset()
+  const fruit = await point('Fruit')
+  await gesture(fruit.x, fruit.y, 0, 0)
+  const armed = await read()
+  assert.equal(armed.cards.Fruit.arm, '1')
+  assert.equal(armed.cards.Fruit.stroke, '#16a34a')
+  assert.equal(armed.cards.Fruit.fill, 'none')
+  assert.equal(armed.cards.Fruit.ants, null)
+  assert.equal(armed.cards.Fruit.animation, 'none')
+  assert.equal(armed.cards.Fruit.width, '3.5px')
+  assert.equal(armed.cards.Fruit.clock, false)
+  assert.equal(armed.mercies, 0)
+  assert.equal(armed.editor, false)
+
+  const empty = await page.evaluate(() => {
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    for (let y = 70; y < 220; y += 18) {
+      for (let x = canvas.left + 12; x < canvas.right - 12; x += 22) {
+        const hit = document.elementFromPoint(x, y)
+        if (hit && !hit.closest('g.node, g.hit-slot, .node-edit-stack')) return { x, y }
+      }
+    }
+    return null
+  })
+  assert.ok(empty, 'need an empty map point')
+  await gesture(empty.x, empty.y, 0, 0)
+  const cleared = await read()
+  assert.equal(cleared.armed, null)
+  assert.equal(cleared.cards.Fruit.arm, null)
+  assert.equal(cleared.cards.Fruit.stroke, null)
+
+  await gesture(fruit.x, fruit.y, 0, 0)
+  await gesture(fruit.x, fruit.y, 0, 80)
+  const branch = await read()
+  assert.deepEqual(branch.marked, ['Fruit:red', 'Lime:red'])
+  assert.equal(branch.cards.Fruit.clock, true)
+  assert.equal(branch.cards.Fruit.clockStroke, '#ff0000')
+  assert.equal(branch.cards.Lime.stroke, '#ff0000')
+  assert.equal(branch.cards.Lime.ants, 'ants')
+  assert.equal(branch.cards.Meat.stroke, null)
+  assert.equal(branch.cards.Fruit.arm, null)
+
+  await reset()
+  const again = await point('Fruit')
+  await gesture(again.x, again.y, 0, 0)
+  await gesture(again.x, again.bottom + 16, 0, 80)
+  const kids = await read()
+  assert.deepEqual(kids.marked, ['Lime:red'])
+  assert.equal(kids.cards.Fruit.clock, true)
+  assert.equal(kids.cards.Lime.stroke, '#ff0000')
+  assert.equal(kids.cards.Fruit.stroke, null)
+  assert.equal(kids.cards.Meat.stroke, null)
+
+  await reset()
+  const third = await point('Fruit')
+  await gesture(third.x, third.y, 0, 0)
+  await gesture(third.x, third.top - 16, 0, 80)
+  const parent = await read()
+  assert.deepEqual(parent.marked, ['Food:red'])
+  assert.equal(parent.cards.Food.clock, true)
+  assert.equal(parent.cards.Food.clockStroke, '#ff0000')
+  assert.equal(parent.cards.Fruit.stroke, null)
+  assert.equal(parent.cards.Lime.stroke, null)
+
+  await reset()
+  const fourth = await point('Fruit')
+  await gesture(fourth.x, fourth.y, 0, 0)
+  await gesture(fourth.x, fourth.y, -80, 0)
+  const bank = await read()
+  assert.deepEqual(bank.marked, ['Fruit:amber', 'Lime:amber'])
+  assert.equal(bank.cards.Fruit.clock, true)
+  assert.equal(bank.cards.Fruit.clockStroke, '#ffa100')
+  assert.equal(bank.cards.Lime.stroke, '#ffa100')
+  assert.equal(bank.cards.Meat.stroke, null)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ an ancestor cast absorbs a nested branch and disjoint branches stay live', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   await stubMaps(context)

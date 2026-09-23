@@ -1062,6 +1062,35 @@
     return 'idle'
   }
 
+  // Armed select is a calm green outline. Not a fate, so no ants and no clock.
+  function smiteArmChrome() {
+    return { stroke: '#16a34a', ants: false, fill: 'none' }
+  }
+
+  // Where a one-thumb swipe started, relative to the armed card.
+  // Beside the card is not a nominate zone.
+  function smiteArmPlace(rect, x, y) {
+    if (!rect || !(rect.right > rect.left) || !(rect.bottom > rect.top)) return null
+    const px = Number(x)
+    const py = Number(y)
+    if (px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom) return 'on'
+    const pad = 36
+    if (px < rect.left - pad || px > rect.right + pad) return null
+    if (py < rect.top) return 'above'
+    if (py > rect.bottom) return 'below'
+    return null
+  }
+
+  // On the card: that card and its branch. Below: children only.
+  // Above: the parent card only. parentId is omitted when the card is root.
+  function smiteArmScope(node, place, parentId) {
+    if (!node || !place) return []
+    if (place === 'below') return smiteChildList(node).map(smiteNodeId).filter(Boolean)
+    if (place === 'above') return parentId ? [parentId] : []
+    if (place === 'on') return smiteAffected(node, 'middle')
+    return []
+  }
+
   // Clock cards wear the mercy timer, not a second ants outline. No fills.
   function smiteCardChrome(mark, isClockCard) {
     if (isClockCard) return null
@@ -2125,6 +2154,7 @@
 
     if (win.__logyqV2ConsumedPointers.has(event.pointerId)) {
       win.__logyqV2ConsumedPointers.delete(event.pointerId)
+      state.lastTap = null
       return
     }
     if (!candidate || candidate.multi) {
@@ -2182,6 +2212,7 @@
     const node = uid ? nodeByUid(doc, uid) : null
     if (!uid) {
       hardClearBackground(doc, win, { keepStroke: true })
+      smiteSetArm(doc, null)
       return
     }
 
@@ -2189,6 +2220,7 @@
     if (state.lastTap?.uid === uid && now - state.lastTap.time <= v162Constants().DOUBLE_TAP_MS) {
       state.lastTap = null
       clearCardMic(state.mic)
+      smiteSetArm(doc, null)
       bridge.editSelected({ uid })
       return
     }
@@ -2203,6 +2235,8 @@
     state.lastTap = { uid, time: now }
     if (blank(node)) armBlankCardMic(state.mic, doc, uid)
     else clearCardMic(state.mic)
+    const live = preview.gestures?.smite
+    if (!live || !smiteOwnsUid(live, uid)) smiteSetArm(doc, uid)
   }
 
   function onFlickClear(event, win, state) {
@@ -2629,6 +2663,8 @@
         y: event.clientY,
         lastX: event.clientX,
         lastY: event.clientY,
+        t0: win.performance?.now?.() || Date.now(),
+        view: captureView(doc, win),
         uid,
       })
       if (smiteOwnsUid(smite, uid) && holdState) cancelHold(win, holdState)
@@ -2664,6 +2700,7 @@
       const paired = smite.pair
       let handled = false
       if (!smite.pinched) handled = smiteMercyUp(doc, win, smite, pointer)
+      if (!handled && !smite.pinched && !paired) handled = smiteTryArmSwipe(doc, win, smite, pointer)
       if (!handled && !smite.pinched) handled = smiteTryCast(doc, win, smite, pointer, event.pointerId)
       smite.pointers.delete(event.pointerId)
       if (handled || paired) win.__logyqV2ConsumedPointers.add(event.pointerId)
@@ -2772,9 +2809,39 @@
     if (extra?.marks) layers.push(extra)
     if (!layers.length) {
       clearSmiteClocks(doc)
+      paintSmiteArm(doc, smite.armed)
       return
     }
     paintSmiteLayers(doc, layers)
+    paintSmiteArm(doc, smite.armed)
+  }
+
+  function paintSmiteArm(doc, uid) {
+    doc.querySelectorAll('svg#canvas g.node[data-smite-arm="1"]').forEach((node) => {
+      if (nodeUid(node) === uid) return
+      delete node.dataset.smiteArm
+      if (node.dataset.smiteClock === '1') return
+      const wash = node.querySelector('rect.logyq-smite-wash')
+      if (wash && wash.dataset.smiteOutline !== 'ants') wash.remove()
+      if (!node.dataset.smiteClock && !node.querySelector('rect.logyq-smite-wash')) delete node.dataset.smiteHeat
+    })
+    if (!uid) return
+    const node = nodeByUid(doc, uid)
+    if (!node) return
+    if (node.dataset.smiteClock === '1') {
+      delete node.dataset.smiteArm
+      return
+    }
+    const wash = node.querySelector('rect.logyq-smite-wash')
+    if (node.dataset.smiteHeat === '1' && wash && wash.dataset.smiteOutline === 'ants') {
+      delete node.dataset.smiteArm
+      return
+    }
+    const face = smiteFace(node)
+    if (!face) return
+    const box = smiteFaceBox(face)
+    smitePaintCard(node, smiteArmChrome(), box.rx, box.ry)
+    node.dataset.smiteArm = '1'
   }
 
   function smiteEnsureTick(doc, win, smite) {
@@ -2841,6 +2908,60 @@
       return
     }
     smiteRefresh(doc, smite, { marks: plan.marks, fraction: 1, castUid: swipe.uid, tone }, new Set(plan.absorb))
+  }
+
+  function smiteParentId(uid) {
+    const root = bridge.core?.state?.root
+    if (!root?.descendants || uid == null) return null
+    const node = root.descendants().find((item) => item?.data?._uid === uid)
+    return node?.parent?.data?._uid || null
+  }
+
+  function smiteSetArm(doc, uid) {
+    const live = preview.gestures?.smite
+    if (!live) return
+    live.armed = uid || null
+    smiteRefresh(doc, live)
+  }
+
+  function smiteTryArmSwipe(doc, win, smite, pointer) {
+    if (!smite.armed || !pointer) return false
+    const dx = pointer.lastX - pointer.x
+    const dy = pointer.lastY - pointer.y
+    const elapsed = (win.performance?.now?.() || Date.now()) - (pointer.t0 || 0)
+    if (!isFlick(dx, dy, elapsed)) return false
+    const direction = smiteCastDirection(dx, dy, v162Constants().FLICK_MIN)
+    if (direction !== 'down' && direction !== 'left') return false
+    const flick = preview.gestures?.session?.flick
+    if (flick) flick.lastTap = null
+    const rect = cardFaceRect(nodeByUid(doc, smite.armed))
+    const place = smiteArmPlace(rect, pointer.x, pointer.y)
+    if (!place) return false
+    const data = smiteLiveData(smite.armed)
+    const parentId = smiteParentId(smite.armed)
+    const ids = smiteArmScope(data, place, parentId)
+    if (!ids.length) {
+      smiteToast('Nothing to smite')
+      if (pointer.view) restoreView(doc, win, pointer.view)
+      return true
+    }
+    const tone = direction === 'left' ? 'amber' : 'red'
+    const plan = smiteFoldCast(smite.mercies, ids, tone)
+    if (plan.action === 'block') {
+      smiteRefresh(doc, smite)
+      return true
+    }
+    if (pointer.view) restoreView(doc, win, pointer.view)
+    for (const mercy of plan.absorb) smiteDropMercy(smite, mercy)
+    const castUid = place === 'above' ? parentId : smite.armed
+    smite.armed = null
+    beginSmiteMercy(doc, win, smite, {
+      uid: castUid,
+      zone: place === 'below' ? 'bottom' : (place === 'above' ? 'top' : 'middle'),
+      direction,
+      marks: plan.marks,
+    })
+    return true
   }
 
   function smiteTryCast(doc, win, smite, pointer, pointerId) {
@@ -3703,7 +3824,11 @@
     preview.gestures.smiteClockRoots = smiteClockRoots
     preview.gestures.smiteCastOverlaps = smiteCastOverlaps
     preview.gestures.smiteFoldCast = smiteFoldCast
+    preview.gestures.smiteArmPlace = smiteArmPlace
+    preview.gestures.smiteArmScope = smiteArmScope
+    preview.gestures.smiteArmChrome = smiteArmChrome
     preview.gestures.openSmiteCast = openSmiteCast
+    preview.gestures.clearSmiteArm = () => smiteSetArm(document, null)
     preview.gestures.smiteHeat = smiteHeat
     preview.gestures.smiteScarOpacity = smiteScarOpacity
     preview.gestures.smiteScarBlocked = smiteScarBlocked
