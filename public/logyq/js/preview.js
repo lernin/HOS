@@ -1067,27 +1067,42 @@
     return { stroke: '#16a34a', ants: false, fill: 'none' }
   }
 
-  // Where a one-thumb swipe started, relative to the armed card.
-  // Beside the card is not a nominate zone.
-  function smiteArmPlace(rect, x, y) {
-    if (!rect || !(rect.right > rect.left) || !(rect.bottom > rect.top)) return null
-    const px = Number(x)
-    const py = Number(y)
-    if (px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom) return 'on'
-    const pad = 36
-    if (px < rect.left - pad || px > rect.right + pad) return null
-    if (py < rect.top) return 'above'
-    if (py > rect.bottom) return 'below'
+  // One-thumb direction. Up is only for a green-armed card.
+  // Two-finger Smite keeps smiteCastDirection, which does not return up.
+  function smiteArmDirection(dx, dy, min = 52) {
+    const x = Number(dx) || 0
+    const y = Number(dy) || 0
+    const adx = Math.abs(x)
+    const ady = Math.abs(y)
+    if (Math.hypot(x, y) < min) return null
+    if (adx > ady && x < 0) return 'left'
+    if (ady >= adx && y > 0) return 'down'
+    if (ady > adx && y < 0) return 'up'
     return null
   }
 
-  // On the card: that card and its branch. Below: children only.
-  // Above: the parent card only. parentId is omitted when the card is root.
-  function smiteArmScope(node, place, parentId) {
-    if (!node || !place) return []
-    if (place === 'below') return smiteChildList(node).map(smiteNodeId).filter(Boolean)
-    if (place === 'above') return parentId ? [parentId] : []
-    if (place === 'on') return smiteAffected(node, 'middle')
+  // The swipe starts on the green card, or on one of its direct children.
+  function smiteArmTarget(armedUid, hitUid, childIds) {
+    if (!armedUid || !hitUid) return null
+    if (hitUid === armedUid) return 'self'
+    if ((childIds || []).some((id) => id === hitUid)) return 'child'
+    return null
+  }
+
+  // self + down/left: the green card and everything under it.
+  // self + up: the green card alone.
+  // child + down/left: every direct child, not grandchildren.
+  function smiteArmScope(node, target, direction) {
+    if (!node || !target || !direction) return []
+    const id = smiteNodeId(node)
+    if (!id) return []
+    if (target === 'child') {
+      if (direction !== 'down' && direction !== 'left') return []
+      return smiteChildList(node).map(smiteNodeId).filter(Boolean)
+    }
+    if (target !== 'self') return []
+    if (direction === 'up') return [id]
+    if (direction === 'down' || direction === 'left') return smiteAffected(node, 'middle')
     return []
   }
 
@@ -2910,13 +2925,6 @@
     smiteRefresh(doc, smite, { marks: plan.marks, fraction: 1, castUid: swipe.uid, tone }, new Set(plan.absorb))
   }
 
-  function smiteParentId(uid) {
-    const root = bridge.core?.state?.root
-    if (!root?.descendants || uid == null) return null
-    const node = root.descendants().find((item) => item?.data?._uid === uid)
-    return node?.parent?.data?._uid || null
-  }
-
   function smiteSetArm(doc, uid) {
     const live = preview.gestures?.smite
     if (!live) return
@@ -2930,21 +2938,16 @@
     const dy = pointer.lastY - pointer.y
     const elapsed = (win.performance?.now?.() || Date.now()) - (pointer.t0 || 0)
     if (!isFlick(dx, dy, elapsed)) return false
-    const direction = smiteCastDirection(dx, dy, v162Constants().FLICK_MIN)
-    if (direction !== 'down' && direction !== 'left') return false
+    const direction = smiteArmDirection(dx, dy, v162Constants().FLICK_MIN)
+    if (!direction) return false
+    const data = smiteLiveData(smite.armed)
+    const childIds = smiteChildList(data).map(smiteNodeId).filter(Boolean)
+    const target = smiteArmTarget(smite.armed, pointer.uid, childIds)
+    if (!target) return false
+    const ids = smiteArmScope(data, target, direction)
+    if (!ids.length) return false
     const flick = preview.gestures?.session?.flick
     if (flick) flick.lastTap = null
-    const rect = cardFaceRect(nodeByUid(doc, smite.armed))
-    const place = smiteArmPlace(rect, pointer.x, pointer.y)
-    if (!place) return false
-    const data = smiteLiveData(smite.armed)
-    const parentId = smiteParentId(smite.armed)
-    const ids = smiteArmScope(data, place, parentId)
-    if (!ids.length) {
-      smiteToast('Nothing to smite')
-      if (pointer.view) restoreView(doc, win, pointer.view)
-      return true
-    }
     const tone = direction === 'left' ? 'amber' : 'red'
     const plan = smiteFoldCast(smite.mercies, ids, tone)
     if (plan.action === 'block') {
@@ -2953,12 +2956,13 @@
     }
     if (pointer.view) restoreView(doc, win, pointer.view)
     for (const mercy of plan.absorb) smiteDropMercy(smite, mercy)
-    const castUid = place === 'above' ? parentId : smite.armed
+    const castUid = smite.armed
+    const zone = target === 'child' ? 'bottom' : (direction === 'up' ? 'top' : 'middle')
     smite.armed = null
     beginSmiteMercy(doc, win, smite, {
       uid: castUid,
-      zone: place === 'below' ? 'bottom' : (place === 'above' ? 'top' : 'middle'),
-      direction,
+      zone,
+      direction: direction === 'left' ? 'left' : 'down',
       marks: plan.marks,
     })
     return true
@@ -3824,7 +3828,8 @@
     preview.gestures.smiteClockRoots = smiteClockRoots
     preview.gestures.smiteCastOverlaps = smiteCastOverlaps
     preview.gestures.smiteFoldCast = smiteFoldCast
-    preview.gestures.smiteArmPlace = smiteArmPlace
+    preview.gestures.smiteArmDirection = smiteArmDirection
+    preview.gestures.smiteArmTarget = smiteArmTarget
     preview.gestures.smiteArmScope = smiteArmScope
     preview.gestures.smiteArmChrome = smiteArmChrome
     preview.gestures.openSmiteCast = openSmiteCast

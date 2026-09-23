@@ -3793,7 +3793,7 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
   await context.close()
 })
 
-test('LOGYQ one-thumb tap arms green and a swipe nominates by zone', async () => {
+test('LOGYQ one-thumb tap arms green and a swipe nominates by target', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   await stubMaps(context)
   const page = await context.newPage()
@@ -3810,12 +3810,18 @@ test('LOGYQ one-thumb tap arms green and a swipe nominates by zone', async () =>
     window.LOGYQBridge.loadMap({
       name: 'Food',
       children: [
-        { name: 'Fruit', children: [{ name: 'Lime' }] },
+        {
+          name: 'Fruit',
+          children: [
+            { name: 'Lime', children: [{ name: 'Peel' }] },
+            { name: 'Zest' },
+          ],
+        },
         { name: 'Meat' },
       ],
     }, [])
   })
-  await page.waitForFunction(() => ['Food', 'Fruit', 'Lime', 'Meat'].every((label) => {
+  await page.waitForFunction(() => ['Food', 'Fruit', 'Lime', 'Peel', 'Zest', 'Meat'].every((label) => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
     return node && node.getBoundingClientRect().width > 20
   }))
@@ -3849,7 +3855,14 @@ test('LOGYQ one-thumb tap arms green and a swipe nominates by zone', async () =>
       cast: smite.mercy?.castUid || null,
       marked,
       editor: !!document.querySelector('.node-edit-input'),
-      cards: { Food: chrome('Food'), Fruit: chrome('Fruit'), Lime: chrome('Lime'), Meat: chrome('Meat') },
+      cards: {
+        Food: chrome('Food'),
+        Fruit: chrome('Fruit'),
+        Lime: chrome('Lime'),
+        Peel: chrome('Peel'),
+        Zest: chrome('Zest'),
+        Meat: chrome('Meat'),
+      },
     }
   })
 
@@ -3926,49 +3939,88 @@ test('LOGYQ one-thumb tap arms green and a swipe nominates by zone', async () =>
   assert.equal(cleared.cards.Fruit.arm, null)
   assert.equal(cleared.cards.Fruit.stroke, null)
 
-  await gesture(fruit.x, fruit.y, 0, 0)
-  await gesture(fruit.x, fruit.y, 0, 80)
+  const swipe = async (name, dx, dy) => {
+    const spot = await point(name)
+    await gesture(spot.x, spot.y, dx, dy)
+  }
+
+  await swipe('Fruit', 0, 0)
+  await swipe('Fruit', 0, 80)
   const branch = await read()
-  assert.deepEqual(branch.marked, ['Fruit:red', 'Lime:red'])
+  assert.deepEqual(branch.marked, ['Fruit:red', 'Lime:red', 'Peel:red', 'Zest:red'])
   assert.equal(branch.cards.Fruit.clock, true)
   assert.equal(branch.cards.Fruit.clockStroke, '#ff0000')
   assert.equal(branch.cards.Lime.stroke, '#ff0000')
   assert.equal(branch.cards.Lime.ants, 'ants')
+  assert.equal(branch.cards.Peel.stroke, '#ff0000')
+  assert.equal(branch.cards.Zest.stroke, '#ff0000')
   assert.equal(branch.cards.Meat.stroke, null)
+  assert.equal(branch.cards.Food.stroke, null)
   assert.equal(branch.cards.Fruit.arm, null)
 
   await reset()
-  const again = await point('Fruit')
-  await gesture(again.x, again.y, 0, 0)
-  await gesture(again.x, again.bottom + 16, 0, 80)
+  await swipe('Fruit', 0, 0)
+  await swipe('Fruit', 0, -80)
+  const alone = await read()
+  assert.deepEqual(alone.marked, ['Fruit:red'])
+  assert.equal(alone.cards.Fruit.clock, true)
+  assert.equal(alone.cards.Fruit.clockStroke, '#ff0000')
+  assert.equal(alone.cards.Lime.stroke, null)
+  assert.equal(alone.cards.Peel.stroke, null)
+  assert.equal(alone.cards.Zest.stroke, null)
+  assert.equal(alone.cards.Food.stroke, null)
+
+  await reset()
+  await swipe('Fruit', 0, 0)
+  await swipe('Lime', 0, 80)
   const kids = await read()
-  assert.deepEqual(kids.marked, ['Lime:red'])
+  assert.deepEqual(kids.marked, ['Lime:red', 'Zest:red'])
   assert.equal(kids.cards.Fruit.clock, true)
-  assert.equal(kids.cards.Lime.stroke, '#ff0000')
   assert.equal(kids.cards.Fruit.stroke, null)
+  assert.equal(kids.cards.Lime.stroke, '#ff0000')
+  assert.equal(kids.cards.Zest.stroke, '#ff0000')
+  assert.equal(kids.cards.Peel.stroke, null)
   assert.equal(kids.cards.Meat.stroke, null)
 
   await reset()
-  const third = await point('Fruit')
-  await gesture(third.x, third.y, 0, 0)
-  await gesture(third.x, third.top - 16, 0, 80)
-  const parent = await read()
-  assert.deepEqual(parent.marked, ['Food:red'])
-  assert.equal(parent.cards.Food.clock, true)
-  assert.equal(parent.cards.Food.clockStroke, '#ff0000')
-  assert.equal(parent.cards.Fruit.stroke, null)
-  assert.equal(parent.cards.Lime.stroke, null)
+  await swipe('Fruit', 0, 0)
+  await swipe('Zest', 0, 80)
+  const kidsAgain = await read()
+  assert.deepEqual(kidsAgain.marked, ['Lime:red', 'Zest:red'])
+  assert.equal(kidsAgain.cards.Peel.stroke, null)
+  assert.equal(kidsAgain.cards.Fruit.clock, true)
 
   await reset()
-  const fourth = await point('Fruit')
-  await gesture(fourth.x, fourth.y, 0, 0)
-  await gesture(fourth.x, fourth.y, -80, 0)
+  await swipe('Fruit', 0, 0)
+  await swipe('Fruit', -80, 0)
   const bank = await read()
-  assert.deepEqual(bank.marked, ['Fruit:amber', 'Lime:amber'])
+  assert.deepEqual(bank.marked, ['Fruit:amber', 'Lime:amber', 'Peel:amber', 'Zest:amber'])
   assert.equal(bank.cards.Fruit.clock, true)
   assert.equal(bank.cards.Fruit.clockStroke, '#ffa100')
   assert.equal(bank.cards.Lime.stroke, '#ffa100')
+  assert.equal(bank.cards.Peel.stroke, '#ffa100')
+  assert.equal(bank.cards.Zest.stroke, '#ffa100')
   assert.equal(bank.cards.Meat.stroke, null)
+
+  await reset()
+  await swipe('Fruit', 0, 0)
+  await swipe('Lime', -80, 0)
+  const kidBank = await read()
+  assert.deepEqual(kidBank.marked, ['Lime:amber', 'Zest:amber'])
+  assert.equal(kidBank.cards.Fruit.clock, true)
+  assert.equal(kidBank.cards.Fruit.clockStroke, '#ffa100')
+  assert.equal(kidBank.cards.Lime.stroke, '#ffa100')
+  assert.equal(kidBank.cards.Zest.stroke, '#ffa100')
+  assert.equal(kidBank.cards.Peel.stroke, null)
+
+  await reset()
+  await swipe('Fruit', 0, 0)
+  await swipe('Peel', 0, 80)
+  const deeper = await read()
+  assert.equal(deeper.mercies, 0)
+  assert.equal(deeper.cards.Lime.stroke, null)
+  assert.equal(deeper.cards.Zest.stroke, null)
+  assert.equal(deeper.cards.Fruit.clock, false)
 
   assert.deepEqual(errors, [])
   await context.close()
