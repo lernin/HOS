@@ -2416,7 +2416,7 @@
       smite.armed = null
       if (pointer.view) restoreView(doc, win, pointer.view)
       smiteRefresh(doc, smite)
-      preview.thekonym.openUid(uid)
+      preview.thekonym.openUid(uid, { flip: true })
       return true
     }
     const direction = smiteArmDirection(dx, dy, v162Constants().FLICK_MIN)

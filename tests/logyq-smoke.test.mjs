@@ -6112,6 +6112,8 @@ test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right 
   assert.equal(await page.evaluate((id) => document.querySelector(`svg#canvas g.node[data-uid="${id}"]`)?.dataset.smiteArm, uid), '1')
   await stroke(uid, 96, 45)
   await page.waitForSelector('#logyq-thekonym-card.is-open')
+  assert.equal(await page.evaluate(() => document.getElementById('logyq-thekonym-card')?.dataset.flip), 'open')
+  assert.equal(await page.locator('.logyq-tk-fly').count(), 1)
   assert.equal(await page.locator('.node-edit-input').count(), 0)
   assert.equal(await nodeCount(), beforeNodes)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
@@ -6138,6 +6140,7 @@ test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right 
   assert.deepEqual(dossier.examples, ['First example.', 'Second example.', 'Third example.'])
   assert.equal(dossier.bank, 0)
   assert.equal(dossier.addText, false)
+  await page.waitForFunction(() => document.getElementById('logyq-thekonym-card')?.dataset.flip === 'settled')
   await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
   await page.waitForFunction(() => !document.getElementById('logyq-thekonym-card').classList.contains('is-open'))
 

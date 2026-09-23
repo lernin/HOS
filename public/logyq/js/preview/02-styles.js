@@ -191,6 +191,12 @@
       body.logyq-thekonym::before{animation:none;filter:none;background:radial-gradient(ellipse at center, rgba(247,245,233,0) 40%, rgba(22,46,39,0.05) 72%, rgba(22,46,39,0.16) 100%), radial-gradient(ellipse at 50% 40%, #fbf8ef 0%, #f7f5e9 58%, #efe6d2 100%)}
       .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:rgba(22,46,39,.28);padding:5dvh 5vw}
       .logyq-tk-scrim.is-open{display:flex}
+      .logyq-tk-scrim.is-flipping{perspective:1400px}
+      .logyq-tk-scrim.is-flipping .logyq-tk-card{transform-style:preserve-3d;backface-visibility:hidden}
+      .logyq-tk-fly{position:fixed;z-index:6300;pointer-events:none;perspective:900px}
+      .logyq-tk-fly-face{width:100%;height:100%;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px 10px;background:#fff;border-radius:10px;box-shadow:0 12px 28px rgba(22,46,39,.2);backface-visibility:hidden;transform-origin:center center}
+      .logyq-tk-fly-face .logyq-onym{font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:22px;line-height:1.05;color:#1c3329;text-align:center;-webkit-text-stroke:0.45px #1c3329}
+      .logyq-tk-fly-face .logyq-essence{font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:500;font-size:14px;line-height:1.15;color:#66706a;text-align:center}
       .logyq-tk-card{position:relative;box-sizing:border-box;width:90vw;height:90dvh;max-width:720px;overflow:hidden;display:flex;flex-direction:column;text-align:center;padding:0;background:#f7f5e9;color:#29382f;border-radius:18px;box-shadow:0 24px 70px rgba(22,46,39,.28);font-family:'DM Sans',system-ui,sans-serif}
       .logyq-tk-x{position:absolute;top:8px;right:8px;z-index:1;width:36px;height:36px;border:0;border-radius:8px;background:transparent;color:#162e27;font-size:22px;line-height:1}
       .logyq-tk-body{box-sizing:border-box;width:100%;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:16px 22px 14px}
