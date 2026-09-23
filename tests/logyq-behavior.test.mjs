@@ -2245,9 +2245,18 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   const start = source.indexOf('// THEKONYM_PURE_START')
   const end = source.indexOf('// THEKONYM_PURE_END')
   assert.ok(start >= 0 && end > start)
-  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine };`)()
+  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine, thekonymDossier, thekonymExampleLines, thekonymExampleKeep, thekonymInPlay };`)()
   const rows = [
-    { id: '1', term: 'Fruit', essence: 'stored essence' },
+    {
+      id: '1',
+      term: 'Fruit',
+      essence: 'stored essence',
+      term_pronunciation: 'prak • TEH • oh • nim',
+      kid_explanation: 'Kid line.',
+      definition: 'A definition.',
+      technical_definition: 'A technical definition.',
+      example: 'One.\n\nTwo.\r\n Three.',
+    },
     { id: '2', term: 'fruit', essence: 'other' },
   ]
   assert.equal(api.thekonymMatch(rows, 'Fruit').id, '1')
@@ -2265,8 +2274,36 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   assert.equal(api.thekonymAlphabetLetter('fruit'), 'F')
   assert.equal(api.thekonymFaceLine('short'), 'short')
   assert.equal(api.thekonymFaceLine('1234567890123456789012345').endsWith('…'), true)
+  const dossier = api.thekonymDossier(rows, 'Fruit', {})
+  assert.equal(dossier.pronunciation, 'prak • TEH • oh • nim')
+  assert.equal(dossier.kids, 'Kid line.')
+  assert.equal(dossier.definition, 'A definition.')
+  assert.equal(dossier.technical, 'A technical definition.')
+  assert.deepEqual(dossier.examples, ['One.', 'Two.', 'Three.'])
+  const edited = api.thekonymDossier(rows, 'Fruit', { 1: { essence: 'local essence' } })
+  assert.equal(edited.essence, 'local essence')
+  assert.equal(edited.pronunciation, 'prak • TEH • oh • nim')
+  const bare = api.thekonymDossier([{ id: '9', term: 'Bare' }], 'Bare', {})
+  assert.equal(bare.kids, '')
+  assert.equal(bare.definition, '')
+  assert.deepEqual(bare.examples, [])
+  assert.deepEqual(api.thekonymExampleLines(''), [])
+  const fitsAt = (limit) => (keep) => keep <= limit
+  assert.deepEqual(api.thekonymExampleKeep(5, fitsAt(5)), { keep: 5, fadeTechnical: false })
+  assert.deepEqual(api.thekonymExampleKeep(5, fitsAt(2)), { keep: 2, fadeTechnical: false })
+  assert.deepEqual(api.thekonymExampleKeep(5, fitsAt(1)), { keep: 1, fadeTechnical: false })
+  assert.deepEqual(api.thekonymExampleKeep(5, () => false), { keep: 1, fadeTechnical: true })
+  assert.deepEqual(api.thekonymExampleKeep(0, () => false), { keep: 0, fadeTechnical: true })
+  assert.equal(api.thekonymInPlay('Fruit', ['Fruit', 'Other']), true)
+  assert.equal(api.thekonymInPlay('Fruit', ['fruit']), false)
+  assert.equal(api.thekonymInPlay('Quill', ['Fruit']), false)
   assert.match(source, /lab_thekonym_read/)
+  assert.match(source, /term_pronunciation/)
+  assert.match(source, /kid_explanation/)
+  assert.match(source, /technical_definition/)
   assert.match(source, /not in Thekonyms yet/)
+  assert.match(source, /Add to Word Bank/)
+  assert.doesNotMatch(source, /logyq-tk-bank/)
   assert.doesNotMatch(source, /rpc\('lab_thekonym_update'/)
   assert.match(source, /logyq_thekonym_mode_v1/)
 })

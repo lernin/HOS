@@ -343,21 +343,29 @@
       body.logyq-thekonym #logyq-thekonym-ask{display:grid;place-items:center;position:fixed;z-index:3300;top:58px;right:10px;width:36px;height:36px;border:1px solid #3c4d43;border-radius:10px;background:#162e27;color:#faf8f1;font:18px Georgia,serif;padding:0}
       #logyq-thekonym-mobile{grid-column:1 / -1}
       #logyq-thekonym-mobile[aria-pressed="true"]{background:#162e27;color:#faf8f1;border-color:#162e27}
-      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#29382f}
-      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#73786e}
+      body.logyq-thekonym svg#canvas g.node text.label{dominant-baseline:alphabetic}
+      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400}
+      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#4e5b54;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400}
       .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:rgba(22,46,39,.28);padding:5dvh 5vw}
       .logyq-tk-scrim.is-open{display:flex}
-      .logyq-tk-card{position:relative;box-sizing:border-box;width:90vw;height:90dvh;max-width:720px;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:36px 22px 20px;background:#f7f5e9;color:#29382f;border-radius:18px;box-shadow:0 24px 70px rgba(22,46,39,.28);font-family:'DM Sans',system-ui,sans-serif}
-      .logyq-tk-x{position:absolute;top:10px;right:10px;width:36px;height:36px;border:0;border-radius:8px;background:transparent;color:#162e27;font-size:22px;line-height:1}
-      .logyq-tk-kicker{margin:0 0 10px;letter-spacing:.16em;font-size:11px;color:#73786e}
-      .logyq-tk-onym{margin:0;max-width:100%;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:clamp(40px,8vw,72px);line-height:1.05;color:#284f38;overflow-wrap:anywhere}
-      .logyq-tk-essence{margin:18px 0 0;max-width:16em;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:clamp(22px,4.2vw,34px);line-height:1.25;color:#6d7368}
-      .logyq-tk-essence.is-missing{font-family:'DM Sans',system-ui,sans-serif;font-size:16px;color:#8a8474}
-      .logyq-tk-empty{margin:12px 0 0;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:clamp(26px,5vw,40px);line-height:1.2;color:#73786e}
-      .logyq-tk-bank{margin-top:28px;border:0;border-radius:8px;background:#284e43;color:#faf8f1;min-height:44px;padding:10px 16px;font:600 14px/1 'DM Sans',system-ui,sans-serif}
-      .logyq-tk-bank:disabled{opacity:.45}
-      .logyq-tk-note{margin:16px 0 0;font-size:11px;line-height:1.4;color:#8a8474}
-      .logyq-tk-input{width:min(100%,16em);box-sizing:border-box;text-align:center;background:#fffef8;border:1px solid #b6bdac;border-radius:6px;padding:8px 10px;color:#29382f;font:inherit}
+      .logyq-tk-card{position:relative;box-sizing:border-box;width:90vw;height:90dvh;max-width:720px;overflow:hidden;display:flex;flex-direction:column;text-align:center;padding:0;background:#f7f5e9;color:#29382f;border-radius:18px;box-shadow:0 24px 70px rgba(22,46,39,.28);font-family:'DM Sans',system-ui,sans-serif}
+      .logyq-tk-x{position:absolute;top:8px;right:8px;z-index:1;width:36px;height:36px;border:0;border-radius:8px;background:transparent;color:#162e27;font-size:22px;line-height:1}
+      .logyq-tk-body{box-sizing:border-box;width:100%;flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:16px 22px 14px}
+      .logyq-tk-body.is-miss{justify-content:center}
+      .logyq-tk-kicker{margin:0;letter-spacing:.18em;font-size:11px;font-weight:650;text-transform:uppercase;color:#284f38}
+      .logyq-tk-kicker::after{content:"";display:block;width:22px;height:1px;margin:8px auto 0;background:#9a7846}
+      .logyq-tk-onym{margin:8px 0 0;max-width:100%;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:clamp(40px,10vw,64px);line-height:.96;color:#162e27;overflow-wrap:anywhere}
+      .logyq-tk-pron{margin:7px 0 0;max-width:100%;font-family:Georgia,serif;font-size:15px;line-height:1.3;color:#737969}
+      .logyq-tk-essence{margin:8px 0 0;max-width:16em;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:clamp(22px,5.6vw,32px);line-height:1.12;color:#9a7846}
+      .logyq-tk-essence.is-blank{min-height:1.15em}
+      .logyq-tk-fields{width:100%;margin-top:14px;display:flex;flex-direction:column;gap:10px;text-align:left}
+      .logyq-tk-block h2{margin:0;font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:650;color:#6d6248}
+      .logyq-tk-block p{margin:2px 0 0;font-size:15.5px;line-height:1.32;color:#29382f}
+      .logyq-tk-technical.is-fade p{max-height:4.5em;overflow:hidden;-webkit-mask-image:linear-gradient(#000 58%,transparent);mask-image:linear-gradient(#000 58%,transparent)}
+      .logyq-tk-examples{margin:2px 0 0;padding:0 0 0 1.05em}
+      .logyq-tk-examples li{margin:1px 0;font-size:15.5px;line-height:1.3;color:#29382f}
+      .logyq-tk-empty{margin:14px 0 0;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;font-size:clamp(26px,6vw,40px);line-height:1.2;color:#73786e}
+      .logyq-tk-input{width:min(100%,16em);box-sizing:border-box;text-align:center;background:#fffef8;border:1px solid #b6bdac;border-radius:6px;padding:6px 10px;color:#29382f;font:inherit}
       .logyq-tk-browser{position:fixed;inset:0;z-index:6100;display:none;flex-direction:column;background:#f7f5e9;color:#29382f;font-family:'DM Sans',system-ui,sans-serif}
       .logyq-tk-browser.is-open{display:flex}
       .logyq-tk-browser header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:#162e27;color:#eeeadd;flex:0 0 auto}
@@ -4856,6 +4864,41 @@
     if (text.length <= 22) return text
     return `${text.slice(0, 21).trimEnd()}…`
   }
+
+  function thekonymText(value) {
+    return typeof value === 'string' ? value.trim() : ''
+  }
+
+  function thekonymExampleLines(example) {
+    return thekonymText(example).split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  }
+
+  function thekonymDossier(catalogue, name, edits) {
+    const face = thekonymFace(catalogue, name, edits)
+    const row = thekonymMatch(catalogue, name)
+    return {
+      ...face,
+      pronunciation: thekonymText(row?.term_pronunciation),
+      kids: thekonymText(row?.kid_explanation),
+      definition: thekonymText(row?.definition),
+      technical: thekonymText(row?.technical_definition),
+      examples: thekonymExampleLines(row?.example),
+    }
+  }
+
+  function thekonymInPlay(name, playing) {
+    const key = thekonymJoinKey(name)
+    if (!key) return true
+    return (Array.isArray(playing) ? playing : []).some((item) => thekonymJoinKey(item) === key)
+  }
+
+  // Drop examples from the end until two fit, then one. Fade technical only after that.
+  function thekonymExampleKeep(count, fits) {
+    let keep = Math.max(0, count | 0)
+    while (keep > 2 && !fits(keep)) keep -= 1
+    if (keep > 1 && !fits(keep)) keep = 1
+    return { keep, fadeTechnical: !fits(keep) }
+  }
   // THEKONYM_PURE_END
 
   const thekonymState = {
@@ -4890,24 +4933,41 @@
     return thekonymState.on
   }
 
+  function fitSvgLine(el, size, max) {
+    el.style.fontSize = `${size}px`
+    const length = el.getComputedTextLength?.() || 0
+    if (length > max && length > 0) el.style.fontSize = `${Math.max(12, (size * max) / length)}px`
+  }
+
   function paintLabelElement(text, name) {
     if (!text || !thekonymState.on) return
     const face = thekonymFace(thekonymState.rows, name, thekonymState.edits)
     const svg = 'http://www.w3.org/2000/svg'
+    const onymSize = 22
+    const essenceSize = 14
+    const gap = 5
+    const onymAscent = onymSize * 0.8
+    const onymDescent = onymSize * 0.22
+    const essenceAscent = essenceSize * 0.78
+    const essenceDescent = essenceSize * 0.24
+    const block = onymAscent + onymDescent + gap + essenceAscent + essenceDescent
+    const onymBaseline = (-block / 2) + onymAscent
+    const essenceBaseline = onymBaseline + onymDescent + gap + essenceAscent
     text.textContent = ''
+    text.style.dominantBaseline = 'alphabetic'
     const onym = document.createElementNS(svg, 'tspan')
     onym.setAttribute('class', 'logyq-onym')
     onym.setAttribute('x', '0')
-    onym.setAttribute('dy', '-0.42em')
-    onym.style.fontSize = '13px'
+    onym.setAttribute('y', String(onymBaseline))
     onym.textContent = face.onym || thekonymJoinKey(name)
     const essence = document.createElementNS(svg, 'tspan')
     essence.setAttribute('class', 'logyq-essence')
     essence.setAttribute('x', '0')
-    essence.setAttribute('dy', '1.2em')
-    essence.style.fontSize = '10px'
+    essence.setAttribute('y', String(essenceBaseline))
     essence.textContent = thekonymFaceLine(face.essence)
     text.append(onym, essence)
+    fitSvgLine(onym, onymSize, 126)
+    fitSvgLine(essence, essenceSize, 126)
   }
 
   function paintThekonymFaces() {
@@ -4924,6 +4984,11 @@
     function apply() {
       original()
       if (thekonymState.on) paintThekonymFaces()
+      else {
+        document.querySelectorAll('svg#canvas g.node text.label').forEach((el) => {
+          el.style.dominantBaseline = ''
+        })
+      }
     }
     apply.__thekonym = true
     wrap.apply = apply
@@ -4990,37 +5055,95 @@
   function currentCardFace() {
     const card = thekonymState.card
     if (!card) return null
-    return thekonymFace(thekonymState.rows, card.name, thekonymState.edits)
+    return thekonymDossier(thekonymState.rows, card.name, thekonymState.edits)
+  }
+
+  function thekonymPlayingNames() {
+    const names = []
+    const bank = bridge.core?.state?.wordBank
+    if (Array.isArray(bank)) names.push(...bank)
+    const root = bridge.core?.state?.root
+    if (root?.descendants) {
+      root.descendants().forEach((node) => {
+        if (node?.data?.name) names.push(node.data.name)
+      })
+    }
+    return names
+  }
+
+  function setThekonymBlock(root, name, text) {
+    const block = root.querySelector(`[data-block="${name}"]`)
+    const copy = block?.querySelector('p')
+    if (!block || !copy) return
+    copy.textContent = text || ''
+    block.hidden = !text
+    block.classList.remove('is-fade')
+  }
+
+  function fitThekonymDossier(root, lines) {
+    const body = root.querySelector('.logyq-tk-body')
+    const list = root.querySelector('.logyq-tk-examples')
+    const technical = root.querySelector('[data-block="technical"]')
+    if (!body || !list || body.clientHeight < 40) return
+    const items = [...list.querySelectorAll('li')]
+    const fits = (keep) => {
+      items.forEach((item, index) => { item.hidden = index >= keep })
+      technical?.classList.remove('is-fade')
+      return body.scrollHeight <= body.clientHeight + 1
+    }
+    const plan = thekonymExampleKeep(lines.length, fits)
+    items.forEach((item, index) => { item.hidden = index >= plan.keep })
+    technical?.classList.toggle('is-fade', !!plan.fadeTechnical && !technical.hidden)
   }
 
   function renderThekonymCard() {
     const root = document.getElementById('logyq-thekonym-card')
     if (!root || !thekonymState.card) return
+    if (root.querySelector('.logyq-tk-input')) return
     const face = currentCardFace()
     const onym = root.querySelector('.logyq-tk-onym')
+    const pron = root.querySelector('.logyq-tk-pron')
     const essence = root.querySelector('.logyq-tk-essence')
+    const fields = root.querySelector('.logyq-tk-fields')
     const empty = root.querySelector('.logyq-tk-empty')
-    const bank = root.querySelector('.logyq-tk-bank')
-    const editing = root.querySelector('.logyq-tk-input')
-    if (editing) return
+    const body = root.querySelector('.logyq-tk-body')
     const matched = !!face?.matched && thekonymState.status === 'ready'
     onym.hidden = !matched
+    pron.hidden = !matched || !face.pronunciation
     essence.hidden = !matched
+    fields.hidden = !matched
+    body?.classList.toggle('is-miss', !matched)
     if (matched) {
       onym.textContent = face.onym
-      onym.dataset.raw = face.onym
-      essence.dataset.raw = face.essence
-      essence.textContent = face.essence || 'Essence not recorded'
-      essence.classList.toggle('is-missing', !face.essence)
+      pron.textContent = face.pronunciation
+      essence.textContent = face.essence
+      essence.classList.toggle('is-blank', !face.essence)
+      setThekonymBlock(root, 'kids', face.kids)
+      setThekonymBlock(root, 'definition', face.definition)
+      setThekonymBlock(root, 'technical', face.technical)
+      const list = root.querySelector('.logyq-tk-examples')
+      const examples = root.querySelector('[data-block="examples"]')
+      list.replaceChildren(...face.examples.map((line) => {
+        const item = document.createElement('li')
+        item.textContent = line
+        return item
+      }))
+      examples.hidden = face.examples.length === 0
     }
     if (thekonymState.status === 'ready' && !face?.matched) empty.textContent = 'not in Thekonyms yet.'
     else if (thekonymState.status === 'reading') empty.textContent = 'Reading Thekonyms…'
     else empty.textContent = 'Thekonyms could not be read.'
     empty.hidden = matched
-    const chip = matched ? face.onym : thekonymJoinKey(thekonymState.card.name)
-    bank.hidden = !chip
-    bank.disabled = !chip
     root.classList.add('is-open')
+    if (matched) {
+      const lines = face.examples
+      const run = () => {
+        if (!root.classList.contains('is-open') || root.querySelector('.logyq-tk-input')) return
+        fitThekonymDossier(root, lines)
+      }
+      run()
+      requestAnimationFrame(run)
+    }
   }
 
   function renderThekonymList() {
@@ -5042,10 +5165,13 @@
       list.innerHTML = '<p class="logyq-tk-none">No Thekonyms for that letter.</p>'
       return
     }
+    const playing = thekonymPlayingNames()
     list.innerHTML = rows.map((row) => {
       const face = thekonymFace([row], row.term, thekonymState.edits)
       const essence = face.essence || '—'
-      return `<div class="logyq-tk-item"><button type="button" class="logyq-tk-row" data-id="${escapeHtml(row.id)}"><span>${escapeHtml(face.onym)}</span><small>${escapeHtml(essence)}</small></button><button type="button" class="logyq-tk-add" data-id="${escapeHtml(row.id)}">Add to Word Bank</button></div>`
+      const inPlay = thekonymInPlay(face.onym, playing) || thekonymInPlay(row.term, playing)
+      const add = inPlay ? '' : `<button type="button" class="logyq-tk-add" data-id="${escapeHtml(row.id)}">Add to Word Bank</button>`
+      return `<div class="logyq-tk-item"><button type="button" class="logyq-tk-row" data-id="${escapeHtml(row.id)}"><span>${escapeHtml(face.onym)}</span><small>${escapeHtml(essence)}</small></button>${add}</div>`
     }).join('')
   }
 
@@ -5070,6 +5196,7 @@
     const word = thekonymJoinKey(name)
     if (!word) return false
     bridge.core.wordDock.addWords(word, 'bank')
+    renderThekonymList()
     return true
   }
 
@@ -5089,7 +5216,7 @@
 
   function beginThekonymEdit(field) {
     const face = currentCardFace()
-    if (!face?.matched || !face.id) return
+    if (!face?.matched || !face.id || thekonymState.status !== 'ready') return
     const root = document.getElementById('logyq-thekonym-card')
     const host = root?.querySelector(field === 'term' ? '.logyq-tk-onym' : '.logyq-tk-essence')
     if (!host || host.querySelector('input')) return
@@ -5203,7 +5330,7 @@
       const scrim = document.createElement('div')
       scrim.id = 'logyq-thekonym-card'
       scrim.className = 'logyq-tk-scrim'
-      scrim.innerHTML = '<article class="logyq-tk-card" role="dialog" aria-label="Thekonym"><button type="button" class="logyq-tk-x" aria-label="Close">×</button><p class="logyq-tk-kicker">Thekonym</p><h1 class="logyq-tk-onym" data-edit="term"></h1><p class="logyq-tk-essence" data-edit="essence"></p><p class="logyq-tk-empty" hidden>not in Thekonyms yet.</p><button type="button" class="logyq-tk-bank">Add to Word Bank</button><p class="logyq-tk-note">Edits stay on this device. They are not written to Thekonyms.</p></article>'
+      scrim.innerHTML = '<article class="logyq-tk-card" role="dialog" aria-label="Thekonym"><button type="button" class="logyq-tk-x" aria-label="Close">×</button><div class="logyq-tk-body"><p class="logyq-tk-kicker">Thekonym</p><h1 class="logyq-tk-onym" data-edit="term"></h1><p class="logyq-tk-pron" hidden></p><p class="logyq-tk-essence" data-edit="essence"></p><div class="logyq-tk-fields"><section class="logyq-tk-block" data-block="kids" hidden><h2>Kids definition</h2><p></p></section><section class="logyq-tk-block" data-block="definition" hidden><h2>Definition</h2><p></p></section><section class="logyq-tk-block logyq-tk-technical" data-block="technical" hidden><h2>Technical definition</h2><p></p></section><section class="logyq-tk-block" data-block="examples" hidden><h2>Examples</h2><ul class="logyq-tk-examples"></ul></section></div><p class="logyq-tk-empty" hidden>not in Thekonyms yet.</p></div></article>'
       document.body.append(scrim)
       let lastField = ''
       let lastAt = 0
@@ -5211,10 +5338,6 @@
         if (event.target === scrim) closeThekonymCard()
       })
       scrim.querySelector('.logyq-tk-x').addEventListener('click', closeThekonymCard)
-      scrim.querySelector('.logyq-tk-bank').addEventListener('click', () => {
-        const face = currentCardFace()
-        addThekonymToBank(face?.matched ? face.onym : thekonymState.card?.name)
-      })
       scrim.querySelector('.logyq-tk-card').addEventListener('pointerup', (event) => {
         const field = event.target.closest?.('[data-edit]')
         if (!field || field.querySelector('input')) return

@@ -5962,7 +5962,20 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(name === 'lab_thekonym_read'
-        ? [{ id: 'row-1', term: 'Zephyronym', essence: 'a test essence' }]
+        ? [{
+          id: 'row-1',
+          term: 'Zephyronym',
+          term_pronunciation: 'ZEF • ee • oh • nim',
+          essence: 'a test essence',
+          kid_explanation: 'A kid line for the test.',
+          definition: 'A short definition.',
+          technical_definition: 'A longer technical definition kept on the dossier.',
+          example: 'First example.\nSecond example.\nThird example.',
+        }, {
+          id: 'row-2',
+          term: 'Quillonym',
+          essence: 'not on the map',
+        }]
         : { refused: true }),
     })
   })
@@ -6017,7 +6030,29 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
   }, uid)
   await page.waitForSelector('#logyq-thekonym-card.is-open')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
-  assert.match(await page.locator('#logyq-thekonym-card .logyq-tk-essence').innerText(), /a test essence/)
+  const dossier = await page.evaluate(() => {
+    const card = document.getElementById('logyq-thekonym-card')
+    return {
+      word: card.querySelector('.logyq-tk-onym')?.textContent,
+      pron: card.querySelector('.logyq-tk-pron')?.textContent,
+      essence: card.querySelector('.logyq-tk-essence')?.textContent,
+      kids: card.querySelector('[data-block="kids"] p')?.textContent,
+      definition: card.querySelector('[data-block="definition"] p')?.textContent,
+      technical: card.querySelector('[data-block="technical"] p')?.textContent,
+      examples: [...card.querySelectorAll('.logyq-tk-examples li')].filter((item) => !item.hidden).map((item) => item.textContent),
+      bank: card.querySelectorAll('.logyq-tk-bank, .logyq-tk-add').length,
+      addText: /Add to Word Bank/.test(card.innerText),
+    }
+  })
+  assert.equal(dossier.word, 'Zephyronym')
+  assert.equal(dossier.pron, 'ZEF • ee • oh • nim')
+  assert.equal(dossier.essence, 'a test essence')
+  assert.equal(dossier.kids, 'A kid line for the test.')
+  assert.equal(dossier.definition, 'A short definition.')
+  assert.equal(dossier.technical, 'A longer technical definition kept on the dossier.')
+  assert.deepEqual(dossier.examples, ['First example.', 'Second example.', 'Third example.'])
+  assert.equal(dossier.bank, 0)
+  assert.equal(dossier.addText, false)
   await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
   await page.waitForFunction(() => !document.getElementById('logyq-thekonym-card').classList.contains('is-open'))
 
@@ -6034,9 +6069,14 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
   await page.waitForSelector('.logyq-tk-row')
   assert.match(await page.locator('.logyq-tk-row').innerText(), /Zephyronym/)
   assert.match(await page.locator('.logyq-tk-row').innerText(), /a test essence/)
+  assert.equal(await page.locator('.logyq-tk-add').count(), 0)
+  await page.locator('#logyq-thekonym-letters [data-letter="Q"]').click()
+  await page.waitForSelector('.logyq-tk-add')
+  assert.match(await page.locator('.logyq-tk-row').innerText(), /Quillonym/)
   await page.locator('.logyq-tk-add').click()
-  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.includes('Zephyronym'))
-  assert.equal(await page.locator('#Dock .chip', { hasText: 'Zephyronym' }).count(), 1)
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.includes('Quillonym'))
+  assert.equal(await page.locator('#Dock .chip', { hasText: 'Quillonym' }).count(), 1)
+  assert.equal(await page.locator('.logyq-tk-add').count(), 0)
   await page.locator('#logyq-thekonym-browser-close').click()
   await page.evaluate((id) => window.LOGYQPreview.thekonym.openUid(id), uid)
   await page.waitForSelector('#logyq-thekonym-card.is-open .logyq-tk-essence')
