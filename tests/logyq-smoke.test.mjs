@@ -5969,7 +5969,7 @@ test('LOGYQ kids-only parent tap steps delete to Word Bank then clears', async (
   await context.close()
 })
 
-test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instead of rename', async () => {
+test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right swipe opens the dossier', async () => {
   const calls = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)
@@ -6032,7 +6032,41 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
       && node.querySelector('tspan.logyq-onym')?.textContent === 'Zephyronym'
   })
 
+  const faceType = await page.evaluate(() => {
+    const onym = document.querySelector('tspan.logyq-onym')
+    const essence = document.querySelector('tspan.logyq-essence')
+    const onymCss = getComputedStyle(onym)
+    const essenceCss = getComputedStyle(essence)
+    const wash = getComputedStyle(document.body, '::before')
+    const dossierOnym = getComputedStyle(document.querySelector('.logyq-tk-onym'))
+    const dossierEssence = getComputedStyle(document.querySelector('.logyq-tk-essence'))
+    return {
+      onymFamily: onymCss.fontFamily,
+      onymWeight: onymCss.fontWeight,
+      onymStroke: onymCss.strokeWidth,
+      essenceFamily: essenceCss.fontFamily,
+      essenceWeight: essenceCss.fontWeight,
+      essenceFill: essenceCss.fill,
+      dossierOnym: dossierOnym.fontFamily,
+      dossierEssence: dossierEssence.fontFamily,
+      animation: wash.animationName,
+      background: wash.backgroundImage,
+    }
+  })
+  assert.match(faceType.onymFamily, /Libre Caslon Display/)
+  assert.equal(faceType.onymWeight, '400')
+  assert.ok(parseFloat(faceType.onymStroke) >= 0.5, 'map onym keeps a little optical weight')
+  assert.match(faceType.essenceFamily, /Inter/)
+  assert.equal(faceType.essenceWeight, '500')
+  assert.match(faceType.essenceFill, /102,\s*112,\s*106|66706a/i)
+  assert.match(faceType.dossierOnym, /Libre Caslon Display/)
+  assert.match(faceType.dossierEssence, /Libre Caslon Display/)
+  assert.equal(faceType.animation, 'none')
+  assert.match(faceType.background, /247,\s*245,\s*233|251,\s*248,\s*239/)
+
   const uid = await page.evaluate(() => window.LOGYQBridge.core.state.root.data._uid)
+  const nodeCount = () => page.evaluate(() => document.querySelectorAll('svg#canvas g.node').length)
+  const beforeNodes = await nodeCount()
   await page.evaluate((id) => {
     const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
     const rect = face.getBoundingClientRect()
@@ -6048,8 +6082,39 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
       }
     }
   }, uid)
+  await page.waitForSelector('.node-edit-input')
+  assert.equal(await page.locator('#logyq-thekonym-card.is-open').count(), 0)
+  await page.locator('.node-edit-cancel').click()
+  await page.waitForFunction(() => !document.querySelector('.node-edit-input'))
+
+  const stroke = (id, dx, pointerId) => page.evaluate(({ id, dx, pointerId }) => {
+    const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
+    const rect = face.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const point = (type, px) => face.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+      isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1,
+      clientX: px, clientY: y,
+    }))
+    point('pointerdown', x)
+    point('pointermove', x + dx / 2)
+    point('pointermove', x + dx)
+    point('pointerup', x + dx)
+  }, { id, dx, pointerId })
+
+  await stroke(uid, 0, 43)
+  await page.waitForFunction((id) => document.querySelector(`svg#canvas g.node[data-uid="${id}"]`)?.dataset.smiteArm === '1', uid)
+  await stroke(uid, 28, 44)
+  assert.equal(await page.locator('#logyq-thekonym-card.is-open').count(), 0)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+  assert.equal(await nodeCount(), beforeNodes)
+  assert.equal(await page.evaluate((id) => document.querySelector(`svg#canvas g.node[data-uid="${id}"]`)?.dataset.smiteArm, uid), '1')
+  await stroke(uid, 96, 45)
   await page.waitForSelector('#logyq-thekonym-card.is-open')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
+  assert.equal(await nodeCount(), beforeNodes)
+  assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
   const dossier = await page.evaluate(() => {
     const card = document.getElementById('logyq-thekonym-card')
     return {
@@ -6120,6 +6185,13 @@ test('LOGYQ Thekonym mode uses the catalogue onym and essence, then flips instea
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Zephyronym')
     return node && !node.querySelector('tspan.logyq-essence') && !document.body.classList.contains('logyq-thekonym')
   })
+  const plain = await page.evaluate(() => {
+    const label = Array.from(document.querySelectorAll('svg#canvas g.node text.label')).find((el) => el.textContent === 'Zephyronym')
+    const wash = getComputedStyle(document.body, '::before')
+    return { weight: label ? getComputedStyle(label).fontWeight : '', animation: wash.animationName }
+  })
+  assert.equal(plain.weight, '600')
+  assert.equal(plain.animation, 'swirl')
   await page.evaluate((id) => {
     const face = document.querySelector(`svg#canvas g.node[data-uid="${id}"] rect:not(.grabzone)`)
     const rect = face.getBoundingClientRect()

@@ -407,6 +407,16 @@
     return null
   }
 
+  // Thekonym dossier is a clear right swipe. A short nudge stays under the
+  // flick minimum. Right is not a Smite direction (down, up, and left stay).
+  function thekonymDossierSwipe(dx, dy, min = 52) {
+    const x = Number(dx) || 0
+    const y = Number(dy) || 0
+    if (x <= 0) return false
+    if (Math.hypot(x, y) < min) return false
+    return Math.abs(x) > Math.abs(y)
+  }
+
   // The swipe starts on the green card, or on one of its direct children.
   function smiteArmTarget(armedUid, hitUid, childIds) {
     if (!armedUid || !hitUid) return null
@@ -1650,10 +1660,6 @@
       state.lastTap = null
       clearCardMic(state.mic)
       smiteSetArm(doc, null)
-      if (preview.thekonym?.enabled?.()) {
-        preview.thekonym.openUid(uid)
-        return
-      }
       bridge.editSelected({ uid })
       return
     }
@@ -2401,6 +2407,18 @@
     const dy = pointer.lastY - pointer.y
     const elapsed = (win.performance?.now?.() || Date.now()) - (pointer.t0 || 0)
     if (!isFlick(dx, dy, elapsed)) return false
+    // Tap arms green. In Thekonym mode a clear right swipe on that card opens
+    // the dossier and does not Smite or create a sibling. Down, up, and left stay Smite.
+    if (preview.thekonym?.enabled?.() && pointer.uid === smite.armed && thekonymDossierSwipe(dx, dy, v162Constants().FLICK_MIN)) {
+      const flick = preview.gestures?.session?.flick
+      if (flick) flick.lastTap = null
+      const uid = smite.armed
+      smite.armed = null
+      if (pointer.view) restoreView(doc, win, pointer.view)
+      smiteRefresh(doc, smite)
+      preview.thekonym.openUid(uid)
+      return true
+    }
     const direction = smiteArmDirection(dx, dy, v162Constants().FLICK_MIN)
     if (!direction) return false
     const data = smiteLiveData(smite.armed)
@@ -3292,6 +3310,7 @@
     preview.gestures.smiteCastOverlaps = smiteCastOverlaps
     preview.gestures.smiteFoldCast = smiteFoldCast
     preview.gestures.smiteArmDirection = smiteArmDirection
+    preview.gestures.thekonymDossierSwipe = thekonymDossierSwipe
     preview.gestures.smiteArmTarget = smiteArmTarget
     preview.gestures.smiteArmScope = smiteArmScope
     preview.gestures.smiteArmChrome = smiteArmChrome

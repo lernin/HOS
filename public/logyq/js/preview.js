@@ -344,8 +344,9 @@
       #logyq-thekonym-mobile{grid-column:1 / -1}
       #logyq-thekonym-mobile[aria-pressed="true"]{background:#162e27;color:#faf8f1;border-color:#162e27}
       body.logyq-thekonym svg#canvas g.node text.label{dominant-baseline:alphabetic}
-      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400}
-      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#4e5b54;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400}
+      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-onym{fill:#1c3329;font-family:'Libre Caslon Display',Georgia,serif;font-weight:400;stroke:#1c3329;stroke-width:0.65px;stroke-linejoin:round;paint-order:stroke fill;vector-effect:non-scaling-stroke}
+      body.logyq-thekonym svg#canvas g.node text.label tspan.logyq-essence{fill:#66706a;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;font-weight:500;stroke:none}
+      body.logyq-thekonym::before{animation:none;filter:none;background:radial-gradient(ellipse at center, rgba(247,245,233,0) 40%, rgba(22,46,39,0.05) 72%, rgba(22,46,39,0.16) 100%), radial-gradient(ellipse at 50% 40%, #fbf8ef 0%, #f7f5e9 58%, #efe6d2 100%)}
       .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:rgba(22,46,39,.28);padding:5dvh 5vw}
       .logyq-tk-scrim.is-open{display:flex}
       .logyq-tk-card{position:relative;box-sizing:border-box;width:90vw;height:90dvh;max-width:720px;overflow:hidden;display:flex;flex-direction:column;text-align:center;padding:0;background:#f7f5e9;color:#29382f;border-radius:18px;box-shadow:0 24px 70px rgba(22,46,39,.28);font-family:'DM Sans',system-ui,sans-serif}
@@ -1197,6 +1198,16 @@
     if (ady >= adx && y > 0) return 'down'
     if (ady > adx && y < 0) return 'up'
     return null
+  }
+
+  // Thekonym dossier is a clear right swipe. A short nudge stays under the
+  // flick minimum. Right is not a Smite direction (down, up, and left stay).
+  function thekonymDossierSwipe(dx, dy, min = 52) {
+    const x = Number(dx) || 0
+    const y = Number(dy) || 0
+    if (x <= 0) return false
+    if (Math.hypot(x, y) < min) return false
+    return Math.abs(x) > Math.abs(y)
   }
 
   // The swipe starts on the green card, or on one of its direct children.
@@ -2442,10 +2453,6 @@
       state.lastTap = null
       clearCardMic(state.mic)
       smiteSetArm(doc, null)
-      if (preview.thekonym?.enabled?.()) {
-        preview.thekonym.openUid(uid)
-        return
-      }
       bridge.editSelected({ uid })
       return
     }
@@ -3193,6 +3200,18 @@
     const dy = pointer.lastY - pointer.y
     const elapsed = (win.performance?.now?.() || Date.now()) - (pointer.t0 || 0)
     if (!isFlick(dx, dy, elapsed)) return false
+    // Tap arms green. In Thekonym mode a clear right swipe on that card opens
+    // the dossier and does not Smite or create a sibling. Down, up, and left stay Smite.
+    if (preview.thekonym?.enabled?.() && pointer.uid === smite.armed && thekonymDossierSwipe(dx, dy, v162Constants().FLICK_MIN)) {
+      const flick = preview.gestures?.session?.flick
+      if (flick) flick.lastTap = null
+      const uid = smite.armed
+      smite.armed = null
+      if (pointer.view) restoreView(doc, win, pointer.view)
+      smiteRefresh(doc, smite)
+      preview.thekonym.openUid(uid)
+      return true
+    }
     const direction = smiteArmDirection(dx, dy, v162Constants().FLICK_MIN)
     if (!direction) return false
     const data = smiteLiveData(smite.armed)
@@ -4084,6 +4103,7 @@
     preview.gestures.smiteCastOverlaps = smiteCastOverlaps
     preview.gestures.smiteFoldCast = smiteFoldCast
     preview.gestures.smiteArmDirection = smiteArmDirection
+    preview.gestures.thekonymDossierSwipe = thekonymDossierSwipe
     preview.gestures.smiteArmTarget = smiteArmTarget
     preview.gestures.smiteArmScope = smiteArmScope
     preview.gestures.smiteArmChrome = smiteArmChrome
@@ -5257,7 +5277,7 @@
       const link = document.createElement('link')
       link.id = 'logyq-thekonym-fonts'
       link.rel = 'stylesheet'
-      link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Libre+Caslon+Display&display=swap'
+      link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Inter:wght@500&family=Libre+Caslon+Display&display=swap'
       document.head.append(link)
     }
     if (!document.getElementById('logyq-thekonym-ask')) {
