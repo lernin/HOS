@@ -97,9 +97,13 @@
         body>header{display:none!important}
         svg#canvas{position:fixed;inset:0;width:100%;height:100dvh;max-width:none;touch-action:none;overflow:visible;z-index:0}
         #trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
-        #Dock{left:8px;right:8px;bottom:max(8px,env(safe-area-inset-bottom));padding:0 4px;min-height:48px;max-height:25dvh;overflow:auto;justify-content:flex-start;flex-wrap:wrap}
-        #Dock .chip{touch-action:none;-webkit-user-drag:none}
-        #Dock.dock-left{top:54px;bottom:max(8px,env(safe-area-inset-bottom));left:8px;right:auto;width:min(220px,72vw);padding:8px}
+        #Dock,#Dock.dock-left{box-sizing:border-box;left:8px;right:8px;top:auto;bottom:max(8px,env(safe-area-inset-bottom));width:auto;height:56px;min-height:56px;max-height:56px;padding:6px 8px;overflow-x:auto;overflow-y:hidden;display:flex!important;flex-direction:row;flex-wrap:nowrap;justify-content:flex-start;align-items:center;column-width:auto;column-count:auto;gap:8px;border-radius:16px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.95);box-shadow:0 8px 22px rgba(15,23,42,.08);touch-action:none;scrollbar-width:none}
+        #Dock.dock-hidden{display:none!important}
+        #Dock .chip,#Dock.dock-left .chip{touch-action:none;-webkit-user-drag:none;display:inline-flex;margin:0}
+        #logyq-warehouse,#logyq-bank-trash{display:flex;position:fixed;z-index:30;width:44px;height:44px;bottom:calc(max(8px,env(safe-area-inset-bottom)) + 62px)}
+        #logyq-warehouse{left:10px;right:auto;top:auto}
+        #logyq-bank-trash{right:10px;left:auto;top:auto}
+        body:has(#Dock.dock-hidden) #logyq-warehouse,body:has(#Dock.dock-hidden) #logyq-bank-trash,body.logyq-home:not(.logyq-map-open) #logyq-warehouse,body.logyq-home:not(.logyq-map-open) #logyq-bank-trash{display:none!important}
         #Toast{bottom:72px;max-width:calc(100vw - 36px);text-align:center}
         #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px);overflow:hidden;flex-wrap:nowrap}
         #logyq-map-title{top:52px;left:12px}
@@ -180,7 +184,12 @@
         svg#canvas{left:0;right:0;top:0;width:100%;height:100dvh}
         #logyq-paint-strip{top:max(8px,env(safe-area-inset-top));left:auto;right:max(72px,calc(env(safe-area-inset-right) + 8px));width:max-content;max-width:min(420px,calc(100vw - 88px))}
         #logiq-mobile-panel{top:max(8px,env(safe-area-inset-top));left:auto;right:max(72px,calc(env(safe-area-inset-right) + 8px));width:min(310px,calc(100vw - 88px))}
-        #Dock{left:max(8px,env(safe-area-inset-left));right:max(72px,env(safe-area-inset-right))}
+        #Dock,#Dock.dock-left{box-sizing:border-box;left:max(8px,env(safe-area-inset-left));right:auto;top:max(8px,env(safe-area-inset-top));bottom:max(8px,env(safe-area-inset-bottom));width:148px;height:auto;min-height:0;max-height:none;overflow-x:hidden;overflow-y:auto;flex-direction:column;align-items:stretch;touch-action:none}
+        #Dock .chip,#Dock.dock-left .chip{touch-action:none;width:100%;max-width:100%}
+        #logyq-map-title{left:calc(max(8px,env(safe-area-inset-left)) + 164px)}
+        #logyq-warehouse,#logyq-bank-trash{left:calc(max(8px,env(safe-area-inset-left)) + 164px);right:auto}
+        #logyq-warehouse{top:max(8px,env(safe-area-inset-top));bottom:auto}
+        #logyq-bank-trash{top:auto;bottom:max(8px,env(safe-area-inset-bottom))}
         body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
         body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
       }

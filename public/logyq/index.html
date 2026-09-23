@@ -25,6 +25,9 @@
   #logiq-mobile-header .logiq-save-state{display:inline-flex;width:9px;overflow:hidden;flex:0 0 9px;color:transparent;order:8}
   #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:17px;padding:0}
   #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  #Dock,#Dock.dock-left{left:8px;right:8px;top:auto;bottom:max(8px,env(safe-area-inset-bottom));width:auto;height:56px;max-height:56px;overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap}
+  #logyq-warehouse,#logyq-bank-trash{display:flex;position:fixed;z-index:30;width:44px;height:44px;bottom:calc(max(8px,env(safe-area-inset-bottom)) + 62px)}
+  #logyq-warehouse{left:10px}#logyq-bank-trash{right:10px}
 }
 @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
   #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0}
@@ -34,6 +37,10 @@
   #logyq-paint-btn{order:-1}
   #logyq-corner-cluster .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px}
   svg#canvas{left:0;right:0;top:0;width:100%}
+  #Dock,#Dock.dock-left{left:max(8px,env(safe-area-inset-left));right:auto;top:max(8px,env(safe-area-inset-top));bottom:max(8px,env(safe-area-inset-bottom));width:148px;height:auto;max-height:none;overflow-x:hidden;overflow-y:auto}
+  #logyq-warehouse,#logyq-bank-trash{left:calc(max(8px,env(safe-area-inset-left)) + 164px);right:auto}
+  #logyq-warehouse{top:max(8px,env(safe-area-inset-top));bottom:auto}
+  #logyq-bank-trash{top:auto;bottom:max(8px,env(safe-area-inset-bottom))}
 }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
@@ -85,6 +92,22 @@
 
 
 <div id="Dock"></div>
+<button type="button" id="logyq-warehouse" aria-label="Warehouse">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5-8 4.5L4 8.5z"></path><path d="M4 8.5V16l8 4 8-4V8.5"></path><path d="M12 13v7"></path></svg>
+</button>
+<button type="button" id="logyq-bank-trash" aria-label="Trash">
+  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14"></path><path d="M9 7V5h6v2"></path><path d="M7.5 7l.8 12h7.4l.8-12"></path><path d="M10 10.5v6M14 10.5v6"></path></svg>
+</button>
+<div id="logyq-warehouse-sheet" hidden aria-hidden="true">
+  <div class="logyq-warehouse-panel" role="dialog" aria-modal="true" aria-labelledby="logyq-warehouse-title">
+    <div class="logyq-warehouse-head">
+      <h2 id="logyq-warehouse-title">Warehouse</h2>
+      <button type="button" id="logyq-warehouse-close" aria-label="Close warehouse">✕</button>
+    </div>
+    <p class="logyq-warehouse-note">Green stays on the shelf. Blank stays in the warehouse.</p>
+    <div id="logyq-warehouse-list"></div>
+  </div>
+</div>
   <div id="Toast"></div>
 <svg id="canvas" aria-label="Interactive Tree Diagram"></svg>
 <div id="trash" aria-label="Trash" role="button" aria-live="polite">

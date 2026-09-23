@@ -4380,8 +4380,155 @@ attach('drag', dragManager)
   // starts an empty canvas. Render rebuilds the chips, so this lives here.
   let chipOrder = []
 
+  const WAREHOUSE_KEY = 'logyq_word_warehouse_v1'
+
+  function phoneShelf(){
+    try {
+      if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true
+      if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false
+      return !!window.matchMedia('((max-width:700px)),((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px))').matches
+    } catch (_error) {
+      return false
+    }
+  }
+
+  // Portrait shelf pans on x. Landscape shelf pans on y. Desktop keeps the old down-delete.
+  function shelfScrollAxis(){
+    if (!phoneShelf()) return null
+    try {
+      if (typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+        && window.matchMedia('(orientation: landscape)').matches) return 'y'
+    } catch (_error) {}
+    return 'x'
+  }
+
+  function warehouseMapKey(){
+    try {
+      const id = window.LOGYQPreview?.app?.current?.id
+      return id ? String(id) : '_draft'
+    } catch (_error) {
+      return '_draft'
+    }
+  }
+
+  function readWarehouseStore(){
+    try {
+      const raw = globalThis.localStorage?.getItem(WAREHOUSE_KEY)
+      const parsed = raw ? JSON.parse(raw) : {}
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+    } catch (_error) {
+      return {}
+    }
+  }
+
+  function warehouseNameSet(){
+    const list = readWarehouseStore()[warehouseMapKey()]
+    const names = Array.isArray(list) ? list : []
+    return new Set(names.map((name) => String(name || '').trim()).filter(Boolean))
+  }
+
+  function writeWarehouseSet(set){
+    try {
+      const store = readWarehouseStore()
+      const bank = new Set((logyq.state.wordBank || []).map((name) => String(name || '').trim()).filter(Boolean))
+      const next = []
+      set.forEach((name) => { if (bank.has(name)) next.push(name) })
+      store[warehouseMapKey()] = next
+      globalThis.localStorage?.setItem(WAREHOUSE_KEY, JSON.stringify(store))
+    } catch (_error) {}
+  }
+
   function chipNamesInBank(){
-    return (logyq.state.wordBank || []).map(w => String(w || '').trim()).filter(Boolean)
+    const all = (logyq.state.wordBank || []).map(w => String(w || '').trim()).filter(Boolean)
+    if (!phoneShelf()) return all
+    const hidden = warehouseNameSet()
+    return all.filter((name) => !hidden.has(name))
+  }
+
+  function storeWordsInWarehouse(words){
+    const set = warehouseNameSet()
+    ;(words || []).forEach((word) => {
+      const name = String(word || '').trim()
+      if (name) set.add(name)
+    })
+    writeWarehouseSet(set)
+    const drop = new Set((words || []).map((word) => String(word || '').trim()))
+    chipOrder = chipOrder.filter((name) => !drop.has(name))
+    render()
+    try { window.LOGYQBridge?.notifyChange?.() } catch (_error) {}
+  }
+
+  function releaseWordsFromWarehouse(words){
+    const set = warehouseNameSet()
+    let changed = false
+    ;(words || []).forEach((word) => {
+      const name = String(word || '').trim()
+      if (name && set.delete(name)) changed = true
+    })
+    if (changed) writeWarehouseSet(set)
+    return changed
+  }
+
+  function toggleWarehouseWord(name){
+    const clean = String(name || '').trim()
+    if (!clean) return
+    const set = warehouseNameSet()
+    if (set.has(clean)) set.delete(clean)
+    else set.add(clean)
+    writeWarehouseSet(set)
+    if (set.has(clean)) chipOrder = chipOrder.filter((item) => item !== clean)
+    render()
+    renderWarehouseList()
+  }
+
+  function renderWarehouseList(){
+    const list = typeof document !== 'undefined' ? document.getElementById('logyq-warehouse-list') : null
+    if (!list) return
+    const hidden = warehouseNameSet()
+    const words = (logyq.state.wordBank || []).map((word) => String(word || '').trim()).filter(Boolean)
+    list.replaceChildren()
+    if (!words.length) {
+      const empty = document.createElement('p')
+      empty.className = 'logyq-warehouse-empty'
+      empty.textContent = 'No words in the bank yet.'
+      list.appendChild(empty)
+      return
+    }
+    words.forEach((name) => {
+      const onShelf = !hidden.has(name)
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'logyq-warehouse-term' + (onShelf ? ' is-on' : '')
+      button.setAttribute('aria-pressed', onShelf ? 'true' : 'false')
+      button.dataset.word = name
+      const mark = document.createElement('span')
+      mark.className = 'logyq-warehouse-mark'
+      mark.setAttribute('aria-hidden', 'true')
+      const label = document.createElement('span')
+      label.className = 'logyq-warehouse-word'
+      label.textContent = name
+      button.append(mark, label)
+      button.addEventListener('click', () => toggleWarehouseWord(name))
+      list.appendChild(button)
+    })
+  }
+
+  function openWarehouseSheet(){
+    const sheet = document.getElementById('logyq-warehouse-sheet')
+    if (!sheet) return
+    renderWarehouseList()
+    sheet.hidden = false
+    sheet.classList.add('is-open')
+    sheet.setAttribute('aria-hidden', 'false')
+  }
+
+  function closeWarehouseSheet(){
+    const sheet = document.getElementById('logyq-warehouse-sheet')
+    if (!sheet) return
+    sheet.hidden = true
+    sheet.classList.remove('is-open')
+    sheet.setAttribute('aria-hidden', 'true')
+    render()
   }
 
   function pruneChipOrder(){
@@ -4446,7 +4593,10 @@ attach('drag', dragManager)
   function render(){
     const { state, elements, utils } = logyq
     const list = elements.Dock; list.innerHTML = '';
+    const hidden = phoneShelf() ? warehouseNameSet() : null
     state.wordBank.forEach((w)=>{
+      const shelfName = String(w || '').trim()
+      if (!shelfName || (hidden && hidden.has(shelfName))) return
       const chip = document.createElement('div');
       chip.className='chip'; chip.textContent=w;
       // Native HTML5 drag cancels the pointer as soon as it moves, so a
@@ -4492,7 +4642,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
       });
       list.appendChild(chip);
     });
-    if (state.wordBank.length) {
+    if (chipNamesInBank().length) {
       const allButton = document.createElement('button');
       allButton.type = 'button';
       allButton.id = 'logyq-bank-all';
@@ -4528,7 +4678,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
         render(); logyq.treeManager.layoutAndRender(false); return;
       }
     }
-    state.wordBank.push(...words); render();
+    state.wordBank.push(...words); releaseWordsFromWarehouse(words); render();
   }
 // === GLOBAL ENTER COMMIT (GIQ-aware) ===
 // Adds current #wordInput to the selected node (if exactly one is selected) or to the Dock.
@@ -4659,6 +4809,8 @@ function endChipDragVisuals() {
   document.getElementById('logyq-chip-ghost')?.remove()
   document.querySelectorAll('#Dock .chip.is-lifting').forEach((el) => el.classList.remove('is-lifting'))
   document.body.classList.remove('logyq-chip-drag')
+  document.getElementById('logyq-bank-trash')?.classList.remove('is-over', 'over', 'wiggle')
+  document.getElementById('logyq-warehouse')?.classList.remove('is-over')
 }
 
 // Press-drag for a finger or a mouse. The dock is a scroll container, so a
@@ -4757,9 +4909,51 @@ function bindChipPointerPlace() {
     if (next.length === prevBank.length) return false
     logyq.history.pushHistory({ type: 'bank-delete', prevBank })
     logyq.state.wordBank = next
+    writeWarehouseSet(warehouseNameSet())
     render()
     try { window.LOGYQBridge?.notifyChange?.() } catch (_error) {}
     return true
+  }
+
+  const beginLift = (words) => {
+    logyq.state.chipDrag.active = true
+    logyq.state.chipDrag.words = words
+    logyq.state.chipDrag.word = words[0]
+    logyq.state.chipDrag.drop = null
+    session.dragging = true
+    session.words = words
+    window.__logyqChipPlacing = true
+    document.body.classList.add('logyq-chip-drag')
+    document.querySelectorAll('#Dock .chip').forEach((el) => {
+      el.classList.toggle('is-lifting', words.includes(el.textContent.trim()))
+    })
+  }
+
+  const cornerHit = (el, x, y) => {
+    if (!el || !phoneShelf()) return false
+    const style = getComputedStyle(el)
+    if (style.display === 'none' || style.visibility === 'hidden' || style.pointerEvents === 'none') return false
+    const rect = el.getBoundingClientRect()
+    if (rect.width < 1 || rect.height < 1) return false
+    const aim = raisedGhostPoint(x, y)
+    const pad = 10
+    const hit = (px, py) => px >= rect.left - pad && px <= rect.right + pad && py >= rect.top - pad && py <= rect.bottom + pad
+    return hit(x, y) || hit(aim.x, aim.y)
+  }
+
+  // Finger still on the shelf cancels. The ghost alone must not warehouse or trash.
+  const cornerUnderFinger = (x, y) => {
+    if (overDock(x, y)) return null
+    const trash = document.getElementById('logyq-bank-trash')
+    const warehouse = document.getElementById('logyq-warehouse')
+    const trashOn = cornerHit(trash, x, y)
+    const houseOn = !trashOn && cornerHit(warehouse, x, y)
+    trash?.classList.toggle('is-over', trashOn)
+    trash?.classList.toggle('over', trashOn)
+    warehouse?.classList.toggle('is-over', houseOn)
+    if (trashOn) return 'trash'
+    if (houseOn) return 'warehouse'
+    return null
   }
 
   window.addEventListener('pointermove', (event) => {
@@ -4767,30 +4961,38 @@ function bindChipPointerPlace() {
     const dx = event.clientX - session.x
     const dy = event.clientY - session.y
     const moved = Math.hypot(dx, dy) >= 10
-    if (!session.dragging && !session.deleting) {
+    if (!session.dragging && !session.deleting && !session.panning) {
       // Claim the gesture while the finger is still on the chip. Waiting
       // until it has left the dock lets the browser cancel the pointer first.
       if (!moved) return
-      // Down stays a delete. Up and out still lift the chip onto the map.
-      if (dy > 0 && dy >= Math.abs(dx)) {
+      const axis = shelfScrollAxis()
+      if (axis === 'x') {
+        // Portrait: only an upward drag lifts. Horizontal movement pans the shelf.
+        if (dy < 0 && Math.abs(dy) > Math.abs(dx)) beginLift(swipeWords(session.word))
+        else session.panning = true
+      } else if (axis === 'y') {
+        // Landscape: only a rightward drag lifts. Vertical movement pans the shelf.
+        if (dx > 0 && Math.abs(dx) > Math.abs(dy)) beginLift(swipeWords(session.word))
+        else session.panning = true
+      } else if (dy > 0 && dy >= Math.abs(dx)) {
+        // Desktop: down stays a delete. Up and out still lift the chip onto the map.
         session.deleting = true
         session.words = swipeWords(session.word)
-        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
       } else {
-        const words = swipeWords(session.word)
-        logyq.state.chipDrag.active = true
-        logyq.state.chipDrag.words = words
-        logyq.state.chipDrag.word = words[0]
-        logyq.state.chipDrag.drop = null
-        session.dragging = true
-        session.words = words
-        window.__logyqChipPlacing = true
-        document.body.classList.add('logyq-chip-drag')
-        document.querySelectorAll('#Dock .chip').forEach((el) => {
-          el.classList.toggle('is-lifting', words.includes(el.textContent.trim()))
-        })
-        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+        beginLift(swipeWords(session.word))
       }
+      try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+    }
+    if (session.panning) {
+      const axis = shelfScrollAxis()
+      const prevX = session.lastX ?? session.x
+      const prevY = session.lastY ?? session.y
+      if (axis === 'y') dock.scrollTop -= event.clientY - prevY
+      else dock.scrollLeft -= event.clientX - prevX
+      session.lastX = event.clientX
+      session.lastY = event.clientY
+      event.preventDefault()
+      return
     }
     if (session.deleting) {
       event.preventDefault()
@@ -4798,6 +5000,13 @@ function bindChipPointerPlace() {
     }
     event.preventDefault()
     placeGhost(session.words, event.clientX, event.clientY)
+    const corner = cornerUnderFinger(event.clientX, event.clientY)
+    if (corner) {
+      logyq.state.chipDrag.drop = null
+      logyq.elements.caretDot.style('opacity', 0)
+      d3.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
+      return
+    }
     hoverMap(event.clientX, event.clientY)
   }, { passive: false })
 
@@ -4805,12 +5014,22 @@ function bindChipPointerPlace() {
     if (!session || event.pointerId !== session.pointerId) return
     const dragging = session.dragging
     const deleting = session.deleting
+    const panning = session.panning
     const chip = session.chip
     const word = session.word
     const words = session.words
     const dx = event.clientX - session.x
     const dy = event.clientY - session.y
     session = null
+    if (panning) {
+      event.preventDefault()
+      event.stopPropagation()
+      if (chip) {
+        chip.dataset.skipClick = '1'
+        window.setTimeout(() => { delete chip.dataset.skipClick }, 0)
+      }
+      return
+    }
     if (deleting) {
       event.preventDefault()
       event.stopPropagation()
@@ -4831,7 +5050,12 @@ function bindChipPointerPlace() {
     }
     event.preventDefault()
     event.stopPropagation()
-    if (commit && !overDock(event.clientX, event.clientY)) {
+    const corner = commit ? cornerUnderFinger(event.clientX, event.clientY) : null
+    if (corner === 'trash') {
+      removeBankWords(words)
+    } else if (corner === 'warehouse') {
+      storeWordsInWarehouse(words)
+    } else if (commit && !overDock(event.clientX, event.clientY)) {
       if (words) placeGhost(words, event.clientX, event.clientY)
       const aim = raisedGhostPoint(event.clientX, event.clientY)
       hoverMap(event.clientX, event.clientY)
@@ -4848,6 +5072,29 @@ function bindChipPointerPlace() {
 
   window.addEventListener('pointerup', (event) => finishPointer(event, true))
   window.addEventListener('pointercancel', (event) => finishPointer(event, false))
+  bindShelfChrome()
+}
+
+function bindShelfChrome(){
+  const warehouse = document.getElementById('logyq-warehouse')
+  const sheet = document.getElementById('logyq-warehouse-sheet')
+  if (!warehouse || warehouse.dataset.bound === '1') return
+  warehouse.dataset.bound = '1'
+  warehouse.addEventListener('click', (event) => {
+    if (window.__logyqChipPlacing) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+    openWarehouseSheet()
+  })
+  document.getElementById('logyq-warehouse-close')?.addEventListener('click', () => closeWarehouseSheet())
+  sheet?.addEventListener('click', (event) => {
+    if (event.target === sheet) closeWarehouseSheet()
+  })
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && sheet?.classList.contains('is-open')) closeWarehouseSheet()
+  })
 }
 
 /* ======================= CHIP DROP OVER SVG (uses detectors) ======================= */
@@ -5850,16 +6097,18 @@ centerOnSelected(opts = {}) {
     const headerH = phone && !edge ? (document.getElementById('logiq-mobile-header')?.getBoundingClientRect().height || 48) : 0;
     const dockEl = phone ? document.getElementById('Dock') : null;
     const dockBox = dockEl && !dockEl.classList.contains('dock-hidden') ? dockEl.getBoundingClientRect() : null;
-    const dockH = dockBox && dockBox.height > 8 ? dockBox.height + 8 : 16;
+    const leftShelf = !!(edge && dockBox && dockBox.width > 8 && dockBox.width < fullW * 0.45 && dockBox.height > fullH * 0.45);
+    const shelfW = leftShelf ? dockBox.width + 12 : 0;
+    const dockH = leftShelf ? 16 : (dockBox && dockBox.height > 8 ? dockBox.height + 8 : 16);
     const usableH = Math.max(80, fullH - headerH - dockH);
     const widthScale = (fullW - pad) / b.width;
     const heightScale = ((phone ? usableH : fullH) - pad) / b.height;
     const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1];
     const scale = phone
-      ? Math.min(maxK, Math.max(0.02, widthScale))
+      ? Math.min(maxK, Math.max(0.02, leftShelf ? (fullW - shelfW - pad) / b.width : widthScale))
       : Math.min(1, widthScale, heightScale);
     if(!isFinite(scale) || scale<=0) return;
-    const tx=(fullW/2)-scale*(b.x+b.width/2);
+    const tx=((leftShelf ? shelfW : 0) + (fullW - (leftShelf ? shelfW : 0))/2)-scale*(b.x+b.width/2);
     let ty;
     if (!phone) {
       ty = (fullH/2)-scale*(b.y+b.height/2);

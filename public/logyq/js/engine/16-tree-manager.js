@@ -545,16 +545,18 @@ centerOnSelected(opts = {}) {
     const headerH = phone && !edge ? (document.getElementById('logiq-mobile-header')?.getBoundingClientRect().height || 48) : 0;
     const dockEl = phone ? document.getElementById('Dock') : null;
     const dockBox = dockEl && !dockEl.classList.contains('dock-hidden') ? dockEl.getBoundingClientRect() : null;
-    const dockH = dockBox && dockBox.height > 8 ? dockBox.height + 8 : 16;
+    const leftShelf = !!(edge && dockBox && dockBox.width > 8 && dockBox.width < fullW * 0.45 && dockBox.height > fullH * 0.45);
+    const shelfW = leftShelf ? dockBox.width + 12 : 0;
+    const dockH = leftShelf ? 16 : (dockBox && dockBox.height > 8 ? dockBox.height + 8 : 16);
     const usableH = Math.max(80, fullH - headerH - dockH);
     const widthScale = (fullW - pad) / b.width;
     const heightScale = ((phone ? usableH : fullH) - pad) / b.height;
     const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1];
     const scale = phone
-      ? Math.min(maxK, Math.max(0.02, widthScale))
+      ? Math.min(maxK, Math.max(0.02, leftShelf ? (fullW - shelfW - pad) / b.width : widthScale))
       : Math.min(1, widthScale, heightScale);
     if(!isFinite(scale) || scale<=0) return;
-    const tx=(fullW/2)-scale*(b.x+b.width/2);
+    const tx=((leftShelf ? shelfW : 0) + (fullW - (leftShelf ? shelfW : 0))/2)-scale*(b.x+b.width/2);
     let ty;
     if (!phone) {
       ty = (fullH/2)-scale*(b.y+b.height/2);

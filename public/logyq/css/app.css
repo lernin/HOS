@@ -138,6 +138,117 @@
     #trash.wiggle { animation: none; }
   }
 
+  /* Phone shelf corners. Hidden until the phone layout; not part of the chip row. */
+  #logyq-warehouse,
+  #logyq-bank-trash {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(226, 232, 240, .95);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, .94);
+    color: #64748b;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, .1);
+    touch-action: manipulation;
+    cursor: pointer;
+  }
+  #logyq-warehouse svg,
+  #logyq-bank-trash svg {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  #logyq-warehouse.is-over {
+    color: #15803d;
+    border-color: #22c55e;
+    background: #dcfce7;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, .28);
+  }
+  #logyq-bank-trash.is-over,
+  #logyq-bank-trash.over {
+    color: #dc2626;
+    border-color: #ef4444;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, .22);
+  }
+  #logyq-warehouse-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 6200;
+    display: none;
+    align-items: stretch;
+    justify-content: center;
+    padding: 10px;
+    background: rgba(244, 241, 228, .42);
+    backdrop-filter: blur(10px);
+  }
+  #logyq-warehouse-sheet.is-open { display: flex; }
+  .logyq-warehouse-panel {
+    width: min(560px, 100%);
+    max-height: 100%;
+    overflow: auto;
+    margin: auto;
+    padding: 14px 14px 18px;
+    border: 1px solid rgba(226, 232, 240, .95);
+    border-radius: 20px;
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 24px 60px rgba(15, 23, 42, .18);
+    color: #334155;
+  }
+  .logyq-warehouse-head { display: flex; align-items: center; gap: 10px; }
+  .logyq-warehouse-head h2 { margin: 0; flex: 1; font-size: 18px; color: #14532d; }
+  #logyq-warehouse-close {
+    width: 36px;
+    height: 36px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    background: #fff;
+    color: #334155;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .logyq-warehouse-note { margin: 8px 0 12px; color: #64748b; font-size: 13px; }
+  #logyq-warehouse-list { display: grid; gap: 8px; }
+  .logyq-warehouse-empty { margin: 12px 0; color: #94a3b8; text-align: center; }
+  .logyq-warehouse-term {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    background: #fff;
+    color: #334155;
+    font: 650 15px/1.2 system-ui, sans-serif;
+    text-align: left;
+    cursor: pointer;
+  }
+  .logyq-warehouse-mark {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    border: 2px solid #cbd5e1;
+    border-radius: 999px;
+    background: transparent;
+  }
+  .logyq-warehouse-term.is-on {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #14532d;
+  }
+  .logyq-warehouse-term.is-on .logyq-warehouse-mark {
+    border-color: #16a34a;
+    background: #22c55e;
+    box-shadow: inset 0 0 0 3px #dcfce7;
+  }
+
 /* ======================= HEADER & CONTROLS ======================= */
 #logyq-map-title{
   position: fixed;
@@ -868,6 +979,13 @@ body::before {
   #logiq-mobile-menu-btn{order:9}
   #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:17px;padding:0}
   #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  #Dock,#Dock.dock-left{box-sizing:border-box;left:8px;right:8px;top:auto;bottom:max(8px,env(safe-area-inset-bottom));width:auto;height:56px;min-height:56px;max-height:56px;padding:6px 8px;overflow-x:auto;overflow-y:hidden;display:flex!important;flex-flow:row nowrap;justify-content:flex-start;align-items:center;column-width:auto;gap:8px;border-radius:16px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.95);box-shadow:0 8px 22px rgba(15,23,42,.08);touch-action:none}
+  #Dock.dock-hidden{display:none!important}
+  #Dock .chip,#Dock.dock-left .chip{touch-action:none;margin:0}
+  #logyq-warehouse,#logyq-bank-trash{display:flex;position:fixed;z-index:30;width:44px;height:44px;bottom:calc(max(8px,env(safe-area-inset-bottom)) + 62px)}
+  #logyq-warehouse{left:10px;right:auto;top:auto}
+  #logyq-bank-trash{right:10px;left:auto;top:auto}
+  body:has(#Dock.dock-hidden) #logyq-warehouse,body:has(#Dock.dock-hidden) #logyq-bank-trash,body.logyq-home:not(.logyq-map-open) #logyq-warehouse,body.logyq-home:not(.logyq-map-open) #logyq-bank-trash{display:none!important}
 }
 @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
   #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0;overflow:visible}
@@ -881,6 +999,12 @@ body::before {
   #logiq-mobile-panel{top:max(8px,env(safe-area-inset-top));left:auto;right:max(72px,calc(env(safe-area-inset-right) + 8px));width:min(310px,calc(100vw - 88px))}
   body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
   body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto}
+  #Dock,#Dock.dock-left{box-sizing:border-box;left:max(8px,env(safe-area-inset-left));right:auto;top:max(8px,env(safe-area-inset-top));bottom:max(8px,env(safe-area-inset-bottom));width:148px;height:auto;min-height:0;max-height:none;overflow-x:hidden;overflow-y:auto;flex-direction:column;align-items:stretch;touch-action:none}
+  #Dock .chip,#Dock.dock-left .chip{touch-action:none;width:100%;max-width:100%}
+  #logyq-map-title{left:calc(max(8px,env(safe-area-inset-left)) + 164px)}
+  #logyq-warehouse,#logyq-bank-trash{left:calc(max(8px,env(safe-area-inset-left)) + 164px);right:auto}
+  #logyq-warehouse{top:max(8px,env(safe-area-inset-top));bottom:auto}
+  #logyq-bank-trash{top:auto;bottom:max(8px,env(safe-area-inset-bottom))}
 }
 
 
