@@ -3578,3 +3578,222 @@ test('LOGYQ ends a cast when nothing is left on delete or Word Bank', async () =
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ clears white outlines on the midfield parents Ashley photographed', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      children: [
+        { name: 'Fruit', children: [{ name: 'Apple' }, { name: 'Banana' }] },
+        { name: 'Meat', children: [{ name: 'Chicken' }, { name: 'Beef' }] },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => {
+    const names = ['Food', 'Fruit', 'Meat', 'Apple', 'Banana', 'Chicken', 'Beef']
+    return names.every((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.getBoundingClientRect()
+      return rect && rect.width > 20 && rect.top > 40 && rect.bottom < window.innerHeight
+    })
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function castKidsOfFood() {
+    const thumb = await page.evaluate(() => {
+      const canvas = document.getElementById('canvas').getBoundingClientRect()
+      const yStart = Math.floor(window.innerHeight * (2 / 3)) + 8
+      for (let y = window.innerHeight - 6; y >= yStart; y -= 10) {
+        for (let x = canvas.left + 6; x < canvas.right - 6; x += 12) {
+          const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+          if (!hit) return { x, y }
+        }
+      }
+      return null
+    })
+    assert.ok(thumb, 'bottom third needs an empty thumb park')
+    const card = await face('Food')
+    await touch('pointerdown', thumb.x, thumb.y, 111)
+    await touch('pointerdown', card.x, card.y, 112)
+    await touch('pointermove', card.x, card.y + 70, 112)
+    await touch('pointerup', card.x, card.y + 70, 112)
+    await touch('pointerup', thumb.x, thumb.y, 111)
+    await page.waitForFunction(() => window.LOGYQPreview.gestures.smite.mercy?.marks?.size === 2)
+  }
+
+  async function tap(name, pointerId) {
+    const point = await face(name)
+    await touch('pointerdown', point.x, point.y, pointerId)
+    await touch('pointerup', point.x, point.y, pointerId)
+    await page.waitForTimeout(40)
+  }
+
+  async function chrome() {
+    return page.evaluate(() => {
+      const read = (label) => {
+        const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+        const wash = node?.querySelector('rect.logyq-smite-wash')
+        const clock = node?.querySelector('path.logyq-smite-clock')
+        const raw = wash ? (wash.getAttribute('stroke') || '') : ''
+        const stroke = raw === 'rgb(255, 0, 0)' ? '#ff0000' : (raw === 'rgb(255, 255, 255)' ? '#ffffff' : (raw === 'rgb(255, 161, 0)' ? '#ffa100' : (raw || null)))
+        return {
+          stroke,
+          ants: wash?.dataset?.smiteOutline || null,
+          clock: !!clock,
+        }
+      }
+      const mercy = window.LOGYQPreview.gestures.smite.mercy
+      const root = window.LOGYQBridge.core.state.root
+      const nameOf = (uid) => root.descendants().find((node) => node.data._uid === uid)?.data?.name || null
+      return {
+        mercy: !!mercy,
+        raf: window.LOGYQPreview.gestures.smite.raf || 0,
+        remaining: mercy ? mercy.remaining : null,
+        marks: mercy ? [...mercy.marks.entries()].map(([uid, mark]) => [nameOf(uid), mark]).sort() : [],
+        names: root.descendants().map((node) => node.data.name),
+        Food: read('Food'),
+        Fruit: read('Fruit'),
+        Meat: read('Meat'),
+        Apple: read('Apple'),
+        Banana: read('Banana'),
+        Chicken: read('Chicken'),
+        Beef: read('Beef'),
+      }
+    })
+  }
+
+  await castKidsOfFood()
+  let nominated = await chrome()
+  assert.deepEqual(nominated.marks, [['Fruit', 'red'], ['Meat', 'red']])
+  assert.equal(nominated.Food.clock, true)
+  assert.equal(nominated.Food.stroke, null)
+  assert.equal(nominated.Fruit.stroke, '#ff0000')
+  assert.equal(nominated.Meat.stroke, '#ff0000')
+  for (const kid of ['Apple', 'Banana', 'Chicken', 'Beef']) {
+    assert.equal(nominated[kid].stroke, null, `${kid} stays quiet during a kids-only cast`)
+  }
+
+  await tap('Fruit', 113)
+  await tap('Fruit', 114)
+  const oneWhite = await chrome()
+  assert.equal(oneWhite.mercy, true, 'Meat still on delete keeps the cast')
+  assert.equal(oneWhite.Fruit.stroke, '#ffffff')
+  assert.equal(oneWhite.Fruit.ants, 'ants')
+  assert.equal(oneWhite.Meat.stroke, '#ff0000')
+  assert.equal(oneWhite.Apple.stroke, null)
+
+  await tap('Meat', 115)
+  await tap('Meat', 116)
+  let cleared = await chrome()
+  assert.equal(cleared.mercy, false, 'Fruit and Meat both white ends the cast')
+  assert.equal(cleared.raf, 0, 'the mercy timer does not keep a frame')
+  for (const name of ['Food', 'Fruit', 'Meat', 'Apple', 'Banana', 'Chicken', 'Beef']) {
+    assert.equal(cleared[name].stroke, null, `${name} has no outline after the cast ends`)
+    assert.equal(cleared[name].clock, false)
+  }
+  assert.deepEqual(cleared.names.slice().sort(), ['Apple', 'Banana', 'Beef', 'Chicken', 'Food', 'Fruit', 'Meat'])
+  await page.waitForTimeout(300)
+  cleared = await chrome()
+  assert.equal(cleared.mercy, false)
+  assert.equal(cleared.raf, 0)
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_food_white_cleared.png' })
+
+  await page.evaluate(() => {
+    const smite = window.LOGYQPreview.gestures.smite
+    if (smite.raf) cancelAnimationFrame(smite.raf)
+    smite.raf = 0
+    const root = window.LOGYQBridge.core.state.root
+    const uid = (label) => root.descendants().find((node) => node.data.name === label).data._uid
+    const mercy = {
+      marks: new Map([[uid('Fruit'), 'normal'], [uid('Meat'), 'normal']]),
+      castUid: uid('Food'),
+      zone: 'bottom',
+      direction: 'down',
+      remaining: 9000,
+      lastTick: performance.now(),
+      interacting: false,
+      committing: false,
+    }
+    smite.mercies = [mercy]
+    smite.mercy = mercy
+  })
+  const empty = await page.evaluate(() => {
+    const canvas = document.getElementById('canvas').getBoundingClientRect()
+    for (let y = 80; y < window.innerHeight - 8; y += 14) {
+      for (let x = canvas.left + 6; x < canvas.right - 6; x += 16) {
+        const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+        if (!hit) return { x, y }
+      }
+    }
+    return null
+  })
+  assert.ok(empty)
+  await touch('pointerdown', empty.x, empty.y, 117)
+  await touch('pointerup', empty.x, empty.y, 117)
+  const stuck = await chrome()
+  assert.equal(stuck.mercy, true)
+  assert.equal(stuck.Food.stroke, null)
+  assert.equal(stuck.Food.clock, false)
+  assert.equal(stuck.Fruit.stroke, '#ffffff')
+  assert.equal(stuck.Fruit.ants, 'ants')
+  assert.equal(stuck.Meat.stroke, '#ffffff')
+  assert.equal(stuck.Meat.ants, 'ants')
+  for (const kid of ['Apple', 'Banana', 'Chicken', 'Beef']) {
+    assert.equal(stuck[kid].stroke, null)
+    assert.equal(stuck[kid].clock, false)
+  }
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_food_white_stuck.png' })
+
+  await tap('Food', 118)
+  const afterFood = await chrome()
+  assert.equal(afterFood.mercy, false, 'tapping Food clears the white-only midfield cast')
+  assert.equal(afterFood.raf, 0)
+  assert.equal(afterFood.Fruit.stroke, null)
+  assert.equal(afterFood.Meat.stroke, null)
+  assert.equal(afterFood.Food.clock, false)
+  await page.waitForTimeout(300)
+  assert.equal((await chrome()).mercy, false)
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_food_after_parent.png' })
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
