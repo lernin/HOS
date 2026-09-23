@@ -82,6 +82,17 @@
     return (Array.isArray(playing) ? playing : []).some((item) => thekonymJoinKey(item) === key)
   }
 
+  // Missing content is red. A present field whose confidence is not 3 is amber. Example is ignored.
+  function thekonymHeat(row) {
+    if (!row) return ''
+    const missing = ['essence', 'kid_explanation', 'definition', 'technical_definition', 'term_pronunciation']
+      .some((key) => !String(row[key] ?? '').trim())
+    if (missing) return 'red'
+    const unsure = ['essence_confidence', 'kid_explanation_confidence', 'definition_confidence', 'technical_definition_confidence']
+      .some((key) => Number(row[key]) !== 3)
+    return unsure ? 'amber' : ''
+  }
+
   // Drop examples from the end until two fit, then one. Fade technical only after that.
   function thekonymExampleKeep(count, fits) {
     let keep = Math.max(0, count | 0)
@@ -163,8 +174,36 @@
   function paintThekonymFaces() {
     if (!thekonymState.on || typeof d3 === 'undefined') return
     d3.selectAll('svg#canvas g.nodes g.node text.label').each(function paintFace(d) {
-      paintLabelElement(this, d?.data?.name || '')
+      const name = d?.data?.name || ''
+      paintLabelElement(this, name)
+      paintThekonymHeat(this.closest('g.node'), name)
     })
+  }
+
+  function paintThekonymHeat(node, name) {
+    const wash = node?.querySelector('rect.logyq-tk-heat')
+    const heat = thekonymState.on ? thekonymHeat(thekonymMatch(thekonymState.rows, name)) : ''
+    if (!node || !heat) {
+      wash?.remove()
+      if (node) delete node.dataset.tkHeat
+      return
+    }
+    node.dataset.tkHeat = heat
+    const card = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus):not(.logyq-tk-heat)')
+    const layer = wash || document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+    layer.setAttribute('class', 'logyq-tk-heat')
+    for (const attr of ['x', 'y', 'width', 'height', 'rx', 'ry']) {
+      const value = card?.getAttribute(attr)
+      if (value) layer.setAttribute(attr, value)
+    }
+    if (!layer.getAttribute('rx')) {
+      layer.setAttribute('rx', '10')
+      layer.setAttribute('ry', '10')
+    }
+    if (!layer.isConnected) {
+      if (card) card.after(layer)
+      else node.append(layer)
+    }
   }
 
   function installThekonymFaces() {
@@ -178,6 +217,8 @@
         document.querySelectorAll('svg#canvas g.node text.label').forEach((el) => {
           el.style.dominantBaseline = ''
         })
+        document.querySelectorAll('svg#canvas rect.logyq-tk-heat').forEach((el) => el.remove())
+        document.querySelectorAll('svg#canvas g.node[data-tk-heat]').forEach((el) => { delete el.dataset.tkHeat })
       }
     }
     apply.__thekonym = true
@@ -198,7 +239,7 @@
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => (
       el.dataset.uid === String(uid) || el.__data__?.data?._uid === uid
     ))
-    const face = node?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)')
+    const face = node?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus):not(.logyq-tk-heat)')
     const rect = (face || node)?.getBoundingClientRect?.()
     if (!rect || rect.width < 8 || rect.height < 8) return null
     return { left: rect.left, top: rect.top, width: rect.width, height: rect.height, node }
@@ -621,7 +662,7 @@
       const link = document.createElement('link')
       link.id = 'logyq-thekonym-fonts'
       link.rel = 'stylesheet'
-      link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Inter:wght@500&family=Libre+Caslon+Display&display=swap'
+      link.href = 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Inter:wght@500&family=Roboto+Condensed:wght@400&display=swap'
       document.head.append(link)
     }
     if (!document.getElementById('logyq-thekonym-ask')) {

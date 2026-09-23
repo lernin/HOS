@@ -2251,7 +2251,7 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   const start = source.indexOf('// THEKONYM_PURE_START')
   const end = source.indexOf('// THEKONYM_PURE_END')
   assert.ok(start >= 0 && end > start)
-  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine, thekonymPronunciation, thekonymDossier, thekonymExampleLines, thekonymExampleKeep, thekonymInPlay };`)()
+  const api = new Function(`${source.slice(start, end)}; return { thekonymJoinKey, thekonymMatch, thekonymFace, thekonymByLetter, thekonymAlphabetLetter, thekonymFaceLine, thekonymPronunciation, thekonymDossier, thekonymExampleLines, thekonymExampleKeep, thekonymInPlay, thekonymHeat };`)()
   const rows = [
     {
       id: '1',
@@ -2284,6 +2284,15 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   assert.equal(api.thekonymPronunciation('the  ko   nym'), 'the • ko • nym')
   assert.equal(api.thekonymPronunciation('prak·TEH·oh'), 'prak • TEH • oh')
   assert.equal(api.thekonymPronunciation('Telonym'), 'Telonym')
+  const full = {
+    essence: 'e', kid_explanation: 'k', definition: 'd', technical_definition: 't', term_pronunciation: 'p',
+    essence_confidence: 3, kid_explanation_confidence: 3, definition_confidence: 3, technical_definition_confidence: 3,
+  }
+  assert.equal(api.thekonymHeat(null), '')
+  assert.equal(api.thekonymHeat({ ...full, term_pronunciation: '  ' }), 'red')
+  assert.equal(api.thekonymHeat({ ...full, essence_confidence: 2 }), 'amber')
+  assert.equal(api.thekonymHeat({ ...full, kid_explanation_confidence: null }), 'amber')
+  assert.equal(api.thekonymHeat({ ...full, example: '' }), '')
   const dossier = api.thekonymDossier(rows, 'Fruit', {})
   assert.equal(dossier.pronunciation, 'prak • TEH • oh • nim')
   assert.equal(dossier.kids, 'Kid line.')

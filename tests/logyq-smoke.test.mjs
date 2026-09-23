@@ -5969,7 +5969,7 @@ test('LOGYQ kids-only parent tap steps delete to Word Bank then clears', async (
   await context.close()
 })
 
-test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right swipe opens the dossier', async () => {
+test('LOGYQ Thekonym mode pairs a Roboto Condensed onym with a sans essence, and a right swipe opens the dossier', async () => {
   const calls = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)
@@ -6031,6 +6031,21 @@ test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right 
     return node?.querySelector('tspan.logyq-essence')?.textContent === 'a test essence'
       && node.querySelector('tspan.logyq-onym')?.textContent === 'Zephyronym'
   })
+  const heat = await page.evaluate(() => {
+    const node = (name) => Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === name)
+    const fill = (name) => {
+      const wash = node(name)?.querySelector('rect.logyq-tk-heat')
+      return wash ? getComputedStyle(wash).fill : ''
+    }
+    return {
+      z: node('Zephyronym')?.dataset.tkHeat || '',
+      other: node('Other')?.dataset.tkHeat || '',
+      zFill: fill('Zephyronym'),
+    }
+  })
+  assert.equal(heat.z, 'amber')
+  assert.equal(heat.other, '')
+  assert.match(heat.zFill, /214,\s*148,\s*42/)
 
   const faceType = await page.evaluate(() => {
     const onym = document.querySelector('tspan.logyq-onym')
@@ -6048,19 +6063,25 @@ test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right 
       essenceWeight: essenceCss.fontWeight,
       essenceFill: essenceCss.fill,
       dossierOnym: dossierOnym.fontFamily,
+      dossierOnymWeight: dossierOnym.fontWeight,
       dossierEssence: dossierEssence.fontFamily,
+      dossierEssenceWeight: dossierEssence.fontWeight,
+      typeLab: !!document.querySelector('#logyq-thekonym-type-lab, #logyq-thekonym-type-mobile, a[href*="thekonym-type"]'),
       animation: wash.animationName,
       background: wash.backgroundImage,
     }
   })
-  assert.match(faceType.onymFamily, /Libre Caslon Display/)
+  assert.match(faceType.onymFamily, /Roboto Condensed/)
   assert.equal(faceType.onymWeight, '400')
-  assert.ok(parseFloat(faceType.onymStroke) >= 0.5, 'map onym keeps a little optical weight')
+  assert.ok(parseFloat(faceType.onymStroke) === 0, 'map onym stays regular, with no optical stroke')
   assert.match(faceType.essenceFamily, /Inter/)
   assert.equal(faceType.essenceWeight, '500')
   assert.match(faceType.essenceFill, /102,\s*112,\s*106|66706a/i)
-  assert.match(faceType.dossierOnym, /Libre Caslon Display/)
-  assert.match(faceType.dossierEssence, /Libre Caslon Display/)
+  assert.match(faceType.dossierOnym, /Roboto Condensed/)
+  assert.equal(faceType.dossierOnymWeight, '400')
+  assert.match(faceType.dossierEssence, /Inter/)
+  assert.equal(faceType.dossierEssenceWeight, '500')
+  assert.equal(faceType.typeLab, false)
   assert.equal(faceType.animation, 'swirl')
   assert.doesNotMatch(faceType.background, /247,\s*245,\s*233|239,\s*230,\s*210|efe6d2/i)
 
