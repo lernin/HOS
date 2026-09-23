@@ -10,7 +10,7 @@
  // PHONE_BAR_CAP_MS. It then slides up from under the keyboard.
  const PHONE_BAR_QUIET_MS = 80
  const PHONE_BAR_CAP_MS = 500
- const PHONE_BAR_SLIDE_MS = 340
+ const PHONE_BAR_SLIDE_MS = 600
  function keyboardInset(){
   const vv = window.visualViewport
   return vv ? Math.max(0, Math.round(window.innerHeight - vv.height)) : 0
