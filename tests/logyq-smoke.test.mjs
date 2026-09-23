@@ -4028,7 +4028,12 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   await touch('pointerdown', lime.x, lime.y, 17)
   await touch('pointerup', lime.x, lime.y, 17)
   await page.waitForSelector('.node-edit-cancel')
-  await page.locator('.node-edit-input').fill('Discard me')
+  await page.locator('.node-edit-input').evaluate((el) => {
+    el.focus()
+    el.value = ''
+    el.setSelectionRange(0, 0)
+  })
+  await page.locator('.node-edit-input').pressSequentially('Discard me')
   const panSpot = await page.evaluate(() => {
     const canvas = document.getElementById('canvas').getBoundingClientRect()
     for (let y = 80; y < window.innerHeight - 120; y += 16) {
@@ -4062,24 +4067,31 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   const pinchBefore = await view()
   await page.evaluate(({ x, y }) => {
     const canvas = document.getElementById('canvas')
-    const touch = (id, px, py) => new Touch({ identifier: id, target: canvas, clientX: px, clientY: py })
-    const fire = (type, points, changed) => {
-      canvas.dispatchEvent(new TouchEvent(type, {
+    const fire = (type, px, py, pointerId) => {
+      canvas.dispatchEvent(new PointerEvent(type, {
         bubbles: true,
         cancelable: true,
-        touches: points,
-        targetTouches: points,
-        changedTouches: changed,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: pointerId === 21,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: px,
+        clientY: py,
       }))
     }
-    const start = [touch(3, x, y), touch(4, x + 80, y)]
-    fire('touchstart', start, start)
-    const spread = [touch(3, x - 40, y), touch(4, x + 150, y)]
-    fire('touchmove', spread, spread)
-    fire('touchend', [], spread)
+    fire('pointerdown', x, y, 21)
+    fire('pointerdown', x + 160, y, 22)
+    fire('pointermove', x + 24, y, 21)
+    fire('pointermove', x + 136, y, 22)
+    fire('pointermove', x + 50, y, 21)
+    fire('pointermove', x + 90, y, 22)
+    fire('pointerup', x + 50, y, 21)
+    fire('pointerup', x + 90, y, 22)
   }, panSpot)
   const pinched = await view()
-  assert.ok(pinched.k > pinchBefore.k + 0.05, `map must pinch-zoom while renaming, before=${pinchBefore.k} after=${pinched.k}`)
+  assert.ok(pinchBefore.k - pinched.k > 0.05, `map must pinch-zoom while renaming, before=${pinchBefore.k} after=${pinched.k}`)
   assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.editingUid), created.editing)
   await page.locator('.node-edit-cancel').click()
   await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
