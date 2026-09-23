@@ -494,6 +494,9 @@ test('chip-drop cases keep empty-canvas, rootAbove, gap, then node order', () =>
   const gap = source.indexOf("if (drop.type === 'gap')", dropStart)
   const node = source.indexOf("if (drop.type === 'node')", dropStart)
   assert.ok(dropStart > 0 && empty > dropStart && above > empty && gap > above && node > gap)
+  assert.match(source, /raisedGhostPoint/)
+  assert.match(source, /clientX: aim\.x, clientY: aim\.y/)
+  assert.match(source, /if \(overDock\(x, y\)\)/)
 })
 
 test('undo still recognizes the original action types', () => {
@@ -1376,6 +1379,8 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(v162, /STILL_PX: 16/)
   assert.match(v162, /function fingerMovedFromLatch/)
   assert.match(v162, /function dragMousePoint/)
+  assert.match(v162, /function dragAimPoint/)
+  assert.match(v162, /function previewCardCenter/)
   assert.match(v162, /function activeDockKind/)
   assert.match(v162, /function paintCloneCard/)
   assert.match(v162, /if \(!fingerMovedFromLatch\(drag, x, y\)\) return 'none'/)

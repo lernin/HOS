@@ -839,8 +839,8 @@
     if (!drag || drag.pointerId !== event.pointerId) return
     drag.lastX = event.clientX
     drag.lastY = event.clientY
-    const feed = dragMousePoint(drag, event.clientX, event.clientY)
     movePreview(drag, event.clientX, event.clientY)
+    const feed = dragAimPoint(doc, drag, event.clientX, event.clientY)
     mouse(win, win, 'mousemove', feed.x, feed.y, 1)
   }
 
@@ -879,13 +879,15 @@
     // post-cleanup call, not a side effect of d3.drag.end.
     const commitTree = !canceled && !releasedAtOrigin && dockKind === 'none'
       && fingerMovedFromLatch(drag, event.clientX, event.clientY)
+    if (commitTree) movePreview(drag, event.clientX, event.clientY)
     const end = (canceled || dockKind !== 'none' || releasedAtOrigin)
       ? { x: drag.x, y: drag.y }
-      : visualPoint(event.clientX, event.clientY)
+      : dragAimPoint(doc, drag, event.clientX, event.clientY)
 
     if (commitTree) win.__logyqHoldDragCommit = true
     try {
       if (canceled || dockKind !== 'none' || releasedAtOrigin) mouse(win, win, 'mousemove', drag.x, drag.y, 1)
+      else mouse(win, win, 'mousemove', end.x, end.y, 1)
       mouse(win, win, 'mouseup', end.x, end.y, 0)
 
       cleanupDrag(doc, win, state, drag)
@@ -951,6 +953,8 @@
       lastX: hold.lastX,
       lastY: hold.lastY,
       preview: previewHost,
+      grabGraph: clientToGraph(doc.getElementById('canvas'), win, hold.x, hold.y),
+      nodeGraph: { x: hierarchy.x, y: hierarchy.y },
       multi: false,
       bankChip: null,
       bankSince: 0,
@@ -1034,16 +1038,17 @@
       const dockKind = activeDockKind(doc, drag, drag.lastX, drag.lastY)
       armBankHover(win, drag, dockKind, doc)
       doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
+      movePreview(drag, drag.lastX, drag.lastY)
       if (dockKind === 'none') {
         if (fingerMovedFromLatch(drag, drag.lastX, drag.lastY)) {
           edgePan(doc, win, drag.lastX, drag.lastY)
-          const visual = visualPoint(drag.lastX, drag.lastY)
-          mouse(win, win, 'mousemove', visual.x, visual.y, 1)
+          movePreview(drag, drag.lastX, drag.lastY)
+          const aim = dragAimPoint(doc, drag, drag.lastX, drag.lastY)
+          mouse(win, win, 'mousemove', aim.x, aim.y, 1)
         }
       } else {
         mouse(win, win, 'mousemove', drag.x, drag.y, 1)
       }
-      movePreview(drag, drag.lastX, drag.lastY)
       state.feedbackRaf = win.requestAnimationFrame(tick)
     }
     state.feedbackRaf = win.requestAnimationFrame(tick)
@@ -1215,6 +1220,50 @@
   function dragMousePoint(drag, x, y) {
     if (!fingerMovedFromLatch(drag, x, y)) return { x: drag.x, y: drag.y }
     return visualPoint(x, y)
+  }
+
+  function previewCardCenter(drag) {
+    const card = drag?.preview?.querySelector?.('svg')
+    const rect = card?.getBoundingClientRect?.()
+    if (!rect || rect.width < 1 || rect.height < 1) return null
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }
+
+  function clientToGraph(svg, win, x, y) {
+    if (!svg || !win?.d3 || typeof svg.createSVGPoint !== 'function' || !svg.getScreenCTM?.()) return null
+    const point = svg.createSVGPoint()
+    point.x = x
+    point.y = y
+    const local = point.matrixTransform(svg.getScreenCTM().inverse())
+    const [gx, gy] = win.d3.zoomTransform(svg).invert([local.x, local.y])
+    return { x: gx, y: gy }
+  }
+
+  function graphToClient(svg, win, x, y) {
+    if (!svg || !win?.d3 || typeof svg.createSVGPoint !== 'function' || !svg.getScreenCTM?.()) return null
+    const [lx, ly] = win.d3.zoomTransform(svg).apply([x, y])
+    const point = svg.createSVGPoint()
+    point.x = lx
+    point.y = ly
+    const screen = point.matrixTransform(svg.getScreenCTM())
+    return { x: screen.x, y: screen.y }
+  }
+
+  // Engine hit-testing treats the pointer as the grabbed point. Feed the
+  // pointer that puts the virtual card center on the raised ghost's center.
+  function dragAimPoint(doc, drag, x, y) {
+    if (!fingerMovedFromLatch(drag, x, y)) return { x: drag.x, y: drag.y }
+    const win = doc.defaultView
+    const svg = doc.getElementById('canvas')
+    const ghost = previewCardCenter(drag)
+    if (!ghost || !drag?.grabGraph || !drag?.nodeGraph) return visualPoint(x, y)
+    const ghostGraph = clientToGraph(svg, win, ghost.x, ghost.y)
+    if (!ghostGraph) return visualPoint(x, y)
+    const pointerGraph = {
+      x: ghostGraph.x - drag.nodeGraph.x + drag.grabGraph.x,
+      y: ghostGraph.y - drag.nodeGraph.y + drag.grabGraph.y,
+    }
+    return graphToClient(svg, win, pointerGraph.x, pointerGraph.y) || visualPoint(x, y)
   }
 
   function activeDockKind(doc, drag, x, y) {

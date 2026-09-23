@@ -4699,6 +4699,14 @@ function bindChipPointerPlace() {
     stack.style.top = `${y}px`
   }
 
+  // The ghost is lifted above the finger by CSS. Aim at that card, not the touch.
+  const raisedGhostPoint = (x, y) => {
+    const stack = document.getElementById('logyq-chip-ghost')
+    const rect = stack?.getBoundingClientRect?.()
+    if (!rect || rect.width < 1 || rect.height < 1) return { x, y }
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  }
+
   const hoverMap = (x, y) => {
     const svg = logyq.elements.svg.node()
     if (!svg) return
@@ -4708,7 +4716,8 @@ function bindChipPointerPlace() {
       d3.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
       return
     }
-    svg.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX: x, clientY: y }))
+    const aim = raisedGhostPoint(x, y)
+    svg.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX: aim.x, clientY: aim.y }))
   }
 
   const chipUnderPoint = (x, y) => {
@@ -4767,6 +4776,7 @@ function bindChipPointerPlace() {
     const dragging = session.dragging
     const chip = session.chip
     const word = session.word
+    const words = session.words
     session = null
     if (!dragging) {
       if (commit && chip && word) {
@@ -4779,12 +4789,14 @@ function bindChipPointerPlace() {
     event.preventDefault()
     event.stopPropagation()
     if (commit && !overDock(event.clientX, event.clientY)) {
+      if (words) placeGhost(words, event.clientX, event.clientY)
+      const aim = raisedGhostPoint(event.clientX, event.clientY)
       hoverMap(event.clientX, event.clientY)
       logyq.elements.svg.node()?.dispatchEvent(new DragEvent('drop', {
         bubbles: true,
         cancelable: true,
-        clientX: event.clientX,
-        clientY: event.clientY,
+        clientX: aim.x,
+        clientY: aim.y,
       }))
     }
     endChipDragVisuals()
