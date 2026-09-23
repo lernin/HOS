@@ -43,6 +43,11 @@
   }
 
   function queueAutosave(snapshot) {
+    if (app.curriculum) {
+      setSaveState('saved')
+      maybeCurriculumClear(snapshot)
+      return
+    }
     if (!app.hasOpenMap) return
     if (isBlankDraft({
       id: app.current.id,
@@ -81,6 +86,13 @@
   }
 
   async function savePending() {
+    if (app.curriculum) {
+      if (localStorage.getItem(PENDING_KEY)) {
+        clearTimeout(app.timer)
+        app.timer = setTimeout(savePending, 850)
+      }
+      return
+    }
     if (app.saving) {
       app.saveAgain = true
       return
@@ -347,6 +359,7 @@
   }
 
   function enterEditor(row, { edit = false } = {}) {
+    leaveCurriculumPlay()
     const tree = decodeMapTree(row.tree)
     const wordBank = Array.isArray(row.word_bank) ? row.word_bank : (row.wordBank || [])
     app.current = { id: row.id || null, name: row.name || DEFAULT_NAME }
@@ -372,6 +385,7 @@
   }
 
   function createMap({ edit = false } = {}) {
+    leaveCurriculumPlay()
     const taken = []
     for (const row of app.libraryRows || []) taken.push(row?.name)
     for (const row of readCachedLibrary()) taken.push(row?.name)
@@ -470,7 +484,4 @@
     await refreshLibrary()
     app.booted = true
   }
-
-  bootSession()
-})()
 

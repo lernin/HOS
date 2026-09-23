@@ -27,6 +27,25 @@
       #logyq-curriculum{display:none}
       #logiq-library[data-shelf="curriculum"] #logyq-curriculum{display:block}
       #logyq-curriculum .logiq-empty p{margin:0}
+      .logyq-level-intro{margin:4px 0 14px;color:#64748b;font-size:13px}
+      #logyq-level-path{list-style:none;margin:0 auto 28px;padding:8px 0 12px;width:min(440px,100%);display:grid;gap:16px;position:relative}
+      #logyq-level-path::before{content:"";position:absolute;left:50%;top:28px;bottom:28px;width:4px;border-radius:999px;background:#bbf7d0;transform:translateX(-50%)}
+      .logyq-level{position:relative;display:flex;z-index:1}
+      .logyq-level:nth-child(odd){justify-content:flex-start;padding-left:4%}
+      .logyq-level:nth-child(even){justify-content:flex-end;padding-right:4%}
+      .logyq-level button{display:flex;align-items:center;gap:10px;border:1px solid #e2e8f0;background:#fff;border-radius:999px;padding:6px 14px 6px 6px;font:700 15px/1.2 system-ui,sans-serif;color:#14532d;cursor:pointer;box-shadow:0 6px 16px rgba(15,23,42,.06)}
+      .logyq-level-num{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#16a34a;color:#fff;font-weight:800}
+      .logyq-level.is-cleared .logyq-level-num{background:#14532d}
+      .logyq-level.is-locked button{color:#94a3b8;cursor:not-allowed;box-shadow:none}
+      .logyq-level.is-locked .logyq-level-num{background:#e2e8f0;color:#64748b}
+      .logyq-level-lock{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
+      #logyq-curriculum-bar{position:fixed;z-index:42;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:14px;background:rgba(255,255,255,.96);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{display:flex}
+      #logyq-curriculum-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
+      #logyq-curriculum-status[data-tone="clear"]{color:#14532d}
+      #logyq-curriculum-status[data-tone="wait"]{color:#64748b}
+      #logyq-curriculum-check,#logyq-curriculum-levels{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
+      #logyq-curriculum-levels{background:#fff;color:#14532d;border:1px solid #bbf7d0}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
       .logiq-primary{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:9px 13px;font-weight:750;cursor:pointer}
       .logiq-library-body{padding:12px 16px 18px}

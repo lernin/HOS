@@ -982,15 +982,90 @@ test('LOGYQ empty library stays a library, not a chooser or editor', async () =>
   assert.equal(await page.locator('#logyq-curriculum').isVisible(), false)
   await page.locator('#logyq-tab-curriculum').click()
   assert.equal(await page.locator('#logyq-tab-curriculum').getAttribute('aria-selected'), 'true')
-  assert.match(await page.locator('#logyq-curriculum').innerText(), /Levels coming soon/)
+  assert.equal(await page.locator('#logyq-curriculum [data-level]').count(), 8)
+  assert.equal(await page.locator('[data-level="fruit"]').isDisabled(), false)
+  assert.equal(await page.locator('[data-level="food"]').isDisabled(), true)
+  assert.match(await page.locator('[data-level="food"]').getAttribute('aria-label'), /locked/)
+  assert.doesNotMatch(await page.locator('#logyq-curriculum').innerText(), /Levels coming soon|lunch|recess/)
   assert.equal(await page.locator('#logiq-map-list').isVisible(), false)
   assert.equal(await page.locator('#logiq-new-map').isVisible(), false)
-  assert.equal(await page.locator('#logyq-curriculum .logiq-map-row, #logyq-curriculum [data-level]').count(), 0)
+  assert.equal(await page.locator('#logyq-curriculum .logiq-map-row').count(), 0)
   await page.locator('#logyq-tab-maps').click()
   assert.equal(await page.locator('#logyq-tab-maps').getAttribute('aria-selected'), 'true')
   assert.match((await page.locator('#logiq-map-list').innerText()), /No maps yet/)
   assert.equal(await page.locator('#logiq-new-map').isVisible(), true)
   await page.waitForTimeout(950)
+  assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ curriculum level 1 clears into an empty map and unlocks level 2', async () => {
+  const capture = []
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context, { capture })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.locator('#logyq-tab-curriculum').click()
+  await page.locator('[data-level="fruit"]').click()
+  await page.waitForFunction(() => document.querySelector('#Dock .chip')?.textContent === 'fruit'
+    || document.querySelectorAll('#Dock .chip').length === 3)
+  const opened = await page.evaluate(() => ({
+    chips: Array.from(document.querySelectorAll('#Dock .chip')).map((el) => el.textContent.trim()).sort(),
+    nodes: document.querySelectorAll('g.node').length,
+    title: document.getElementById('logyq-curriculum-status')?.textContent || '',
+    playing: document.body.classList.contains('logyq-curriculum'),
+  }))
+  assert.deepEqual(opened.chips, ['apple', 'banana', 'fruit'])
+  assert.equal(opened.nodes, 0)
+  assert.equal(opened.playing, true)
+  assert.match(opened.title, /Fruit/)
+  assert.equal(await page.locator('#logyq-curriculum-check').isVisible(), true)
+
+  await page.evaluate(() => {
+    const core = window.LOGYQBridge.core
+    const tree = { name: 'fruit', children: [{ name: 'apple', children: [{ name: 'banana' }] }] }
+    core.utils.assignUids(tree)
+    core.state.wordBank = []
+    core.state.root = window.d3.hierarchy(tree)
+    core.utils.assignIds(core.state.root)
+    core.wordDock.render()
+    core.treeManager.layoutAndRender(false)
+  })
+  await page.locator('#logyq-curriculum-check').click()
+  assert.match(await page.locator('#logyq-curriculum-status').innerText(), /Not yet/)
+  assert.equal(await page.evaluate(() => localStorage.getItem('logyq_curriculum_progress_v1')), null)
+
+  await page.evaluate(() => {
+    const core = window.LOGYQBridge.core
+    const tree = { name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] }
+    core.utils.assignUids(tree)
+    core.state.wordBank = []
+    core.state.root = window.d3.hierarchy(tree)
+    core.utils.assignIds(core.state.root)
+    core.wordDock.render()
+    core.treeManager.layoutAndRender(false)
+  })
+  await page.locator('#logyq-curriculum-check').click()
+  await page.waitForFunction(() => /Fruit cleared/.test(document.getElementById('logyq-curriculum-status')?.textContent || ''))
+  const progress = await page.evaluate(() => JSON.parse(localStorage.getItem('logyq_curriculum_progress_v1')))
+  assert.equal(typeof progress.levels.fruit.clearedAt, 'string')
+  assert.equal(typeof progress.levels.fruit.ms, 'number')
+  await page.locator('#logyq-curriculum-levels').click()
+  await page.waitForFunction(() => {
+    const food = document.querySelector('[data-level="food"]')
+    const tab = document.getElementById('logyq-tab-curriculum')
+    return food && !food.disabled && tab?.getAttribute('aria-selected') === 'true'
+  })
+  assert.match(await page.locator('[data-level="fruit"]').getAttribute('aria-label'), /cleared/)
+  assert.equal(await page.locator('[data-level="body"]').isDisabled(), true)
+  await page.locator('#logyq-tab-maps').click()
+  assert.match(await page.locator('#logiq-map-list').innerText(), /No maps yet/)
+  assert.equal(await page.locator('#logiq-new-map').isVisible(), true)
+  await page.waitForTimeout(1000)
   assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
   assert.deepEqual(errors, [])
   await context.close()

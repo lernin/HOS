@@ -414,7 +414,7 @@ test('preview fragments concatenate to the served enhancement without edits', ()
   const assembled = assembleLogyqPreview()
   assert.deepEqual(assembled.names, [
     '00-boot.js', '01-helpers.js', '02-styles.js', '03-ui.js', '04-gestures.js',
-    '05-v162-gestures.js', '06-persistence.js',
+    '05-v162-gestures.js', '06-persistence.js', '07-curriculum.js',
   ])
   assert.equal(assembled.source, readFileSync(previewPath, 'utf8'))
   assert.match(assembled.source, /function queueAutosave/)

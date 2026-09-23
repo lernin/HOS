@@ -1463,7 +1463,9 @@ test('preview gestures expose v162 flick/hold/double-tap seams and have no spawn
   assert.match(ui, />My maps</)
   assert.match(ui, /id="logyq-tab-curriculum"/)
   assert.match(ui, />Curriculum</)
-  assert.match(ui, /Levels coming soon/)
+  assert.match(ui, /id="logyq-level-path"/)
+  assert.match(ui, /id="logyq-curriculum-check"/)
+  assert.doesNotMatch(ui, /Levels coming soon/)
   assert.match(ui, /function setHomeTab/)
   assert.match(styles, /#logiq-library\[data-shelf="curriculum"\] #logiq-new-map/)
   assert.match(styles, /v2-branch-drag svg#canvas g\.node\.drop-target text/)
@@ -2194,4 +2196,43 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   assert.match(v162, /clock\.style\.removeProperty\('stroke-dashoffset'\)/)
   assert.doesNotMatch(v162, /clock\.style\.strokeDasharray\s*=/)
   assert.doesNotMatch(v162, /clock\.style\.strokeDashoffset\s*=/)
+})
+
+test('curriculum pack matches parent structure and ignores sibling order', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/07-curriculum.js', import.meta.url), 'utf8')
+  const start = source.indexOf('// CURRICULUM_PURE_START')
+  const end = source.indexOf('// CURRICULUM_PURE_END')
+  assert.ok(start >= 0 && end > start)
+  const api = new Function(`${source.slice(start, end)}; return { curriculumPack, curriculumWords, curriculumMatches, curriculumUnlocked, curriculumStructureKey };`)()
+  const pack = api.curriculumPack()
+  assert.deepEqual(pack.map((level) => level.title), ['Fruit', 'Food', 'Places', 'Body', 'Body deep', 'Animals', 'School', 'Home'])
+  assert.equal(pack.length, 8)
+  const titles = JSON.stringify(pack)
+  assert.equal(titles.includes('lunch'), false)
+  assert.equal(titles.includes('recess'), false)
+  assert.equal(titles.includes('"break"'), false)
+  const fruit = pack[0].tree
+  assert.deepEqual(api.curriculumWords(fruit).sort(), ['apple', 'banana', 'fruit'])
+  const swapped = { name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] }
+  assert.equal(api.curriculumMatches(fruit, swapped), true)
+  assert.equal(api.curriculumMatches(fruit, { name: 'fruit', children: [{ name: 'apple', children: [{ name: 'banana' }] }] }), false)
+  assert.equal(api.curriculumMatches(fruit, { name: 'fruit', children: [{ name: 'apple' }] }), false)
+  const food = pack[1].tree
+  const foodSwapped = {
+    name: 'food',
+    children: [
+      { name: 'meat', children: [{ name: 'beef' }, { name: 'chicken' }] },
+      { name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] },
+    ],
+  }
+  assert.equal(api.curriculumMatches(food, foodSwapped), true)
+  assert.equal(api.curriculumMatches(food, { name: 'food', children: foodSwapped.children.slice(0, 1) }), false)
+  assert.equal(api.curriculumStructureKey(pack[2].tree).startsWith('Earth['), true)
+  assert.equal(api.curriculumUnlocked(0, { levels: {} }, pack), true)
+  assert.equal(api.curriculumUnlocked(1, { levels: {} }, pack), false)
+  assert.equal(api.curriculumUnlocked(1, { levels: { fruit: { clearedAt: '2026-09-23T00:00:00.000Z', ms: 1200 } } }, pack), true)
+  assert.equal(api.curriculumUnlocked(2, { levels: { fruit: { clearedAt: '2026-09-23T00:00:00.000Z', ms: 10 } } }, pack), false)
+  assert.match(source, /logyq_curriculum_progress_v1/)
+  assert.match(source, /state\.root = null/)
+  assert.match(source, /function checkCurriculum/)
 })

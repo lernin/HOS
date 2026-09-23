@@ -52,10 +52,16 @@
           <div class="logiq-library-body">
             <div class="logiq-map-list" id="logiq-map-list" role="tabpanel" aria-labelledby="logyq-tab-maps"></div>
             <div id="logyq-curriculum" role="tabpanel" aria-labelledby="logyq-tab-curriculum" hidden>
-              <div class="logiq-empty"><p>Levels coming soon</p></div>
+              <p class="logyq-level-intro">Build each tree from the Word Bank. Sibling order can differ.</p>
+              <ol id="logyq-level-path"></ol>
             </div>
           </div>
         </section>
+      </div>
+      <div id="logyq-curriculum-bar">
+        <p id="logyq-curriculum-status" role="status"></p>
+        <button type="button" id="logyq-curriculum-check">Check</button>
+        <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
       <div class="logiq-backdrop" id="logiq-pin" aria-hidden="true">
         <form class="logiq-pin-card" id="logiq-pin-form"><h2>Connect</h2><p>Enter the Lab PIN to open live maps. It stays in this LOGYQ session only.</p><input id="logiq-pin-input" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Lab PIN" required><span class="logiq-pin-error">That PIN was not accepted.</span><div class="logiq-pin-actions"><button type="button" class="logiq-icon-btn" id="logiq-pin-cancel" aria-label="Cancel">×</button><button class="logiq-primary" type="submit">Connect</button></div></form>
@@ -308,6 +314,7 @@
     currBtn?.setAttribute('aria-selected', String(curriculum))
     if (list) list.hidden = curriculum
     if (panel) panel.hidden = !curriculum
+    if (curriculum) renderCurriculumPath()
   }
 
   function closeMobilePanel() {

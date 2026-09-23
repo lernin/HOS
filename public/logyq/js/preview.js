@@ -185,6 +185,25 @@
       #logyq-curriculum{display:none}
       #logiq-library[data-shelf="curriculum"] #logyq-curriculum{display:block}
       #logyq-curriculum .logiq-empty p{margin:0}
+      .logyq-level-intro{margin:4px 0 14px;color:#64748b;font-size:13px}
+      #logyq-level-path{list-style:none;margin:0 auto 28px;padding:8px 0 12px;width:min(440px,100%);display:grid;gap:16px;position:relative}
+      #logyq-level-path::before{content:"";position:absolute;left:50%;top:28px;bottom:28px;width:4px;border-radius:999px;background:#bbf7d0;transform:translateX(-50%)}
+      .logyq-level{position:relative;display:flex;z-index:1}
+      .logyq-level:nth-child(odd){justify-content:flex-start;padding-left:4%}
+      .logyq-level:nth-child(even){justify-content:flex-end;padding-right:4%}
+      .logyq-level button{display:flex;align-items:center;gap:10px;border:1px solid #e2e8f0;background:#fff;border-radius:999px;padding:6px 14px 6px 6px;font:700 15px/1.2 system-ui,sans-serif;color:#14532d;cursor:pointer;box-shadow:0 6px 16px rgba(15,23,42,.06)}
+      .logyq-level-num{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:#16a34a;color:#fff;font-weight:800}
+      .logyq-level.is-cleared .logyq-level-num{background:#14532d}
+      .logyq-level.is-locked button{color:#94a3b8;cursor:not-allowed;box-shadow:none}
+      .logyq-level.is-locked .logyq-level-num{background:#e2e8f0;color:#64748b}
+      .logyq-level-lock{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
+      #logyq-curriculum-bar{position:fixed;z-index:42;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:14px;background:rgba(255,255,255,.96);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{display:flex}
+      #logyq-curriculum-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
+      #logyq-curriculum-status[data-tone="clear"]{color:#14532d}
+      #logyq-curriculum-status[data-tone="wait"]{color:#64748b}
+      #logyq-curriculum-check,#logyq-curriculum-levels{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
+      #logyq-curriculum-levels{background:#fff;color:#14532d;border:1px solid #bbf7d0}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
       .logiq-primary{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:9px 13px;font-weight:750;cursor:pointer}
       .logiq-library-body{padding:12px 16px 18px}
@@ -378,10 +397,16 @@
           <div class="logiq-library-body">
             <div class="logiq-map-list" id="logiq-map-list" role="tabpanel" aria-labelledby="logyq-tab-maps"></div>
             <div id="logyq-curriculum" role="tabpanel" aria-labelledby="logyq-tab-curriculum" hidden>
-              <div class="logiq-empty"><p>Levels coming soon</p></div>
+              <p class="logyq-level-intro">Build each tree from the Word Bank. Sibling order can differ.</p>
+              <ol id="logyq-level-path"></ol>
             </div>
           </div>
         </section>
+      </div>
+      <div id="logyq-curriculum-bar">
+        <p id="logyq-curriculum-status" role="status"></p>
+        <button type="button" id="logyq-curriculum-check">Check</button>
+        <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
       <div class="logiq-backdrop" id="logiq-pin" aria-hidden="true">
         <form class="logiq-pin-card" id="logiq-pin-form"><h2>Connect</h2><p>Enter the Lab PIN to open live maps. It stays in this LOGYQ session only.</p><input id="logiq-pin-input" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Lab PIN" required><span class="logiq-pin-error">That PIN was not accepted.</span><div class="logiq-pin-actions"><button type="button" class="logiq-icon-btn" id="logiq-pin-cancel" aria-label="Cancel">×</button><button class="logiq-primary" type="submit">Connect</button></div></form>
@@ -634,6 +659,7 @@
     currBtn?.setAttribute('aria-selected', String(curriculum))
     if (list) list.hidden = curriculum
     if (panel) panel.hidden = !curriculum
+    if (curriculum) renderCurriculumPath()
   }
 
   function closeMobilePanel() {
@@ -4066,6 +4092,11 @@
   }
 
   function queueAutosave(snapshot) {
+    if (app.curriculum) {
+      setSaveState('saved')
+      maybeCurriculumClear(snapshot)
+      return
+    }
     if (!app.hasOpenMap) return
     if (isBlankDraft({
       id: app.current.id,
@@ -4104,6 +4135,13 @@
   }
 
   async function savePending() {
+    if (app.curriculum) {
+      if (localStorage.getItem(PENDING_KEY)) {
+        clearTimeout(app.timer)
+        app.timer = setTimeout(savePending, 850)
+      }
+      return
+    }
     if (app.saving) {
       app.saveAgain = true
       return
@@ -4370,6 +4408,7 @@
   }
 
   function enterEditor(row, { edit = false } = {}) {
+    leaveCurriculumPlay()
     const tree = decodeMapTree(row.tree)
     const wordBank = Array.isArray(row.word_bank) ? row.word_bank : (row.wordBank || [])
     app.current = { id: row.id || null, name: row.name || DEFAULT_NAME }
@@ -4395,6 +4434,7 @@
   }
 
   function createMap({ edit = false } = {}) {
+    leaveCurriculumPlay()
     const taken = []
     for (const row of app.libraryRows || []) taken.push(row?.name)
     for (const row of readCachedLibrary()) taken.push(row?.name)
@@ -4494,6 +4534,234 @@
     app.booted = true
   }
 
+  const CURRICULUM_KEY = 'logyq_curriculum_progress_v1'
+
+  // CURRICULUM_PURE_START
+  function curriculumNode(name, ...children) {
+    return children.length ? { name, children } : { name }
+  }
+
+  function curriculumPack() {
+    return [
+      { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')) },
+      { id: 'food', title: 'Food', tree: curriculumNode('food',
+        curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
+        curriculumNode('meat', curriculumNode('chicken'), curriculumNode('beef'))) },
+      { id: 'places', title: 'Places', tree: curriculumNode('Earth',
+        curriculumNode('Korea', curriculumNode('Seoul')),
+        curriculumNode('Canada', curriculumNode('Vancouver'))) },
+      { id: 'body', title: 'Body', tree: curriculumNode('body', curriculumNode('arm'), curriculumNode('leg'), curriculumNode('head')) },
+      { id: 'body-deep', title: 'Body deep', tree: curriculumNode('body',
+        curriculumNode('arm', curriculumNode('hand', curriculumNode('finger'))),
+        curriculumNode('leg', curriculumNode('foot', curriculumNode('toe'))),
+        curriculumNode('head', curriculumNode('face', curriculumNode('eyes'), curriculumNode('nose'), curriculumNode('mouth')))) },
+      { id: 'animals', title: 'Animals', tree: curriculumNode('animal',
+        curriculumNode('mammal', curriculumNode('dog'), curriculumNode('cat')),
+        curriculumNode('bird', curriculumNode('eagle'), curriculumNode('sparrow'))) },
+      { id: 'school', title: 'School', tree: curriculumNode('school',
+        curriculumNode('subject', curriculumNode('math'), curriculumNode('English')),
+        curriculumNode('room', curriculumNode('classroom'), curriculumNode('library'))) },
+      { id: 'home', title: 'Home', tree: curriculumNode('home',
+        curriculumNode('kitchen', curriculumNode('fridge'), curriculumNode('stove')),
+        curriculumNode('bedroom', curriculumNode('bed'), curriculumNode('desk'))) },
+    ]
+  }
+
+  function curriculumWords(node, into = []) {
+    if (!node || typeof node !== 'object') return into
+    const name = String(node.name ?? '').trim()
+    if (name) into.push(name)
+    for (const child of node.children || []) curriculumWords(child, into)
+    return into
+  }
+
+  function curriculumStructureKey(node) {
+    if (!node || typeof node !== 'object') return ''
+    const name = String(node.name ?? '').trim()
+    const kids = (Array.isArray(node.children) ? node.children : [])
+      .map((child) => curriculumStructureKey(child))
+      .filter((key) => key.length)
+      .sort()
+    return `${name}[${kids.join('|')}]`
+  }
+
+  function curriculumMatches(target, live) {
+    if (!target || !live) return false
+    return curriculumStructureKey(target) === curriculumStructureKey(live)
+  }
+
+  function curriculumUnlocked(index, progress, pack) {
+    if (index <= 0) return true
+    const prev = pack?.[index - 1]
+    if (!prev) return false
+    return !!progress?.levels?.[prev.id]?.clearedAt
+  }
+  // CURRICULUM_PURE_END
+
+  function readCurriculumProgress() {
+    const stored = readJson(CURRICULUM_KEY, { levels: {} })
+    const levels = stored && typeof stored.levels === 'object' && stored.levels ? stored.levels : {}
+    return { levels }
+  }
+
+  function writeCurriculumProgress(progress) {
+    try { localStorage.setItem(CURRICULUM_KEY, JSON.stringify(progress)) } catch (_error) {}
+  }
+
+  function shuffleCurriculumWords(words) {
+    const next = words.slice()
+    for (let i = next.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1))
+      const swap = next[i]
+      next[i] = next[j]
+      next[j] = swap
+    }
+    const same = next.every((word, index) => word === words[index])
+    if (same && next.length > 1) {
+      next.push(next.shift())
+    }
+    return next
+  }
+
+  function curriculumLevel(id) {
+    return curriculumPack().find((level) => level.id === id) || null
+  }
+
+  function renderCurriculumChrome() {
+    const playing = !!app.curriculum
+    document.body.classList.toggle('logyq-curriculum', playing)
+    const status = document.getElementById('logyq-curriculum-status')
+    if (status && playing && !status.dataset.tone) status.textContent = app.curriculum.title || ''
+  }
+
+  function leaveCurriculumPlay() {
+    if (!app.curriculum) {
+      renderCurriculumChrome()
+      return
+    }
+    app.curriculum = null
+    const status = document.getElementById('logyq-curriculum-status')
+    if (status) {
+      status.textContent = ''
+      delete status.dataset.tone
+    }
+    renderCurriculumChrome()
+  }
+
+  function renderCurriculumPath() {
+    const path = document.getElementById('logyq-level-path')
+    if (!path) return
+    const pack = curriculumPack()
+    const progress = readCurriculumProgress()
+    path.innerHTML = pack.map((level, index) => {
+      const unlocked = curriculumUnlocked(index, progress, pack)
+      const cleared = !!progress.levels?.[level.id]?.clearedAt
+      const state = cleared ? 'cleared' : unlocked ? 'open' : 'locked'
+      const label = `Level ${index + 1}, ${level.title}${cleared ? ', cleared' : unlocked ? '' : ', locked'}`
+      return `<li class="logyq-level is-${state}">
+        <button type="button" data-level="${escapeHtml(level.id)}" aria-label="${escapeHtml(label)}"${unlocked ? '' : ' disabled'}>
+          <span class="logyq-level-num">${index + 1}</span>
+          <span class="logyq-level-name">${escapeHtml(level.title)}</span>
+          ${unlocked ? '' : '<svg class="logyq-level-lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V8a4 4 0 0 1 8 0v3"></path></svg>'}
+        </button>
+      </li>`
+    }).join('')
+  }
+
+  function beginCurriculumLevel(level) {
+    if (!level) return
+    const words = shuffleCurriculumWords(curriculumWords(level.tree))
+    app.curriculum = {
+      id: level.id,
+      title: level.title,
+      startedAt: Date.now(),
+      cleared: false,
+    }
+    app.current = { id: null, name: level.title }
+    app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    app.lastSnapshot = 'curriculum'
+    updateMapName()
+    hideLibrary()
+    const status = document.getElementById('logyq-curriculum-status')
+    if (status) {
+      delete status.dataset.tone
+      status.textContent = level.title
+    }
+    renderCurriculumChrome()
+    bridge.loadMap({ name: '' }, words)
+    const state = bridge.core?.state
+    if (state) {
+      state.root = null
+      state.history = []
+      state.redo = []
+      state.wordBank = words.slice()
+    }
+    try { bridge.core?.treeManager?.renderEmpty?.() } catch (_error) {}
+    try { bridge.core?.wordDock?.render?.() } catch (_error) {}
+    setSaveState('saved')
+  }
+
+  function maybeCurriculumClear(snapshot) {
+    const session = app.curriculum
+    if (!session || session.cleared) return false
+    const level = curriculumLevel(session.id)
+    if (!level || !curriculumMatches(level.tree, snapshot?.tree)) return false
+    session.cleared = true
+    const progress = readCurriculumProgress()
+    const ms = Math.max(0, Date.now() - (session.startedAt || Date.now()))
+    progress.levels[level.id] = { clearedAt: new Date().toISOString(), ms }
+    writeCurriculumProgress(progress)
+    const pack = curriculumPack()
+    const next = pack[pack.findIndex((item) => item.id === level.id) + 1]
+    const status = document.getElementById('logyq-curriculum-status')
+    if (status) {
+      status.dataset.tone = 'clear'
+      status.textContent = next ? `${level.title} cleared. ${next.title} is open.` : `${level.title} cleared.`
+    }
+    return true
+  }
+
+  function checkCurriculum() {
+    if (!app.curriculum) return false
+    const snapshot = bridge.snapshot()
+    if (maybeCurriculumClear(snapshot)) return true
+    if (app.curriculum.cleared) return true
+    const status = document.getElementById('logyq-curriculum-status')
+    if (status) {
+      status.dataset.tone = 'wait'
+      status.textContent = 'Not yet. The parents have to match. Sibling order can differ.'
+    }
+    return false
+  }
+
+  function bindCurriculum() {
+    document.getElementById('logyq-level-path')?.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-level]')
+      if (!button || button.disabled) return
+      const pack = curriculumPack()
+      const index = pack.findIndex((level) => level.id === button.dataset.level)
+      const level = pack[index]
+      if (!level || !curriculumUnlocked(index, readCurriculumProgress(), pack)) return
+      beginCurriculumLevel(level)
+    })
+    document.getElementById('logyq-curriculum-check')?.addEventListener('click', () => checkCurriculum())
+    document.getElementById('logyq-curriculum-levels')?.addEventListener('click', () => {
+      openLibrary().then(() => setHomeTab('curriculum'))
+    })
+    preview.curriculum = {
+      key: CURRICULUM_KEY,
+      pack: curriculumPack,
+      words: curriculumWords,
+      matches: curriculumMatches,
+      structureKey: curriculumStructureKey,
+      unlocked: curriculumUnlocked,
+      read: readCurriculumProgress,
+      begin: beginCurriculumLevel,
+      check: checkCurriculum,
+    }
+  }
+
+  bindCurriculum()
   bootSession()
 })()
-
