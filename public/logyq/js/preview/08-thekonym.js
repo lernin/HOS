@@ -215,6 +215,25 @@
     }
   }
 
+  const DOSSIER_FLIP_MS = 420
+
+  function dossierFlipFrames() {
+    return [
+      { transform: 'translateX(-16px) rotateY(-88deg)', offset: 0, easing: 'linear' },
+      { transform: 'translateX(18px) rotateY(-46deg)', offset: 0.42, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+      { transform: 'translateX(0px) rotateY(0deg)', offset: 1 },
+    ]
+  }
+
+  // A clear left swipe on the dossier. A short nudge does not count.
+  function thekonymDismissSwipe(dx, dy, min = 52) {
+    const x = Number(dx) || 0
+    const y = Number(dy) || 0
+    if (x >= 0) return false
+    if (Math.hypot(x, y) < min) return false
+    return Math.abs(x) > Math.abs(y)
+  }
+
   // Right-swipe open: the dossier flips in at full size. A few pixels of rightward drift sit inside that turn.
   function playDossierFlip(origin) {
     const root = document.getElementById('logyq-thekonym-card')
@@ -223,7 +242,7 @@
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return
     clearDossierFlip(root)
     if (card.getBoundingClientRect().width < 8) return
-    const duration = 420
+    const duration = DOSSIER_FLIP_MS
     root.classList.add('is-flipping')
     root.dataset.flip = 'open'
     root.style.backgroundColor = 'rgba(22,46,39,0)'
@@ -231,11 +250,7 @@
     card.style.transformOrigin = 'center center'
     card.style.transform = 'translateX(-16px) rotateY(-88deg)'
 
-    const cardAnim = card.animate([
-      { transform: 'translateX(-16px) rotateY(-88deg)', offset: 0, easing: 'linear' },
-      { transform: 'translateX(18px) rotateY(-46deg)', offset: 0.42, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
-      { transform: 'translateX(0px) rotateY(0deg)', offset: 1 },
-    ], { duration, easing: 'linear', fill: 'both' })
+    const cardAnim = card.animate(dossierFlipFrames(), { duration, easing: 'linear', fill: 'both' })
     const scrimAnim = root.animate([
       { backgroundColor: 'rgba(22,46,39,0)', offset: 0 },
       { backgroundColor: 'rgba(22,46,39,0.28)', offset: 1 },
@@ -259,18 +274,30 @@
     flip.timer = setTimeout(settle, duration + 90)
   }
 
-  function closeThekonymCard(immediate) {
-    const root = document.getElementById('logyq-thekonym-card')
-    thekonymState.card = null
-    if (!root?.classList.contains('is-open')) return
-    const flipping = root.dataset.flip === 'open' || root.dataset.flip === 'settled'
-    if (immediate || !flipping) {
+  // Settled close: the same turn, played backward, until the dossier is edge-on and gone.
+  function playDossierUnflip(root) {
+    const card = root.querySelector('.logyq-tk-card')
+    if (!card || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
       clearDossierFlip(root)
       root.classList.remove('is-open')
       return
     }
-    const flip = dossierFlip
-    if (flip?.closing) return
+    clearDossierFlip(root)
+    const duration = DOSSIER_FLIP_MS
+    root.classList.add('is-flipping')
+    root.dataset.flip = 'close'
+    card.style.opacity = ''
+    card.style.transformOrigin = 'center center'
+    card.style.transform = 'translateX(0px) rotateY(0deg)'
+    const cardAnim = card.animate([
+      { transform: 'translateX(0px) rotateY(0deg)', offset: 0, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+      { transform: 'translateX(18px) rotateY(-46deg)', offset: 0.58, easing: 'linear' },
+      { transform: 'translateX(-16px) rotateY(-88deg)', offset: 1 },
+    ], { duration, easing: 'linear', fill: 'both' })
+    const scrimAnim = root.animate([
+      { backgroundColor: 'rgba(22,46,39,0.28)', offset: 0 },
+      { backgroundColor: 'rgba(22,46,39,0)', offset: 1 },
+    ], { duration, easing: 'linear', fill: 'both' })
     let closed = false
     const done = () => {
       if (closed) return
@@ -278,7 +305,36 @@
       clearDossierFlip(root)
       root.classList.remove('is-open')
     }
+    cardAnim.onfinish = done
+    dossierFlip = { anims: [cardAnim, scrimAnim], fly: null, node: null, timer: setTimeout(done, duration + 80), closing: true }
+  }
+
+  function closeThekonymCard(immediate) {
+    const root = document.getElementById('logyq-thekonym-card')
+    thekonymState.card = null
+    if (!root?.classList.contains('is-open')) return
+    if (root.dataset.flip === 'close' || dossierFlip?.closing) {
+      if (immediate) {
+        clearDossierFlip(root)
+        root.classList.remove('is-open')
+      }
+      return
+    }
+    const flipping = root.dataset.flip === 'open' || root.dataset.flip === 'settled'
+    if (immediate || !flipping) {
+      clearDossierFlip(root)
+      root.classList.remove('is-open')
+      return
+    }
+    const flip = dossierFlip
     if (flip && root.dataset.flip === 'open') {
+      let closed = false
+      const done = () => {
+        if (closed) return
+        closed = true
+        clearDossierFlip(root)
+        root.classList.remove('is-open')
+      }
       flip.closing = true
       clearTimeout(flip.timer)
       flip.anims.forEach((anim) => {
@@ -290,19 +346,7 @@
       flip.timer = setTimeout(done, 480)
       return
     }
-    clearDossierFlip(root)
-    root.dataset.flip = 'closing'
-    const card = root.querySelector('.logyq-tk-card')
-    const fade = card?.animate([
-      { transform: 'scale(1)', opacity: 1 },
-      { transform: 'scale(0.94) translateY(8px)', opacity: 0 },
-    ], { duration: 260, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'both' })
-    root.animate([
-      { backgroundColor: 'rgba(22,46,39,0.28)' },
-      { backgroundColor: 'rgba(22,46,39,0)' },
-    ], { duration: 260, easing: 'ease-in', fill: 'both' })
-    if (fade) fade.onfinish = done
-    dossierFlip = { timer: setTimeout(done, 340), closing: true, anims: fade ? [fade] : [], fly: null, node: null }
+    playDossierUnflip(root)
   }
 
   function closeThekonymBrowser() {
@@ -638,7 +682,35 @@
         if (event.target === scrim) closeThekonymCard()
       })
       scrim.querySelector('.logyq-tk-x').addEventListener('click', () => closeThekonymCard())
+      let gesture = null
+      scrim.addEventListener('pointerdown', (event) => {
+        if (event.button) return
+        if (event.target.closest?.('.logyq-tk-x, input, textarea, .logyq-tk-input')) {
+          gesture = null
+          return
+        }
+        gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, lastX: event.clientX, lastY: event.clientY }
+        try { scrim.setPointerCapture(event.pointerId) } catch (_error) {}
+      })
+      scrim.addEventListener('pointermove', (event) => {
+        if (!gesture || event.pointerId !== gesture.id) return
+        gesture.lastX = event.clientX
+        gesture.lastY = event.clientY
+      })
+      scrim.addEventListener('pointerup', (event) => {
+        if (!gesture || event.pointerId !== gesture.id) return
+        const dx = gesture.lastX - gesture.x
+        const dy = gesture.lastY - gesture.y
+        gesture = null
+        if (!thekonymDismissSwipe(dx, dy)) return
+        lastField = ''
+        closeThekonymCard()
+      })
+      scrim.addEventListener('pointercancel', (event) => {
+        if (gesture?.id === event.pointerId) gesture = null
+      })
       scrim.querySelector('.logyq-tk-card').addEventListener('pointerup', (event) => {
+        if (gesture && thekonymDismissSwipe(gesture.lastX - gesture.x, gesture.lastY - gesture.y)) return
         const field = event.target.closest?.('[data-edit]')
         if (!field || field.querySelector('input')) return
         const now = performance.now()

@@ -6166,7 +6166,51 @@ test('LOGYQ Thekonym mode pairs a display onym with a sans essence, and a right 
   assert.equal(dossier.bank, 0)
   assert.equal(dossier.addText, false)
   await page.waitForFunction(() => document.getElementById('logyq-thekonym-card')?.dataset.flip === 'settled')
+  const dossierSwipe = (dx) => page.evaluate((delta) => {
+    const card = document.querySelector('.logyq-tk-card')
+    const rect = card.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const point = (type, px) => card.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 7,
+      isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1,
+      clientX: px, clientY: y,
+    }))
+    point('pointerdown', x)
+    point('pointermove', x + delta / 2)
+    point('pointermove', x + delta)
+    point('pointerup', x + delta)
+  }, dx)
+  await dossierSwipe(-28)
+  assert.equal(await page.locator('#logyq-thekonym-card.is-open').count(), 1)
+  await dossierSwipe(-96)
+  const closeMotion = await page.evaluate(() => {
+    const card = document.querySelector('#logyq-thekonym-card .logyq-tk-card')
+    const anim = card.getAnimations().find((item) => item.effect?.target === card)
+    const frames = anim.effect.getKeyframes().map((frame) => frame.transform || '')
+    anim.pause()
+    anim.currentTime = 0
+    const face = card.getBoundingClientRect()
+    anim.currentTime = Math.max(0, (anim.effect.getTiming().duration || 420) - 1)
+    const edge = card.getBoundingClientRect()
+    anim.play()
+    return {
+      flip: document.getElementById('logyq-thekonym-card')?.dataset.flip || '',
+      frames,
+      faceW: face.width,
+      edgeW: edge.width,
+      tall: card.offsetHeight > window.innerHeight * 0.8,
+    }
+  })
+  assert.equal(closeMotion.flip, 'close')
+  assert.equal(closeMotion.tall, true)
+  assert.ok(closeMotion.frames.every((value) => value.includes('rotateY') && !value.includes('scale')), closeMotion.frames.join(' | '))
+  assert.ok(closeMotion.edgeW < closeMotion.faceW * 0.5, 'the reverse flip ends edge-on')
+  await page.waitForFunction(() => !document.getElementById('logyq-thekonym-card').classList.contains('is-open'))
+  await page.evaluate((id) => window.LOGYQPreview.thekonym.openUid(id, { flip: true }), uid)
+  await page.waitForFunction(() => document.getElementById('logyq-thekonym-card')?.dataset.flip === 'settled')
   await page.locator('#logyq-thekonym-card .logyq-tk-x').click()
+  assert.equal(await page.evaluate(() => document.getElementById('logyq-thekonym-card')?.dataset.flip), 'close')
   await page.waitForFunction(() => !document.getElementById('logyq-thekonym-card').classList.contains('is-open'))
 
   const other = await page.evaluate(() => {
