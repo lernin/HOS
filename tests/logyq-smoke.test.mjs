@@ -4026,6 +4026,157 @@ test('LOGYQ one-thumb tap arms green and a swipe nominates by target', async () 
   await context.close()
 })
 
+test('LOGYQ rename mirrors onto the card and clears the green focus', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({ name: 'Food', children: [{ name: 'Fruit' }] }, [])
+  })
+  await page.waitForFunction(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit')
+    return node && node.getBoundingClientRect().width > 20
+  })
+  const read = () => page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.dataset.editFocus === '1')
+      || Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit' || el.__data__?.data?._uid)
+    const fruit = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => {
+      const uid = el.__data__?.data?._uid
+      return uid && uid === document.querySelector('.node-edit-input')?.dataset?.editUid
+    }) || Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit' || el.__data__?.data?.name === 'Peel' || el.__data__?.data?.name === 'Citrus')
+    const ring = fruit?.querySelector('rect.logyq-edit-focus')
+    const label = fruit?.querySelector('text.label')
+    return {
+      name: fruit?.__data__?.data?.name ?? null,
+      label: label?.textContent || '',
+      focus: fruit?.dataset?.editFocus || null,
+      arm: fruit?.dataset?.smiteArm || null,
+      armed: window.LOGYQPreview.gestures.smite.armed,
+      stroke: ring?.getAttribute('stroke') || null,
+      fill: ring?.getAttribute('fill') || null,
+      width: ring ? getComputedStyle(ring).strokeWidth : null,
+      value: document.querySelector('.node-edit-input')?.value ?? null,
+      editing: window.LOGYQBridge.core.state.editingUid,
+    }
+  })
+  const point = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const tap = async () => {
+    await page.evaluate(({ x, y }) => {
+      const canvas = document.getElementById('canvas')
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      const fire = (type) => target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
+        isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+      }))
+      fire('pointerdown')
+      fire('pointerup')
+    }, point)
+  }
+  await tap()
+  await tap()
+  await page.waitForSelector('.node-edit-input')
+  await page.waitForFunction(() => document.activeElement?.classList?.contains('node-edit-input'))
+  const opened = await read()
+  assert.equal(opened.value, 'Fruit')
+  assert.equal(opened.focus, '1')
+  assert.equal(opened.stroke, '#16a34a')
+  assert.equal(opened.fill, 'none')
+  assert.equal(opened.width, '3.5px')
+  assert.equal(opened.arm, null)
+  assert.equal(opened.armed, null)
+  await page.locator('.node-edit-input').pressSequentially('Pe')
+  const mid = await read()
+  assert.equal(mid.value, 'FruitPe')
+  assert.equal(mid.name, 'FruitPe')
+  assert.equal(mid.label, 'FruitPe')
+  assert.equal(mid.focus, '1')
+  await page.locator('.node-edit-input').fill('Peel')
+  const typed = await read()
+  assert.equal(typed.name, 'Peel')
+  assert.equal(typed.label, 'Peel')
+  await page.locator('.node-edit-cancel').click()
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
+  const cancelled = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit')
+    return {
+      name: node?.__data__?.data?.name ?? null,
+      label: node?.querySelector('text.label')?.textContent || '',
+      focus: document.querySelectorAll('rect.logyq-edit-focus').length,
+      armed: window.LOGYQPreview.gestures.smite.armed,
+    }
+  })
+  assert.equal(cancelled.name, 'Fruit')
+  assert.equal(cancelled.label, 'Fruit')
+  assert.equal(cancelled.focus, 0)
+  assert.equal(cancelled.armed, null)
+  const again = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Fruit')
+    const rect = node.getBoundingClientRect()
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+  })
+  const tapAt = async (spot) => {
+    await page.evaluate(({ x, y }) => {
+      const canvas = document.getElementById('canvas')
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      const fire = (type) => target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
+        isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+      }))
+      fire('pointerdown')
+      fire('pointerup')
+    }, spot)
+  }
+  await tapAt(again)
+  await tapAt(again)
+  const second = await page.evaluate(({ x, y }) => {
+    const hit = document.elementFromPoint(x, y)
+    return {
+      editing: window.LOGYQBridge.core.state.editingUid,
+      editors: document.querySelectorAll('.node-edit-input').length,
+      hit: hit ? `${hit.tagName}.${hit.getAttribute('class') || ''}` : null,
+      armed: window.LOGYQPreview.gestures.smite.armed,
+    }
+  }, again)
+  assert.equal(second.editors, 1, JSON.stringify(second))
+  await page.locator('.node-edit-input').fill('Citrus')
+  const live = await read()
+  assert.equal(live.name, 'Citrus')
+  assert.equal(live.label, 'Citrus')
+  assert.equal(live.stroke, '#16a34a')
+  await page.locator('.node-edit-input').press('Enter')
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.editingUid)
+  const saved = await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'Citrus')
+    return {
+      name: node?.__data__?.data?.name ?? null,
+      label: node?.querySelector('text.label')?.textContent || '',
+      focus: document.querySelectorAll('rect.logyq-edit-focus').length,
+      armed: window.LOGYQPreview.gestures.smite.armed,
+    }
+  })
+  assert.equal(saved.name, 'Citrus')
+  assert.equal(saved.label, 'Citrus')
+  assert.equal(saved.focus, 0)
+  assert.equal(saved.armed, null)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ an ancestor cast absorbs a nested branch and disjoint branches stay live', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   await stubMaps(context)
@@ -4735,7 +4886,7 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
     }
   }, created.selected)
   assert.equal(duringPan.editing, created.selected)
-  assert.equal(duringPan.name, 'Lime')
+  assert.equal(duringPan.name, 'Discard me')
   assert.equal(duringPan.value, 'Discard me')
   const pinchBefore = await view()
   await page.evaluate(({ x, y }) => {

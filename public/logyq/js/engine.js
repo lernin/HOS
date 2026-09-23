@@ -1933,10 +1933,34 @@ if (dir === +1){
  
  
  
+  function mirrorEditLabel(uid, text){
+    const { state, utils } = logyq
+    const target = utils.findByUid(state.root?.data, uid)
+    if (!target) return
+    const next = text == null ? '' : String(text)
+    if ((target.name ?? '') === next) return
+    target.name = next
+    try { logyq.layout.LabelWrap.apply() } catch (_e) {}
+  }
+  function showEditFocus(uid){
+    try { logyq.setEditFocus?.(uid || null) } catch (_e) {}
+  }
+  function restoreEditName(uid, prev){
+    if (prev == null || uid == null) return
+    const { state, utils } = logyq
+    const target = utils.findByUid(state.root?.data, uid)
+    if (!target || (target.name ?? '') === prev) return
+    target.name = prev
+    try { logyq.layout.LabelWrap.apply() } catch (_e) {}
+  }
+
   function closeNodeEditor(apply, restoreZoom){
     const { state, elements, utils } = logyq
     if(!state.editingUid) return;
     const uid = state.editorEl?.dataset?.editUid || state.editingUid; const el = state.editorEl;
+    const prevName = state.editPrevName
+    state.editPrevName = null
+    showEditFocus(null)
     if (state._editFocusTimer) { try { clearTimeout(state._editFocusTimer); } catch (_e) {} state._editFocusTimer = 0; }
     if (state._editPlaceTimer) { try { clearTimeout(state._editPlaceTimer); } catch (_e) {} state._editPlaceTimer = 0; }
     if (typeof state._editViewportOff === 'function') { try { state._editViewportOff(); } catch (_e) {} state._editViewportOff = null; }
@@ -1945,7 +1969,7 @@ if (dir === +1){
     if(apply){
       const target = utils.findByUid(state.root.data, uid);
       if(target){
-        const prev = target.name ?? "";
+        const prev = prevName != null ? prevName : (target.name ?? "");
         const next = (el && typeof el.value === "string") ? el.value.trim() : prev;
         if(next !== prev){
           logyq.history.pushHistory({ type:"rename", uid, prev, next });
@@ -1954,8 +1978,12 @@ if (dir === +1){
           utils.assignIds(state.root);
           logyq.treeManager.layoutAndRender(false);
           setSelected(uid);
+        } else {
+          restoreEditName(uid, prev);
         }
       }
+    } else {
+      restoreEditName(uid, prevName);
     }
     if (!mobileQuietEdit()) {
       const svg = elements.svg?.node?.();
@@ -1982,6 +2010,8 @@ if (dir === +1){
     const uid = d?.data?._uid;
     if(!d || uid == null || String(uid) === '') return;
     state.editingUid = uid;
+    state.editPrevName = (d.data && d.data.name) ? String(d.data.name) : '';
+    showEditFocus(uid);
     state.editZoom = null;
     state.editFocusArmed = false;
     state.editUserZoom = false;
@@ -2046,6 +2076,11 @@ if (dir === +1){
     }
     state.editorEl = input;
 
+
+    input.addEventListener("input", function(){
+      if (state.editingUid !== uid) return;
+      mirrorEditLabel(uid, input.value);
+    });
 
     input.addEventListener("keydown", function(e){
   if (e.key === "Enter"){

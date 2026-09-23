@@ -257,6 +257,7 @@
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important;filter:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{pointer-events:none!important;fill:none!important;fill-opacity:0!important;stroke-width:3.5px!important;stroke-linecap:round;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-edit-focus{pointer-events:none!important;fill:none!important;fill-opacity:0!important;stroke:#16a34a!important;stroke-width:3.5px!important;stroke-linecap:round;vector-effect:non-scaling-stroke;filter:none!important;animation:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash[data-smite-outline="ants"]{stroke-dasharray:8 6!important;animation:logyq-smite-march 1.4s linear infinite!important}
         body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-dasharray:none!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.links path.logyq-smite-ant{fill:none!important;stroke-linecap:round;stroke-dasharray:8 6!important;animation:logyq-smite-march 1.4s linear infinite!important;pointer-events:none!important;transition:none!important;vector-effect:non-scaling-stroke}
@@ -2294,7 +2295,7 @@
   }
 
   function cardFaceRect(node) {
-    const vis = node?.querySelector?.('rect:not(.grabzone)')
+    const vis = node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)')
     return vis?.getBoundingClientRect?.() || node?.getBoundingClientRect?.() || null
   }
 
@@ -2825,10 +2826,12 @@
     if (!layers.length) {
       clearSmiteClocks(doc)
       paintSmiteArm(doc, smite.armed)
+      paintEditFocus(doc, smite.editUid)
       return
     }
     paintSmiteLayers(doc, layers)
     paintSmiteArm(doc, smite.armed)
+    paintEditFocus(doc, smite.editUid)
   }
 
   function paintSmiteArm(doc, uid) {
@@ -2857,6 +2860,49 @@
     const box = smiteFaceBox(face)
     smitePaintCard(node, smiteArmChrome(), box.rx, box.ry)
     node.dataset.smiteArm = '1'
+  }
+
+  // Rename focus uses the same calm green outline as an armed card.
+  // It is not a Smite arm, so a swipe still needs a separate tap.
+  function paintEditFocus(doc, uid) {
+    doc.querySelectorAll('svg#canvas g.node[data-edit-focus="1"]').forEach((node) => {
+      if (uid && nodeUid(node) === uid) return
+      delete node.dataset.editFocus
+      node.querySelectorAll('rect.logyq-edit-focus').forEach((el) => el.remove())
+    })
+    if (!uid) return
+    const node = nodeByUid(doc, uid)
+    if (!node) return
+    if (node.dataset.smiteClock === '1') {
+      delete node.dataset.editFocus
+      node.querySelectorAll('rect.logyq-edit-focus').forEach((el) => el.remove())
+      return
+    }
+    const face = smiteFace(node)
+    if (!face) return
+    const box = smiteFaceBox(face)
+    const chrome = smiteArmChrome()
+    let ring = node.querySelector('rect.logyq-edit-focus')
+    if (!ring) {
+      ring = doc.createElementNS('http://www.w3.org/2000/svg', 'rect')
+      ring.setAttribute('class', 'logyq-edit-focus')
+      ring.setAttribute('pointer-events', 'none')
+      face.insertAdjacentElement('afterend', ring)
+    }
+    ring.setAttribute('x', face.getAttribute('x') || '0')
+    ring.setAttribute('y', face.getAttribute('y') || '0')
+    ring.setAttribute('width', face.getAttribute('width') || '0')
+    ring.setAttribute('height', face.getAttribute('height') || '0')
+    ring.setAttribute('rx', String(box.rx))
+    ring.setAttribute('ry', String(box.ry))
+    ring.setAttribute('fill', chrome.fill)
+    ring.setAttribute('stroke', chrome.stroke)
+    ring.style.fill = 'none'
+    ring.style.stroke = chrome.stroke
+    ring.style.strokeWidth = '3.5px'
+    ring.style.animation = 'none'
+    ring.style.filter = 'none'
+    node.dataset.editFocus = '1'
   }
 
   function smiteEnsureTick(doc, win, smite) {
@@ -3168,7 +3214,7 @@
   }
 
   function smiteFace(node) {
-    return node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)') || null
+    return node?.querySelector?.('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)') || null
   }
 
   function smiteRestoreFace(face) {
@@ -3834,6 +3880,13 @@
     preview.gestures.smiteArmChrome = smiteArmChrome
     preview.gestures.openSmiteCast = openSmiteCast
     preview.gestures.clearSmiteArm = () => smiteSetArm(document, null)
+    if (bridge.core) {
+      bridge.core.setEditFocus = (uid) => {
+        const live = preview.gestures?.smite
+        if (live) live.editUid = uid || null
+        paintEditFocus(document, uid || null)
+      }
+    }
     preview.gestures.smiteHeat = smiteHeat
     preview.gestures.smiteScarOpacity = smiteScarOpacity
     preview.gestures.smiteScarBlocked = smiteScarBlocked
