@@ -514,21 +514,25 @@
   // that is already Word Bank ends the nomination. So does a clock tap
   // once nobody is left on delete or Word Bank — white outlines are not
   // a fate, and the cast must not keep throbbing.
+  // A kids-only clock is not itself on delete. Tapping it still steps the
+  // children: delete becomes Word Bank, and the next tap clears.
   function smiteRootStep(marks, castUid, descendantUids) {
     const entries = smiteTicketEntries(marks)
     const own = smiteMarkOf(marks, castUid)
     if (own === 'amber') return { action: 'clear', entries: [] }
     if (!smiteHasNominated(marks)) return { action: 'clear', entries: [] }
-    if (own !== 'red') return { action: 'noop', entries }
     const kids = new Set(descendantUids || [])
-    return {
+    const degrade = (includeSelf) => ({
       action: 'degrade',
       entries: entries.map(([id, mark]) => {
         if (mark !== 'red') return [id, mark]
-        if (id === castUid || kids.has(id)) return [id, 'amber']
+        if ((includeSelf && id === castUid) || kids.has(id)) return [id, 'amber']
         return [id, mark]
       }),
-    }
+    })
+    if (own === 'red') return degrade(true)
+    if (entries.some(([id, mark]) => mark === 'red' && kids.has(id))) return degrade(false)
+    return { action: 'clear', entries: [] }
   }
 
   function smiteCastTap(marks, castUid, uid, descendantUids) {

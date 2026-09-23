@@ -4003,3 +4003,155 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ kids-only parent tap steps delete to Word Bank then clears', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Food',
+      children: [
+        { name: 'Fruit', children: [{ name: 'Apple' }, { name: 'Banana' }] },
+        { name: 'Meat', children: [{ name: 'Chicken' }, { name: 'Beef' }] },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => {
+    return ['Food', 'Fruit', 'Meat', 'Apple'].every((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.getBoundingClientRect()
+      return rect && rect.width > 20 && rect.bottom < window.innerHeight
+    })
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const target = hit && document.getElementById('canvas')?.contains(hit) ? hit : document.getElementById('canvas')
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  async function thumb() {
+    return page.evaluate(() => {
+      const canvas = document.getElementById('canvas').getBoundingClientRect()
+      const yStart = Math.floor(window.innerHeight * (2 / 3)) + 8
+      for (let y = window.innerHeight - 6; y >= yStart; y -= 10) {
+        for (let x = canvas.left + 6; x < canvas.right - 6; x += 12) {
+          const hit = document.elementFromPoint(x, y)?.closest?.('g.node, g.hit-slot')
+          if (!hit) return { x, y }
+        }
+      }
+      return null
+    })
+  }
+
+  async function castKids(dx, pointerId) {
+    const park = await thumb()
+    assert.ok(park, 'bottom third needs an empty thumb park')
+    const card = await face('Food')
+    await touch('pointerdown', park.x, park.y, pointerId)
+    await touch('pointerdown', card.x, card.y, pointerId + 1)
+    await touch('pointermove', card.x + dx, card.y + (dx ? 0 : 70), pointerId + 1)
+    await touch('pointerup', card.x + dx, card.y + (dx ? 0 : 70), pointerId + 1)
+    await touch('pointerup', park.x, park.y, pointerId)
+    await page.waitForFunction(() => window.LOGYQPreview.gestures.smite.mercy?.marks?.size === 2)
+  }
+
+  async function tapFood(pointerId) {
+    const card = await face('Food')
+    await touch('pointerdown', card.x, card.y, pointerId)
+    await touch('pointerup', card.x, card.y, pointerId)
+    await page.waitForTimeout(40)
+  }
+
+  async function castState() {
+    return page.evaluate(() => {
+      const mercy = window.LOGYQPreview.gestures.smite.mercy
+      const root = window.LOGYQBridge.core.state.root
+      const nameOf = (uid) => root.descendants().find((node) => node.data._uid === uid)?.data?.name || null
+      const wash = (label) => {
+        const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+        return node?.querySelector('rect.logyq-smite-wash')?.getAttribute('stroke') || null
+      }
+      const clock = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.querySelector('path.logyq-smite-clock'))
+      return {
+        mercy: !!mercy,
+        marks: mercy ? [...mercy.marks.entries()].map(([uid, mark]) => [nameOf(uid), mark]).sort() : [],
+        clock: clock?.__data__?.data?.name || null,
+        Fruit: wash('Fruit'),
+        Meat: wash('Meat'),
+        Apple: wash('Apple'),
+        editors: document.querySelectorAll('.node-edit-input').length,
+      }
+    })
+  }
+
+  await castKids(0, 21)
+  let live = await castState()
+  assert.deepEqual(live.marks, [['Fruit', 'red'], ['Meat', 'red']])
+  assert.equal(live.clock, 'Food')
+  assert.equal(live.Apple, null)
+  await tapFood(23)
+  live = await castState()
+  assert.equal(live.mercy, true, 'Word Bank kids keep the cast')
+  assert.deepEqual(live.marks, [['Fruit', 'amber'], ['Meat', 'amber']])
+  assert.equal(live.clock, 'Food')
+  assert.equal(live.Fruit, '#ffa100')
+  assert.equal(live.Meat, '#ffa100')
+  assert.equal(live.Apple, null)
+  assert.equal(live.editors, 0)
+  await page.screenshot({ path: '/opt/cursor/artifacts/screenshots/cast_kids_parent_bank.png' })
+  await page.waitForTimeout(400)
+  await tapFood(24)
+  live = await castState()
+  assert.equal(live.mercy, false, 'the next parent tap clears a Word Bank kids-only cast')
+  assert.equal(live.clock, null)
+  assert.equal(live.Fruit, null)
+  assert.equal(live.Meat, null)
+  assert.equal(live.editors, 0)
+
+  await castKids(-70, 31)
+  live = await castState()
+  assert.deepEqual(live.marks, [['Fruit', 'amber'], ['Meat', 'amber']])
+  assert.equal(live.clock, 'Food')
+  await tapFood(33)
+  live = await castState()
+  assert.equal(live.mercy, false, 'a Word Bank kids-only cast clears on the first parent tap')
+  assert.equal(live.clock, null)
+  assert.equal(live.Fruit, null)
+  assert.equal(live.Meat, null)
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
