@@ -1583,7 +1583,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgeAnt, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1857,28 +1857,40 @@ test('a down-flick commits only the still-in pocket under that card', () => {
   assert.equal(above.size, 0)
 })
 
-test('cast edge ants follow the child fate and ignore the parent', () => {
+test('cast edges gradient from parent fate to child fate, and ants follow the child', () => {
   const smite = loadSmitePure()
+  const clear = '#e6e8ee'
+  const red = '#ff0000'
+  const amber = '#ffa100'
   const pairs = [
-    ['red', 'red', '#ff0000'],
-    ['amber', 'amber', '#ffa100'],
-    ['red', 'amber', '#ffa100'],
-    ['amber', 'red', '#ff0000'],
-    ['red', 'normal', null],
-    ['amber', 'normal', null],
-    ['normal', 'red', '#ff0000'],
-    ['normal', 'amber', '#ffa100'],
-    ['normal', 'normal', null],
-    [null, 'red', '#ff0000'],
-    ['red', null, null],
-    ['amber', undefined, null],
+    ['red', 'red', red, red, red],
+    ['amber', 'amber', amber, amber, amber],
+    ['red', 'amber', red, amber, amber],
+    ['amber', 'red', amber, red, red],
+    ['normal', 'red', clear, red, red],
+    ['normal', 'amber', clear, amber, amber],
+    ['red', 'normal', red, clear, null],
+    ['amber', 'normal', amber, clear, null],
+    ['normal', 'normal', clear, clear, null],
+    [null, 'red', clear, red, red],
+    ['red', null, red, clear, null],
+    ['amber', undefined, amber, clear, null],
   ]
-  for (const [parent, child, color] of pairs) {
-    assert.equal(smite.smiteEdgeAnt(parent, child), color, `${parent} → ${child}`)
+  for (const [parent, child, from, to, ants] of pairs) {
+    const paint = smite.smiteEdgePaint(parent, child)
+    assert.equal(paint.from, from, `${parent} → ${child} from`)
+    assert.equal(paint.to, to, `${parent} → ${child} to`)
+    assert.equal(paint.ants, ants, `${parent} → ${child} ants`)
+    assert.equal(smite.smiteEdgeAnt(parent, child), ants)
   }
   const tree = smiteSampleTree()
   assert.equal(smite.smiteMoodTargets(tree, 'a').includes('a'), false)
-  assert.deepEqual(smite.smiteMoodTargets(tree, 'a').slice().sort(), ['a1', 'blank'])
+  assert.deepEqual(
+    smite.smiteMoodEdges(tree, 'a').map((edge) => `${edge.parentUid}>${edge.childUid}`).sort(),
+    ['a>a1', 'a>blank'],
+  )
+  assert.deepEqual(smite.smiteMoodEdges(tree, 'b'), [])
+  assert.equal(smite.smiteMoodEdges(tree, 'r').some((edge) => edge.childUid === 'r'), false)
 })
 
 test('smite cake is a solid clock and does not reopen a long-press Word Bank dump', () => {
@@ -1905,13 +1917,18 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   assert.match(commit, /smiteFlickScope\(/)
   assert.match(commit, /scopeUid/)
   assert.match(commit, /mercy\.committing = false/)
+  assert.match(v162, /function smiteEdgePaint/)
   assert.match(v162, /function smiteEdgeAnt/)
+  assert.match(v162, /function smiteMoodEdges/)
   assert.match(v162, /strokeDasharray = '8 6'/)
+  assert.match(v162, /strokeDasharray = 'none'/)
+  assert.match(v162, /linearGradient/)
   assert.match(v162, /logyq-smite-ants/)
   const edge = styles.slice(styles.indexOf('data-smite-edge'), styles.indexOf('path.logyq-smite-clock'))
+  assert.match(edge, /stroke-dasharray:\s*none/)
+  assert.match(edge, /logyq-smite-ant/)
   assert.match(edge, /logyq-smite-ants/)
   assert.match(edge, /stroke-width:\s*3\.5px/)
-  assert.doesNotMatch(edge, /animation:\s*none/)
   assert.match(v162, /__logyqV2ConsumedPointers\.add\(event\.pointerId\)/)
   assert.match(v162, /smite\.pinched/)
   assert.match(v162, /smite\.mercies/)

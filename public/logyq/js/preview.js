@@ -257,7 +257,8 @@
         body.logyq-mobile-v162 svg#canvas g.node>rect:not(.grabzone),body.logyq-mobile-v162 svg#canvas g.node>text{pointer-events:auto!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash,body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-glow{pointer-events:none!important;animation:none!important;filter:none!important}
         body.logyq-mobile-v162 svg#canvas g.node>rect.logyq-smite-wash{stroke:none!important;filter:none!important;vector-effect:none}
-        body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-dasharray:8 6;animation:logyq-smite-ants .7s linear infinite!important;transition:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.links path.link[data-smite-edge="1"]{opacity:1!important;stroke-opacity:1!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-dasharray:none!important;animation:none!important;transition:none!important;vector-effect:non-scaling-stroke}
+        body.logyq-mobile-v162 svg#canvas g.links path.logyq-smite-ant{fill:none!important;stroke-linecap:round;stroke-dasharray:8 6!important;animation:logyq-smite-ants .7s linear infinite!important;pointer-events:none!important;transition:none!important;vector-effect:non-scaling-stroke}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock{fill:none!important;stroke-width:3.5px!important;stroke-linecap:round;stroke-linejoin:round;pointer-events:none!important;animation:none!important;transition:none!important;vector-effect:none}
         body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-red,body.logyq-mobile-v162 svg#canvas g.node>path.logyq-smite-clock.logyq-smite-amber{filter:none}
         .logyq-smite-scar{position:fixed;z-index:40;width:18px;height:18px;margin:-9px 0 0 -9px;padding:0;border:3px solid #dc2626;border-radius:999px;background:transparent;box-shadow:0 0 6px rgba(239,68,68,.55);touch-action:manipulation;pointer-events:auto;transform-origin:center}
@@ -267,7 +268,7 @@
         #logyq-v162-action.show{display:grid}#logyq-v162-action.rec{background:#ef4444}
         #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
-        @keyframes logyq-smite-ants{to{stroke-dashoffset:-14px}}
+        @keyframes logyq-smite-ants{0%{stroke-dashoffset:0;stroke-opacity:.45}50%{stroke-opacity:1}100%{stroke-dashoffset:-14px;stroke-opacity:.45}}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
       }
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
@@ -1015,11 +1016,41 @@
     return smiteScopeMarks(marks, smiteSubtreeIds(tree, uid))
   }
 
-  // Ants follow the child. The parent fate does not gate the edge.
+  // Out fades to a soft gray. Delete and Word Bank keep the mercy colors.
+  function smiteFateTone(mark) {
+    if (mark === 'red') return '#ff0000'
+    if (mark === 'amber') return '#ffa100'
+    return '#e6e8ee'
+  }
+
+  // Gradient runs parent → child. Ants ride only when the child is still in.
+  function smiteEdgePaint(parentMark, childMark) {
+    return {
+      from: smiteFateTone(parentMark),
+      to: smiteFateTone(childMark),
+      ants: childMark === 'amber' ? '#ffa100' : (childMark === 'red' ? '#ff0000' : null),
+    }
+  }
+
   function smiteEdgeAnt(parentMark, childMark) {
-    if (childMark === 'amber') return '#ffa100'
-    if (childMark === 'red') return '#ff0000'
-    return null
+    return smiteEdgePaint(parentMark, childMark).ants
+  }
+
+  // Edges whose target sits strictly below the clock card.
+  function smiteMoodEdges(tree, castUid) {
+    const out = []
+    if (!tree || !castUid) return out
+    const found = smiteFindNode(tree, castUid)
+    const walk = (node) => {
+      const parentUid = smiteNodeUid(node)
+      for (const kid of smiteNodeKids(node)) {
+        const childUid = smiteNodeUid(kid)
+        if (parentUid && childUid) out.push({ parentUid, childUid })
+        walk(kid)
+      }
+    }
+    if (found) walk(found)
+    return out
   }
 
   // Live windows are branches of the one open map, not separate documents.
@@ -2931,8 +2962,25 @@
     return found[0] || null
   }
 
+  function smiteEdgeGradientId(link) {
+    const uid = link?.__data__?.target?.data?._uid || link?.__data__?.target?.data?.uid || 'edge'
+    return `logyq-smite-grad-${String(uid).replace(/[^a-zA-Z0-9_-]/g, '')}`
+  }
+
+  function smiteDropAnts(link, gradId) {
+    let sib = link?.nextElementSibling
+    while (sib && sib.classList?.contains('logyq-smite-ant') && (!gradId || sib.dataset.forLink === gradId)) {
+      const next = sib.nextElementSibling
+      sib.remove()
+      sib = next
+    }
+  }
+
   function smiteRestoreEdge(link) {
     if (!link || link.dataset.smiteEdge !== '1') return
+    const gradId = link.dataset.smiteGrad
+    if (gradId) link.ownerDocument?.getElementById(gradId)?.remove()
+    smiteDropAnts(link, gradId)
     link.style.stroke = ''
     link.style.strokeDasharray = ''
     link.style.strokeDashoffset = ''
@@ -2943,20 +2991,114 @@
     link.style.vectorEffect = ''
     link.style.transition = ''
     delete link.dataset.smiteEdge
+    delete link.dataset.smiteGrad
   }
 
-  function smitePaintEdge(link, heat) {
+  function smiteEnsureEdgeGradient(link, from, to) {
+    const doc = link.ownerDocument
+    const svg = doc.getElementById('canvas')
+    const xml = 'http://www.w3.org/2000/svg'
+    let defs = svg?.querySelector('defs.logyq-smite-grads')
+    if (svg && !defs) {
+      defs = doc.createElementNS(xml, 'defs')
+      defs.setAttribute('class', 'logyq-smite-grads')
+      svg.insertBefore(defs, svg.firstChild)
+    }
+    const id = smiteEdgeGradientId(link)
+    let grad = doc.getElementById(id)
+    if (!grad && defs) {
+      grad = doc.createElementNS(xml, 'linearGradient')
+      grad.id = id
+      grad.setAttribute('gradientUnits', 'userSpaceOnUse')
+      defs.appendChild(grad)
+    }
+    if (!grad) return id
+    let start = { x: 0, y: 0 }
+    let end = { x: 0, y: 1 }
+    try {
+      const length = link.getTotalLength()
+      if (length > 0) {
+        start = link.getPointAtLength(0)
+        end = link.getPointAtLength(length)
+      }
+    } catch (_error) {}
+    grad.setAttribute('x1', String(start.x))
+    grad.setAttribute('y1', String(start.y))
+    grad.setAttribute('x2', String(end.x))
+    grad.setAttribute('y2', String(end.y))
+    let stops = grad.querySelectorAll('stop')
+    if (stops.length !== 2) {
+      while (grad.firstChild) grad.removeChild(grad.firstChild)
+      for (const offset of ['0', '1']) {
+        const stop = doc.createElementNS(xml, 'stop')
+        stop.setAttribute('offset', offset)
+        grad.appendChild(stop)
+      }
+      stops = grad.querySelectorAll('stop')
+    }
+    stops[0].setAttribute('stop-color', from)
+    stops[1].setAttribute('stop-color', to)
+    return id
+  }
+
+  function smitePaintAnts(link, color, gradId) {
+    const doc = link.ownerDocument
+    const found = []
+    let sib = link.nextElementSibling
+    while (sib && sib.classList?.contains('logyq-smite-ant') && sib.dataset.forLink === gradId) {
+      found.push(sib)
+      sib = sib.nextElementSibling
+    }
+    if (!color) {
+      found.forEach((path) => path.remove())
+      return
+    }
+    const xml = 'http://www.w3.org/2000/svg'
+    const d = link.getAttribute('d') || ''
+    const ensure = (role, stroke, width) => {
+      let path = found.find((item) => item.dataset.antRole === role)
+      if (!path) {
+        path = doc.createElementNS(xml, 'path')
+        path.setAttribute('class', 'logyq-smite-ant')
+        path.dataset.antRole = role
+        path.dataset.forLink = gradId
+        path.setAttribute('fill', 'none')
+        path.setAttribute('pointer-events', 'none')
+        link.parentNode.insertBefore(path, link.nextSibling)
+        found.push(path)
+      }
+      path.setAttribute('d', d)
+      path.setAttribute('stroke', stroke)
+      path.style.stroke = stroke
+      path.style.strokeWidth = width
+      path.style.strokeDasharray = '8 6'
+      path.style.strokeLinecap = 'round'
+      path.style.animation = 'logyq-smite-ants 0.7s linear infinite'
+      path.style.vectorEffect = 'non-scaling-stroke'
+      path.style.fill = 'none'
+      path.style.pointerEvents = 'none'
+      return path
+    }
+    // Halo goes under the colored dashes so same-fate ants stay visible.
+    ensure('color', color, '3.5px')
+    ensure('halo', '#ffffff', '6px')
+  }
+
+  function smitePaintEdge(link, paint) {
     try { link.ownerDocument?.defaultView?.d3?.select(link).interrupt() } catch (_error) {}
     link.dataset.smiteEdge = '1'
-    link.style.setProperty('stroke', heat.stroke, 'important')
+    const gradId = smiteEnsureEdgeGradient(link, paint.from, paint.to)
+    link.dataset.smiteGrad = gradId
+    link.style.setProperty('stroke', `url(#${gradId})`, 'important')
     link.style.strokeWidth = '3.5px'
     link.style.opacity = '1'
-    link.style.strokeDasharray = '8 6'
-    link.style.strokeDashoffset = '0'
+    link.style.strokeDasharray = 'none'
+    link.style.strokeDashoffset = ''
     link.style.strokeLinecap = 'round'
-    link.style.animation = 'logyq-smite-ants 0.7s linear infinite'
+    link.style.animation = 'none'
     link.style.transition = 'none'
     link.style.vectorEffect = 'non-scaling-stroke'
+    smitePaintAnts(link, paint.ants, gradId)
   }
 
   function smitePaintCard(node, heat, rx, ry, outline) {
@@ -3141,18 +3283,28 @@
     })
     const mood = new Map()
     for (const [castUid, host] of clockHosts) {
-      const parentMark = smiteMarkOf(host.marks, castUid)
-      for (const uid of smiteMoodTargets(tree, castUid)) {
-        if (mood.has(uid)) continue
-        const color = smiteEdgeAnt(parentMark, smiteMarkOf(host.marks, uid))
-        if (color) mood.set(uid, color)
+      for (const edge of smiteMoodEdges(tree, castUid)) {
+        if (mood.has(edge.childUid)) continue
+        mood.set(edge.childUid, smiteEdgePaint(
+          smiteMarkOf(host.marks, edge.parentUid),
+          smiteMarkOf(host.marks, edge.childUid),
+        ))
       }
     }
+    const liveGrads = new Set()
     doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => {
       const uid = link.__data__?.target?.data?._uid || link.__data__?.target?.data?.uid || null
-      const color = uid ? mood.get(uid) : null
-      if (color) smitePaintEdge(link, { stroke: color })
-      else smiteRestoreEdge(link)
+      const paint = uid ? mood.get(uid) : null
+      if (paint) {
+        smitePaintEdge(link, paint)
+        if (link.dataset.smiteGrad) liveGrads.add(link.dataset.smiteGrad)
+      } else smiteRestoreEdge(link)
+    })
+    doc.querySelectorAll('svg#canvas path.logyq-smite-ant').forEach((path) => {
+      if (!liveGrads.has(path.dataset.forLink)) path.remove()
+    })
+    doc.querySelectorAll('svg#canvas defs.logyq-smite-grads linearGradient').forEach((grad) => {
+      if (!liveGrads.has(grad.id)) grad.remove()
     })
   }
 
@@ -3181,6 +3333,8 @@
     })
     doc.querySelectorAll('svg#canvas .logyq-smite-clock').forEach((clock) => clock.remove())
     doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => smiteRestoreEdge(link))
+    doc.querySelectorAll('svg#canvas path.logyq-smite-ant').forEach((path) => path.remove())
+    doc.querySelectorAll('svg#canvas defs.logyq-smite-grads').forEach((defs) => defs.remove())
   }
 
   function clearSmiteScars(doc, smite) {
