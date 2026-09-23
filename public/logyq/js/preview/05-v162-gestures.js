@@ -426,9 +426,7 @@
     return out
   }
 
-  // Live windows are branches of the one open map, not separate documents.
-  // Sibling branches that share no cards each keep a timer. A cast that
-  // touches a card already in a live branch is ignored.
+  // True when any incoming card is already in a live branch.
   function smiteCastOverlaps(sets, ids) {
     const taken = new Set()
     for (const set of sets || []) {
@@ -441,6 +439,34 @@
       }
     }
     return (ids || []).some((id) => taken.has(id))
+  }
+
+  // Disjoint branches stay side by side. A later cast that fully contains
+  // an earlier branch absorbs it and becomes the primary. A partial overlap,
+  // or a new cast nested inside an existing one, stays blocked.
+  function smiteFoldCast(mercies, ids, tone) {
+    const incoming = new Set(ids || [])
+    const absorb = []
+    for (const mercy of mercies || []) {
+      if (!mercy) continue
+      const held = smiteTicketEntries(mercy.marks).map(([uid]) => uid)
+      if (!held.length) continue
+      const hits = held.filter((id) => incoming.has(id))
+      if (!hits.length) continue
+      if (mercy.committing || hits.length !== held.length) {
+        return { action: 'block', absorb: [], marks: null }
+      }
+      absorb.push(mercy)
+    }
+    const nextTone = tone === 'amber' ? 'amber' : 'red'
+    const marks = new Map()
+    for (const id of ids || []) marks.set(id, nextTone)
+    for (const mercy of absorb) {
+      for (const [uid, mark] of smiteTicketEntries(mercy.marks)) {
+        if (incoming.has(uid) && (mark === 'red' || mark === 'amber' || mark === 'normal')) marks.set(uid, mark)
+      }
+    }
+    return { action: absorb.length ? 'absorb' : 'clear', absorb, marks }
   }
 
   function smiteHsl(hue, sat, light) {
@@ -2058,8 +2084,8 @@
     if (smite.mercy === mercy) smite.mercy = smite.mercies[smite.mercies.length - 1] || null
   }
 
-  function smiteActiveLayers(smite) {
-    return (smite.mercies || []).filter((mercy) => mercy && !mercy.committing).map((mercy) => ({
+  function smiteActiveLayers(smite, skip) {
+    return (smite.mercies || []).filter((mercy) => mercy && !mercy.committing && !(skip && skip.has(mercy))).map((mercy) => ({
       marks: mercy.marks,
       fraction: smiteRingFraction(mercy.remaining, SMITE_FULL_MS),
       castUid: mercy.castUid,
@@ -2067,8 +2093,8 @@
     }))
   }
 
-  function smiteRefresh(doc, smite, extra) {
-    const layers = smiteActiveLayers(smite)
+  function smiteRefresh(doc, smite, extra, skip) {
+    const layers = smiteActiveLayers(smite, skip)
     if (extra?.marks) layers.push(extra)
     if (!layers.length) {
       clearSmiteClocks(doc)
@@ -2129,15 +2155,18 @@
     }
     const data = smiteLiveData(swipe.uid)
     if (!data) return
-    const marks = new Map()
     const tone = direction === 'left' ? 'amber' : 'red'
     const ids = smiteAffected(data, smiteZone(parked[0].y, win.innerHeight))
-    if (!ids.length || smiteCastOverlaps(smite.mercies, ids)) {
+    if (!ids.length) {
       smiteRefresh(doc, smite)
       return
     }
-    for (const id of ids) marks.set(id, tone)
-    smiteRefresh(doc, smite, { marks, fraction: 1, castUid: swipe.uid, tone })
+    const plan = smiteFoldCast(smite.mercies, ids, tone)
+    if (plan.action === 'block') {
+      smiteRefresh(doc, smite)
+      return
+    }
+    smiteRefresh(doc, smite, { marks: plan.marks, fraction: 1, castUid: swipe.uid, tone }, new Set(plan.absorb))
   }
 
   function smiteTryCast(doc, win, smite, pointer, pointerId) {
@@ -2157,15 +2186,32 @@
       smiteRefresh(doc, smite)
       return true
     }
-    if (smiteCastOverlaps(smite.mercies, ids)) {
+    const tone = direction === 'left' ? 'amber' : 'red'
+    const plan = smiteFoldCast(smite.mercies, ids, tone)
+    if (plan.action === 'block') {
       smiteRefresh(doc, smite)
       return true
     }
-    const tone = direction === 'left' ? 'amber' : 'red'
-    const marks = new Map()
-    for (const id of ids) marks.set(id, tone)
-    beginSmiteMercy(doc, win, smite, { uid: pointer.uid, zone, direction, marks })
+    for (const mercy of plan.absorb) smiteDropMercy(smite, mercy)
+    beginSmiteMercy(doc, win, smite, { uid: pointer.uid, zone, direction, marks: plan.marks })
     return true
+  }
+
+  function openSmiteCast(cast) {
+    const live = preview.gestures?.smite
+    const ids = cast?.ids || []
+    if (!live || !ids.length || !cast?.uid) return 'block'
+    const direction = cast.direction === 'left' ? 'left' : 'right'
+    const plan = smiteFoldCast(live.mercies, ids, direction === 'left' ? 'amber' : 'red')
+    if (plan.action === 'block') return 'block'
+    for (const mercy of plan.absorb) smiteDropMercy(live, mercy)
+    beginSmiteMercy(document, window, live, {
+      uid: cast.uid,
+      zone: cast.zone || 'middle',
+      direction,
+      marks: plan.marks,
+    })
+    return plan.action
   }
 
   function beginSmiteMercy(doc, win, smite, cast) {
@@ -2501,7 +2547,7 @@
       path.style.strokeWidth = width
       path.style.strokeDasharray = '8 6'
       path.style.strokeLinecap = 'round'
-      path.style.animation = 'logyq-smite-march 0.7s linear infinite'
+      path.style.animation = 'logyq-smite-march 1.4s linear infinite'
       path.style.opacity = opacity
       path.style.vectorEffect = 'non-scaling-stroke'
       path.style.fill = 'none'
@@ -2586,7 +2632,7 @@
     if (heat.ants) {
       wash.dataset.smiteOutline = 'ants'
       wash.style.strokeDasharray = '8 6'
-      wash.style.animation = 'logyq-smite-march 0.7s linear infinite'
+      wash.style.animation = 'logyq-smite-march 1.4s linear infinite'
     } else {
       delete wash.dataset.smiteOutline
       wash.style.strokeDasharray = 'none'
@@ -2982,6 +3028,8 @@
     preview.gestures.smiteLinePhase = smiteLinePhase
     preview.gestures.smiteClockRoots = smiteClockRoots
     preview.gestures.smiteCastOverlaps = smiteCastOverlaps
+    preview.gestures.smiteFoldCast = smiteFoldCast
+    preview.gestures.openSmiteCast = openSmiteCast
     preview.gestures.smiteHeat = smiteHeat
     preview.gestures.smiteScarOpacity = smiteScarOpacity
     preview.gestures.smiteScarBlocked = smiteScarBlocked

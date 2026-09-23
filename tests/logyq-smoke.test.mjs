@@ -3707,6 +3707,7 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
             stroke: sib.getAttribute('stroke'),
             opacity: sib.style.opacity,
             animation: getComputedStyle(sib).animationName,
+            duration: getComputedStyle(sib).animationDuration,
           })
           sib = sib.nextElementSibling
         }
@@ -3730,6 +3731,7 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
           stroke: wash?.getAttribute('stroke') || null,
           outline: wash?.dataset?.smiteOutline || null,
           animation: wash ? getComputedStyle(wash).animationName : null,
+          duration: wash ? getComputedStyle(wash).animationDuration : null,
           clock: !!clock,
           clockAnimation: clock ? getComputedStyle(clock).animationName : null,
         }
@@ -3768,8 +3770,10 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
     assert.ok(halo.stroke.startsWith('url('))
     assert.notEqual(halo.stroke, '#ffffff')
     assert.equal(halo.width, '6px')
-    assert.ok(edge.ants.every((ant) => ant.animation === 'logyq-smite-march'))
+    assert.ok(edge.ants.every((ant) => ant.animation === 'logyq-smite-march' && (ant.duration === '1.4s' || ant.duration === '1400ms')))
   }
+  assert.ok(pocket.cards.bank.duration === '1.4s' || pocket.cards.bank.duration === '1400ms')
+  assert.ok(pocket.cards.out.duration === '1.4s' || pocket.cards.out.duration === '1400ms')
   assert.equal(pocket.cards.root.clock, true)
   assert.equal(pocket.cards.root.clockAnimation, 'none')
   assert.equal(pocket.cards.bank.stroke, '#ffa100')
@@ -3785,6 +3789,110 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
   assert.equal(parentOnly.bank.ants.length, 0)
   assert.equal(parentOnly.out.ants.length, 0)
   assert.equal(parentOnly.pale.ants.length, 0)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ an ancestor cast absorbs a nested branch and disjoint branches stay live', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [
+        { name: 'A', children: [{ name: 'B', children: [{ name: 'B1' }] }] },
+        { name: 'C' },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => ['A', 'B', 'B1', 'C'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    return node && node.getBoundingClientRect().width > 20
+  }))
+  const report = await page.evaluate(() => {
+    const core = window.LOGYQBridge.core
+    const byName = (label) => core.state.root.descendants().find((node) => node.data.name === label)
+    const uid = (label) => byName(label).data._uid
+    const clock = (label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      return node?.dataset?.smiteClock === '1'
+    }
+    const gestures = window.LOGYQPreview.gestures
+    gestures.smite.mercies = []
+    gestures.smite.mercy = null
+    const child = gestures.openSmiteCast({
+      uid: uid('B'),
+      direction: 'right',
+      ids: [uid('B'), uid('B1')],
+    })
+    const nested = gestures.smite.mercies[0]
+    nested.marks.set(uid('B1'), 'amber')
+    const ancestor = gestures.openSmiteCast({
+      uid: uid('A'),
+      direction: 'right',
+      ids: [uid('A'), uid('B'), uid('B1')],
+    })
+    const absorbed = {
+      child,
+      ancestor,
+      count: gestures.smite.mercies.length,
+      castUid: gestures.smite.mercy?.castUid,
+      primaryIsA: gestures.smite.mercy?.castUid === uid('A'),
+      marks: [...(gestures.smite.mercy?.marks || [])],
+      clocks: { a: clock('A'), b: clock('B'), b1: clock('B1'), c: clock('C') },
+    }
+    gestures.smite.mercies = []
+    gestures.smite.mercy = null
+    const left = gestures.openSmiteCast({
+      uid: uid('A'),
+      direction: 'right',
+      ids: [uid('A'), uid('B'), uid('B1')],
+    })
+    const right = gestures.openSmiteCast({
+      uid: uid('C'),
+      direction: 'left',
+      ids: [uid('C')],
+    })
+    const live = gestures.smite.mercies.map((mercy) => mercy.castUid)
+    return {
+      absorbed,
+      disjoint: {
+        left,
+        right,
+        count: gestures.smite.mercies.length,
+        live,
+        clocks: { a: clock('A'), b: clock('B'), c: clock('C') },
+        a: live.includes(uid('A')),
+        c: live.includes(uid('C')),
+      },
+    }
+  })
+  assert.equal(report.absorbed.child, 'clear')
+  assert.equal(report.absorbed.ancestor, 'absorb')
+  assert.equal(report.absorbed.count, 1)
+  assert.equal(report.absorbed.primaryIsA, true)
+  assert.deepEqual(report.absorbed.marks.map((entry) => entry[1]), ['red', 'red', 'amber'])
+  assert.equal(report.absorbed.clocks.a, true)
+  assert.equal(report.absorbed.clocks.b, false)
+  assert.equal(report.absorbed.clocks.b1, false)
+  assert.equal(report.disjoint.left, 'clear')
+  assert.equal(report.disjoint.right, 'clear')
+  assert.equal(report.disjoint.count, 2)
+  assert.equal(report.disjoint.a, true)
+  assert.equal(report.disjoint.c, true)
+  assert.equal(report.disjoint.clocks.a, true)
+  assert.equal(report.disjoint.clocks.c, true)
+  assert.equal(report.disjoint.clocks.b, false)
   assert.deepEqual(errors, [])
   await context.close()
 })

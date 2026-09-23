@@ -1630,7 +1630,7 @@ function loadSmitePure() {
   const start = source.indexOf('// SMITE_PURE_START')
   const end = source.indexOf('// SMITE_PURE_END')
   assert.ok(start >= 0 && end > start)
-  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastShape, smiteCardChrome, smiteLinkLive, smiteCastOverlaps, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
+  return new Function(`${source.slice(start, end)}; return { smiteZone, smiteCastDirection, smiteAffected, smiteNextMark, smiteRingFraction, smiteRefillMs, planSmiteCommit, smiteClockPath, smiteClockLength, smiteLineDash, smiteLinePhase, smiteClockRoots, smiteMoodTargets, smiteMoodColor, smiteSubtreeIds, smiteFlickScope, smiteEdgePaint, smiteEdgeAnt, smiteMoodEdges, smiteCastShape, smiteCardChrome, smiteLinkLive, smiteCastOverlaps, smiteFoldCast, smiteHeat, smitePastel, smiteNominatedTone, smiteCardNext, smiteCycleMember, smiteRootStep, smiteCastTap, smiteCastReply, smiteHasNominated, smiteScarOpacity, smiteScarBlocked };`)()
 }
 
 function smiteSampleTree() {
@@ -1830,6 +1830,27 @@ test('smite cake zones, directions, marks, and the mercy ring', () => {
   assert.equal(smite.smiteCastOverlaps([{ marks: new Map([['a', 'red'], ['a1', 'red']]) }], ['b']), false)
   assert.equal(smite.smiteCastOverlaps([{ marks: { a: 'red', a1: 'amber' } }], ['a1']), true)
   assert.equal(smite.smiteCastOverlaps([{ marks: new Map([['a', 'normal']]) }], ['a']), true)
+
+  const branchB = { castUid: 'b', committing: false, marks: new Map([['b', 'red'], ['b1', 'amber']]) }
+  const branchC = { castUid: 'c', committing: false, marks: new Map([['c', 'amber']]) }
+  const nested = smite.smiteFoldCast([branchB], ['a', 'b', 'b1'], 'red')
+  assert.equal(nested.action, 'absorb')
+  assert.deepEqual(nested.absorb.map((mercy) => mercy.castUid), ['b'])
+  assert.deepEqual([...nested.marks], [['a', 'red'], ['b', 'red'], ['b1', 'amber']])
+  const both = smite.smiteFoldCast([branchB, branchC], ['r', 'a', 'b', 'b1', 'c'], 'red')
+  assert.equal(both.action, 'absorb')
+  assert.deepEqual(both.absorb.map((mercy) => mercy.castUid), ['b', 'c'])
+  assert.equal(both.marks.get('c'), 'amber')
+  assert.equal(both.marks.get('r'), 'red')
+  const sibling = smite.smiteFoldCast([branchB], ['c'], 'amber')
+  assert.equal(sibling.action, 'clear')
+  assert.deepEqual(sibling.absorb, [])
+  assert.deepEqual([...sibling.marks], [['c', 'amber']])
+  const inside = smite.smiteFoldCast([branchB], ['b1'], 'red')
+  assert.equal(inside.action, 'block')
+  assert.equal(inside.marks, null)
+  const partial = smite.smiteFoldCast([branchB], ['b', 'other'], 'red')
+  assert.equal(partial.action, 'block')
 
   assert.equal(smite.smiteScarOpacity(0), 1)
   assert.equal(smite.smiteScarOpacity(2800), 1)
@@ -2070,6 +2091,9 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   const edgePaint = v162.slice(v162.indexOf('function smitePaintEdge'), v162.indexOf('function smitePaintCard'))
   assert.match(edgePaint, /smiteEnsureLinkGeometry/)
   assert.doesNotMatch(edgePaint, /\.interrupt\(/)
+  assert.match(v162, /logyq-smite-march 1\.4s linear infinite/)
+  assert.doesNotMatch(v162, /logyq-smite-march 0\.7s/)
+  assert.match(v162, /function smiteFoldCast/)
   assert.match(v162, /strokeDasharray = '8 6'/)
   assert.match(v162, /strokeDasharray = 'none'/)
   assert.match(v162, /linearGradient/)
@@ -2079,7 +2103,8 @@ test('smite cake is a solid clock and does not reopen a long-press Word Bank dum
   const edge = styles.slice(styles.indexOf('data-smite-edge'), styles.indexOf('path.logyq-smite-clock'))
   assert.match(edge, /stroke-dasharray:\s*none/)
   assert.match(edge, /logyq-smite-ant/)
-  assert.match(edge, /logyq-smite-march/)
+  assert.match(edge, /logyq-smite-march 1\.4s linear infinite/)
+  assert.doesNotMatch(edge, /logyq-smite-march \.7s/)
   assert.doesNotMatch(edge, /data-smite-weight="soft"/)
   assert.match(edge, /stroke-width:\s*3\.5px/)
   assert.doesNotMatch(edge, /stroke-width:\s*2px/)
