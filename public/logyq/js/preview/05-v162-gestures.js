@@ -2493,8 +2493,27 @@
     ensure('halo', '#ffffff', '6px')
   }
 
+  // A live layout tween owns `d` and should finish with the cards.
+  // Interrupting it used to freeze cast curves on the pre-reflow path.
+  function smiteLinkTweening(link) {
+    const schedules = link?.__transition
+    if (!schedules) return false
+    for (const _id in schedules) return true
+    return false
+  }
+
+  function smiteEnsureLinkGeometry(link) {
+    if (!link || smiteLinkTweening(link)) return
+    const vLink = link.ownerDocument?.defaultView?.LOGYQBridge?.core?.visual?.vLink
+    const datum = link.__data__
+    if (!datum?.source || !datum?.target || typeof vLink !== 'function') return
+    let next = ''
+    try { next = vLink(datum) || '' } catch (_error) { return }
+    if (next && link.getAttribute('d') !== next) link.setAttribute('d', next)
+  }
+
   function smitePaintEdge(link, paint) {
-    try { link.ownerDocument?.defaultView?.d3?.select(link).interrupt() } catch (_error) {}
+    smiteEnsureLinkGeometry(link)
     link.dataset.smiteEdge = '1'
     const gradId = smiteEnsureEdgeGradient(link, paint.from, paint.to)
     link.dataset.smiteGrad = gradId
@@ -2703,6 +2722,7 @@
     }
     const liveGrads = new Set()
     doc.querySelectorAll('svg#canvas g.links path.link').forEach((link) => {
+      smiteEnsureLinkGeometry(link)
       const uid = link.__data__?.target?.data?._uid || link.__data__?.target?.data?.uid || null
       const paint = uid ? mood.get(uid) : null
       if (paint) {

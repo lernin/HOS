@@ -3616,6 +3616,137 @@ test('LOGYQ ends a cast when nothing is left on delete or Word Bank', async () =
   await context.close()
 })
 
+test('LOGYQ partial smite conclude redraws connectors with the cards', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.core.editing.closeNodeEditor(false, false)
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [
+        { name: 'Gone' },
+        { name: 'Stay', children: [{ name: 'Leaf' }] },
+      ],
+    }, [])
+  })
+  await page.waitForFunction(() => ['Root', 'Gone', 'Stay', 'Leaf'].every((label) => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+    return node && node.getBoundingClientRect().width > 20
+  }))
+  await page.evaluate(() => window.LOGYQBridge.core.treeManager.autoFit())
+  await page.waitForFunction(() => {
+    const names = ['Root', 'Gone', 'Stay']
+    return names.every((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const rect = node?.querySelector('rect:not(.grabzone)')?.getBoundingClientRect()
+      return rect && rect.top > 40 && rect.bottom < window.innerHeight - 80 && rect.left > 0 && rect.right < window.innerWidth
+    })
+  })
+
+  async function face(name) {
+    return page.evaluate((label) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const box = node?.querySelector('rect:not(.grabzone)') || node
+      const rect = box.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }, name)
+  }
+  async function touch(type, x, y, pointerId) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      const hit = document.elementFromPoint(x, y)
+      const canvas = document.getElementById('canvas')
+      const target = hit && canvas.contains(hit) ? hit : canvas
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId,
+        isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const planted = await page.evaluate(() => {
+    const core = window.LOGYQBridge.core
+    const byName = (label) => core.state.root.descendants().find((node) => node.data.name === label)
+    const root = byName('Root')
+    const gone = byName('Gone')
+    const stay = byName('Stay')
+    const leaf = byName('Leaf')
+    const mercy = {
+      marks: new Map([
+        [root.data._uid, 'red'],
+        [gone.data._uid, 'red'],
+        [stay.data._uid, 'red'],
+        [leaf.data._uid, 'amber'],
+      ]),
+      castUid: root.data._uid,
+      zone: 'middle',
+      direction: 'down',
+      remaining: 9000,
+      lastTick: performance.now(),
+      interacting: false,
+      committing: false,
+    }
+    const smite = window.LOGYQPreview.gestures.smite
+    smite.mercies = [mercy]
+    smite.mercy = mercy
+    const stayLink = Array.from(document.querySelectorAll('svg#canvas g.links path.link')).find((link) => link.__data__?.target?.data?.name === 'Stay')
+    return { before: stayLink?.getAttribute('d') || '' }
+  })
+  assert.ok(planted.before)
+
+  const gone = await face('Gone')
+  await touch('pointerdown', gone.x, gone.y, 41)
+  await touch('pointerup', gone.x, gone.y + 74, 41)
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'Gone'))
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.layoutSettling)
+
+  const geometry = await page.evaluate(() => {
+    const vLink = window.LOGYQBridge.core.visual.vLink
+    const links = Array.from(document.querySelectorAll('svg#canvas g.links path.link')).map((link) => {
+      const name = link.__data__?.target?.data?.name || ''
+      const want = vLink(link.__data__)
+      const d = link.getAttribute('d') || ''
+      return { name, d, want, match: d === want }
+    })
+    const ants = Array.from(document.querySelectorAll('svg#canvas path.logyq-smite-ant')).map((path) => {
+      let link = path.previousElementSibling
+      while (link && !link.classList?.contains('link')) link = link.previousElementSibling
+      return {
+        d: path.getAttribute('d') || '',
+        link: link?.getAttribute('d') || '',
+        match: (path.getAttribute('d') || '') === (link?.getAttribute('d') || ''),
+      }
+    })
+    return {
+      names: window.LOGYQBridge.core.state.root.descendants().map((node) => node.data.name),
+      links,
+      ants,
+      mercy: window.LOGYQPreview.gestures.smite.mercies.length,
+    }
+  })
+  assert.deepEqual(geometry.names.slice().sort(), ['Leaf', 'Root', 'Stay'])
+  assert.equal(geometry.mercy, 1, 'the rest of the cast stays live')
+  assert.ok(geometry.links.length >= 2, 'root, stay, and leaf still have connectors')
+  for (const link of geometry.links) {
+    assert.equal(link.match, true, `${link.name} connector should sit on the new layout`)
+  }
+  const stay = geometry.links.find((link) => link.name === 'Stay')
+  assert.ok(stay)
+  assert.notEqual(stay.d, planted.before, 'the stay connector must leave its pre-conclude curve')
+  assert.ok(geometry.ants.length >= 2, 'cast ants should still be on the live edges')
+  for (const ant of geometry.ants) assert.equal(ant.match, true, 'cast ants should follow the link they decorate')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ clears white outlines on the midfield parents Ashley photographed', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   await stubMaps(context)
