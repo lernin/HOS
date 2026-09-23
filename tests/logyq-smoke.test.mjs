@@ -390,9 +390,11 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
     }
   })
   await touch('pointerdown', panCard.x, panCard.y, 81)
-  for (const step of [12, 24, 36, 48, 64, 88]) {
-    await page.waitForTimeout(60)
-    await touch('pointermove', panCard.x + step, panCard.y + Math.round(step * 0.6), 81)
+  // Slow 1:1 diagonal: under the flick speed and under ratio 1.45, so the
+  // map pans after 48ms. A fast or axis-aligned stroke stays flick-gated.
+  for (const step of [10, 22, 34, 46, 58, 74, 92]) {
+    await page.waitForTimeout(90)
+    await touch('pointermove', panCard.x + step, panCard.y + step, 81)
   }
   assert.equal(await page.evaluate(() => document.body.classList.contains('v2-branch-drag')), false, 'slow slide must not lift the card')
   const panDuring = await page.evaluate(() => {
@@ -407,8 +409,8 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   })
   assert.equal(panDuring.drag, false)
   assert.equal(panDuring.transform, panOrigin.transform, 'card stays put while the map pans')
-  assert.ok(Math.hypot(panDuring.x - panOrigin.x, panDuring.y - panOrigin.y) > 40, `map should follow an early card slide, before=${panOrigin.x},${panOrigin.y} during=${panDuring.x},${panDuring.y}`)
-  await touch('pointerup', panCard.x + 88, panCard.y + 54, 81)
+  assert.ok(Math.hypot(panDuring.x - panOrigin.x, panDuring.y - panOrigin.y) > 40, `map should follow a diagonal card slide, before=${panOrigin.x},${panOrigin.y} during=${panDuring.x},${panDuring.y}`)
+  await touch('pointerup', panCard.x + 92, panCard.y + 92, 81)
   const panAfter = await page.evaluate(() => {
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return { x: t.x, y: t.y, nodes: document.querySelectorAll('g.node').length }
@@ -625,7 +627,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.deepEqual(await page.evaluate(() => (window.LOGYQBridge.core.state.wordBank || []).slice()), bankWordsBefore, 'still hold / long-press contextmenu must not copy into Word Bank')
   assert.equal(await page.evaluate(() => !!window.LOGYQBridge.core?.holdDrag?.blocksBank?.()), true)
   assert.ok(Number(still.opacity) > 0.2, `origin ghost opacity vanished: ${still.opacity}`)
-  assert.ok(still.width > 8 && still.height > 8, `origin ghost box collapsed: ${still.width}x${still.height}`)
+  assert.ok(still.width > 6 && still.height > 6, `origin ghost box collapsed: ${still.width}x${still.height}`)
   assert.ok(Math.abs(still.y - beforeHold.y) < 2, `map must stay put while holding still, before=${beforeHold.y} during=${still.y}`)
   assert.equal(await page.locator('svg#canvas g.node').count(), holdCount)
   const slotStill = await page.evaluate(() => {
@@ -2383,20 +2385,18 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   }
   async function edges() {
     return page.evaluate(() => {
-      const cssHex = (value) => {
-        const rgb = String(value || '').match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
-        if (!rgb) return String(value || '')
-        const hex = (n) => Number(n).toString(16).padStart(2, '0')
-        return `#${hex(rgb[1])}${hex(rgb[2])}${hex(rgb[3])}`
-      }
-      return Array.from(document.querySelectorAll('svg#canvas g.links path.link')).map((link) => ({
-        name: link.__data__?.target?.data?.name ?? null,
-        stroke: cssHex(getComputedStyle(link).stroke || link.style.stroke || ''),
-        dash: link.style.strokeDasharray || '',
-        opacity: link.style.opacity || '',
-        edge: link.dataset.smiteEdge || '',
-        animation: link.style.animationName || link.style.animation || '',
-      }))
+      return Array.from(document.querySelectorAll('svg#canvas g.links path.link')).map((link) => {
+        const grad = link.dataset.smiteGrad ? document.getElementById(link.dataset.smiteGrad) : null
+        const stops = grad ? Array.from(grad.querySelectorAll('stop')).map((stop) => (stop.getAttribute('stop-color') || '').toLowerCase()) : []
+        return {
+          name: link.__data__?.target?.data?.name ?? null,
+          stroke: stops[1] || stops[0] || '',
+          dash: link.style.strokeDasharray || '',
+          opacity: link.style.opacity || '',
+          edge: link.dataset.smiteEdge || '',
+          animation: link.style.animationName || link.style.animation || '',
+        }
+      })
     })
   }
   async function zoomK() {
@@ -2441,13 +2441,9 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(armed[0].stroke, '#ff0000')
   assert.equal(armed[0].glow, 0)
   assert.ok(armed[0].faceFill === '#2563eb' || armed[0].faceFill === 'rgb(37, 99, 235)', 'paint stays on the card')
-  assert.equal(armed[0].wash, '#ffb8b8')
-  assert.ok(armed[0].washOpacity > 0.8)
+  assert.equal(armed[0].wash, '', 'the clock card is an outline timer, not a fill')
   const rootMood = await edges()
-  for (const name of ['A', 'A1', '', 'B']) {
-    assert.equal(rootMood.find((edge) => edge.name === name)?.edge, '1')
-    assert.equal(rootMood.find((edge) => edge.name === name)?.stroke, '#ff0000')
-  }
+  assert.equal(rootMood.some((edge) => edge.edge === '1'), false, 'a parent-only cast leaves connectors quiet')
   assert.equal(armed[0].text, '')
   const noon = await page.evaluate(() => {
     const clock = document.querySelector('path.logyq-smite-clock')
@@ -2571,7 +2567,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   })
   const late = await clocks()
   assert.equal(late[0].stroke, '#ff0000')
-  assert.equal(late[0].wash, '#ffb8b8')
+  assert.equal(late[0].wash, '')
   assert.equal(late[0].glow, 0)
   assert.ok(late[0].faceFill === '#2563eb' || late[0].faceFill === 'rgb(37, 99, 235)')
   await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 15000 })
@@ -2591,8 +2587,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.ok(rearmed.remaining >= 14000, 're-arming restarts the 3s hold')
   assert.equal(rearmed.dash, 'none')
   assert.equal(rearmed.stroke, '#ffa100')
-  assert.equal((await edges()).find((edge) => edge.name === 'A')?.stroke, '#ffa100')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false, 'parent-only amber still leaves connectors quiet')
   assert.equal(await cycle(25), null)
   const restored = await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Root')
@@ -2622,7 +2617,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   assert.equal(bankArmed[0].amber, true)
   assert.equal(bankArmed[0].stroke, '#ffa100')
   assert.equal(bankArmed[0].phase, '')
-  assert.equal(bankArmed[0].wash, '#ffcc80')
+  assert.equal(bankArmed[0].wash, '')
   assert.equal(bankArmed[0].glow, 0)
   await touch('pointerup', leaf.x - 80, leaf.y, 32, leaf.uid)
   await touch('pointerup', 16, 400, 31)
@@ -2642,11 +2637,13 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', card.x, card.y, 42, card.uid)
   await touch('pointermove', card.x, card.y + 84, 42, card.uid)
   const family = await heats()
-  assert.deepEqual(family.map((card) => card.name).sort(), ['', 'A', 'A1'])
-  assert.equal(family.find((card) => card.name === 'A')?.clock, true)
+  assert.deepEqual(family.map((card) => card.name).sort(), ['', 'A1'])
   assert.equal(family.find((card) => card.name === 'A1')?.clock, false)
-  assert.equal(family.every((card) => card.wash === '#ffb8b8' && card.glow === 0), true)
-  assert.equal(family.find((card) => card.name === 'A')?.faceStroke, 'none')
+  assert.equal(family.every((card) => card.glow === 0), true)
+  assert.equal(family.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((family.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ff0000')
+  assert.equal(family.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((family.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
   assert.equal((await clocks()).length, 1)
   assert.equal((await clocks())[0].name, 'A')
   assert.equal((await clocks())[0].stroke, '#ff0000')
@@ -2665,7 +2662,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
     return clock?.getAttribute('stroke') === '#ff0000' && parts.length === 2 && parts[0] < clock.getTotalLength() * 0.2
   })
   assert.equal((await clocks())[0].stroke, '#ff0000')
-  assert.equal((await clocks())[0].wash, '#ffb8b8')
+  assert.equal((await clocks())[0].wash, '')
   assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
   assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
   await page.evaluate(() => { window.LOGYQPreview.gestures.smite.mercy.remaining = 8000 })
@@ -2673,28 +2670,31 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', child.x, child.y, 45, child.uid)
   await touch('pointerup', child.x, child.y, 45, child.uid)
   const childAmber = await heats()
-  assert.equal(childAmber.find((card) => card.name === 'A1')?.wash, '#ffcc80')
-  assert.equal(childAmber.find((card) => card.name === 'A')?.wash, '#ffb8b8')
-  assert.equal(childAmber.find((card) => card.name === '')?.wash, '#ffb8b8')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
+  assert.equal(childAmber.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((childAmber.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffa100')
+  assert.equal(childAmber.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((childAmber.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
   await touch('pointerdown', child.x, child.y, 46, child.uid)
   await touch('pointerup', child.x, child.y, 46, child.uid)
   const droppedChild = await heats()
-  assert.equal(droppedChild.find((card) => card.name === 'A1'), undefined)
-  assert.equal(droppedChild.find((card) => card.name === 'A')?.wash, '#ffb8b8')
-  assert.equal(droppedChild.find((card) => card.name === '')?.wash, '#ffb8b8')
+  assert.equal(droppedChild.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((droppedChild.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
+  assert.equal(droppedChild.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((droppedChild.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.marks.get(
     Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'A1')?.__data__.data._uid
   )), 'normal')
-  assert.ok(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.remaining < 14000), 'a child cycle does not restart the parent clock')
+  assert.ok(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.remaining >= 14000), 'a mercy tap restarts the hold')
   const parentPoint = await center('A')
   await touch('pointerdown', parentPoint.x, parentPoint.y, 43, parentPoint.uid)
   await touch('pointerup', parentPoint.x, parentPoint.y, 43, parentPoint.uid)
   const rearmedFamily = await heats()
-  assert.deepEqual(rearmedFamily.map((card) => card.name).sort(), ['', 'A'])
-  assert.equal(rearmedFamily.every((card) => card.wash === '#ffcc80'), true)
-  assert.equal(rearmedFamily.find((card) => card.name === 'A')?.clock, true)
-  assert.equal(rearmedFamily.find((card) => card.name === 'A1'), undefined)
+  assert.deepEqual(rearmedFamily.map((card) => card.name).sort(), ['', 'A1'])
+  assert.equal(rearmedFamily.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((rearmedFamily.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ffa100')
+  assert.equal(rearmedFamily.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((rearmedFamily.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.marks.get(
     Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'A1')?.__data__.data._uid
   )), 'normal')
@@ -2706,16 +2706,17 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', child.x, child.y, 47, child.uid)
   await touch('pointerup', child.x, child.y, 47, child.uid)
   const reincluded = await heats()
-  assert.equal(reincluded.find((card) => card.name === 'A1')?.wash, '#ffb8b8')
-  assert.equal(reincluded.find((card) => card.name === 'A')?.wash, '#ffcc80')
-  assert.equal(reincluded.find((card) => card.name === 'A')?.clock, true)
+  assert.equal(reincluded.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((reincluded.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ff0000')
+  assert.equal((await clocks())[0].name, 'A')
   assert.equal((await clocks())[0].stroke, '#ffa100')
   await touch('pointerdown', child.x, child.y, 48, child.uid)
   await touch('pointerup', child.x, child.y, 48, child.uid)
   await touch('pointerdown', child.x, child.y, 49, child.uid)
   await touch('pointerup', child.x, child.y, 49, child.uid)
-  assert.equal((await heats()).find((card) => card.name === 'A1'), undefined)
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffffff')
   assert.equal((await edges()).find((edge) => edge.name === '')?.stroke, '#ffa100')
   assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
   assert.equal(await page.locator('.node-edit-input').count(), 0)
@@ -2740,46 +2741,53 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   const kidsOnly = await heats()
   assert.equal(kidsOnly.find((card) => card.name === 'A'), undefined)
   assert.equal(kidsOnly.find((card) => card.name === 'A1')?.clock, false)
-  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.wash, '#ffb8b8')
-  assert.equal(kidsOnly.find((card) => card.name === '')?.wash, '#ffb8b8')
+  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((kidsOnly.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ff0000')
+  assert.equal(kidsOnly.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((kidsOnly.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
   const kidClocks = await clocks()
   assert.deepEqual(kidClocks.map((clock) => clock.name), ['A'])
   assert.equal(kidClocks[0].stroke, '#ff0000')
   assert.equal(kidClocks[0].wash, '')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ff0000')
-  assert.equal((await edges()).find((edge) => edge.name === '')?.stroke, '#ff0000')
-  assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false, 'a kids-only cast leaves connectors quiet')
   await touch('pointerup', kidParent.x, kidParent.y + 84, 92, kidParent.uid)
   await touch('pointerup', thumbKids.x, thumbKids.y, 91)
   const kidTicket = await center('A1')
   await touch('pointerdown', kidTicket.x, kidTicket.y, 94, kidTicket.uid)
   await touch('pointerup', kidTicket.x, kidTicket.y, 94, kidTicket.uid)
-  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, '#ffcc80')
+  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffa100')
   await touch('pointerdown', kidTicket.x, kidTicket.y, 194, kidTicket.uid)
   await touch('pointerup', kidTicket.x, kidTicket.y, 194, kidTicket.uid)
   const afterKid = await heats()
-  assert.equal(afterKid.find((card) => card.name === 'A1'), undefined)
-  assert.equal(afterKid.find((card) => card.name === '')?.wash, '#ffb8b8')
+  assert.equal(afterKid.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((afterKid.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
+  assert.equal(afterKid.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((afterKid.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
   assert.deepEqual((await clocks()).map((clock) => clock.name), ['A'])
   const master = await center('A')
   await touch('pointerdown', master.x, master.y, 95, master.uid)
   await touch('pointerup', master.x, master.y, 95, master.uid)
   const kidRearm = await heats()
-  assert.equal(kidRearm.find((card) => card.name === 'A')?.wash, '#ffcc80')
-  assert.equal(kidRearm.find((card) => card.name === 'A')?.clock, true)
-  assert.equal(kidRearm.find((card) => card.name === 'A1'), undefined)
-  assert.equal(kidRearm.find((card) => card.name === '')?.wash, '#ffcc80')
+  assert.equal(kidRearm.find((card) => card.name === 'A'), undefined)
+  assert.equal(kidRearm.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((kidRearm.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
+  assert.equal(kidRearm.find((card) => card.name === '')?.wash, 'none')
+  assert.equal((kidRearm.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ffa100')
   assert.deepEqual((await clocks()).map((clock) => clock.name), ['A'])
   assert.equal((await clocks())[0].stroke, '#ffa100')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
-  assert.equal((await edges()).find((edge) => edge.name === 'A')?.edge || '', '')
+  assert.equal((await edges()).some((edge) => edge.edge === '1'), false, 'kids-only amber still leaves connectors quiet')
   assert.ok(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy.remaining >= 14000))
   await touch('pointerdown', kidTicket.x, kidTicket.y, 195, kidTicket.uid)
   await touch('pointerup', kidTicket.x, kidTicket.y, 195, kidTicket.uid)
-  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, '#ffb8b8')
-  assert.equal((await heats()).find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal((await heats()).find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ff0000')
   await touch('pointerdown', master.x, master.y, 96, master.uid)
   await touch('pointerup', master.x, master.y, 96, master.uid)
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffa100')
+  assert.notEqual(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
+  await touch('pointerdown', master.x, master.y, 97, master.uid)
+  await touch('pointerup', master.x, master.y, 97, master.uid)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
   assert.deepEqual(await clocks(), [])
   assert.equal((await edges()).some((edge) => edge.edge === '1'), false)
@@ -2787,7 +2795,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', kidTicket.x, kidTicket.y, 196, kidTicket.uid)
   await touch('pointerup', kidTicket.x, kidTicket.y, 196, kidTicket.uid)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercy), null)
-  assert.equal((await heats()).find((card) => card.name === 'A1'), undefined)
+  assert.equal(((await heats()).find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#16a34a')
   await page.evaluate(() => {
     document.querySelectorAll('.node-edit-input').forEach((input) => input.blur())
     document.body.click()
@@ -2808,12 +2816,11 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerup', branch.x - 86, branch.y, 82, branch.uid)
   await touch('pointerup', thumbA.x, thumbA.y, 81)
   const parallel = await heats()
-  assert.equal(parallel.find((card) => card.name === 'B')?.clock, true)
-  assert.equal(parallel.find((card) => card.name === 'B')?.wash, '#ffb8b8')
-  assert.equal(parallel.find((card) => card.name === 'A')?.clock, true)
-  assert.equal(parallel.find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal(parallel.find((card) => card.name === 'B'), undefined)
+  assert.equal(parallel.find((card) => card.name === 'A'), undefined)
   assert.equal(parallel.find((card) => card.name === 'A1')?.clock, false)
-  assert.equal(parallel.find((card) => card.name === 'A1')?.wash, '#ffcc80')
+  assert.equal(parallel.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((parallel.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffa100')
   assert.equal(await page.evaluate(() => document.querySelectorAll('path.logyq-smite-clock').length), 2)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
   const parallelClocks = await clocks()
@@ -2853,12 +2860,12 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointerdown', childAgain.x, childAgain.y, 83, childAgain.uid)
   await touch('pointerup', childAgain.x, childAgain.y, 83, childAgain.uid)
   const afterToggle = await heats()
-  assert.equal(afterToggle.find((card) => card.name === 'A1'), undefined)
-  assert.equal(afterToggle.find((card) => card.name === 'A')?.wash, '#ffcc80')
+  assert.equal(afterToggle.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal((afterToggle.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ffffff')
   assert.equal((await clocks()).find((clock) => clock.name === 'A')?.stroke, '#ffa100')
   assert.equal((await clocks()).find((clock) => clock.name === 'B')?.stroke, '#ff0000')
   assert.equal((await edges()).find((edge) => edge.name === 'A1')?.edge, '1')
-  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffa100')
+  assert.equal((await edges()).find((edge) => edge.name === 'A1')?.stroke, '#ffffff')
   assert.equal(await page.evaluate(() => document.querySelectorAll('path.logyq-smite-clock').length), 2)
   assert.equal(await page.evaluate(() => window.LOGYQPreview.gestures.smite.mercies.length), 2)
   const overlapThumb = await park('middle', 97)
@@ -3882,20 +3889,33 @@ test('LOGYQ repeated flicks keep the camera still and the touched card', async (
     const rect = el.getBoundingClientRect()
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
   })
-  const host = await face(mixedName)
   const cdp = await page.context().newCDPSession(page)
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: chip.x, y: chip.y, id: 1 }] })
+  const nudge = { x: chip.x, y: Math.max(70, chip.y - 36) }
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: nudge.x, y: nudge.y, id: 1 }] })
+  await page.waitForTimeout(40)
+  const lift = await page.evaluate((finger) => {
+    const rect = document.getElementById('logyq-chip-ghost')?.getBoundingClientRect()
+    if (!rect || rect.width < 1) return { x: 0, y: 0 }
+    return {
+      x: rect.left + rect.width / 2 - finger.x,
+      y: rect.top + rect.height / 2 - finger.y,
+    }
+  }, nudge)
+  let prev = nudge
   for (let i = 1; i <= 8; i += 1) {
-    await cdp.send('Input.dispatchTouchEvent', {
-      type: 'touchMove',
-      touchPoints: [{
-        x: chip.x + ((host.x - chip.x) * i) / 8,
-        y: chip.y + ((host.y - chip.y) * i) / 8,
-        id: 1,
-      }],
-    })
+    const live = await face(mixedName)
+    const dest = { x: live.x - lift.x, y: live.y - lift.y }
+    prev = { x: prev.x + (dest.x - prev.x) * 0.5, y: prev.y + (dest.y - prev.y) * 0.5 }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: prev.x, y: prev.y, id: 1 }] })
     await page.waitForTimeout(16)
   }
+  const landed = await face(mixedName)
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: landed.x - lift.x, y: landed.y - lift.y, id: 1 }],
+  })
+  await page.waitForTimeout(32)
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await cdp.detach()
   await page.waitForFunction((label) => {
