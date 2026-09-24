@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import test from 'node:test'
 
@@ -10,42 +9,57 @@ runInNewContext(readFileSync(new URL('game-grammar.js', root), 'utf8'), sandbox)
 const grammar = sandbox.window.LOGYQGameGrammar
 const card = (id, paint, children = []) => ({ gameId: id, paint, children })
 
-test('a child matches a parent only when the bottom and top colors agree', () => {
-  const chain = card('root', 'orange', [card('middle', 'orange-blue', [card('leaf', 'blue')])])
-  assert.equal(grammar.complete(chain, ['root', 'middle', 'leaf'], 'root'), true)
-  assert.equal(grammar.complete(card('root', 'orange', [card('leaf', 'blue'), card('middle', 'orange-blue')]), ['root', 'middle', 'leaf'], 'root'), false)
+test('the four fixed geometries expose the intended top and bottom contacts', () => {
+  for (const shape of ['L', 'DL', 'DR']) {
+    assert.equal(grammar.edge(shape + ':A:B', 'top'), 'A')
+    assert.equal(grammar.edge(shape + ':A:B', 'bottom'), 'B')
+  }
+  assert.equal(grammar.edge('W:A', 'top'), 'A')
+  assert.equal(grammar.edge('W:A', 'bottom'), 'A')
+  assert.equal(grammar.edge('DL:A:B', 'left'), 'B')
+  assert.equal(grammar.edge('DL:A:B', 'right'), 'A')
+  assert.equal(grammar.edge('DR:A:B', 'left'), 'A')
+  assert.equal(grammar.edge('DR:A:B', 'right'), 'B')
 })
 
-test('diagonal siblings must also match at their shared edge', () => {
-  const left = card('left', 'pink-blue-down')
-  const right = card('right', 'blue-green-up')
-  assert.equal(grammar.edge(left.paint, 'top'), 'blue')
-  assert.equal(grammar.edge(left.paint, 'right'), 'blue')
-  assert.equal(grammar.edge(right.paint, 'left'), 'blue')
-  assert.equal(grammar.complete(card('root', 'blue', [left, right]), ['root', 'left', 'right'], 'root'), true)
-  assert.equal(grammar.complete(card('root', 'blue', [right, left]), ['root', 'left', 'right'], 'root'), false)
+test('Whole/Whole is ambiguous and therefore omitted from the 15-level curriculum', () => {
+  const first = card('a', 'W:A', [card('b', 'W:A')])
+  const second = card('b', 'W:A', [card('a', 'W:A')])
+  assert.equal(grammar.complete(first, ['a', 'b']), true)
+  assert.equal(grammar.complete(second, ['a', 'b']), true)
 })
 
-test('a matching row without its parent is not a completed map', () => {
-  const row = card('left', 'pink-blue-down', [card('middle', 'blue', [card('right', 'blue-green-up')])])
-  assert.equal(grammar.complete(row, ['root', 'left', 'right'], 'root'), false)
+test('all other ordered geometry pairs have one canonical vertical solution', () => {
+  const shapes = ['W', 'L', 'DL', 'DR']
+  let count = 0
+  for (const rootShape of shapes) {
+    for (const childShape of shapes) {
+      if (rootShape === 'W' && childShape === 'W') continue
+      count++
+      const rp = rootShape === 'W' ? 'W:A' : rootShape + ':A:B'
+      const contact = rootShape === 'W' ? 'A' : 'B'
+      const cp = childShape === 'W' ? 'W:' + contact : childShape + ':' + contact + ':' + (contact === 'A' ? 'B' : 'C')
+      const solved = card('r', rp, [card('c', cp)])
+      const reversed = card('c', cp, [card('r', rp)])
+      assert.equal(grammar.complete(solved, ['r', 'c']), true, rootShape + ' -> ' + childShape)
+      assert.equal(grammar.complete(reversed, ['r', 'c']), false, childShape + ' must not also root ' + rootShape)
+      assert.equal(grammar.canDrop(reversed, 'r', { type: 'rootAbove' }), true)
+    }
+  }
+  assert.equal(count, 15)
 })
 
-test('drop check simulates the editor gap and node drops without mutating the source', () => {
-  const chain = card('root', 'orange', [card('middle', 'orange-blue'), card('leaf', 'blue')])
-  assert.equal(grammar.canDrop(chain, 'leaf', { type: 'node', targetUid: 'middle' }, 'root'), true)
-  assert.equal(grammar.canDrop(chain, 'middle', { type: 'node', targetUid: 'leaf' }, 'root'), false)
-  assert.equal(chain.children.length, 2)
-  const branch = card('root', 'blue', [card('right', 'blue-green-up'), card('left', 'pink-blue-down')])
-  assert.equal(grammar.canDrop(branch, 'left', { type: 'gap', parentUid: 'root', nextUid: 'right' }, 'root'), true)
-  assert.equal(grammar.canDrop(branch, 'right', { type: 'gap', parentUid: 'root', nextUid: 'left' }, 'root'), false)
-  assert.equal(grammar.canDrop(branch, 'root', { type: 'rootAbove' }, 'root'), false)
-  assert.equal(branch.children[0].gameId, 'right')
+test('diagonal sibling orientation remains physically meaningful', () => {
+  const left = card('left', 'DL:A:B')
+  const right = card('right', 'DR:B:C')
+  assert.notEqual(grammar.edge(left.paint, 'right'), grammar.edge(right.paint, 'left'))
 })
 
-test('the first puzzle starts as a chain and repairs by moving its parent below its child', () => {
-  const start = card('root', 'orange', [card('leaf', 'blue', [card('middle', 'orange-blue')])])
-  assert.equal(grammar.complete(start, ['root', 'middle', 'leaf'], 'root'), false)
-  assert.equal(grammar.canDrop(start, 'leaf', { type: 'node', targetUid: 'middle' }, 'root'), true)
-  assert.equal(start.children[0].gameId, 'leaf')
+
+test('a loose bank card can solve from either starting side', () => {
+  const root = card('r', 'L:A:B')
+  const child = card('c', 'DR:B:C')
+  assert.equal(grammar.canAdd(root, child, { type: 'node', targetUid: 'r' }), true)
+  assert.equal(grammar.canAdd(child, root, { type: 'rootAbove' }), true)
+  assert.equal(grammar.canAdd(root, child, { type: 'rootAbove' }), false)
 })
