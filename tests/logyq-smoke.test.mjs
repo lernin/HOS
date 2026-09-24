@@ -3325,6 +3325,107 @@ test('LOGYQ Word Bank chip drag pans the map with the card-drag follow', async (
   await context.close()
 })
 
+test('LOGYQ Word Bank chip still pans when the finger is in the shelf slack', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [{ name: 'Far' }],
+    }, ['Pan'])
+  })
+  await page.waitForSelector('#Dock .chip')
+  await page.waitForFunction(() => {
+    const far = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far')
+    return far?.getBoundingClientRect().width > 20 && !document.body.classList.contains('logyq-layout-settling')
+  })
+  const parked = await page.evaluate(() => {
+    const state = window.LOGYQBridge.core.state
+    const svg = document.getElementById('canvas')
+    const node = state.root.descendants().find((item) => item.data.name === 'Far')
+    const box = svg.getBoundingClientRect()
+    const dock = document.getElementById('Dock').getBoundingClientRect()
+    const tx = box.left + box.width + 220 - node.x
+    const ty = box.top + box.height / 2 - node.y
+    state._lastMoat = Date.now() + 30000
+    window.d3.select(svg).call(state.zoom.transform, window.d3.zoomIdentity.translate(tx, ty).scale(1))
+    state._lastMoat = Date.now() + 30000
+    const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === 'Pan').getBoundingClientRect()
+    const zoom = window.d3.zoomTransform(svg)
+    return {
+      tx: zoom.x,
+      chip: { x: chip.left + chip.width / 2, y: chip.top + chip.height / 2 },
+      lift: { x: chip.left + chip.width / 2, y: dock.top - 140 },
+      edge: { x: box.right - 16, y: dock.top - 16 },
+      dockTop: dock.top,
+    }
+  })
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...parked.chip, id: 1 }] })
+  const liftSteps = 6
+  for (let i = 1; i <= liftSteps; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: parked.chip.x + ((parked.lift.x - parked.chip.x) * i) / liftSteps,
+        y: parked.chip.y + ((parked.lift.y - parked.chip.y) * i) / liftSteps,
+        id: 1,
+      }],
+    })
+    await page.waitForTimeout(16)
+  }
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-chip-drag')), true)
+  const slideSteps = 8
+  for (let i = 1; i <= slideSteps; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: parked.lift.x + ((parked.edge.x - parked.lift.x) * i) / slideSteps,
+        y: parked.lift.y + ((parked.edge.y - parked.lift.y) * i) / slideSteps,
+        id: 1,
+      }],
+    })
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(450)
+  const panned = await page.evaluate((dockTop) => {
+    const svg = document.getElementById('canvas')
+    const zoom = window.d3.zoomTransform(svg)
+    const ghost = document.getElementById('logyq-chip-ghost')?.getBoundingClientRect()
+    const far = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far').getBoundingClientRect()
+    return {
+      tx: zoom.x,
+      farX: far.left + far.width / 2,
+      ghostTop: ghost?.top ?? null,
+      fingerInSlack: true,
+      dockTop,
+    }
+  }, parked.dockTop)
+  assert.ok(parked.edge.y > parked.dockTop - 28, `finger should sit in the shelf slack, y=${parked.edge.y} dock=${parked.dockTop}`)
+  assert.ok(panned.ghostTop != null && panned.ghostTop < parked.dockTop - 28, `chip should be clear of the shelf, ghostTop=${panned.ghostTop}`)
+  assert.ok(parked.tx - panned.tx > 40, `slack-edge hold should keep panning, before=${parked.tx} after=${panned.tx} far=${panned.farX}`)
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ ...parked.chip, id: 1 }],
+  })
+  await page.waitForTimeout(40)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await page.waitForFunction(() => !document.body.classList.contains('logyq-chip-drag'))
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Pan')), true)
+  assert.deepEqual(errors, [])
+  await cdp.detach()
+  await context.close()
+})
+
 test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () => {
   async function openBankMap(page, bank = ['Pop', 'Stay']) {
     await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })

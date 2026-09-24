@@ -2123,9 +2123,13 @@
     return { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight, width: win.innerWidth, height: win.innerHeight }
   }
 
-  // Same center-follow as a map-card hold. The ghost stays on the finger;
-  // only the map moves, and only while the finger is clear of the bank.
+  // Same center-follow as a map-card hold. Detect from the finger
+  // (`edgePan`); re-aim the drop at the raised chip. The full-bleed shelf
+  // has a slack band under that chip, so "near" the bank is not "on" it.
+  let chipEdgePanBound = false
   function bindChipEdgePan(doc, win) {
+    if (chipEdgePanBound) return
+    chipEdgePanBound = true
     let raf = 0
     let finger = null
     const stop = () => {
@@ -2133,19 +2137,25 @@
       raf = 0
       finger = null
     }
+    const chipPoint = () => {
+      const rect = doc.getElementById('logyq-chip-ghost')?.getBoundingClientRect?.()
+      if (!rect || rect.width < 1 || rect.height < 1) return null
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }
     const tick = () => {
       raf = 0
       if (!finger || !doc.body.classList.contains('logyq-chip-drag')) return
-      if (dockDropKind(doc, finger.x, finger.y) === 'none' && edgePan(doc, win, finger.x, finger.y)) {
-        const stack = doc.getElementById('logyq-chip-ghost')
-        const rect = stack?.getBoundingClientRect?.()
+      const aim = chipPoint()
+      const fingerKind = dockDropKind(doc, finger.x, finger.y)
+      const chipKind = aim ? dockDropKind(doc, aim.x, aim.y) : fingerKind
+      if (fingerKind !== 'bank' && chipKind === 'none' && edgePan(doc, win, finger.x, finger.y)) {
         const svg = doc.getElementById('canvas')
-        if (rect && rect.width > 1 && svg) {
+        if (aim && svg) {
           svg.dispatchEvent(new win.DragEvent('dragover', {
             bubbles: true,
             cancelable: true,
-            clientX: rect.left + rect.width / 2,
-            clientY: rect.top + rect.height / 2,
+            clientX: aim.x,
+            clientY: aim.y,
           }))
         }
       }
@@ -4209,6 +4219,9 @@
   }
 
   bindV162Gestures()
+  // Chip placement lives in the word dock, including desktop mouse drags
+  // that never enter the phone hold-drag loop. One bind either way.
+  bindChipEdgePan(document, window)
   if (preview.gestures) {
     preview.gestures.constants = v162Constants()
     preview.gestures.bindV162 = bindV162Gestures
