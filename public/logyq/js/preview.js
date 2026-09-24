@@ -5506,22 +5506,37 @@
     return curriculumPack().find((level) => level.id === id) || null
   }
 
-  // Slot-machine tumble. Each beat is the same Mix. Gaps start short so
-  // the board spins hard, then each wait grows so the same Mix slows
-  // down. Motion grows with the gap: early glides are quick, later ones
-  // drift. The last glide lands, then the root-anchored camera ease.
-  // Shuffle ~3.7s plus a 0.9s settle. About 4.6s, gate to play.
+  // Slot-machine tumble, stretched. Each beat is the same Mix. Gaps start
+  // short and keep growing. Every glide except the last outlasts the wait
+  // before the next Mix, so the cards are still moving when the tree
+  // changes and do not sit still between beats. The last glide starts at
+  // that same speed and eases to a stop, then the root-anchored camera
+  // ease. Shuffle ~7.2s plus a 0.9s settle.
+  function curriculumVegasEase(kind) {
+    if (kind === 'out') return (t) => t * (1 + t - t * t)
+    return typeof window.d3?.easeLinear === 'function' ? window.d3.easeLinear : null
+  }
+
   const CURRICULUM_VEGAS_BEATS = [
-    { at: 0, motion: 130 },
-    { at: 110, motion: 160 },
-    { at: 250, motion: 220 },
-    { at: 450, motion: 310 },
-    { at: 740, motion: 440 },
-    { at: 1160, motion: 620 },
-    { at: 1760, motion: 940 },
-    { at: 2680, motion: 960 },
+    { at: 0, motion: 140, ease: 'linear' },
+    { at: 90, motion: 170, ease: 'linear' },
+    { at: 200, motion: 190, ease: 'linear' },
+    { at: 320, motion: 220, ease: 'linear' },
+    { at: 460, motion: 260, ease: 'linear' },
+    { at: 630, motion: 300, ease: 'linear' },
+    { at: 820, motion: 340, ease: 'linear' },
+    { at: 1040, motion: 400, ease: 'linear' },
+    { at: 1300, motion: 470, ease: 'linear' },
+    { at: 1600, motion: 540, ease: 'linear' },
+    { at: 1950, motion: 620, ease: 'linear' },
+    { at: 2350, motion: 710, ease: 'linear' },
+    { at: 2810, motion: 820, ease: 'linear' },
+    { at: 3340, motion: 960, ease: 'linear' },
+    { at: 3960, motion: 1120, ease: 'linear' },
+    { at: 4680, motion: 1300, ease: 'linear' },
+    { at: 5520, motion: 1540, ease: 'out' },
   ]
-  const CURRICULUM_VEGAS_SETTLE_AT = 3680
+  const CURRICULUM_VEGAS_SETTLE_AT = 7200
   const CURRICULUM_VEGAS_SETTLE_MS = 900
 
   const curriculumVegas = { token: 0, timers: [] }
@@ -5624,7 +5639,7 @@
   // One Mix. Seeds the level words, then calls randomizeTree. The curriculum
   // class is lifted for that call because Mix refuses it. Camera fit stays
   // off while curriculumCameraLock is set.
-  function spinCurriculum(level, { motion = 260, avoidAnswer = true } = {}) {
+  function spinCurriculum(level, { motion = 260, avoidAnswer = true, ease = 'linear' } = {}) {
     const core = bridge.core
     const state = core?.state
     const utils = core?.utils
@@ -5654,11 +5669,10 @@
     const prevMotion = state.layoutMotionMs
     const prevEase = state.layoutMotionEase
     state.layoutMotionMs = motion
-    // Linear, not the default slow-in/slow-out. A longer beat then really
-    // drifts slower, and the next Mix does not start with a stall.
-    state.layoutMotionEase = motion > 0 && typeof window.d3?.easeLinear === 'function'
-      ? window.d3.easeLinear
-      : null
+    // Linear keeps a steady drift that the next Mix can catch mid-glide.
+    // The closing beat uses an ease that starts at that same speed and
+    // arrives with none left, so the handoff into the camera settle is soft.
+    state.layoutMotionEase = motion > 0 ? curriculumVegasEase(ease) : null
     state.curriculumCameraLock = true
     const locked = document.body.classList.contains('logyq-curriculum')
     const runMix = () => {
@@ -5770,7 +5784,7 @@
     beats.forEach((beat) => {
       const run = () => {
         if (!alive()) return
-        spinCurriculum(level, { motion: beat.motion, avoidAnswer: true })
+        spinCurriculum(level, { motion: beat.motion, avoidAnswer: true, ease: beat.ease })
         restoreCurriculumCamera(snap)
       }
       if (beat.at === 0) {
