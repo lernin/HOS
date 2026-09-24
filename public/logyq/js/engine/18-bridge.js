@@ -29,6 +29,7 @@
   // Color lives on node data (`color`) so snapshot / maps / reload keep it.
   // Does not change selection or fly the camera.
   const paintNodes = (uid, color, branch) => {
+    if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return false;
     const node = uid && logyq.state.root?.descendants().find((item) => item.data?._uid === uid);
     if (!node) return false;
     const next = normalizePaintColor(color);
@@ -132,6 +133,7 @@
       return created || null;
     },
     renameNode(uid, name) {
+      if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return false;
       const target = uid && utils.findByUid(state.root?.data, uid);
       if (!target) return false;
       const next = name == null ? '' : String(name).trim();

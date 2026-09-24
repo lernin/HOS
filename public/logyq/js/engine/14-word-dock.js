@@ -290,6 +290,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
 
   function addWords(raw, to){
     const { state, utils } = logyq
+    if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
     if (typeof window !== 'undefined' && window.__logyqHoldDragBlocksBank?.()) return;
     const text = (raw || '').trim(); if(!text) return;
     const words = text.split(/[;,]+/).map(s => s.trim()).filter(Boolean);

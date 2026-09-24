@@ -23,6 +23,7 @@ function mixCard(name, extras){
 
 function randomizeTree(includeBank){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   try{
     const prevTree = state.root ? utils.deepClone(state.root.data) : null;
     const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
@@ -93,6 +94,7 @@ function randomizeTree(includeBank){
   // Don’t show the browser menu or bubble to zoom
   event.preventDefault();
   event.stopPropagation();
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   // Contextmenu is never a Word Bank write. Phone long-press and desktop
   // right-click both land here, and both used to copy the card label into
   // the dock (Ashley’s “Jrvb” chip while Dog / Poodle / Jdvb stayed put).

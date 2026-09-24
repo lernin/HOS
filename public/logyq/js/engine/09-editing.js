@@ -187,6 +187,7 @@
 
   function openNodeEditor(d){
     const { state, elements } = logyq
+    if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
     try{ closeNodeEditor(false,false); }catch(_e){}
     const uid = d?.data?._uid;
     if(!d || uid == null || String(uid) === '') return;

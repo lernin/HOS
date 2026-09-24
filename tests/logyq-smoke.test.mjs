@@ -1002,7 +1002,7 @@ test('LOGYQ empty library stays a library, not a chooser or editor', async () =>
   await context.close()
 })
 
-test('LOGYQ curriculum level 1 clears into an empty map and unlocks level 2', async () => {
+test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', async () => {
   const capture = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context, { capture })
@@ -1013,23 +1013,71 @@ test('LOGYQ curriculum level 1 clears into an empty map and unlocks level 2', as
   await waitForBoot(page)
   await page.locator('#logyq-tab-curriculum').click()
   await page.locator('[data-level="fruit"]').click()
-  await page.waitForFunction(() => document.querySelector('#Dock .chip')?.textContent === 'fruit'
-    || document.querySelectorAll('#Dock .chip').length === 3)
-  const opened = await page.evaluate(() => ({
-    chips: Array.from(document.querySelectorAll('#Dock .chip')).map((el) => el.textContent.trim()).sort(),
-    nodes: document.querySelectorAll('g.node').length,
-    title: document.getElementById('logyq-curriculum-status')?.textContent || '',
-    playing: document.body.classList.contains('logyq-curriculum'),
-  }))
-  assert.deepEqual(opened.chips, ['apple', 'banana', 'fruit'])
-  assert.equal(opened.nodes, 0)
+  await page.waitForFunction(() => {
+    const names = Array.from(document.querySelectorAll('g.node:not(.logyq-pile)')).map((el) => el.__data__?.data?.name)
+    return names.length === 3 && document.body.classList.contains('logyq-curriculum')
+  })
+  const opened = await page.evaluate(() => {
+    const hidden = (id) => getComputedStyle(document.getElementById(id)).display === 'none'
+    const cards = Array.from(document.querySelectorAll('g.node:not(.logyq-pile)'))
+    const names = cards.map((el) => el.__data__?.data?.name).sort()
+    const detached = cards.every((el) => el.__data__?.parent?.data?.curriculumPile && !(el.__data__?.data?.children || []).length)
+    const answer = window.LOGYQPreview.curriculum.matches(
+      window.LOGYQPreview.curriculum.pack().find((level) => level.id === 'fruit').tree,
+      window.LOGYQBridge.snapshot().tree,
+    )
+    return {
+      chips: document.querySelectorAll('#Dock .chip').length,
+      names,
+      detached,
+      answer,
+      dock: hidden('Dock'),
+      trash: hidden('trash'),
+      warehouse: hidden('logyq-warehouse'),
+      bankTrash: hidden('logyq-bank-trash'),
+      title: document.getElementById('logyq-curriculum-status')?.textContent || '',
+      playing: document.body.classList.contains('logyq-curriculum'),
+      pileHidden: getComputedStyle(document.querySelector('g.node.logyq-pile')).display === 'none',
+    }
+  })
+  assert.equal(opened.chips, 0)
+  assert.deepEqual(opened.names, ['apple', 'banana', 'fruit'])
+  assert.equal(opened.detached, true)
+  assert.equal(opened.answer, false)
+  assert.equal(opened.dock, true)
+  assert.equal(opened.trash, true)
+  assert.equal(opened.warehouse, true)
+  assert.equal(opened.bankTrash, true)
+  assert.equal(opened.pileHidden, true)
   assert.equal(opened.playing, true)
   assert.match(opened.title, /Fruit/)
   assert.equal(await page.locator('#logyq-curriculum-check').isVisible(), true)
+  assert.equal(await page.locator('#logyq-curriculum-mix').isVisible(), true)
+  assert.equal(await page.locator('#logyq-curriculum').innerText().then((text) => text.includes('Word Bank')), false)
+
+  const beforeOrder = await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.map((child) => child.name).join(','))
+  const mixing = await page.evaluate(() => {
+    window.__logyqCurriculumMix()
+    return window.LOGYQBridge.core.state.repositionMode
+  })
+  const afterOrder = await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.map((child) => child.name).join(','))
+  assert.equal(mixing, 'mix')
+  assert.notEqual(afterOrder, beforeOrder)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.length), 0)
+  const fruitUid = await page.evaluate(() => document.querySelector('g.node:not(.logyq-pile)')?.__data__?.data?._uid)
+  const beforeNodes = await page.evaluate(() => document.querySelectorAll('g.node').length)
+  await page.evaluate((uid) => window.LOGYQBridge.createRelative('down', uid), fruitUid)
+  await page.evaluate((uid) => window.LOGYQBridge.editSelected({ uid }), fruitUid)
+  assert.equal(await page.evaluate(() => document.querySelectorAll('g.node').length), beforeNodes)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
 
   await page.evaluate(() => {
     const core = window.LOGYQBridge.core
-    const tree = { name: 'fruit', children: [{ name: 'apple', children: [{ name: 'banana' }] }] }
+    const tree = {
+      name: '',
+      curriculumPile: true,
+      children: [{ name: 'fruit', children: [{ name: 'apple', children: [{ name: 'banana' }] }] }],
+    }
     core.utils.assignUids(tree)
     core.state.wordBank = []
     core.state.root = window.d3.hierarchy(tree)
@@ -1043,7 +1091,11 @@ test('LOGYQ curriculum level 1 clears into an empty map and unlocks level 2', as
 
   await page.evaluate(() => {
     const core = window.LOGYQBridge.core
-    const tree = { name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] }
+    const tree = {
+      name: '',
+      curriculumPile: true,
+      children: [{ name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] }],
+    }
     core.utils.assignUids(tree)
     core.state.wordBank = []
     core.state.root = window.d3.hierarchy(tree)

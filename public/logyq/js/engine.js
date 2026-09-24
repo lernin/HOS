@@ -128,6 +128,15 @@ function __selectedUid(){
 /* Phone has no select UX. Do not follow-focus / re-center from tap, moat,
    create-relative fly, or inline edit. Desktop keyboard IJKL-style
    center-on-select stays. */
+/* Curriculum play is a rebuild sandbox. Normal maps never set this class. */
+function curriculumPlayLocked(){
+  try {
+    return typeof document !== 'undefined' && !!document.body?.classList?.contains('logyq-curriculum');
+  } catch (_e) {
+    return false;
+  }
+}
+
 function phoneNoFollowCamera(){
   try {
     if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true;
@@ -436,6 +445,7 @@ attach('elements', elements)
 
 function commitWordInput(domEvent, opts = {}){
   const { state, elements } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   const el = elements.wordInput;
   if (!el) return;
   const raw = (el.value || '').trim();
@@ -534,6 +544,7 @@ elements.addWordBtn.addEventListener('contextmenu', (e) => {
 /* ---------- Add box handler: JSON / GIQ / comma-words ---------- */
 function handleAddBox(){
   const { state, elements } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   const el = elements.wordInput;
   if (!el) return;
   const raw = (el.value || '').trim();
@@ -2006,6 +2017,7 @@ if (dir === +1){
 
   function openNodeEditor(d){
     const { state, elements } = logyq
+    if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
     try{ closeNodeEditor(false,false); }catch(_e){}
     const uid = d?.data?._uid;
     if(!d || uid == null || String(uid) === '') return;
@@ -2923,6 +2935,7 @@ window.addEventListener('keydown', onGroupHotkeys, { passive: false });
 /* [patch] multi-node-trash helper start */
 function deleteNodesToTrash(uids){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (!state.root || !Array.isArray(uids) || !uids.length) return;
 
   // If root is selected, delete the whole tree.
@@ -2984,6 +2997,7 @@ logyq.selection.clearSelection();    // keep if you still want focus cleared
 /* [patch] delete-selected-node-only helper start */
 function deleteSelectedNodeOnly(){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (!state.root) return;
   if (!state.selectedUids || state.selectedUids.size !== 1) return;
 
@@ -3045,6 +3059,7 @@ function deleteSelectedNodeOnly(){
 /* [patch] delete-selected-nodes-only (multi) start */
 function deleteSelectedNodesOnly(){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (!state.root || !state.selectedUids || state.selectedUids.size === 0) return;
 
   // Snapshot once so Undo restores the whole tree in one step
@@ -3157,6 +3172,7 @@ function commitCreatedNode(uid, { noEdit = false, select = true, layout = true }
 function addChildOf(parentUid, newName = '', opts = {}) {
   const { noEdit = false, select = true, layout = true } = opts;
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return null;
 
   const parent = utils.findByUid(state.root?.data, parentUid);
   if (!parent) return null;
@@ -3188,6 +3204,7 @@ function addSiblingLeftOf(uid, newName = '', opts = {}){
 function insertSibling(uid, newName = '', opts = {}){
   const { side = 'right', noEdit = false, select = true, rootAsChild = side === 'right' } = opts;
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return null;
   if (!state.root) return null;
   const path = utils.pathToUid(state.root.data, uid);
   if (!path || path.length < 2){
@@ -3212,6 +3229,7 @@ function insertSibling(uid, newName = '', opts = {}){
 function insertParentAbove(uid, newName = '', opts = {}){
   const { noEdit = false, select = true } = opts;
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return null;
   if (!state.root || !uid) return null;
   const h = state.root.descendants().find(n => n?.data?._uid === uid);
   if (!h) return null;
@@ -3246,6 +3264,7 @@ function insertParentAbove(uid, newName = '', opts = {}){
 /* ---------- add SUBTREE (object with {name, children}) as rightmost child ---------- */
 function addSubtreeChildOf(parentUid, subtreeData){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return null;
   if (!subtreeData) return null;
 
   // ensure every node has a _uid
@@ -3342,6 +3361,7 @@ function __namesFromSubtree(nodeData){
 
 function dropSelectedToWordBank({ onlyNode = false } = {}) {
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   if (!window.__logyqHoldDragAllowBank && !window.__logyqExplicitBankCommit) return;
@@ -3477,6 +3497,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
 
 function sendSubtreeToWordBank(h){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   // Move + dock dwell sets AllowBank. Keyboard D sets ExplicitBankCommit.
@@ -3522,6 +3543,7 @@ function sendSubtreeToWordBank(h){
 
 function sendNodeToWordBank_abandon(h){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   if (!window.__logyqHoldDragAllowBank && !window.__logyqExplicitBankCommit) return;
@@ -3913,6 +3935,9 @@ state.dragState.drop = null;
     const src = event.sourceEvent, cx=src.clientX, cy=src.clientY;
     const zone=dragManager.zone(cx,cy);
     const shouldDelete = (zone==='over');
+    if(shouldDelete && typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()){
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
+    }
     if(shouldDelete){
       // Group delete
 
@@ -3951,6 +3976,9 @@ state.dragState.drop = null;
 
     // 2) Valid drop?
     const drop = state.dragState.drop;
+    if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked() && drop && drop.type === 'rootAbove') {
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
+    }
     if (!drop){ dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
 
     /* ========= Helpers used below ========= */
@@ -4693,6 +4721,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
 
   function addWords(raw, to){
     const { state, utils } = logyq
+    if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
     if (typeof window !== 'undefined' && window.__logyqHoldDragBlocksBank?.()) return;
     const text = (raw || '').trim(); if(!text) return;
     const words = text.split(/[;,]+/).map(s => s.trim()).filter(Boolean);
@@ -5420,6 +5449,7 @@ function mixCard(name, extras){
 
 function randomizeTree(includeBank){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   try{
     const prevTree = state.root ? utils.deepClone(state.root.data) : null;
     const prevBank = Array.isArray(state.wordBank) ? state.wordBank.slice() : [];
@@ -5490,6 +5520,7 @@ function randomizeTree(includeBank){
   // Don’t show the browser menu or bubble to zoom
   event.preventDefault();
   event.stopPropagation();
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   // Contextmenu is never a Word Bank write. Phone long-press and desktop
   // right-click both land here, and both used to copy the card label into
   // the dock (Ashley’s “Jrvb” chip while Dog / Poodle / Jdvb stayed put).
@@ -5995,6 +6026,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       .style("pointer-events", "all");
     const slots = enter.merge(sel)
       .attr("data-uid", d => d.data._uid)
+      .classed("logyq-pile", d => !!d?.data?.curriculumPile)
       .attr("transform", d => `translate(${d.x},${d.y})`);
     this.bindUidStamp(slots)
     sel.exit().remove();
@@ -6035,6 +6067,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     const selLinks=elements.gLinks.selectAll("path.link").data(links, d=>d.target.data._uid);
     const enteredLinks = selLinks.enter().append("path").attr("class","link").style("stroke-width", 2.8).style("opacity", 0.5)
       .attr("d", d=> logyq.visual.vLink({source:d.source, target:d.source}))
+    enteredLinks.merge(selLinks).classed("logyq-pile-link", d => !!d.source?.data?.curriculumPile);
     glide(enteredLinks).attr("d", d=> logyq.visual.vLink(d));
     glide(selLinks).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> logyq.visual.vLink(d));
     selLinks.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
@@ -6084,6 +6117,7 @@ const nEnter = selNodes.enter()
 
     const allNodes = nEnter.merge(selNodes);
     allNodes.attr("data-uid", d => d.data._uid);
+    allNodes.classed("logyq-pile", d => !!d?.data?.curriculumPile);
     allNodes.select("rect.grabzone")
       .attr("x", -CONFIG.CARD_WIDTH/2)
       .attr("y", -CONFIG.CARD_HEIGHT/2)
@@ -6350,6 +6384,18 @@ function keyDispatcher(e){
   }
 
   if (typing && !state.tabHold) return;
+
+  // Rebuild sandbox: fit, undo, and the curriculum Mix hook. No add, rename,
+  // delete, bank, or the map Mix that builds a new connected tree.
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) {
+    if (lower === 'f' && !e.shiftKey) { e.preventDefault(); logyq.treeManager.autoFit(); return; }
+    if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }
+    if (lower === 'u') { e.preventDefault(); logyq.history.undo(); return; }
+    if (lower === 'm') { e.preventDefault(); try { window.__logyqCurriculumMix?.(); } catch (_e) {} return; }
+    if (k === 'Escape') return;
+    e.preventDefault();
+    return;
+  }
 
  // 🔑 Hotkeys
     if (lower === 'f' && !e.shiftKey){ e.preventDefault(); logyq.treeManager.autoFit(); return; }
@@ -6934,6 +6980,7 @@ elements.svg.on("contextmenu", (event) => {
   // Color lives on node data (`color`) so snapshot / maps / reload keep it.
   // Does not change selection or fly the camera.
   const paintNodes = (uid, color, branch) => {
+    if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return false;
     const node = uid && logyq.state.root?.descendants().find((item) => item.data?._uid === uid);
     if (!node) return false;
     const next = normalizePaintColor(color);
@@ -7037,6 +7084,7 @@ elements.svg.on("contextmenu", (event) => {
       return created || null;
     },
     renameNode(uid, name) {
+      if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return false;
       const target = uid && utils.findByUid(state.root?.data, uid);
       if (!target) return false;
       const next = name == null ? '' : String(name).trim();

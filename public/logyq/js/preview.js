@@ -330,8 +330,8 @@
       #logyq-curriculum-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
       #logyq-curriculum-status[data-tone="clear"]{color:#14532d}
       #logyq-curriculum-status[data-tone="wait"]{color:#64748b}
-      #logyq-curriculum-check,#logyq-curriculum-levels{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
-      #logyq-curriculum-levels{background:#fff;color:#14532d;border:1px solid #bbf7d0}
+      #logyq-curriculum-check,#logyq-curriculum-levels,#logyq-curriculum-mix{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
+      #logyq-curriculum-levels,#logyq-curriculum-mix{background:#fff;color:#14532d;border:1px solid #bbf7d0}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
       .logiq-primary{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:9px 13px;font-weight:750;cursor:pointer}
       .logiq-library-body{padding:12px 16px 18px}
@@ -477,6 +477,27 @@
         body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
         body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
       }
+      body.logyq-curriculum #Dock,
+      body.logyq-curriculum #Dock.dock-left,
+      body.logyq-curriculum #logyq-warehouse,
+      body.logyq-curriculum #logyq-bank-trash,
+      body.logyq-curriculum #logyq-warehouse-sheet,
+      body.logyq-curriculum #trash,
+      body.logyq-curriculum .word-tools,
+      body.logyq-curriculum #logyq-select-strip,
+      body.logyq-curriculum #logyq-paint-btn,
+      body.logyq-curriculum #logyq-paint-strip,
+      body.logyq-curriculum #logyq-thekonym-ask,
+      body.logyq-curriculum #logiq-mobile-panel [data-tool="add"],
+      body.logyq-curriculum #logiq-mobile-panel [data-tool="add-child"],
+      body.logyq-curriculum #logiq-mobile-panel [data-tool="paint"],
+      body.logyq-curriculum #logiq-mobile-panel [data-tool="dock"],
+      body.logyq-mobile-v162.logyq-curriculum.v2-branch-drag #trash,
+      body.logyq-curriculum.logyq-chip-drag #logyq-bank-trash,
+      body.logyq-curriculum.v2-branch-drag #logyq-bank-trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
+      body.logyq-curriculum g.node.logyq-pile,
+      body.logyq-curriculum g.hit-slot.logyq-pile,
+      body.logyq-curriculum path.link.logyq-pile-link{display:none!important;pointer-events:none!important}
       #logyq-thekonym-ask{display:none}
       body.logyq-thekonym #logyq-thekonym-ask{display:grid;place-items:center;position:fixed;z-index:3300;top:58px;right:10px;width:36px;height:36px;border:1px solid #3c4d43;border-radius:10px;background:#162e27;color:#faf8f1;font:18px Georgia,serif;padding:0}
       #logyq-thekonym-mobile{grid-column:1 / -1}
@@ -592,7 +613,7 @@
           <div class="logiq-library-body">
             <div class="logiq-map-list" id="logiq-map-list" role="tabpanel" aria-labelledby="logyq-tab-maps"></div>
             <div id="logyq-curriculum" role="tabpanel" aria-labelledby="logyq-tab-curriculum" hidden>
-              <p class="logyq-level-intro">Build each tree from the Word Bank. Sibling order can differ.</p>
+              <p class="logyq-level-intro">Drag the cards into the tree. Sibling order can differ.</p>
               <ol id="logyq-level-path"></ol>
             </div>
           </div>
@@ -600,6 +621,7 @@
       </div>
       <div id="logyq-curriculum-bar">
         <p id="logyq-curriculum-status" role="status"></p>
+        <button type="button" id="logyq-curriculum-mix">Mix</button>
         <button type="button" id="logyq-curriculum-check">Check</button>
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
@@ -786,10 +808,18 @@
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool
+      const sandbox = document.body.classList.contains('logyq-curriculum')
+      if (sandbox && (action === 'add' || action === 'add-child' || action === 'dock' || action === 'paint')) {
+        closeMobilePanel()
+        return
+      }
       if (action === 'add') commitMobileInput(false)
       if (action === 'add-child') commitMobileInput(true)
       if (action === 'undo') bridge.undo()
-      if (action === 'mix') bridge.mix(false)
+      if (action === 'mix') {
+        if (sandbox && window.__logyqCurriculumMix) window.__logyqCurriculumMix()
+        else bridge.mix(false)
+      }
       if (action === 'fit') bridge.fit()
       if (action === 'library') openLibrary()
       if (action === 'dock') bridge.cycleDock()
@@ -826,6 +856,7 @@
   }
 
   function commitMobileInput(toNode) {
+    if (document.body.classList.contains('logyq-curriculum')) return
     const legacyInput = document.getElementById('wordInput')
     const legacyAdd = document.getElementById('addWordBtn')
     if (!legacyInput || !legacyAdd) return
@@ -2534,6 +2565,10 @@
     })
   }
 
+  function curriculumSandbox(doc) {
+    return !!doc.body?.classList.contains('logyq-curriculum')
+  }
+
   function onFlickUp(event, doc, win, state) {
     state.active.delete(event.pointerId)
     const candidate = state.candidates.get(event.pointerId)
@@ -2558,6 +2593,10 @@
     // branch only while a palette color is active. Left/up/down still create.
     // Thekonym mode opens the dossier on a right flick. Double-tap still renames.
     if (candidate.uid && isFlick(dx, dy, elapsed)) {
+      if (curriculumSandbox(doc)) {
+        state.lastTap = null
+        return
+      }
       const direction = flickDirection(dx, dy)
       if (paintFlickDown(direction)) {
         state.lastTap = null
@@ -2622,11 +2661,12 @@
       state.lastTap = null
       clearCardMic(state.mic)
       smiteSetArm(doc, null)
-      bridge.editSelected({ uid })
+      if (!curriculumSandbox(doc)) bridge.editSelected({ uid })
       return
     }
 
     if (paintTap()) {
+      if (curriculumSandbox(doc)) return
       bridge.paintUid(uid, preview.paint.color)
       state.lastTap = { uid, time: now }
       clearCardMic(state.mic)
@@ -3364,6 +3404,7 @@
   }
 
   function smiteTryArmSwipe(doc, win, smite, pointer) {
+    if (curriculumSandbox(doc)) return false
     if (!smite.armed || !pointer) return false
     const dx = pointer.lastX - pointer.x
     const dy = pointer.lastY - pointer.y
@@ -3412,6 +3453,7 @@
   }
 
   function smiteTryCast(doc, win, smite, pointer, pointerId) {
+    if (curriculumSandbox(doc)) return false
     if (smite.pinched || !pointer?.uid) return false
     const others = []
     smite.pointers.forEach((finger, id) => { if (id !== pointerId) others.push(finger) })
@@ -3457,6 +3499,7 @@
   }
 
   function beginSmiteMercy(doc, win, smite, cast) {
+    if (curriculumSandbox(doc)) return
     const now = win.performance?.now?.() || Date.now()
     const mercy = {
       marks: cast.marks,
@@ -5208,6 +5251,17 @@
     if (!prev) return false
     return !!progress?.levels?.[prev.id]?.clearedAt
   }
+
+  // The answer sheet is the one rebuilt tree. A play pile with several loose
+  // cards is not that tree. One child under the pile is the rebuilt tree.
+  function curriculumAnswerTree(live) {
+    if (!live || typeof live !== 'object') return null
+    if (!live.curriculumPile) return live
+    const kids = (Array.isArray(live.children) ? live.children : [])
+      .filter((child) => String(child?.name ?? '').trim())
+    if (kids.length !== 1) return null
+    return kids[0]
+  }
   // CURRICULUM_PURE_END
 
   function readCurriculumProgress() {
@@ -5280,9 +5334,89 @@
     }).join('')
   }
 
+  function curriculumCardPool(live, answer) {
+    const expected = curriculumWords(answer)
+    const found = []
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return
+      if (!node.curriculumPile) {
+        const name = String(node.name ?? '').trim()
+        if (name) found.push({ name, _uid: node._uid })
+      }
+      for (const child of node.children || []) walk(child)
+    }
+    walk(live)
+    const names = found.map((card) => card.name).sort()
+    const want = expected.slice().sort()
+    const same = names.length === want.length && names.every((name, index) => name === want[index])
+    if (!same) return expected.map((name) => ({ name }))
+    return found
+  }
+
+  function gatherCurriculumCards() {
+    const root = bridge.core?.state?.root
+    const cx = Number.isFinite(root?.x) ? root.x : 0
+    const cy = Number.isFinite(root?.y) ? root.y : 0
+    document.querySelectorAll('g.node').forEach((el) => {
+      if (el.__data__?.data?.curriculumPile) return
+      el.setAttribute('transform', `translate(${cx},${cy})`)
+    })
+  }
+
+  function mixCurriculum() {
+    const session = app.curriculum
+    if (!session || session.cleared) return false
+    const level = curriculumLevel(session.id)
+    const core = bridge.core
+    const state = core?.state
+    const utils = core?.utils
+    if (!level || !state || !utils || !window.d3) return false
+    const cards = curriculumCardPool(state.root?.data, level.tree)
+    const shuffled = shuffleCurriculumWords(cards.map((card) => card.name))
+    const byName = new Map(cards.map((card) => [card.name, card]))
+    const pile = {
+      name: '',
+      curriculumPile: true,
+      children: shuffled.map((name) => {
+        const src = byName.get(name) || { name }
+        const card = { name: src.name }
+        if (src._uid != null && String(src._uid) !== '') card._uid = src._uid
+        return card
+      }),
+    }
+    if (state.root?.data?.curriculumPile && state.root.data._uid != null) pile._uid = state.root.data._uid
+    utils.assignUids(pile)
+    try { core.editing?.closeNodeEditor?.(false, false) } catch (_error) {}
+    state.wordBank = []
+    state.history = []
+    state.redo = []
+    state.selectedUid = null
+    try { core.selection?.clearGroup?.() } catch (_error) {}
+    try { core.selection?.clearSelection?.() } catch (_error) {}
+    state.root = window.d3.hierarchy(pile)
+    utils.assignIds(state.root)
+    state.layoutMotionMs = 0
+    state.repositionMode = null
+    core.treeManager.layoutAndRender(false)
+    state.layoutMotionMs = null
+    gatherCurriculumCards()
+    state.layoutMotionMs = 420
+    state.repositionMode = 'mix'
+    core.treeManager.layoutAndRender(false)
+    state.layoutMotionMs = null
+    try { core.wordDock?.render?.() } catch (_error) {}
+    const undo = document.getElementById('undoBtn')
+    if (undo) undo.disabled = true
+    const status = document.getElementById('logyq-curriculum-status')
+    if (status && status.dataset.tone === 'wait') {
+      delete status.dataset.tone
+      status.textContent = level.title
+    }
+    return true
+  }
+
   function beginCurriculumLevel(level) {
     if (!level) return
-    const words = shuffleCurriculumWords(curriculumWords(level.tree))
     app.curriculum = {
       id: level.id,
       title: level.title,
@@ -5301,16 +5435,7 @@
       status.textContent = level.title
     }
     renderCurriculumChrome()
-    bridge.loadMap({ name: '' }, words)
-    const state = bridge.core?.state
-    if (state) {
-      state.root = null
-      state.history = []
-      state.redo = []
-      state.wordBank = words.slice()
-    }
-    try { bridge.core?.treeManager?.renderEmpty?.() } catch (_error) {}
-    try { bridge.core?.wordDock?.render?.() } catch (_error) {}
+    mixCurriculum()
     setSaveState('saved')
   }
 
@@ -5318,7 +5443,8 @@
     const session = app.curriculum
     if (!session || session.cleared) return false
     const level = curriculumLevel(session.id)
-    if (!level || !curriculumMatches(level.tree, snapshot?.tree)) return false
+    const live = curriculumAnswerTree(snapshot?.tree)
+    if (!level || !live || !curriculumMatches(level.tree, live)) return false
     session.cleared = true
     const progress = readCurriculumProgress()
     const ms = Math.max(0, Date.now() - (session.startedAt || Date.now()))
@@ -5358,6 +5484,13 @@
       beginCurriculumLevel(level)
     })
     document.getElementById('logyq-curriculum-check')?.addEventListener('click', () => checkCurriculum())
+    document.getElementById('logyq-curriculum-mix')?.addEventListener('click', () => mixCurriculum())
+    document.getElementById('mixBtn')?.addEventListener('pointerdown', (event) => {
+      if (!document.body.classList.contains('logyq-curriculum')) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      mixCurriculum()
+    }, true)
     document.getElementById('logyq-curriculum-levels')?.addEventListener('click', () => {
       openLibrary().then(() => setHomeTab('curriculum'))
     })
@@ -5371,7 +5504,10 @@
       read: readCurriculumProgress,
       begin: beginCurriculumLevel,
       check: checkCurriculum,
+      mix: mixCurriculum,
+      answerTree: curriculumAnswerTree,
     }
+    window.__logyqCurriculumMix = mixCurriculum
   }
 
   bindCurriculum()

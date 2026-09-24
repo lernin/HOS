@@ -1596,6 +1596,10 @@
     })
   }
 
+  function curriculumSandbox(doc) {
+    return !!doc.body?.classList.contains('logyq-curriculum')
+  }
+
   function onFlickUp(event, doc, win, state) {
     state.active.delete(event.pointerId)
     const candidate = state.candidates.get(event.pointerId)
@@ -1620,6 +1624,10 @@
     // branch only while a palette color is active. Left/up/down still create.
     // Thekonym mode opens the dossier on a right flick. Double-tap still renames.
     if (candidate.uid && isFlick(dx, dy, elapsed)) {
+      if (curriculumSandbox(doc)) {
+        state.lastTap = null
+        return
+      }
       const direction = flickDirection(dx, dy)
       if (paintFlickDown(direction)) {
         state.lastTap = null
@@ -1684,11 +1692,12 @@
       state.lastTap = null
       clearCardMic(state.mic)
       smiteSetArm(doc, null)
-      bridge.editSelected({ uid })
+      if (!curriculumSandbox(doc)) bridge.editSelected({ uid })
       return
     }
 
     if (paintTap()) {
+      if (curriculumSandbox(doc)) return
       bridge.paintUid(uid, preview.paint.color)
       state.lastTap = { uid, time: now }
       clearCardMic(state.mic)
@@ -2426,6 +2435,7 @@
   }
 
   function smiteTryArmSwipe(doc, win, smite, pointer) {
+    if (curriculumSandbox(doc)) return false
     if (!smite.armed || !pointer) return false
     const dx = pointer.lastX - pointer.x
     const dy = pointer.lastY - pointer.y
@@ -2474,6 +2484,7 @@
   }
 
   function smiteTryCast(doc, win, smite, pointer, pointerId) {
+    if (curriculumSandbox(doc)) return false
     if (smite.pinched || !pointer?.uid) return false
     const others = []
     smite.pointers.forEach((finger, id) => { if (id !== pointerId) others.push(finger) })
@@ -2519,6 +2530,7 @@
   }
 
   function beginSmiteMercy(doc, win, smite, cast) {
+    if (curriculumSandbox(doc)) return
     const now = win.performance?.now?.() || Date.now()
     const mercy = {
       marks: cast.marks,

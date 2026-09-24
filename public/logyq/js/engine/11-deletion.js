@@ -1,6 +1,7 @@
 /* [patch] multi-node-trash helper start */
 function deleteNodesToTrash(uids){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (!state.root || !Array.isArray(uids) || !uids.length) return;
 
   // If root is selected, delete the whole tree.
@@ -62,6 +63,7 @@ logyq.selection.clearSelection();    // keep if you still want focus cleared
 /* [patch] delete-selected-node-only helper start */
 function deleteSelectedNodeOnly(){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (!state.root) return;
   if (!state.selectedUids || state.selectedUids.size !== 1) return;
 
@@ -123,6 +125,7 @@ function deleteSelectedNodeOnly(){
 /* [patch] delete-selected-nodes-only (multi) start */
 function deleteSelectedNodesOnly(){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (!state.root || !state.selectedUids || state.selectedUids.size === 0) return;
 
   // Snapshot once so Undo restores the whole tree in one step

@@ -88,6 +88,15 @@ function __selectedUid(){
 /* Phone has no select UX. Do not follow-focus / re-center from tap, moat,
    create-relative fly, or inline edit. Desktop keyboard IJKL-style
    center-on-select stays. */
+/* Curriculum play is a rebuild sandbox. Normal maps never set this class. */
+function curriculumPlayLocked(){
+  try {
+    return typeof document !== 'undefined' && !!document.body?.classList?.contains('logyq-curriculum');
+  } catch (_e) {
+    return false;
+  }
+}
+
 function phoneNoFollowCamera(){
   try {
     if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true;

@@ -52,7 +52,7 @@
           <div class="logiq-library-body">
             <div class="logiq-map-list" id="logiq-map-list" role="tabpanel" aria-labelledby="logyq-tab-maps"></div>
             <div id="logyq-curriculum" role="tabpanel" aria-labelledby="logyq-tab-curriculum" hidden>
-              <p class="logyq-level-intro">Build each tree from the Word Bank. Sibling order can differ.</p>
+              <p class="logyq-level-intro">Drag the cards into the tree. Sibling order can differ.</p>
               <ol id="logyq-level-path"></ol>
             </div>
           </div>
@@ -60,6 +60,7 @@
       </div>
       <div id="logyq-curriculum-bar">
         <p id="logyq-curriculum-status" role="status"></p>
+        <button type="button" id="logyq-curriculum-mix">Mix</button>
         <button type="button" id="logyq-curriculum-check">Check</button>
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
@@ -246,10 +247,18 @@
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool
+      const sandbox = document.body.classList.contains('logyq-curriculum')
+      if (sandbox && (action === 'add' || action === 'add-child' || action === 'dock' || action === 'paint')) {
+        closeMobilePanel()
+        return
+      }
       if (action === 'add') commitMobileInput(false)
       if (action === 'add-child') commitMobileInput(true)
       if (action === 'undo') bridge.undo()
-      if (action === 'mix') bridge.mix(false)
+      if (action === 'mix') {
+        if (sandbox && window.__logyqCurriculumMix) window.__logyqCurriculumMix()
+        else bridge.mix(false)
+      }
       if (action === 'fit') bridge.fit()
       if (action === 'library') openLibrary()
       if (action === 'dock') bridge.cycleDock()
@@ -286,6 +295,7 @@
   }
 
   function commitMobileInput(toNode) {
+    if (document.body.classList.contains('logyq-curriculum')) return
     const legacyInput = document.getElementById('wordInput')
     const legacyAdd = document.getElementById('addWordBtn')
     if (!legacyInput || !legacyAdd) return

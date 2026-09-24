@@ -93,6 +93,7 @@ attach('elements', elements)
 
 function commitWordInput(domEvent, opts = {}){
   const { state, elements } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   const el = elements.wordInput;
   if (!el) return;
   const raw = (el.value || '').trim();
@@ -191,6 +192,7 @@ elements.addWordBtn.addEventListener('contextmenu', (e) => {
 /* ---------- Add box handler: JSON / GIQ / comma-words ---------- */
 function handleAddBox(){
   const { state, elements } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   const el = elements.wordInput;
   if (!el) return;
   const raw = (el.value || '').trim();

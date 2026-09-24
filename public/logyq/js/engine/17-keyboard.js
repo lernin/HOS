@@ -34,6 +34,18 @@ function keyDispatcher(e){
 
   if (typing && !state.tabHold) return;
 
+  // Rebuild sandbox: fit, undo, and the curriculum Mix hook. No add, rename,
+  // delete, bank, or the map Mix that builds a new connected tree.
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) {
+    if (lower === 'f' && !e.shiftKey) { e.preventDefault(); logyq.treeManager.autoFit(); return; }
+    if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }
+    if (lower === 'u') { e.preventDefault(); logyq.history.undo(); return; }
+    if (lower === 'm') { e.preventDefault(); try { window.__logyqCurriculumMix?.(); } catch (_e) {} return; }
+    if (k === 'Escape') return;
+    e.preventDefault();
+    return;
+  }
+
  // 🔑 Hotkeys
     if (lower === 'f' && !e.shiftKey){ e.preventDefault(); logyq.treeManager.autoFit(); return; }
     if (lower === 'f' && e.shiftKey) { e.preventDefault(); logyq.camera.centerOnSelected(); return; }
