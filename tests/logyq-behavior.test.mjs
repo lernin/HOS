@@ -549,7 +549,16 @@ test('addWords splits on commas/semicolons and appends to the bank or the focuse
   }
   globalThis.document = {
     createElement() {
-      return { className: '', textContent: '', draggable: false, addEventListener() {} }
+      const children = []
+      return {
+        className: '',
+        textContent: '',
+        draggable: false,
+        id: '',
+        children,
+        appendChild(node) { children.push(node); return node },
+        addEventListener() {},
+      }
     },
     querySelectorAll() { return [] },
   }

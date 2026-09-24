@@ -162,16 +162,6 @@
     return found
   }
 
-  function gatherCurriculumCards() {
-    const root = bridge.core?.state?.root
-    const cx = Number.isFinite(root?.x) ? root.x : 0
-    const cy = Number.isFinite(root?.y) ? root.y : 0
-    document.querySelectorAll('g.node').forEach((el) => {
-      if (el.__data__?.data?.curriculumPile) return
-      el.setAttribute('transform', `translate(${cx},${cy})`)
-    })
-  }
-
   function mixCurriculum() {
     const session = app.curriculum
     if (!session || session.cleared) return false
@@ -204,15 +194,22 @@
     try { core.selection?.clearSelection?.() } catch (_error) {}
     state.root = window.d3.hierarchy(pile)
     utils.assignIds(state.root)
+    state.holdLayout = true
+    state.root.descendants().forEach((node) => { node.x = 0; node.y = 0 })
     state.layoutMotionMs = 0
     state.repositionMode = null
-    core.treeManager.layoutAndRender(false)
-    state.layoutMotionMs = null
-    gatherCurriculumCards()
-    state.layoutMotionMs = 420
-    state.repositionMode = 'mix'
-    core.treeManager.layoutAndRender(false)
-    state.layoutMotionMs = null
+    try {
+      core.treeManager.layoutAndRender(false)
+      state.holdLayout = false
+      state.curriculumScatterAnchor = level.tree?.name || ''
+      state.layoutMotionMs = 420
+      state.repositionMode = 'mix'
+      core.treeManager.layoutAndRender(false)
+    } finally {
+      state.holdLayout = false
+      state.layoutMotionMs = null
+      state.curriculumScatterAnchor = null
+    }
     try { core.wordDock?.render?.() } catch (_error) {}
     const undo = document.getElementById('undoBtn')
     if (undo) undo.disabled = true

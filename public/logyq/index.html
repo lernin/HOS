@@ -25,11 +25,14 @@
   #logiq-mobile-header .logiq-save-state{display:inline-flex;width:9px;overflow:hidden;flex:0 0 9px;color:transparent;order:8}
   #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:17px;padding:0}
   #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-  #Dock,#Dock.dock-left{box-sizing:border-box;left:0;right:0;top:auto;bottom:0;width:auto;height:calc(56px + env(safe-area-inset-bottom));max-height:none;padding:8px 10px calc(8px + env(safe-area-inset-bottom));overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;border-radius:0;border-top:1px solid rgba(226,232,240,.95)}
+  #Dock,#Dock.dock-left{box-sizing:border-box;left:0;right:0;top:auto;bottom:0;width:auto;height:calc(56px + env(safe-area-inset-bottom));max-height:none;padding:8px 10px calc(8px + env(safe-area-inset-bottom));overflow:hidden;flex-wrap:nowrap;border-radius:0;border-top:1px solid rgba(226,232,240,.95)}
+  #Dock.is-empty{display:none!important}
+  #logyq-bank-chips{flex:1 1 auto;min-width:0;display:flex;flex-flow:row nowrap;gap:8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
   #logyq-warehouse{display:flex;position:fixed;z-index:30;width:44px;height:44px;left:10px;right:auto;top:auto;bottom:calc(56px + env(safe-area-inset-bottom) + 8px)}
   #logyq-bank-trash{display:none;position:fixed;z-index:30;width:44px;height:44px;right:10px;left:auto;top:auto;bottom:calc(56px + env(safe-area-inset-bottom) + 8px)}
   body.logyq-chip-drag #logyq-bank-trash,body.v2-branch-drag #logyq-bank-trash{display:flex!important}
   #logyq-warehouse.is-bank-empty{display:none!important}
+  body.logyq-chip-drag:not(.logyq-curriculum) #logyq-warehouse.is-bank-empty{display:flex!important}
 }
 @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
   #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0}
@@ -39,7 +42,8 @@
   #logyq-paint-btn{order:-1}
   #logyq-corner-cluster .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px}
   svg#canvas{left:0;right:0;top:0;width:100%}
-  #Dock,#Dock.dock-left{left:0;right:auto;top:0;bottom:0;width:calc(148px + env(safe-area-inset-left));height:auto;max-height:none;padding:10px 10px 10px calc(10px + env(safe-area-inset-left));overflow-x:hidden;overflow-y:auto;border-radius:0}
+  #Dock,#Dock.dock-left{left:0;right:auto;top:0;bottom:0;width:calc(148px + env(safe-area-inset-left));height:auto;max-height:none;padding:10px 10px 10px calc(10px + env(safe-area-inset-left));overflow:hidden;border-radius:0}
+  #logyq-bank-chips{flex-direction:column;align-items:stretch;overflow-x:hidden;overflow-y:auto;width:100%}
   #logyq-warehouse,#logyq-bank-trash{left:calc(148px + env(safe-area-inset-left) + 8px);right:auto}
   #logyq-warehouse{top:max(8px,env(safe-area-inset-top));bottom:auto}
   #logyq-bank-trash{top:auto;bottom:max(8px,env(safe-area-inset-bottom))}
