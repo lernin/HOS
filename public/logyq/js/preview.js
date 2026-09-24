@@ -356,8 +356,15 @@
       #logyq-curriculum-gate{position:fixed;inset:0;z-index:41}
       #logyq-curriculum-gate[hidden]{display:none!important}
       body.logyq-home #logyq-curriculum-gate{display:none!important}
-      .logyq-curriculum-frost{position:absolute;inset:0;background:rgba(244,241,228,.36);backdrop-filter:blur(14px) saturate(1.08);-webkit-backdrop-filter:blur(14px) saturate(1.08);transition:background .35s ease,backdrop-filter .35s ease}
-      body.logyq-curriculum-shuffling .logyq-curriculum-frost{background:rgba(244,241,228,.08);backdrop-filter:blur(1px) saturate(1.02);-webkit-backdrop-filter:blur(1px) saturate(1.02)}
+      .logyq-curriculum-frost{position:absolute;inset:0;background:rgba(244,241,228,.36);backdrop-filter:blur(14px) saturate(1.08);-webkit-backdrop-filter:blur(14px) saturate(1.08);transition:opacity .25s ease,background .25s ease}
+      body.logyq-curriculum-shuffling #logyq-curriculum-gate,
+      #logyq-curriculum-gate.is-clearing{pointer-events:none;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+      body.logyq-curriculum-shuffling .logyq-curriculum-frost,
+      #logyq-curriculum-gate.is-clearing .logyq-curriculum-frost{opacity:0;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+      body.logyq-curriculum-shuffling #logyq-curriculum-gate::before,
+      body.logyq-curriculum-shuffling #logyq-curriculum-gate::after,
+      body.logyq-curriculum-shuffling .logyq-curriculum-frost::before,
+      body.logyq-curriculum-shuffling .logyq-curriculum-frost::after{content:none;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
       #logyq-curriculum-start{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);z-index:1;border:0;border-radius:999px;background:#16a34a;color:#fff;padding:16px 36px;font:750 22px/1 system-ui,sans-serif;box-shadow:0 12px 30px rgba(22,163,74,.28);cursor:pointer}
       #logyq-curriculum-start[hidden]{display:none!important}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
@@ -575,8 +582,8 @@
       body.logyq-thekonym svg#canvas g.node[data-tk-heat="red"]>rect.logyq-tk-heat{fill:rgba(214,64,64,.18)}
       body.logyq-thekonym svg#canvas g.node[data-tk-heat="amber"]>rect.logyq-tk-heat{fill:rgba(214,148,42,.22)}
       .logyq-tk-scrim{position:fixed;inset:0;z-index:6200;display:none;align-items:center;justify-content:center;background:transparent;padding:5dvh 5vw;touch-action:none}
-      #logyq-tk-frost{position:fixed;inset:0;z-index:6150;pointer-events:none;opacity:0;background:rgba(244,241,228,.36);backdrop-filter:blur(14px) saturate(1.08);-webkit-backdrop-filter:blur(14px) saturate(1.08)}
-      body:has(#logyq-thekonym-card.is-open) #logyq-tk-frost{opacity:1}
+      #logyq-tk-frost{position:fixed;inset:0;z-index:6150;pointer-events:none;display:none;opacity:0;background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none}
+      body:has(#logyq-thekonym-card.is-open) #logyq-tk-frost{display:block;opacity:1;background:rgba(244,241,228,.36);backdrop-filter:blur(14px) saturate(1.08);-webkit-backdrop-filter:blur(14px) saturate(1.08)}
       .logyq-tk-scrim.is-open{display:flex}
       .logyq-tk-scrim.is-flipping{perspective:1400px}
       .logyq-tk-scrim.is-flipping .logyq-tk-card{transform-style:preserve-3d;backface-visibility:hidden}
@@ -5598,6 +5605,7 @@
   ]
   const CURRICULUM_VEGAS_SETTLE_AT = 7200
   const CURRICULUM_VEGAS_SETTLE_MS = 900
+  const CURRICULUM_HAZE_FADE_MS = 250
 
   const curriculumVegas = { token: 0, timers: [] }
 
@@ -5605,6 +5613,27 @@
     curriculumVegas.token += 1
     curriculumVegas.timers.forEach((id) => clearTimeout(id))
     curriculumVegas.timers = []
+  }
+
+  // Haze is only the pre-Start gate. Start fades it off as the tumble
+  // begins, then the layer leaves the stack so nothing sits on the cards.
+  function showCurriculumHaze(gate) {
+    gate._hazeToken = (gate._hazeToken || 0) + 1
+    gate.classList.remove('is-clearing')
+    gate.hidden = false
+  }
+
+  function fadeCurriculumHaze(gate) {
+    if (!gate || gate.hidden || gate.classList.contains('is-clearing')) return
+    gate.classList.add('is-clearing')
+    const token = (gate._hazeToken || 0) + 1
+    gate._hazeToken = token
+    window.setTimeout(() => {
+      if (gate._hazeToken !== token) return
+      if (app.curriculum?.phase === 'gate') return
+      gate.hidden = true
+      gate.classList.remove('is-clearing')
+    }, CURRICULUM_HAZE_FADE_MS)
   }
 
   function renderCurriculumChrome() {
@@ -5617,7 +5646,14 @@
     if (playing) document.body.dataset.curriculumPhase = phase
     else delete document.body.dataset.curriculumPhase
     const gate = document.getElementById('logyq-curriculum-gate')
-    if (gate) gate.hidden = !(playing && phase !== 'play')
+    if (gate) {
+      if (playing && phase === 'gate') showCurriculumHaze(gate)
+      else if (!playing) {
+        gate._hazeToken = (gate._hazeToken || 0) + 1
+        gate.classList.remove('is-clearing')
+        gate.hidden = true
+      } else fadeCurriculumHaze(gate)
+    }
     const start = document.getElementById('logyq-curriculum-start')
     if (start) start.hidden = phase !== 'gate'
     const status = document.getElementById('logyq-curriculum-status')
