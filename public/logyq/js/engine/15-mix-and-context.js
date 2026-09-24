@@ -17,6 +17,9 @@ function mixCard(name, extras){
     for (const key of ['label', 'text', 'title', 'value']) {
       if (typeof src[key] === 'string' && src[key].trim()) node[key] = src[key];
     }
+    // Keep the card's identity so a Mix layout glides the same cards into
+    // the new tree. Reminting _uid made every shuffle a fade/pop.
+    if (src._uid != null && String(src._uid) !== '') node._uid = src._uid;
   }
   return node;
 }

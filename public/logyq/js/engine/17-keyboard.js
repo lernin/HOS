@@ -34,10 +34,23 @@ function keyDispatcher(e){
 
   if (typing && !state.tabHold) return;
 
-  // Rebuild sandbox: fit, undo, and Mix. Curriculum Mix calls the same
-  // randomizeTree as a normal map. No add, rename, delete, or bank.
+  // Rebuild sandbox: undo, Mix, and a root-anchored overflow settle.
+  // Curriculum Mix calls the same randomizeTree as a normal map.
+  // No add, rename, delete, or bank. The Start gate swallows keys.
   if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) {
-    if (lower === 'f' && !e.shiftKey) { e.preventDefault(); logyq.treeManager.autoFit(); return; }
+    const phase = document.body?.dataset?.curriculumPhase || '';
+    if (phase === 'gate' || phase === 'shuffle') {
+      e.preventDefault();
+      if (phase === 'gate' && lower === 'm') {
+        try { window.__logyqCurriculumMix?.(); } catch (_e) {}
+      }
+      return;
+    }
+    if (lower === 'f' && !e.shiftKey) {
+      e.preventDefault();
+      logyq.treeManager.settleRootAnchored?.({ force: false });
+      return;
+    }
     if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }
     if (lower === 'u') { e.preventDefault(); logyq.history.undo(); return; }
     if (lower === 'm') { e.preventDefault(); try { window.__logyqCurriculumMix?.(); } catch (_e) {} return; }

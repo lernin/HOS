@@ -23,6 +23,10 @@ state.zoom = d3.zoom()
     // Allow wheel-zoom anywhere. Desktop: block pans that start on a
     // card (that's a drag). Phone: a card finger uses this same zoom
     // pan until a still hold latches (`__logyqHoldDragSession`).
+    if (typeof document !== "undefined" && document.body?.classList?.contains("logyq-curriculum")
+      && (document.body.classList.contains("logyq-curriculum-frozen") || document.body.classList.contains("logyq-curriculum-gate"))) {
+      return false;
+    }
     if (event.type === "wheel") return true;
     if (typeof window !== "undefined" && (window.__logyqHoldDragSession || window.__logyqSuppressZoom)) return false;
     const mobile = typeof document !== "undefined"
@@ -66,6 +70,10 @@ elements.svg.call(state.zoom);
 elements.svg.on("wheel.zoom", null); // disable default instant wheel
 elements.svg.on("wheel.smooth", function (event) {
   event.preventDefault();
+  if (document.body?.classList?.contains("logyq-curriculum")
+    && (document.body.classList.contains("logyq-curriculum-frozen") || document.body.classList.contains("logyq-curriculum-gate"))) {
+    return;
+  }
   const factor = event.deltaY < 0 ? 1.12 : 1 / 1.12;  // zoom step
   const p = d3.pointer(event);                       // zoom to cursor
   d3.select(this)
@@ -104,6 +112,10 @@ window.addEventListener('keydown', (e) => {
     // Z = zoom in, Shift+Z = zoom out
     if (e.key === 'z' || e.key === 'Z') {
       e.preventDefault();
+      if (document.body?.classList?.contains('logyq-curriculum')
+        && (document.body.classList.contains('logyq-curriculum-frozen') || document.body.classList.contains('logyq-curriculum-gate'))) {
+        return;
+      }
       zoomByStep(e.shiftKey ? -1 : +1);
     }
   }, { passive: false });
@@ -138,7 +150,13 @@ window.addEventListener('keydown', (e) => {
     state.root = null;
     this.renderEmpty();
 
-    elements.fitBtn.addEventListener('click', ()=> this.autoFit());
+    elements.fitBtn.addEventListener('click', ()=> {
+      if (document.body?.classList?.contains('logyq-curriculum')) {
+        this.settleRootAnchored({ force: false });
+        return;
+      }
+      this.autoFit();
+    });
     elements.undoBtn.addEventListener('click', logyq.history.undo);
 
     /* ========== Mix / Save / Maps ========== */
@@ -429,7 +447,13 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */
       (function(){
         /* Fit after the cards finish moving. A mid-tween bbox is a tight
-           cluster, and fitting that zooms a small pile to fill the screen. */
+           cluster, and fitting that zooms a small pile to fill the screen.
+           Curriculum keeps the camera locked through the shuffle and settles
+           itself (root pinned, zoom out only when the shape overflows). */
+        if (state.curriculumCameraLock) {
+          try { clearTimeout(window.__mixFitT); } catch (_e) {}
+          return;
+        }
         const motion = Number.isFinite(state.layoutMotionMs) ? state.layoutMotionMs : 260
         const wait = Math.max(240, motion + 70)
         const done = ()=>{ if(state.repositionMode==="mix"){ state.repositionMode=null; logyq.treeManager.autoFit(); } };
@@ -532,8 +556,8 @@ centerOnSelected(opts = {}) {
 },
 
 
-  autoFit(pad=24){
-    const { state, elements } = logyq
+  contentBBox(){
+    const { elements } = logyq
     const nb=elements.gNodes.node()?.getBBox();
     const lb=elements.gLinks.node()?.getBBox();
     const merge=(a,b)=>{ if(!a||!a.width||!a.height) return b; if(!b||!b.width||!b.height) return a;
@@ -541,10 +565,14 @@ centerOnSelected(opts = {}) {
       const r=Math.max(a.x+a.width,b.x+b.width), bt=Math.max(a.y+a.height,b.y+b.height);
       return {x, y, width:r-x, height:bt-y};
     };
-    const b=merge(nb,lb);
+    return merge(nb, lb);
+  },
+
+  usableFrame(){
+    const { elements } = logyq
     const svgNode = elements.svg.node();
     const fullW=svgNode.clientWidth, fullH=svgNode.clientHeight;
-    if(!b||!b.width||!b.height||!fullW||!fullH) return;
+    if(!fullW||!fullH) return null;
     const phone = typeof window !== 'undefined' && window.matchMedia
       && window.matchMedia('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px)),(max-width:700px)').matches;
     const shown = (id) => {
@@ -556,29 +584,90 @@ centerOnSelected(opts = {}) {
       if (rect.width < 2 || rect.height < 2) return null
       return rect
     }
-    let chromeLeft = 0
-    let chromeTop = 0
-    let chromeRight = fullW
-    let chromeBottom = fullH
+    let left = 0
+    let top = 0
+    let right = fullW
+    let bottom = fullH
     if (phone) {
       const edge = window.matchMedia('(orientation: landscape)').matches
       const header = shown('logiq-mobile-header')
-      if (header && !edge) chromeTop = Math.max(chromeTop, header.bottom)
+      if (header && !edge) top = Math.max(top, header.bottom)
     } else {
       const header = document.querySelector('body > header')
       if (header && getComputedStyle(header).display !== 'none') {
         const rect = header.getBoundingClientRect()
-        if (rect.height > 2) chromeTop = Math.max(chromeTop, rect.bottom)
+        if (rect.height > 2) top = Math.max(top, rect.bottom)
       }
     }
     const bar = shown('logyq-curriculum-bar')
-    if (bar) chromeTop = Math.max(chromeTop, bar.bottom + 8)
+    if (bar) top = Math.max(top, bar.bottom + 8)
     const dock = shown('Dock')
     if (dock) {
       const sideShelf = dock.width < fullW * 0.45 && dock.height > fullH * 0.45 && dock.left < fullW * 0.5
-      if (sideShelf) chromeLeft = Math.max(chromeLeft, dock.right + 8)
-      else if (dock.top > fullH * 0.5) chromeBottom = Math.min(chromeBottom, dock.top - 8)
+      if (sideShelf) left = Math.max(left, dock.right + 8)
+      else if (dock.top > fullH * 0.5) bottom = Math.min(bottom, dock.top - 8)
     }
+    return { svgNode, fullW, fullH, left, top, right, bottom }
+  },
+
+  // Pin the root to one screen spot in the upper band and scale so the
+  // finished shape fits about 90% of the usable viewport. Zoom out when the
+  // shape overflows. When it already fits, keep the current scale so a
+  // shallower Mix does not pull the root. Never center the bounding box.
+  settleRootAnchored(opts = {}){
+    const { state, elements } = logyq
+    const frame = this.usableFrame()
+    const b = this.contentBBox()
+    if (!frame || !b || !b.width || !b.height) return
+    const root = state.root
+    const rx = Number.isFinite(root?.x) ? root.x : 0
+    const ry = Number.isFinite(root?.y) ? root.y : 0
+    const usableW = Math.max(80, frame.right - frame.left)
+    const usableH = Math.max(80, frame.bottom - frame.top)
+    const padX = usableW * 0.05
+    const padY = usableH * 0.05
+    const innerLeft = frame.left + padX
+    const innerRight = frame.right - padX
+    const innerTop = frame.top + padY
+    const innerBottom = frame.bottom - padY
+    const anchorX = frame.left + usableW / 2
+    const anchorY = frame.top + usableH * 0.28
+    const limits = []
+    const pushLimit = (room, span) => {
+      if (span > 0.5 && room > 0) limits.push(room / span)
+    }
+    pushLimit(anchorX - innerLeft, rx - b.x)
+    pushLimit(innerRight - anchorX, b.x + b.width - rx)
+    pushLimit(anchorY - innerTop, ry - b.y)
+    pushLimit(innerBottom - anchorY, b.y + b.height - ry)
+    const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1]
+    let fitScale = limits.length ? Math.min(...limits) : 1
+    fitScale = Math.min(maxK, 1.15, Math.max(0.02, fitScale))
+    const t0 = d3.zoomTransform(frame.svgNode)
+    let scale = t0.k
+    if (!(scale > 0.02)) scale = fitScale
+    if (opts.force || fitScale < scale - 0.012) scale = fitScale
+    const tx = anchorX - scale * rx
+    const ty = anchorY - scale * ry
+    const duration = Number.isFinite(opts.duration) ? opts.duration : 780
+    const target = d3.zoomIdentity.translate(tx, ty).scale(scale)
+    if (duration <= 0) {
+      elements.svg.interrupt().call(state.zoom.transform, target)
+      return
+    }
+    elements.svg.interrupt()
+      .transition()
+      .duration(duration)
+      .ease(d3.easeCubicInOut)
+      .call(state.zoom.transform, target)
+  },
+
+  autoFit(pad=24){
+    const { state, elements } = logyq
+    const b = this.contentBBox()
+    const frame = this.usableFrame()
+    if(!b||!b.width||!b.height||!frame) return;
+    const { svgNode, left: chromeLeft, top: chromeTop, right: chromeRight, bottom: chromeBottom } = frame
     const usableW = Math.max(80, chromeRight - chromeLeft)
     const usableH = Math.max(80, chromeBottom - chromeTop)
     // About 10% padding, so the map shape sits in 90% of the usable viewport.

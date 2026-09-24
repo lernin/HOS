@@ -206,6 +206,9 @@ function centerOnSelectedSoon(delay){
 // keep the name, change the behavior to "center on selected"
 function checkMoatAndAutoFit(sourceTag = 'kbd'){
   if (phoneNoFollowCamera()) return;
+  // Curriculum owns its camera (root-anchored settle only). A zoom event
+  // from that settle must not recenter on the selected card.
+  if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-curriculum')) return;
   const { state, moat } = logyq
 
       // Don’t run the moat while the user is dragging/panning the map

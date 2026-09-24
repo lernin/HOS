@@ -1021,7 +1021,11 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
   await page.locator('[data-level="fruit"]').click()
   await page.waitForFunction(() => {
     const names = Array.from(document.querySelectorAll('g.node:not(.logyq-pile)')).map((el) => el.__data__?.data?.name)
-    return names.length === 3 && document.body.classList.contains('logyq-curriculum')
+    const start = document.getElementById('logyq-curriculum-start')
+    return names.length === 3
+      && document.body.dataset.curriculumPhase === 'gate'
+      && start && !start.hidden
+      && !!document.querySelector('.logyq-curriculum-frost')
   })
   const opened = await page.evaluate(() => {
     const hidden = (id) => getComputedStyle(document.getElementById(id)).display === 'none'
@@ -1046,6 +1050,9 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
       bankTrash: hidden('logyq-bank-trash'),
       title: document.getElementById('logyq-curriculum-status')?.textContent || '',
       playing: document.body.classList.contains('logyq-curriculum'),
+      phase: document.body.dataset.curriculumPhase || '',
+      start: document.getElementById('logyq-curriculum-start')?.hidden === false,
+      frost: getComputedStyle(document.querySelector('.logyq-curriculum-frost')).backgroundColor,
     }
   })
   assert.equal(opened.chips, 0)
@@ -1060,10 +1067,50 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
   assert.equal(opened.warehouse, true)
   assert.equal(opened.bankTrash, true)
   assert.equal(opened.playing, true)
+  assert.equal(opened.phase, 'gate')
+  assert.equal(opened.start, true)
+  assert.match(opened.frost, /244,\s*241,\s*228/)
   assert.match(opened.title, /Fruit/)
+  assert.equal(await page.locator('#logyq-curriculum-start').isVisible(), true)
+  assert.equal(await page.locator('#logyq-curriculum-check').isVisible(), false)
+  assert.equal(await page.locator('#logyq-curriculum-mix').isVisible(), false)
+  assert.equal(await page.locator('#logyq-curriculum').innerText().then((text) => text.includes('Word Bank')), false)
+
+  const gateCamera = await page.evaluate(() => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { x: t.x, y: t.y, k: t.k }
+  })
+  await page.locator('#logyq-curriculum-start').click()
+  await page.waitForTimeout(450)
+  const midShuffle = await page.evaluate((before) => {
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return {
+      phase: document.body.dataset.curriculumPhase,
+      x: t.x,
+      y: t.y,
+      k: t.k,
+      same: Math.abs(t.x - before.x) < 0.5 && Math.abs(t.y - before.y) < 0.5 && Math.abs(t.k - before.k) < 0.001,
+    }
+  }, gateCamera)
+  assert.equal(midShuffle.phase, 'shuffle')
+  assert.equal(midShuffle.same, true, `camera moved during shuffle x=${midShuffle.x} y=${midShuffle.y} k=${midShuffle.k}`)
+
+  await page.waitForFunction(() => document.body.dataset.curriculumPhase === 'play', null, { timeout: 12000 })
+  assert.equal(await page.locator('#logyq-curriculum-start').isVisible(), false)
   assert.equal(await page.locator('#logyq-curriculum-check').isVisible(), true)
   assert.equal(await page.locator('#logyq-curriculum-mix').isVisible(), true)
-  assert.equal(await page.locator('#logyq-curriculum').innerText().then((text) => text.includes('Word Bank')), false)
+  assert.equal(await page.evaluate(() => {
+    const svg = document.getElementById('canvas')
+    const before = window.d3.zoomTransform(svg).k
+    svg.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, clientX: 180, clientY: 400, bubbles: true, cancelable: true }))
+    return window.d3.zoomTransform(svg).k === before
+  }), true)
+  const rootBeforeMix = await page.evaluate(() => {
+    const root = Array.from(document.querySelectorAll('g.node')).find((el) => !el.__data__?.parent)
+    const box = root.getBoundingClientRect()
+    const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    return { y: box.top + box.height / 2, k: t.k }
+  })
 
   const beforeKey = await page.evaluate(() => window.LOGYQPreview.curriculum.structureKey(window.LOGYQBridge.snapshot().tree))
   const mixing = await page.evaluate(() => {
@@ -1105,8 +1152,14 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
     const k = window.d3.zoomTransform(document.getElementById('canvas')).k
     const fits = left >= 4 && right <= vw - 4 && top >= usableTop + 2 && bottom <= vh - 8
     const overview = wide <= vw * 0.92 && tall <= (vh - usableTop) * 0.92
-    return fits && overview && k <= 1.2 && k >= 0.2
-  }, null, { timeout: 8000 })
+    return fits && overview && k <= 1.2 && k >= 0.2 && document.body.dataset.curriculumPhase === 'play'
+  }, null, { timeout: 12000 })
+  const rootAfterMix = await page.evaluate(() => {
+    const root = Array.from(document.querySelectorAll('g.node')).find((el) => !el.__data__?.parent)
+    const box = root.getBoundingClientRect()
+    return box.top + box.height / 2
+  })
+  assert.ok(Math.abs(rootAfterMix - rootBeforeMix.y) < 14, `root bobbed from ${rootBeforeMix.y} to ${rootAfterMix}`)
   assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.length), 0)
   const fruitUid = await page.evaluate(() => document.querySelector('g.node:not(.logyq-pile)')?.__data__?.data?._uid)
   const beforeNodes = await page.evaluate(() => document.querySelectorAll('g.node').length)
@@ -1179,10 +1232,9 @@ test('LOGYQ curriculum above-root reparent uses the normal map gesture', async (
   await waitForBoot(page)
   await page.locator('#logyq-tab-curriculum').click()
   await page.locator('[data-level="fruit"]').click()
-  await page.waitForFunction(() => {
-    const names = Array.from(document.querySelectorAll('g.node')).map((el) => el.__data__?.data?.name)
-    return names.length === 3 && document.body.classList.contains('logyq-curriculum') && !document.querySelector('g.node.logyq-pile')
-  })
+  await page.waitForFunction(() => document.body.dataset.curriculumPhase === 'gate' && document.querySelectorAll('g.node').length === 3)
+  await page.locator('#logyq-curriculum-start').click()
+  await page.waitForFunction(() => document.body.dataset.curriculumPhase === 'play', null, { timeout: 12000 })
   await page.waitForFunction(() => {
     const cards = Array.from(document.querySelectorAll('g.node'))
     const boxes = cards.map((el) => el.getBoundingClientRect()).filter((box) => box.width > 8)

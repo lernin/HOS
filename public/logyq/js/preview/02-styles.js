@@ -50,6 +50,15 @@
       #logyq-curriculum-status[data-tone="wait"]{color:#64748b}
       #logyq-curriculum-check,#logyq-curriculum-levels,#logyq-curriculum-mix{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
       #logyq-curriculum-levels,#logyq-curriculum-mix{background:#fff;color:#14532d;border:1px solid #bbf7d0}
+      body.logyq-curriculum-gate:not(.logyq-curriculum-shuffling) #logyq-curriculum-mix,
+      body.logyq-curriculum-gate:not(.logyq-curriculum-shuffling) #logyq-curriculum-check{display:none}
+      #logyq-curriculum-gate{position:fixed;inset:0;z-index:41}
+      #logyq-curriculum-gate[hidden]{display:none!important}
+      body.logyq-home #logyq-curriculum-gate{display:none!important}
+      .logyq-curriculum-frost{position:absolute;inset:0;background:rgba(244,241,228,.36);backdrop-filter:blur(14px) saturate(1.08);-webkit-backdrop-filter:blur(14px) saturate(1.08);transition:background .35s ease,backdrop-filter .35s ease}
+      body.logyq-curriculum-shuffling .logyq-curriculum-frost{background:rgba(244,241,228,.08);backdrop-filter:blur(1px) saturate(1.02);-webkit-backdrop-filter:blur(1px) saturate(1.02)}
+      #logyq-curriculum-start{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);z-index:1;border:0;border-radius:999px;background:#16a34a;color:#fff;padding:16px 36px;font:750 22px/1 system-ui,sans-serif;box-shadow:0 12px 30px rgba(22,163,74,.28);cursor:pointer}
+      #logyq-curriculum-start[hidden]{display:none!important}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
       .logiq-primary{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:9px 13px;font-weight:750;cursor:pointer}
       #logyq-new-folder{background:#fff;color:#14532d;border:1px solid #86efac}

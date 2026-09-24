@@ -1233,6 +1233,7 @@
   }
 
   function edgePan(doc, win, x, y) {
+    if (curriculumViewLocked(doc)) return false
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3) return false
     const view = viewRect(doc, win)
@@ -1546,6 +1547,9 @@
   }
 
   function applyFingerPan(doc, win, pan, x, y) {
+    const locked = doc?.body?.classList?.contains('logyq-curriculum')
+      && (doc.body.classList.contains('logyq-curriculum-frozen') || doc.body.classList.contains('logyq-curriculum-gate'))
+    if (locked) return
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3 || !pan) return
     const dx = x - pan.lastX
@@ -1598,6 +1602,14 @@
 
   function curriculumSandbox(doc) {
     return !!doc.body?.classList.contains('logyq-curriculum')
+  }
+
+  // After the Start settle, and during the haze gate, the board stays put.
+  // Drag reparent does not use these pan/zoom paths.
+  function curriculumViewLocked(doc) {
+    const body = doc?.body
+    if (!body?.classList?.contains('logyq-curriculum')) return false
+    return body.classList.contains('logyq-curriculum-frozen') || body.classList.contains('logyq-curriculum-gate')
   }
 
   function onFlickUp(event, doc, win, state) {
@@ -2234,6 +2246,7 @@
   }
 
   function smiteApplyPinch(doc, win, smite) {
+    if (curriculumViewLocked(doc)) return
     const fingers = Array.from(smite.pointers.values())
     if (fingers.length < 2 || !win.d3) return
     const a = fingers[0]
