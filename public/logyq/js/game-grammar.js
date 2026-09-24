@@ -1,30 +1,50 @@
-/* Fixed-orientation card grammar. Each paint defines the colors at its four
- * contacts; neighboring children touch on their shared vertical edge. */
+/* LOGYQ fixed-orientation visual-card grammar.
+ * Region numbers are logical identities. Display colors are a renderer concern. */
 (() => {
   'use strict'
-  const faces = Object.freeze({
-    orange: { top: 'orange', bottom: 'orange', left: 'orange', right: 'orange' },
-    blue: { top: 'blue', bottom: 'blue', left: 'blue', right: 'blue' },
-    'orange-blue': { top: 'orange', bottom: 'blue', left: 'orange-blue', right: 'orange-blue' },
-    'pink-blue-down': { top: 'blue', bottom: 'pink', left: 'pink', right: 'blue' },
-    'blue-green-up': { top: 'blue', bottom: 'green', left: 'blue', right: 'green' },
-  })
 
-  function edge(paint, side) { return faces[paint]?.[side] || null }
-  function touchesMatch(a, sideA, b, sideB) {
-    const first = edge(a?.paint, sideA)
-    return !!first && first === edge(b?.paint, sideB)
+  const SHAPES = Object.freeze(['whole', 'horizontal', 'diagonal_left', 'diagonal_right'])
+
+  function validCard(card) {
+    if (!card || !SHAPES.includes(card.shape) || !Array.isArray(card.regions)) return false
+    const needed = card.shape === 'whole' ? 1 : 2
+    return card.regions.length === needed && card.regions.every((value) => Number.isInteger(value) && value >= 1 && value <= 4)
   }
+
+  function edge(card, side) {
+    if (!validCard(card)) return null
+    const [a, b] = card.regions
+    if (card.shape === 'whole') return String(a)
+    if (side === 'top') return String(a)
+    if (side === 'bottom') return String(b)
+    if (card.shape === 'horizontal') return side === 'left' || side === 'right' ? `${a}|${b}` : null
+    if (card.shape === 'diagonal_left') {
+      if (side === 'left') return String(b)
+      if (side === 'right') return String(a)
+    }
+    if (card.shape === 'diagonal_right') {
+      if (side === 'left') return String(a)
+      if (side === 'right') return String(b)
+    }
+    return null
+  }
+
+  function touchesMatch(a, sideA, b, sideB) {
+    const first = edge(a, sideA)
+    return !!first && first === edge(b, sideB)
+  }
+
   function contacts(tree) {
-    if (!tree || !edge(tree.paint, 'top')) return false
+    if (!tree || !validCard(tree)) return false
     const children = Array.isArray(tree.children) ? tree.children : []
     return children.every((child, i) =>
       touchesMatch(tree, 'bottom', child, 'top') &&
       (i === 0 || touchesMatch(children[i - 1], 'right', child, 'left')) &&
       contacts(child))
   }
-  function complete(tree, ids, rootId) {
-    if (!tree || tree.gameId !== rootId || !Array.isArray(ids) || !contacts(tree)) return false
+
+  function complete(tree, ids) {
+    if (!tree || !Array.isArray(ids) || !contacts(tree)) return false
     const found = []
     const visit = (node) => {
       found.push(node.gameId)
@@ -34,8 +54,9 @@
     return found.length === ids.length && new Set(found).size === ids.length &&
       ids.every((id) => found.includes(id))
   }
+
   function clone(node) {
-    return { ...node, children: (node.children || []).map(clone) }
+    return { ...node, regions: Array.isArray(node?.regions) ? node.regions.slice() : node?.regions, children: (node.children || []).map(clone) }
   }
   function isUid(node, uid) {
     return uid != null && (node?._uid === uid || node?.gameId === uid)
@@ -66,19 +87,29 @@
     }
     return null
   }
-  // Destination contacts are the only move test. The starter arrangement may
-  // have a clash elsewhere; the moved card must fit wherever it is dropped.
-  function canDrop(tree, movingUid, drop, rootId) {
-    if (!tree || !drop || isUid(tree, movingUid)) return false
-    if (drop.type !== 'gap' && drop.type !== 'node') return false
+
+  // Only physical destination contacts decide whether a move is allowed.
+  function canDrop(tree, movingUid, drop) {
+    if (!tree || !drop || !movingUid) return false
+    if (!['gap', 'node', 'rootAbove'].includes(drop.type)) return false
     const copy = clone(tree)
     const moving = find(copy, movingUid)
+    if (!moving) return false
+
+    if (drop.type === 'rootAbove') {
+      if (isUid(copy, movingUid)) return false
+      detach(copy, movingUid)
+      moving.children ||= []
+      moving.children.push(copy)
+      return contacts(moving)
+    }
+
+    if (isUid(copy, movingUid)) return false
     const targetUid = drop.type === 'node' ? drop.targetUid : drop.parentUid
     const target = find(copy, targetUid)
-    if (!moving || !target || isUid(moving, targetUid)) return false
+    if (!target || isUid(moving, targetUid)) return false
+
     if (find(moving, targetUid)) {
-      // LOGYQ already supports moving a parent under one of its descendants:
-      // its children take its old place, then the moved card becomes a child.
       if (drop.type !== 'node') return false
       const oldParent = parentOf(copy, movingUid)
       if (!oldParent) return false
@@ -88,8 +119,9 @@
       const promoted = find(copy, targetUid)
       promoted.children ||= []
       promoted.children.push(moving)
-      return copy.gameId === rootId && contacts(copy)
+      return contacts(copy)
     }
+
     detach(copy, movingUid)
     target.children ||= []
     let index = target.children.length
@@ -101,10 +133,10 @@
     }
     target.children.splice(index, 0, moving)
     const siblings = target.children
-    return copy.gameId === rootId &&
-      touchesMatch(target, 'bottom', moving, 'top') &&
+    return touchesMatch(target, 'bottom', moving, 'top') &&
       (index === 0 || touchesMatch(siblings[index - 1], 'right', moving, 'left')) &&
       (index === siblings.length - 1 || touchesMatch(moving, 'right', siblings[index + 1], 'left'))
   }
-  window.LOGYQGameGrammar = Object.freeze({ edge, contacts, complete, canDrop })
+
+  window.LOGYQGameGrammar = Object.freeze({ SHAPES, validCard, edge, touchesMatch, contacts, complete, canDrop })
 })()
