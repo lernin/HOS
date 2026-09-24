@@ -49,6 +49,11 @@
   }
 
   function queueAutosave(snapshot) {
+    if (app.game) {
+      setSaveState('saved')
+      maybeGameClear(snapshot)
+      return
+    }
     if (app.curriculum) {
       setSaveState('saved')
       maybeCurriculumClear(snapshot)
@@ -102,7 +107,7 @@
   }
 
   async function savePending() {
-    if (app.curriculum) {
+    if (app.curriculum || app.game) {
       if (localStorage.getItem(PENDING_KEY)) {
         clearTimeout(app.timer)
         app.timer = setTimeout(savePending, 850)
@@ -275,6 +280,11 @@
 
   async function openLibrary() {
     closeMobilePanel()
+    if (app.game) {
+      showLibrary()
+      setHomeTab('game')
+      return
+    }
     abandonBlankDraft()
     showLibrary()
     if (!libraryTask) {
@@ -553,6 +563,7 @@
   }
 
   function enterEditor(row, { edit = false, baseline = true } = {}) {
+    leaveGamePlay()
     leaveCurriculumPlay()
     const tree = decodeMapTree(row.tree)
     const wordBank = Array.isArray(row.word_bank) ? row.word_bank : (row.wordBank || [])
@@ -591,6 +602,7 @@
   }
 
   function createMap({ edit = false } = {}) {
+    leaveGamePlay()
     leaveCurriculumPlay()
     const folderIndex = readFolderIndex()
     app.draftFolderId = folderIndex.folders.some((folder) => folder.id === app.libraryFolderId) ? app.libraryFolderId : null
@@ -771,7 +783,7 @@
   }
 
   function applyRemoteRow(row, options = {}) {
-    if (!row || app.curriculum) return
+    if (!row || app.curriculum || app.game) return
     app.applyingRemote = true
     app.heldRemote = null
     app.editClaim = null
@@ -854,7 +866,7 @@
   }
 
   function considerRemoteRow(row) {
-    if (!row || !app.hasOpenMap || app.curriculum || app.applyingRemote || app.saving) return
+    if (!row || !app.hasOpenMap || app.curriculum || app.game || app.applyingRemote || app.saving) return
     if (row.id && app.current?.id && row.id !== app.current.id) return
     const remoteBank = Array.isArray(row.word_bank) ? row.word_bank : []
     const remoteKey = contentKey(decodeMapTree(row.tree), remoteBank)
@@ -930,7 +942,7 @@
   let pullFlight = null
 
   async function pullRemoteNow() {
-    if (app.curriculum || !app.hasOpenMap || !app.current?.id || app.saving || app.applyingRemote) return
+    if (app.curriculum || app.game || !app.hasOpenMap || !app.current?.id || app.saving || app.applyingRemote) return
     if (document.body.classList.contains('v2-branch-drag') || document.body.classList.contains('dragging-mode')) return
     const gesture = preview.gestures?.session
     if (gesture?.flick?.active?.size || gesture?.hold?.race || gesture?.hold?.pan) return
@@ -1014,4 +1026,3 @@
     await refreshLibrary()
     app.booted = true
   }
-
