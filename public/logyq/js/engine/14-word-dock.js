@@ -121,19 +121,23 @@
       const onShelf = !hidden.has(name)
       const button = document.createElement('button')
       button.type = 'button'
-      button.className = 'logyq-warehouse-term' + (onShelf ? ' is-on' : '')
+      button.className = 'chip logyq-warehouse-term' + (onShelf ? ' is-on' : '')
       button.setAttribute('aria-pressed', onShelf ? 'true' : 'false')
       button.dataset.word = name
-      const mark = document.createElement('span')
-      mark.className = 'logyq-warehouse-mark'
-      mark.setAttribute('aria-hidden', 'true')
-      const label = document.createElement('span')
-      label.className = 'logyq-warehouse-word'
-      label.textContent = name
-      button.append(mark, label)
+      button.textContent = name
       button.addEventListener('click', () => toggleWarehouseWord(name))
       list.appendChild(button)
     })
+  }
+
+  // Hide the corner warehouse only when the bank has zero words.
+  // Warehoused-only words still count, so the catalog stays reachable.
+  function syncShelfChrome(){
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return
+    const warehouse = document.getElementById('logyq-warehouse')
+    if (!warehouse) return
+    const count = (logyq.state.wordBank || []).map((word) => String(word || '').trim()).filter(Boolean).length
+    warehouse.classList.toggle('is-bank-empty', count === 0)
   }
 
   function openWarehouseSheet(){
@@ -281,6 +285,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
       list.appendChild(allButton);
     }
     paintChipSelection();
+    syncShelfChrome();
   }
 
   function addWords(raw, to){

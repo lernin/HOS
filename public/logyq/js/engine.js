@@ -3602,6 +3602,16 @@ function sendNodeToWordBank_abandon(h){
 
 
 /* ======================= DRAG MANAGER (rewritten) ======================= */
+// Phone shelf trash. Hidden until a chip or map drag; desktop keeps #trash.
+function cornerTrashEl() {
+  try {
+    if (!document.body?.classList?.contains('logyq-mobile-v162')) return null
+    return document.getElementById('logyq-bank-trash')
+  } catch (_error) {
+    return null
+  }
+}
+
 const dragManager = {
   // Highlight subtree (or just this node in solo mode)
   markForDrag(d){
@@ -3645,6 +3655,7 @@ elements.gLinks.selectAll("path.link").classed("is-sub-link is-parent-link", fal
    
     elements.dragMiniG.style("opacity",0).style("display","none");
     elements.trash.classList.remove("near","over","open","wiggle");
+    cornerTrashEl()?.classList.remove("near","over","open","wiggle","is-over");
     elements.caretDot.style("opacity",0);
 
     state.dragState.trashZone = "far";
@@ -3661,10 +3672,17 @@ elements.gLinks.selectAll("path.link").classed("is-sub-link is-parent-link", fal
 
 
 
-  // Where is the pointer relative to the trash
+  // Where is the pointer relative to the trash.
+  // Phone uses the corner can while a drag is showing it. Desktop keeps #trash.
   zone(cx,cy){
     const { state } = logyq
-    const r = document.getElementById("trash").getBoundingClientRect();
+    const corner = cornerTrashEl()
+    let trashEl = document.getElementById("trash")
+    if (corner) {
+      const style = getComputedStyle(corner)
+      if (style.display !== 'none' && style.visibility !== 'hidden') trashEl = corner
+    }
+    const r = trashEl.getBoundingClientRect();
     const expand=(R,p)=>({left:R.left-p,right:R.right+p,top:R.top-p,bottom:R.bottom+p});
     const inside=(R,x,y)=>x>=R.left&&x<=R.right&&y>=R.top&&y<=R.bottom;
     const nearR=expand(r, 100), overR=expand(r, 16);
@@ -3811,6 +3829,14 @@ elements.dragMiniG.attr("transform",
     elements.trash.classList.toggle('wiggle', (isNear || isOver));
     elements.trash.classList.toggle('near', isNear);
     elements.trash.classList.toggle('over', isOver);
+    const corner = cornerTrashEl()
+    if (corner) {
+      corner.classList.toggle('open', (isNear || isOver));
+      corner.classList.toggle('wiggle', (isNear || isOver));
+      corner.classList.toggle('near', isNear);
+      corner.classList.toggle('over', isOver);
+      corner.classList.toggle('is-over', (isNear || isOver));
+    }
 
     if (isNear || isOver){
       elements.svg.classed('delete-intent', true);
@@ -4498,19 +4524,23 @@ attach('drag', dragManager)
       const onShelf = !hidden.has(name)
       const button = document.createElement('button')
       button.type = 'button'
-      button.className = 'logyq-warehouse-term' + (onShelf ? ' is-on' : '')
+      button.className = 'chip logyq-warehouse-term' + (onShelf ? ' is-on' : '')
       button.setAttribute('aria-pressed', onShelf ? 'true' : 'false')
       button.dataset.word = name
-      const mark = document.createElement('span')
-      mark.className = 'logyq-warehouse-mark'
-      mark.setAttribute('aria-hidden', 'true')
-      const label = document.createElement('span')
-      label.className = 'logyq-warehouse-word'
-      label.textContent = name
-      button.append(mark, label)
+      button.textContent = name
       button.addEventListener('click', () => toggleWarehouseWord(name))
       list.appendChild(button)
     })
+  }
+
+  // Hide the corner warehouse only when the bank has zero words.
+  // Warehoused-only words still count, so the catalog stays reachable.
+  function syncShelfChrome(){
+    if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return
+    const warehouse = document.getElementById('logyq-warehouse')
+    if (!warehouse) return
+    const count = (logyq.state.wordBank || []).map((word) => String(word || '').trim()).filter(Boolean).length
+    warehouse.classList.toggle('is-bank-empty', count === 0)
   }
 
   function openWarehouseSheet(){
@@ -4658,6 +4688,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
       list.appendChild(allButton);
     }
     paintChipSelection();
+    syncShelfChrome();
   }
 
   function addWords(raw, to){

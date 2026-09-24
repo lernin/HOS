@@ -25,20 +25,22 @@
   #logiq-mobile-header .logiq-save-state{display:inline-flex;width:9px;overflow:hidden;flex:0 0 9px;color:transparent;order:8}
   #logiq-mobile-header .logiq-icon-btn{width:36px;height:36px;flex:0 0 36px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:17px;padding:0}
   #logiq-mobile-header .logiq-icon-btn svg{width:19px;height:19px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-  #Dock,#Dock.dock-left{left:8px;right:8px;top:auto;bottom:max(8px,env(safe-area-inset-bottom));width:auto;height:56px;max-height:56px;overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap}
-  #logyq-warehouse,#logyq-bank-trash{display:flex;position:fixed;z-index:30;width:44px;height:44px;bottom:calc(max(8px,env(safe-area-inset-bottom)) + 62px)}
-  #logyq-warehouse{left:10px}#logyq-bank-trash{right:10px}
+  #Dock,#Dock.dock-left{box-sizing:border-box;left:0;right:0;top:auto;bottom:0;width:auto;height:calc(56px + env(safe-area-inset-bottom));max-height:none;padding:8px 10px calc(8px + env(safe-area-inset-bottom));overflow-x:auto;overflow-y:hidden;flex-wrap:nowrap;border-radius:0;border-top:1px solid rgba(226,232,240,.95)}
+  #logyq-warehouse{display:flex;position:fixed;z-index:30;width:44px;height:44px;left:10px;right:auto;top:auto;bottom:calc(56px + env(safe-area-inset-bottom) + 8px)}
+  #logyq-bank-trash{display:none;position:fixed;z-index:30;width:44px;height:44px;right:10px;left:auto;top:auto;bottom:calc(56px + env(safe-area-inset-bottom) + 8px)}
+  body.logyq-chip-drag #logyq-bank-trash,body.v2-branch-drag #logyq-bank-trash{display:flex!important}
+  #logyq-warehouse.is-bank-empty{display:none!important}
 }
 @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
   #logiq-mobile-header{display:contents;position:static;height:auto;background:none;border:0;box-shadow:none;padding:0}
-  #logyq-map-title{top:max(8px,env(safe-area-inset-top));left:max(12px,env(safe-area-inset-left))}
+  #logyq-map-title{top:max(8px,env(safe-area-inset-top));left:calc(148px + env(safe-area-inset-left) + 12px)}
   #logyq-corner-cluster{display:flex;flex-direction:column;align-items:center;gap:6px;position:fixed;z-index:3000;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));left:auto;width:max-content;height:auto;padding:6px;border-radius:18px;background:rgba(255,255,255,.94);border:1px solid rgba(226,232,240,.9);box-shadow:0 10px 28px rgba(15,23,42,.16)}
   #logyq-corner-cluster img,#logyq-select-strip,#logyq-home-btn,#logyq-corner-cluster .logiq-save-state{display:none}
   #logyq-paint-btn{order:-1}
   #logyq-corner-cluster .logiq-icon-btn{width:44px;height:44px;flex:0 0 44px}
   svg#canvas{left:0;right:0;top:0;width:100%}
-  #Dock,#Dock.dock-left{left:max(8px,env(safe-area-inset-left));right:auto;top:max(8px,env(safe-area-inset-top));bottom:max(8px,env(safe-area-inset-bottom));width:148px;height:auto;max-height:none;overflow-x:hidden;overflow-y:auto}
-  #logyq-warehouse,#logyq-bank-trash{left:calc(max(8px,env(safe-area-inset-left)) + 164px);right:auto}
+  #Dock,#Dock.dock-left{left:0;right:auto;top:0;bottom:0;width:calc(148px + env(safe-area-inset-left));height:auto;max-height:none;padding:10px 10px 10px calc(10px + env(safe-area-inset-left));overflow-x:hidden;overflow-y:auto;border-radius:0}
+  #logyq-warehouse,#logyq-bank-trash{left:calc(148px + env(safe-area-inset-left) + 8px);right:auto}
   #logyq-warehouse{top:max(8px,env(safe-area-inset-top));bottom:auto}
   #logyq-bank-trash{top:auto;bottom:max(8px,env(safe-area-inset-bottom))}
 }
