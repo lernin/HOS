@@ -1163,6 +1163,179 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
   await context.close()
 })
 
+test('LOGYQ curriculum above-root reparent uses the normal map gesture', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.locator('#logyq-tab-curriculum').click()
+  await page.locator('[data-level="fruit"]').click()
+  await page.waitForFunction(() => {
+    const names = Array.from(document.querySelectorAll('g.node')).map((el) => el.__data__?.data?.name)
+    return names.length === 3 && document.body.classList.contains('logyq-curriculum') && !document.querySelector('g.node.logyq-pile')
+  })
+  await page.waitForFunction(() => {
+    const cards = Array.from(document.querySelectorAll('g.node'))
+    const boxes = cards.map((el) => el.getBoundingClientRect()).filter((box) => box.width > 8)
+    if (boxes.length < 3) return false
+    const left = Math.min(...boxes.map((box) => box.left))
+    const right = Math.max(...boxes.map((box) => box.right))
+    const top = Math.min(...boxes.map((box) => box.top))
+    const bottom = Math.max(...boxes.map((box) => box.bottom))
+    const bar = document.getElementById('logyq-curriculum-bar')?.getBoundingClientRect()
+    const usableTop = bar && bar.height > 2 ? bar.bottom : 0
+    const fits = left >= 4 && right <= window.innerWidth - 4 && top >= usableTop + 2 && bottom <= window.innerHeight - 8
+    const k = window.d3.zoomTransform(document.getElementById('canvas')).k
+    return fits && k <= 1.2 && k >= 0.2
+  }, null, { timeout: 8000 })
+
+  async function touch(type, x, y, pointerId = 61) {
+    await page.evaluate(({ type, x, y, pointerId }) => {
+      document.getElementById('canvas').dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+      }))
+    }, { type, x, y, pointerId })
+  }
+
+  const plan = await page.evaluate(() => {
+    const nodes = Array.from(document.querySelectorAll('svg#canvas g.node'))
+    const root = nodes.find((el) => !el.__data__?.parent)
+    const moving = nodes.find((el) => el.__data__?.parent)
+    const rootBox = root.getBoundingClientRect()
+    const moveBox = moving.getBoundingClientRect()
+    const lift = window.LOGYQPreview.gestures.liftPx()
+    return {
+      rootName: root.__data__.data.name,
+      movingName: moving.__data__.data.name,
+      movingUid: moving.__data__.data._uid,
+      rootUid: root.__data__.data._uid,
+      from: { x: moveBox.left + moveBox.width / 2, y: moveBox.top + moveBox.height / 2 },
+      above: { x: rootBox.left + rootBox.width / 2, y: rootBox.top - 24 + lift },
+      onRoot: { x: rootBox.left + rootBox.width / 2, y: rootBox.top + rootBox.height / 2 + lift },
+      count: nodes.length,
+    }
+  })
+
+  await touch('pointerdown', plan.from.x, plan.from.y)
+  await page.waitForTimeout(320)
+  assert.equal(await page.evaluate(() => document.body.classList.contains('v2-branch-drag')), true)
+
+  await touch('pointermove', plan.onRoot.x, plan.onRoot.y)
+  await page.waitForTimeout(120)
+  const onCard = await page.evaluate(() => {
+    const drop = window.LOGYQBridge.core.state.dragState.drop
+    return { type: drop?.type || null, target: drop?.targetUid || null }
+  })
+  assert.equal(onCard.type, 'node', 'ghost centered on the root card still attaches as a child')
+  assert.equal(onCard.target, plan.rootUid)
+
+  await touch('pointermove', plan.above.x, plan.above.y)
+  await page.waitForTimeout(120)
+  const above = await page.evaluate(() => {
+    const drop = window.LOGYQBridge.core.state.dragState.drop
+    const caret = document.querySelector('svg#canvas .caret-dot')
+    return { type: drop?.type || null, caret: caret ? Number(getComputedStyle(caret).opacity) : 0 }
+  })
+  assert.equal(above.type, 'rootAbove')
+  assert.ok(above.caret > 0.5, 'above-root targeting still shows the caret')
+
+  await touch('pointerup', plan.above.x, plan.above.y)
+  await page.waitForTimeout(500)
+  const after = await page.evaluate(() => {
+    const root = window.LOGYQBridge.snapshot().tree
+    const hidden = (id) => getComputedStyle(document.getElementById(id)).display === 'none'
+    return {
+      root: root.name,
+      childNames: (root.children || []).map((child) => child.name),
+      count: document.querySelectorAll('g.node').length,
+      dock: hidden('Dock'),
+      trash: hidden('trash'),
+      warehouse: hidden('logyq-warehouse'),
+      bank: window.LOGYQBridge.core.state.wordBank.length,
+      pile: !!root.curriculumPile,
+    }
+  })
+  assert.equal(after.root, plan.movingName)
+  assert.ok(after.childNames.includes(plan.rootName), `old root should sit under ${plan.movingName}, children=${after.childNames.join(',')}`)
+  assert.equal(after.count, plan.count)
+  assert.equal(after.dock, true)
+  assert.equal(after.trash, true)
+  assert.equal(after.warehouse, true)
+  assert.equal(after.bank, 0)
+  assert.equal(after.pile, false)
+
+  await page.evaluate((uid) => window.LOGYQBridge.createRelative('down', uid), plan.movingUid)
+  await page.evaluate((uid) => window.LOGYQBridge.editSelected({ uid }), plan.movingUid)
+  assert.equal(await page.evaluate(() => document.querySelectorAll('g.node').length), plan.count)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
+
+  await page.keyboard.press('u')
+  await page.waitForTimeout(400)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.name), plan.rootName)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ normal map above-root reparent still promotes the dragged card', async () => {
+  const context = await newContext({ viewport: { width: 1280, height: 800 } })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home', 'logyq-curriculum')
+    const library = document.getElementById('logiq-library')
+    library?.classList.remove('is-open')
+    library?.setAttribute('aria-hidden', 'true')
+    const tree = { name: 'maple', children: [{ name: 'leaf' }, { name: 'twig' }] }
+    window.LOGYQBridge.core.utils.assignUids(tree)
+    window.LOGYQBridge.loadMap(tree, [])
+    window.LOGYQBridge.fit()
+  })
+  await page.waitForFunction(() => document.querySelectorAll('g.node').length === 3)
+  await page.waitForTimeout(500)
+  const boxes = await page.evaluate(() => {
+    const byName = (name) => Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === name)
+    const box = (el) => {
+      const rect = el.getBoundingClientRect()
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2, top: rect.top }
+    }
+    return { leaf: box(byName('leaf')), maple: box(byName('maple')) }
+  })
+  await page.mouse.move(boxes.leaf.x, boxes.leaf.y)
+  await page.mouse.down()
+  await page.mouse.move(boxes.leaf.x + 14, boxes.leaf.y - 14, { steps: 4 })
+  await page.mouse.move(boxes.maple.x, boxes.maple.top - 48, { steps: 12 })
+  await page.waitForTimeout(120)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.dragState.drop?.type), 'rootAbove')
+  await page.mouse.up()
+  await page.waitForTimeout(450)
+  const tree = await page.evaluate(() => window.LOGYQBridge.snapshot().tree)
+  assert.equal(tree.name, 'leaf')
+  assert.ok((tree.children || []).some((child) => child.name === 'maple'))
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-curriculum')), false)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
 test('LOGYQ missing Lab PIN asks to connect and does not claim the library is empty', async () => {
   const capture = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, pin: null })

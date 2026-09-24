@@ -840,6 +840,9 @@ test('drag drop handling keeps group, solo, then subtree order', () => {
   assert.ok(group > 0 && solo > group && subtree > solo)
   assert.match(source, /group \+ rootAbove not supported yet/)
   assert.match(source, /Never allow rootAbove while dragging the current root/)
+  assert.match(source, /Above-root reparent is a Curriculum attach/)
+  assert.doesNotMatch(source, /curriculumPlayLocked\(\) && drop && drop\.type === 'rootAbove'/)
+  assert.match(source, /shouldDelete && typeof curriculumPlayLocked === 'function' && curriculumPlayLocked\(\)/)
 })
 
 test('dead getSelectionUids helper is gone; bridge getSelectedUids is the live read', () => {

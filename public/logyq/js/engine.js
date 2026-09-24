@@ -3975,10 +3975,9 @@ state.dragState.drop = null;
     }
 
     // 2) Valid drop?
+    // Above-root reparent is a Curriculum attach: the dragged card becomes
+    // the new root, same as on a normal map. Trash stays blocked above.
     const drop = state.dragState.drop;
-    if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked() && drop && drop.type === 'rootAbove') {
-      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
-    }
     if (!drop){ dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
 
     /* ========= Helpers used below ========= */
