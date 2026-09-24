@@ -1,26 +1,54 @@
-  // A small, fixed-orientation fitting puzzle on the real LOGYQ canvas.
-  // Paint is visible on the node; gameId and paint carry the contact rules.
-  const GAME_KEY = 'logyq_game_progress_v1'
+  // Fixed-orientation fitting puzzles on the real LOGYQ canvas.
+  // shape + regions are logical data; the palette below is display-only.
+  const GAME_KEY = 'logyq_game_progress_v2'
   const gameGrammar = window.LOGYQGameGrammar
-  const gameLevels = [
-    {
-      id: 'chain', title: '1 · One child at a time', hint: 'Move the blue card beneath the two-color card.',
-      ids: ['root', 'middle', 'leaf'],
-      tree: { name: '', gameId: 'root', paint: 'orange', children: [
-        { name: '', gameId: 'leaf', paint: 'blue', children: [
-          { name: '', gameId: 'middle', paint: 'orange-blue' },
-        ] },
-      ] },
-    },
-    {
-      id: 'branch', title: '2 · Two children', hint: 'Both children fit the parent. Check where they touch each other.',
-      ids: ['root', 'left', 'right'],
-      tree: { name: '', gameId: 'root', paint: 'blue', children: [
-        { name: '', gameId: 'right', paint: 'blue-green-up' },
-        { name: '', gameId: 'left', paint: 'pink-blue-down' },
-      ] },
-    },
-  ]
+  const GAME_SHAPES = ['whole', 'horizontal', 'diagonal_left', 'diagonal_right']
+  const GAME_SHAPE_LABEL = {
+    whole: 'Whole',
+    horizontal: 'Layer cake',
+    diagonal_left: 'Diagonal left',
+    diagonal_right: 'Diagonal right',
+  }
+  const GAME_PALETTE = Object.freeze({
+    1: '#60a5fa',
+    2: '#facc15',
+    3: '#f472b6',
+    4: '#86efac',
+  })
+
+  function puzzleCard(gameId, shape, regions, children = []) {
+    return { name: '', gameId, shape, regions: regions.slice(), children }
+  }
+
+  function makeN2Level(rootShape, childShape, index) {
+    const rootRegions = rootShape === 'whole' ? [1] : [1, 2]
+    const contact = rootShape === 'whole' ? 1 : 2
+    const childRegions = childShape === 'whole' ? [contact] : [contact, contact === 1 ? 2 : 3]
+    const intendedRoot = puzzleCard('p1', rootShape, rootRegions)
+    const intendedChild = puzzleCard('p2', childShape, childRegions)
+    // Start inverted. The player promotes p1 above p2 using LOGYQ's root-above gesture.
+    const tree = puzzleCard('p2', childShape, childRegions, [puzzleCard('p1', rootShape, rootRegions)])
+    return {
+      id: `n2-${String(index).padStart(2, '0')}`,
+      title: `${index} · ${GAME_SHAPE_LABEL[rootShape]} → ${GAME_SHAPE_LABEL[childShape]}`,
+      hint: 'The two cards are upside down. Make the physical contact fit.',
+      ids: ['p1', 'p2'],
+      tree,
+      solution: puzzleCard('p1', rootShape, rootRegions, [intendedChild]),
+      cards: [intendedRoot, intendedChild],
+    }
+  }
+
+  const gameLevels = (() => {
+    const levels = []
+    for (const rootShape of GAME_SHAPES) {
+      for (const childShape of GAME_SHAPES) {
+        if (rootShape === 'whole' && childShape === 'whole') continue
+        levels.push(makeN2Level(rootShape, childShape, levels.length + 1))
+      }
+    }
+    return levels
+  })()
 
   function gameProgress() {
     const value = readJson(GAME_KEY, {})
@@ -35,45 +63,57 @@
       const unlocked = index === 0 || !!progress[gameLevels[index - 1].id]
       const done = !!progress[level.id]
       return `<li><button type="button" data-game-level="${level.id}" ${unlocked ? '' : 'disabled'}>` +
-        `${level.title}${done ? ' ✓' : ''}<span>${unlocked ? level.hint : 'Clear the previous level first.'}</span></button></li>`
+        `${level.title}${done ? ' ✓' : ''}<span>${unlocked ? level.hint : 'Clear the previous puzzle first.'}</span></button></li>`
     }).join('')
+  }
+
+  function gradientId(shape, regions) {
+    return `logyq-game-${shape}-${regions.join('-')}`
   }
 
   function ensureGamePaint() {
     const svg = document.getElementById('canvas')
-    if (!svg || svg.querySelector('#logyq-game-orange-blue')) return
-    const ns = 'http://www.w3.org/2000/svg'
-    const defs = document.createElementNS(ns, 'defs')
-    const gradients = [
-      ['orange-blue', '0%', '0%', '0%', '100%', '#fb923c', '#60a5fa'],
-      // First child: pink at lower left, blue at upper right.
-      ['pink-blue-down', '0%', '100%', '100%', '0%', '#f0abfc', '#60a5fa'],
-      // Second child: blue at upper left, green at lower right.
-      ['blue-green-up', '0%', '0%', '100%', '100%', '#60a5fa', '#86efac'],
-    ]
-    for (const [id, x1, y1, x2, y2, first, second] of gradients) {
-      const gradient = document.createElementNS(ns, 'linearGradient')
-      gradient.id = `logyq-game-${id}`
-      for (const [key, value] of Object.entries({ x1, y1, x2, y2 })) gradient.setAttribute(key, value)
-      for (const [offset, color] of [['0%', first], ['49.9%', first], ['50%', second], ['100%', second]]) {
-        const stop = document.createElementNS(ns, 'stop')
-        stop.setAttribute('offset', offset)
-        stop.setAttribute('stop-color', color)
-        gradient.appendChild(stop)
-      }
-      defs.appendChild(gradient)
+    if (!svg) return
+    let defs = svg.querySelector('#logyq-game-defs')
+    if (!defs) {
+      const ns = 'http://www.w3.org/2000/svg'
+      defs = document.createElementNS(ns, 'defs')
+      defs.id = 'logyq-game-defs'
+      svg.insertBefore(defs, svg.firstChild)
     }
-    svg.insertBefore(defs, svg.firstChild)
+    const ns = 'http://www.w3.org/2000/svg'
+    for (const level of gameLevels) {
+      for (const card of level.cards) {
+        if (card.shape === 'whole') continue
+        const id = gradientId(card.shape, card.regions)
+        if (defs.querySelector(`#${id}`)) continue
+        const gradient = document.createElementNS(ns, 'linearGradient')
+        gradient.id = id
+        const direction = card.shape === 'horizontal'
+          ? { x1: '0%', y1: '0%', x2: '0%', y2: '100%' }
+          : card.shape === 'diagonal_left'
+            ? { x1: '100%', y1: '0%', x2: '0%', y2: '100%' }
+            : { x1: '0%', y1: '0%', x2: '100%', y2: '100%' }
+        for (const [key, value] of Object.entries(direction)) gradient.setAttribute(key, value)
+        const [a, b] = card.regions
+        for (const [offset, region] of [['0%', a], ['49.9%', a], ['50%', b], ['100%', b]]) {
+          const stop = document.createElementNS(ns, 'stop')
+          stop.setAttribute('offset', offset)
+          stop.setAttribute('stop-color', GAME_PALETTE[region])
+          gradient.appendChild(stop)
+        }
+        defs.appendChild(gradient)
+      }
+    }
   }
 
-  function gameColor(paint) {
-    if (paint === 'orange') return '#fb923c'
-    if (paint === 'blue') return '#60a5fa'
-    return `url(#logyq-game-${paint})`
+  function gameColor(card) {
+    if (card.shape === 'whole') return GAME_PALETTE[card.regions[0]]
+    return `url(#${gradientId(card.shape, card.regions)})`
   }
 
   function paintGameTree(node) {
-    node.color = gameColor(node.paint)
+    node.color = gameColor(node)
     for (const child of node.children || []) paintGameTree(child)
     return node
   }
@@ -121,8 +161,8 @@
     document.getElementById('logyq-game-next').hidden = true
     window.__logyqGameDropAllowed = ({ tree, movingUid, drop, trash, multi }) => {
       if (trash || multi) return false
-      const allowed = gameGrammar.canDrop(tree, movingUid, drop, 'root')
-      if (!allowed && drop) gameStatus('Those edges do not fit. Try another connection.')
+      const allowed = gameGrammar.canDrop(tree, movingUid, drop)
+      if (!allowed && drop) gameStatus('Those regions do not match at the contact. Try the other arrangement.')
       return allowed
     }
     ensureGamePaint()
@@ -137,13 +177,13 @@
     const session = app.game
     if (!session || session.cleared) return false
     const level = gameLevels.find((item) => item.id === session.id)
-    if (!level || !gameGrammar.complete(snapshot?.tree, level.ids, 'root')) return false
+    if (!level || !gameGrammar.complete(snapshot?.tree, level.ids)) return false
     session.cleared = true
     const progress = gameProgress()
     progress[level.id] = Date.now()
     try { localStorage.setItem(GAME_KEY, JSON.stringify(progress)) } catch (_error) {}
     const next = gameLevels[gameLevels.indexOf(level) + 1]
-    gameStatus(next ? 'It fits! The branch level is open.' : 'It fits! Both children meet the parent and each other.', true)
+    gameStatus(next ? 'It fits! The next puzzle is open.' : 'It fits! All 15 two-card puzzles are complete.', true)
     document.getElementById('logyq-game-next').hidden = !next
     return true
   }
@@ -152,7 +192,7 @@
     if (!app.game) return
     if (maybeGameClear(bridge.snapshot())) return
     if (app.game.cleared) return
-    gameStatus('A contact still clashes. Each card has one parent; neighboring children must match too.')
+    gameStatus('The contact still clashes. Match the physical regions; the root emerges from the fit.')
   }
 
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
