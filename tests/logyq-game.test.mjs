@@ -54,3 +54,12 @@ test('diagonal sibling orientation remains physically meaningful', () => {
   const right = card('right', 'DR:B:C')
   assert.notEqual(grammar.edge(left.paint, 'right'), grammar.edge(right.paint, 'left'))
 })
+
+
+test('a loose bank card can solve from either starting side', () => {
+  const root = card('r', 'L:A:B')
+  const child = card('c', 'DR:B:C')
+  assert.equal(grammar.canAdd(root, child, { type: 'node', targetUid: 'r' }), true)
+  assert.equal(grammar.canAdd(child, root, { type: 'rootAbove' }), true)
+  assert.equal(grammar.canAdd(root, child, { type: 'rootAbove' }), false)
+})
