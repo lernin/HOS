@@ -559,15 +559,15 @@
       .logyq-tk-examples li{margin:1px 0;font-size:15.5px;line-height:1.3;color:#29382f}
       .logyq-tk-empty{margin:14px 0 0;font-family:'DM Sans',system-ui,sans-serif;font-weight:500;font-size:clamp(26px,6vw,40px);line-height:1.2;color:#73786e}
       .logyq-tk-input{width:min(100%,16em);box-sizing:border-box;text-align:center;background:#fffef8;border:1px solid #b6bdac;border-radius:6px;padding:6px 10px;color:#29382f;font:inherit}
-      .logyq-tk-browser{position:fixed;inset:0;z-index:6100;display:none;flex-direction:column;background:#f7f5e9;color:#29382f;font-family:'DM Sans',system-ui,sans-serif}
+      .logyq-tk-browser{position:fixed;inset:0;z-index:6100;display:none;flex-direction:column;overflow:hidden;background:#f7f5e9;color:#29382f;font-family:'DM Sans',system-ui,sans-serif}
       .logyq-tk-browser.is-open{display:flex}
-      .logyq-tk-browser header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:#162e27;color:#eeeadd;flex:0 0 auto}
+      .logyq-tk-browser header{position:static;top:auto;z-index:auto;width:auto;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;font-size:inherit;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px;background:#162e27;color:#eeeadd;flex:0 0 auto}
       .logyq-tk-browser h2{margin:0;font-family:'DM Sans',system-ui,sans-serif;font-weight:500;font-size:26px}
       .logyq-tk-browser header button{border:0;background:transparent;color:inherit;width:40px;height:40px;font-size:22px}
-      .logyq-tk-az{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:12px 14px;border-bottom:1px solid #d8d8c9;flex:0 0 auto}
-      .logyq-tk-az button{border:0;background:transparent;min-height:40px;border-radius:3px;color:#3e5142;font-family:Georgia,serif;font-size:18px}
+      .logyq-tk-az{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;padding:12px 14px;border-bottom:1px solid #d8d8c9;flex:0 0 auto;max-height:min(292px,52dvh);overflow:auto}
+      .logyq-tk-az button{appearance:none;-webkit-appearance:none;box-sizing:border-box;display:grid;place-items:center;overflow:visible;line-height:1.15;border:0;background:transparent;min-height:44px;padding:6px 2px;border-radius:3px;color:#3e5142;font-family:Georgia,serif;font-size:20px;touch-action:manipulation}
+      .logyq-tk-az button.is-empty{color:#8a9186}
       .logyq-tk-az button[aria-pressed="true"]{background:#284f38;color:#fff}
-      .logyq-tk-az button:disabled{opacity:.25}
       .logyq-tk-list{flex:1;min-height:0;overflow:auto;padding:6px 12px 28px}
       .logyq-tk-prompt,.logyq-tk-none{margin:18px 8px;color:#73786e;font-size:15px}
       .logyq-tk-item{display:flex;align-items:center;gap:8px;border-bottom:1px solid #e6e5db}
@@ -6264,16 +6264,24 @@
     letters.querySelectorAll('button').forEach((button) => {
       const letter = button.dataset.letter
       const count = thekonymByLetter(thekonymState.rows, letter).length
-      button.disabled = thekonymState.status === 'ready' && count === 0
+      const empty = thekonymState.status === 'ready' && count === 0
+      button.disabled = false
+      button.classList.toggle('is-empty', empty)
       button.setAttribute('aria-pressed', String(thekonymState.letter === letter))
     })
+    list.scrollTop = 0
     if (!thekonymState.letter) {
       list.innerHTML = '<p class="logyq-tk-prompt">Pick a letter.</p>'
       return
     }
     const rows = thekonymByLetter(thekonymState.rows, thekonymState.letter)
     if (!rows.length) {
-      list.innerHTML = '<p class="logyq-tk-none">No Thekonyms for that letter.</p>'
+      const note = thekonymState.status === 'reading'
+        ? 'Reading Thekonyms…'
+        : thekonymState.status === 'ready'
+          ? 'No Thekonyms for that letter.'
+          : 'Thekonyms could not be read.'
+      list.innerHTML = `<p class="logyq-tk-none">${note}</p>`
       return
     }
     const playing = thekonymPlayingNames()
@@ -6418,12 +6426,12 @@
       browser.className = 'logyq-tk-browser'
       browser.setAttribute('role', 'dialog')
       browser.setAttribute('aria-label', 'Thekonyms A to Z')
-      browser.innerHTML = `<header><h2>Thekonyms</h2><button type="button" id="logyq-thekonym-browser-close" aria-label="Close">×</button></header><div class="logyq-tk-az" id="logyq-thekonym-letters">${THEKONYM_LETTERS.map((letter) => `<button type="button" data-letter="${letter}">${letter}</button>`).join('')}</div><div class="logyq-tk-list" id="logyq-thekonym-list"></div>`
+      browser.innerHTML = `<header><h2>Thekonyms</h2><button type="button" id="logyq-thekonym-browser-close" aria-label="Close">×</button></header><div class="logyq-tk-az" id="logyq-thekonym-letters">${THEKONYM_LETTERS.map((letter) => `<button type="button" data-letter="${letter}" aria-label="${letter === '#' ? 'Thekonyms that do not start with a letter' : `Thekonyms starting with ${letter}`}">${letter}</button>`).join('')}</div><div class="logyq-tk-list" id="logyq-thekonym-list"></div>`
       document.body.append(browser)
       browser.querySelector('#logyq-thekonym-browser-close').addEventListener('click', closeThekonymBrowser)
       browser.addEventListener('click', (event) => {
         const letter = event.target.closest?.('[data-letter]')
-        if (letter && !letter.disabled) {
+        if (letter) {
           thekonymState.letter = letter.dataset.letter
           renderThekonymList()
           return

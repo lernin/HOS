@@ -133,14 +133,39 @@
   // Warehouse control shows when something is stored. A full shelf with an
   // empty warehouse stays hidden; chip drag still reveals the corner so the
   // first word can be stored. Curriculum play hides it in CSS either way.
+  function sendAllToWarehouse(){
+    if (document.body?.classList?.contains('logyq-curriculum')) return
+    const words = chipNamesInBank()
+    if (!words.length) return
+    storeWordsInWarehouse(words)
+    renderWarehouseList()
+  }
+
+  function syncSendAllButton(){
+    const sendAll = document.getElementById('logyq-warehouse-send-all')
+    if (!sendAll) return
+    const waiting = chipNamesInBank()
+    sendAll.disabled = waiting.length === 0
+    sendAll.setAttribute('aria-label', waiting.length
+      ? `Send all ${waiting.length} Word Bank chips into the warehouse`
+      : 'Send all Word Bank chips into the warehouse')
+  }
+
   function syncShelfChrome(){
     if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return
     const warehouse = document.getElementById('logyq-warehouse')
     const dock = typeof document.getElementById === 'function' ? document.getElementById('Dock') : null
     const curriculum = !!document.body?.classList?.contains('logyq-curriculum')
     const stored = warehouseNameSet().size
-    if (warehouse) warehouse.classList.toggle('is-bank-empty', curriculum || stored === 0)
-    if (dock) dock.classList.toggle('is-empty', chipNamesInBank().length === 0)
+    const onBar = chipNamesInBank().length
+    const shelfClear = !curriculum && stored > 0 && onBar === 0
+    if (warehouse) {
+      warehouse.classList.toggle('is-bank-empty', curriculum || stored === 0)
+      warehouse.classList.toggle('is-shelf-clear', shelfClear)
+      warehouse.title = shelfClear ? 'Word Bank is in the warehouse' : 'Warehouse'
+    }
+    if (dock) dock.classList.toggle('is-empty', onBar === 0)
+    syncSendAllButton()
   }
 
   function bankScroller(){
@@ -731,6 +756,7 @@ function bindShelfChrome(){
     openWarehouseSheet()
   })
   document.getElementById('logyq-warehouse-close')?.addEventListener('click', () => closeWarehouseSheet())
+  document.getElementById('logyq-warehouse-send-all')?.addEventListener('click', () => sendAllToWarehouse())
   sheet?.addEventListener('click', (event) => {
     if (event.target === sheet) closeWarehouseSheet()
   })
