@@ -115,5 +115,29 @@
     return contacts(copy)
   }
 
-  window.LOGYQGameGrammar = Object.freeze({ parsePaint, edge, touchesMatch, contacts, complete, canDrop })
+  function canAdd(tree, card, drop) {
+    if (!tree || !card || !drop || !edge(card.paint, 'top')) return false
+    const copy = clone(tree)
+    const fresh = clone(card)
+    if (drop.type === 'rootAbove') {
+      fresh.children ||= []
+      fresh.children.push(copy)
+      return contacts(fresh)
+    }
+    const targetUid = drop.type === 'node' ? drop.targetUid : drop.parentUid
+    const target = find(copy, targetUid)
+    if (!target) return false
+    target.children ||= []
+    let index = target.children.length
+    if (drop.type === 'gap') {
+      const next = target.children.findIndex((child) => isUid(child, drop.nextUid))
+      const prev = target.children.findIndex((child) => isUid(child, drop.prevUid))
+      if (next >= 0) index = next
+      if (prev >= 0) index = prev + 1
+    }
+    target.children.splice(index, 0, fresh)
+    return contacts(copy)
+  }
+
+  window.LOGYQGameGrammar = Object.freeze({ parsePaint, edge, touchesMatch, contacts, complete, canDrop, canAdd })
 })()
