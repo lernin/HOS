@@ -13,13 +13,13 @@
       .logiq-backdrop{position:fixed;inset:0;z-index:5000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(15,23,42,.36);backdrop-filter:blur(4px)}
       .logiq-backdrop.is-open{display:flex}
       #logiq-pin.is-open{z-index:6400}
-      .logiq-modal{width:min(680px,100%);max-height:min(760px,calc(100dvh - 36px));overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 70px rgba(15,23,42,.24);color:#334155}
-      body.logyq-home #logiq-library{display:flex;align-items:stretch;justify-content:stretch;padding:0;background:#f8fafc;z-index:4500}
-      body.logyq-home #logiq-library .logiq-modal{width:100%;max-width:none;max-height:none;height:100%;border:0;border-radius:0;box-shadow:none}
+      .logiq-modal{width:min(680px,100%);max-width:100%;min-width:0;box-sizing:border-box;max-height:min(760px,calc(100dvh - 36px));overflow:auto;background:#fff;border:1px solid #e2e8f0;border-radius:18px;box-shadow:0 24px 70px rgba(15,23,42,.24);color:#334155}
+      body.logyq-home #logiq-library{display:flex;align-items:stretch;justify-content:stretch;padding:0;background:#f8fafc;z-index:4500;overflow-x:hidden}
+      body.logyq-home #logiq-library .logiq-modal{width:100%;max-width:100%;min-width:0;max-height:none;height:100%;border:0;border-radius:0;box-shadow:none}
       body.logyq-home:not(.logyq-map-open) #logiq-library-close{display:none}
       #logyq-home-btn svg{width:18px;height:18px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.8}
       .logyq-choice-card,.logyq-chooser{display:none!important}
-      .logiq-modal-head{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:16px;background:rgba(255,255,255,.96);border-bottom:1px solid #e2e8f0}
+      .logiq-modal-head{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:16px;background:rgba(255,255,255,.96);border-bottom:1px solid #e2e8f0;min-width:0;max-width:100%;box-sizing:border-box}
       .logiq-modal-head h2{font-size:18px;margin:0;flex:1}
       .logyq-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
       .logyq-home-tabs{display:flex;align-items:center;gap:4px;flex:1;min-width:0}
@@ -62,15 +62,16 @@
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
       .logiq-primary{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:9px 13px;font-weight:750;cursor:pointer}
       #logyq-new-folder{background:#fff;color:#14532d;border:1px solid #86efac}
-      .logyq-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 12px;color:#14532d;font:700 14px/1.3 system-ui,sans-serif}
+      .logyq-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 12px;min-width:0;max-width:100%;color:#14532d;font:700 14px/1.3 system-ui,sans-serif}
+      .logyq-crumbs button,.logyq-crumbs [aria-current="page"]{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
       .logyq-crumbs button{border:0;background:transparent;color:#15803d;font:inherit;padding:4px 2px;cursor:pointer}
       .logyq-crumbs [aria-current="page"]{color:#14532d}
       .logyq-crumb-sep{color:#94a3b8;font-weight:600}
-      .logyq-new-folder-form,.logyq-move-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+      .logyq-new-folder-form,.logyq-move-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;min-width:0;max-width:100%}
       .logyq-new-folder-form{margin:0 0 12px}
-      .logyq-new-folder-form input,.logyq-move-form select{height:38px;border:1px solid #cbd5e1;border-radius:9px;padding:0 10px;font:inherit;background:#fff;color:#334155;min-width:0}
+      .logyq-new-folder-form input,.logyq-move-form select{height:38px;width:100%;max-width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:9px;padding:0 10px;font:inherit;background:#fff;color:#334155;min-width:0}
       .logyq-new-folder-form button,.logyq-move-form button{border:1px solid #bbf7d0;border-radius:8px;background:#fff;padding:6px 9px;color:#14532d;font-weight:700;cursor:pointer}
-      .logyq-folder-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px;border:1px solid #bbf7d0;border-radius:14px;background:#f0fdf4}
+      .logyq-folder-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;min-width:0;max-width:100%;box-sizing:border-box;padding:12px;border:1px solid #bbf7d0;border-radius:14px;background:#f0fdf4}
       .logyq-folder-open{display:flex;align-items:center;gap:10px;min-width:0;border:0;background:transparent;padding:0;color:#14532d;font:inherit;text-align:left;cursor:pointer}
       .logyq-folder-copy{min-width:0;display:grid}
       .logyq-folder-copy .logiq-map-name{color:#14532d}
@@ -78,18 +79,20 @@
       .logyq-folder-mark::before{content:"";position:absolute;left:0;top:-6px;width:12px;height:6px;border-radius:3px 3px 0 0;background:#4ade80}
       .logyq-move-form{display:none;grid-column:1/-1}
       .logyq-move-form.is-open{display:grid}
-      .logiq-library-body{padding:12px 16px 18px}
-      .logiq-library-note{margin:0 0 12px;color:#64748b;font-size:13px}
-      .logiq-map-list{display:grid;gap:9px}
-      .logiq-map-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;cursor:pointer}
+      .logiq-library-body{padding:12px 16px 18px;min-width:0;max-width:100%;box-sizing:border-box}
+      .logiq-library-note{margin:0 0 12px;color:#64748b;font-size:13px;overflow-wrap:anywhere}
+      .logiq-map-list{display:grid;gap:9px;min-width:0;max-width:100%}
+      .logiq-map-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;min-width:0;max-width:100%;box-sizing:border-box;padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#fff;cursor:pointer}
       .logiq-map-row.is-current{border-color:#22c55e;box-shadow:0 0 0 2px rgba(34,197,94,.12)}
-      .logiq-map-name{font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .logiq-map-time{font-size:12px;color:#94a3b8;margin-top:3px}
-      .logiq-map-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+      .logiq-map-row > div:first-child{min-width:0}
+      .logiq-map-name{min-width:0;max-width:100%;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .logiq-map-time{min-width:0;max-width:100%;font-size:12px;color:#94a3b8;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .logiq-map-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;min-width:0;max-width:100%}
       .logiq-map-actions button,.logiq-inline-rename button{border:1px solid #e2e8f0;border-radius:8px;background:#fff;padding:6px 9px;color:#334155;cursor:pointer}
       .logiq-map-actions .danger{color:#dc2626}
-      .logiq-inline-rename{display:none;grid-column:1/-1;gap:8px;grid-template-columns:1fr auto}
+      .logiq-inline-rename{display:none;grid-column:1/-1;gap:8px;grid-template-columns:minmax(0,1fr) auto;min-width:0;max-width:100%}
       .logiq-inline-rename.is-open{display:grid}
+      .logiq-inline-rename input{width:100%;min-width:0;max-width:100%;box-sizing:border-box}
       .logiq-inline-rename input,.logiq-pin-card input{height:38px;border:1px solid #cbd5e1;border-radius:9px;padding:0 10px;font:inherit}
       .logiq-empty{padding:28px;text-align:center;color:#64748b;border:1px dashed #cbd5e1;border-radius:12px}
       .logiq-empty p{margin:0 0 14px}
@@ -180,7 +183,7 @@
         #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
         @keyframes logyq-smite-march{from{stroke-dashoffset:0}to{stroke-dashoffset:-14px}}
-        .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row,.logyq-folder-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
+        .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row,.logyq-folder-row{grid-template-columns:minmax(0,1fr)}.logiq-map-actions{justify-content:flex-start}
       }
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
         body.logyq-mobile-v162 #logiq-v2-drag-card,body.logyq-mobile-v162 .drag-mini,body.logyq-mobile-v162 g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
