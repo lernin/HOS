@@ -47,6 +47,7 @@
             </div>
             <h2 id="logiq-library-title" class="logyq-sr">Your maps</h2>
             <button class="logiq-primary" id="logiq-new-map" type="button">+ New</button>
+            <button class="logiq-primary" id="logyq-new-folder" type="button">+ Folder</button>
             <button class="logiq-icon-btn" id="logiq-library-close" aria-label="Back to map">×</button>
           </header>
           <div class="logiq-library-body">
@@ -241,6 +242,12 @@
     document.getElementById('logiq-library-close').addEventListener('click', closeLibrary)
     ui.library.addEventListener('click', (event) => { if (event.target === ui.library) closeLibrary() })
     document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: false }))
+    document.getElementById('logyq-new-folder')?.addEventListener('click', () => {
+      if (document.getElementById('logiq-library')?.dataset.shelf === 'curriculum') return
+      app.folderComposer = true
+      renderLibrary()
+      ui.mapList.querySelector('[data-new-folder] input')?.focus()
+    })
     ui.library.querySelectorAll('.logyq-home-tab').forEach((button) => {
       button.addEventListener('click', () => setHomeTab(button.dataset.shelf))
     })
@@ -287,6 +294,11 @@
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return
+      if (app.folderComposer) {
+        app.folderComposer = false
+        renderLibrary()
+        return
+      }
       closeMobilePanel()
       closeLibrary()
       closePaintStrip(document)

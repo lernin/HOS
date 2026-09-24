@@ -844,5 +844,3 @@
   }
 
   bindThekonym()
-  bootSession()
-})()

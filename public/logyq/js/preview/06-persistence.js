@@ -89,6 +89,7 @@
       tree: encoded.tree,
       word_bank: encoded.word_bank,
       updated_at: new Date().toISOString(),
+      folder_id: app.current.id ? null : (app.draftFolderId || null),
     }))
     setSaveState(navigator.onLine ? 'saving' : 'offline')
     clearTimeout(app.timer)
@@ -155,7 +156,12 @@
         map_id: pending.id || null,
       })
       acceptPin(pin)
-      app.current = { id: typeof id === 'string' ? id : (id?.id || pending.id), name: payload.name }
+      const savedId = typeof id === 'string' ? id : (id?.id || pending.id)
+      app.current = { id: savedId, name: payload.name }
+      if (!pending.id && savedId && pending.folder_id) {
+        writeFolderIndex(placeMap(readFolderIndex(), savedId, pending.folder_id))
+        app.draftFolderId = null
+      }
       updateMapName()
       app.ackedTree = decodeMapTree(payload.tree)
       app.ackedWordBank = payload.word_bank.slice()
@@ -253,6 +259,7 @@
     app.hasOpenMap = false
     document.body.classList.remove('logyq-map-open')
     app.current = { id: null, name: DEFAULT_NAME }
+    app.draftFolderId = null
     app.lastSnapshot = ''
     localStorage.removeItem(PENDING_KEY)
     updateMapName()
@@ -316,6 +323,7 @@
     try {
       app.libraryRows = await listLiveMaps()
       app.libraryStatus = 'live'
+      writeFolderIndex(prunePlacements(readFolderIndex(), app.libraryRows))
       renderLibrary()
     } catch (error) {
       if (error.auth) forgetPin()
@@ -325,6 +333,75 @@
     }
   }
 
+  function folderChoiceOptions(choices) {
+    return choices.map((choice) => `<option value="${escapeHtml(choice.id || '')}">${escapeHtml(choice.label)}</option>`).join('')
+  }
+
+  function renderFolderCrumbs(crumbs) {
+    if (!crumbs.length) return ''
+    const parts = ['<button type="button" data-crumb="">My maps</button>']
+    crumbs.forEach((folder, index) => {
+      parts.push('<span class="logyq-crumb-sep" aria-hidden="true">/</span>')
+      if (index === crumbs.length - 1) parts.push(`<span aria-current="page">${escapeHtml(folder.name)}</span>`)
+      else parts.push(`<button type="button" data-crumb="${escapeHtml(folder.id)}">${escapeHtml(folder.name)}</button>`)
+    })
+    return `<nav class="logyq-crumbs" aria-label="Folders">${parts.join('')}</nav>`
+  }
+
+  function renderFolderComposer() {
+    return '<form class="logyq-new-folder-form" data-new-folder><input aria-label="Folder name" placeholder="Folder name" maxlength="80"><button type="submit">Add</button></form>'
+  }
+
+  function renderFolderRow(index, rows, folder) {
+    const choices = moveChoices(index, { kind: 'folder', id: folder.id, currentParentId: folder.parentId })
+    const move = choices.length
+      ? `<form class="logyq-move-form" data-folder-move><select aria-label="Move ${escapeHtml(folder.name)} to">${folderChoiceOptions(choices)}</select><button type="submit">Move</button></form>`
+      : ''
+    const moveBtn = choices.length ? '<button type="button" data-folder-action="move">Move</button>' : ''
+    return `<article class="logyq-folder-row" data-folder-id="${escapeHtml(folder.id)}">
+      <button type="button" class="logyq-folder-open" data-open-folder="${escapeHtml(folder.id)}">
+        <span class="logyq-folder-mark" aria-hidden="true"></span>
+        <span class="logyq-folder-copy"><span class="logiq-map-name">${escapeHtml(folder.name)}</span><span class="logiq-map-time">${escapeHtml(insideLabel(directCount(index, rows, folder.id)))}</span></span>
+      </button>
+      <div class="logiq-map-actions"><button type="button" data-folder-action="rename">Rename</button>${moveBtn}<button type="button" class="danger" data-folder-action="delete">Delete</button></div>
+      <form class="logiq-inline-rename" data-folder-rename><input value="${escapeHtml(folder.name)}" aria-label="Folder name" maxlength="80"><button type="submit">Done</button></form>
+      ${move}
+    </article>`
+  }
+
+  function renderMapRow(index, row) {
+    const placed = index.placements[row.id] || null
+    const choices = moveChoices(index, { kind: 'map', id: row.id, currentParentId: placed })
+    const current = row.id === app.current.id ? ' is-current' : ''
+    const when = formatUpdatedAt(row.updated_at)
+    const moveBtn = choices.length ? '<button type="button" data-map-action="move">Move</button>' : ''
+    const move = choices.length
+      ? `<form class="logyq-move-form" data-map-move><select aria-label="Move ${escapeHtml(row.name || DEFAULT_NAME)} to">${folderChoiceOptions(choices)}</select><button type="submit">Move</button></form>`
+      : ''
+    return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
+      <div><div class="logiq-map-name">${escapeHtml(row.name || DEFAULT_NAME)}</div><div class="logiq-map-time">${escapeHtml(when)}</div></div>
+      <div class="logiq-map-actions"><button type="button" data-map-action="rename">Rename</button>${moveBtn}<button type="button" class="danger" data-map-action="delete">Delete</button></div>
+      <form class="logiq-inline-rename"><input value="${escapeHtml(row.name || DEFAULT_NAME)}" aria-label="Map name"><button type="submit">Done</button></form>
+      ${move}
+    </article>`
+  }
+
+  function openLibraryFolder(id) {
+    const index = readFolderIndex()
+    app.libraryFolderId = id && index.folders.some((folder) => folder.id === id) ? id : null
+    app.folderComposer = false
+    renderLibrary()
+  }
+
+  function addLibraryFolder(name) {
+    const index = readFolderIndex()
+    const parentId = index.folders.some((folder) => folder.id === app.libraryFolderId) ? app.libraryFolderId : null
+    const created = createFolder(index, { name, parentId })
+    if (created.ok) writeFolderIndex(created.index)
+    app.folderComposer = false
+    renderLibrary()
+  }
+
   function renderLibrary() {
     const rows = Array.isArray(app.libraryRows) ? app.libraryRows : []
     const status = app.libraryStatus || 'live'
@@ -332,28 +409,80 @@
       ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
       return
     }
-    if (!rows.length && status === 'locked') {
-      ui.mapList.innerHTML = '<div class="logiq-empty"><p>Your maps are still saved. Enter the Lab PIN to open them.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
+    const index = readFolderIndex()
+    const open = index.folders.some((folder) => folder.id === app.libraryFolderId) ? app.libraryFolderId : null
+    if (app.libraryFolderId !== open) app.libraryFolderId = open
+    const head = renderFolderCrumbs(folderCrumbs(index, open)) + (app.folderComposer ? renderFolderComposer() : '')
+    if (!rows.length && !index.folders.length && !open) {
+      if (status === 'locked') {
+        ui.mapList.innerHTML = `${head}<div class="logiq-empty"><p>Your maps are still saved. Enter the Lab PIN to open them.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>`
+        return
+      }
+      if (status !== 'live') {
+        ui.mapList.innerHTML = `${head}<div class="logiq-empty"><p>${navigator.onLine ? 'Could not load maps. Nothing was deleted.' : 'Offline. Saved changes will retry.'}</p><button type="button" class="logiq-primary" data-connect>Try again</button></div>`
+        return
+      }
+      ui.mapList.innerHTML = `${head}<div class="logiq-empty"><p>No maps yet.</p><button type="button" class="logiq-primary" data-empty-new>+ New</button></div>`
       return
     }
-    if (!rows.length && status !== 'live') {
-      ui.mapList.innerHTML = `<div class="logiq-empty"><p>${navigator.onLine ? 'Could not load maps. Nothing was deleted.' : 'Offline. Saved changes will retry.'}</p><button type="button" class="logiq-primary" data-connect>Try again</button></div>`
-      return
-    }
-    if (!rows.length) {
-      ui.mapList.innerHTML = '<div class="logiq-empty"><p>No maps yet.</p><button type="button" class="logiq-primary" data-empty-new>+ New</button></div>'
-      return
-    }
+    const view = libraryView(index, rows, open)
     const note = status === 'live' ? '' : '<div class="logiq-library-note"><p>Showing maps last opened on this device. Connect to refresh the Lab. Nothing was deleted.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
-    ui.mapList.innerHTML = note + rows.map((row) => {
-      const current = row.id === app.current.id ? ' is-current' : ''
-      const when = formatUpdatedAt(row.updated_at)
-      return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
-        <div><div class="logiq-map-name">${escapeHtml(row.name || DEFAULT_NAME)}</div><div class="logiq-map-time">${escapeHtml(when)}</div></div>
-        <div class="logiq-map-actions"><button type="button" data-map-action="rename">Rename</button><button type="button" class="danger" data-map-action="delete">Delete</button></div>
-        <form class="logiq-inline-rename"><input value="${escapeHtml(row.name || DEFAULT_NAME)}" aria-label="Map name"><button>Done</button></form>
-      </article>`
-    }).join('')
+    const foldersHtml = view.folders.map((folder) => renderFolderRow(index, rows, folder)).join('')
+    const mapsHtml = view.maps.map((row) => renderMapRow(index, row)).join('')
+    const empty = !view.folders.length && !view.maps.length
+      ? `<div class="logiq-empty"><p>${open ? 'This folder is empty.' : 'No maps yet.'}</p>${open ? '' : '<button type="button" class="logiq-primary" data-empty-new>+ New</button>'}</div>`
+      : ''
+    ui.mapList.innerHTML = head + note + foldersHtml + mapsHtml + empty
+  }
+
+  async function handleFolderAction(event, folderElement) {
+    const id = folderElement.dataset.folderId
+    const index = readFolderIndex()
+    const folder = index.folders.find((item) => item.id === id)
+    if (!folder) return
+    const renameForm = event.target.closest('[data-folder-rename]')
+    if (renameForm) {
+      if (!event.target.closest('button')) return
+      event.preventDefault()
+      const renamed = renameFolder(index, id, renameForm.querySelector('input').value)
+      if (renamed.ok) writeFolderIndex(renamed.index)
+      renderLibrary()
+      return
+    }
+    const moveForm = event.target.closest('[data-folder-move]')
+    if (moveForm) {
+      if (!event.target.closest('button')) return
+      event.preventDefault()
+      const moved = moveFolder(index, id, moveForm.querySelector('select').value || null)
+      if (moved.ok) writeFolderIndex(moved.index)
+      renderLibrary()
+      return
+    }
+    const action = event.target.closest('[data-folder-action]')?.dataset.folderAction
+    if (action === 'rename') {
+      folderElement.querySelector('[data-folder-rename]')?.classList.add('is-open')
+      folderElement.querySelector('[data-folder-move]')?.classList.remove('is-open')
+      folderElement.querySelector('[data-folder-rename] input')?.focus()
+      return
+    }
+    if (action === 'move') {
+      folderElement.querySelector('[data-folder-move]')?.classList.add('is-open')
+      folderElement.querySelector('[data-folder-rename]')?.classList.remove('is-open')
+      return
+    }
+    if (action === 'delete') {
+      const count = directCount(index, app.libraryRows, id)
+      const parent = index.folders.find((item) => item.id === folder.parentId)
+      const home = parent?.name || 'My maps'
+      const message = count
+        ? `Remove “${folder.name}”? Folders and maps inside move up into ${home}. Saved maps are not deleted.`
+        : `Remove empty folder “${folder.name}”?`
+      if (!window.confirm(message)) return
+      writeFolderIndex(deleteFolder(index, id).index)
+      renderLibrary()
+      return
+    }
+    if (event.target.closest('[data-open-folder]')) openLibraryFolder(id)
   }
 
   async function handleMapAction(event) {
@@ -365,6 +494,23 @@
       createMap({ edit: false })
       return
     }
+    const crumb = event.target.closest('[data-crumb]')
+    if (crumb) {
+      openLibraryFolder(crumb.dataset.crumb || null)
+      return
+    }
+    const createForm = event.target.closest('[data-new-folder]')
+    if (createForm) {
+      if (!event.target.closest('button')) return
+      event.preventDefault()
+      addLibraryFolder(createForm.querySelector('input').value)
+      return
+    }
+    const folderElement = event.target.closest('.logyq-folder-row')
+    if (folderElement) {
+      await handleFolderAction(event, folderElement)
+      return
+    }
     const rowElement = event.target.closest('.logiq-map-row')
     if (!rowElement) return
     const row = app.libraryRows.find((item) => item.id === rowElement.dataset.id)
@@ -372,16 +518,31 @@
 
     const renameForm = event.target.closest('.logiq-inline-rename')
     if (renameForm) {
+      if (!event.target.closest('button')) return
       event.preventDefault()
       const name = renameForm.querySelector('input').value.trim() || DEFAULT_NAME
       await renameMap(row, name)
       return
     }
+    const moveForm = event.target.closest('[data-map-move]')
+    if (moveForm) {
+      if (!event.target.closest('button')) return
+      event.preventDefault()
+      writeFolderIndex(placeMap(readFolderIndex(), row.id, moveForm.querySelector('select').value || null))
+      renderLibrary()
+      return
+    }
 
     const action = event.target.closest('[data-map-action]')?.dataset.mapAction
     if (action === 'rename') {
-      rowElement.querySelector('.logiq-inline-rename').classList.toggle('is-open')
-      rowElement.querySelector('input').focus()
+      rowElement.querySelector('.logiq-inline-rename').classList.add('is-open')
+      rowElement.querySelector('[data-map-move]')?.classList.remove('is-open')
+      rowElement.querySelector('.logiq-inline-rename input').focus()
+      return
+    }
+    if (action === 'move') {
+      rowElement.querySelector('[data-map-move]')?.classList.add('is-open')
+      rowElement.querySelector('.logiq-inline-rename')?.classList.remove('is-open')
       return
     }
     if (action === 'delete' && window.confirm(`Delete “${row.name || DEFAULT_NAME}”?`)) {
@@ -431,6 +592,8 @@
 
   function createMap({ edit = false } = {}) {
     leaveCurriculumPlay()
+    const folderIndex = readFolderIndex()
+    app.draftFolderId = folderIndex.folders.some((folder) => folder.id === app.libraryFolderId) ? app.libraryFolderId : null
     const taken = []
     for (const row of app.libraryRows || []) taken.push(row?.name)
     for (const row of readCachedLibrary()) taken.push(row?.name)
@@ -494,6 +657,7 @@
     try {
       await rpc('logiq_map_delete', { pin, map_id: row.id })
       acceptPin(pin)
+      writeFolderIndex(placeMap(readFolderIndex(), row.id, null))
       app.libraryRows = app.libraryRows.filter((item) => item.id !== row.id)
       cacheLibrary(app.libraryRows)
       if (app.current.id === row.id) {

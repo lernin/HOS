@@ -32,6 +32,9 @@
     saveAgain: false,
     libraryRows: [],
     libraryStatus: 'loading',
+    libraryFolderId: null,
+    folderComposer: false,
+    draftFolderId: null,
     recorder: null,
     recordingStream: null,
     recordingChunks: [],
@@ -302,13 +305,14 @@
       body.logyq-home:not(.logyq-map-open) #logiq-library-close{display:none}
       #logyq-home-btn svg{width:18px;height:18px;display:block;margin:auto;fill:none;stroke:currentColor;stroke-width:1.8}
       .logyq-choice-card,.logyq-chooser{display:none!important}
-      .logiq-modal-head{position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:10px;padding:16px;background:rgba(255,255,255,.96);border-bottom:1px solid #e2e8f0}
+      .logiq-modal-head{position:sticky;top:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:16px;background:rgba(255,255,255,.96);border-bottom:1px solid #e2e8f0}
       .logiq-modal-head h2{font-size:18px;margin:0;flex:1}
       .logyq-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
       .logyq-home-tabs{display:flex;align-items:center;gap:4px;flex:1;min-width:0}
       .logyq-home-tab{border:0;background:transparent;color:#64748b;font:750 16px/1.2 system-ui,sans-serif;padding:6px 10px;border-radius:999px;cursor:pointer}
       .logyq-home-tab.is-active{color:#14532d;background:#dcfce7}
       #logiq-library[data-shelf="curriculum"] #logiq-new-map,
+      #logiq-library[data-shelf="curriculum"] #logyq-new-folder,
       #logiq-library[data-shelf="curriculum"] #logiq-map-list,
       #logyq-curriculum{display:none}
       #logiq-library[data-shelf="curriculum"] #logyq-curriculum{display:block}
@@ -334,6 +338,23 @@
       #logyq-curriculum-levels,#logyq-curriculum-mix{background:#fff;color:#14532d;border:1px solid #bbf7d0}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
       .logiq-primary{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:9px 13px;font-weight:750;cursor:pointer}
+      #logyq-new-folder{background:#fff;color:#14532d;border:1px solid #86efac}
+      .logyq-crumbs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 12px;color:#14532d;font:700 14px/1.3 system-ui,sans-serif}
+      .logyq-crumbs button{border:0;background:transparent;color:#15803d;font:inherit;padding:4px 2px;cursor:pointer}
+      .logyq-crumbs [aria-current="page"]{color:#14532d}
+      .logyq-crumb-sep{color:#94a3b8;font-weight:600}
+      .logyq-new-folder-form,.logyq-move-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center}
+      .logyq-new-folder-form{margin:0 0 12px}
+      .logyq-new-folder-form input,.logyq-move-form select{height:38px;border:1px solid #cbd5e1;border-radius:9px;padding:0 10px;font:inherit;background:#fff;color:#334155;min-width:0}
+      .logyq-new-folder-form button,.logyq-move-form button{border:1px solid #bbf7d0;border-radius:8px;background:#fff;padding:6px 9px;color:#14532d;font-weight:700;cursor:pointer}
+      .logyq-folder-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:12px;border:1px solid #bbf7d0;border-radius:14px;background:#f0fdf4}
+      .logyq-folder-open{display:flex;align-items:center;gap:10px;min-width:0;border:0;background:transparent;padding:0;color:#14532d;font:inherit;text-align:left;cursor:pointer}
+      .logyq-folder-copy{min-width:0;display:grid}
+      .logyq-folder-copy .logiq-map-name{color:#14532d}
+      .logyq-folder-mark{width:28px;height:20px;flex:0 0 28px;border-radius:3px 5px 5px 5px;background:#86efac;position:relative}
+      .logyq-folder-mark::before{content:"";position:absolute;left:0;top:-6px;width:12px;height:6px;border-radius:3px 3px 0 0;background:#4ade80}
+      .logyq-move-form{display:none;grid-column:1/-1}
+      .logyq-move-form.is-open{display:grid}
       .logiq-library-body{padding:12px 16px 18px}
       .logiq-library-note{margin:0 0 12px;color:#64748b;font-size:13px}
       .logiq-map-list{display:grid;gap:9px}
@@ -436,7 +457,7 @@
         #logyq-v162-action.rec::before{content:"";position:absolute;inset:-5px;border:2px solid rgba(239,68,68,.35);border-radius:50%;animation:logyq-v162-pulse 1.05s ease-out infinite}
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
         @keyframes logyq-smite-march{from{stroke-dashoffset:0}to{stroke-dashoffset:-14px}}
-        .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
+        .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row,.logyq-folder-row{grid-template-columns:1fr}.logiq-map-actions{justify-content:flex-start}
       }
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
         body.logyq-mobile-v162 #logiq-v2-drag-card,body.logyq-mobile-v162 .drag-mini,body.logyq-mobile-v162 g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
@@ -613,6 +634,7 @@
             </div>
             <h2 id="logiq-library-title" class="logyq-sr">Your maps</h2>
             <button class="logiq-primary" id="logiq-new-map" type="button">+ New</button>
+            <button class="logiq-primary" id="logyq-new-folder" type="button">+ Folder</button>
             <button class="logiq-icon-btn" id="logiq-library-close" aria-label="Back to map">×</button>
           </header>
           <div class="logiq-library-body">
@@ -807,6 +829,12 @@
     document.getElementById('logiq-library-close').addEventListener('click', closeLibrary)
     ui.library.addEventListener('click', (event) => { if (event.target === ui.library) closeLibrary() })
     document.getElementById('logiq-new-map').addEventListener('click', () => createMap({ edit: false }))
+    document.getElementById('logyq-new-folder')?.addEventListener('click', () => {
+      if (document.getElementById('logiq-library')?.dataset.shelf === 'curriculum') return
+      app.folderComposer = true
+      renderLibrary()
+      ui.mapList.querySelector('[data-new-folder] input')?.focus()
+    })
     ui.library.querySelectorAll('.logyq-home-tab').forEach((button) => {
       button.addEventListener('click', () => setHomeTab(button.dataset.shelf))
     })
@@ -853,6 +881,11 @@
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return
+      if (app.folderComposer) {
+        app.folderComposer = false
+        renderLibrary()
+        return
+      }
       closeMobilePanel()
       closeLibrary()
       closePaintStrip(document)
@@ -4432,6 +4465,7 @@
       tree: encoded.tree,
       word_bank: encoded.word_bank,
       updated_at: new Date().toISOString(),
+      folder_id: app.current.id ? null : (app.draftFolderId || null),
     }))
     setSaveState(navigator.onLine ? 'saving' : 'offline')
     clearTimeout(app.timer)
@@ -4498,7 +4532,12 @@
         map_id: pending.id || null,
       })
       acceptPin(pin)
-      app.current = { id: typeof id === 'string' ? id : (id?.id || pending.id), name: payload.name }
+      const savedId = typeof id === 'string' ? id : (id?.id || pending.id)
+      app.current = { id: savedId, name: payload.name }
+      if (!pending.id && savedId && pending.folder_id) {
+        writeFolderIndex(placeMap(readFolderIndex(), savedId, pending.folder_id))
+        app.draftFolderId = null
+      }
       updateMapName()
       app.ackedTree = decodeMapTree(payload.tree)
       app.ackedWordBank = payload.word_bank.slice()
@@ -4596,6 +4635,7 @@
     app.hasOpenMap = false
     document.body.classList.remove('logyq-map-open')
     app.current = { id: null, name: DEFAULT_NAME }
+    app.draftFolderId = null
     app.lastSnapshot = ''
     localStorage.removeItem(PENDING_KEY)
     updateMapName()
@@ -4659,6 +4699,7 @@
     try {
       app.libraryRows = await listLiveMaps()
       app.libraryStatus = 'live'
+      writeFolderIndex(prunePlacements(readFolderIndex(), app.libraryRows))
       renderLibrary()
     } catch (error) {
       if (error.auth) forgetPin()
@@ -4668,6 +4709,75 @@
     }
   }
 
+  function folderChoiceOptions(choices) {
+    return choices.map((choice) => `<option value="${escapeHtml(choice.id || '')}">${escapeHtml(choice.label)}</option>`).join('')
+  }
+
+  function renderFolderCrumbs(crumbs) {
+    if (!crumbs.length) return ''
+    const parts = ['<button type="button" data-crumb="">My maps</button>']
+    crumbs.forEach((folder, index) => {
+      parts.push('<span class="logyq-crumb-sep" aria-hidden="true">/</span>')
+      if (index === crumbs.length - 1) parts.push(`<span aria-current="page">${escapeHtml(folder.name)}</span>`)
+      else parts.push(`<button type="button" data-crumb="${escapeHtml(folder.id)}">${escapeHtml(folder.name)}</button>`)
+    })
+    return `<nav class="logyq-crumbs" aria-label="Folders">${parts.join('')}</nav>`
+  }
+
+  function renderFolderComposer() {
+    return '<form class="logyq-new-folder-form" data-new-folder><input aria-label="Folder name" placeholder="Folder name" maxlength="80"><button type="submit">Add</button></form>'
+  }
+
+  function renderFolderRow(index, rows, folder) {
+    const choices = moveChoices(index, { kind: 'folder', id: folder.id, currentParentId: folder.parentId })
+    const move = choices.length
+      ? `<form class="logyq-move-form" data-folder-move><select aria-label="Move ${escapeHtml(folder.name)} to">${folderChoiceOptions(choices)}</select><button type="submit">Move</button></form>`
+      : ''
+    const moveBtn = choices.length ? '<button type="button" data-folder-action="move">Move</button>' : ''
+    return `<article class="logyq-folder-row" data-folder-id="${escapeHtml(folder.id)}">
+      <button type="button" class="logyq-folder-open" data-open-folder="${escapeHtml(folder.id)}">
+        <span class="logyq-folder-mark" aria-hidden="true"></span>
+        <span class="logyq-folder-copy"><span class="logiq-map-name">${escapeHtml(folder.name)}</span><span class="logiq-map-time">${escapeHtml(insideLabel(directCount(index, rows, folder.id)))}</span></span>
+      </button>
+      <div class="logiq-map-actions"><button type="button" data-folder-action="rename">Rename</button>${moveBtn}<button type="button" class="danger" data-folder-action="delete">Delete</button></div>
+      <form class="logiq-inline-rename" data-folder-rename><input value="${escapeHtml(folder.name)}" aria-label="Folder name" maxlength="80"><button type="submit">Done</button></form>
+      ${move}
+    </article>`
+  }
+
+  function renderMapRow(index, row) {
+    const placed = index.placements[row.id] || null
+    const choices = moveChoices(index, { kind: 'map', id: row.id, currentParentId: placed })
+    const current = row.id === app.current.id ? ' is-current' : ''
+    const when = formatUpdatedAt(row.updated_at)
+    const moveBtn = choices.length ? '<button type="button" data-map-action="move">Move</button>' : ''
+    const move = choices.length
+      ? `<form class="logyq-move-form" data-map-move><select aria-label="Move ${escapeHtml(row.name || DEFAULT_NAME)} to">${folderChoiceOptions(choices)}</select><button type="submit">Move</button></form>`
+      : ''
+    return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
+      <div><div class="logiq-map-name">${escapeHtml(row.name || DEFAULT_NAME)}</div><div class="logiq-map-time">${escapeHtml(when)}</div></div>
+      <div class="logiq-map-actions"><button type="button" data-map-action="rename">Rename</button>${moveBtn}<button type="button" class="danger" data-map-action="delete">Delete</button></div>
+      <form class="logiq-inline-rename"><input value="${escapeHtml(row.name || DEFAULT_NAME)}" aria-label="Map name"><button type="submit">Done</button></form>
+      ${move}
+    </article>`
+  }
+
+  function openLibraryFolder(id) {
+    const index = readFolderIndex()
+    app.libraryFolderId = id && index.folders.some((folder) => folder.id === id) ? id : null
+    app.folderComposer = false
+    renderLibrary()
+  }
+
+  function addLibraryFolder(name) {
+    const index = readFolderIndex()
+    const parentId = index.folders.some((folder) => folder.id === app.libraryFolderId) ? app.libraryFolderId : null
+    const created = createFolder(index, { name, parentId })
+    if (created.ok) writeFolderIndex(created.index)
+    app.folderComposer = false
+    renderLibrary()
+  }
+
   function renderLibrary() {
     const rows = Array.isArray(app.libraryRows) ? app.libraryRows : []
     const status = app.libraryStatus || 'live'
@@ -4675,28 +4785,80 @@
       ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
       return
     }
-    if (!rows.length && status === 'locked') {
-      ui.mapList.innerHTML = '<div class="logiq-empty"><p>Your maps are still saved. Enter the Lab PIN to open them.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
+    const index = readFolderIndex()
+    const open = index.folders.some((folder) => folder.id === app.libraryFolderId) ? app.libraryFolderId : null
+    if (app.libraryFolderId !== open) app.libraryFolderId = open
+    const head = renderFolderCrumbs(folderCrumbs(index, open)) + (app.folderComposer ? renderFolderComposer() : '')
+    if (!rows.length && !index.folders.length && !open) {
+      if (status === 'locked') {
+        ui.mapList.innerHTML = `${head}<div class="logiq-empty"><p>Your maps are still saved. Enter the Lab PIN to open them.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>`
+        return
+      }
+      if (status !== 'live') {
+        ui.mapList.innerHTML = `${head}<div class="logiq-empty"><p>${navigator.onLine ? 'Could not load maps. Nothing was deleted.' : 'Offline. Saved changes will retry.'}</p><button type="button" class="logiq-primary" data-connect>Try again</button></div>`
+        return
+      }
+      ui.mapList.innerHTML = `${head}<div class="logiq-empty"><p>No maps yet.</p><button type="button" class="logiq-primary" data-empty-new>+ New</button></div>`
       return
     }
-    if (!rows.length && status !== 'live') {
-      ui.mapList.innerHTML = `<div class="logiq-empty"><p>${navigator.onLine ? 'Could not load maps. Nothing was deleted.' : 'Offline. Saved changes will retry.'}</p><button type="button" class="logiq-primary" data-connect>Try again</button></div>`
-      return
-    }
-    if (!rows.length) {
-      ui.mapList.innerHTML = '<div class="logiq-empty"><p>No maps yet.</p><button type="button" class="logiq-primary" data-empty-new>+ New</button></div>'
-      return
-    }
+    const view = libraryView(index, rows, open)
     const note = status === 'live' ? '' : '<div class="logiq-library-note"><p>Showing maps last opened on this device. Connect to refresh the Lab. Nothing was deleted.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
-    ui.mapList.innerHTML = note + rows.map((row) => {
-      const current = row.id === app.current.id ? ' is-current' : ''
-      const when = formatUpdatedAt(row.updated_at)
-      return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
-        <div><div class="logiq-map-name">${escapeHtml(row.name || DEFAULT_NAME)}</div><div class="logiq-map-time">${escapeHtml(when)}</div></div>
-        <div class="logiq-map-actions"><button type="button" data-map-action="rename">Rename</button><button type="button" class="danger" data-map-action="delete">Delete</button></div>
-        <form class="logiq-inline-rename"><input value="${escapeHtml(row.name || DEFAULT_NAME)}" aria-label="Map name"><button>Done</button></form>
-      </article>`
-    }).join('')
+    const foldersHtml = view.folders.map((folder) => renderFolderRow(index, rows, folder)).join('')
+    const mapsHtml = view.maps.map((row) => renderMapRow(index, row)).join('')
+    const empty = !view.folders.length && !view.maps.length
+      ? `<div class="logiq-empty"><p>${open ? 'This folder is empty.' : 'No maps yet.'}</p>${open ? '' : '<button type="button" class="logiq-primary" data-empty-new>+ New</button>'}</div>`
+      : ''
+    ui.mapList.innerHTML = head + note + foldersHtml + mapsHtml + empty
+  }
+
+  async function handleFolderAction(event, folderElement) {
+    const id = folderElement.dataset.folderId
+    const index = readFolderIndex()
+    const folder = index.folders.find((item) => item.id === id)
+    if (!folder) return
+    const renameForm = event.target.closest('[data-folder-rename]')
+    if (renameForm) {
+      if (!event.target.closest('button')) return
+      event.preventDefault()
+      const renamed = renameFolder(index, id, renameForm.querySelector('input').value)
+      if (renamed.ok) writeFolderIndex(renamed.index)
+      renderLibrary()
+      return
+    }
+    const moveForm = event.target.closest('[data-folder-move]')
+    if (moveForm) {
+      if (!event.target.closest('button')) return
+      event.preventDefault()
+      const moved = moveFolder(index, id, moveForm.querySelector('select').value || null)
+      if (moved.ok) writeFolderIndex(moved.index)
+      renderLibrary()
+      return
+    }
+    const action = event.target.closest('[data-folder-action]')?.dataset.folderAction
+    if (action === 'rename') {
+      folderElement.querySelector('[data-folder-rename]')?.classList.add('is-open')
+      folderElement.querySelector('[data-folder-move]')?.classList.remove('is-open')
+      folderElement.querySelector('[data-folder-rename] input')?.focus()
+      return
+    }
+    if (action === 'move') {
+      folderElement.querySelector('[data-folder-move]')?.classList.add('is-open')
+      folderElement.querySelector('[data-folder-rename]')?.classList.remove('is-open')
+      return
+    }
+    if (action === 'delete') {
+      const count = directCount(index, app.libraryRows, id)
+      const parent = index.folders.find((item) => item.id === folder.parentId)
+      const home = parent?.name || 'My maps'
+      const message = count
+        ? `Remove “${folder.name}”? Folders and maps inside move up into ${home}. Saved maps are not deleted.`
+        : `Remove empty folder “${folder.name}”?`
+      if (!window.confirm(message)) return
+      writeFolderIndex(deleteFolder(index, id).index)
+      renderLibrary()
+      return
+    }
+    if (event.target.closest('[data-open-folder]')) openLibraryFolder(id)
   }
 
   async function handleMapAction(event) {
@@ -4708,6 +4870,23 @@
       createMap({ edit: false })
       return
     }
+    const crumb = event.target.closest('[data-crumb]')
+    if (crumb) {
+      openLibraryFolder(crumb.dataset.crumb || null)
+      return
+    }
+    const createForm = event.target.closest('[data-new-folder]')
+    if (createForm) {
+      if (!event.target.closest('button')) return
+      event.preventDefault()
+      addLibraryFolder(createForm.querySelector('input').value)
+      return
+    }
+    const folderElement = event.target.closest('.logyq-folder-row')
+    if (folderElement) {
+      await handleFolderAction(event, folderElement)
+      return
+    }
     const rowElement = event.target.closest('.logiq-map-row')
     if (!rowElement) return
     const row = app.libraryRows.find((item) => item.id === rowElement.dataset.id)
@@ -4715,16 +4894,31 @@
 
     const renameForm = event.target.closest('.logiq-inline-rename')
     if (renameForm) {
+      if (!event.target.closest('button')) return
       event.preventDefault()
       const name = renameForm.querySelector('input').value.trim() || DEFAULT_NAME
       await renameMap(row, name)
       return
     }
+    const moveForm = event.target.closest('[data-map-move]')
+    if (moveForm) {
+      if (!event.target.closest('button')) return
+      event.preventDefault()
+      writeFolderIndex(placeMap(readFolderIndex(), row.id, moveForm.querySelector('select').value || null))
+      renderLibrary()
+      return
+    }
 
     const action = event.target.closest('[data-map-action]')?.dataset.mapAction
     if (action === 'rename') {
-      rowElement.querySelector('.logiq-inline-rename').classList.toggle('is-open')
-      rowElement.querySelector('input').focus()
+      rowElement.querySelector('.logiq-inline-rename').classList.add('is-open')
+      rowElement.querySelector('[data-map-move]')?.classList.remove('is-open')
+      rowElement.querySelector('.logiq-inline-rename input').focus()
+      return
+    }
+    if (action === 'move') {
+      rowElement.querySelector('[data-map-move]')?.classList.add('is-open')
+      rowElement.querySelector('.logiq-inline-rename')?.classList.remove('is-open')
       return
     }
     if (action === 'delete' && window.confirm(`Delete “${row.name || DEFAULT_NAME}”?`)) {
@@ -4774,6 +4968,8 @@
 
   function createMap({ edit = false } = {}) {
     leaveCurriculumPlay()
+    const folderIndex = readFolderIndex()
+    app.draftFolderId = folderIndex.folders.some((folder) => folder.id === app.libraryFolderId) ? app.libraryFolderId : null
     const taken = []
     for (const row of app.libraryRows || []) taken.push(row?.name)
     for (const row of readCachedLibrary()) taken.push(row?.name)
@@ -4837,6 +5033,7 @@
     try {
       await rpc('logiq_map_delete', { pin, map_id: row.id })
       acceptPin(pin)
+      writeFolderIndex(placeMap(readFolderIndex(), row.id, null))
       app.libraryRows = app.libraryRows.filter((item) => item.id !== row.id)
       cacheLibrary(app.libraryRows)
       if (app.current.id === row.id) {
@@ -6355,5 +6552,262 @@
   }
 
   bindThekonym()
+  // FOLDER_PURE_START
+  function cloneFolderIndex(index) {
+    return {
+      folders: (index?.folders || []).map((folder) => ({
+        id: folder.id,
+        name: folder.name,
+        parentId: folder.parentId || null,
+      })),
+      placements: { ...(index?.placements || {}) },
+    }
+  }
+
+  function parentChainLoops(folders, folderId, parentId) {
+    const byId = new Map((folders || []).map((folder) => [folder.id, folder]))
+    let cursor = parentId || null
+    const seen = new Set()
+    while (cursor) {
+      if (cursor === folderId || seen.has(cursor)) return true
+      seen.add(cursor)
+      cursor = byId.get(cursor)?.parentId || null
+    }
+    return false
+  }
+
+  function normalizeFolderIndex(raw) {
+    const folders = []
+    const seen = new Set()
+    for (const row of Array.isArray(raw?.folders) ? raw.folders : []) {
+      const id = String(row?.id || '').trim()
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      const name = String(row?.name || '').trim().slice(0, 80) || 'Folder'
+      const parentId = row?.parentId ? String(row.parentId) : null
+      folders.push({ id, name, parentId })
+    }
+    const ids = new Set(folders.map((folder) => folder.id))
+    for (const folder of folders) {
+      if (!folder.parentId || !ids.has(folder.parentId)) folder.parentId = null
+    }
+    for (const folder of folders) {
+      if (parentChainLoops(folders, folder.id, folder.parentId)) folder.parentId = null
+    }
+    const placements = {}
+    const source = raw?.placements && typeof raw.placements === 'object' ? raw.placements : {}
+    for (const [mapId, folderId] of Object.entries(source)) {
+      const id = String(mapId || '').trim()
+      const parent = String(folderId || '').trim()
+      if (!id || !ids.has(parent)) continue
+      placements[id] = parent
+    }
+    return { folders, placements }
+  }
+
+  function newFolderId() {
+    if (globalThis.crypto?.randomUUID) return crypto.randomUUID()
+    return `folder-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+  }
+
+  function nextFolderName(folders, parentId) {
+    const used = new Set(
+      (folders || [])
+        .filter((folder) => (folder.parentId || null) === (parentId || null))
+        .map((folder) => String(folder.name || '').trim().toLowerCase()),
+    )
+    const base = 'New folder'
+    if (!used.has(base.toLowerCase())) return base
+    let n = 2
+    while (used.has(`${base} ${n}`.toLowerCase())) n += 1
+    return `${base} ${n}`
+  }
+
+  function createFolder(index, { name, parentId, id } = {}) {
+    const next = cloneFolderIndex(normalizeFolderIndex(index))
+    const parent = parentId && next.folders.some((folder) => folder.id === parentId) ? parentId : null
+    const trimmed = String(name || '').trim().slice(0, 80) || nextFolderName(next.folders, parent)
+    const folderId = String(id || newFolderId())
+    if (next.folders.some((folder) => folder.id === folderId)) return { index: next, ok: false, folder: null }
+    const folder = { id: folderId, name: trimmed, parentId: parent }
+    next.folders.push(folder)
+    return { index: next, ok: true, folder }
+  }
+
+  function renameFolder(index, id, name) {
+    const next = cloneFolderIndex(normalizeFolderIndex(index))
+    const folder = next.folders.find((item) => item.id === id)
+    const trimmed = String(name || '').trim().slice(0, 80)
+    if (!folder || !trimmed) return { index: next, ok: false }
+    folder.name = trimmed
+    return { index: next, ok: true }
+  }
+
+  function moveFolder(index, id, parentId) {
+    const next = cloneFolderIndex(normalizeFolderIndex(index))
+    const folder = next.folders.find((item) => item.id === id)
+    if (!folder) return { index: next, ok: false }
+    const target = parentId || null
+    if (target === (folder.parentId || null)) return { index: next, ok: true }
+    if (target && !next.folders.some((item) => item.id === target)) return { index: next, ok: false }
+    if (parentChainLoops(next.folders, id, target)) return { index: next, ok: false }
+    folder.parentId = target
+    return { index: next, ok: true }
+  }
+
+  function deleteFolder(index, id) {
+    const next = cloneFolderIndex(normalizeFolderIndex(index))
+    const folder = next.folders.find((item) => item.id === id)
+    if (!folder) return { index: next, removed: false, lifted: false }
+    const parentId = folder.parentId || null
+    let lifted = false
+    for (const child of next.folders) {
+      if (child.parentId === id) {
+        child.parentId = parentId
+        lifted = true
+      }
+    }
+    for (const mapId of Object.keys(next.placements)) {
+      if (next.placements[mapId] === id) {
+        if (parentId) next.placements[mapId] = parentId
+        else delete next.placements[mapId]
+        lifted = true
+      }
+    }
+    next.folders = next.folders.filter((item) => item.id !== id)
+    return { index: next, removed: true, lifted }
+  }
+
+  function placeMap(index, mapId, folderId) {
+    const next = cloneFolderIndex(normalizeFolderIndex(index))
+    const id = String(mapId || '').trim()
+    if (!id) return next
+    if (!folderId || !next.folders.some((folder) => folder.id === folderId)) {
+      delete next.placements[id]
+      return next
+    }
+    next.placements[id] = folderId
+    return next
+  }
+
+  function libraryView(index, rows, folderId) {
+    const clean = normalizeFolderIndex(index)
+    const open = folderId && clean.folders.some((folder) => folder.id === folderId) ? folderId : null
+    const folders = clean.folders
+      .filter((folder) => (folder.parentId || null) === open)
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+    const maps = (Array.isArray(rows) ? rows : []).filter((row) => {
+      const placed = clean.placements[row?.id] || null
+      return placed === open
+    })
+    return { folderId: open, folders, maps }
+  }
+
+  function folderCrumbs(index, folderId) {
+    const clean = normalizeFolderIndex(index)
+    const crumbs = []
+    let cursor = folderId || null
+    const seen = new Set()
+    while (cursor && !seen.has(cursor)) {
+      seen.add(cursor)
+      const folder = clean.folders.find((item) => item.id === cursor)
+      if (!folder) break
+      crumbs.unshift({ id: folder.id, name: folder.name })
+      cursor = folder.parentId || null
+    }
+    return crumbs
+  }
+
+  function moveTargets(index, { kind, id } = {}) {
+    const clean = normalizeFolderIndex(index)
+    const blocked = new Set()
+    if (kind === 'folder' && id) {
+      const stack = [id]
+      while (stack.length) {
+        const current = stack.pop()
+        if (!current || blocked.has(current)) continue
+        blocked.add(current)
+        for (const folder of clean.folders) {
+          if (folder.parentId === current) stack.push(folder.id)
+        }
+      }
+    }
+    const targets = [{ id: null, label: 'My maps' }]
+    const walk = (parentId, prefix) => {
+      const children = clean.folders
+        .filter((folder) => (folder.parentId || null) === (parentId || null) && !blocked.has(folder.id))
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name))
+      for (const folder of children) {
+        const label = prefix ? `${prefix} / ${folder.name}` : folder.name
+        targets.push({ id: folder.id, label })
+        walk(folder.id, label)
+      }
+    }
+    walk(null, '')
+    return targets
+  }
+
+  function moveChoices(index, { kind, id, currentParentId } = {}) {
+    const current = currentParentId || null
+    return moveTargets(index, { kind, id }).filter((target) => (target.id || null) !== current)
+  }
+
+  function directCount(index, rows, folderId) {
+    const clean = normalizeFolderIndex(index)
+    if (!folderId || !clean.folders.some((folder) => folder.id === folderId)) return 0
+    const folders = clean.folders.filter((folder) => folder.parentId === folderId).length
+    const maps = (Array.isArray(rows) ? rows : []).filter((row) => clean.placements[row?.id] === folderId).length
+    return folders + maps
+  }
+
+  function insideLabel(count) {
+    const n = Number(count) || 0
+    if (n === 1) return '1 inside'
+    if (n > 1) return `${n} inside`
+    return 'Empty'
+  }
+
+  function prunePlacements(index, rows) {
+    const next = cloneFolderIndex(normalizeFolderIndex(index))
+    const ids = new Set((Array.isArray(rows) ? rows : []).map((row) => row?.id).filter(Boolean))
+    for (const mapId of Object.keys(next.placements)) {
+      if (!ids.has(mapId)) delete next.placements[mapId]
+    }
+    return next
+  }
+  // FOLDER_PURE_END
+
+  const FOLDERS_KEY = 'logyq_map_folders_v1'
+
+  function readFolderIndex() {
+    return normalizeFolderIndex(readJson(FOLDERS_KEY, null))
+  }
+
+  function writeFolderIndex(index) {
+    const clean = normalizeFolderIndex(index)
+    try { localStorage.setItem(FOLDERS_KEY, JSON.stringify(clean)) } catch (_error) {}
+    return clean
+  }
+
+  preview.folders = {
+    key: FOLDERS_KEY,
+    normalizeFolderIndex,
+    createFolder,
+    renameFolder,
+    moveFolder,
+    deleteFolder,
+    placeMap,
+    libraryView,
+    folderCrumbs,
+    moveChoices,
+    directCount,
+    insideLabel,
+    prunePlacements,
+    read: readFolderIndex,
+    write: writeFolderIndex,
+  }
+
   bootSession()
 })()

@@ -2449,3 +2449,67 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   assert.doesNotMatch(source, /rpc\('lab_thekonym_update'/)
   assert.match(source, /logyq_thekonym_mode_v1/)
 })
+
+test('map folders nest, move, and delete without touching map rows', () => {
+  const source = readFileSync(new URL('../public/logyq/js/preview/09-folders.js', import.meta.url), 'utf8')
+  const start = source.indexOf('// FOLDER_PURE_START')
+  const end = source.indexOf('// FOLDER_PURE_END')
+  assert.ok(start >= 0 && end > start)
+  const api = new Function(`${source.slice(start, end)}; return { normalizeFolderIndex, createFolder, renameFolder, moveFolder, deleteFolder, placeMap, libraryView, folderCrumbs, moveChoices, directCount, prunePlacements };`)()
+  const maps = [
+    { id: 'robins', name: 'Robins', tree: { name: 'Robins' }, word_bank: ['red'] },
+    { id: 'oaks', name: 'Oaks', tree: { name: 'Oaks' }, word_bank: [] },
+  ]
+  const before = JSON.stringify(maps)
+  let index = api.normalizeFolderIndex(null)
+  const animals = api.createFolder(index, { name: 'Animals', id: 'animals' })
+  assert.equal(animals.ok, true)
+  assert.equal(animals.folder.parentId, null)
+  index = animals.index
+  const birds = api.createFolder(index, { name: 'Birds', parentId: 'animals', id: 'birds' })
+  index = birds.index
+  const nests = api.createFolder(index, { name: 'Nests', parentId: 'birds', id: 'nests' })
+  index = nests.index
+  index = api.placeMap(index, 'robins', 'birds')
+  index = api.placeMap(index, 'oaks', 'animals')
+  assert.deepEqual(api.libraryView(index, maps, null).folders.map((folder) => folder.id), ['animals'])
+  assert.deepEqual(api.libraryView(index, maps, null).maps, [])
+  assert.deepEqual(api.libraryView(index, maps, 'birds').maps.map((row) => row.id), ['robins'])
+  assert.deepEqual(api.folderCrumbs(index, 'nests').map((crumb) => crumb.name), ['Animals', 'Birds', 'Nests'])
+  assert.equal(api.moveFolder(index, 'animals', 'birds').ok, false)
+  assert.equal(api.moveFolder(index, 'animals', 'birds').index.folders.find((folder) => folder.id === 'animals').parentId, null)
+  const renamed = api.renameFolder(index, 'birds', 'Songbirds')
+  assert.equal(renamed.ok, true)
+  index = renamed.index
+  const lifted = api.deleteFolder(index, 'songbirds')
+  assert.equal(lifted.removed, false)
+  const removed = api.deleteFolder(index, 'birds')
+  assert.equal(removed.removed, true)
+  assert.equal(removed.lifted, true)
+  assert.equal(removed.index.placements.robins, 'animals')
+  assert.equal(removed.index.folders.find((folder) => folder.id === 'nests').parentId, 'animals')
+  assert.equal(JSON.stringify(maps), before)
+  const rootAgain = api.deleteFolder(removed.index, 'animals')
+  assert.equal(rootAgain.index.placements.robins, undefined)
+  assert.equal(rootAgain.index.placements.oaks, undefined)
+  assert.equal(rootAgain.index.folders.find((folder) => folder.id === 'nests').parentId, null)
+  const messy = api.normalizeFolderIndex({
+    folders: [{ id: 'a', name: 'A', parentId: 'missing' }, { id: 'b', name: '', parentId: 'a' }],
+    placements: { robins: 'gone', oaks: 'a' },
+  })
+  assert.equal(messy.folders.find((folder) => folder.id === 'a').parentId, null)
+  assert.equal(messy.folders.find((folder) => folder.id === 'b').name, 'Folder')
+  assert.deepEqual(messy.placements, { oaks: 'a' })
+  assert.equal(api.libraryView(messy, maps, 'missing').folderId, null)
+  assert.deepEqual(api.libraryView(messy, maps, 'missing').maps.map((row) => row.id), ['robins'])
+  assert.deepEqual(api.libraryView(messy, maps, 'a').maps.map((row) => row.id), ['oaks'])
+  const pruned = api.prunePlacements(api.placeMap(messy, 'ghost', 'a'), maps)
+  assert.equal(pruned.placements.ghost, undefined)
+  assert.equal(pruned.placements.oaks, 'a')
+  const withPlants = api.createFolder(index, { name: 'Plants', id: 'plants' }).index
+  assert.ok(api.moveChoices(withPlants, { kind: 'map', id: 'oaks', currentParentId: null }).some((choice) => choice.label === 'Animals / Songbirds'))
+  assert.deepEqual(
+    api.moveChoices(withPlants, { kind: 'folder', id: 'animals', currentParentId: null }).map((choice) => choice.id),
+    ['plants'],
+  )
+})

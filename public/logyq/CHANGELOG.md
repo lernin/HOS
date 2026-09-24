@@ -1,5 +1,10 @@
 # LOGYQ changelog (intentional experiment deltas)
 
+## Nested map folders
+
+- **My maps can hold nested folders.** Create, rename, move, and delete folders. Maps move into folders and still open from inside them. Deleting a folder lifts what was inside it; it does not delete maps.
+- **No database change.** Folder layout is `localStorage.logyq_map_folders_v1` on this device. `logiq_map_list` / `logiq_map_save` / `logiq_map_delete` are unchanged. No Supabase migration.
+
 ## Map sync preview
 
 - **Open maps follow `logiq_maps.updated_at`.** A newer database row updates the canvas when no rename field is open. A save of an existing map checks that stamp first and does not post a stale full tree over it. Mid-rename keeps the typed name and shows an informational “Database change came in.” note on the input. Enter still saves that name. No schema change. Thekonym device edits stay local.
