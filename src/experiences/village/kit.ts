@@ -28,14 +28,107 @@ export function bevelBox(w:number,h:number,d:number,bevel=.06) {
   const s=new T.Shape();s.moveTo(-w/2,-h/2);s.lineTo(w/2,-h/2);s.lineTo(w/2,h/2);s.lineTo(-w/2,h/2);s.closePath()
   const g=new T.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelSize:bevel,bevelThickness:bevel,bevelSegments:1,steps:1});g.translate(0,0,-d/2);return g
 }
+type SurfaceKind='wood'|'plaster'|'stone'|'shingle'|'plain'
+const woodColors=new Set([palette.timber,palette.honey,palette.wood,palette.trim,'#5f806f','#6e7454','#8a684d','#55796b','#5b7c69','#76927b','#845730','#be955e','#ba915b'])
+const stoneColors=new Set([palette.stone,'#838e8d','#949b89','#8f978e','#a1a397','#a4a795','#91988d','#a8aa98'])
+const shingleColors=new Set([palette.slate,'#456578','#496b61','#a56748','#587487','#688391'])
+function surfaceKind(color:string):SurfaceKind {
+  const v=color.toLowerCase()
+  if(v===palette.plaster)return 'plaster'
+  if(woodColors.has(v))return 'wood'
+  if(stoneColors.has(v))return 'stone'
+  if(shingleColors.has(v))return 'shingle'
+  return 'plain'
+}
+function textureHash(x:number,y:number,seed:number) {
+  let n=Math.imul(x+seed,374761393)^Math.imul(y-seed,668265263)
+  n=(n^(n>>>13))*1274126177
+  return ((n^(n>>>16))>>>0)/4294967295
+}
+function makeSurfaceTexture(kind:Exclude<SurfaceKind,'plain'>) {
+  const size=128,data=new Uint8Array(size*size*4)
+  const seed=kind==='wood'?19:kind==='plaster'?43:kind==='stone'?71:97
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++) {
+    const px=x/size,py=y/size
+    const grain=textureHash(x,y,seed),coarse=textureHash(Math.floor(x/8),Math.floor(y/8),seed+11)
+    let value=.82
+    if(kind==='wood') {
+      const bend=8*Math.sin(py*9.0)+3*Math.sin(py*25.0)
+      const lines=.5+.5*Math.sin((x+bend)*.48+Math.sin(y*.12)*2.2)
+      const knots=Math.max(0,.22-Math.hypot((px-.28)%1,(py-.63)%1))*1.2
+      value=.63+.22*lines+.11*coarse+.06*grain-.18*knots
+    } else if(kind==='plaster') {
+      const trowel=.5+.5*Math.sin(px*18+Math.sin(py*13)*1.8)
+      value=.78+.10*coarse+.07*trowel+.05*grain
+    } else if(kind==='stone') {
+      const cell=textureHash(Math.floor(x/13+(Math.floor(y/11)%2)*.45),Math.floor(y/11),seed+23)
+      const edgeX=Math.min((x%13)/13,1-(x%13)/13)
+      const edgeY=Math.min((y%11)/11,1-(y%11)/11)
+      const mortar=Math.min(edgeX,edgeY)<.055?-.16:0
+      value=.60+.27*cell+.11*coarse+.06*grain+mortar
+    } else {
+      const row=Math.floor(y/13),shift=(row%2)*8
+      const sx=(x+shift)%16,sy=y%13
+      const seam=(sx<1.4||sy<1.4)?-.20:0
+      const tile=textureHash(Math.floor((x+shift)/16),row,seed+31)
+      value=.64+.24*tile+.10*grain+seam
+    }
+    const v=Math.round(Math.max(.28,Math.min(1,value))*255),i=(y*size+x)*4
+    data[i]=v;data[i+1]=v;data[i+2]=v;data[i+3]=255
+  }
+  const tex=new T.DataTexture(data,size,size,T.RGBAFormat,T.UnsignedByteType)
+  tex.wrapS=tex.wrapT=T.RepeatWrapping
+  tex.magFilter=T.LinearFilter
+  tex.minFilter=T.LinearMipmapLinearFilter
+  tex.generateMipmaps=true
+  tex.colorSpace=T.NoColorSpace
+  tex.needsUpdate=true
+  return tex
+}
+function textureMaterial(m:T.MeshStandardMaterial,kind:SurfaceKind,tex?:T.DataTexture) {
+  if(kind==='plain'||!tex)return
+  m.customProgramCacheKey=()=>`waterfall-surface-map-v3-${kind}`
+  m.onBeforeCompile=shader=>{
+    shader.uniforms.surfaceMap={value:tex}
+    shader.vertexShader=shader.vertexShader
+      .replace('#include <common>','#include <common>\nvarying vec3 vSurfacePosition;\nvarying vec3 vSurfaceNormal;')
+      .replace('#include <begin_vertex>','#include <begin_vertex>\nvSurfacePosition=(modelMatrix*vec4(position,1.0)).xyz;\nvSurfaceNormal=normalize(mat3(modelMatrix)*normal);')
+    const functions=`
+uniform sampler2D surfaceMap;
+varying vec3 vSurfacePosition;
+varying vec3 vSurfaceNormal;
+float mappedSurface(vec3 p,vec3 n,float scale){
+  vec3 w=abs(normalize(n))+.0001;w/=w.x+w.y+w.z;
+  float sx=texture2D(surfaceMap,p.zy*scale).r;
+  float sy=texture2D(surfaceMap,p.xz*scale).r;
+  float sz=texture2D(surfaceMap,p.xy*scale).r;
+  return sx*w.x+sy*w.y+sz*w.z;
+}`
+    shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>${functions}`)
+    const scale=kind==='wood'?'.72':kind==='plaster'?'.46':kind==='stone'?'.62':'.78'
+    const contrast=kind==='plaster'?'float surfaceTone=.82+surfaceValue*.30;':kind==='wood'?'float surfaceTone=.64+surfaceValue*.54;':kind==='stone'?'float surfaceTone=.62+surfaceValue*.56;':'float surfaceTone=.64+surfaceValue*.52;'
+    shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>\nfloat surfaceValue=mappedSurface(vSurfacePosition,vSurfaceNormal,${scale});\n${contrast}\ndiffuseColor.rgb*=surfaceTone;`)
+    const roughness=kind==='plaster'?'.14':kind==='stone'?'.19':kind==='shingle'?'.17':'.15'
+    shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>\nfloat surfaceRough=mappedSurface(vSurfacePosition,vSurfaceNormal,${scale}*1.7);\nroughnessFactor=clamp(roughnessFactor+(.5-surfaceRough)*${roughness},.50,1.0);`)
+  }
+}
 export type Kit=ReturnType<typeof createKit>
 export function createKit(scene:T.Scene) {
   const root=new T.Group(),materials=new Map<string,T.MeshStandardMaterial>(),geometries=new Set<T.BufferGeometry>()
   const rand=random(),rocks=Array.from({length:7},(_,i)=>pebbleGeometry(i*73+3))
+  const surfaceTextures=new Map<Exclude<SurfaceKind,'plain'>,T.DataTexture>([
+    ['wood',makeSurfaceTexture('wood')],['plaster',makeSurfaceTexture('plaster')],['stone',makeSurfaceTexture('stone')],['shingle',makeSurfaceTexture('shingle')],
+  ])
   rocks.forEach(g=>geometries.add(g))
   const material=(color:string) => {
-    if(!materials.has(color))materials.set(color,new T.MeshStandardMaterial({color,roughness:.88}))
-    return materials.get(color)!
+    const key=color.toLowerCase()
+    if(!materials.has(key)) {
+      const m=new T.MeshStandardMaterial({color,roughness:.88})
+      const kind=surfaceKind(key)
+      textureMaterial(m,kind,kind==='plain'?undefined:surfaceTextures.get(kind))
+      materials.set(key,m)
+    }
+    return materials.get(key)!
   }
   const glow=material('#ffd58a');glow.emissive.set('#ffb447');glow.emissiveIntensity=.9
   const add=(g:T.BufferGeometry,color:string|T.Material,x=0,y=0,z=0,group:T.Group=root) => {
@@ -88,5 +181,5 @@ export function createKit(scene:T.Scene) {
     // Temporary object forest is released after batching.
     root.clear()
   }
-  return {root,add,box,beam,rock,lantern,flower,fence,material,rand,finish,dispose:()=>{geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose())}}
+  return {root,add,box,beam,rock,lantern,flower,fence,material,rand,finish,dispose:()=>{geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());surfaceTextures.forEach(t=>t.dispose())}}
 }
