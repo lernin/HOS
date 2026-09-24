@@ -6,6 +6,7 @@
       FLICK_FAST_MS: 180,
       HOLD_MS: 160,
       HOLD_SLOP: 8,
+      GAME_DRAG_PX: 6,
       TAP_MOVE: 11,
       DOUBLE_TAP_MS: 360,
       PAN_DEAD_PX: 56,
@@ -813,9 +814,11 @@
     }
 
     const hold = { pointerId: event.pointerId, ...pointer, timer: 0 }
-    hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     state.hold = hold
     win.__logyqHoldArming = true
+    // Game has no pan, so a few pixels of movement starts the drag at once.
+    if (gamePlay(doc)) return
+    hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     beginCardRace(doc, win, state, event)
   }
 
@@ -824,6 +827,15 @@
     if (!pointer) return
     pointer.lastX = event.clientX
     pointer.lastY = event.clientY
+
+    if (gamePlay(doc) && state.hold?.pointerId === event.pointerId) {
+      state.hold.lastX = event.clientX
+      state.hold.lastY = event.clientY
+      if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) >= v162Constants().GAME_DRAG_PX) {
+        latchHold(doc, win, state, state.hold)
+      }
+      return
+    }
 
     if (state.hold?.pointerId === event.pointerId) {
       state.hold.lastX = event.clientX
@@ -880,7 +892,7 @@
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
     const releasedAtOrigin = Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= v162Constants().STILL_PX
-    const dockKind = (canceled || releasedAtOrigin)
+    const dockKind = (canceled || releasedAtOrigin || gamePlay(doc))
       ? 'none'
       : activeDockKind(doc, drag, event.clientX, event.clientY)
     const armedBank = !canceled && !releasedAtOrigin && drag.moved && dockKind === 'bank' && drag.bankArmed
@@ -903,7 +915,7 @@
 
       cleanupDrag(doc, win, state, drag)
       dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
-      if (armedBank) sendDragToWordBank(doc, drag)
+      if (armedBank && !gamePlay(doc)) sendDragToWordBank(doc, drag)
     } finally {
       win.__logyqHoldDragCommit = false
       win.__logyqHoldDragAllowBank = false
@@ -1046,7 +1058,7 @@
       if (!drag) { state.feedbackRaf = 0; return }
       restoreOriginLayout(doc, drag.originLayout)
       stampOriginGhost(doc, drag.uids)
-      const dockKind = activeDockKind(doc, drag, drag.lastX, drag.lastY)
+      const dockKind = gamePlay(doc) ? 'none' : activeDockKind(doc, drag, drag.lastX, drag.lastY)
       armBankHover(win, drag, dockKind, doc)
       doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
       movePreview(drag, drag.lastX, drag.lastY)
@@ -1233,7 +1245,7 @@
   }
 
   function edgePan(doc, win, x, y) {
-    if (curriculumViewLocked(doc)) return false
+    if (curriculumViewLocked(doc) || gamePlay(doc)) return false
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3) return false
     const view = viewRect(doc, win)
@@ -1474,6 +1486,7 @@
   }
 
   function resolveCardRace(doc, win, state, event) {
+    if (gamePlay(doc)) return
     const race = state.race
     if (!race || race.mode === 'drag') return
     const now = win.performance.now()
@@ -1549,7 +1562,7 @@
   function applyFingerPan(doc, win, pan, x, y) {
     const locked = doc?.body?.classList?.contains('logyq-curriculum')
       && (doc.body.classList.contains('logyq-curriculum-frozen') || doc.body.classList.contains('logyq-curriculum-gate'))
-    if (locked) return
+    if (locked || doc?.body?.classList?.contains('logyq-game')) return
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3 || !pan) return
     const dx = x - pan.lastX
@@ -1603,6 +1616,10 @@
   function curriculumSandbox(doc) {
     return !!doc.body?.classList.contains('logyq-curriculum') ||
       !!doc.body?.classList.contains('logyq-game')
+  }
+
+  function gamePlay(doc) {
+    return !!doc?.body?.classList?.contains('logyq-game')
   }
 
   // After the Start settle, and during the haze gate, the board stays put.
@@ -1685,6 +1702,14 @@
 
     if (candidate.moved) {
       state.lastTap = null
+      return
+    }
+
+    // Game taps do not nominate, edit, or create. Fitting is drag-only.
+    if (gamePlay(doc)) {
+      state.lastTap = null
+      clearCardMic(state.mic)
+      smiteSetArm(doc, null)
       return
     }
 
@@ -2247,7 +2272,7 @@
   }
 
   function smiteApplyPinch(doc, win, smite) {
-    if (curriculumViewLocked(doc)) return
+    if (curriculumViewLocked(doc) || gamePlay(doc)) return
     const fingers = Array.from(smite.pointers.values())
     if (fingers.length < 2 || !win.d3) return
     const a = fingers[0]

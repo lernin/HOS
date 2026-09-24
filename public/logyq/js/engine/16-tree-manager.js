@@ -23,6 +23,7 @@ state.zoom = d3.zoom()
     // Allow wheel-zoom anywhere. Desktop: block pans that start on a
     // card (that's a drag). Phone: a card finger uses this same zoom
     // pan until a still hold latches (`__logyqHoldDragSession`).
+    if (typeof gameCameraLocked === "function" && gameCameraLocked()) return false;
     if (typeof document !== "undefined" && document.body?.classList?.contains("logyq-curriculum")
       && (document.body.classList.contains("logyq-curriculum-frozen") || document.body.classList.contains("logyq-curriculum-gate"))) {
       return false;
@@ -70,6 +71,7 @@ elements.svg.call(state.zoom);
 elements.svg.on("wheel.zoom", null); // disable default instant wheel
 elements.svg.on("wheel.smooth", function (event) {
   event.preventDefault();
+  if (typeof gameCameraLocked === "function" && gameCameraLocked()) return;
   if (document.body?.classList?.contains("logyq-curriculum")
     && (document.body.classList.contains("logyq-curriculum-frozen") || document.body.classList.contains("logyq-curriculum-gate"))) {
     return;
@@ -112,6 +114,7 @@ window.addEventListener('keydown', (e) => {
     // Z = zoom in, Shift+Z = zoom out
     if (e.key === 'z' || e.key === 'Z') {
       e.preventDefault();
+      if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
       if (document.body?.classList?.contains('logyq-curriculum')
         && (document.body.classList.contains('logyq-curriculum-frozen') || document.body.classList.contains('logyq-curriculum-gate'))) {
         return;
@@ -151,6 +154,7 @@ window.addEventListener('keydown', (e) => {
     this.renderEmpty();
 
     elements.fitBtn.addEventListener('click', ()=> {
+      if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
       if (document.body?.classList?.contains('logyq-curriculum')) {
         this.settleRootAnchored({ force: false });
         return;

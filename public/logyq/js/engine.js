@@ -138,6 +138,15 @@ function curriculumPlayLocked(){
   }
 }
 
+/* Game play fits once on entry. After that the camera stays put. */
+function gameCameraLocked(){
+  try {
+    return typeof document !== 'undefined' && !!document.body?.classList?.contains('logyq-game');
+  } catch (_e) {
+    return false;
+  }
+}
+
 function phoneNoFollowCamera(){
   try {
     if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true;
@@ -150,6 +159,7 @@ function phoneNoFollowCamera(){
 /* Smoothly pan to a node's center, preserving current zoom. */
 function flyCenterToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
   if (phoneNoFollowCamera()) return;
+  if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
   const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
@@ -185,6 +195,7 @@ function copyZoom(t){
    move the map, so this returns immediately on a phone. */
 function flyEditFocusToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
   if (phoneNoFollowCamera()) return;
+  if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
   const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
@@ -250,6 +261,7 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   // Curriculum owns its camera (root-anchored settle only). A zoom event
   // from that settle must not recenter on the selected card.
   if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-curriculum')) return;
+  if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
   const { state, moat } = logyq
 
       // Don’t run the moat while the user is dragging/panning the map
@@ -922,6 +934,7 @@ function autoFitSoon(delay){
     var d = Number.isFinite(delay) ? delay : 220; // let transitions finish
     window.__undoFitT = setTimeout(function(){
       try{
+        if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
         const curriculum = typeof document !== 'undefined' && document.body?.classList?.contains('logyq-curriculum');
         if (curriculum && typeof logyq.treeManager.settleRootAnchored === 'function') {
           logyq.treeManager.settleRootAnchored({ force: false, duration: 640 });
@@ -4731,7 +4744,9 @@ attach('drag', dragManager)
 chip.addEventListener('dragend', () => endChipDragVisuals());
 
       chip.addEventListener("contextmenu", (e) => {e.preventDefault();
-        e.stopPropagation(); const sel = Array.from((state.selectedUids || new Set()).values());
+        e.stopPropagation();
+        if (document.body.classList.contains('logyq-game')) return;
+        const sel = Array.from((state.selectedUids || new Set()).values());
 if (!state.root || sel.length !== 1) {logyq.selection.showToast(sel.length === 0 ? "Select a node first" : "Select just one node");
   return;}
 const target = utils.findByUid(state.root.data, sel[0]);
@@ -5078,7 +5093,12 @@ function bindChipPointerPlace() {
     if (!session.dragging && !session.deleting && !session.panning) {
       // Claim the gesture while the finger is still on the chip. Waiting
       // until it has left the dock lets the browser cancel the pointer first.
-      if (!moved) return
+      if (document.body.classList.contains('logyq-game')) {
+        if (Math.hypot(dx, dy) < 6) return
+        beginLift([session.word])
+        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      } else if (!moved) return
+      else {
       const axis = shelfScrollAxis()
       if (axis === 'x') {
         // Portrait: only an upward drag lifts. Horizontal movement pans the shelf.
@@ -5096,6 +5116,7 @@ function bindChipPointerPlace() {
         beginLift(swipeWords(session.word))
       }
       try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      }
     }
     if (session.panning) {
       const axis = shelfScrollAxis()
@@ -5165,7 +5186,9 @@ function bindChipPointerPlace() {
     }
     event.preventDefault()
     event.stopPropagation()
-    const corner = commit ? cornerUnderFinger(event.clientX, event.clientY) : null
+    const corner = commit && !document.body.classList.contains('logyq-game')
+      ? cornerUnderFinger(event.clientX, event.clientY)
+      : null
     if (corner === 'trash') {
       removeBankWords(words)
     } else if (corner === 'warehouse') {
@@ -5370,12 +5393,14 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     render();
     logyq.treeManager.layoutAndRender(false);
 
-    // Keep your “drop under pointer” behavior
+    // Keep your “drop under pointer” behavior. Game keeps the fitted camera.
+    if (!(typeof gameCameraLocked === 'function' && gameCameraLocked())) {
     const current = d3.zoomTransform(elements.svg.node());
     const s = current.k || 1;
     const rx = state.root.x, ry = state.root.y;
     const tx = drop.px - s * rx, ty = drop.py - s * ry;
     elements.svg.call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
+    }
     return;
   }
 
@@ -5704,6 +5729,7 @@ state.zoom = d3.zoom()
     // Allow wheel-zoom anywhere. Desktop: block pans that start on a
     // card (that's a drag). Phone: a card finger uses this same zoom
     // pan until a still hold latches (`__logyqHoldDragSession`).
+    if (typeof gameCameraLocked === "function" && gameCameraLocked()) return false;
     if (typeof document !== "undefined" && document.body?.classList?.contains("logyq-curriculum")
       && (document.body.classList.contains("logyq-curriculum-frozen") || document.body.classList.contains("logyq-curriculum-gate"))) {
       return false;
@@ -5751,6 +5777,7 @@ elements.svg.call(state.zoom);
 elements.svg.on("wheel.zoom", null); // disable default instant wheel
 elements.svg.on("wheel.smooth", function (event) {
   event.preventDefault();
+  if (typeof gameCameraLocked === "function" && gameCameraLocked()) return;
   if (document.body?.classList?.contains("logyq-curriculum")
     && (document.body.classList.contains("logyq-curriculum-frozen") || document.body.classList.contains("logyq-curriculum-gate"))) {
     return;
@@ -5793,6 +5820,7 @@ window.addEventListener('keydown', (e) => {
     // Z = zoom in, Shift+Z = zoom out
     if (e.key === 'z' || e.key === 'Z') {
       e.preventDefault();
+      if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
       if (document.body?.classList?.contains('logyq-curriculum')
         && (document.body.classList.contains('logyq-curriculum-frozen') || document.body.classList.contains('logyq-curriculum-gate'))) {
         return;
@@ -5832,6 +5860,7 @@ window.addEventListener('keydown', (e) => {
     this.renderEmpty();
 
     elements.fitBtn.addEventListener('click', ()=> {
+      if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
       if (document.body?.classList?.contains('logyq-curriculum')) {
         this.settleRootAnchored({ force: false });
         return;
@@ -6575,6 +6604,12 @@ function keyDispatcher(e){
   // Curriculum Mix calls the same randomizeTree as a normal map.
   // No add, rename, delete, or bank. The Start gate swallows keys.
   if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) {
+    if (document.body?.classList?.contains('logyq-game')) {
+      e.preventDefault();
+      if (lower === 'u' && e.shiftKey) { logyq.history.redo?.(); return; }
+      if (lower === 'u') { logyq.history.undo(); return; }
+      return;
+    }
     const phase = document.body?.dataset?.curriculumPhase || '';
     if (phase === 'gate' || phase === 'shuffle') {
       e.preventDefault();
@@ -7319,7 +7354,10 @@ elements.svg.on("contextmenu", (event) => {
     },
     undo() { undo(); },
     mix(includeBank = false) { logyq.mix.randomizeTree(!!includeBank); },
-    fit() { logyq.treeManager.autoFit(); },
+    fit() {
+      if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
+      logyq.treeManager.autoFit();
+    },
     loadMap(tree, wordBank = [], options = {}) {
       const keepEditor = !!options.keepEditor;
       const keepSelection = !!options.keepSelection || keepEditor;

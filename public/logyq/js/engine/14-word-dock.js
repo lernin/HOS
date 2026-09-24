@@ -283,7 +283,9 @@
 chip.addEventListener('dragend', () => endChipDragVisuals());
 
       chip.addEventListener("contextmenu", (e) => {e.preventDefault();
-        e.stopPropagation(); const sel = Array.from((state.selectedUids || new Set()).values());
+        e.stopPropagation();
+        if (document.body.classList.contains('logyq-game')) return;
+        const sel = Array.from((state.selectedUids || new Set()).values());
 if (!state.root || sel.length !== 1) {logyq.selection.showToast(sel.length === 0 ? "Select a node first" : "Select just one node");
   return;}
 const target = utils.findByUid(state.root.data, sel[0]);
@@ -630,7 +632,12 @@ function bindChipPointerPlace() {
     if (!session.dragging && !session.deleting && !session.panning) {
       // Claim the gesture while the finger is still on the chip. Waiting
       // until it has left the dock lets the browser cancel the pointer first.
-      if (!moved) return
+      if (document.body.classList.contains('logyq-game')) {
+        if (Math.hypot(dx, dy) < 6) return
+        beginLift([session.word])
+        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      } else if (!moved) return
+      else {
       const axis = shelfScrollAxis()
       if (axis === 'x') {
         // Portrait: only an upward drag lifts. Horizontal movement pans the shelf.
@@ -648,6 +655,7 @@ function bindChipPointerPlace() {
         beginLift(swipeWords(session.word))
       }
       try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      }
     }
     if (session.panning) {
       const axis = shelfScrollAxis()
@@ -717,7 +725,9 @@ function bindChipPointerPlace() {
     }
     event.preventDefault()
     event.stopPropagation()
-    const corner = commit ? cornerUnderFinger(event.clientX, event.clientY) : null
+    const corner = commit && !document.body.classList.contains('logyq-game')
+      ? cornerUnderFinger(event.clientX, event.clientY)
+      : null
     if (corner === 'trash') {
       removeBankWords(words)
     } else if (corner === 'warehouse') {
@@ -922,12 +932,14 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     render();
     logyq.treeManager.layoutAndRender(false);
 
-    // Keep your “drop under pointer” behavior
+    // Keep your “drop under pointer” behavior. Game keeps the fitted camera.
+    if (!(typeof gameCameraLocked === 'function' && gameCameraLocked())) {
     const current = d3.zoomTransform(elements.svg.node());
     const s = current.k || 1;
     const rx = state.root.x, ry = state.root.y;
     const tx = drop.px - s * rx, ty = drop.py - s * ry;
     elements.svg.call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
+    }
     return;
   }
 

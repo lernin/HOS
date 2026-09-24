@@ -98,6 +98,15 @@ function curriculumPlayLocked(){
   }
 }
 
+/* Game play fits once on entry. After that the camera stays put. */
+function gameCameraLocked(){
+  try {
+    return typeof document !== 'undefined' && !!document.body?.classList?.contains('logyq-game');
+  } catch (_e) {
+    return false;
+  }
+}
+
 function phoneNoFollowCamera(){
   try {
     if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-mobile-v162')) return true;
@@ -110,6 +119,7 @@ function phoneNoFollowCamera(){
 /* Smoothly pan to a node's center, preserving current zoom. */
 function flyCenterToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
   if (phoneNoFollowCamera()) return;
+  if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
   const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
@@ -145,6 +155,7 @@ function copyZoom(t){
    move the map, so this returns immediately on a phone. */
 function flyEditFocusToUID(uid, { duration = logyq.fly.hotkeyDuration } = {}){
   if (phoneNoFollowCamera()) return;
+  if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
   const { elements, state } = logyq
   const svg = elements.svg?.node();
   if (!svg || !state.root || !uid) return;
@@ -210,6 +221,7 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   // Curriculum owns its camera (root-anchored settle only). A zoom event
   // from that settle must not recenter on the selected card.
   if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-curriculum')) return;
+  if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
   const { state, moat } = logyq
 
       // Don’t run the moat while the user is dragging/panning the map

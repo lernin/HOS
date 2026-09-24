@@ -435,9 +435,9 @@
         #logyq-warehouse{display:flex;position:fixed;z-index:30;width:44px;height:44px;left:10px;right:auto;top:auto;bottom:calc(56px + env(safe-area-inset-bottom) + 8px)}
         #logyq-bank-trash{display:none;position:fixed;z-index:30;width:44px;height:44px;right:10px;left:auto;top:auto;bottom:calc(56px + env(safe-area-inset-bottom) + 8px)}
         body:has(#Dock.dock-hidden) #logyq-warehouse,body:has(#Dock.dock-hidden) #logyq-bank-trash,body.logyq-home:not(.logyq-map-open) #logyq-warehouse,body.logyq-home:not(.logyq-map-open) #logyq-bank-trash{display:none!important}
-        body.logyq-chip-drag #logyq-bank-trash,body.v2-branch-drag #logyq-bank-trash,body:has(#Dock.dock-hidden).logyq-chip-drag #logyq-bank-trash,body:has(#Dock.dock-hidden).v2-branch-drag #logyq-bank-trash{display:flex!important}
+        body.logyq-chip-drag:not(.logyq-game) #logyq-bank-trash,body.v2-branch-drag:not(.logyq-game) #logyq-bank-trash,body:has(#Dock.dock-hidden).logyq-chip-drag:not(.logyq-game) #logyq-bank-trash,body:has(#Dock.dock-hidden).v2-branch-drag:not(.logyq-game) #logyq-bank-trash{display:flex!important}
         #logyq-warehouse.is-bank-empty{display:none!important}
-        body.logyq-chip-drag:not(.logyq-curriculum) #logyq-warehouse.is-bank-empty{display:flex!important}
+        body.logyq-chip-drag:not(.logyq-curriculum):not(.logyq-game) #logyq-warehouse.is-bank-empty{display:flex!important}
         body:has(#Dock.is-empty) #logyq-warehouse{bottom:max(10px,env(safe-area-inset-bottom))}
         #Toast{bottom:72px;max-width:calc(100vw - 36px);text-align:center}
         #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px);overflow:hidden;flex-wrap:nowrap}
@@ -485,6 +485,9 @@
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
         @keyframes logyq-smite-march{from{stroke-dashoffset:0}to{stroke-dashoffset:-14px}}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row,.logyq-folder-row{grid-template-columns:minmax(0,1fr)}.logiq-map-actions{justify-content:flex-start}
+        body.logyq-home .logiq-modal-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center}
+        body.logyq-home .logyq-home-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:4px;width:100%;min-width:0;flex:none}
+        body.logyq-home .logyq-home-tab{min-width:0;width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:8px 4px;font-size:clamp(13px,3.7vw,16px);line-height:1.15;text-align:center;white-space:nowrap;overflow:hidden}
       }
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
         body.logyq-mobile-v162 #logiq-v2-drag-card,body.logyq-mobile-v162 .drag-mini,body.logyq-mobile-v162 g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
@@ -528,9 +531,15 @@
         #logyq-warehouse{top:max(8px,env(safe-area-inset-top));bottom:auto}
         #logyq-bank-trash{top:auto;bottom:max(8px,env(safe-area-inset-bottom))}
         body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
-        body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
+        body.logyq-home #logiq-library .logiq-modal-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
+        body.logyq-home .logyq-home-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;min-width:0}
+        body.logyq-home .logyq-home-tab{min-width:0;width:100%;box-sizing:border-box;text-align:center;white-space:nowrap;overflow:hidden;font-size:clamp(13px,3.7vw,16px)}
       }
-      body.logyq-game #Dock,
+      body.logyq-game .word-tools,
+      body.logyq-game #wordInput,
+      body.logyq-game #addWordBtn,
+      body.logyq-game #fitBtn,
+      body.logyq-game #logiq-mobile-header [data-tool="fit"],
       body.logyq-game #logyq-warehouse,
       body.logyq-game #logyq-bank-trash,
       body.logyq-game #logyq-warehouse-sheet,
@@ -559,8 +568,11 @@
       body.logyq-curriculum #logiq-mobile-panel [data-tool="paint"],
       body.logyq-curriculum #logiq-mobile-panel [data-tool="dock"],
       body.logyq-mobile-v162.logyq-curriculum.v2-branch-drag #trash,
+      body.logyq-mobile-v162.logyq-game.v2-branch-drag #trash,
       body.logyq-curriculum.logyq-chip-drag #logyq-bank-trash,
-      body.logyq-curriculum.v2-branch-drag #logyq-bank-trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
+      body.logyq-game.logyq-chip-drag #logyq-bank-trash,
+      body.logyq-curriculum.v2-branch-drag #logyq-bank-trash,
+      body.logyq-game.v2-branch-drag #logyq-bank-trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
       body.logyq-curriculum g.node.logyq-pile,
       body.logyq-curriculum g.hit-slot.logyq-pile,
       body.logyq-curriculum path.link.logyq-pile-link{display:none!important;pointer-events:none!important}
@@ -1074,6 +1086,7 @@
       FLICK_FAST_MS: 180,
       HOLD_MS: 160,
       HOLD_SLOP: 8,
+      GAME_DRAG_PX: 6,
       TAP_MOVE: 11,
       DOUBLE_TAP_MS: 360,
       PAN_DEAD_PX: 56,
@@ -1881,9 +1894,11 @@
     }
 
     const hold = { pointerId: event.pointerId, ...pointer, timer: 0 }
-    hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     state.hold = hold
     win.__logyqHoldArming = true
+    // Game has no pan, so a few pixels of movement starts the drag at once.
+    if (gamePlay(doc)) return
+    hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     beginCardRace(doc, win, state, event)
   }
 
@@ -1892,6 +1907,15 @@
     if (!pointer) return
     pointer.lastX = event.clientX
     pointer.lastY = event.clientY
+
+    if (gamePlay(doc) && state.hold?.pointerId === event.pointerId) {
+      state.hold.lastX = event.clientX
+      state.hold.lastY = event.clientY
+      if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) >= v162Constants().GAME_DRAG_PX) {
+        latchHold(doc, win, state, state.hold)
+      }
+      return
+    }
 
     if (state.hold?.pointerId === event.pointerId) {
       state.hold.lastX = event.clientX
@@ -1948,7 +1972,7 @@
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
     const releasedAtOrigin = Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= v162Constants().STILL_PX
-    const dockKind = (canceled || releasedAtOrigin)
+    const dockKind = (canceled || releasedAtOrigin || gamePlay(doc))
       ? 'none'
       : activeDockKind(doc, drag, event.clientX, event.clientY)
     const armedBank = !canceled && !releasedAtOrigin && drag.moved && dockKind === 'bank' && drag.bankArmed
@@ -1971,7 +1995,7 @@
 
       cleanupDrag(doc, win, state, drag)
       dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
-      if (armedBank) sendDragToWordBank(doc, drag)
+      if (armedBank && !gamePlay(doc)) sendDragToWordBank(doc, drag)
     } finally {
       win.__logyqHoldDragCommit = false
       win.__logyqHoldDragAllowBank = false
@@ -2114,7 +2138,7 @@
       if (!drag) { state.feedbackRaf = 0; return }
       restoreOriginLayout(doc, drag.originLayout)
       stampOriginGhost(doc, drag.uids)
-      const dockKind = activeDockKind(doc, drag, drag.lastX, drag.lastY)
+      const dockKind = gamePlay(doc) ? 'none' : activeDockKind(doc, drag, drag.lastX, drag.lastY)
       armBankHover(win, drag, dockKind, doc)
       doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
       movePreview(drag, drag.lastX, drag.lastY)
@@ -2301,7 +2325,7 @@
   }
 
   function edgePan(doc, win, x, y) {
-    if (curriculumViewLocked(doc)) return false
+    if (curriculumViewLocked(doc) || gamePlay(doc)) return false
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3) return false
     const view = viewRect(doc, win)
@@ -2542,6 +2566,7 @@
   }
 
   function resolveCardRace(doc, win, state, event) {
+    if (gamePlay(doc)) return
     const race = state.race
     if (!race || race.mode === 'drag') return
     const now = win.performance.now()
@@ -2617,7 +2642,7 @@
   function applyFingerPan(doc, win, pan, x, y) {
     const locked = doc?.body?.classList?.contains('logyq-curriculum')
       && (doc.body.classList.contains('logyq-curriculum-frozen') || doc.body.classList.contains('logyq-curriculum-gate'))
-    if (locked) return
+    if (locked || doc?.body?.classList?.contains('logyq-game')) return
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3 || !pan) return
     const dx = x - pan.lastX
@@ -2671,6 +2696,10 @@
   function curriculumSandbox(doc) {
     return !!doc.body?.classList.contains('logyq-curriculum') ||
       !!doc.body?.classList.contains('logyq-game')
+  }
+
+  function gamePlay(doc) {
+    return !!doc?.body?.classList?.contains('logyq-game')
   }
 
   // After the Start settle, and during the haze gate, the board stays put.
@@ -2753,6 +2782,14 @@
 
     if (candidate.moved) {
       state.lastTap = null
+      return
+    }
+
+    // Game taps do not nominate, edit, or create. Fitting is drag-only.
+    if (gamePlay(doc)) {
+      state.lastTap = null
+      clearCardMic(state.mic)
+      smiteSetArm(doc, null)
       return
     }
 
@@ -3315,7 +3352,7 @@
   }
 
   function smiteApplyPinch(doc, win, smite) {
-    if (curriculumViewLocked(doc)) return
+    if (curriculumViewLocked(doc) || gamePlay(doc)) return
     const fingers = Array.from(smite.pointers.values())
     if (fingers.length < 2 || !win.d3) return
     const a = fingers[0]
