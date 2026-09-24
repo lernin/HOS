@@ -91,7 +91,8 @@ function __selectedUid(){
 /* Curriculum play is a rebuild sandbox. Normal maps never set this class. */
 function curriculumPlayLocked(){
   try {
-    return typeof document !== 'undefined' && !!document.body?.classList?.contains('logyq-curriculum');
+    return typeof document !== 'undefined' && !!document.body?.classList &&
+      (document.body.classList.contains('logyq-curriculum') || document.body.classList.contains('logyq-game'));
   } catch (_e) {
     return false;
   }
@@ -310,6 +311,5 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   window.incidentalBankContext = incidentalBankContext
   window.noteBankContextGrace = noteBankContextGrace
   attach('holdDrag', { frozen: holdDragFrozen, blocksBank: holdDragBlocksBank, incidentalBankContext, noteBankContextGrace })
-
 
 

@@ -417,9 +417,10 @@ test('preview fragments concatenate to the served enhancement without edits', ()
   assert.deepEqual(assembled.names, [
     '00-boot.js', '01-helpers.js', '02-styles.js', '03-ui.js', '04-gestures.js',
     '05-v162-gestures.js', '06-persistence.js', '07-curriculum.js', '08-thekonym.js',
-    '09-folders.js',
+    '10-game.js', '09-folders.js',
   ])
   assert.equal(assembled.source, readFileSync(previewPath, 'utf8'))
+  assert.ok(assembled.source.indexOf('const GAME_KEY') < assembled.source.lastIndexOf('})()'), 'game helpers stay inside the LOGYQ preview scope')
   assert.match(assembled.source, /function queueAutosave/)
   assert.match(assembled.source, /function planRemoteSync/)
   assert.match(assembled.source, /logyq-db-bubble/)

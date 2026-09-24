@@ -316,6 +316,21 @@
       #logiq-library[data-shelf="curriculum"] #logiq-map-list,
       #logyq-curriculum{display:none}
       #logiq-library[data-shelf="curriculum"] #logyq-curriculum{display:block}
+      #logiq-library[data-shelf="game"] #logiq-new-map,
+      #logiq-library[data-shelf="game"] #logyq-new-folder,
+      #logiq-library[data-shelf="game"] #logiq-map-list,
+      #logyq-game-levels{display:none}
+      #logiq-library[data-shelf="game"] #logyq-game-levels{display:block}
+      #logyq-game-path{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
+      #logyq-game-path button{width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
+      #logyq-game-path button:disabled{cursor:not-allowed;color:#94a3b8;background:#f8fafc}
+      #logyq-game-path span{display:block;font-size:13px;font-weight:500;color:#64748b;margin-top:3px}
+      #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+      body.logyq-game:not(.logyq-home) #logyq-game-bar{display:flex}
+      #logyq-game-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
+      #logyq-game-bar button{border:1px solid #bfdbfe;background:#fff;color:#1e40af;border-radius:9px;padding:8px 10px;font-weight:750;cursor:pointer}
+      #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
+      #logyq-game-next[hidden]{display:none}
       #logyq-curriculum .logiq-empty p{margin:0}
       .logyq-level-intro{margin:4px 0 14px;color:#64748b;font-size:13px}
       #logyq-level-path{list-style:none;margin:0 auto 28px;padding:8px 0 12px;width:min(440px,100%);display:grid;gap:16px;position:relative}
@@ -515,6 +530,19 @@
         body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
         body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
       }
+      body.logyq-game #Dock,
+      body.logyq-game #logyq-warehouse,
+      body.logyq-game #logyq-bank-trash,
+      body.logyq-game #logyq-warehouse-sheet,
+      body.logyq-game #trash,
+      body.logyq-game #logyq-select-strip,
+      body.logyq-game #logyq-paint-btn,
+      body.logyq-game #logyq-paint-strip,
+      body.logyq-game #logiq-mobile-panel [data-tool="add"],
+      body.logyq-game #logiq-mobile-panel [data-tool="add-child"],
+      body.logyq-game #logiq-mobile-panel [data-tool="paint"],
+      body.logyq-game #logiq-mobile-panel [data-tool="dock"],
+      body.logyq-game #logiq-mobile-panel [data-tool="mix"],
       body.logyq-curriculum #Dock,
       body.logyq-curriculum #Dock.dock-left,
       body.logyq-curriculum #logyq-warehouse,
@@ -596,7 +624,6 @@
     `
     document.head.append(style)
   }
-
   function buildUi() {
     const desktopState = document.createElement('span')
     desktopState.className = 'logiq-save-state'
@@ -643,6 +670,7 @@
             <div class="logyq-home-tabs" role="tablist" aria-label="Maps home">
               <button type="button" class="logyq-home-tab is-active" id="logyq-tab-maps" role="tab" aria-selected="true" aria-controls="logiq-map-list" data-shelf="maps">My maps</button>
               <button type="button" class="logyq-home-tab" id="logyq-tab-curriculum" role="tab" aria-selected="false" aria-controls="logyq-curriculum" data-shelf="curriculum">Curriculum</button>
+              <button type="button" class="logyq-home-tab" id="logyq-tab-game" role="tab" aria-selected="false" aria-controls="logyq-game-levels" data-shelf="game">Game</button>
             </div>
             <h2 id="logiq-library-title" class="logyq-sr">Your maps</h2>
             <button class="logiq-primary" id="logiq-new-map" type="button">+ New</button>
@@ -655,6 +683,10 @@
               <p class="logyq-level-intro">Drag the cards into the tree. Sibling order can differ.</p>
               <ol id="logyq-level-path"></ol>
             </div>
+            <div id="logyq-game-levels" role="tabpanel" aria-labelledby="logyq-tab-game" hidden>
+              <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
+              <ol id="logyq-game-path"></ol>
+            </div>
           </div>
         </section>
       </div>
@@ -663,6 +695,12 @@
         <button type="button" id="logyq-curriculum-mix">Mix</button>
         <button type="button" id="logyq-curriculum-check">Check</button>
         <button type="button" id="logyq-curriculum-levels">Levels</button>
+      </div>
+      <div id="logyq-game-bar">
+        <p id="logyq-game-status" role="status" aria-live="polite"></p>
+        <button type="button" id="logyq-game-check">Check</button>
+        <button type="button" id="logyq-game-next" hidden>Next</button>
+        <button type="button" id="logyq-game-levels-button">Levels</button>
       </div>
       <div id="logyq-curriculum-gate" hidden>
         <div class="logyq-curriculum-frost" aria-hidden="true"></div>
@@ -857,7 +895,7 @@
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool
-      const sandbox = document.body.classList.contains('logyq-curriculum')
+      const sandbox = document.body.classList.contains('logyq-curriculum') || document.body.classList.contains('logyq-game')
       if (sandbox && (action === 'add' || action === 'add-child' || action === 'dock' || action === 'paint')) {
         closeMobilePanel()
         return
@@ -866,6 +904,7 @@
       if (action === 'add-child') commitMobileInput(true)
       if (action === 'undo') bridge.undo()
       if (action === 'mix') {
+        if (document.body.classList.contains('logyq-game')) return
         if (sandbox && window.__logyqCurriculumMix) window.__logyqCurriculumMix()
         else bridge.mix(false)
       }
@@ -910,7 +949,7 @@
   }
 
   function commitMobileInput(toNode) {
-    if (document.body.classList.contains('logyq-curriculum')) return
+    if (document.body.classList.contains('logyq-curriculum') || document.body.classList.contains('logyq-game')) return
     const legacyInput = document.getElementById('wordInput')
     const legacyAdd = document.getElementById('addWordBtn')
     if (!legacyInput || !legacyAdd) return
@@ -926,20 +965,27 @@
 
   function setHomeTab(shelf) {
     const curriculum = shelf === 'curriculum'
+    const game = shelf === 'game'
     const library = document.getElementById('logiq-library')
     if (!library) return
-    library.dataset.shelf = curriculum ? 'curriculum' : 'maps'
+    library.dataset.shelf = curriculum ? 'curriculum' : game ? 'game' : 'maps'
     const mapsBtn = document.getElementById('logyq-tab-maps')
     const currBtn = document.getElementById('logyq-tab-curriculum')
+    const gameBtn = document.getElementById('logyq-tab-game')
     const list = document.getElementById('logiq-map-list')
     const panel = document.getElementById('logyq-curriculum')
-    mapsBtn?.classList.toggle('is-active', !curriculum)
+    const gamePanel = document.getElementById('logyq-game-levels')
+    mapsBtn?.classList.toggle('is-active', !curriculum && !game)
     currBtn?.classList.toggle('is-active', curriculum)
-    mapsBtn?.setAttribute('aria-selected', String(!curriculum))
+    gameBtn?.classList.toggle('is-active', game)
+    mapsBtn?.setAttribute('aria-selected', String(!curriculum && !game))
     currBtn?.setAttribute('aria-selected', String(curriculum))
-    if (list) list.hidden = curriculum
+    gameBtn?.setAttribute('aria-selected', String(game))
+    if (list) list.hidden = curriculum || game
     if (panel) panel.hidden = !curriculum
+    if (gamePanel) gamePanel.hidden = !game
     if (curriculum) renderCurriculumPath()
+    if (game) renderGamePath()
   }
 
   function closeMobilePanel() {
@@ -952,7 +998,6 @@
     const title = document.getElementById('logyq-map-title')
     if (title) title.textContent = app.current?.name || ''
   }
-
   function showMobileToast(message) {
     const toast = document.getElementById('Toast')
     if (!toast) return
@@ -2624,7 +2669,8 @@
   }
 
   function curriculumSandbox(doc) {
-    return !!doc.body?.classList.contains('logyq-curriculum')
+    return !!doc.body?.classList.contains('logyq-curriculum') ||
+      !!doc.body?.classList.contains('logyq-game')
   }
 
   // After the Start settle, and during the haze gate, the board stays put.
@@ -4454,6 +4500,11 @@
   }
 
   function queueAutosave(snapshot) {
+    if (app.game) {
+      setSaveState('saved')
+      maybeGameClear(snapshot)
+      return
+    }
     if (app.curriculum) {
       setSaveState('saved')
       maybeCurriculumClear(snapshot)
@@ -4507,7 +4558,7 @@
   }
 
   async function savePending() {
-    if (app.curriculum) {
+    if (app.curriculum || app.game) {
       if (localStorage.getItem(PENDING_KEY)) {
         clearTimeout(app.timer)
         app.timer = setTimeout(savePending, 850)
@@ -4680,6 +4731,11 @@
 
   async function openLibrary() {
     closeMobilePanel()
+    if (app.game) {
+      showLibrary()
+      setHomeTab('game')
+      return
+    }
     abandonBlankDraft()
     showLibrary()
     if (!libraryTask) {
@@ -4958,6 +5014,7 @@
   }
 
   function enterEditor(row, { edit = false, baseline = true } = {}) {
+    leaveGamePlay()
     leaveCurriculumPlay()
     const tree = decodeMapTree(row.tree)
     const wordBank = Array.isArray(row.word_bank) ? row.word_bank : (row.wordBank || [])
@@ -4996,6 +5053,7 @@
   }
 
   function createMap({ edit = false } = {}) {
+    leaveGamePlay()
     leaveCurriculumPlay()
     const folderIndex = readFolderIndex()
     app.draftFolderId = folderIndex.folders.some((folder) => folder.id === app.libraryFolderId) ? app.libraryFolderId : null
@@ -5176,7 +5234,7 @@
   }
 
   function applyRemoteRow(row, options = {}) {
-    if (!row || app.curriculum) return
+    if (!row || app.curriculum || app.game) return
     app.applyingRemote = true
     app.heldRemote = null
     app.editClaim = null
@@ -5259,7 +5317,7 @@
   }
 
   function considerRemoteRow(row) {
-    if (!row || !app.hasOpenMap || app.curriculum || app.applyingRemote || app.saving) return
+    if (!row || !app.hasOpenMap || app.curriculum || app.game || app.applyingRemote || app.saving) return
     if (row.id && app.current?.id && row.id !== app.current.id) return
     const remoteBank = Array.isArray(row.word_bank) ? row.word_bank : []
     const remoteKey = contentKey(decodeMapTree(row.tree), remoteBank)
@@ -5335,7 +5393,7 @@
   let pullFlight = null
 
   async function pullRemoteNow() {
-    if (app.curriculum || !app.hasOpenMap || !app.current?.id || app.saving || app.applyingRemote) return
+    if (app.curriculum || app.game || !app.hasOpenMap || !app.current?.id || app.saving || app.applyingRemote) return
     if (document.body.classList.contains('v2-branch-drag') || document.body.classList.contains('dragging-mode')) return
     const gesture = preview.gestures?.session
     if (gesture?.flick?.active?.size || gesture?.hold?.race || gesture?.hold?.pan) return
@@ -5419,7 +5477,6 @@
     await refreshLibrary()
     app.booted = true
   }
-
   const CURRICULUM_KEY = 'logyq_curriculum_progress_v1'
 
   // CURRICULUM_PURE_START
@@ -5812,6 +5869,7 @@
 
   function beginCurriculumLevel(level) {
     if (!level) return
+    leaveGamePlay()
     cancelCurriculumVegas()
     app.curriculum = {
       id: level.id,
@@ -6765,6 +6823,179 @@
   }
 
   bindThekonym()
+  // A small, fixed-orientation fitting puzzle on the real LOGYQ canvas.
+  // Paint is visible on the node; gameId and paint carry the contact rules.
+  const GAME_KEY = 'logyq_game_progress_v1'
+  const gameGrammar = window.LOGYQGameGrammar
+  const gameLevels = [
+    {
+      id: 'chain', title: '1 · One child at a time', hint: 'Move the blue card beneath the two-color card.',
+      ids: ['root', 'middle', 'leaf'],
+      tree: { name: '', gameId: 'root', paint: 'orange', children: [
+        { name: '', gameId: 'leaf', paint: 'blue', children: [
+          { name: '', gameId: 'middle', paint: 'orange-blue' },
+        ] },
+      ] },
+    },
+    {
+      id: 'branch', title: '2 · Two children', hint: 'Both children fit the parent. Check where they touch each other.',
+      ids: ['root', 'left', 'right'],
+      tree: { name: '', gameId: 'root', paint: 'blue', children: [
+        { name: '', gameId: 'right', paint: 'blue-green-up' },
+        { name: '', gameId: 'left', paint: 'pink-blue-down' },
+      ] },
+    },
+  ]
+
+  function gameProgress() {
+    const value = readJson(GAME_KEY, {})
+    return value && typeof value === 'object' ? value : {}
+  }
+
+  function renderGamePath() {
+    const path = document.getElementById('logyq-game-path')
+    if (!path) return
+    const progress = gameProgress()
+    path.innerHTML = gameLevels.map((level, index) => {
+      const unlocked = index === 0 || !!progress[gameLevels[index - 1].id]
+      const done = !!progress[level.id]
+      return `<li><button type="button" data-game-level="${level.id}" ${unlocked ? '' : 'disabled'}>` +
+        `${level.title}${done ? ' ✓' : ''}<span>${unlocked ? level.hint : 'Clear the previous level first.'}</span></button></li>`
+    }).join('')
+  }
+
+  function ensureGamePaint() {
+    const svg = document.getElementById('canvas')
+    if (!svg || svg.querySelector('#logyq-game-orange-blue')) return
+    const ns = 'http://www.w3.org/2000/svg'
+    const defs = document.createElementNS(ns, 'defs')
+    const gradients = [
+      ['orange-blue', '0%', '0%', '0%', '100%', '#fb923c', '#60a5fa'],
+      // First child: pink at lower left, blue at upper right.
+      ['pink-blue-down', '0%', '100%', '100%', '0%', '#f0abfc', '#60a5fa'],
+      // Second child: blue at upper left, green at lower right.
+      ['blue-green-up', '0%', '0%', '100%', '100%', '#60a5fa', '#86efac'],
+    ]
+    for (const [id, x1, y1, x2, y2, first, second] of gradients) {
+      const gradient = document.createElementNS(ns, 'linearGradient')
+      gradient.id = `logyq-game-${id}`
+      for (const [key, value] of Object.entries({ x1, y1, x2, y2 })) gradient.setAttribute(key, value)
+      for (const [offset, color] of [['0%', first], ['49.9%', first], ['50%', second], ['100%', second]]) {
+        const stop = document.createElementNS(ns, 'stop')
+        stop.setAttribute('offset', offset)
+        stop.setAttribute('stop-color', color)
+        gradient.appendChild(stop)
+      }
+      defs.appendChild(gradient)
+    }
+    svg.insertBefore(defs, svg.firstChild)
+  }
+
+  function gameColor(paint) {
+    if (paint === 'orange') return '#fb923c'
+    if (paint === 'blue') return '#60a5fa'
+    return `url(#logyq-game-${paint})`
+  }
+
+  function paintGameTree(node) {
+    node.color = gameColor(node.paint)
+    for (const child of node.children || []) paintGameTree(child)
+    return node
+  }
+
+  function gameStatus(message, cleared = false) {
+    const status = document.getElementById('logyq-game-status')
+    if (status) {
+      status.textContent = message
+      status.style.color = cleared ? '#166534' : ''
+    }
+  }
+
+  function leaveGamePlay() {
+    const session = app.game
+    if (!session) return
+    app.game = null
+    document.body.classList.remove('logyq-game')
+    delete window.__logyqGameDropAllowed
+    document.getElementById('logyq-game-next').hidden = true
+    if (session.origin) {
+      app.current = session.origin.current
+      app.hasOpenMap = session.origin.hasOpenMap
+      document.body.classList.toggle('logyq-map-open', !!app.hasOpenMap)
+      app.lastSnapshot = session.origin.lastSnapshot
+      updateMapName()
+      bridge.loadMap(session.origin.snapshot.tree || { name: '' }, session.origin.snapshot.wordBank || [])
+    }
+  }
+
+  function beginGameLevel(level) {
+    if (!level || !gameGrammar) return
+    const origin = app.game?.origin || (app.curriculum ? {
+      current: { id: null, name: DEFAULT_NAME }, hasOpenMap: false,
+      lastSnapshot: '', snapshot: { tree: null, wordBank: [] },
+    } : {
+      current: { ...app.current }, hasOpenMap: app.hasOpenMap,
+      lastSnapshot: app.lastSnapshot, snapshot: bridge.snapshot(),
+    })
+    leaveCurriculumPlay()
+    app.game = { id: level.id, origin, cleared: false }
+    app.current = { id: null, name: level.title }
+    app.hasOpenMap = true
+    app.lastSnapshot = 'game'
+    document.body.classList.add('logyq-game', 'logyq-map-open')
+    document.getElementById('logyq-game-next').hidden = true
+    window.__logyqGameDropAllowed = ({ tree, movingUid, drop, trash, multi }) => {
+      if (trash || multi) return false
+      const allowed = gameGrammar.canDrop(tree, movingUid, drop, 'root')
+      if (!allowed && drop) gameStatus('Those edges do not fit. Try another connection.')
+      return allowed
+    }
+    ensureGamePaint()
+    updateMapName()
+    hideLibrary()
+    gameStatus(level.hint)
+    bridge.loadMap(paintGameTree(structuredClone(level.tree)), [])
+    setSaveState('saved')
+  }
+
+  function maybeGameClear(snapshot) {
+    const session = app.game
+    if (!session || session.cleared) return false
+    const level = gameLevels.find((item) => item.id === session.id)
+    if (!level || !gameGrammar.complete(snapshot?.tree, level.ids, 'root')) return false
+    session.cleared = true
+    const progress = gameProgress()
+    progress[level.id] = Date.now()
+    try { localStorage.setItem(GAME_KEY, JSON.stringify(progress)) } catch (_error) {}
+    const next = gameLevels[gameLevels.indexOf(level) + 1]
+    gameStatus(next ? 'It fits! The branch level is open.' : 'It fits! Both children meet the parent and each other.', true)
+    document.getElementById('logyq-game-next').hidden = !next
+    return true
+  }
+
+  function checkGame() {
+    if (!app.game) return
+    if (maybeGameClear(bridge.snapshot())) return
+    if (app.game.cleared) return
+    gameStatus('A contact still clashes. Each card has one parent; neighboring children must match too.')
+  }
+
+  document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-game-level]')
+    if (!button || button.disabled) return
+    const index = gameLevels.findIndex((level) => level.id === button.dataset.gameLevel)
+    if (index > 0 && !gameProgress()[gameLevels[index - 1].id]) return
+    beginGameLevel(gameLevels[index])
+  })
+  document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
+  document.getElementById('logyq-game-next')?.addEventListener('click', () => {
+    const index = gameLevels.findIndex((level) => level.id === app.game?.id)
+    if (app.game?.cleared && gameLevels[index + 1]) beginGameLevel(gameLevels[index + 1])
+  })
+  document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
+    openLibrary().then(() => setHomeTab('game'))
+  })
+  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay }
   // FOLDER_PURE_START
   function cloneFolderIndex(index) {
     return {

@@ -390,6 +390,7 @@
 
   function beginCurriculumLevel(level) {
     if (!level) return
+    leaveGamePlay()
     cancelCurriculumVegas()
     app.curriculum = {
       id: level.id,

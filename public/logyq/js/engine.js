@@ -131,7 +131,8 @@ function __selectedUid(){
 /* Curriculum play is a rebuild sandbox. Normal maps never set this class. */
 function curriculumPlayLocked(){
   try {
-    return typeof document !== 'undefined' && !!document.body?.classList?.contains('logyq-curriculum');
+    return typeof document !== 'undefined' && !!document.body?.classList &&
+      (document.body.classList.contains('logyq-curriculum') || document.body.classList.contains('logyq-game'));
   } catch (_e) {
     return false;
   }
@@ -350,7 +351,6 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   window.incidentalBankContext = incidentalBankContext
   window.noteBankContextGrace = noteBankContextGrace
   attach('holdDrag', { frozen: holdDragFrozen, blocksBank: holdDragBlocksBank, incidentalBankContext, noteBankContextGrace })
-
 
 
 /* ======================= STATE & ELEMENTS ======================= */
@@ -3945,6 +3945,15 @@ state.dragState.drop = null;
     const src = event.sourceEvent, cx=src.clientX, cy=src.clientY;
     const zone=dragManager.zone(cx,cy);
     const shouldDelete = (zone==='over');
+    if (window.__logyqGameDropAllowed && !window.__logyqGameDropAllowed({
+      tree: state.root?.data,
+      movingUid: d.data?._uid,
+      drop: state.dragState.drop,
+      trash: shouldDelete,
+      multi: (state.dragState.multiUids?.length || 0) > 1
+    })) {
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
+    }
     if(shouldDelete && typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()){
       dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
     }
@@ -4436,7 +4445,6 @@ state.dragState.drop = null;
   }
 };
 attach('drag', dragManager)
-
 
   /* ======================= CHIPS & INPUT ======================= */
   // Tap order. The first name tapped is the parent when a multi-select

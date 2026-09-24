@@ -1601,7 +1601,8 @@
   }
 
   function curriculumSandbox(doc) {
-    return !!doc.body?.classList.contains('logyq-curriculum')
+    return !!doc.body?.classList.contains('logyq-curriculum') ||
+      !!doc.body?.classList.contains('logyq-game')
   }
 
   // After the Start settle, and during the haze gate, the board stays put.
