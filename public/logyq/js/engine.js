@@ -360,8 +360,6 @@ const state = {
   editingUid:null, editorEl:null, prevZoom:null,
   detectors:[], tabHold:false, /* [patch] tab-hold-flag */
   repositionMode: null, /* [patch] mix-reposition-flag */
-  curriculumScatterAnchor: null,
-  holdLayout: false,
   _pendingSelectUndo: null, /* [patch] pending-select */
   _lastMoat: 0,   /* [patch] mote-cooldown timestamp */
   focusUid: null, /* [patch] focus state */
@@ -5859,7 +5857,6 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
   applyLayout(root){
     const { state, config: CONFIG } = logyq
     if (!root || !state.layout) return root
-    if (state.holdLayout) return root
     state.layout.nodeSize([CONFIG.CARD_WIDTH+CONFIG.HORIZONTAL_GAP, CONFIG.CARD_HEIGHT+CONFIG.VERTICAL_GAP]).separation((a,b)=>{
       let A=a,B=b; while(A.depth>B.depth)A=A.parent; while(B.depth>A.depth)B=B.parent; while(A!==B){A=A.parent;B=B.parent;}
       const l=A.depth, up=Math.max(1,a.depth-l);
@@ -5868,75 +5865,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       return Math.max(0.1, base+inc+bonus);
     });
     state.layout(root);
-    if (state.curriculumScatterAnchor) this.scatterDetachedCurriculum(root, state.curriculumScatterAnchor)
     return root;
-  },
-
-  // Detached Curriculum cards stay siblings of the hidden pile so Check and
-  // reparent still see a flat answer pile. The level's root word stays the
-  // visual root; the others scatter around it instead of sharing one row.
-  scatterDetachedCurriculum(root, anchorName){
-    const { config: CONFIG } = logyq
-    if (!root?.data?.curriculumPile) return false
-    const cards = (root.children || []).filter((child) => child && !child.data?.curriculumPile)
-    if (cards.length < 2) return false
-    if (cards.some((child) => child.children && child.children.length)) return false
-    const want = String(anchorName || '')
-    const anchor = cards.find((child) => String(child.data?.name || '') === want) || cards[0]
-    const others = cards.filter((child) => child !== anchor)
-    const needX = CONFIG.CARD_WIDTH + 36
-    const needY = CONFIG.CARD_HEIGHT + 28
-    const sep = Math.hypot(needX, needY * 0.65)
-    const golden = Math.PI * (3 - Math.sqrt(5))
-    const spin = Math.random() * Math.PI * 2
-    anchor.x = 0
-    anchor.y = 0
-    others.forEach((node, index) => {
-      const ring = Math.floor(index / 6)
-      const angle = spin + index * golden + (Math.random() - 0.5) * 0.45
-      const radius = sep * (0.92 + ring * 0.7) * (0.86 + Math.random() * 0.28)
-      node.x = Math.cos(angle) * radius
-      node.y = Math.sin(angle) * radius
-    })
-    const hit = (a, b) => Math.abs(a.x - b.x) < needX && Math.abs(a.y - b.y) < needY
-    for (let pass = 0; pass < 14; pass += 1) {
-      let moved = false
-      others.forEach((node, index) => {
-        cards.forEach((other) => {
-          if (other === node || !hit(node, other)) return
-          let dx = node.x - other.x
-          let dy = node.y - other.y
-          if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
-            const angle = spin + index * golden
-            dx = Math.cos(angle)
-            dy = Math.sin(angle)
-          }
-          const len = Math.hypot(dx, dy) || 1
-          node.x += (dx / len) * 22
-          node.y += (dy / len) * 18
-          moved = true
-        })
-      })
-      if (!moved) break
-    }
-    const span = (key) => {
-      const values = cards.map((node) => node[key])
-      return Math.max(...values) - Math.min(...values)
-    }
-    if (span('y') < 72) {
-      others.forEach((node, index) => {
-        const sign = index % 2 === 0 ? 1 : -1
-        node.y += sign * needY * (0.7 + (index % 3) * 0.2)
-      })
-    }
-    if (span('x') < 72) {
-      others.forEach((node, index) => {
-        node.x += (index - (others.length - 1) / 2) * needX * 0.85
-      })
-    }
-    root.x = anchor.x
-    root.y = anchor.y
-    return true
   },
 
   syncCreateHitSlots(){
@@ -6493,8 +6422,8 @@ function keyDispatcher(e){
 
   if (typing && !state.tabHold) return;
 
-  // Rebuild sandbox: fit, undo, and the curriculum Mix hook. No add, rename,
-  // delete, bank, or the map Mix that builds a new connected tree.
+  // Rebuild sandbox: fit, undo, and Mix. Curriculum Mix calls the same
+  // randomizeTree as a normal map. No add, rename, delete, or bank.
   if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) {
     if (lower === 'f' && !e.shiftKey) { e.preventDefault(); logyq.treeManager.autoFit(); return; }
     if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }

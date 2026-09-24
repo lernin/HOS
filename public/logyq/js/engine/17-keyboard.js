@@ -34,8 +34,8 @@ function keyDispatcher(e){
 
   if (typing && !state.tabHold) return;
 
-  // Rebuild sandbox: fit, undo, and the curriculum Mix hook. No add, rename,
-  // delete, bank, or the map Mix that builds a new connected tree.
+  // Rebuild sandbox: fit, undo, and Mix. Curriculum Mix calls the same
+  // randomizeTree as a normal map. No add, rename, delete, or bank.
   if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) {
     if (lower === 'f' && !e.shiftKey) { e.preventDefault(); logyq.treeManager.autoFit(); return; }
     if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }

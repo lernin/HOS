@@ -83,21 +83,6 @@
     try { localStorage.setItem(CURRICULUM_KEY, JSON.stringify(progress)) } catch (_error) {}
   }
 
-  function shuffleCurriculumWords(words) {
-    const next = words.slice()
-    for (let i = next.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(Math.random() * (i + 1))
-      const swap = next[i]
-      next[i] = next[j]
-      next[j] = swap
-    }
-    const same = next.every((word, index) => word === words[index])
-    if (same && next.length > 1) {
-      next.push(next.shift())
-    }
-    return next
-  }
-
   function curriculumLevel(id) {
     return curriculumPack().find((level) => level.id === id) || null
   }
@@ -169,22 +154,24 @@
     const core = bridge.core
     const state = core?.state
     const utils = core?.utils
-    if (!level || !state || !utils || !window.d3) return false
+    const mix = core?.mix?.randomizeTree
+    if (!level || !state || !utils || !window.d3 || typeof mix !== 'function') return false
     const cards = curriculumCardPool(state.root?.data, level.tree)
-    const shuffled = shuffleCurriculumWords(cards.map((card) => card.name))
-    const byName = new Map(cards.map((card) => [card.name, card]))
-    const pile = {
-      name: '',
-      curriculumPile: true,
-      children: shuffled.map((name) => {
-        const src = byName.get(name) || { name }
-        const card = { name: src.name }
-        if (src._uid != null && String(src._uid) !== '') card._uid = src._uid
-        return card
+    if (!cards.length) return false
+    const previous = curriculumStructureKey(curriculumAnswerTree(state.root?.data) || {})
+    // Seed the level words only. The layout Ashley likes is randomizeTree,
+    // the same Mix a normal map uses. It refuses body.logyq-curriculum, so
+    // the class is lifted for that call and put back before paint.
+    const seed = {
+      name: cards[0].name,
+      children: cards.slice(1).map((card) => {
+        const node = { name: card.name }
+        if (card._uid != null && String(card._uid) !== '') node._uid = card._uid
+        return node
       }),
     }
-    if (state.root?.data?.curriculumPile && state.root.data._uid != null) pile._uid = state.root.data._uid
-    utils.assignUids(pile)
+    if (cards[0]._uid != null && String(cards[0]._uid) !== '') seed._uid = cards[0]._uid
+    utils.assignUids(seed)
     try { core.editing?.closeNodeEditor?.(false, false) } catch (_error) {}
     state.wordBank = []
     state.history = []
@@ -192,24 +179,33 @@
     state.selectedUid = null
     try { core.selection?.clearGroup?.() } catch (_error) {}
     try { core.selection?.clearSelection?.() } catch (_error) {}
-    state.root = window.d3.hierarchy(pile)
+    state.root = window.d3.hierarchy(seed)
     utils.assignIds(state.root)
-    state.holdLayout = true
-    state.root.descendants().forEach((node) => { node.x = 0; node.y = 0 })
-    state.layoutMotionMs = 0
-    state.repositionMode = null
-    try {
-      core.treeManager.layoutAndRender(false)
-      state.holdLayout = false
-      state.curriculumScatterAnchor = level.tree?.name || ''
-      state.layoutMotionMs = 420
-      state.repositionMode = 'mix'
-      core.treeManager.layoutAndRender(false)
-    } finally {
-      state.holdLayout = false
-      state.layoutMotionMs = null
-      state.curriculumScatterAnchor = null
+    const before = curriculumStructureKey(state.root.data)
+    const locked = document.body.classList.contains('logyq-curriculum')
+    const runMix = () => {
+      if (locked) document.body.classList.remove('logyq-curriculum')
+      try { mix(false) } finally {
+        if (locked) document.body.classList.add('logyq-curriculum')
+      }
     }
+    runMix()
+    const live = () => curriculumAnswerTree(state.root?.data)
+    const solved = () => {
+      const tree = live()
+      return !!(tree && curriculumMatches(level.tree, tree))
+    }
+    let tries = 0
+    while (tries < 6) {
+      const key = curriculumStructureKey(state.root?.data)
+      const sameBoard = key === before || (previous && key === previous)
+      if (!solved() && !sameBoard) break
+      runMix()
+      tries += 1
+    }
+    state.wordBank = []
+    state.history = []
+    state.redo = []
     try { core.wordDock?.render?.() } catch (_error) {}
     const undo = document.getElementById('undoBtn')
     if (undo) undo.disabled = true

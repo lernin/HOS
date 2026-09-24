@@ -1021,9 +1021,7 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
     const hidden = (id) => getComputedStyle(document.getElementById(id)).display === 'none'
     const cards = Array.from(document.querySelectorAll('g.node:not(.logyq-pile)'))
     const names = cards.map((el) => el.__data__?.data?.name).sort()
-    const detached = cards.every((el) => el.__data__?.parent?.data?.curriculumPile && !(el.__data__?.data?.children || []).length)
-    const ys = cards.map((el) => el.__data__.y)
-    const xs = cards.map((el) => el.__data__.x)
+    const depths = new Set(cards.map((el) => el.__data__.depth))
     const answer = window.LOGYQPreview.curriculum.matches(
       window.LOGYQPreview.curriculum.pack().find((level) => level.id === 'fruit').tree,
       window.LOGYQBridge.snapshot().tree,
@@ -1031,9 +1029,10 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
     return {
       chips: document.querySelectorAll('#Dock .chip').length,
       names,
-      detached,
-      ySpan: Math.max(...ys) - Math.min(...ys),
-      xSpan: Math.max(...xs) - Math.min(...xs),
+      roots: cards.filter((el) => !el.__data__?.parent).length,
+      linked: cards.some((el) => (el.__data__?.children || []).length > 0),
+      depths: depths.size,
+      pile: !!document.querySelector('g.node.logyq-pile'),
       answer,
       dock: hidden('Dock'),
       trash: hidden('trash'),
@@ -1041,49 +1040,50 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
       bankTrash: hidden('logyq-bank-trash'),
       title: document.getElementById('logyq-curriculum-status')?.textContent || '',
       playing: document.body.classList.contains('logyq-curriculum'),
-      pileHidden: getComputedStyle(document.querySelector('g.node.logyq-pile')).display === 'none',
     }
   })
   assert.equal(opened.chips, 0)
   assert.deepEqual(opened.names, ['apple', 'banana', 'fruit'])
-  assert.equal(opened.detached, true)
-  assert.ok(opened.ySpan > 48, `Fruit start should scatter around a root, ySpan=${opened.ySpan}`)
-  assert.ok(opened.xSpan > 48, `Fruit start should scatter around a root, xSpan=${opened.xSpan}`)
+  assert.equal(opened.roots, 1)
+  assert.equal(opened.linked, true)
+  assert.ok(opened.depths > 1, `Fruit start should use Mix depth, depths=${opened.depths}`)
+  assert.equal(opened.pile, false)
   assert.equal(opened.answer, false)
   assert.equal(opened.dock, true)
   assert.equal(opened.trash, true)
   assert.equal(opened.warehouse, true)
   assert.equal(opened.bankTrash, true)
-  assert.equal(opened.pileHidden, true)
   assert.equal(opened.playing, true)
   assert.match(opened.title, /Fruit/)
   assert.equal(await page.locator('#logyq-curriculum-check').isVisible(), true)
   assert.equal(await page.locator('#logyq-curriculum-mix').isVisible(), true)
   assert.equal(await page.locator('#logyq-curriculum').innerText().then((text) => text.includes('Word Bank')), false)
 
-  const beforeOrder = await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.map((child) => child.name).join(','))
+  const beforeKey = await page.evaluate(() => window.LOGYQPreview.curriculum.structureKey(window.LOGYQBridge.snapshot().tree))
   const mixing = await page.evaluate(() => {
     window.__logyqCurriculumMix()
     return window.LOGYQBridge.core.state.repositionMode
   })
-  const afterOrder = await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.map((child) => child.name).join(','))
-  assert.equal(mixing, 'mix')
-  assert.notEqual(afterOrder, beforeOrder)
-  const mixedSpread = await page.evaluate(() => {
-    const cards = Array.from(document.querySelectorAll('g.node:not(.logyq-pile)'))
-    const ys = cards.map((el) => el.__data__.y)
-    const xs = cards.map((el) => el.__data__.x)
+  const mixedSpread = await page.evaluate((previous) => {
+    const cards = window.LOGYQBridge.core.state.root.descendants()
+    const depths = new Set(cards.map((node) => node.depth))
     return {
-      detached: cards.every((el) => el.__data__?.parent?.data?.curriculumPile && !(el.__data__?.data?.children || []).length),
-      ySpan: Math.max(...ys) - Math.min(...ys),
-      xSpan: Math.max(...xs) - Math.min(...xs),
+      key: window.LOGYQPreview.curriculum.structureKey(window.LOGYQBridge.snapshot().tree),
+      previous,
+      roots: cards.filter((node) => !node.parent).length,
+      linked: cards.some((node) => (node.children || []).length > 0),
+      depths: depths.size,
+      pile: !!window.LOGYQBridge.snapshot().tree?.curriculumPile,
     }
-  })
-  assert.equal(mixedSpread.detached, true)
-  assert.ok(mixedSpread.ySpan > 48, `Mix should keep a scattered pile, ySpan=${mixedSpread.ySpan}`)
-  assert.ok(mixedSpread.xSpan > 48, `Mix should keep a scattered pile, xSpan=${mixedSpread.xSpan}`)
+  }, beforeKey)
+  assert.equal(mixing, 'mix')
+  assert.notEqual(mixedSpread.key, mixedSpread.previous)
+  assert.equal(mixedSpread.roots, 1)
+  assert.equal(mixedSpread.linked, true)
+  assert.ok(mixedSpread.depths > 1, `Mix should keep a tree, depths=${mixedSpread.depths}`)
+  assert.equal(mixedSpread.pile, false)
   await page.waitForFunction(() => {
-    const cards = Array.from(document.querySelectorAll('g.node:not(.logyq-pile)'))
+    const cards = Array.from(document.querySelectorAll('g.node'))
     const boxes = cards.map((el) => el.getBoundingClientRect()).filter((box) => box.width > 8)
     if (boxes.length < 3) return false
     const left = Math.min(...boxes.map((box) => box.left))
@@ -1098,7 +1098,7 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
     const tall = bottom - top
     const k = window.d3.zoomTransform(document.getElementById('canvas')).k
     const fits = left >= 4 && right <= vw - 4 && top >= usableTop + 2 && bottom <= vh - 8
-    const overview = wide <= vw * 0.92 && tall <= (vh - usableTop) * 0.92 && wide >= vw * 0.45
+    const overview = wide <= vw * 0.92 && tall <= (vh - usableTop) * 0.92
     return fits && overview && k <= 1.2 && k >= 0.2
   }, null, { timeout: 8000 })
   assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.length), 0)

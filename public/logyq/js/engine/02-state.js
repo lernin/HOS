@@ -8,8 +8,6 @@ const state = {
   editingUid:null, editorEl:null, prevZoom:null,
   detectors:[], tabHold:false, /* [patch] tab-hold-flag */
   repositionMode: null, /* [patch] mix-reposition-flag */
-  curriculumScatterAnchor: null,
-  holdLayout: false,
   _pendingSelectUndo: null, /* [patch] pending-select */
   _lastMoat: 0,   /* [patch] mote-cooldown timestamp */
   focusUid: null, /* [patch] focus state */
