@@ -25,7 +25,7 @@ These were inspected and left as copied v161 behavior. Changing them is likely t
 
 ## Preview / persistence
 
-- **Live map library.** List, save, rename, and delete use the PIN RPCs in `PERSISTENCE.md`. `localStorage.logyq_maps_v1` is the last successful list, not the source of truth. A missing PIN shows Connect, not an empty library.
+- **Live map library.** List, save, rename, and delete use the PIN RPCs in `PERSISTENCE.md`. `localStorage.logyq_maps_v1` is the last successful list, not the source of truth. A missing PIN shows Connect, not an empty library. Nested folders are the separate device key `logyq_map_folders_v1`; they do not alter `logiq_maps`.
 - **Lab PIN.** `getPin` uses `logyq_lab_pin_v1` for those RPCs and for `/api/transcribe`, not `logiq_lab_pin_v1`. It is stored only after a Lab RPC accepts it.
 - **Autosave debounce.** 850ms write delay and 1100ms retry-on-overlap are unchanged. Offline now means a localStorage write failed, not a missing network.
 - **Phone shell CSS.** Compact phone header CSS lives in `index.html` (`#logyq-phone-boot`) and `css/app.css` so the fat desktop header cannot paint first. `injectStyles` still adds the rest of the preview chrome. DOM ids stay `logiq-*` so copied selectors match.

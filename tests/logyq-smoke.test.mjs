@@ -8,7 +8,10 @@ const d3Source = readFileSync(new URL('../node_modules/d3/dist/d3.min.js', impor
 let browser
 
 test.before(async () => {
-  browser = await chromium.launch({ headless: true })
+  browser = await chromium.launch({
+    headless: true,
+    ...(process.env.LOGYQ_CHROME ? { channel: 'chrome' } : {}),
+  })
 })
 
 test.after(async () => {
@@ -981,6 +984,7 @@ test('LOGYQ empty library stays a library, not a chooser or editor', async () =>
   assert.equal(await page.locator('#logyq-tab-maps').getAttribute('aria-selected'), 'true')
   assert.match((await page.locator('#logiq-map-list').innerText()), /No maps yet/)
   assert.equal(await page.locator('#logiq-new-map').isVisible(), true)
+  assert.equal(await page.locator('#logyq-new-folder').isVisible(), true)
   assert.equal(await page.locator('#logyq-curriculum').isVisible(), false)
   await page.locator('#logyq-tab-curriculum').click()
   assert.equal(await page.locator('#logyq-tab-curriculum').getAttribute('aria-selected'), 'true')
@@ -991,11 +995,13 @@ test('LOGYQ empty library stays a library, not a chooser or editor', async () =>
   assert.doesNotMatch(await page.locator('#logyq-curriculum').innerText(), /Levels coming soon|lunch|recess/)
   assert.equal(await page.locator('#logiq-map-list').isVisible(), false)
   assert.equal(await page.locator('#logiq-new-map').isVisible(), false)
+  assert.equal(await page.locator('#logyq-new-folder').isVisible(), false)
   assert.equal(await page.locator('#logyq-curriculum .logiq-map-row').count(), 0)
   await page.locator('#logyq-tab-maps').click()
   assert.equal(await page.locator('#logyq-tab-maps').getAttribute('aria-selected'), 'true')
   assert.match((await page.locator('#logiq-map-list').innerText()), /No maps yet/)
   assert.equal(await page.locator('#logiq-new-map').isVisible(), true)
+  assert.equal(await page.locator('#logyq-new-folder').isVisible(), true)
   await page.waitForTimeout(950)
   assert.ok(capture.every((request) => request.name !== 'logiq_map_save'))
   assert.deepEqual(errors, [])
@@ -7293,6 +7299,91 @@ test('LOGYQ landscape shelf is a left column with corner warehouse and trash', a
   assert.ok(scrolled.after > scrolled.before + 30, `vertical pan should scroll the shelf, before=${scrolled.before} after=${scrolled.after}`)
   assert.equal(scrolled.dragging, false)
   assert.equal(scrolled.bank, 18)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ nested folders organize maps without deleting them', async () => {
+  const capture = []
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  const store = await stubMaps(context, {
+    capture,
+    maps: [{
+      id: 'robins',
+      name: 'Robins',
+      tree: { name: 'Robins', formatVersion: 2, _uid: 'root' },
+      word_bank: [],
+      updated_at: '2026-09-24T00:00:00.000Z',
+    }],
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  page.on('dialog', (dialog) => dialog.accept())
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.waitForSelector('#logiq-library.is-open')
+  assert.match(await page.locator('#logiq-map-list').innerText(), /Robins/)
+
+  await page.locator('#logyq-new-folder').click()
+  await page.locator('[data-new-folder] input').fill('Animals')
+  await page.locator('[data-new-folder] button').click()
+  await page.locator('.logyq-folder-open', { hasText: 'Animals' }).click()
+  await page.waitForSelector('.logyq-crumbs')
+  assert.match(await page.locator('.logyq-crumbs').innerText(), /My maps/)
+  assert.match(await page.locator('.logyq-crumbs').innerText(), /Animals/)
+  assert.match(await page.locator('#logiq-map-list').innerText(), /This folder is empty/)
+
+  await page.locator('#logyq-new-folder').click()
+  await page.locator('[data-new-folder] input').fill('Birds')
+  await page.locator('[data-new-folder] button').click()
+  await page.locator('.logyq-crumbs button', { hasText: 'My maps' }).click()
+  await page.locator('.logiq-map-row', { hasText: 'Robins' }).locator('[data-map-action="move"]').click()
+  await page.locator('.logiq-map-row select').selectOption({ label: 'Animals / Birds' })
+  await page.locator('.logiq-map-row [data-map-move] button').click()
+  assert.equal(await page.locator('.logiq-map-row', { hasText: 'Robins' }).count(), 0)
+
+  await page.locator('.logyq-folder-open', { hasText: 'Animals' }).click()
+  await page.locator('.logyq-folder-open', { hasText: 'Birds' }).click()
+  assert.match(await page.locator('.logyq-crumbs').innerText(), /Birds/)
+  await page.locator('.logiq-map-name', { hasText: 'Robins' }).click()
+  await page.waitForFunction(() => !document.getElementById('logiq-library')?.classList.contains('is-open'))
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.name), 'Robins')
+  await page.locator('#logyq-home-btn').click()
+  await page.waitForSelector('#logiq-library.is-open')
+  assert.match(await page.locator('.logyq-crumbs').innerText(), /Birds/)
+  assert.equal(await page.locator('.logiq-map-name', { hasText: 'Robins' }).count(), 1)
+
+  await page.locator('.logyq-crumbs button', { hasText: 'Animals' }).click()
+  const birds = page.locator('.logyq-folder-row', { hasText: 'Birds' })
+  await birds.locator('[data-folder-action="rename"]').click()
+  await birds.locator('[data-folder-rename] input').fill('Songbirds')
+  await birds.locator('[data-folder-rename] button').click()
+  assert.equal(await page.locator('.logyq-folder-open', { hasText: 'Songbirds' }).count(), 1)
+  await page.locator('.logyq-folder-row', { hasText: 'Songbirds' }).locator('[data-folder-action="delete"]').click()
+  assert.equal(await page.locator('.logiq-map-name', { hasText: 'Robins' }).count(), 1)
+  assert.equal(store.maps.length, 1)
+  assert.equal(store.maps[0].tree.name, 'Robins')
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('logyq_map_folders_v1')))
+  const animalsId = saved.folders.find((folder) => folder.name === 'Animals').id
+  assert.equal(saved.placements.robins, animalsId)
+  assert.equal(saved.folders.some((folder) => folder.name === 'Songbirds'), false)
+
+  await page.locator('#logiq-new-map').click()
+  await page.waitForFunction(() => window.LOGYQPreview.app.draftFolderId === window.LOGYQPreview.app.libraryFolderId)
+  await page.evaluate(() => {
+    const uid = window.LOGYQBridge.core.state.root.data._uid
+    window.LOGYQBridge.renameNode(uid, 'Sparrow')
+  })
+  await page.waitForFunction(() => {
+    const raw = localStorage.getItem('logyq_map_folders_v1')
+    return raw && raw.includes('map-')
+  })
+  const placed = await page.evaluate(() => JSON.parse(localStorage.getItem('logyq_map_folders_v1')))
+  const sparrow = store.maps.find((row) => row.tree?.name === 'Sparrow')
+  assert.ok(sparrow)
+  assert.equal(placed.placements[sparrow.id], animalsId)
+  assert.equal(store.maps.find((row) => row.id === 'robins').tree.name, 'Robins')
   assert.deepEqual(errors, [])
   await context.close()
 })

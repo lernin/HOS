@@ -67,6 +67,24 @@ Root-only marker `2` stamped on save (`encodeMapTree`). Compatible with existing
 
 Word Bank is `string[]` (`word_bank`). Palette last-color is `logyq_paint_color_v1`.
 
+## Folders
+
+My maps can group maps in nested folders. This is **not** a column on `public.logiq_maps` and it does **not** add an RPC. No Supabase migration.
+
+`localStorage.logyq_map_folders_v1` on this device:
+
+```
+{ folders: [{ id, name, parentId }], placements: { [mapId]: folderId } }
+```
+
+- `parentId: null` is My maps (the root).
+- A map with no placement, or a placement whose folder is gone, stays at My maps.
+- A new map started inside a folder is placed there on the first successful `logiq_map_save`. The map row is still only `name` / `tree` / `word_bank`.
+- Rename and move change the folder index only.
+- Delete of an empty folder removes that folder. Delete of a folder that has anything in it moves those folders and maps up to the parent. Map rows are not deleted.
+- Folders do not sync across devices or browsers. Clearing site data drops the folder layout and leaves the maps on the server.
+- Curriculum is a separate shelf and does not read this index.
+
 ## Open (Drive-style)
 
 Prior consultant notes said 0 maps should drop into a one-card editor already editing. That forced wipe-edit was the “big square slap” (keyboard wall on a blank root). Library is now home for both empty and populated accounts.
