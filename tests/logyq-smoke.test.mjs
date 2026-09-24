@@ -7439,3 +7439,94 @@ test('LOGYQ nested folders organize maps without deleting them', async () => {
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ my maps list fits a phone viewport', async () => {
+  const longMap = 'Robins along the winter reed beds and the long causeway'
+  const longFolder = 'Birds of the northern estuary survey folder'
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context, {
+    maps: [{
+      id: 'robins',
+      name: longMap,
+      tree: { name: longMap, formatVersion: 2, _uid: 'root' },
+      word_bank: [],
+      updated_at: '2026-09-24T00:00:00.000Z',
+    }],
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  page.on('dialog', (dialog) => dialog.accept())
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.waitForSelector('#logiq-library.is-open')
+
+  async function assertListFits(label) {
+    const box = await page.evaluate(() => {
+      const view = document.documentElement.clientWidth
+      const modal = document.querySelector('#logiq-library .logiq-modal')
+      const list = document.getElementById('logiq-map-list')
+      const rows = Array.from(document.querySelectorAll('.logiq-map-row, .logyq-folder-row')).map((el) => {
+        const rect = el.getBoundingClientRect()
+        const name = el.querySelector('.logiq-map-name')
+        const actions = Array.from(el.querySelectorAll('.logiq-map-actions button')).map((button) => {
+          const bounds = button.getBoundingClientRect()
+          return { text: button.textContent, left: bounds.left, right: bounds.right, width: bounds.width, height: bounds.height }
+        })
+        return { left: rect.left, right: rect.right, nameClient: name?.clientWidth || 0, nameScroll: name?.scrollWidth || 0, actions }
+      })
+      return {
+        view,
+        docScroll: document.documentElement.scrollWidth,
+        modalClient: modal.clientWidth,
+        modalScroll: modal.scrollWidth,
+        listClient: list.clientWidth,
+        listScroll: list.scrollWidth,
+        rows,
+      }
+    })
+    assert.ok(box.docScroll <= box.view + 1, `${label} document ${box.docScroll} > ${box.view}`)
+    assert.ok(box.modalScroll <= box.modalClient + 1, `${label} modal ${box.modalScroll} > ${box.modalClient}`)
+    assert.ok(box.listScroll <= box.listClient + 1, `${label} list ${box.listScroll} > ${box.listClient}`)
+    for (const row of box.rows) {
+      assert.ok(row.left >= -1 && row.right <= box.view + 1, `${label} row ${row.left}-${row.right}`)
+      for (const action of row.actions) {
+        assert.ok(action.width >= 24 && action.height >= 24, `${label} ${action.text}`)
+        assert.ok(action.left >= -1 && action.right <= box.view + 1, `${label} ${action.text} ${action.left}-${action.right}`)
+      }
+    }
+    return box
+  }
+
+  const root = await assertListFits('root')
+  assert.ok(root.rows.some((row) => row.nameScroll > row.nameClient + 8), 'long map name truncates')
+
+  await page.locator('#logyq-new-folder').click()
+  await page.locator('[data-new-folder] input').fill(longFolder)
+  await page.locator('[data-new-folder] button').click()
+  const withFolder = await assertListFits('root folder')
+  assert.ok(withFolder.rows.some((row) => row.nameScroll > row.nameClient + 8), 'long folder name truncates')
+
+  await page.locator('.logyq-folder-open', { hasText: longFolder }).click()
+  await page.waitForSelector('.logyq-crumbs')
+  await page.locator('#logyq-new-folder').click()
+  await page.locator('[data-new-folder] input').fill('Nests')
+  await page.locator('[data-new-folder] button').click()
+  await assertListFits('nested folder')
+
+  await page.locator('.logyq-crumbs button', { hasText: 'My maps' }).click()
+  await page.locator('.logiq-map-row').locator('[data-map-action="move"]').click()
+  await page.locator('.logiq-map-row select').selectOption({ label: `${longFolder} / Nests` })
+  await assertListFits('move open')
+  await page.locator('.logiq-map-row [data-map-move] button').click()
+  await page.locator('.logyq-folder-open', { hasText: longFolder }).click()
+  await page.locator('.logyq-folder-open', { hasText: 'Nests' }).click()
+  await assertListFits('map inside nest')
+  await page.locator('.logiq-map-row').locator('[data-map-action="rename"]').click()
+  await assertListFits('rename open')
+  await page.locator('.logiq-map-name').click()
+  await page.waitForFunction(() => !document.getElementById('logiq-library')?.classList.contains('is-open'))
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.name), longMap)
+  assert.deepEqual(errors, [])
+  await context.close()
+})

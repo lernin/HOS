@@ -4,6 +4,7 @@
 
 - **My maps can hold nested folders.** Create, rename, move, and delete folders. Maps move into folders and still open from inside them. Deleting a folder lifts what was inside it; it does not delete maps.
 - **No database change.** Folder layout is `localStorage.logyq_map_folders_v1` on this device. `logiq_map_list` / `logiq_map_save` / `logiq_map_delete` are unchanged. No Supabase migration.
+- **My maps fits the viewport.** Map rows, folder rows, crumbs, and rename/move fields shrink with the screen. Long names ellipsize instead of widening the list.
 
 ## Curriculum Start gate
 
