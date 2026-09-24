@@ -7042,8 +7042,6 @@
     openLibrary().then(() => setHomeTab('game'))
   })
   preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay }
-
-
   // FOLDER_PURE_START
   function cloneFolderIndex(index) {
     return {
