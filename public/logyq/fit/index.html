@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#162135">
+  <title>Fit the Tree · LOGYQ</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="game" id="game">
+    <header class="topbar">
+      <div><div class="eyebrow">LOGYQ · FIT THE TREE</div><h1 id="level-heading">Level 1</h1></div>
+      <button class="text-button" id="levels-button" type="button">Levels</button>
+    </header>
+    <div class="progress"><div id="progress-fill"></div></div>
+    <section class="rules" aria-label="Rules">
+      <span class="rules-icon">?</span>
+      <div><strong>How to play</strong><p>No turning. Match a tile’s top to a space’s pattern. Give every tile a home.</p></div>
+    </section>
+    <div class="tools">
+      <span id="feedback" role="status" aria-live="polite">Tap a loose tile, then its matching space.</span>
+      <button id="hint-button" type="button">Hint</button>
+      <button id="reset-button" type="button">Reset</button>
+    </div>
+    <section class="board-wrap" aria-label="Tree board"><div class="board" id="board"></div></section>
+    <section class="tray" aria-label="Loose tiles">
+      <div class="tray-heading"><strong>Loose tiles</strong><span id="tile-count"></span></div>
+      <div class="tray-list" id="tray"></div>
+    </section>
+  </main>
+  <dialog id="level-picker"><div class="dialog-head"><h2>Choose a level</h2><button type="button" id="close-levels" aria-label="Close levels">×</button></div><div id="level-grid" class="level-grid"></div></dialog>
+  <dialog id="win-dialog" class="win-dialog"><div class="win-mark">✓</div><h2>Tree complete!</h2><p>Every tile found its home.</p><button id="next-button" type="button">Next level</button><button class="quiet" id="replay-button" type="button">Play again</button></dialog>
+  <script type="module" src="./game.mjs"></script>
+</body>
+</html>
