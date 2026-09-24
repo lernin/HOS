@@ -607,6 +607,8 @@ test('chip-drop cases keep empty-canvas, rootAbove, gap, then node order', () =>
   assert.match(source, /session\.deleting/)
   assert.match(source, /dy >= 36 && dy >= Math\.abs\(dx\)/)
   assert.match(source, /type: 'bank-delete', prevBank/)
+  assert.match(source, /function sendAllToWarehouse/)
+  assert.match(source, /is-shelf-clear/)
 })
 
 test('undo still recognizes the original action types', () => {
@@ -2445,7 +2447,11 @@ test('thekonym join matches term exactly and reads essence from the row', () => 
   assert.match(source, /technical_definition/)
   assert.match(source, /not in Thekonyms yet/)
   assert.match(source, /Add to Word Bank/)
+  assert.match(source, /No Thekonyms for that letter/)
+  assert.doesNotMatch(source, /button\.disabled = thekonymState\.status === 'ready'/)
   assert.doesNotMatch(source, /logyq-tk-bank/)
+  const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
+  assert.match(styles, /\.logyq-tk-browser header\{[^}]*position:static/)
   assert.doesNotMatch(source, /rpc\('lab_thekonym_update'/)
   assert.match(source, /logyq_thekonym_mode_v1/)
 })

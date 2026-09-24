@@ -556,16 +556,24 @@
     letters.querySelectorAll('button').forEach((button) => {
       const letter = button.dataset.letter
       const count = thekonymByLetter(thekonymState.rows, letter).length
-      button.disabled = thekonymState.status === 'ready' && count === 0
+      const empty = thekonymState.status === 'ready' && count === 0
+      button.disabled = false
+      button.classList.toggle('is-empty', empty)
       button.setAttribute('aria-pressed', String(thekonymState.letter === letter))
     })
+    list.scrollTop = 0
     if (!thekonymState.letter) {
       list.innerHTML = '<p class="logyq-tk-prompt">Pick a letter.</p>'
       return
     }
     const rows = thekonymByLetter(thekonymState.rows, thekonymState.letter)
     if (!rows.length) {
-      list.innerHTML = '<p class="logyq-tk-none">No Thekonyms for that letter.</p>'
+      const note = thekonymState.status === 'reading'
+        ? 'Reading Thekonyms…'
+        : thekonymState.status === 'ready'
+          ? 'No Thekonyms for that letter.'
+          : 'Thekonyms could not be read.'
+      list.innerHTML = `<p class="logyq-tk-none">${note}</p>`
       return
     }
     const playing = thekonymPlayingNames()
@@ -710,12 +718,12 @@
       browser.className = 'logyq-tk-browser'
       browser.setAttribute('role', 'dialog')
       browser.setAttribute('aria-label', 'Thekonyms A to Z')
-      browser.innerHTML = `<header><h2>Thekonyms</h2><button type="button" id="logyq-thekonym-browser-close" aria-label="Close">×</button></header><div class="logyq-tk-az" id="logyq-thekonym-letters">${THEKONYM_LETTERS.map((letter) => `<button type="button" data-letter="${letter}">${letter}</button>`).join('')}</div><div class="logyq-tk-list" id="logyq-thekonym-list"></div>`
+      browser.innerHTML = `<header><h2>Thekonyms</h2><button type="button" id="logyq-thekonym-browser-close" aria-label="Close">×</button></header><div class="logyq-tk-az" id="logyq-thekonym-letters">${THEKONYM_LETTERS.map((letter) => `<button type="button" data-letter="${letter}" aria-label="${letter === '#' ? 'Thekonyms that do not start with a letter' : `Thekonyms starting with ${letter}`}">${letter}</button>`).join('')}</div><div class="logyq-tk-list" id="logyq-thekonym-list"></div>`
       document.body.append(browser)
       browser.querySelector('#logyq-thekonym-browser-close').addEventListener('click', closeThekonymBrowser)
       browser.addEventListener('click', (event) => {
         const letter = event.target.closest?.('[data-letter]')
-        if (letter && !letter.disabled) {
+        if (letter) {
           thekonymState.letter = letter.dataset.letter
           renderThekonymList()
           return
