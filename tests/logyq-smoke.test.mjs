@@ -1002,7 +1002,7 @@ test('LOGYQ empty library stays a library, not a chooser or editor', async () =>
   await context.close()
 })
 
-test('LOGYQ curriculum level 1 clears into an empty map and unlocks level 2', async () => {
+test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', async () => {
   const capture = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context, { capture })
@@ -1013,23 +1013,71 @@ test('LOGYQ curriculum level 1 clears into an empty map and unlocks level 2', as
   await waitForBoot(page)
   await page.locator('#logyq-tab-curriculum').click()
   await page.locator('[data-level="fruit"]').click()
-  await page.waitForFunction(() => document.querySelector('#Dock .chip')?.textContent === 'fruit'
-    || document.querySelectorAll('#Dock .chip').length === 3)
-  const opened = await page.evaluate(() => ({
-    chips: Array.from(document.querySelectorAll('#Dock .chip')).map((el) => el.textContent.trim()).sort(),
-    nodes: document.querySelectorAll('g.node').length,
-    title: document.getElementById('logyq-curriculum-status')?.textContent || '',
-    playing: document.body.classList.contains('logyq-curriculum'),
-  }))
-  assert.deepEqual(opened.chips, ['apple', 'banana', 'fruit'])
-  assert.equal(opened.nodes, 0)
+  await page.waitForFunction(() => {
+    const names = Array.from(document.querySelectorAll('g.node:not(.logyq-pile)')).map((el) => el.__data__?.data?.name)
+    return names.length === 3 && document.body.classList.contains('logyq-curriculum')
+  })
+  const opened = await page.evaluate(() => {
+    const hidden = (id) => getComputedStyle(document.getElementById(id)).display === 'none'
+    const cards = Array.from(document.querySelectorAll('g.node:not(.logyq-pile)'))
+    const names = cards.map((el) => el.__data__?.data?.name).sort()
+    const detached = cards.every((el) => el.__data__?.parent?.data?.curriculumPile && !(el.__data__?.data?.children || []).length)
+    const answer = window.LOGYQPreview.curriculum.matches(
+      window.LOGYQPreview.curriculum.pack().find((level) => level.id === 'fruit').tree,
+      window.LOGYQBridge.snapshot().tree,
+    )
+    return {
+      chips: document.querySelectorAll('#Dock .chip').length,
+      names,
+      detached,
+      answer,
+      dock: hidden('Dock'),
+      trash: hidden('trash'),
+      warehouse: hidden('logyq-warehouse'),
+      bankTrash: hidden('logyq-bank-trash'),
+      title: document.getElementById('logyq-curriculum-status')?.textContent || '',
+      playing: document.body.classList.contains('logyq-curriculum'),
+      pileHidden: getComputedStyle(document.querySelector('g.node.logyq-pile')).display === 'none',
+    }
+  })
+  assert.equal(opened.chips, 0)
+  assert.deepEqual(opened.names, ['apple', 'banana', 'fruit'])
+  assert.equal(opened.detached, true)
+  assert.equal(opened.answer, false)
+  assert.equal(opened.dock, true)
+  assert.equal(opened.trash, true)
+  assert.equal(opened.warehouse, true)
+  assert.equal(opened.bankTrash, true)
+  assert.equal(opened.pileHidden, true)
   assert.equal(opened.playing, true)
   assert.match(opened.title, /Fruit/)
   assert.equal(await page.locator('#logyq-curriculum-check').isVisible(), true)
+  assert.equal(await page.locator('#logyq-curriculum-mix').isVisible(), true)
+  assert.equal(await page.locator('#logyq-curriculum').innerText().then((text) => text.includes('Word Bank')), false)
+
+  const beforeOrder = await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.map((child) => child.name).join(','))
+  const mixing = await page.evaluate(() => {
+    window.__logyqCurriculumMix()
+    return window.LOGYQBridge.core.state.repositionMode
+  })
+  const afterOrder = await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.map((child) => child.name).join(','))
+  assert.equal(mixing, 'mix')
+  assert.notEqual(afterOrder, beforeOrder)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.length), 0)
+  const fruitUid = await page.evaluate(() => document.querySelector('g.node:not(.logyq-pile)')?.__data__?.data?._uid)
+  const beforeNodes = await page.evaluate(() => document.querySelectorAll('g.node').length)
+  await page.evaluate((uid) => window.LOGYQBridge.createRelative('down', uid), fruitUid)
+  await page.evaluate((uid) => window.LOGYQBridge.editSelected({ uid }), fruitUid)
+  assert.equal(await page.evaluate(() => document.querySelectorAll('g.node').length), beforeNodes)
+  assert.equal(await page.locator('.node-edit-input').count(), 0)
 
   await page.evaluate(() => {
     const core = window.LOGYQBridge.core
-    const tree = { name: 'fruit', children: [{ name: 'apple', children: [{ name: 'banana' }] }] }
+    const tree = {
+      name: '',
+      curriculumPile: true,
+      children: [{ name: 'fruit', children: [{ name: 'apple', children: [{ name: 'banana' }] }] }],
+    }
     core.utils.assignUids(tree)
     core.state.wordBank = []
     core.state.root = window.d3.hierarchy(tree)
@@ -1043,7 +1091,11 @@ test('LOGYQ curriculum level 1 clears into an empty map and unlocks level 2', as
 
   await page.evaluate(() => {
     const core = window.LOGYQBridge.core
-    const tree = { name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] }
+    const tree = {
+      name: '',
+      curriculumPile: true,
+      children: [{ name: 'fruit', children: [{ name: 'banana' }, { name: 'apple' }] }],
+    }
     core.utils.assignUids(tree)
     core.state.wordBank = []
     core.state.root = window.d3.hierarchy(tree)
@@ -3320,6 +3372,107 @@ test('LOGYQ Word Bank chip drag pans the map with the card-drag follow', async (
   await page.waitForFunction(() => !document.body.classList.contains('logyq-chip-drag'))
   assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Pan')), true)
   assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'Pan')), false)
+  assert.deepEqual(errors, [])
+  await cdp.detach()
+  await context.close()
+})
+
+test('LOGYQ Word Bank chip still pans when the finger is in the shelf slack', async () => {
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({
+      name: 'Root',
+      children: [{ name: 'Far' }],
+    }, ['Pan'])
+  })
+  await page.waitForSelector('#Dock .chip')
+  await page.waitForFunction(() => {
+    const far = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far')
+    return far?.getBoundingClientRect().width > 20 && !document.body.classList.contains('logyq-layout-settling')
+  })
+  const parked = await page.evaluate(() => {
+    const state = window.LOGYQBridge.core.state
+    const svg = document.getElementById('canvas')
+    const node = state.root.descendants().find((item) => item.data.name === 'Far')
+    const box = svg.getBoundingClientRect()
+    const dock = document.getElementById('Dock').getBoundingClientRect()
+    const tx = box.left + box.width + 220 - node.x
+    const ty = box.top + box.height / 2 - node.y
+    state._lastMoat = Date.now() + 30000
+    window.d3.select(svg).call(state.zoom.transform, window.d3.zoomIdentity.translate(tx, ty).scale(1))
+    state._lastMoat = Date.now() + 30000
+    const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === 'Pan').getBoundingClientRect()
+    const zoom = window.d3.zoomTransform(svg)
+    return {
+      tx: zoom.x,
+      chip: { x: chip.left + chip.width / 2, y: chip.top + chip.height / 2 },
+      lift: { x: chip.left + chip.width / 2, y: dock.top - 140 },
+      edge: { x: box.right - 16, y: dock.top - 16 },
+      dockTop: dock.top,
+    }
+  })
+  const cdp = await page.context().newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...parked.chip, id: 1 }] })
+  const liftSteps = 6
+  for (let i = 1; i <= liftSteps; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: parked.chip.x + ((parked.lift.x - parked.chip.x) * i) / liftSteps,
+        y: parked.chip.y + ((parked.lift.y - parked.chip.y) * i) / liftSteps,
+        id: 1,
+      }],
+    })
+    await page.waitForTimeout(16)
+  }
+  assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-chip-drag')), true)
+  const slideSteps = 8
+  for (let i = 1; i <= slideSteps; i += 1) {
+    await cdp.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [{
+        x: parked.lift.x + ((parked.edge.x - parked.lift.x) * i) / slideSteps,
+        y: parked.lift.y + ((parked.edge.y - parked.lift.y) * i) / slideSteps,
+        id: 1,
+      }],
+    })
+    await page.waitForTimeout(16)
+  }
+  await page.waitForTimeout(450)
+  const panned = await page.evaluate((dockTop) => {
+    const svg = document.getElementById('canvas')
+    const zoom = window.d3.zoomTransform(svg)
+    const ghost = document.getElementById('logyq-chip-ghost')?.getBoundingClientRect()
+    const far = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far').getBoundingClientRect()
+    return {
+      tx: zoom.x,
+      farX: far.left + far.width / 2,
+      ghostTop: ghost?.top ?? null,
+      fingerInSlack: true,
+      dockTop,
+    }
+  }, parked.dockTop)
+  assert.ok(parked.edge.y > parked.dockTop - 28, `finger should sit in the shelf slack, y=${parked.edge.y} dock=${parked.dockTop}`)
+  assert.ok(panned.ghostTop != null && panned.ghostTop < parked.dockTop - 28, `chip should be clear of the shelf, ghostTop=${panned.ghostTop}`)
+  assert.ok(parked.tx - panned.tx > 40, `slack-edge hold should keep panning, before=${parked.tx} after=${panned.tx} far=${panned.farX}`)
+  await cdp.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ ...parked.chip, id: 1 }],
+  })
+  await page.waitForTimeout(40)
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+  await page.waitForFunction(() => !document.body.classList.contains('logyq-chip-drag'))
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Pan')), true)
   assert.deepEqual(errors, [])
   await cdp.detach()
   await context.close()

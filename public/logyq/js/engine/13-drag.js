@@ -310,6 +310,9 @@ state.dragState.drop = null;
     const src = event.sourceEvent, cx=src.clientX, cy=src.clientY;
     const zone=dragManager.zone(cx,cy);
     const shouldDelete = (zone==='over');
+    if(shouldDelete && typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()){
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
+    }
     if(shouldDelete){
       // Group delete
 
@@ -348,6 +351,9 @@ state.dragState.drop = null;
 
     // 2) Valid drop?
     const drop = state.dragState.drop;
+    if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked() && drop && drop.type === 'rootAbove') {
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
+    }
     if (!drop){ dragManager.clear(); logyq.treeManager.layoutAndRender(false); return; }
 
     /* ========= Helpers used below ========= */

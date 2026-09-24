@@ -60,6 +60,17 @@
     if (!prev) return false
     return !!progress?.levels?.[prev.id]?.clearedAt
   }
+
+  // The answer sheet is the one rebuilt tree. A play pile with several loose
+  // cards is not that tree. One child under the pile is the rebuilt tree.
+  function curriculumAnswerTree(live) {
+    if (!live || typeof live !== 'object') return null
+    if (!live.curriculumPile) return live
+    const kids = (Array.isArray(live.children) ? live.children : [])
+      .filter((child) => String(child?.name ?? '').trim())
+    if (kids.length !== 1) return null
+    return kids[0]
+  }
   // CURRICULUM_PURE_END
 
   function readCurriculumProgress() {
@@ -132,9 +143,89 @@
     }).join('')
   }
 
+  function curriculumCardPool(live, answer) {
+    const expected = curriculumWords(answer)
+    const found = []
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return
+      if (!node.curriculumPile) {
+        const name = String(node.name ?? '').trim()
+        if (name) found.push({ name, _uid: node._uid })
+      }
+      for (const child of node.children || []) walk(child)
+    }
+    walk(live)
+    const names = found.map((card) => card.name).sort()
+    const want = expected.slice().sort()
+    const same = names.length === want.length && names.every((name, index) => name === want[index])
+    if (!same) return expected.map((name) => ({ name }))
+    return found
+  }
+
+  function gatherCurriculumCards() {
+    const root = bridge.core?.state?.root
+    const cx = Number.isFinite(root?.x) ? root.x : 0
+    const cy = Number.isFinite(root?.y) ? root.y : 0
+    document.querySelectorAll('g.node').forEach((el) => {
+      if (el.__data__?.data?.curriculumPile) return
+      el.setAttribute('transform', `translate(${cx},${cy})`)
+    })
+  }
+
+  function mixCurriculum() {
+    const session = app.curriculum
+    if (!session || session.cleared) return false
+    const level = curriculumLevel(session.id)
+    const core = bridge.core
+    const state = core?.state
+    const utils = core?.utils
+    if (!level || !state || !utils || !window.d3) return false
+    const cards = curriculumCardPool(state.root?.data, level.tree)
+    const shuffled = shuffleCurriculumWords(cards.map((card) => card.name))
+    const byName = new Map(cards.map((card) => [card.name, card]))
+    const pile = {
+      name: '',
+      curriculumPile: true,
+      children: shuffled.map((name) => {
+        const src = byName.get(name) || { name }
+        const card = { name: src.name }
+        if (src._uid != null && String(src._uid) !== '') card._uid = src._uid
+        return card
+      }),
+    }
+    if (state.root?.data?.curriculumPile && state.root.data._uid != null) pile._uid = state.root.data._uid
+    utils.assignUids(pile)
+    try { core.editing?.closeNodeEditor?.(false, false) } catch (_error) {}
+    state.wordBank = []
+    state.history = []
+    state.redo = []
+    state.selectedUid = null
+    try { core.selection?.clearGroup?.() } catch (_error) {}
+    try { core.selection?.clearSelection?.() } catch (_error) {}
+    state.root = window.d3.hierarchy(pile)
+    utils.assignIds(state.root)
+    state.layoutMotionMs = 0
+    state.repositionMode = null
+    core.treeManager.layoutAndRender(false)
+    state.layoutMotionMs = null
+    gatherCurriculumCards()
+    state.layoutMotionMs = 420
+    state.repositionMode = 'mix'
+    core.treeManager.layoutAndRender(false)
+    state.layoutMotionMs = null
+    try { core.wordDock?.render?.() } catch (_error) {}
+    const undo = document.getElementById('undoBtn')
+    if (undo) undo.disabled = true
+    const status = document.getElementById('logyq-curriculum-status')
+    if (status && status.dataset.tone === 'wait') {
+      delete status.dataset.tone
+      status.textContent = level.title
+    }
+    return true
+  }
+
   function beginCurriculumLevel(level) {
     if (!level) return
-    const words = shuffleCurriculumWords(curriculumWords(level.tree))
     app.curriculum = {
       id: level.id,
       title: level.title,
@@ -153,16 +244,7 @@
       status.textContent = level.title
     }
     renderCurriculumChrome()
-    bridge.loadMap({ name: '' }, words)
-    const state = bridge.core?.state
-    if (state) {
-      state.root = null
-      state.history = []
-      state.redo = []
-      state.wordBank = words.slice()
-    }
-    try { bridge.core?.treeManager?.renderEmpty?.() } catch (_error) {}
-    try { bridge.core?.wordDock?.render?.() } catch (_error) {}
+    mixCurriculum()
     setSaveState('saved')
   }
 
@@ -170,7 +252,8 @@
     const session = app.curriculum
     if (!session || session.cleared) return false
     const level = curriculumLevel(session.id)
-    if (!level || !curriculumMatches(level.tree, snapshot?.tree)) return false
+    const live = curriculumAnswerTree(snapshot?.tree)
+    if (!level || !live || !curriculumMatches(level.tree, live)) return false
     session.cleared = true
     const progress = readCurriculumProgress()
     const ms = Math.max(0, Date.now() - (session.startedAt || Date.now()))
@@ -210,6 +293,13 @@
       beginCurriculumLevel(level)
     })
     document.getElementById('logyq-curriculum-check')?.addEventListener('click', () => checkCurriculum())
+    document.getElementById('logyq-curriculum-mix')?.addEventListener('click', () => mixCurriculum())
+    document.getElementById('mixBtn')?.addEventListener('pointerdown', (event) => {
+      if (!document.body.classList.contains('logyq-curriculum')) return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      mixCurriculum()
+    }, true)
     document.getElementById('logyq-curriculum-levels')?.addEventListener('click', () => {
       openLibrary().then(() => setHomeTab('curriculum'))
     })
@@ -223,7 +313,10 @@
       read: readCurriculumProgress,
       begin: beginCurriculumLevel,
       check: checkCurriculum,
+      mix: mixCurriculum,
+      answerTree: curriculumAnswerTree,
     }
+    window.__logyqCurriculumMix = mixCurriculum
   }
 
   bindCurriculum()

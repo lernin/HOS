@@ -47,8 +47,8 @@
       #logyq-curriculum-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
       #logyq-curriculum-status[data-tone="clear"]{color:#14532d}
       #logyq-curriculum-status[data-tone="wait"]{color:#64748b}
-      #logyq-curriculum-check,#logyq-curriculum-levels{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
-      #logyq-curriculum-levels{background:#fff;color:#14532d;border:1px solid #bbf7d0}
+      #logyq-curriculum-check,#logyq-curriculum-levels,#logyq-curriculum-mix{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
+      #logyq-curriculum-levels,#logyq-curriculum-mix{background:#fff;color:#14532d;border:1px solid #bbf7d0}
       .logiq-icon-btn{width:38px;height:38px;border:1px solid #e2e8f0;border-radius:10px;background:#fff;color:#334155;font-size:18px;cursor:pointer}
       .logiq-primary{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:9px 13px;font-weight:750;cursor:pointer}
       .logiq-library-body{padding:12px 16px 18px}
@@ -194,6 +194,27 @@
         body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
         body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
       }
+      body.logyq-curriculum #Dock,
+      body.logyq-curriculum #Dock.dock-left,
+      body.logyq-curriculum #logyq-warehouse,
+      body.logyq-curriculum #logyq-bank-trash,
+      body.logyq-curriculum #logyq-warehouse-sheet,
+      body.logyq-curriculum #trash,
+      body.logyq-curriculum .word-tools,
+      body.logyq-curriculum #logyq-select-strip,
+      body.logyq-curriculum #logyq-paint-btn,
+      body.logyq-curriculum #logyq-paint-strip,
+      body.logyq-curriculum #logyq-thekonym-ask,
+      body.logyq-curriculum #logiq-mobile-panel [data-tool="add"],
+      body.logyq-curriculum #logiq-mobile-panel [data-tool="add-child"],
+      body.logyq-curriculum #logiq-mobile-panel [data-tool="paint"],
+      body.logyq-curriculum #logiq-mobile-panel [data-tool="dock"],
+      body.logyq-mobile-v162.logyq-curriculum.v2-branch-drag #trash,
+      body.logyq-curriculum.logyq-chip-drag #logyq-bank-trash,
+      body.logyq-curriculum.v2-branch-drag #logyq-bank-trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
+      body.logyq-curriculum g.node.logyq-pile,
+      body.logyq-curriculum g.hit-slot.logyq-pile,
+      body.logyq-curriculum path.link.logyq-pile-link{display:none!important;pointer-events:none!important}
       #logyq-thekonym-ask{display:none}
       body.logyq-thekonym #logyq-thekonym-ask{display:grid;place-items:center;position:fixed;z-index:3300;top:58px;right:10px;width:36px;height:36px;border:1px solid #3c4d43;border-radius:10px;background:#162e27;color:#faf8f1;font:18px Georgia,serif;padding:0}
       #logyq-thekonym-mobile{grid-column:1 / -1}

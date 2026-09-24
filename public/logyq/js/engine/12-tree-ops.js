@@ -20,6 +20,7 @@ function commitCreatedNode(uid, { noEdit = false, select = true, layout = true }
 function addChildOf(parentUid, newName = '', opts = {}) {
   const { noEdit = false, select = true, layout = true } = opts;
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return null;
 
   const parent = utils.findByUid(state.root?.data, parentUid);
   if (!parent) return null;
@@ -51,6 +52,7 @@ function addSiblingLeftOf(uid, newName = '', opts = {}){
 function insertSibling(uid, newName = '', opts = {}){
   const { side = 'right', noEdit = false, select = true, rootAsChild = side === 'right' } = opts;
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return null;
   if (!state.root) return null;
   const path = utils.pathToUid(state.root.data, uid);
   if (!path || path.length < 2){
@@ -75,6 +77,7 @@ function insertSibling(uid, newName = '', opts = {}){
 function insertParentAbove(uid, newName = '', opts = {}){
   const { noEdit = false, select = true } = opts;
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return null;
   if (!state.root || !uid) return null;
   const h = state.root.descendants().find(n => n?.data?._uid === uid);
   if (!h) return null;
@@ -109,6 +112,7 @@ function insertParentAbove(uid, newName = '', opts = {}){
 /* ---------- add SUBTREE (object with {name, children}) as rightmost child ---------- */
 function addSubtreeChildOf(parentUid, subtreeData){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return null;
   if (!subtreeData) return null;
 
   // ensure every node has a _uid
@@ -205,6 +209,7 @@ function __namesFromSubtree(nodeData){
 
 function dropSelectedToWordBank({ onlyNode = false } = {}) {
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   if (!window.__logyqHoldDragAllowBank && !window.__logyqExplicitBankCommit) return;
@@ -340,6 +345,7 @@ function dropSelectedToWordBank({ onlyNode = false } = {}) {
 
 function sendSubtreeToWordBank(h){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   // Move + dock dwell sets AllowBank. Keyboard D sets ExplicitBankCommit.
@@ -385,6 +391,7 @@ function sendSubtreeToWordBank(h){
 
 function sendNodeToWordBank_abandon(h){
   const { state, utils } = logyq
+  if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) return;
   if (window.__logyqHoldDragFrozen?.()) return;
   if (window.__logyqHoldDragBlocksBank?.()) return;
   if (!window.__logyqHoldDragAllowBank && !window.__logyqExplicitBankCommit) return;

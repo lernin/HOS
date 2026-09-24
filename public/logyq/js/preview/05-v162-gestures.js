@@ -1185,9 +1185,13 @@
     return { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight, width: win.innerWidth, height: win.innerHeight }
   }
 
-  // Same center-follow as a map-card hold. The ghost stays on the finger;
-  // only the map moves, and only while the finger is clear of the bank.
+  // Same center-follow as a map-card hold. Detect from the finger
+  // (`edgePan`); re-aim the drop at the raised chip. The full-bleed shelf
+  // has a slack band under that chip, so "near" the bank is not "on" it.
+  let chipEdgePanBound = false
   function bindChipEdgePan(doc, win) {
+    if (chipEdgePanBound) return
+    chipEdgePanBound = true
     let raf = 0
     let finger = null
     const stop = () => {
@@ -1195,19 +1199,25 @@
       raf = 0
       finger = null
     }
+    const chipPoint = () => {
+      const rect = doc.getElementById('logyq-chip-ghost')?.getBoundingClientRect?.()
+      if (!rect || rect.width < 1 || rect.height < 1) return null
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    }
     const tick = () => {
       raf = 0
       if (!finger || !doc.body.classList.contains('logyq-chip-drag')) return
-      if (dockDropKind(doc, finger.x, finger.y) === 'none' && edgePan(doc, win, finger.x, finger.y)) {
-        const stack = doc.getElementById('logyq-chip-ghost')
-        const rect = stack?.getBoundingClientRect?.()
+      const aim = chipPoint()
+      const fingerKind = dockDropKind(doc, finger.x, finger.y)
+      const chipKind = aim ? dockDropKind(doc, aim.x, aim.y) : fingerKind
+      if (fingerKind !== 'bank' && chipKind === 'none' && edgePan(doc, win, finger.x, finger.y)) {
         const svg = doc.getElementById('canvas')
-        if (rect && rect.width > 1 && svg) {
+        if (aim && svg) {
           svg.dispatchEvent(new win.DragEvent('dragover', {
             bubbles: true,
             cancelable: true,
-            clientX: rect.left + rect.width / 2,
-            clientY: rect.top + rect.height / 2,
+            clientX: aim.x,
+            clientY: aim.y,
           }))
         }
       }
@@ -1586,6 +1596,10 @@
     })
   }
 
+  function curriculumSandbox(doc) {
+    return !!doc.body?.classList.contains('logyq-curriculum')
+  }
+
   function onFlickUp(event, doc, win, state) {
     state.active.delete(event.pointerId)
     const candidate = state.candidates.get(event.pointerId)
@@ -1610,6 +1624,10 @@
     // branch only while a palette color is active. Left/up/down still create.
     // Thekonym mode opens the dossier on a right flick. Double-tap still renames.
     if (candidate.uid && isFlick(dx, dy, elapsed)) {
+      if (curriculumSandbox(doc)) {
+        state.lastTap = null
+        return
+      }
       const direction = flickDirection(dx, dy)
       if (paintFlickDown(direction)) {
         state.lastTap = null
@@ -1674,11 +1692,12 @@
       state.lastTap = null
       clearCardMic(state.mic)
       smiteSetArm(doc, null)
-      bridge.editSelected({ uid })
+      if (!curriculumSandbox(doc)) bridge.editSelected({ uid })
       return
     }
 
     if (paintTap()) {
+      if (curriculumSandbox(doc)) return
       bridge.paintUid(uid, preview.paint.color)
       state.lastTap = { uid, time: now }
       clearCardMic(state.mic)
@@ -2416,6 +2435,7 @@
   }
 
   function smiteTryArmSwipe(doc, win, smite, pointer) {
+    if (curriculumSandbox(doc)) return false
     if (!smite.armed || !pointer) return false
     const dx = pointer.lastX - pointer.x
     const dy = pointer.lastY - pointer.y
@@ -2464,6 +2484,7 @@
   }
 
   function smiteTryCast(doc, win, smite, pointer, pointerId) {
+    if (curriculumSandbox(doc)) return false
     if (smite.pinched || !pointer?.uid) return false
     const others = []
     smite.pointers.forEach((finger, id) => { if (id !== pointerId) others.push(finger) })
@@ -2509,6 +2530,7 @@
   }
 
   function beginSmiteMercy(doc, win, smite, cast) {
+    if (curriculumSandbox(doc)) return
     const now = win.performance?.now?.() || Date.now()
     const mercy = {
       marks: cast.marks,
@@ -3271,6 +3293,9 @@
   }
 
   bindV162Gestures()
+  // Chip placement lives in the word dock, including desktop mouse drags
+  // that never enter the phone hold-drag loop. One bind either way.
+  bindChipEdgePan(document, window)
   if (preview.gestures) {
     preview.gestures.constants = v162Constants()
     preview.gestures.bindV162 = bindV162Gestures

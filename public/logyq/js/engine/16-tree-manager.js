@@ -412,6 +412,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       .style("pointer-events", "all");
     const slots = enter.merge(sel)
       .attr("data-uid", d => d.data._uid)
+      .classed("logyq-pile", d => !!d?.data?.curriculumPile)
       .attr("transform", d => `translate(${d.x},${d.y})`);
     this.bindUidStamp(slots)
     sel.exit().remove();
@@ -452,6 +453,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     const selLinks=elements.gLinks.selectAll("path.link").data(links, d=>d.target.data._uid);
     const enteredLinks = selLinks.enter().append("path").attr("class","link").style("stroke-width", 2.8).style("opacity", 0.5)
       .attr("d", d=> logyq.visual.vLink({source:d.source, target:d.source}))
+    enteredLinks.merge(selLinks).classed("logyq-pile-link", d => !!d.source?.data?.curriculumPile);
     glide(enteredLinks).attr("d", d=> logyq.visual.vLink(d));
     glide(selLinks).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> logyq.visual.vLink(d));
     selLinks.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
@@ -501,6 +503,7 @@ const nEnter = selNodes.enter()
 
     const allNodes = nEnter.merge(selNodes);
     allNodes.attr("data-uid", d => d.data._uid);
+    allNodes.classed("logyq-pile", d => !!d?.data?.curriculumPile);
     allNodes.select("rect.grabzone")
       .attr("x", -CONFIG.CARD_WIDTH/2)
       .attr("y", -CONFIG.CARD_HEIGHT/2)
