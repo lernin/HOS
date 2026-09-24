@@ -30,6 +30,21 @@
       #logiq-library[data-shelf="curriculum"] #logiq-map-list,
       #logyq-curriculum{display:none}
       #logiq-library[data-shelf="curriculum"] #logyq-curriculum{display:block}
+      #logiq-library[data-shelf="game"] #logiq-new-map,
+      #logiq-library[data-shelf="game"] #logyq-new-folder,
+      #logiq-library[data-shelf="game"] #logiq-map-list,
+      #logyq-game-levels{display:none}
+      #logiq-library[data-shelf="game"] #logyq-game-levels{display:block}
+      #logyq-game-path{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
+      #logyq-game-path button{width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
+      #logyq-game-path button:disabled{cursor:not-allowed;color:#94a3b8;background:#f8fafc}
+      #logyq-game-path span{display:block;font-size:13px;font-weight:500;color:#64748b;margin-top:3px}
+      #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+      body.logyq-game:not(.logyq-home) #logyq-game-bar{display:flex}
+      #logyq-game-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
+      #logyq-game-bar button{border:1px solid #bfdbfe;background:#fff;color:#1e40af;border-radius:9px;padding:8px 10px;font-weight:750;cursor:pointer}
+      #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
+      #logyq-game-next[hidden]{display:none}
       #logyq-curriculum .logiq-empty p{margin:0}
       .logyq-level-intro{margin:4px 0 14px;color:#64748b;font-size:13px}
       #logyq-level-path{list-style:none;margin:0 auto 28px;padding:8px 0 12px;width:min(440px,100%);display:grid;gap:16px;position:relative}
@@ -236,6 +251,19 @@
         body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
         body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
       }
+      body.logyq-game #Dock,
+      body.logyq-game #logyq-warehouse,
+      body.logyq-game #logyq-bank-trash,
+      body.logyq-game #logyq-warehouse-sheet,
+      body.logyq-game #trash,
+      body.logyq-game #logyq-select-strip,
+      body.logyq-game #logyq-paint-btn,
+      body.logyq-game #logyq-paint-strip,
+      body.logyq-game #logiq-mobile-panel [data-tool="add"],
+      body.logyq-game #logiq-mobile-panel [data-tool="add-child"],
+      body.logyq-game #logiq-mobile-panel [data-tool="paint"],
+      body.logyq-game #logiq-mobile-panel [data-tool="dock"],
+      body.logyq-game #logiq-mobile-panel [data-tool="mix"],
       body.logyq-curriculum #Dock,
       body.logyq-curriculum #Dock.dock-left,
       body.logyq-curriculum #logyq-warehouse,
@@ -317,4 +345,3 @@
     `
     document.head.append(style)
   }
-

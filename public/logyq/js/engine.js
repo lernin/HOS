@@ -131,7 +131,8 @@ function __selectedUid(){
 /* Curriculum play is a rebuild sandbox. Normal maps never set this class. */
 function curriculumPlayLocked(){
   try {
-    return typeof document !== 'undefined' && !!document.body?.classList?.contains('logyq-curriculum');
+    return typeof document !== 'undefined' && !!document.body?.classList &&
+      (document.body.classList.contains('logyq-curriculum') || document.body.classList.contains('logyq-game'));
   } catch (_e) {
     return false;
   }
@@ -350,7 +351,6 @@ function checkMoatAndAutoFit(sourceTag = 'kbd'){
   window.incidentalBankContext = incidentalBankContext
   window.noteBankContextGrace = noteBankContextGrace
   attach('holdDrag', { frozen: holdDragFrozen, blocksBank: holdDragBlocksBank, incidentalBankContext, noteBankContextGrace })
-
 
 
 /* ======================= STATE & ELEMENTS ======================= */
@@ -3945,6 +3945,15 @@ state.dragState.drop = null;
     const src = event.sourceEvent, cx=src.clientX, cy=src.clientY;
     const zone=dragManager.zone(cx,cy);
     const shouldDelete = (zone==='over');
+    if (window.__logyqGameDropAllowed && !window.__logyqGameDropAllowed({
+      tree: state.root?.data,
+      movingUid: d.data?._uid,
+      drop: state.dragState.drop,
+      trash: shouldDelete,
+      multi: (state.dragState.multiUids?.length || 0) > 1
+    })) {
+      dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
+    }
     if(shouldDelete && typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()){
       dragManager.clear(); logyq.treeManager.layoutAndRender(false); return;
     }
@@ -4436,7 +4445,6 @@ state.dragState.drop = null;
   }
 };
 attach('drag', dragManager)
-
 
   /* ======================= CHIPS & INPUT ======================= */
   // Tap order. The first name tapped is the parent when a multi-select
@@ -5300,9 +5308,9 @@ state.chipDrag.drop = {
 
 
 } else if (drop.type === 'rootAbove') {
-  // A tree is already on the canvas. Only a card or a gap places chips.
-  // The zone above the root, and any other miss, leaves them in the bank.
-  state.chipDrag.drop = null
+  // Normal maps keep the historical behavior. LOGYQ Game explicitly allows
+  // a loose puzzle card to become the new root when its physical edge fits.
+  state.chipDrag.drop = window.__logyqGameBankNode ? { type: 'rootAbove' } : null
 }
 
 
@@ -5323,6 +5331,15 @@ logyq.elements.svg.on('drop', (event) => {
 
   if (!drop || !words.length) return;
 
+  const makeNode = (word) => {
+    const gameNode = window.__logyqGameBankNode?.(word)
+    const node = gameNode ? { ...gameNode } : { name: word }
+    utils.assignUids(node)
+    return node
+  }
+  if (window.__logyqGameBankDropAllowed &&
+      !window.__logyqGameBankDropAllowed({ tree: state.root?.data, words, drop })) return;
+
   const removeFromBank = (list) => {
     list.forEach(w => {
       const i = state.wordBank.indexOf(w);
@@ -5332,12 +5349,11 @@ logyq.elements.svg.on('drop', (event) => {
 
   // --- CASE 1: create a new root at pointer (empty canvas) ---
   if (drop.type === 'newRootAt') {
-    const rootNode = { name: words[0] };
-    utils.assignUids(rootNode);
+    const rootNode = makeNode(words[0]);
 
     if (words.length > 1) {
       rootNode.children = words.slice(1).map(nm => {
-        const c = { name: nm }; utils.assignUids(c); return c;
+        return makeNode(nm);
       });
     }
 
@@ -5366,12 +5382,12 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
   // --- CASE 2: make a new root above existing root ---
   if (drop.type === 'rootAbove' && state.root) {
     const prev = utils.deepClone(state.root.data);
-    const newRoot = { name: words[0], children: [prev] };
-    utils.assignUids(newRoot);
+    const newRoot = makeNode(words[0]);
+    newRoot.children = [prev];
 
     if (words.length > 1) {
       for (const nm of words.slice(1)) {
-        const c = { name: nm }; utils.assignUids(c); newRoot.children.push(c);
+        const c = makeNode(nm); newRoot.children.push(c);
       }
     }
 
@@ -5411,7 +5427,7 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     const parentPath = utils.pathToUid(state.root.data, parent._uid);
 
     words.forEach((nm, i) => {
-      const node = { name: nm }; utils.assignUids(node);
+      const node = makeNode(nm);
       parent.children.splice(insertAt + i, 0, node);
       logyq.history.pushHistory({ type: 'add', parentPath, uid: node._uid, index: insertAt + i });
     });
@@ -5438,7 +5454,7 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     const parentPath = utils.pathToUid(state.root.data, target._uid);
 
     words.forEach(nm => {
-      const node = { name: nm }; utils.assignUids(node);
+      const node = makeNode(nm);
       target.children.push(node);
       logyq.history.pushHistory({
         type: 'add',

@@ -44,6 +44,7 @@
             <div class="logyq-home-tabs" role="tablist" aria-label="Maps home">
               <button type="button" class="logyq-home-tab is-active" id="logyq-tab-maps" role="tab" aria-selected="true" aria-controls="logiq-map-list" data-shelf="maps">My maps</button>
               <button type="button" class="logyq-home-tab" id="logyq-tab-curriculum" role="tab" aria-selected="false" aria-controls="logyq-curriculum" data-shelf="curriculum">Curriculum</button>
+              <button type="button" class="logyq-home-tab" id="logyq-tab-game" role="tab" aria-selected="false" aria-controls="logyq-game-levels" data-shelf="game">Game</button>
             </div>
             <h2 id="logiq-library-title" class="logyq-sr">Your maps</h2>
             <button class="logiq-primary" id="logiq-new-map" type="button">+ New</button>
@@ -56,6 +57,10 @@
               <p class="logyq-level-intro">Drag the cards into the tree. Sibling order can differ.</p>
               <ol id="logyq-level-path"></ol>
             </div>
+            <div id="logyq-game-levels" role="tabpanel" aria-labelledby="logyq-tab-game" hidden>
+              <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
+              <ol id="logyq-game-path"></ol>
+            </div>
           </div>
         </section>
       </div>
@@ -64,6 +69,12 @@
         <button type="button" id="logyq-curriculum-mix">Mix</button>
         <button type="button" id="logyq-curriculum-check">Check</button>
         <button type="button" id="logyq-curriculum-levels">Levels</button>
+      </div>
+      <div id="logyq-game-bar">
+        <p id="logyq-game-status" role="status" aria-live="polite"></p>
+        <button type="button" id="logyq-game-check">Check</button>
+        <button type="button" id="logyq-game-next" hidden>Next</button>
+        <button type="button" id="logyq-game-levels-button">Levels</button>
       </div>
       <div id="logyq-curriculum-gate" hidden>
         <div class="logyq-curriculum-frost" aria-hidden="true"></div>
@@ -258,7 +269,7 @@
 
     document.querySelectorAll('[data-tool]').forEach((button) => button.addEventListener('click', () => {
       const action = button.dataset.tool
-      const sandbox = document.body.classList.contains('logyq-curriculum')
+      const sandbox = document.body.classList.contains('logyq-curriculum') || document.body.classList.contains('logyq-game')
       if (sandbox && (action === 'add' || action === 'add-child' || action === 'dock' || action === 'paint')) {
         closeMobilePanel()
         return
@@ -267,6 +278,7 @@
       if (action === 'add-child') commitMobileInput(true)
       if (action === 'undo') bridge.undo()
       if (action === 'mix') {
+        if (document.body.classList.contains('logyq-game')) return
         if (sandbox && window.__logyqCurriculumMix) window.__logyqCurriculumMix()
         else bridge.mix(false)
       }
@@ -311,7 +323,7 @@
   }
 
   function commitMobileInput(toNode) {
-    if (document.body.classList.contains('logyq-curriculum')) return
+    if (document.body.classList.contains('logyq-curriculum') || document.body.classList.contains('logyq-game')) return
     const legacyInput = document.getElementById('wordInput')
     const legacyAdd = document.getElementById('addWordBtn')
     if (!legacyInput || !legacyAdd) return
@@ -327,20 +339,27 @@
 
   function setHomeTab(shelf) {
     const curriculum = shelf === 'curriculum'
+    const game = shelf === 'game'
     const library = document.getElementById('logiq-library')
     if (!library) return
-    library.dataset.shelf = curriculum ? 'curriculum' : 'maps'
+    library.dataset.shelf = curriculum ? 'curriculum' : game ? 'game' : 'maps'
     const mapsBtn = document.getElementById('logyq-tab-maps')
     const currBtn = document.getElementById('logyq-tab-curriculum')
+    const gameBtn = document.getElementById('logyq-tab-game')
     const list = document.getElementById('logiq-map-list')
     const panel = document.getElementById('logyq-curriculum')
-    mapsBtn?.classList.toggle('is-active', !curriculum)
+    const gamePanel = document.getElementById('logyq-game-levels')
+    mapsBtn?.classList.toggle('is-active', !curriculum && !game)
     currBtn?.classList.toggle('is-active', curriculum)
-    mapsBtn?.setAttribute('aria-selected', String(!curriculum))
+    gameBtn?.classList.toggle('is-active', game)
+    mapsBtn?.setAttribute('aria-selected', String(!curriculum && !game))
     currBtn?.setAttribute('aria-selected', String(curriculum))
-    if (list) list.hidden = curriculum
+    gameBtn?.setAttribute('aria-selected', String(game))
+    if (list) list.hidden = curriculum || game
     if (panel) panel.hidden = !curriculum
+    if (gamePanel) gamePanel.hidden = !game
     if (curriculum) renderCurriculumPath()
+    if (game) renderGamePath()
   }
 
   function closeMobilePanel() {
@@ -353,4 +372,3 @@
     const title = document.getElementById('logyq-map-title')
     if (title) title.textContent = app.current?.name || ''
   }
-
