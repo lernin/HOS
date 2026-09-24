@@ -8,7 +8,7 @@
 ## Curriculum Start gate
 
 - **Haze gate.** Opening a level shows the mixed board under the same frost as the Thekonym dossier (`rgba(244,241,228,.36)` plus a 14px blur). A Start button sits on that gate. Map gestures stay blocked until play.
-- **Vegas Mix.** Start, the Curriculum Mix button, and M call `randomizeTree` on a slot-machine curve: beats begin close together and each gap grows, so the tumble starts fast and slows down, over about 4.6 seconds. Those glides are linear, so a longer beat is a slower drift. Normal Mix keeps its usual ease. The camera transform is restored after every beat.
+- **Vegas Mix.** Start, the Curriculum Mix button, and M call `randomizeTree` on a slot-machine curve for about 7.2 seconds before the settle. Beats begin close together and each gap grows. Glides overlap, so the cards keep drifting instead of stopping between Mix calls. The last glide eases to a stop, then the camera settles. Normal Mix keeps its usual ease. The camera transform is restored after every beat.
 - **Root-anchored settle.** When the tumble ends, one ease pins the root to the upper band (28% of the usable viewport) and zooms out only if the new shape would overflow about 90% of that viewport. A smaller Mix keeps the current scale. Play then freezes pan, pinch, and wheel. Drag reparent still works. Undo uses that same settle instead of bbox-centering.
 - **Card identity through Mix.** `randomizeTree` keeps each card's `_uid`, so the layout transition moves the same cards instead of fading in new ones.
 
