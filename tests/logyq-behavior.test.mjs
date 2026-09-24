@@ -2370,6 +2370,25 @@ test('curriculum pack matches parent structure and ignores sibling order', () =>
   assert.match(source, /function checkCurriculum/)
   assert.match(source, /logyq-curriculum-start/)
   assert.match(source, /CURRICULUM_VEGAS_SETTLE_AT = 3680/)
+  const beatSource = source.match(/const CURRICULUM_VEGAS_BEATS = \[([\s\S]*?)\]/)
+  assert.ok(beatSource)
+  const beats = [...beatSource[1].matchAll(/\{\s*at:\s*(\d+),\s*motion:\s*(\d+)\s*\}/g)].map((hit) => ({
+    at: Number(hit[1]),
+    motion: Number(hit[2]),
+  }))
+  assert.ok(beats.length >= 6)
+  assert.equal(beats[0].at, 0)
+  const gaps = []
+  for (let i = 1; i < beats.length; i += 1) gaps.push(beats[i].at - beats[i - 1].at)
+  gaps.push(3680 - beats.at(-1).at)
+  assert.ok(gaps.every((gap, index) => gap > 0 && (index === 0 || gap > gaps[index - 1])), `vegas gaps should decelerate: ${gaps.join(',')}`)
+  assert.ok(gaps[0] < 200, `first mix should be faster than the old even 320ms spacing, was ${gaps[0]}`)
+  assert.ok(beats[0].motion < beats.at(-1).motion)
+  assert.ok(beats.at(-1).motion <= gaps.at(-1))
+  assert.match(source, /d3\?\.easeLinear/)
+  assert.match(source, /layoutMotionEase = prevEase/)
+  const layout = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
+  assert.match(layout, /if \(typeof state\.layoutMotionEase === 'function'\) tween\.ease\(state\.layoutMotionEase\)/)
   assert.match(source, /settleRootAnchored/)
   assert.match(source, /curriculumCameraLock/)
   const frost = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')

@@ -5506,15 +5506,20 @@
     return curriculumPack().find((level) => level.id === id) || null
   }
 
-  // pa-pa-pa, then two slower turns, then one long tumble. The camera
-  // ease starts after the last card motion. About 4.6s, gate to play.
+  // Slot-machine tumble. Each beat is the same Mix. Gaps start short so
+  // the board spins hard, then each wait grows so the same Mix slows
+  // down. Motion grows with the gap: early glides are quick, later ones
+  // drift. The last glide lands, then the root-anchored camera ease.
+  // Shuffle ~3.7s plus a 0.9s settle. About 4.6s, gate to play.
   const CURRICULUM_VEGAS_BEATS = [
-    { at: 0, motion: 260 },
-    { at: 320, motion: 240 },
-    { at: 640, motion: 240 },
-    { at: 1100, motion: 480 },
-    { at: 1750, motion: 620 },
-    { at: 2600, motion: 900 },
+    { at: 0, motion: 130 },
+    { at: 110, motion: 160 },
+    { at: 250, motion: 220 },
+    { at: 450, motion: 310 },
+    { at: 740, motion: 440 },
+    { at: 1160, motion: 620 },
+    { at: 1760, motion: 940 },
+    { at: 2680, motion: 960 },
   ]
   const CURRICULUM_VEGAS_SETTLE_AT = 3680
   const CURRICULUM_VEGAS_SETTLE_MS = 900
@@ -5647,7 +5652,13 @@
     utils.assignIds(state.root)
     const before = curriculumStructureKey(state.root.data)
     const prevMotion = state.layoutMotionMs
+    const prevEase = state.layoutMotionEase
     state.layoutMotionMs = motion
+    // Linear, not the default slow-in/slow-out. A longer beat then really
+    // drifts slower, and the next Mix does not start with a stall.
+    state.layoutMotionEase = motion > 0 && typeof window.d3?.easeLinear === 'function'
+      ? window.d3.easeLinear
+      : null
     state.curriculumCameraLock = true
     const locked = document.body.classList.contains('logyq-curriculum')
     const runMix = () => {
@@ -5675,6 +5686,7 @@
       }
     } finally {
       state.layoutMotionMs = prevMotion
+      state.layoutMotionEase = prevEase
     }
     state.wordBank = []
     try { core.wordDock?.render?.() } catch (_error) {}
