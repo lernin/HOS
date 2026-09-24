@@ -428,10 +428,13 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     this.armLayoutSettle();
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */
       (function(){
-        /* wait for render transitions to finish, then fit using final bbox */
+        /* Fit after the cards finish moving. A mid-tween bbox is a tight
+           cluster, and fitting that zooms a small pile to fill the screen. */
+        const motion = Number.isFinite(state.layoutMotionMs) ? state.layoutMotionMs : 260
+        const wait = Math.max(240, motion + 70)
         const done = ()=>{ if(state.repositionMode==="mix"){ state.repositionMode=null; logyq.treeManager.autoFit(); } };
         try{ clearTimeout(window.__mixFitT); }catch(_e){}
-        try{ window.__mixFitT = setTimeout(done, 190); }catch(_e){ setTimeout(done, 190); }
+        try{ window.__mixFitT = setTimeout(done, wait); }catch(_e){ setTimeout(done, wait); }
       })();
     }
 
@@ -541,33 +544,54 @@ centerOnSelected(opts = {}) {
     const b=merge(nb,lb);
     const svgNode = elements.svg.node();
     const fullW=svgNode.clientWidth, fullH=svgNode.clientHeight;
-    if(!b||!b.width||!b.height) return;
+    if(!b||!b.width||!b.height||!fullW||!fullH) return;
     const phone = typeof window !== 'undefined' && window.matchMedia
       && window.matchMedia('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px)),(max-width:700px)').matches;
-    const edge = phone && window.matchMedia('(orientation: landscape)').matches;
-    const headerH = phone && !edge ? (document.getElementById('logiq-mobile-header')?.getBoundingClientRect().height || 48) : 0;
-    const dockEl = phone ? document.getElementById('Dock') : null;
-    const dockBox = dockEl && !dockEl.classList.contains('dock-hidden') ? dockEl.getBoundingClientRect() : null;
-    const leftShelf = !!(edge && dockBox && dockBox.width > 8 && dockBox.width < fullW * 0.45 && dockBox.height > fullH * 0.45);
-    const shelfW = leftShelf ? dockBox.width + 12 : 0;
-    const dockH = leftShelf ? 16 : (dockBox && dockBox.height > 8 ? dockBox.height + 8 : 16);
-    const usableH = Math.max(80, fullH - headerH - dockH);
-    const widthScale = (fullW - pad) / b.width;
-    const heightScale = ((phone ? usableH : fullH) - pad) / b.height;
-    const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1];
-    const scale = phone
-      ? Math.min(maxK, Math.max(0.02, leftShelf ? (fullW - shelfW - pad) / b.width : widthScale))
-      : Math.min(1, widthScale, heightScale);
-    if(!isFinite(scale) || scale<=0) return;
-    const tx=((leftShelf ? shelfW : 0) + (fullW - (leftShelf ? shelfW : 0))/2)-scale*(b.x+b.width/2);
-    let ty;
-    if (!phone) {
-      ty = (fullH/2)-scale*(b.y+b.height/2);
-    } else if (scale * b.height <= usableH - pad) {
-      ty = (headerH + usableH/2) - scale*(b.y+b.height/2);
-    } else {
-      ty = headerH + pad - scale * b.y;
+    const shown = (id) => {
+      const el = document.getElementById(id)
+      if (!el) return null
+      const style = getComputedStyle(el)
+      if (style.display === 'none' || style.visibility === 'hidden') return null
+      const rect = el.getBoundingClientRect()
+      if (rect.width < 2 || rect.height < 2) return null
+      return rect
     }
+    let chromeLeft = 0
+    let chromeTop = 0
+    let chromeRight = fullW
+    let chromeBottom = fullH
+    if (phone) {
+      const edge = window.matchMedia('(orientation: landscape)').matches
+      const header = shown('logiq-mobile-header')
+      if (header && !edge) chromeTop = Math.max(chromeTop, header.bottom)
+    } else {
+      const header = document.querySelector('body > header')
+      if (header && getComputedStyle(header).display !== 'none') {
+        const rect = header.getBoundingClientRect()
+        if (rect.height > 2) chromeTop = Math.max(chromeTop, rect.bottom)
+      }
+    }
+    const bar = shown('logyq-curriculum-bar')
+    if (bar) chromeTop = Math.max(chromeTop, bar.bottom + 8)
+    const dock = shown('Dock')
+    if (dock) {
+      const sideShelf = dock.width < fullW * 0.45 && dock.height > fullH * 0.45 && dock.left < fullW * 0.5
+      if (sideShelf) chromeLeft = Math.max(chromeLeft, dock.right + 8)
+      else if (dock.top > fullH * 0.5) chromeBottom = Math.min(chromeBottom, dock.top - 8)
+    }
+    const usableW = Math.max(80, chromeRight - chromeLeft)
+    const usableH = Math.max(80, chromeBottom - chromeTop)
+    // About 10% padding, so the map shape sits in 90% of the usable viewport.
+    const content = 0.9
+    const widthScale = (usableW * content) / b.width
+    const heightScale = (usableH * content) / b.height
+    const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1]
+    const fitScale = Math.min(widthScale, heightScale)
+    // Cap zoom-in so a small pile stays an overview. Wider maps still scale down to fit.
+    const scale = Math.min(maxK, 1.15, Math.max(0.02, fitScale))
+    if(!isFinite(scale) || scale<=0) return;
+    const tx = chromeLeft + usableW / 2 - scale * (b.x + b.width / 2)
+    const ty = chromeTop + usableH / 2 - scale * (b.y + b.height / 2)
   const el = svgNode;
 const t0 = d3.zoomTransform(el);
 const dx = tx - t0.x, dy = ty - t0.y, dk = Math.abs(scale - t0.k);

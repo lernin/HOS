@@ -549,7 +549,16 @@ test('addWords splits on commas/semicolons and appends to the bank or the focuse
   }
   globalThis.document = {
     createElement() {
-      return { className: '', textContent: '', draggable: false, addEventListener() {} }
+      const children = []
+      return {
+        className: '',
+        textContent: '',
+        draggable: false,
+        id: '',
+        children,
+        appendChild(node) { children.push(node); return node },
+        addEventListener() {},
+      }
     },
     querySelectorAll() { return [] },
   }
@@ -2349,7 +2358,8 @@ test('curriculum pack matches parent structure and ignores sibling order', () =>
   assert.equal(api.curriculumMatches(fruit, api.curriculumAnswerTree(solved)), true)
   assert.equal(api.curriculumAnswerTree(swapped).name, 'fruit')
   assert.match(source, /logyq_curriculum_progress_v1/)
-  assert.match(source, /curriculumPile: true/)
+  assert.match(source, /randomizeTree/)
+  assert.doesNotMatch(source, /scatterDetached|curriculumScatterAnchor/)
   assert.match(source, /function mixCurriculum/)
   assert.match(source, /function checkCurriculum/)
   assert.doesNotMatch(source, /state\.wordBank = words/)

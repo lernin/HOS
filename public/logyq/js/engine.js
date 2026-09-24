@@ -4561,14 +4561,21 @@ attach('drag', dragManager)
     })
   }
 
-  // Hide the corner warehouse only when the bank has zero words.
-  // Warehoused-only words still count, so the catalog stays reachable.
+  // Warehouse control shows when something is stored. A full shelf with an
+  // empty warehouse stays hidden; chip drag still reveals the corner so the
+  // first word can be stored. Curriculum play hides it in CSS either way.
   function syncShelfChrome(){
     if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return
     const warehouse = document.getElementById('logyq-warehouse')
-    if (!warehouse) return
-    const count = (logyq.state.wordBank || []).map((word) => String(word || '').trim()).filter(Boolean).length
-    warehouse.classList.toggle('is-bank-empty', count === 0)
+    const dock = typeof document.getElementById === 'function' ? document.getElementById('Dock') : null
+    const curriculum = !!document.body?.classList?.contains('logyq-curriculum')
+    const stored = warehouseNameSet().size
+    if (warehouse) warehouse.classList.toggle('is-bank-empty', curriculum || stored === 0)
+    if (dock) dock.classList.toggle('is-empty', chipNamesInBank().length === 0)
+  }
+
+  function bankScroller(){
+    return document.getElementById('logyq-bank-chips') || logyq.elements.Dock
   }
 
   function openWarehouseSheet(){
@@ -4650,7 +4657,11 @@ attach('drag', dragManager)
 
   function render(){
     const { state, elements, utils } = logyq
-    const list = elements.Dock; list.innerHTML = '';
+    const list = elements.Dock
+    list.innerHTML = ''
+    // Word Bank bar: chips scroll in their own strip. All stays pinned outside it.
+    const strip = document.createElement('div')
+    strip.id = 'logyq-bank-chips'
     const hidden = phoneShelf() ? warehouseNameSet() : null
     state.wordBank.forEach((w)=>{
       const shelfName = String(w || '').trim()
@@ -4698,8 +4709,9 @@ const target = utils.findByUid(state.root.data, sel[0]);
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
         clearChipSelection(); render(); logyq.treeManager.layoutAndRender(false);
       });
-      list.appendChild(chip);
+      strip.appendChild(chip);
     });
+    list.appendChild(strip);
     if (chipNamesInBank().length) {
       const allButton = document.createElement('button');
       allButton.type = 'button';
@@ -5047,8 +5059,9 @@ function bindChipPointerPlace() {
       const axis = shelfScrollAxis()
       const prevX = session.lastX ?? session.x
       const prevY = session.lastY ?? session.y
-      if (axis === 'y') dock.scrollTop -= event.clientY - prevY
-      else dock.scrollLeft -= event.clientX - prevX
+      const scroller = bankScroller()
+      if (axis === 'y') scroller.scrollTop -= event.clientY - prevY
+      else scroller.scrollLeft -= event.clientX - prevX
       session.lastX = event.clientX
       session.lastY = event.clientY
       event.preventDefault()
@@ -6042,10 +6055,13 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     this.armLayoutSettle();
     if (state.repositionMode === "mix") { /* [patch] mix-reposition-run */
       (function(){
-        /* wait for render transitions to finish, then fit using final bbox */
+        /* Fit after the cards finish moving. A mid-tween bbox is a tight
+           cluster, and fitting that zooms a small pile to fill the screen. */
+        const motion = Number.isFinite(state.layoutMotionMs) ? state.layoutMotionMs : 260
+        const wait = Math.max(240, motion + 70)
         const done = ()=>{ if(state.repositionMode==="mix"){ state.repositionMode=null; logyq.treeManager.autoFit(); } };
         try{ clearTimeout(window.__mixFitT); }catch(_e){}
-        try{ window.__mixFitT = setTimeout(done, 190); }catch(_e){ setTimeout(done, 190); }
+        try{ window.__mixFitT = setTimeout(done, wait); }catch(_e){ setTimeout(done, wait); }
       })();
     }
 
@@ -6155,33 +6171,54 @@ centerOnSelected(opts = {}) {
     const b=merge(nb,lb);
     const svgNode = elements.svg.node();
     const fullW=svgNode.clientWidth, fullH=svgNode.clientHeight;
-    if(!b||!b.width||!b.height) return;
+    if(!b||!b.width||!b.height||!fullW||!fullH) return;
     const phone = typeof window !== 'undefined' && window.matchMedia
       && window.matchMedia('((pointer:coarse) and (max-width:1200px)),((hover:none) and (max-width:1200px)),(max-width:700px)').matches;
-    const edge = phone && window.matchMedia('(orientation: landscape)').matches;
-    const headerH = phone && !edge ? (document.getElementById('logiq-mobile-header')?.getBoundingClientRect().height || 48) : 0;
-    const dockEl = phone ? document.getElementById('Dock') : null;
-    const dockBox = dockEl && !dockEl.classList.contains('dock-hidden') ? dockEl.getBoundingClientRect() : null;
-    const leftShelf = !!(edge && dockBox && dockBox.width > 8 && dockBox.width < fullW * 0.45 && dockBox.height > fullH * 0.45);
-    const shelfW = leftShelf ? dockBox.width + 12 : 0;
-    const dockH = leftShelf ? 16 : (dockBox && dockBox.height > 8 ? dockBox.height + 8 : 16);
-    const usableH = Math.max(80, fullH - headerH - dockH);
-    const widthScale = (fullW - pad) / b.width;
-    const heightScale = ((phone ? usableH : fullH) - pad) / b.height;
-    const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1];
-    const scale = phone
-      ? Math.min(maxK, Math.max(0.02, leftShelf ? (fullW - shelfW - pad) / b.width : widthScale))
-      : Math.min(1, widthScale, heightScale);
-    if(!isFinite(scale) || scale<=0) return;
-    const tx=((leftShelf ? shelfW : 0) + (fullW - (leftShelf ? shelfW : 0))/2)-scale*(b.x+b.width/2);
-    let ty;
-    if (!phone) {
-      ty = (fullH/2)-scale*(b.y+b.height/2);
-    } else if (scale * b.height <= usableH - pad) {
-      ty = (headerH + usableH/2) - scale*(b.y+b.height/2);
-    } else {
-      ty = headerH + pad - scale * b.y;
+    const shown = (id) => {
+      const el = document.getElementById(id)
+      if (!el) return null
+      const style = getComputedStyle(el)
+      if (style.display === 'none' || style.visibility === 'hidden') return null
+      const rect = el.getBoundingClientRect()
+      if (rect.width < 2 || rect.height < 2) return null
+      return rect
     }
+    let chromeLeft = 0
+    let chromeTop = 0
+    let chromeRight = fullW
+    let chromeBottom = fullH
+    if (phone) {
+      const edge = window.matchMedia('(orientation: landscape)').matches
+      const header = shown('logiq-mobile-header')
+      if (header && !edge) chromeTop = Math.max(chromeTop, header.bottom)
+    } else {
+      const header = document.querySelector('body > header')
+      if (header && getComputedStyle(header).display !== 'none') {
+        const rect = header.getBoundingClientRect()
+        if (rect.height > 2) chromeTop = Math.max(chromeTop, rect.bottom)
+      }
+    }
+    const bar = shown('logyq-curriculum-bar')
+    if (bar) chromeTop = Math.max(chromeTop, bar.bottom + 8)
+    const dock = shown('Dock')
+    if (dock) {
+      const sideShelf = dock.width < fullW * 0.45 && dock.height > fullH * 0.45 && dock.left < fullW * 0.5
+      if (sideShelf) chromeLeft = Math.max(chromeLeft, dock.right + 8)
+      else if (dock.top > fullH * 0.5) chromeBottom = Math.min(chromeBottom, dock.top - 8)
+    }
+    const usableW = Math.max(80, chromeRight - chromeLeft)
+    const usableH = Math.max(80, chromeBottom - chromeTop)
+    // About 10% padding, so the map shape sits in 90% of the usable viewport.
+    const content = 0.9
+    const widthScale = (usableW * content) / b.width
+    const heightScale = (usableH * content) / b.height
+    const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1]
+    const fitScale = Math.min(widthScale, heightScale)
+    // Cap zoom-in so a small pile stays an overview. Wider maps still scale down to fit.
+    const scale = Math.min(maxK, 1.15, Math.max(0.02, fitScale))
+    if(!isFinite(scale) || scale<=0) return;
+    const tx = chromeLeft + usableW / 2 - scale * (b.x + b.width / 2)
+    const ty = chromeTop + usableH / 2 - scale * (b.y + b.height / 2)
   const el = svgNode;
 const t0 = d3.zoomTransform(el);
 const dx = tx - t0.x, dy = ty - t0.y, dk = Math.abs(scale - t0.k);
@@ -6385,8 +6422,8 @@ function keyDispatcher(e){
 
   if (typing && !state.tabHold) return;
 
-  // Rebuild sandbox: fit, undo, and the curriculum Mix hook. No add, rename,
-  // delete, bank, or the map Mix that builds a new connected tree.
+  // Rebuild sandbox: fit, undo, and Mix. Curriculum Mix calls the same
+  // randomizeTree as a normal map. No add, rename, delete, or bank.
   if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) {
     if (lower === 'f' && !e.shiftKey) { e.preventDefault(); logyq.treeManager.autoFit(); return; }
     if (lower === 'u' && e.shiftKey) { e.preventDefault(); logyq.history.redo?.(); return; }

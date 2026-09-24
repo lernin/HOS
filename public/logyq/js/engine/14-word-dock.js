@@ -130,14 +130,21 @@
     })
   }
 
-  // Hide the corner warehouse only when the bank has zero words.
-  // Warehoused-only words still count, so the catalog stays reachable.
+  // Warehouse control shows when something is stored. A full shelf with an
+  // empty warehouse stays hidden; chip drag still reveals the corner so the
+  // first word can be stored. Curriculum play hides it in CSS either way.
   function syncShelfChrome(){
     if (typeof document === 'undefined' || typeof document.getElementById !== 'function') return
     const warehouse = document.getElementById('logyq-warehouse')
-    if (!warehouse) return
-    const count = (logyq.state.wordBank || []).map((word) => String(word || '').trim()).filter(Boolean).length
-    warehouse.classList.toggle('is-bank-empty', count === 0)
+    const dock = typeof document.getElementById === 'function' ? document.getElementById('Dock') : null
+    const curriculum = !!document.body?.classList?.contains('logyq-curriculum')
+    const stored = warehouseNameSet().size
+    if (warehouse) warehouse.classList.toggle('is-bank-empty', curriculum || stored === 0)
+    if (dock) dock.classList.toggle('is-empty', chipNamesInBank().length === 0)
+  }
+
+  function bankScroller(){
+    return document.getElementById('logyq-bank-chips') || logyq.elements.Dock
   }
 
   function openWarehouseSheet(){
@@ -219,7 +226,11 @@
 
   function render(){
     const { state, elements, utils } = logyq
-    const list = elements.Dock; list.innerHTML = '';
+    const list = elements.Dock
+    list.innerHTML = ''
+    // Word Bank bar: chips scroll in their own strip. All stays pinned outside it.
+    const strip = document.createElement('div')
+    strip.id = 'logyq-bank-chips'
     const hidden = phoneShelf() ? warehouseNameSet() : null
     state.wordBank.forEach((w)=>{
       const shelfName = String(w || '').trim()
@@ -267,8 +278,9 @@ const target = utils.findByUid(state.root.data, sel[0]);
         state.root = d3.hierarchy(state.root.data); utils.assignIds(state.root);
         clearChipSelection(); render(); logyq.treeManager.layoutAndRender(false);
       });
-      list.appendChild(chip);
+      strip.appendChild(chip);
     });
+    list.appendChild(strip);
     if (chipNamesInBank().length) {
       const allButton = document.createElement('button');
       allButton.type = 'button';
@@ -616,8 +628,9 @@ function bindChipPointerPlace() {
       const axis = shelfScrollAxis()
       const prevX = session.lastX ?? session.x
       const prevY = session.lastY ?? session.y
-      if (axis === 'y') dock.scrollTop -= event.clientY - prevY
-      else dock.scrollLeft -= event.clientX - prevX
+      const scroller = bankScroller()
+      if (axis === 'y') scroller.scrollTop -= event.clientY - prevY
+      else scroller.scrollLeft -= event.clientX - prevX
       session.lastX = event.clientX
       session.lastY = event.clientY
       event.preventDefault()
