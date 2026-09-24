@@ -5652,7 +5652,13 @@
     utils.assignIds(state.root)
     const before = curriculumStructureKey(state.root.data)
     const prevMotion = state.layoutMotionMs
+    const prevEase = state.layoutMotionEase
     state.layoutMotionMs = motion
+    // Linear, not the default slow-in/slow-out. A longer beat then really
+    // drifts slower, and the next Mix does not start with a stall.
+    state.layoutMotionEase = motion > 0 && typeof window.d3?.easeLinear === 'function'
+      ? window.d3.easeLinear
+      : null
     state.curriculumCameraLock = true
     const locked = document.body.classList.contains('logyq-curriculum')
     const runMix = () => {
@@ -5680,6 +5686,7 @@
       }
     } finally {
       state.layoutMotionMs = prevMotion
+      state.layoutMotionEase = prevEase
     }
     state.wordBank = []
     try { core.wordDock?.render?.() } catch (_error) {}

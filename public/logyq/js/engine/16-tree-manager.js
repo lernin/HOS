@@ -472,7 +472,13 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     const links=state.root.links();
     const motion = Number.isFinite(state.layoutMotionMs) ? state.layoutMotionMs : 260
     const glide = (sel) => {
-      if (motion > 0) return sel.transition().duration(motion)
+      if (motion > 0) {
+        const tween = sel.transition().duration(motion)
+        // Curriculum Vegas sets a linear ease so a longer beat is a slower
+        // drift. Normal Mix leaves this unset and keeps d3's default ease.
+        if (typeof state.layoutMotionEase === 'function') tween.ease(state.layoutMotionEase)
+        return tween
+      }
       sel.interrupt()
       return sel
     }
