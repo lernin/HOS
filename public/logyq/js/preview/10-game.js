@@ -27,13 +27,20 @@
       const number = gameLevels.length + 1
       const intendedRoot = { name: '', gameId: 'piece-r', paint: rootPaint(rootShape) }
       const intendedChild = { name: '', gameId: 'piece-c', paint: childPaint(rootShape, childShape) }
-      // Deliberately start upside-down. One rootAbove drag repairs the stack.
+      // One card starts on the canvas and the other in the existing Word Bank.
+      // Alternate the anchor so "always drop below" / "always make root" is not a clue.
+      const rootStarts = number % 2 === 1
+      const anchor = rootStarts ? intendedRoot : intendedChild
+      const loose = rootStarts ? intendedChild : intendedRoot
+      const bankKey = '__LOGYQ_GAME_CARD__'
       gameLevels.push({
         id: 'two-' + rootShape.toLowerCase() + '-' + childShape.toLowerCase(),
         title: number + ' · ' + rootName + ' → ' + childName,
-        hint: 'Two cards. Find which one belongs on top.',
+        hint: 'Drag the loose card from the bank and find where it fits.',
         ids: ['piece-r', 'piece-c'],
-        tree: { ...intendedChild, children: [{ ...intendedRoot, children: [] }] },
+        tree: { ...anchor, children: [] },
+        bank: [bankKey],
+        bankCards: { [bankKey]: { ...loose, children: [] } },
       })
     }
   }
@@ -118,6 +125,8 @@
     app.game = null
     document.body.classList.remove('logyq-game')
     delete window.__logyqGameDropAllowed
+    delete window.__logyqGameBankNode
+    delete window.__logyqGameBankDropAllowed
     document.getElementById('logyq-game-next').hidden = true
     if (session.origin) {
       app.current = session.origin.current
@@ -151,11 +160,22 @@
       if (!allowed && drop) gameStatus('Those visible edges do not fit. Try the other order.')
       return allowed
     }
+    window.__logyqGameBankNode = (word) => {
+      const card = level.bankCards?.[word]
+      return card ? paintGameTree(structuredClone(card)) : null
+    }
+    window.__logyqGameBankDropAllowed = ({ tree, words, drop }) => {
+      if (words.length !== 1) return false
+      const card = level.bankCards?.[words[0]]
+      const allowed = !!card && gameGrammar.canAdd(tree, card, drop)
+      if (!allowed) gameStatus('That card does not fit there. Try the other side of the tree.')
+      return allowed
+    }
     ensureGamePaint()
     updateMapName()
     hideLibrary()
     gameStatus(level.hint)
-    bridge.loadMap(paintGameTree(structuredClone(level.tree)), [])
+    bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice())
     setSaveState('saved')
   }
 
