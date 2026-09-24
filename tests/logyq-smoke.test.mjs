@@ -6470,7 +6470,7 @@ test('LOGYQ Thekonym mode pairs a Roboto Condensed onym with a sans essence, and
   await context.close()
 })
 
-test('LOGYQ swipe down on a Word Bank chip deletes it, and a selected set goes together', async () => {
+test('LOGYQ phone shelf pans in place, and warehouse or trash only take a dragged chip', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)
   const page = await context.newPage()
@@ -6478,14 +6478,46 @@ test('LOGYQ swipe down on a Word Bank chip deletes it, and a selected set goes t
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
   await waitForBoot(page)
-  await page.evaluate(() => {
+  const many = ['Pop', 'Stay', 'Keep', 'Alpha', 'Bravo', 'Cedar', 'Delta', 'Echo', 'Foxtrot']
+  await page.evaluate((words) => {
+    localStorage.removeItem('logyq_word_warehouse_v1')
     window.LOGYQPreview.app.hasOpenMap = true
     document.body.classList.add('logyq-map-open')
     document.body.classList.remove('logyq-home')
     document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
-    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, ['Pop', 'Stay', 'Keep'])
+    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, words)
+  }, many)
+  await page.waitForFunction(() => document.querySelectorAll('#Dock .chip').length === 9)
+
+  const portrait = await page.evaluate(() => {
+    const shelf = document.getElementById('Dock').getBoundingClientRect()
+    const house = document.getElementById('logyq-warehouse').getBoundingClientRect()
+    const trash = document.getElementById('logyq-bank-trash')
+    const dock = document.getElementById('Dock')
+    return {
+      shelfTop: shelf.top,
+      shelfBottom: shelf.bottom,
+      shelfLeft: shelf.left,
+      shelfWidth: shelf.width,
+      radius: getComputedStyle(dock).borderRadius,
+      house: { left: house.left, right: house.right, top: house.top, bottom: house.bottom, w: house.width },
+      trashDisplay: getComputedStyle(trash).display,
+      iconsInRow: !!dock.querySelector('#logyq-warehouse, #logyq-bank-trash'),
+      wrap: getComputedStyle(dock).flexWrap,
+      overflowX: getComputedStyle(dock).overflowX,
+    }
   })
-  await page.waitForFunction(() => document.querySelectorAll('#Dock .chip').length === 3)
+  assert.equal(portrait.iconsInRow, false)
+  assert.equal(portrait.wrap, 'nowrap')
+  assert.equal(portrait.overflowX, 'auto')
+  assert.equal(portrait.trashDisplay, 'none', 'trash stays hidden until a drag')
+  assert.ok(portrait.shelfLeft < 2, `shelf is flush left, left=${portrait.shelfLeft}`)
+  assert.ok(portrait.shelfBottom > 840, `shelf sits flush on the bottom, bottom=${portrait.shelfBottom}`)
+  assert.ok(portrait.shelfWidth > 380, `portrait shelf is full-bleed, width=${portrait.shelfWidth}`)
+  assert.equal(portrait.radius, '0px')
+  assert.ok(portrait.house.bottom <= portrait.shelfTop + 4, 'warehouse sits just above the shelf')
+  assert.ok(portrait.house.left < 24, 'warehouse is the bottom-left corner')
+  assert.ok(portrait.house.w <= 48 && portrait.house.w >= 36)
 
   const swipeChip = (label, dx, dy) => page.evaluate(({ label, dx, dy }) => {
     const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === label)
@@ -6493,13 +6525,13 @@ test('LOGYQ swipe down on a Word Bank chip deletes it, and a selected set goes t
     const rect = chip.getBoundingClientRect()
     const x = rect.left + rect.width / 2
     const y = rect.top + rect.height / 2
-    const point = (type, buttons, ox, oy) => chip.dispatchEvent(new PointerEvent(type, {
+    const point = (type, buttons, ox, oy, target) => (target || chip).dispatchEvent(new PointerEvent(type, {
       bubbles: true, cancelable: true, composed: true, pointerId: 9, pointerType: 'touch',
       isPrimary: true, button: 0, buttons, clientX: x + ox, clientY: y + oy,
     }))
     point('pointerdown', 1, 0, 0)
-    point('pointermove', 1, Math.sign(dx) * 8, Math.sign(dy || 1) * 12)
-    point('pointermove', 1, dx, dy)
+    point('pointermove', 1, Math.sign(dx) * 8, Math.sign(dy || 1) * 12, window)
+    point('pointermove', 1, dx, dy, window)
     window.dispatchEvent(new PointerEvent('pointerup', {
       bubbles: true, cancelable: true, composed: true, pointerId: 9, pointerType: 'touch',
       isPrimary: true, button: 0, buttons: 0, clientX: x + dx, clientY: y + dy,
@@ -6520,26 +6552,336 @@ test('LOGYQ swipe down on a Word Bank chip deletes it, and a selected set goes t
   }, label)
 
   await swipeChip('Pop', 0, 18)
-  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Pop', 'Stay', 'Keep'])
-
   await swipeChip('Pop', 0, 64)
-  await page.waitForFunction(() => !window.LOGYQBridge.core.state.wordBank.includes('Pop'))
-  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay', 'Keep'])
-  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.some((child) => child.name === 'Pop')), false)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Pop')), true)
+  assert.equal(await page.locator('#Dock .chip', { hasText: 'Pop' }).count(), 1)
   assert.equal(await page.evaluate(() => document.body.classList.contains('logyq-chip-drag')), false)
 
-  await tapChip('Stay')
+  const panned = await page.evaluate(() => {
+    const dock = document.getElementById('Dock')
+    const chip = Array.from(dock.querySelectorAll('.chip')).find((el) => el.textContent.trim() === 'Pop')
+    const rect = chip.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const before = dock.scrollLeft
+    const move = (type, cx, buttons) => window.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerId: 11, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons, clientX: cx, clientY: y,
+    }))
+    chip.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, composed: true, pointerId: 11, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons: 1, clientX: x, clientY: y,
+    }))
+    move('pointermove', x - 30, 1)
+    move('pointermove', x - 120, 1)
+    move('pointerup', x - 120, 0)
+    return {
+      before,
+      after: dock.scrollLeft,
+      dragging: document.body.classList.contains('logyq-chip-drag'),
+      still: window.LOGYQBridge.core.state.wordBank.includes('Pop'),
+    }
+  })
+  assert.ok(panned.after > panned.before + 40, `horizontal pan should scroll the shelf, before=${panned.before} after=${panned.after}`)
+  assert.equal(panned.dragging, false)
+  assert.equal(panned.still, true)
+
+  const trashWhileDragging = await page.evaluate(() => {
+    const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === 'Cedar')
+    const rect = chip.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const fire = (type, cx, cy, buttons, node) => node.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerId: 21, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons, clientX: cx, clientY: cy,
+    }))
+    fire('pointerdown', x, y, 1, chip)
+    fire('pointermove', x, y - 36, 1, window)
+    const trash = document.getElementById('logyq-bank-trash')
+    const shelf = document.getElementById('Dock').getBoundingClientRect()
+    const box = trash.getBoundingClientRect()
+    const during = {
+      display: getComputedStyle(trash).display,
+      bottom: box.bottom,
+      right: box.right,
+      shelfTop: shelf.top,
+    }
+    fire('pointercancel', x, y - 36, 0, window)
+    return {
+      during,
+      after: getComputedStyle(trash).display,
+      still: window.LOGYQBridge.core.state.wordBank.includes('Cedar'),
+    }
+  })
+  assert.equal(trashWhileDragging.during.display, 'flex', 'trash appears while a shelf chip is dragged')
+  assert.ok(trashWhileDragging.during.bottom <= trashWhileDragging.during.shelfTop + 4, 'trash sits just above the shelf')
+  assert.ok(trashWhileDragging.during.right > 360, 'trash is the bottom-right corner')
+  assert.equal(trashWhileDragging.after, 'none', 'trash hides when the drag is cancelled')
+  assert.equal(trashWhileDragging.still, true)
+
+  const dropOn = async (label, targetId) => {
+    await page.evaluate(({ label, targetId }) => {
+      const chip = Array.from(document.querySelectorAll('#Dock .chip')).find((el) => el.textContent.trim() === label)
+      const target = document.getElementById(targetId)
+      const from = chip.getBoundingClientRect()
+      const x = from.left + from.width / 2
+      const y = from.top + from.height / 2
+      const fire = (type, cx, cy, buttons, node) => node.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, composed: true, pointerId: 12, pointerType: 'touch',
+        isPrimary: true, button: 0, buttons, clientX: cx, clientY: cy,
+      }))
+      fire('pointerdown', x, y, 1, chip)
+      fire('pointermove', x, y - 28, 1, window)
+      const live = target.getBoundingClientRect()
+      const tx = live.width > 1 ? live.left + live.width / 2 : x
+      const ty = live.height > 1 ? live.top + live.height / 2 : y - 80
+      fire('pointermove', tx, ty, 1, window)
+      fire('pointerup', tx, ty, 0, window)
+    }, { label, targetId })
+  }
+
+  await dropOn('Pop', 'logyq-warehouse')
+  await page.waitForFunction(() => !Array.from(document.querySelectorAll('#Dock .chip')).some((el) => el.textContent.trim() === 'Pop'))
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Pop')), true)
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.root.data.children.some((child) => child.name === 'Pop')), false)
+
+  await page.waitForFunction(() => !window.__logyqChipPlacing)
+  await page.locator('#logyq-warehouse').click()
+  await page.waitForSelector('#logyq-warehouse-sheet.is-open')
+  const popped = page.locator('#logyq-warehouse-list button[data-word="Pop"]')
+  assert.equal(await popped.getAttribute('aria-pressed'), 'false')
+  const stayed = page.locator('#logyq-warehouse-list button[data-word="Stay"]')
+  assert.equal(await stayed.getAttribute('aria-pressed'), 'true')
+  await stayed.click()
+  assert.equal(await stayed.getAttribute('aria-pressed'), 'false')
+  await popped.click()
+  assert.equal(await popped.getAttribute('aria-pressed'), 'true')
+  await page.locator('#logyq-warehouse-close').click()
+  await page.waitForFunction(() => !document.getElementById('logyq-warehouse-sheet')?.classList.contains('is-open'))
+  await page.waitForFunction(() => {
+    const names = Array.from(document.querySelectorAll('#Dock .chip')).map((el) => el.textContent.trim())
+    return names.includes('Pop') && !names.includes('Stay')
+  })
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.core.state.wordBank.includes('Stay')), true)
+
   await tapChip('Keep')
-  assert.deepEqual(await page.locator('#Dock .chip.is-outlined').allTextContents(), ['Stay', 'Keep'])
-  await swipeChip('Stay', 4, 70)
-  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.length === 0)
-  assert.deepEqual(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.children.map((child) => child.name)), ['A'])
+  await tapChip('Alpha')
+  assert.deepEqual(await page.locator('#Dock .chip.is-outlined').allTextContents(), ['Keep', 'Alpha'])
+  await dropOn('Keep', 'logyq-bank-trash')
+  await page.waitForFunction(() => !window.LOGYQBridge.core.state.wordBank.includes('Keep') && !window.LOGYQBridge.core.state.wordBank.includes('Alpha'))
+  assert.equal(await page.evaluate(() => window.LOGYQBridge.snapshot().tree.children.map((child) => child.name).join(',')), 'A')
 
   await page.evaluate(() => window.LOGYQBridge.undo())
-  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.join(',') === 'Stay,Keep')
-  await page.evaluate(() => window.LOGYQBridge.undo())
-  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.join(',') === 'Pop,Stay,Keep')
+  await page.waitForFunction(() => window.LOGYQBridge.core.state.wordBank.includes('Keep') && window.LOGYQBridge.core.state.wordBank.includes('Alpha'))
 
+  const mapDelete = await page.evaluate(() => {
+    document.body.classList.add('v2-branch-drag')
+    const trash = document.getElementById('logyq-bank-trash').getBoundingClientRect()
+    const node = window.LOGYQBridge.core.state.root.children.find((child) => child.data.name === 'A')
+    const zone = window.LOGYQBridge.core.drag.zone(trash.left + trash.width / 2, trash.top + trash.height / 2)
+    // A real map drop sets this before mouseup so the hold freeze lets the delete through.
+    window.__logyqHoldDragCommit = true
+    try {
+      window.LOGYQBridge.core.drag.end({
+        sourceEvent: { clientX: trash.left + trash.width / 2, clientY: trash.top + trash.height / 2 },
+      }, node)
+    } finally {
+      window.__logyqHoldDragCommit = false
+      document.body.classList.remove('v2-branch-drag')
+    }
+    return {
+      zone,
+      trash: { w: trash.width, h: trash.height },
+      names: (window.LOGYQBridge.snapshot().tree.children || []).map((child) => child.name),
+      trashHidden: getComputedStyle(document.getElementById('logyq-bank-trash')).display,
+    }
+  })
+  assert.equal(mapDelete.zone, 'over', `map drag should hit the corner trash, box=${JSON.stringify(mapDelete.trash)}`)
+  assert.deepEqual(mapDelete.names, [], 'dropping a map card on the corner trash deletes it')
+  assert.equal(mapDelete.trashHidden, 'none')
+
+  const emptyRule = await page.evaluate(() => {
+    localStorage.removeItem('logyq_word_warehouse_v1')
+    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, [])
+    const house = document.getElementById('logyq-warehouse')
+    const empty = getComputedStyle(house).display === 'none' && house.classList.contains('is-bank-empty')
+    window.LOGYQBridge.core.wordDock.addWords('Stored', 'bank')
+    return {
+      empty,
+      shown: getComputedStyle(house).display !== 'none' && !house.classList.contains('is-bank-empty'),
+    }
+  })
+  assert.equal(emptyRule.empty, true, 'warehouse hides when the bank has zero words')
+  assert.equal(emptyRule.shown, true)
+  await page.waitForFunction(() => !window.__logyqChipPlacing)
+  const storedSheet = await page.evaluate(() => {
+    document.getElementById('logyq-warehouse').click()
+    const list = document.getElementById('logyq-warehouse-list')
+    const button = list.querySelector('button[data-word="Stored"]')
+    const box = button?.getBoundingClientRect()
+    return {
+      open: document.getElementById('logyq-warehouse-sheet').classList.contains('is-open'),
+      words: Array.from(list.querySelectorAll('button')).map((el) => el.dataset.word),
+      box: box ? { w: box.width, h: box.height, top: box.top } : null,
+    }
+  })
+  assert.equal(storedSheet.open, true, `warehouse sheet did not list Stored: ${JSON.stringify(storedSheet)}`)
+  assert.deepEqual(storedSheet.words, ['Stored'])
+  assert.ok(storedSheet.box && storedSheet.box.h > 8, `stored chip should be visible ${JSON.stringify(storedSheet.box)}`)
+  await page.locator('#logyq-warehouse-list button[data-word="Stored"]').click()
+  await page.locator('#logyq-warehouse-close').click()
+  const warehousedOnly = await page.evaluate(() => ({
+    onShelf: Array.from(document.querySelectorAll('#Dock .chip')).some((el) => el.textContent.trim() === 'Stored'),
+    inBank: window.LOGYQBridge.core.state.wordBank.includes('Stored'),
+    house: getComputedStyle(document.getElementById('logyq-warehouse')).display,
+  }))
+  assert.equal(warehousedOnly.onShelf, false)
+  assert.equal(warehousedOnly.inBank, true)
+  assert.notEqual(warehousedOnly.house, 'none', 'warehouse stays when every word is stored off the shelf')
+
+  await page.evaluate(() => {
+    localStorage.removeItem('logyq_word_warehouse_v1')
+    const words = Array.from({ length: 160 }, (_, index) => `N${index + 1}`)
+    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, words)
+  })
+  await page.locator('#logyq-warehouse').click()
+  await page.waitForSelector('#logyq-warehouse-sheet.is-open')
+  const grid = await page.evaluate(() => {
+    const list = document.getElementById('logyq-warehouse-list')
+    const chips = list.querySelectorAll('button.chip')
+    const sample = list.querySelector('button.chip.is-on')
+    list.scrollTop = list.scrollHeight
+    const last = list.querySelector('button.chip:last-of-type')
+    const listBox = list.getBoundingClientRect()
+    const chipBox = last.getBoundingClientRect()
+    return {
+      count: chips.length,
+      wrap: getComputedStyle(list).flexWrap,
+      green: sample ? getComputedStyle(sample).backgroundColor : '',
+      overflow: list.scrollHeight > list.clientHeight + 8,
+      lastBottom: chipBox.bottom,
+      listBottom: listBox.bottom,
+      lastTop: chipBox.top,
+      listTop: listBox.top,
+    }
+  })
+  assert.equal(grid.count, 160)
+  assert.equal(grid.wrap, 'wrap')
+  assert.equal(grid.green, 'rgb(220, 252, 231)')
+  assert.equal(grid.overflow, true, 'warehouse grid scrolls when the chips overflow')
+  assert.ok(grid.lastTop >= grid.listTop - 1, `last chip top ${grid.lastTop} should stay inside ${grid.listTop}`)
+  assert.ok(grid.lastBottom <= grid.listBottom + 1, `last chip bottom ${grid.lastBottom} should stay inside ${grid.listBottom}`)
+  await page.locator('#logyq-warehouse-close').click()
+
+  assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('LOGYQ landscape shelf is a left column with corner warehouse and trash', async () => {
+  const context = await newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true })
+  await stubMaps(context)
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.evaluate(() => {
+    localStorage.removeItem('logyq_word_warehouse_v1')
+    window.LOGYQPreview.app.hasOpenMap = true
+    document.body.classList.add('logyq-map-open')
+    document.body.classList.remove('logyq-home')
+    document.querySelectorAll('.logiq-backdrop.is-open').forEach((el) => el.classList.remove('is-open'))
+    window.LOGYQBridge.loadMap({ name: 'Root', children: [{ name: 'A' }] }, Array.from({ length: 18 }, (_, index) => `Word ${index + 1}`))
+  })
+  await page.waitForFunction(() => document.querySelectorAll('#Dock .chip').length === 18)
+  const layout = await page.evaluate(() => {
+    const shelf = document.getElementById('Dock').getBoundingClientRect()
+    const house = document.getElementById('logyq-warehouse').getBoundingClientRect()
+    const trash = document.getElementById('logyq-bank-trash')
+    const dock = document.getElementById('Dock')
+    return {
+      shelf: { left: shelf.left, top: shelf.top, bottom: shelf.bottom, width: shelf.width, height: shelf.height },
+      house: { left: house.left, top: house.top, bottom: house.bottom },
+      trashDisplay: getComputedStyle(trash).display,
+      radius: getComputedStyle(dock).borderRadius,
+      flow: getComputedStyle(dock).flexDirection,
+      overflowY: getComputedStyle(dock).overflowY,
+    }
+  })
+  assert.equal(layout.flow, 'column')
+  assert.equal(layout.overflowY, 'auto')
+  assert.equal(layout.trashDisplay, 'none', 'trash stays hidden until a drag')
+  assert.equal(layout.radius, '0px')
+  assert.ok(layout.shelf.left < 2, 'shelf is flush to the left edge')
+  assert.ok(layout.shelf.top < 2, 'shelf is flush to the top')
+  assert.ok(layout.shelf.bottom > 385, 'shelf is flush to the bottom')
+  assert.ok(layout.shelf.width < 180 && layout.shelf.width > 120)
+  assert.ok(layout.shelf.height > 300, 'landscape shelf runs the side')
+  assert.ok(layout.house.left >= layout.shelf.left + layout.shelf.width - 2, 'warehouse is just right of the shelf')
+  assert.ok(layout.house.top < 24, 'warehouse is the top corner')
+
+  const landscapeTrash = await page.evaluate(() => {
+    const chip = document.querySelector('#Dock .chip')
+    const rect = chip.getBoundingClientRect()
+    const x = rect.left + 12
+    const y = rect.top + 16
+    const fire = (type, cx, cy, buttons, node) => node.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerId: 22, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons, clientX: cx, clientY: cy,
+    }))
+    fire('pointerdown', x, y, 1, chip)
+    fire('pointermove', x + 40, y, 1, window)
+    const trash = document.getElementById('logyq-bank-trash')
+    const shelf = document.getElementById('Dock').getBoundingClientRect()
+    const box = trash.getBoundingClientRect()
+    const during = {
+      display: getComputedStyle(trash).display,
+      left: box.left,
+      bottom: box.bottom,
+      shelfRight: shelf.right,
+    }
+    fire('pointercancel', x + 40, y, 0, window)
+    return { during, after: getComputedStyle(trash).display, bank: window.LOGYQBridge.core.state.wordBank.length }
+  })
+  assert.equal(landscapeTrash.during.display, 'flex')
+  assert.ok(landscapeTrash.during.left >= landscapeTrash.during.shelfRight - 2, 'trash is just right of the shelf')
+  assert.ok(landscapeTrash.during.bottom > 360, 'trash is the bottom corner')
+  assert.equal(landscapeTrash.after, 'none')
+  assert.equal(landscapeTrash.bank, 18)
+
+  const scrolled = await page.evaluate(() => {
+    const dock = document.getElementById('Dock')
+    const chip = dock.querySelector('.chip')
+    const rect = chip.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + 20
+    const before = dock.scrollTop
+    chip.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true, cancelable: true, composed: true, pointerId: 14, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons: 1, clientX: x, clientY: y,
+    }))
+    window.dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true, cancelable: true, composed: true, pointerId: 14, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons: 1, clientX: x, clientY: y - 24,
+    }))
+    window.dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true, cancelable: true, composed: true, pointerId: 14, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons: 1, clientX: x, clientY: y - 90,
+    }))
+    window.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true, cancelable: true, composed: true, pointerId: 14, pointerType: 'touch',
+      isPrimary: true, button: 0, buttons: 0, clientX: x, clientY: y - 90,
+    }))
+    return {
+      before,
+      after: dock.scrollTop,
+      dragging: document.body.classList.contains('logyq-chip-drag'),
+      bank: window.LOGYQBridge.core.state.wordBank.length,
+    }
+  })
+  assert.ok(scrolled.after > scrolled.before + 30, `vertical pan should scroll the shelf, before=${scrolled.before} after=${scrolled.after}`)
+  assert.equal(scrolled.dragging, false)
+  assert.equal(scrolled.bank, 18)
   assert.deepEqual(errors, [])
   await context.close()
 })

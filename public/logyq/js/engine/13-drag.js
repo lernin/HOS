@@ -1,4 +1,14 @@
 /* ======================= DRAG MANAGER (rewritten) ======================= */
+// Phone shelf trash. Hidden until a chip or map drag; desktop keeps #trash.
+function cornerTrashEl() {
+  try {
+    if (!document.body?.classList?.contains('logyq-mobile-v162')) return null
+    return document.getElementById('logyq-bank-trash')
+  } catch (_error) {
+    return null
+  }
+}
+
 const dragManager = {
   // Highlight subtree (or just this node in solo mode)
   markForDrag(d){
@@ -42,6 +52,7 @@ elements.gLinks.selectAll("path.link").classed("is-sub-link is-parent-link", fal
    
     elements.dragMiniG.style("opacity",0).style("display","none");
     elements.trash.classList.remove("near","over","open","wiggle");
+    cornerTrashEl()?.classList.remove("near","over","open","wiggle","is-over");
     elements.caretDot.style("opacity",0);
 
     state.dragState.trashZone = "far";
@@ -58,10 +69,17 @@ elements.gLinks.selectAll("path.link").classed("is-sub-link is-parent-link", fal
 
 
 
-  // Where is the pointer relative to the trash
+  // Where is the pointer relative to the trash.
+  // Phone uses the corner can while a drag is showing it. Desktop keeps #trash.
   zone(cx,cy){
     const { state } = logyq
-    const r = document.getElementById("trash").getBoundingClientRect();
+    const corner = cornerTrashEl()
+    let trashEl = document.getElementById("trash")
+    if (corner) {
+      const style = getComputedStyle(corner)
+      if (style.display !== 'none' && style.visibility !== 'hidden') trashEl = corner
+    }
+    const r = trashEl.getBoundingClientRect();
     const expand=(R,p)=>({left:R.left-p,right:R.right+p,top:R.top-p,bottom:R.bottom+p});
     const inside=(R,x,y)=>x>=R.left&&x<=R.right&&y>=R.top&&y<=R.bottom;
     const nearR=expand(r, 100), overR=expand(r, 16);
@@ -208,6 +226,14 @@ elements.dragMiniG.attr("transform",
     elements.trash.classList.toggle('wiggle', (isNear || isOver));
     elements.trash.classList.toggle('near', isNear);
     elements.trash.classList.toggle('over', isOver);
+    const corner = cornerTrashEl()
+    if (corner) {
+      corner.classList.toggle('open', (isNear || isOver));
+      corner.classList.toggle('wiggle', (isNear || isOver));
+      corner.classList.toggle('near', isNear);
+      corner.classList.toggle('over', isOver);
+      corner.classList.toggle('is-over', (isNear || isOver));
+    }
 
     if (isNear || isOver){
       elements.svg.classed('delete-intent', true);
