@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import test from 'node:test'
 
@@ -8,44 +7,68 @@ const root = new URL('../public/logyq/js/', import.meta.url)
 const sandbox = { window: {} }
 runInNewContext(readFileSync(new URL('game-grammar.js', root), 'utf8'), sandbox)
 const grammar = sandbox.window.LOGYQGameGrammar
-const card = (id, paint, children = []) => ({ gameId: id, paint, children })
+const card = (id, shape, regions, children = []) => ({ gameId: id, shape, regions, children })
 
-test('a child matches a parent only when the bottom and top colors agree', () => {
-  const chain = card('root', 'orange', [card('middle', 'orange-blue', [card('leaf', 'blue')])])
-  assert.equal(grammar.complete(chain, ['root', 'middle', 'leaf'], 'root'), true)
-  assert.equal(grammar.complete(card('root', 'orange', [card('leaf', 'blue'), card('middle', 'orange-blue')]), ['root', 'middle', 'leaf'], 'root'), false)
+const shapes = ['whole', 'horizontal', 'diagonal_left', 'diagonal_right']
+
+function pair(rootShape, childShape) {
+  const rootRegions = rootShape === 'whole' ? [1] : [1, 2]
+  const contact = rootShape === 'whole' ? 1 : 2
+  const childRegions = childShape === 'whole' ? [contact] : [contact, contact === 1 ? 2 : 3]
+  const solution = card('p1', rootShape, rootRegions, [card('p2', childShape, childRegions)])
+  const inverted = card('p2', childShape, childRegions, [card('p1', rootShape, rootRegions)])
+  return { solution, inverted }
+}
+
+test('the grammar exposes exactly the four fixed card shapes', () => {
+  assert.deepEqual(Array.from(grammar.SHAPES), shapes)
+  for (const shape of shapes) {
+    assert.equal(grammar.validCard(card('x', shape, shape === 'whole' ? [1] : [1, 2])), true)
+  }
 })
 
-test('diagonal siblings must also match at their shared edge', () => {
-  const left = card('left', 'pink-blue-down')
-  const right = card('right', 'blue-green-up')
-  assert.equal(grammar.edge(left.paint, 'top'), 'blue')
-  assert.equal(grammar.edge(left.paint, 'right'), 'blue')
-  assert.equal(grammar.edge(right.paint, 'left'), 'blue')
-  assert.equal(grammar.complete(card('root', 'blue', [left, right]), ['root', 'left', 'right'], 'root'), true)
-  assert.equal(grammar.complete(card('root', 'blue', [right, left]), ['root', 'left', 'right'], 'root'), false)
+test('region numbers are logical identities and top/bottom contacts follow fixed orientation', () => {
+  assert.equal(grammar.edge(card('w', 'whole', [4]), 'top'), '4')
+  assert.equal(grammar.edge(card('h', 'horizontal', [1, 3]), 'top'), '1')
+  assert.equal(grammar.edge(card('h', 'horizontal', [1, 3]), 'bottom'), '3')
+  assert.equal(grammar.edge(card('dl', 'diagonal_left', [1, 2]), 'left'), '2')
+  assert.equal(grammar.edge(card('dl', 'diagonal_left', [1, 2]), 'right'), '1')
+  assert.equal(grammar.edge(card('dr', 'diagonal_right', [1, 2]), 'left'), '1')
+  assert.equal(grammar.edge(card('dr', 'diagonal_right', [1, 2]), 'right'), '2')
 })
 
-test('a matching row without its parent is not a completed map', () => {
-  const row = card('left', 'pink-blue-down', [card('middle', 'blue', [card('right', 'blue-green-up')])])
-  assert.equal(grammar.complete(row, ['root', 'left', 'right'], 'root'), false)
+test('the 4×4 N=2 catalog has 15 candidates after Whole/Whole is excluded', () => {
+  const candidates = []
+  for (const rootShape of shapes) for (const childShape of shapes) {
+    if (rootShape === 'whole' && childShape === 'whole') continue
+    candidates.push([rootShape, childShape])
+  }
+  assert.equal(candidates.length, 15)
 })
 
-test('drop check simulates the editor gap and node drops without mutating the source', () => {
-  const chain = card('root', 'orange', [card('middle', 'orange-blue'), card('leaf', 'blue')])
-  assert.equal(grammar.canDrop(chain, 'leaf', { type: 'node', targetUid: 'middle' }, 'root'), true)
-  assert.equal(grammar.canDrop(chain, 'middle', { type: 'node', targetUid: 'leaf' }, 'root'), false)
-  assert.equal(chain.children.length, 2)
-  const branch = card('root', 'blue', [card('right', 'blue-green-up'), card('left', 'pink-blue-down')])
-  assert.equal(grammar.canDrop(branch, 'left', { type: 'gap', parentUid: 'root', nextUid: 'right' }, 'root'), true)
-  assert.equal(grammar.canDrop(branch, 'right', { type: 'gap', parentUid: 'root', nextUid: 'left' }, 'root'), false)
-  assert.equal(grammar.canDrop(branch, 'root', { type: 'rootAbove' }, 'root'), false)
-  assert.equal(branch.children[0].gameId, 'right')
+test('all 15 intended N=2 stacks fit and every inversion fails', () => {
+  let count = 0
+  for (const rootShape of shapes) for (const childShape of shapes) {
+    if (rootShape === 'whole' && childShape === 'whole') continue
+    const { solution, inverted } = pair(rootShape, childShape)
+    assert.equal(grammar.complete(solution, ['p1', 'p2']), true, `${rootShape} -> ${childShape} should fit`)
+    assert.equal(grammar.complete(inverted, ['p1', 'p2']), false, `${rootShape} -> ${childShape} inversion must fail`)
+    count += 1
+  }
+  assert.equal(count, 15)
 })
 
-test('the first puzzle starts as a chain and repairs by moving its parent below its child', () => {
-  const start = card('root', 'orange', [card('leaf', 'blue', [card('middle', 'orange-blue')])])
-  assert.equal(grammar.complete(start, ['root', 'middle', 'leaf'], 'root'), false)
-  assert.equal(grammar.canDrop(start, 'leaf', { type: 'node', targetUid: 'middle' }, 'root'), true)
-  assert.equal(start.children[0].gameId, 'leaf')
+test('each inverted puzzle can be solved by promoting the intended root above the current root', () => {
+  for (const rootShape of shapes) for (const childShape of shapes) {
+    if (rootShape === 'whole' && childShape === 'whole') continue
+    const { inverted } = pair(rootShape, childShape)
+    assert.equal(grammar.canDrop(inverted, 'p1', { type: 'rootAbove' }), true, `${rootShape} -> ${childShape}`)
+  }
+})
+
+test('Whole/Whole demonstrates why the excluded pair is ambiguous under inversion', () => {
+  const a = card('p1', 'whole', [1], [card('p2', 'whole', [1])])
+  const b = card('p2', 'whole', [1], [card('p1', 'whole', [1])])
+  assert.equal(grammar.complete(a, ['p1', 'p2']), true)
+  assert.equal(grammar.complete(b, ['p1', 'p2']), true)
 })
