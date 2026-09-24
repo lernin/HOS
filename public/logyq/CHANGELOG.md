@@ -5,6 +5,13 @@
 - **My maps can hold nested folders.** Create, rename, move, and delete folders. Maps move into folders and still open from inside them. Deleting a folder lifts what was inside it; it does not delete maps.
 - **No database change.** Folder layout is `localStorage.logyq_map_folders_v1` on this device. `logiq_map_list` / `logiq_map_save` / `logiq_map_delete` are unchanged. No Supabase migration.
 
+## Curriculum Start gate
+
+- **Haze gate.** Opening a level shows the mixed board under the same frost as the Thekonym dossier (`rgba(244,241,228,.36)` plus a 14px blur). A Start button sits on that gate. Map gestures stay blocked until play.
+- **Vegas Mix.** Start, the Curriculum Mix button, and M call `randomizeTree` in six beats over about 4.6 seconds (three quick turns, two slower, one long tumble). The camera transform is restored after every beat.
+- **Root-anchored settle.** When the tumble ends, one ease pins the root to the upper band (28% of the usable viewport) and zooms out only if the new shape would overflow about 90% of that viewport. A smaller Mix keeps the current scale. Play then freezes pan, pinch, and wheel. Drag reparent still works. Undo uses that same settle instead of bbox-centering.
+- **Card identity through Mix.** `randomizeTree` keeps each card's `_uid`, so the layout transition moves the same cards instead of fading in new ones.
+
 ## Map sync preview
 
 - **Open maps follow `logiq_maps.updated_at`.** A newer database row updates the canvas when no rename field is open. A save of an existing map checks that stamp first and does not post a stale full tree over it. Mid-rename keeps the typed name and shows an informational “Database change came in.” note on the input. Enter still saves that name. No schema change. Thekonym device edits stay local.

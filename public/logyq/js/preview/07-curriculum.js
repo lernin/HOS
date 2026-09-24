@@ -87,14 +87,48 @@
     return curriculumPack().find((level) => level.id === id) || null
   }
 
+  // pa-pa-pa, then two slower turns, then one long tumble. The camera
+  // ease starts after the last card motion. About 4.6s, gate to play.
+  const CURRICULUM_VEGAS_BEATS = [
+    { at: 0, motion: 260 },
+    { at: 320, motion: 240 },
+    { at: 640, motion: 240 },
+    { at: 1100, motion: 480 },
+    { at: 1750, motion: 620 },
+    { at: 2600, motion: 900 },
+  ]
+  const CURRICULUM_VEGAS_SETTLE_AT = 3680
+  const CURRICULUM_VEGAS_SETTLE_MS = 900
+
+  const curriculumVegas = { token: 0, timers: [] }
+
+  function cancelCurriculumVegas() {
+    curriculumVegas.token += 1
+    curriculumVegas.timers.forEach((id) => clearTimeout(id))
+    curriculumVegas.timers = []
+  }
+
   function renderCurriculumChrome() {
     const playing = !!app.curriculum
+    const phase = app.curriculum?.phase || ''
     document.body.classList.toggle('logyq-curriculum', playing)
+    document.body.classList.toggle('logyq-curriculum-gate', playing && phase !== 'play')
+    document.body.classList.toggle('logyq-curriculum-shuffling', playing && phase === 'shuffle')
+    document.body.classList.toggle('logyq-curriculum-frozen', playing && phase === 'play')
+    if (playing) document.body.dataset.curriculumPhase = phase
+    else delete document.body.dataset.curriculumPhase
+    const gate = document.getElementById('logyq-curriculum-gate')
+    if (gate) gate.hidden = !(playing && phase !== 'play')
+    const start = document.getElementById('logyq-curriculum-start')
+    if (start) start.hidden = phase !== 'gate'
     const status = document.getElementById('logyq-curriculum-status')
     if (status && playing && !status.dataset.tone) status.textContent = app.curriculum.title || ''
   }
 
   function leaveCurriculumPlay() {
+    cancelCurriculumVegas()
+    const state = bridge.core?.state
+    if (state) state.curriculumCameraLock = false
     if (!app.curriculum) {
       renderCurriculumChrome()
       return
@@ -147,10 +181,26 @@
     return found
   }
 
-  function mixCurriculum() {
-    const session = app.curriculum
-    if (!session || session.cleared) return false
-    const level = curriculumLevel(session.id)
+  function curriculumCameraSnap() {
+    const svg = document.getElementById('canvas')
+    const zoom = window.d3?.zoomTransform
+    if (!svg || typeof zoom !== 'function') return null
+    const t = zoom(svg)
+    return { x: t.x, y: t.y, k: t.k }
+  }
+
+  function restoreCurriculumCamera(snap) {
+    const core = bridge.core
+    const svg = document.getElementById('canvas')
+    if (!snap || !svg || !core?.state?.zoom || !window.d3) return
+    const target = window.d3.zoomIdentity.translate(snap.x, snap.y).scale(snap.k)
+    window.d3.select(svg).interrupt().call(core.state.zoom.transform, target)
+  }
+
+  // One Mix. Seeds the level words, then calls randomizeTree. The curriculum
+  // class is lifted for that call because Mix refuses it. Camera fit stays
+  // off while curriculumCameraLock is set.
+  function spinCurriculum(level, { motion = 260, avoidAnswer = true } = {}) {
     const core = bridge.core
     const state = core?.state
     const utils = core?.utils
@@ -159,9 +209,6 @@
     const cards = curriculumCardPool(state.root?.data, level.tree)
     if (!cards.length) return false
     const previous = curriculumStructureKey(curriculumAnswerTree(state.root?.data) || {})
-    // Seed the level words only. The layout Ashley likes is randomizeTree,
-    // the same Mix a normal map uses. It refuses body.logyq-curriculum, so
-    // the class is lifted for that call and put back before paint.
     const seed = {
       name: cards[0].name,
       children: cards.slice(1).map((card) => {
@@ -174,14 +221,15 @@
     utils.assignUids(seed)
     try { core.editing?.closeNodeEditor?.(false, false) } catch (_error) {}
     state.wordBank = []
-    state.history = []
-    state.redo = []
     state.selectedUid = null
     try { core.selection?.clearGroup?.() } catch (_error) {}
     try { core.selection?.clearSelection?.() } catch (_error) {}
     state.root = window.d3.hierarchy(seed)
     utils.assignIds(state.root)
     const before = curriculumStructureKey(state.root.data)
+    const prevMotion = state.layoutMotionMs
+    state.layoutMotionMs = motion
+    state.curriculumCameraLock = true
     const locked = document.body.classList.contains('logyq-curriculum')
     const runMix = () => {
       if (locked) document.body.classList.remove('logyq-curriculum')
@@ -189,41 +237,141 @@
         if (locked) document.body.classList.add('logyq-curriculum')
       }
     }
-    runMix()
-    const live = () => curriculumAnswerTree(state.root?.data)
-    const solved = () => {
-      const tree = live()
-      return !!(tree && curriculumMatches(level.tree, tree))
-    }
-    let tries = 0
-    while (tries < 6) {
-      const key = curriculumStructureKey(state.root?.data)
-      const sameBoard = key === before || (previous && key === previous)
-      if (!solved() && !sameBoard) break
+    try {
       runMix()
-      tries += 1
+      if (avoidAnswer) {
+        const live = () => curriculumAnswerTree(state.root?.data)
+        const solved = () => {
+          const tree = live()
+          return !!(tree && curriculumMatches(level.tree, tree))
+        }
+        let tries = 0
+        while (tries < 6) {
+          const key = curriculumStructureKey(state.root?.data)
+          const sameBoard = key === before || (previous && key === previous)
+          if (!solved() && !sameBoard) break
+          runMix()
+          tries += 1
+        }
+      }
+    } finally {
+      state.layoutMotionMs = prevMotion
     }
     state.wordBank = []
-    state.history = []
-    state.redo = []
     try { core.wordDock?.render?.() } catch (_error) {}
+    return true
+  }
+
+  function quietCurriculumBoard(level) {
+    const ok = spinCurriculum(level, { motion: 0, avoidAnswer: true })
+    const state = bridge.core?.state
+    if (state) {
+      state.history = []
+      state.redo = []
+      state.repositionMode = null
+      state.curriculumCameraLock = true
+    }
+    const undo = document.getElementById('undoBtn')
+    if (undo) undo.disabled = true
+    const settle = () => {
+      if (app.curriculum?.phase !== 'gate') return
+      try { bridge.core?.treeManager?.settleRootAnchored?.({ force: true, duration: 0 }) } catch (_error) {}
+    }
+    settle()
+    requestAnimationFrame(settle)
+    return ok
+  }
+
+  function releaseCurriculumPlay(session) {
+    if (app.curriculum !== session || session.phase === 'play' && session.released) return
+    session.phase = 'play'
+    session.released = true
+    session.startedAt = Date.now()
+    const state = bridge.core?.state
+    if (state) {
+      state.repositionMode = null
+      state.history = []
+      state.redo = []
+      state.wordBank = []
+      state.curriculumCameraLock = true
+    }
     const undo = document.getElementById('undoBtn')
     if (undo) undo.disabled = true
     const status = document.getElementById('logyq-curriculum-status')
     if (status && status.dataset.tone === 'wait') {
       delete status.dataset.tone
-      status.textContent = level.title
+      status.textContent = session.title || ''
     }
+    renderCurriculumChrome()
+  }
+
+  function playCurriculumVegas(session) {
+    const level = curriculumLevel(session.id)
+    if (!level) return false
+    cancelCurriculumVegas()
+    const token = curriculumVegas.token
+    session.phase = 'shuffle'
+    renderCurriculumChrome()
+    const snap = curriculumCameraSnap()
+    const alive = () => app.curriculum === session && curriculumVegas.token === token
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    const finish = () => {
+      if (!alive()) return
+      const state = bridge.core?.state
+      if (state) state.repositionMode = null
+      const duration = reduced ? 0 : CURRICULUM_VEGAS_SETTLE_MS
+      try {
+        bridge.core?.treeManager?.settleRootAnchored?.({ force: false, duration })
+      } catch (_error) {}
+      const open = window.setTimeout(() => {
+        if (!alive()) return
+        releaseCurriculumPlay(session)
+      }, duration)
+      curriculumVegas.timers.push(open)
+    }
+    if (reduced) {
+      const ok = spinCurriculum(level, { motion: 0, avoidAnswer: true })
+      restoreCurriculumCamera(snap)
+      finish()
+      return ok
+    }
+    const beats = CURRICULUM_VEGAS_BEATS
+    beats.forEach((beat) => {
+      const run = () => {
+        if (!alive()) return
+        spinCurriculum(level, { motion: beat.motion, avoidAnswer: true })
+        restoreCurriculumCamera(snap)
+      }
+      if (beat.at === 0) {
+        run()
+        return
+      }
+      curriculumVegas.timers.push(window.setTimeout(run, beat.at))
+    })
+    const settleId = window.setTimeout(() => {
+      if (!alive()) return
+      finish()
+    }, CURRICULUM_VEGAS_SETTLE_AT)
+    curriculumVegas.timers.push(settleId)
     return true
+  }
+
+  function mixCurriculum() {
+    const session = app.curriculum
+    if (!session || session.cleared || session.phase === 'shuffle') return false
+    return playCurriculumVegas(session)
   }
 
   function beginCurriculumLevel(level) {
     if (!level) return
+    cancelCurriculumVegas()
     app.curriculum = {
       id: level.id,
       title: level.title,
-      startedAt: Date.now(),
+      startedAt: 0,
       cleared: false,
+      phase: 'gate',
+      released: false,
     }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
@@ -236,8 +384,9 @@
       delete status.dataset.tone
       status.textContent = level.title
     }
+    if (bridge.core?.state) bridge.core.state.curriculumCameraLock = true
     renderCurriculumChrome()
-    mixCurriculum()
+    quietCurriculumBoard(level)
     setSaveState('saved')
   }
 
@@ -287,6 +436,7 @@
     })
     document.getElementById('logyq-curriculum-check')?.addEventListener('click', () => checkCurriculum())
     document.getElementById('logyq-curriculum-mix')?.addEventListener('click', () => mixCurriculum())
+    document.getElementById('logyq-curriculum-start')?.addEventListener('click', () => mixCurriculum())
     document.getElementById('mixBtn')?.addEventListener('pointerdown', (event) => {
       if (!document.body.classList.contains('logyq-curriculum')) return
       event.preventDefault()

@@ -17,7 +17,14 @@ function autoFitSoon(delay){
   try{
     var d = Number.isFinite(delay) ? delay : 220; // let transitions finish
     window.__undoFitT = setTimeout(function(){
-      try{ logyq.treeManager.autoFit(); }catch(_e){}
+      try{
+        const curriculum = typeof document !== 'undefined' && document.body?.classList?.contains('logyq-curriculum');
+        if (curriculum && typeof logyq.treeManager.settleRootAnchored === 'function') {
+          logyq.treeManager.settleRootAnchored({ force: false, duration: 640 });
+        } else {
+          logyq.treeManager.autoFit();
+        }
+      }catch(_e){}
     }, d);
   }catch(_e){}
 }
