@@ -42,3 +42,10 @@ test('drop check simulates the editor gap and node drops without mutating the so
   assert.equal(grammar.canDrop(branch, 'root', { type: 'rootAbove' }, 'root'), false)
   assert.equal(branch.children[0].gameId, 'right')
 })
+
+test('the first puzzle starts as a chain and repairs by moving its parent below its child', () => {
+  const start = card('root', 'orange', [card('leaf', 'blue', [card('middle', 'orange-blue')])])
+  assert.equal(grammar.complete(start, ['root', 'middle', 'leaf'], 'root'), false)
+  assert.equal(grammar.canDrop(start, 'leaf', { type: 'node', targetUid: 'middle' }, 'root'), true)
+  assert.equal(start.children[0].gameId, 'leaf')
+})

@@ -58,6 +58,14 @@
     }
     return null
   }
+  function parentOf(node, uid) {
+    if ((node?.children || []).some((child) => isUid(child, uid))) return node
+    for (const child of node?.children || []) {
+      const found = parentOf(child, uid)
+      if (found) return found
+    }
+    return null
+  }
   // Destination contacts are the only move test. The starter arrangement may
   // have a clash elsewhere; the moved card must fit wherever it is dropped.
   function canDrop(tree, movingUid, drop, rootId) {
@@ -67,7 +75,21 @@
     const moving = find(copy, movingUid)
     const targetUid = drop.type === 'node' ? drop.targetUid : drop.parentUid
     const target = find(copy, targetUid)
-    if (!moving || !target || find(moving, targetUid)) return false
+    if (!moving || !target || isUid(moving, targetUid)) return false
+    if (find(moving, targetUid)) {
+      // LOGYQ already supports moving a parent under one of its descendants:
+      // its children take its old place, then the moved card becomes a child.
+      if (drop.type !== 'node') return false
+      const oldParent = parentOf(copy, movingUid)
+      if (!oldParent) return false
+      const index = oldParent.children.findIndex((child) => isUid(child, movingUid))
+      oldParent.children.splice(index, 1, ...(moving.children || []))
+      moving.children = []
+      const promoted = find(copy, targetUid)
+      promoted.children ||= []
+      promoted.children.push(moving)
+      return copy.gameId === rootId && contacts(copy)
+    }
     detach(copy, movingUid)
     target.children ||= []
     let index = target.children.length

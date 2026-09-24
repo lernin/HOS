@@ -7088,11 +7088,12 @@
   const gameGrammar = window.LOGYQGameGrammar
   const gameLevels = [
     {
-      id: 'chain', title: '1 · One child at a time', hint: 'Drag the blue card below the two-color card.',
+      id: 'chain', title: '1 · One child at a time', hint: 'Move the blue card beneath the two-color card.',
       ids: ['root', 'middle', 'leaf'],
       tree: { name: '', gameId: 'root', paint: 'orange', children: [
-        { name: '', gameId: 'middle', paint: 'orange-blue' },
-        { name: '', gameId: 'leaf', paint: 'blue' },
+        { name: '', gameId: 'leaf', paint: 'blue', children: [
+          { name: '', gameId: 'middle', paint: 'orange-blue' },
+        ] },
       ] },
     },
     {
