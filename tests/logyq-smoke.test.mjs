@@ -7646,3 +7646,93 @@ test('LOGYQ my maps list fits a phone viewport', async () => {
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('every solved game tree stays in the phone safe area', async () => {
+  const viewports = [
+    { width: 360, height: 640 },
+    { width: 390, height: 844 },
+    { width: 844, height: 390 },
+  ]
+  const context = await newContext({ viewport: viewports[0], isMobile: true, hasTouch: true })
+  await stubMaps(context, { maps: [] })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  const failures = []
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport)
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+    const report = await page.evaluate(({ width, height }) => {
+      const overlap = (a, b) => a.left < b.right - 1 && a.right > b.left + 1 && a.top < b.bottom - 1 && a.bottom > b.top + 1
+      const rectOf = (id) => {
+        const el = document.getElementById(id)
+        if (!el) return null
+        const style = getComputedStyle(el)
+        if (style.display === 'none' || style.visibility === 'hidden') return null
+        const rect = el.getBoundingClientRect()
+        if (rect.width < 2 || rect.height < 2) return null
+        return rect
+      }
+      const bad = []
+      const levels = window.LOGYQPreview.game.levels
+      for (const level of levels) {
+        window.LOGYQPreview.game.presentSolved(level)
+        const live = new Set((window.LOGYQBridge.core.state.root?.descendants() || []).map((node) => node.data?._uid))
+        const cards = [...document.querySelectorAll('svg#canvas g.nodes g.node')]
+          .filter((node) => live.has(node.__data__?.data?._uid))
+          .map((node) => node.getBoundingClientRect())
+        if (!cards.length) {
+          bad.push(width + 'x' + height + ' ' + level.title + ' has no cards')
+          continue
+        }
+        const bar = rectOf('logyq-game-bar')
+        const dock = rectOf('Dock')
+        let minX = Infinity
+        let maxX = -Infinity
+        for (const card of cards) {
+          if (card.left < -1 || card.top < -1 || card.right > width + 1 || card.bottom > height + 1) {
+            bad.push(width + 'x' + height + ' ' + level.title + ' card outside ' + Math.round(card.left) + ',' + Math.round(card.top) + ' ' + Math.round(card.right) + ',' + Math.round(card.bottom))
+          }
+          if (bar && overlap(card, bar)) bad.push(width + 'x' + height + ' ' + level.title + ' card overlaps the top panel')
+          if (dock && overlap(card, dock)) bad.push(width + 'x' + height + ' ' + level.title + ' card overlaps the Word Bank')
+          minX = Math.min(minX, card.left)
+          maxX = Math.max(maxX, card.right)
+        }
+        let safeLeft = 0
+        let safeRight = width
+        if (dock && dock.width < width * 0.45 && dock.height > height * 0.45 && dock.left < width * 0.5) safeLeft = dock.right
+        const cluster = rectOf('logyq-corner-cluster')
+        if (cluster && cluster.left > width * 0.55 && cluster.width < width * 0.4) safeRight = cluster.left
+        const treeMid = (minX + maxX) / 2
+        const safeMid = (safeLeft + safeRight) / 2
+        const limit = Math.max(18, (safeRight - safeLeft) * 0.08)
+        if (Math.abs(treeMid - safeMid) > limit) {
+          bad.push(width + 'x' + height + ' ' + level.title + ' off center by ' + Math.round(treeMid - safeMid))
+        }
+      }
+      return bad
+    }, viewport)
+    failures.push(...report)
+  }
+  assert.deepEqual(failures, [])
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.evaluate(() => {
+    const level = window.LOGYQPreview.game.levels[0]
+    window.LOGYQPreview.game.presentSolved(level)
+  })
+  await page.locator('#logyq-game-check').click()
+  assert.equal(await page.locator('#logyq-game-status').textContent(), 'It fits!')
+  assert.equal(await page.locator('#logyq-game-status').evaluate((el) => el.scrollWidth <= el.clientWidth + 1), true)
+  assert.equal(await page.locator('#logyq-game-bar').evaluate((el) => Math.round(el.getBoundingClientRect().height)), 32)
+  assert.equal(await page.locator('#logyq-game-next').isVisible(), true)
+  const before = await page.locator('#logyq-game-name').textContent()
+  await page.locator('#logyq-game-next').click()
+  await page.waitForFunction((title) => document.getElementById('logyq-game-name')?.textContent !== title, before)
+  await page.locator('#logyq-game-levels-button').click()
+  await page.waitForSelector('#logiq-library.is-open')
+  assert.equal(await page.locator('#logiq-library').getAttribute('data-shelf'), 'game')
+  assert.deepEqual(errors, [])
+  await context.close()
+})
