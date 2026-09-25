@@ -45,6 +45,38 @@
     }
   }
 
+  // Open playtest expansion: chains first, then branches. These are deliberately
+  // unlocked so the learning sequence can be sampled and tuned out of order.
+  function addOpenLevel(id, title, tree, anchorId) {
+    const nodes = []
+    ;(function walk(n){ nodes.push(n); for (const x of n.children || []) walk(x) })(tree)
+    const anchor = nodes.find(n => n.gameId === anchorId) || nodes[0]
+    const bankCards = {}, bank = []
+    for (const n of nodes) if (n.gameId !== anchor.gameId) {
+      const key = '__TREE_CARD__:' + id + ':' + n.gameId
+      bank.push(key); bankCards[key] = { ...n, children: [] }
+    }
+    gameLevels.push({ id, title, hint: '', ids: nodes.map(n => n.gameId),
+      tree: { ...anchor, children: [] }, bank, bankCards })
+  }
+  const chainSets = [
+    ['L:A:B','DL:B:C','DR:C:D'], ['DL:A:B','L:B:C','DR:C:D'],
+    ['DR:A:B','DL:B:C','L:C:D'], ['L:A:B','DR:B:C','DL:C:D']
+  ]
+  for (let round=0; round<3; round++) chainSets.forEach((p,i) => {
+    const t={name:'',gameId:'a',paint:p[0],children:[{name:'',gameId:'b',paint:p[1],children:[{name:'',gameId:'c',paint:p[2],children:[]}]}]}
+    addOpenLevel('chain-'+round+'-'+i, (16+round*4+i)+' · Chain', t, ['a','b','c'][(round+i)%3])
+  })
+  const branches = [
+    ['L:A:B','DL:B:C','DR:B:D'], ['DL:A:B','DR:B:C','DL:B:D'],
+    ['DR:A:B','DL:B:C','DR:B:D'], ['L:A:B','DR:B:C','DL:B:D']
+  ]
+  for (let round=0; round<3; round++) branches.forEach((p,i) => {
+    const t={name:'',gameId:'a',paint:p[0],children:[
+      {name:'',gameId:'b',paint:p[1],children:[]},{name:'',gameId:'c',paint:p[2],children:[]}]}
+    addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
+  })
+
   function gameProgress() {
     const value = readJson(GAME_KEY, {})
     return value && typeof value === 'object' ? value : {}
@@ -58,7 +90,7 @@
       const unlocked = index === 0 || !!progress[gameLevels[index - 1].id]
       const done = !!progress[level.id]
       return '<li><button type="button" data-game-level="' + level.id + '" ' + (unlocked ? '' : 'disabled') + '>' +
-        level.title + (done ? ' ✓' : '') + '<span>' + (unlocked ? level.hint : 'Clear the previous level first.') + '</span></button></li>'
+        level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
     }).join('')
   }
 
