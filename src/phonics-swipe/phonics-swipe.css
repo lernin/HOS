@@ -161,6 +161,27 @@ button, select { font: inherit; }
   z-index: 8;
 }
 
+.phonics-lab-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 520px;
+  min-height: 44px;
+  margin: 0 auto 6px;
+  padding: 0 14px;
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 13px;
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.94);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: .01em;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .phonics-deck-row {
   max-width: 520px;
   margin: 0 auto 4px;
