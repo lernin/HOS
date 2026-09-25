@@ -22,7 +22,9 @@ export default {
 
     let payload: { name?: unknown; args?: unknown }
     try {
-      payload = await request.json()
+      const parsed: unknown = JSON.parse(await request.text())
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return json({ message: 'Invalid request.' }, 400)
+      payload = parsed as { name?: unknown; args?: unknown }
     } catch (_error) {
       return json({ message: 'Invalid request.' }, 400)
     }
