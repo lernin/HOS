@@ -311,6 +311,7 @@
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return
+      if (event.target?.closest?.('.logiq-inline-rename')) return
       if (app.folderComposer) {
         app.folderComposer = false
         renderLibrary()

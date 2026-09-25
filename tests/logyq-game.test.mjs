@@ -265,13 +265,13 @@ function loadGameFragment() {
 test('every game level is selectable without clearing an earlier one', () => {
   const { sandbox, elements, listeners } = loadGameFragment()
   const levels = sandbox.preview.game.levels
-  assert.equal(levels.length, 39)
+  assert.equal(levels.length, 139)
   levels.forEach((level, index) => {
     assert.equal(level.title.startsWith((index + 1) + ' · '), true, level.title)
   })
   sandbox.preview.game.render()
   const html = elements['logyq-game-path'].innerHTML
-  assert.equal(html.match(/data-game-level=/g).length, 39)
+  assert.equal(html.match(/data-game-level=/g).length, 139)
   assert.doesNotMatch(html, /disabled/)
   assert.doesNotMatch(html, /Clear the previous level/)
   const open = (id) => {
@@ -311,7 +311,7 @@ test('completion is recorded and never required for the next pick', () => {
   sandbox.preview.game.begin(last)
   sandbox.bridge._snapshot = { tree: lastSolved }
   sandbox.preview.game.check()
-  assert.equal(elements['logyq-game-status'].textContent, 'All 39 levels cleared.')
+  assert.equal(elements['logyq-game-status'].textContent, 'All 139 levels cleared.')
   assert.equal(elements['logyq-game-next'].hidden, true)
 })
 

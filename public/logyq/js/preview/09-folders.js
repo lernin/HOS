@@ -89,6 +89,23 @@
     return { index: next, ok: true }
   }
 
+  // blank: 'cancel' drops an empty folder name. blank: 'fallback' is a map file name.
+  function libraryRenameDecision(current, typed, options = {}) {
+    const max = Number.isFinite(options.max) ? options.max : 80
+    const name = String(typed ?? '').trim().slice(0, max)
+    const previous = String(current ?? '')
+    if (!name) {
+      if (options.blank === 'fallback') {
+        const fallback = String(options.fallback ?? '')
+        if (!fallback || fallback === previous) return { action: 'keep' }
+        return { action: 'save', name: fallback }
+      }
+      return { action: 'cancel' }
+    }
+    if (name === previous) return { action: 'keep' }
+    return { action: 'save', name }
+  }
+
   function moveFolder(index, id, parentId) {
     const next = cloneFolderIndex(normalizeFolderIndex(index))
     const folder = next.folders.find((item) => item.id === id)
@@ -242,6 +259,7 @@
     normalizeFolderIndex,
     createFolder,
     renameFolder,
+    libraryRenameDecision,
     moveFolder,
     deleteFolder,
     placeMap,

@@ -967,6 +967,7 @@
 
     document.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return
+      if (event.target?.closest?.('.logiq-inline-rename')) return
       if (app.folderComposer) {
         app.folderComposer = false
         renderLibrary()
@@ -4881,7 +4882,7 @@
         <span class="logyq-folder-copy"><span class="logiq-map-name">${escapeHtml(folder.name)}</span><span class="logiq-map-time">${escapeHtml(insideLabel(directCount(index, rows, folder.id)))}</span></span>
       </button>
       <div class="logiq-map-actions"><button type="button" data-folder-action="rename">Rename</button>${moveBtn}<button type="button" class="danger" data-folder-action="delete">Delete</button></div>
-      <form class="logiq-inline-rename" data-folder-rename><input value="${escapeHtml(folder.name)}" aria-label="Folder name" maxlength="80"><button type="submit">Done</button></form>
+      <form class="logiq-inline-rename" data-folder-rename><input value="${escapeHtml(folder.name)}" aria-label="Folder name" maxlength="80" enterkeyhint="done" autocomplete="off"><button type="submit">Done</button></form>
       ${move}
     </article>`
   }
@@ -4898,7 +4899,7 @@
     return `<article class="logiq-map-row${current}" data-id="${escapeHtml(row.id)}">
       <div><div class="logiq-map-name">${escapeHtml(row.name || DEFAULT_NAME)}</div><div class="logiq-map-time">${escapeHtml(when)}</div></div>
       <div class="logiq-map-actions"><button type="button" data-map-action="rename">Rename</button>${moveBtn}<button type="button" class="danger" data-map-action="delete">Delete</button></div>
-      <form class="logiq-inline-rename"><input value="${escapeHtml(row.name || DEFAULT_NAME)}" aria-label="Map name"><button type="submit">Done</button></form>
+      <form class="logiq-inline-rename" data-map-rename><input value="${escapeHtml(row.name || DEFAULT_NAME)}" aria-label="Map name" maxlength="120" enterkeyhint="done" autocomplete="off"><button type="submit">Done</button></form>
       ${move}
     </article>`
   }
@@ -4952,6 +4953,84 @@
     ui.mapList.innerHTML = head + note + foldersHtml + mapsHtml + empty
   }
 
+  function libraryIsOpen() {
+    return !!document.getElementById('logiq-library')?.classList.contains('is-open')
+  }
+
+  function commitFolderRename(id, typed, source) {
+    const index = readFolderIndex()
+    const folder = index.folders.find((item) => item.id === id)
+    if (!folder) return true
+    const decision = libraryRenameDecision(folder.name, typed, { max: 80, blank: 'cancel' })
+    if (decision.action === 'save') {
+      const renamed = renameFolder(index, id, decision.name)
+      if (renamed.ok) writeFolderIndex(renamed.index)
+    }
+    if (source === 'blur' && !libraryIsOpen()) return true
+    renderLibrary()
+    return true
+  }
+
+  function openLibraryRename(form, commit) {
+    if (!form) return
+    form.classList.add('is-open')
+    const input = form.querySelector('input')
+    if (!input) return
+    if (input.dataset.renameArmed !== '1') {
+      input.dataset.renameArmed = '1'
+      let settled = false
+      let timer = 0
+      const finish = (save, source, value) => {
+        if (settled) return
+        const typed = value == null ? input.value : value
+        if (!save) {
+          settled = true
+          clearTimeout(timer)
+          renderLibrary()
+          return
+        }
+        settled = true
+        clearTimeout(timer)
+        Promise.resolve(commit(typed, source)).then((ok) => {
+          if (ok === false && input.isConnected) {
+            settled = false
+            input.focus()
+            input.select()
+          }
+        })
+      }
+      form._finishRename = () => finish(true, 'button')
+      form.addEventListener('submit', (event) => {
+        event.preventDefault()
+        finish(true, 'button')
+      })
+      input.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== 'Escape') return
+        event.preventDefault()
+        event.stopPropagation()
+        finish(event.key === 'Enter', event.key === 'Enter' ? 'enter' : 'escape')
+      })
+      input.addEventListener('blur', () => {
+        if (settled) return
+        if (form._skipBlurSave) {
+          form._skipBlurSave = false
+          return
+        }
+        const value = input.value
+        timer = setTimeout(() => {
+          if (settled) return
+          finish(true, 'blur', value)
+        }, 220)
+      })
+    }
+    const openedValue = input.value
+    input.focus()
+    input.select()
+    requestAnimationFrame(() => {
+      if (document.activeElement === input && input.value === openedValue) input.select()
+    })
+  }
+
   async function handleFolderAction(event, folderElement) {
     const id = folderElement.dataset.folderId
     const index = readFolderIndex()
@@ -4961,9 +5040,7 @@
     if (renameForm) {
       if (!event.target.closest('button')) return
       event.preventDefault()
-      const renamed = renameFolder(index, id, renameForm.querySelector('input').value)
-      if (renamed.ok) writeFolderIndex(renamed.index)
-      renderLibrary()
+      renameForm._finishRename?.()
       return
     }
     const moveForm = event.target.closest('[data-folder-move]')
@@ -4977,9 +5054,8 @@
     }
     const action = event.target.closest('[data-folder-action]')?.dataset.folderAction
     if (action === 'rename') {
-      folderElement.querySelector('[data-folder-rename]')?.classList.add('is-open')
       folderElement.querySelector('[data-folder-move]')?.classList.remove('is-open')
-      folderElement.querySelector('[data-folder-rename] input')?.focus()
+      openLibraryRename(folderElement.querySelector('[data-folder-rename]'), (typed, source) => commitFolderRename(id, typed, source))
       return
     }
     if (action === 'move') {
@@ -5033,12 +5109,11 @@
     const row = app.libraryRows.find((item) => item.id === rowElement.dataset.id)
     if (!row) return
 
-    const renameForm = event.target.closest('.logiq-inline-rename')
+    const renameForm = event.target.closest('[data-map-rename]')
     if (renameForm) {
       if (!event.target.closest('button')) return
       event.preventDefault()
-      const name = renameForm.querySelector('input').value.trim() || DEFAULT_NAME
-      await renameMap(row, name)
+      renameForm._finishRename?.()
       return
     }
     const moveForm = event.target.closest('[data-map-move]')
@@ -5052,9 +5127,8 @@
 
     const action = event.target.closest('[data-map-action]')?.dataset.mapAction
     if (action === 'rename') {
-      rowElement.querySelector('.logiq-inline-rename').classList.add('is-open')
       rowElement.querySelector('[data-map-move]')?.classList.remove('is-open')
-      rowElement.querySelector('.logiq-inline-rename input').focus()
+      openLibraryRename(rowElement.querySelector('[data-map-rename]'), (typed, source) => commitMapRename(row, typed, source))
       return
     }
     if (action === 'move') {
@@ -5139,14 +5213,30 @@
     }
   }
 
+  async function commitMapRename(row, typed, source) {
+    const decision = libraryRenameDecision(row.name || DEFAULT_NAME, typed, {
+      max: 120,
+      blank: 'fallback',
+      fallback: DEFAULT_NAME,
+    })
+    if (decision.action !== 'save') {
+      if (source === 'blur' && !libraryIsOpen()) return true
+      renderLibrary()
+      return true
+    }
+    return renameMap(row, decision.name)
+  }
+
   async function renameMap(row, name) {
     const pin = await getPin(true)
-    if (!pin) return
+    if (!pin) return false
+    const open = !!(row.id && app.hasOpenMap && app.current?.id === row.id)
+    const live = open ? bridge.snapshot() : null
     try {
       const payload = encodeMapRecord({
         name,
-        tree: row.tree,
-        wordBank: row.word_bank,
+        tree: live?.tree || row.tree,
+        wordBank: live ? live.wordBank : row.word_bank,
       })
       await rpc('logiq_map_save', {
         pin,
@@ -5157,6 +5247,26 @@
       })
       acceptPin(pin)
       row.name = payload.name
+      if (live) {
+        row.tree = payload.tree
+        row.word_bank = payload.word_bank.slice()
+        app.ackedTree = decodeMapTree(payload.tree)
+        app.ackedWordBank = payload.word_bank.slice()
+        app.ackedContent = contentKey(payload.tree, payload.word_bank)
+        app.lastSnapshot = app.ackedContent
+      }
+      const pending = readJson(PENDING_KEY, null)
+      if (pending && pending.id === row.id) {
+        const same = contentKey(pending.tree, pending.word_bank) === contentKey(payload.tree, payload.word_bank)
+        if (same) {
+          localStorage.removeItem(PENDING_KEY)
+          clearTimeout(app.timer)
+        } else {
+          pending.name = payload.name
+          try { localStorage.setItem(PENDING_KEY, JSON.stringify(pending)) } catch (_error) {}
+        }
+      }
+      cacheLibrary(app.libraryRows)
       if (row.id === app.current.id) {
         app.current.name = payload.name
         app.ackedName = payload.name
@@ -5164,9 +5274,11 @@
       }
       renderLibrary()
       setSaveState('saved')
+      return true
     } catch (error) {
       if (error.auth) forgetPin()
       setSaveState('offline')
+      return false
     }
   }
 
@@ -5477,6 +5589,14 @@
       ...claim,
     }
   }
+
+  ui.mapList.addEventListener('pointerdown', (event) => {
+    const openForm = ui.mapList.querySelector('.logiq-inline-rename.is-open')
+    if (!openForm || openForm.contains(event.target)) return
+    if (event.target.closest('[data-map-action], [data-folder-action], [data-map-move], [data-folder-move]')) {
+      openForm._skipBlurSave = true
+    }
+  })
 
   document.addEventListener('keydown', (event) => {
     const input = event.target
@@ -7549,6 +7669,23 @@
     return { index: next, ok: true }
   }
 
+  // blank: 'cancel' drops an empty folder name. blank: 'fallback' is a map file name.
+  function libraryRenameDecision(current, typed, options = {}) {
+    const max = Number.isFinite(options.max) ? options.max : 80
+    const name = String(typed ?? '').trim().slice(0, max)
+    const previous = String(current ?? '')
+    if (!name) {
+      if (options.blank === 'fallback') {
+        const fallback = String(options.fallback ?? '')
+        if (!fallback || fallback === previous) return { action: 'keep' }
+        return { action: 'save', name: fallback }
+      }
+      return { action: 'cancel' }
+    }
+    if (name === previous) return { action: 'keep' }
+    return { action: 'save', name }
+  }
+
   function moveFolder(index, id, parentId) {
     const next = cloneFolderIndex(normalizeFolderIndex(index))
     const folder = next.folders.find((item) => item.id === id)
@@ -7702,6 +7839,7 @@
     normalizeFolderIndex,
     createFolder,
     renameFolder,
+    libraryRenameDecision,
     moveFolder,
     deleteFolder,
     placeMap,
