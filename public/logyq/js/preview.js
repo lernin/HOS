@@ -321,7 +321,9 @@
       #logiq-library[data-shelf="game"] #logiq-map-list,
       #logyq-game-levels{display:none}
       #logiq-library[data-shelf="game"] #logyq-game-levels{display:block}
+      #logyq-game-levels{overflow:auto;-webkit-overflow-scrolling:touch}
       #logyq-game-path{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
+      #logyq-game-path .logyq-tier-head{margin:12px 0 0;padding:2px 2px 0;color:#64748b;font:800 12px/1.2 system-ui,sans-serif;letter-spacing:.04em}
       #logyq-game-path button{width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
       #logyq-game-path button.is-cleared{border-color:#86efac;background:#f0fdf4}
       body.logyq-game .logyq-shape-chip{position:relative;box-sizing:border-box;width:auto;max-width:none;padding:2px;background:transparent;border:0;min-height:0}
@@ -332,6 +334,8 @@
       #logyq-game-path span{display:block;font-size:13px;font-weight:500;color:#64748b;margin-top:3px}
       #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(15,23,42,.08)}
       body.logyq-game:not(.logyq-home) #logyq-game-bar{display:flex}
+      #logyq-game-tier{flex:none;font:700 11px/1 system-ui,sans-serif;color:#64748b;background:#f1f5f9;border-radius:999px;padding:5px 7px;white-space:nowrap}
+      #logyq-game-tier.is-up{color:#166534;background:#dcfce7}
       #logyq-game-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
       #logyq-game-bar button{border:1px solid #bfdbfe;background:#fff;color:#1e40af;border-radius:9px;padding:8px 10px;font-weight:750;cursor:pointer}
       #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
@@ -497,6 +501,7 @@
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
         @keyframes logyq-smite-march{from{stroke-dashoffset:0}to{stroke-dashoffset:-14px}}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row,.logyq-folder-row{grid-template-columns:minmax(0,1fr)}.logiq-map-actions{justify-content:flex-start}
+        #logyq-game-levels{max-height:calc(100dvh - 132px)}
         body.logyq-home .logiq-modal-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center}
         body.logyq-home .logyq-home-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:4px;width:100%;min-width:0;flex:none}
         body.logyq-home .logyq-home-tab{min-width:0;width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:8px 4px;font-size:clamp(13px,3.7vw,16px);line-height:1.15;text-align:center;white-space:nowrap;overflow:hidden}
@@ -722,6 +727,7 @@
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
       <div id="logyq-game-bar">
+        <span id="logyq-game-tier"></span>
         <p id="logyq-game-status" role="status" aria-live="polite"></p>
         <button type="button" id="logyq-game-check">Check</button>
         <button type="button" id="logyq-game-next" hidden>Next</button>
@@ -6951,7 +6957,7 @@
 
   // Open playtest expansion: chains first, then branches. Every level stays
   // selectable so the learning sequence can be sampled and tuned out of order.
-  function addOpenLevel(id, title, tree, anchorId) {
+  function addOpenLevel(id, title, tree, anchorId, extra) {
     const nodes = []
     ;(function walk(n){ nodes.push(n); for (const x of n.children || []) walk(x) })(tree)
     const anchor = nodes.find(n => n.gameId === anchorId) || nodes[0]
@@ -6960,8 +6966,18 @@
       const key = '__TREE_CARD__:' + id + ':' + n.gameId
       bank.push(key); bankCards[key] = { ...n, children: [] }
     }
-    gameLevels.push({ id, title, hint: '', ids: nodes.map(n => n.gameId),
-      tree: { ...anchor, children: [] }, bank, bankCards })
+    const decoy = extra && extra.decoy
+    if (decoy) {
+      const key = '__TREE_CARD__:' + id + ':' + decoy.gameId
+      bank.push(key)
+      bankCards[key] = { name: '', gameId: decoy.gameId, paint: decoy.paint, children: [] }
+    }
+    gameLevels.push({
+      id, title, tier: extra && extra.tier, hint: decoy ? 'One piece does not fit.' : '',
+      ids: nodes.map(n => n.gameId),
+      tree: { ...anchor, children: [] }, bank, bankCards,
+      solution: tree,
+    })
   }
   const chainSets = [
     ['L:A:B','DL:B:C','DR:C:D'], ['DL:A:B','L:B:C','DR:C:D'],
@@ -6981,21 +6997,280 @@
     addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
   })
 
+  gameLevels.forEach((level, index) => {
+    const number = index + 1
+    level.tier = number <= 15 ? 1 : number <= 27 ? 2 : 3
+  })
+
+  // Levels 40–139. Fixed recipes, not a slow ramp: every tier from 4 up
+  // mixes chains, forks, deep branches, three-wide trees, and a distractor.
+  // Color D is reserved for the distractor so it has no visible-contact seat.
+  const CLIMB_COLORS = ['A', 'B', 'C']
+  const CLIMB_ROOTS = [
+    ['L', 'A', 'B'], ['DL', 'A', 'B'], ['DR', 'A', 'B'],
+    ['L', 'B', 'C'], ['DL', 'B', 'C'], ['DR', 'B', 'C'],
+    ['L', 'C', 'A'], ['DL', 'C', 'A'], ['DR', 'C', 'A'],
+    ['L', 'A', 'C'], ['DL', 'B', 'A'], ['DR', 'C', 'B'],
+  ]
+  const CLIMB_ARCHETYPES = [
+    ['chain4', 'Four Chain'],
+    ['chain5', 'Long Chain'],
+    ['fork', 'Fork Tail'],
+    ['deep', 'Deep Branch'],
+    ['wide', 'Three Wide'],
+    ['mixed', 'Mixed Wide'],
+    ['decoy', 'Decoy'],
+  ]
+  const CLIMB_ALT = {
+    chain4: 'Chain Link', chain5: 'Five Chain', fork: 'Branch Chain',
+    deep: 'Grandchild', wide: 'Wide Fork', mixed: 'Wide Mix', decoy: 'Decoy Mix',
+  }
+  const CLIMB_TIER_SIZES = [[4, 14], [5, 14], [6, 14], [7, 15], [8, 15], [9, 14], [10, 14]]
+
+  function climbEdge(paint, side) {
+    return gameGrammar.edge(paint, side)
+  }
+  function climbNode(id, paint, children) {
+    return { name: '', gameId: id, paint, children: children || [] }
+  }
+  function climbSingle(shape, parentBottom, bias) {
+    const bottom = CLIMB_COLORS[(bias + parentBottom.charCodeAt(0)) % 3]
+    if (shape === 'W') return 'W:' + parentBottom
+    return shape + ':' + parentBottom + ':' + bottom
+  }
+  function climbWide(shapes, parentBottom, bias) {
+    const paints = []
+    let prevRight = null
+    for (let i = 0; i < shapes.length; i++) {
+      const shape = shapes[i]
+      let paint = null
+      for (let k = 0; k < 3 && !paint; k++) {
+        const bottom = CLIMB_COLORS[(bias + i + k) % 3]
+        if (shape === 'DL') {
+          const b = prevRight == null ? bottom : prevRight
+          if (CLIMB_COLORS.includes(b)) paint = 'DL:' + parentBottom + ':' + b
+        } else if (shape === 'DR') {
+          if (prevRight == null || prevRight === parentBottom) paint = 'DR:' + parentBottom + ':' + bottom
+        } else if (shape === 'L') {
+          const left = parentBottom + '|' + bottom
+          if (prevRight == null || prevRight === left) paint = 'L:' + parentBottom + ':' + bottom
+        } else if (shape === 'W') {
+          if (prevRight == null || prevRight === parentBottom) paint = 'W:' + parentBottom
+        }
+        if (paint && (climbEdge(paint, 'top') !== parentBottom || (prevRight != null && climbEdge(paint, 'left') !== prevRight))) {
+          paint = null
+        }
+      }
+      if (!paint) return null
+      paints.push(paint)
+      prevRight = climbEdge(paint, 'right')
+    }
+    return paints
+  }
+  function climbChain(shapes, top, bottom) {
+    const paints = []
+    let parentBottom = null
+    for (let i = 0; i < shapes.length; i++) {
+      const shape = shapes[i]
+      const paint = i === 0
+        ? (shape === 'W' ? 'W:' + top : shape + ':' + top + ':' + bottom)
+        : climbSingle(shape, parentBottom, i + top.charCodeAt(0))
+      paints.push(paint)
+      parentBottom = climbEdge(paint, 'bottom')
+    }
+    let node = null
+    for (let i = paints.length - 1; i >= 0; i--) node = climbNode('p' + i, paints[i], node ? [node] : [])
+    return node
+  }
+  function climbRooted(rootSpec, childShapes, bias) {
+    const paints = climbWide(childShapes, rootSpec[2], bias)
+    if (!paints) return null
+    return climbNode('r', rootSpec[0] + ':' + rootSpec[1] + ':' + rootSpec[2], paints.map((paint, i) => climbNode('c' + i, paint)))
+  }
+  function climbHang(tree, childIndex, shape, id, bias) {
+    const parent = tree.children[childIndex] || tree.children[0]
+    parent.children = [climbNode(id, climbSingle(shape, climbEdge(parent.paint, 'bottom'), bias))]
+    return parent.children[0]
+  }
+  const CLIMB_PAIRS = [['DL', 'DR'], ['DR', 'DL'], ['L', 'L'], ['DL', 'L'], ['DR', 'L'], ['DL', 'W']]
+  const CLIMB_TRIOS = [['DL', 'DR', 'DL'], ['DR', 'DL', 'DR'], ['L', 'L', 'L'], ['DL', 'DR', 'W'], ['DL', 'W', 'DR'], ['L', 'DL', 'DR']]
+  const CLIMB_CHAINS = [
+    ['L', 'DL', 'DR', 'L'],
+    ['DL', 'L', 'DR', 'DL'],
+    ['DR', 'DL', 'L', 'DR'],
+    ['L', 'DR', 'DL', 'W'],
+    ['DL', 'DR', 'L', 'W'],
+    ['DR', 'L', 'DL', 'W'],
+    ['L', 'DL', 'L', 'DR'],
+  ]
+  function climbBuild(kind, salt) {
+    const root = CLIMB_ROOTS[salt % CLIMB_ROOTS.length]
+    const bias = salt * 3 + 1
+    if (kind === 'chain4' || kind === 'chain5') {
+      const shapes = CLIMB_CHAINS[salt % CLIMB_CHAINS.length].slice()
+      if (kind === 'chain5') shapes.push(['W', 'DL', 'DR', 'L'][salt % 4])
+      return climbChain(shapes, root[1], root[2])
+    }
+    if (kind === 'fork' || kind === 'deep') {
+      const pair = CLIMB_PAIRS[salt % CLIMB_PAIRS.length]
+      let tree = null
+      for (let shift = 0; shift < CLIMB_ROOTS.length && !tree; shift++) {
+        tree = climbRooted(CLIMB_ROOTS[(salt + shift) % CLIMB_ROOTS.length], pair, bias + shift)
+      }
+      if (!tree) return null
+      const tail = climbHang(tree, salt % 2, ['L', 'DL', 'DR', 'W'][salt % 4], 't', bias)
+      if (kind === 'deep') {
+        tail.children = [climbNode('g', climbSingle(['DL', 'DR', 'L', 'W'][(salt + 1) % 4], climbEdge(tail.paint, 'bottom'), bias + 2))]
+      }
+      return tree
+    }
+    const trio = CLIMB_TRIOS[salt % CLIMB_TRIOS.length]
+    let tree = null
+    for (let shift = 0; shift < CLIMB_ROOTS.length && !tree; shift++) {
+      tree = climbRooted(CLIMB_ROOTS[(salt + shift) % CLIMB_ROOTS.length], trio, bias + shift)
+    }
+    if (!tree) return null
+    if (kind === 'mixed' || kind === 'decoy' || kind === 'decoy-deep') {
+      const mid = climbHang(tree, 1, ['DL', 'DR', 'L', 'W'][salt % 4], 'm', bias + 4)
+      if (kind === 'decoy-deep') {
+        mid.children = [climbNode('g', climbSingle(['DR', 'L', 'DL', 'W'][(salt + 2) % 4], climbEdge(mid.paint, 'bottom'), bias + 5))]
+      }
+    }
+    return tree
+  }
+  function climbNodes(node, out) {
+    out.push(node)
+    for (const child of node.children || []) climbNodes(child, out)
+    return out
+  }
+  function climbDecoyFits(tree) {
+    const card = { gameId: 'decoy', paint: 'W:D', children: [] }
+    const drops = [{ type: 'rootAbove' }]
+    const walk = (node) => {
+      drops.push({ type: 'node', targetUid: node.gameId })
+      const kids = node.children || []
+      for (let i = 0; i <= kids.length; i++) {
+        const drop = { type: 'gap', parentUid: node.gameId }
+        if (kids[i - 1]) drop.prevUid = kids[i - 1].gameId
+        if (kids[i]) drop.nextUid = kids[i].gameId
+        drops.push(drop)
+      }
+      for (const child of kids) walk(child)
+    }
+    walk(tree)
+    return drops.some((drop) => gameGrammar.canAdd(tree, card, drop))
+  }
+
+  for (const [tier, count] of CLIMB_TIER_SIZES) {
+    for (let slot = 0; slot < count; slot++) {
+      const number = gameLevels.length + 1
+      const variant = slot >= CLIMB_ARCHETYPES.length ? 1 : 0
+      const extraHard = slot === CLIMB_ARCHETYPES.length
+      const arch = extraHard ? ['decoy-deep', 'Decoy Deep'] : CLIMB_ARCHETYPES[slot % CLIMB_ARCHETYPES.length]
+      const kind = arch[0]
+      const salt = tier * 17 + slot * 5 + 3
+      let tree = null
+      for (let attempt = 0; attempt < 8 && !tree; attempt++) {
+        const built = climbBuild(kind === 'decoy' ? 'decoy' : kind, salt + attempt * 11)
+        if (!built || !gameGrammar.contacts(built)) continue
+        const ids = climbNodes(built, []).map((node) => node.gameId)
+        if (new Set(ids).size !== ids.length) continue
+        if ((kind === 'decoy' || kind === 'decoy-deep') && climbDecoyFits(built)) continue
+        tree = built
+      }
+      if (!tree) throw new Error('Could not build level ' + number)
+      const nodes = climbNodes(tree, [])
+      const anchor = nodes[(number + tier + slot) % nodes.length]
+      const name = variant && CLIMB_ALT[kind] ? CLIMB_ALT[kind] : arch[1]
+      const decoy = kind === 'decoy' || kind === 'decoy-deep' ? { gameId: 'decoy', paint: 'W:D' } : null
+      addOpenLevel('climb-' + number, number + ' · ' + name, tree, anchor.gameId, { tier, decoy })
+    }
+  }
+
+  const GAME_ADAPTIVE = '_adaptive'
+
   function gameProgress() {
     const value = readJson(GAME_KEY, {})
     return value && typeof value === 'object' ? value : {}
+  }
+
+  function adaptiveState(progress) {
+    const raw = progress && progress[GAME_ADAPTIVE]
+    const clean = Number.isInteger(raw?.clean) && raw.clean > 0 ? raw.clean : 0
+    const tier = Number.isInteger(raw?.tier) && raw.tier > 0 ? raw.tier : 1
+    const played = raw?.played && typeof raw.played === 'object' ? raw.played : {}
+    return { clean, tier, played }
+  }
+
+  function writeProgress(progress) {
+    try { localStorage.setItem(GAME_KEY, JSON.stringify(progress)) } catch (_error) {}
+    return progress
+  }
+
+  function pickInTier(tier, progress, played, avoidId) {
+    const group = gameLevels.filter((level) => level.tier === tier)
+    const unsolved = group.filter((level) => !progress[level.id])
+    if (unsolved.length) {
+      const others = avoidId ? unsolved.filter((level) => level.id !== avoidId) : unsolved
+      return (others.length ? others : unsolved)[0]
+    }
+    const pool = avoidId ? group.filter((level) => level.id !== avoidId) : group.slice()
+    const list = (pool.length ? pool : group).slice()
+    list.sort((a, b) => (played[a.id] || 0) - (played[b.id] || 0))
+    return list[0] || null
+  }
+
+  // One JSON object: solved level ids stay as timestamps, streak lives under
+  // _adaptive, so the blob can later hang off a user without a second store.
+  function recordSolve(progress, levelId, wrongDrops) {
+    const level = gameLevels.find((item) => item.id === levelId)
+    const state = adaptiveState(progress)
+    const clean = wrongDrops > 0 ? 0 : state.clean + 1
+    const now = Date.now()
+    const next = { ...(progress || {}), [levelId]: now }
+    next[GAME_ADAPTIVE] = {
+      clean,
+      tier: level ? level.tier : state.tier,
+      played: { ...state.played, [levelId]: now },
+    }
+    return next
+  }
+
+  function chooseNext(progress, justSolvedId) {
+    const state = adaptiveState(progress)
+    const level = gameLevels.find((item) => item.id === justSolvedId)
+    const tier = level ? level.tier : state.tier
+    if (state.clean >= 3 && gameLevels.some((item) => item.tier === tier + 1)) {
+      return {
+        level: pickInTier(tier + 1, progress, state.played, null),
+        leveledUp: true,
+        adaptive: { clean: 0, tier: tier + 1, played: state.played },
+      }
+    }
+    return {
+      level: pickInTier(tier, progress, state.played, justSolvedId),
+      leveledUp: false,
+      adaptive: { clean: state.clean, tier, played: state.played },
+    }
   }
 
   function renderGamePath() {
     const path = document.getElementById('logyq-game-path')
     if (!path) return
     const progress = gameProgress()
-    path.innerHTML = gameLevels.map((level) => {
+    let html = ''
+    let seen = 0
+    for (const level of gameLevels) {
+      if (level.tier !== seen) {
+        seen = level.tier
+        html += '<li class="logyq-tier-head">Tier ' + level.tier + '</li>'
+      }
       const done = !!progress[level.id]
-      return '<li><button type="button" data-game-level="' + level.id + '"' +
+      html += '<li><button type="button" data-game-level="' + level.id + '"' +
         (done ? ' class="is-cleared"' : '') + '>' +
         level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
-    }).join('')
+    }
+    path.innerHTML = html
   }
 
   function ensureGamePaint() {
@@ -7067,7 +7342,19 @@
     }
   }
 
-  function beginGameLevel(level) {
+  function noteWrongDrop() {
+    if (!app.game || app.game.cleared) return
+    app.game.wrongDrops = (app.game.wrongDrops || 0) + 1
+  }
+
+  function showGameTier(level, levelUp) {
+    const tierEl = document.getElementById('logyq-game-tier')
+    if (!tierEl) return
+    tierEl.textContent = 'Tier ' + level.tier
+    if (tierEl.classList) tierEl.classList.toggle('is-up', !!levelUp)
+  }
+
+  function beginGameLevel(level, opts) {
     if (!level || !gameGrammar) return
     const origin = app.game?.origin || (app.curriculum ? {
       current: { id: null, name: DEFAULT_NAME }, hasOpenMap: false,
@@ -7077,16 +7364,32 @@
       lastSnapshot: app.lastSnapshot, snapshot: bridge.snapshot(),
     })
     leaveCurriculumPlay()
-    app.game = { id: level.id, origin, cleared: false }
+    const progress = gameProgress()
+    const state = adaptiveState(progress)
+    const levelUp = !!opts?.levelUp
+    const clean = !levelUp && state.tier !== level.tier ? 0 : state.clean
+    writeProgress({
+      ...progress,
+      [GAME_ADAPTIVE]: {
+        clean,
+        tier: level.tier,
+        played: { ...state.played, [level.id]: Date.now() },
+      },
+    })
+    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0 }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
     app.lastSnapshot = 'game'
     document.body.classList.add('logyq-game', 'logyq-map-open')
     document.getElementById('logyq-game-next').hidden = true
+    showGameTier(level, levelUp)
     window.__logyqGameDropAllowed = ({ tree, movingUid, drop, trash, multi }) => {
       if (trash || multi) return false
       const allowed = gameGrammar.canDrop(tree, movingUid, drop)
-      if (!allowed && drop) gameStatus('Those visible edges do not fit. Try the other order.')
+      if (!allowed && drop) {
+        noteWrongDrop()
+        gameStatus('Those visible edges do not fit. Try the other order.')
+      }
       return allowed
     }
     window.__logyqGameBankNode = (word) => {
@@ -7097,13 +7400,16 @@
       if (words.length !== 1) return false
       const card = level.bankCards?.[words[0]]
       const allowed = !!card && gameGrammar.canAdd(tree, card, drop)
-      if (!allowed) gameStatus('That card does not fit there. Try the other side of the tree.')
+      if (!allowed && drop) {
+        noteWrongDrop()
+        gameStatus('That card does not fit there. Try the other side of the tree.')
+      }
       return allowed
     }
     ensureGamePaint()
     updateMapName()
     hideLibrary()
-    gameStatus(level.hint)
+    gameStatus(levelUp ? 'Level up!' : level.hint)
     bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice())
     setSaveState('saved')
   }
@@ -7114,12 +7420,11 @@
     const level = gameLevels.find((item) => item.id === session.id)
     if (!level || !gameGrammar.complete(snapshot?.tree, level.ids)) return false
     session.cleared = true
-    const progress = gameProgress()
-    progress[level.id] = Date.now()
-    try { localStorage.setItem(GAME_KEY, JSON.stringify(progress)) } catch (_error) {}
-    const next = gameLevels[gameLevels.indexOf(level) + 1]
-    gameStatus(next ? 'It fits!' : 'All ' + gameLevels.length + ' levels cleared.', true)
-    document.getElementById('logyq-game-next').hidden = !next
+    const progress = writeProgress(recordSolve(gameProgress(), level.id, session.wrongDrops || 0))
+    const solvedCount = gameLevels.filter((item) => progress[item.id]).length
+    const upcoming = chooseNext(progress, level.id).level
+    gameStatus(solvedCount >= gameLevels.length ? 'All ' + gameLevels.length + ' levels cleared.' : 'It fits!', true)
+    document.getElementById('logyq-game-next').hidden = !upcoming
     return true
   }
 
@@ -7139,13 +7444,20 @@
   })
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
   document.getElementById('logyq-game-next')?.addEventListener('click', () => {
-    const index = gameLevels.findIndex((level) => level.id === app.game?.id)
-    if (app.game?.cleared && gameLevels[index + 1]) beginGameLevel(gameLevels[index + 1])
+    if (!app.game?.cleared) return
+    const progress = gameProgress()
+    const choice = chooseNext(progress, app.game.id)
+    if (!choice.level) return
+    writeProgress({ ...progress, [GAME_ADAPTIVE]: choice.adaptive })
+    beginGameLevel(choice.level, { levelUp: choice.leveledUp })
   })
   document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
     openLibrary().then(() => setHomeTab('game'))
   })
-  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath }
+  preview.game = {
+    levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
+    recordSolve, chooseNext,
+  }
   // FOLDER_PURE_START
   function cloneFolderIndex(index) {
     return {
