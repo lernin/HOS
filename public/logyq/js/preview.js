@@ -738,7 +738,7 @@
         <button type="button" id="logyq-curriculum-start">Start</button>
       </div>
       <div class="logiq-backdrop" id="logiq-pin" aria-hidden="true">
-        <form class="logiq-pin-card" id="logiq-pin-form"><h2>Connect</h2><p>Enter the Lab PIN to open live maps. It stays in this LOGYQ session only.</p><input id="logiq-pin-input" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Lab PIN" required><span class="logiq-pin-error">That PIN was not accepted.</span><div class="logiq-pin-actions"><button type="button" class="logiq-icon-btn" id="logiq-pin-cancel" aria-label="Cancel">×</button><button class="logiq-primary" type="submit">Connect</button></div></form>
+        <form class="logiq-pin-card" id="logiq-pin-form"><h2>Voice</h2><p>Enter the Lab PIN to transcribe speech. It stays in this LOGYQ session only.</p><input id="logiq-pin-input" type="password" inputmode="numeric" autocomplete="current-password" aria-label="Lab PIN" required><span class="logiq-pin-error">That PIN was not accepted.</span><div class="logiq-pin-actions"><button type="button" class="logiq-icon-btn" id="logiq-pin-cancel" aria-label="Cancel">×</button><button class="logiq-primary" type="submit">Continue</button></div></form>
       </div>
     `)
 
@@ -4524,16 +4524,14 @@
   }
 
   async function rpc(name, body) {
+    const args = { ...(body || {}) }
+    delete args.pin
     let response
     try {
-      response = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
+      response = await fetch('/api/logyq-maps', {
         method: 'POST',
-        headers: {
-          apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, args }),
         cache: 'no-store',
       })
     } catch (cause) {
@@ -4543,8 +4541,8 @@
     let data = null
     try { data = text ? JSON.parse(text) : null } catch (_error) { data = text }
     if (!response.ok) {
-      const message = data?.message || data?.hint || `Request failed (${response.status})`
-      throw Object.assign(new Error(message), { status: response.status, auth: response.status < 500 })
+      const message = data?.message || data?.hint || data?.error || `Request failed (${response.status})`
+      throw Object.assign(new Error(message), { status: response.status, auth: response.status === 401 || response.status === 403 })
     }
     return data
   }
@@ -4638,9 +4636,6 @@
     }
     if (!navigator.onLine) return setSaveState('offline')
 
-    const pin = await getPin(true)
-    if (!pin) return setSaveState('offline')
-
     let savedOk = false
     app.saving = true
     setSaveState('saving')
@@ -4651,7 +4646,7 @@
         wordBank: pending.word_bank,
       })
       if (pending.id) {
-        const gate = await reconcileBeforeSave(pending, pin)
+        const gate = await reconcileBeforeSave(pending)
         if (gate?.skip) {
           const latest = readJson(PENDING_KEY, null)
           if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
@@ -4661,13 +4656,11 @@
         if (gate?.payload) payload = gate.payload
       }
       const id = await rpc('logiq_map_save', {
-        pin,
         map_name: payload.name,
         map_tree: payload.tree,
         map_word_bank: payload.word_bank,
         map_id: pending.id || null,
       })
-      acceptPin(pin)
       const savedId = typeof id === 'string' ? id : (id?.id || pending.id)
       app.current = { id: savedId, name: payload.name }
       if (!pending.id && savedId && pending.folder_id) {
@@ -4684,8 +4677,7 @@
       if (latest?.updated_at === pending.updated_at) localStorage.removeItem(PENDING_KEY)
       setSaveState(localStorage.getItem(PENDING_KEY) ? 'saving' : 'saved')
       savedOk = true
-    } catch (error) {
-      if (error.auth) forgetPin()
+    } catch (_error) {
       setSaveState('offline')
     } finally {
       app.saving = false
@@ -4742,6 +4734,7 @@
     ui.pin.setAttribute('aria-hidden', 'true')
     const resolve = pinResolver
     pinResolver = null
+    if (value) acceptPin(value)
     resolve(value || null)
   }
 
@@ -4807,27 +4800,12 @@
   }
 
   async function listLiveMaps() {
-    let keepError = false
-    for (;;) {
-      const pin = await getPin(true, { keepError })
-      keepError = false
-      if (!pin) throw Object.assign(new Error('Lab PIN required'), { locked: true })
-      try {
-        const rows = await rpc('logiq_map_list', { pin })
-        if (!Array.isArray(rows)) throw new Error('Could not read the map list.')
-        acceptPin(pin)
-        const list = rows.slice()
-        list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
-        cacheLibrary(list)
-        return list
-      } catch (error) {
-        if (!error.auth) throw error
-        forgetPin()
-        ui.pinError.textContent = 'That PIN was not accepted. Your maps are still saved.'
-        ui.pinError.classList.add('is-visible')
-        keepError = true
-      }
-    }
+    const rows = await rpc('logiq_map_list', {})
+    if (!Array.isArray(rows)) throw new Error('Could not read the map list.')
+    const list = rows.slice()
+    list.sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+    cacheLibrary(list)
+    return list
   }
 
   function refreshLibrary() {
@@ -4842,10 +4820,9 @@
       app.libraryStatus = 'live'
       writeFolderIndex(prunePlacements(readFolderIndex(), app.libraryRows))
       renderLibrary()
-    } catch (error) {
-      if (error.auth) forgetPin()
+    } catch (_error) {
       app.libraryRows = readCachedLibrary()
-      app.libraryStatus = error.locked ? 'locked' : 'error'
+      app.libraryStatus = 'error'
       renderLibrary()
     }
   }
@@ -4931,10 +4908,6 @@
     if (app.libraryFolderId !== open) app.libraryFolderId = open
     const head = renderFolderCrumbs(folderCrumbs(index, open)) + (app.folderComposer ? renderFolderComposer() : '')
     if (!rows.length && !index.folders.length && !open) {
-      if (status === 'locked') {
-        ui.mapList.innerHTML = `${head}<div class="logiq-empty"><p>Your maps are still saved. Enter the Lab PIN to open them.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>`
-        return
-      }
       if (status !== 'live') {
         ui.mapList.innerHTML = `${head}<div class="logiq-empty"><p>${navigator.onLine ? 'Could not load maps. Nothing was deleted.' : 'Offline. Saved changes will retry.'}</p><button type="button" class="logiq-primary" data-connect>Try again</button></div>`
         return
@@ -4943,7 +4916,7 @@
       return
     }
     const view = libraryView(index, rows, open)
-    const note = status === 'live' ? '' : '<div class="logiq-library-note"><p>Showing maps last opened on this device. Connect to refresh the Lab. Nothing was deleted.</p><button type="button" class="logiq-primary" data-connect>Connect</button></div>'
+    const note = status === 'live' ? '' : '<div class="logiq-library-note"><p>Showing maps last opened on this device. Nothing was deleted.</p><button type="button" class="logiq-primary" data-connect>Try again</button></div>'
     const foldersHtml = view.folders.map((folder) => renderFolderRow(index, rows, folder)).join('')
     const mapsHtml = view.maps.map((row) => renderMapRow(index, row)).join('')
     const empty = !view.folders.length && !view.maps.length
@@ -5140,8 +5113,6 @@
   }
 
   async function renameMap(row, name) {
-    const pin = await getPin(true)
-    if (!pin) return
     try {
       const payload = encodeMapRecord({
         name,
@@ -5149,13 +5120,11 @@
         wordBank: row.word_bank,
       })
       await rpc('logiq_map_save', {
-        pin,
         map_name: payload.name,
         map_tree: payload.tree,
         map_word_bank: payload.word_bank,
         map_id: row.id,
       })
-      acceptPin(pin)
       row.name = payload.name
       if (row.id === app.current.id) {
         app.current.name = payload.name
@@ -5164,18 +5133,14 @@
       }
       renderLibrary()
       setSaveState('saved')
-    } catch (error) {
-      if (error.auth) forgetPin()
+    } catch (_error) {
       setSaveState('offline')
     }
   }
 
   async function deleteMap(row) {
-    const pin = await getPin(true)
-    if (!pin) return
     try {
-      await rpc('logiq_map_delete', { pin, map_id: row.id })
-      acceptPin(pin)
+      await rpc('logiq_map_delete', { map_id: row.id })
       writeFolderIndex(placeMap(readFolderIndex(), row.id, null))
       app.libraryRows = app.libraryRows.filter((item) => item.id !== row.id)
       cacheLibrary(app.libraryRows)
@@ -5187,8 +5152,7 @@
       }
       renderLibrary()
       if (!app.libraryRows.length) openHomeLibrary()
-    } catch (error) {
-      if (error.auth) forgetPin()
+    } catch (_error) {
       setSaveState('offline')
     }
   }
@@ -5394,9 +5358,9 @@
     if (plan.action === 'merge') return mergeCommit(row, live, app.editClaim?.submit ? app.editClaim : null)
   }
 
-  async function reconcileBeforeSave(pending, pin) {
+  async function reconcileBeforeSave(pending) {
     let rows
-    try { rows = await rpc('logiq_map_list', { pin }) } catch (_error) { return null }
+    try { rows = await rpc('logiq_map_list', {}) } catch (_error) { return null }
     if (!Array.isArray(rows)) return null
     const row = rows.find((item) => item.id === pending.id)
     if (!row) return null
@@ -5453,10 +5417,8 @@
     if (document.body.classList.contains('v2-branch-drag') || document.body.classList.contains('dragging-mode')) return
     const gesture = preview.gestures?.session
     if (gesture?.flick?.active?.size || gesture?.hold?.race || gesture?.hold?.pan) return
-    const pin = readStoredPin()
-    if (!pin) return
     let rows
-    try { rows = await rpc('logiq_map_list', { pin }) } catch (_error) { return }
+    try { rows = await rpc('logiq_map_list', {}) } catch (_error) { return }
     if (!Array.isArray(rows)) return
     const row = rows.find((item) => item.id === app.current.id)
     if (!row) return
@@ -6485,19 +6447,10 @@
   }
 
   async function loadThekonyms() {
-    const pin = (() => { try { return sessionStorage.getItem(PIN_KEY) } catch (_error) { return '' } })()
-    if (!pin) {
-      thekonymState.rows = []
-      thekonymState.status = 'nopin'
-      paintThekonymFaces()
-      renderThekonymCard()
-      renderThekonymList()
-      return
-    }
     thekonymState.status = 'reading'
     renderThekonymCard()
     try {
-      const data = await rpc('lab_thekonym_read', { pin, term_id: null })
+      const data = await rpc('lab_thekonym_read', { term_id: null })
       if (!thekonymState.on) return
       thekonymState.rows = Array.isArray(data) ? data : []
       thekonymState.status = 'ready'

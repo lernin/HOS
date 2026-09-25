@@ -429,19 +429,10 @@
   }
 
   async function loadThekonyms() {
-    const pin = (() => { try { return sessionStorage.getItem(PIN_KEY) } catch (_error) { return '' } })()
-    if (!pin) {
-      thekonymState.rows = []
-      thekonymState.status = 'nopin'
-      paintThekonymFaces()
-      renderThekonymCard()
-      renderThekonymList()
-      return
-    }
     thekonymState.status = 'reading'
     renderThekonymCard()
     try {
-      const data = await rpc('lab_thekonym_read', { pin, term_id: null })
+      const data = await rpc('lab_thekonym_read', { term_id: null })
       if (!thekonymState.on) return
       thekonymState.rows = Array.isArray(data) ? data : []
       thekonymState.status = 'ready'

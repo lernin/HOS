@@ -2,7 +2,7 @@
 
 ## Live store
 
-Live maps use the same Procedia table and PIN-guarded RPCs as LOGiQ: `public.logiq_maps` on project `jzaghifuhinkzzhiojre`, via `logiq_map_list` / `logiq_map_save` / `logiq_map_delete`. Publishable URL/key match `src/lib/supabase.ts` and LOGiQ preview. The Lab PIN is `sessionStorage.logyq_lab_pin_v1`.
+Live maps use the same Procedia table and PIN-guarded RPCs as LOGiQ: `public.logiq_maps` on project `jzaghifuhinkzzhiojre`, via `logiq_map_list` / `logiq_map_save` / `logiq_map_delete`. The browser calls `POST /api/logyq-maps`. That route adds the Lab PIN on the server and calls the RPCs with the publishable key. The PIN is not in the LOGYQ page. Speech transcription still uses `sessionStorage.logyq_lab_pin_v1` only when she records.
 
 A row is:
 
@@ -90,7 +90,7 @@ My maps can group maps in nested folders. This is **not** a column on `public.lo
 Prior consultant notes said 0 maps should drop into a one-card editor already editing. That forced wipe-edit was the “big square slap” (keyboard wall on a blank root). Library is now home for both empty and populated accounts.
 
 - **0 maps:** recents library, empty state + dominant **+ New**. No chooser. No first-run coaching / gamification. No forced editor. "No maps yet." is only for a successful `logiq_map_list` that returns zero rows.
-- **Missing PIN:** a new origin has no `sessionStorage` PIN. The Connect dialog opens. Cancel, a rejected PIN, or a failed list says the maps are still saved and offers Connect again. That is not an empty library. The PIN is stored only after a Lab RPC accepts it.
+- **No map PIN prompt.** My maps loads through `/api/logyq-maps` with no Connect dialog. A failed list is not an empty library: it says the maps could not be loaded, or shows the last list saved on this device. "No maps yet." is only for a successful list that returns zero rows.
 - **1+ maps:** same library, recent first (`updated_at` desc), **+ New**. Tap a row to open. Maps icon / Trees returns to the library.
 - **New / +:** one normal blank root card, not already editing. Double-tap / E still edits after she is in the canvas.
 - Close does not dump you onto an empty canvas if no map is open.
