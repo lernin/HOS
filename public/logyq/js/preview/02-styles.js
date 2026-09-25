@@ -37,6 +37,7 @@
       #logiq-library[data-shelf="game"] #logyq-game-levels{display:block}
       #logyq-game-path{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
       #logyq-game-path button{width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
+      #logyq-game-path button.is-cleared{border-color:#86efac;background:#f0fdf4}
       #logyq-game-path button:disabled{cursor:not-allowed;color:#94a3b8;background:#f8fafc}
       #logyq-game-path span{display:block;font-size:13px;font-weight:500;color:#64748b;margin-top:3px}
       #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(15,23,42,.08)}

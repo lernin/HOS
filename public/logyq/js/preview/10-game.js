@@ -45,8 +45,8 @@
     }
   }
 
-  // Open playtest expansion: chains first, then branches. These are deliberately
-  // unlocked so the learning sequence can be sampled and tuned out of order.
+  // Open playtest expansion: chains first, then branches. Every level stays
+  // selectable so the learning sequence can be sampled and tuned out of order.
   function addOpenLevel(id, title, tree, anchorId) {
     const nodes = []
     ;(function walk(n){ nodes.push(n); for (const x of n.children || []) walk(x) })(tree)
@@ -86,10 +86,10 @@
     const path = document.getElementById('logyq-game-path')
     if (!path) return
     const progress = gameProgress()
-    path.innerHTML = gameLevels.map((level, index) => {
-      const unlocked = index === 0 || !!progress[gameLevels[index - 1].id]
+    path.innerHTML = gameLevels.map((level) => {
       const done = !!progress[level.id]
-      return '<li><button type="button" data-game-level="' + level.id + '" ' + (unlocked ? '' : 'disabled') + '>' +
+      return '<li><button type="button" data-game-level="' + level.id + '"' +
+        (done ? ' class="is-cleared"' : '') + '>' +
         level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
     }).join('')
   }
@@ -221,7 +221,7 @@
     progress[level.id] = Date.now()
     try { localStorage.setItem(GAME_KEY, JSON.stringify(progress)) } catch (_error) {}
     const next = gameLevels[gameLevels.indexOf(level) + 1]
-    gameStatus(next ? 'It fits! Next level unlocked.' : 'All 15 two-card levels cleared.', true)
+    gameStatus(next ? 'It fits!' : 'All ' + gameLevels.length + ' levels cleared.', true)
     document.getElementById('logyq-game-next').hidden = !next
     return true
   }
@@ -235,9 +235,9 @@
 
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-game-level]')
-    if (!button || button.disabled) return
+    if (!button) return
     const index = gameLevels.findIndex((level) => level.id === button.dataset.gameLevel)
-    if (index > 0 && !gameProgress()[gameLevels[index - 1].id]) return
+    if (index < 0) return
     beginGameLevel(gameLevels[index])
   })
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
@@ -248,4 +248,4 @@
   document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
     openLibrary().then(() => setHomeTab('game'))
   })
-  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay }
+  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath }

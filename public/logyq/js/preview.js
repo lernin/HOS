@@ -323,6 +323,7 @@
       #logiq-library[data-shelf="game"] #logyq-game-levels{display:block}
       #logyq-game-path{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
       #logyq-game-path button{width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
+      #logyq-game-path button.is-cleared{border-color:#86efac;background:#f0fdf4}
       #logyq-game-path button:disabled{cursor:not-allowed;color:#94a3b8;background:#f8fafc}
       #logyq-game-path span{display:block;font-size:13px;font-weight:500;color:#64748b;margin-top:3px}
       #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(15,23,42,.08)}
@@ -6943,6 +6944,38 @@
     }
   }
 
+  // Open playtest expansion: chains first, then branches. Every level stays
+  // selectable so the learning sequence can be sampled and tuned out of order.
+  function addOpenLevel(id, title, tree, anchorId) {
+    const nodes = []
+    ;(function walk(n){ nodes.push(n); for (const x of n.children || []) walk(x) })(tree)
+    const anchor = nodes.find(n => n.gameId === anchorId) || nodes[0]
+    const bankCards = {}, bank = []
+    for (const n of nodes) if (n.gameId !== anchor.gameId) {
+      const key = '__TREE_CARD__:' + id + ':' + n.gameId
+      bank.push(key); bankCards[key] = { ...n, children: [] }
+    }
+    gameLevels.push({ id, title, hint: '', ids: nodes.map(n => n.gameId),
+      tree: { ...anchor, children: [] }, bank, bankCards })
+  }
+  const chainSets = [
+    ['L:A:B','DL:B:C','DR:C:D'], ['DL:A:B','L:B:C','DR:C:D'],
+    ['DR:A:B','DL:B:C','L:C:D'], ['L:A:B','DR:B:C','DL:C:D']
+  ]
+  for (let round=0; round<3; round++) chainSets.forEach((p,i) => {
+    const t={name:'',gameId:'a',paint:p[0],children:[{name:'',gameId:'b',paint:p[1],children:[{name:'',gameId:'c',paint:p[2],children:[]}]}]}
+    addOpenLevel('chain-'+round+'-'+i, (16+round*4+i)+' · Chain', t, ['a','b','c'][(round+i)%3])
+  })
+  const branches = [
+    ['L:A:B','DL:B:C','DR:B:D'], ['DL:A:B','DR:B:C','DL:B:D'],
+    ['DR:A:B','DL:B:C','DR:B:D'], ['L:A:B','DR:B:C','DL:B:D']
+  ]
+  for (let round=0; round<3; round++) branches.forEach((p,i) => {
+    const t={name:'',gameId:'a',paint:p[0],children:[
+      {name:'',gameId:'b',paint:p[1],children:[]},{name:'',gameId:'c',paint:p[2],children:[]}]}
+    addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
+  })
+
   function gameProgress() {
     const value = readJson(GAME_KEY, {})
     return value && typeof value === 'object' ? value : {}
@@ -6952,11 +6985,11 @@
     const path = document.getElementById('logyq-game-path')
     if (!path) return
     const progress = gameProgress()
-    path.innerHTML = gameLevels.map((level, index) => {
-      const unlocked = index === 0 || !!progress[gameLevels[index - 1].id]
+    path.innerHTML = gameLevels.map((level) => {
       const done = !!progress[level.id]
-      return '<li><button type="button" data-game-level="' + level.id + '" ' + (unlocked ? '' : 'disabled') + '>' +
-        level.title + (done ? ' ✓' : '') + '<span>' + (unlocked ? level.hint : 'Clear the previous level first.') + '</span></button></li>'
+      return '<li><button type="button" data-game-level="' + level.id + '"' +
+        (done ? ' class="is-cleared"' : '') + '>' +
+        level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
     }).join('')
   }
 
@@ -7087,7 +7120,7 @@
     progress[level.id] = Date.now()
     try { localStorage.setItem(GAME_KEY, JSON.stringify(progress)) } catch (_error) {}
     const next = gameLevels[gameLevels.indexOf(level) + 1]
-    gameStatus(next ? 'It fits! Next level unlocked.' : 'All 15 two-card levels cleared.', true)
+    gameStatus(next ? 'It fits!' : 'All ' + gameLevels.length + ' levels cleared.', true)
     document.getElementById('logyq-game-next').hidden = !next
     return true
   }
@@ -7101,9 +7134,9 @@
 
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-game-level]')
-    if (!button || button.disabled) return
+    if (!button) return
     const index = gameLevels.findIndex((level) => level.id === button.dataset.gameLevel)
-    if (index > 0 && !gameProgress()[gameLevels[index - 1].id]) return
+    if (index < 0) return
     beginGameLevel(gameLevels[index])
   })
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
@@ -7114,7 +7147,7 @@
   document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
     openLibrary().then(() => setHomeTab('game'))
   })
-  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay }
+  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath }
   // FOLDER_PURE_START
   function cloneFolderIndex(index) {
     return {
