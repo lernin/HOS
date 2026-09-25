@@ -105,31 +105,24 @@
     }
   }
 
-  const GAME_COLORS = { A: '#60a5fa', B: '#fb923c', C: '#86efac', D: '#f0abfc' }
-
   function gameColor(paint) {
-    const parsed = gameGrammar.parsePaint(paint)
-    if (!parsed) return '#cbd5e1'
-    if (parsed.shape === 'W') return GAME_COLORS[parsed.a] || '#cbd5e1'
+    const spec = gameGrammar.paintSpec(paint)
+    if (!spec) return '#cbd5e1'
+    if (spec.solid) return spec.solid
     ensureGamePaint()
     const svg = document.getElementById('canvas')
     const defs = svg?.querySelector('#logyq-game-defs')
-    const safe = paint.replace(/[^A-Za-z0-9_-]/g, '-')
+    const safe = String(paint).replace(/[^A-Za-z0-9_-]/g, '-')
     const id = 'logyq-game-' + safe
     if (!defs?.querySelector('#' + id)) {
       const ns = 'http://www.w3.org/2000/svg'
       const gradient = document.createElementNS(ns, 'linearGradient')
       gradient.id = id
-      const vector = parsed.shape === 'L'
-        ? { x1: '0%', y1: '0%', x2: '0%', y2: '100%' }
-        : parsed.shape === 'DL'
-          ? { x1: '100%', y1: '0%', x2: '0%', y2: '100%' }
-          : { x1: '0%', y1: '0%', x2: '100%', y2: '100%' }
-      for (const [key, value] of Object.entries(vector)) gradient.setAttribute(key, value)
-      for (const [offset, letter] of [['0%', parsed.a], ['49.9%', parsed.a], ['50%', parsed.b], ['100%', parsed.b]]) {
+      for (const [key, value] of Object.entries(spec.split)) gradient.setAttribute(key, value)
+      for (const [offset, color] of spec.stops) {
         const stop = document.createElementNS(ns, 'stop')
         stop.setAttribute('offset', offset)
-        stop.setAttribute('stop-color', GAME_COLORS[letter] || '#cbd5e1')
+        stop.setAttribute('stop-color', color)
         gradient.appendChild(stop)
       }
       defs?.appendChild(gradient)

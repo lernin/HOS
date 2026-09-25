@@ -324,6 +324,10 @@
       #logyq-game-path{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
       #logyq-game-path button{width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
       #logyq-game-path button.is-cleared{border-color:#86efac;background:#f0fdf4}
+      body.logyq-game .logyq-shape-chip{position:relative;box-sizing:border-box;width:auto;max-width:none;padding:2px;background:transparent;border:0;min-height:0}
+      body.logyq-game .logyq-shape-key{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+      body.logyq-game .logyq-shape-chip svg{display:block;height:30px;width:auto}
+      body.logyq-game .logyq-shape-chip.is-outlined{background:transparent;box-shadow:0 0 0 2px #60a5fa}
       #logyq-game-path button:disabled{cursor:not-allowed;color:#94a3b8;background:#f8fafc}
       #logyq-game-path span{display:block;font-size:13px;font-weight:500;color:#64748b;margin-top:3px}
       #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(15,23,42,.08)}
@@ -534,6 +538,7 @@
         #logyq-bank-chips{flex:1 1 auto;width:100%;min-height:0;flex-direction:column;align-items:stretch;justify-content:flex-start;overflow-x:hidden;overflow-y:auto}
         #logyq-bank-all{margin:8px 0 0;align-self:stretch}
         #Dock .chip,#Dock.dock-left .chip{touch-action:none;width:100%;max-width:100%}
+        body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{width:auto;max-width:none;align-self:center}
         #logyq-map-title{left:calc(148px + env(safe-area-inset-left) + 12px)}
         #logyq-warehouse,#logyq-bank-trash{left:calc(148px + env(safe-area-inset-left) + 8px);right:auto}
         #logyq-warehouse{top:max(8px,env(safe-area-inset-top));bottom:auto}
@@ -7004,31 +7009,24 @@
     }
   }
 
-  const GAME_COLORS = { A: '#60a5fa', B: '#fb923c', C: '#86efac', D: '#f0abfc' }
-
   function gameColor(paint) {
-    const parsed = gameGrammar.parsePaint(paint)
-    if (!parsed) return '#cbd5e1'
-    if (parsed.shape === 'W') return GAME_COLORS[parsed.a] || '#cbd5e1'
+    const spec = gameGrammar.paintSpec(paint)
+    if (!spec) return '#cbd5e1'
+    if (spec.solid) return spec.solid
     ensureGamePaint()
     const svg = document.getElementById('canvas')
     const defs = svg?.querySelector('#logyq-game-defs')
-    const safe = paint.replace(/[^A-Za-z0-9_-]/g, '-')
+    const safe = String(paint).replace(/[^A-Za-z0-9_-]/g, '-')
     const id = 'logyq-game-' + safe
     if (!defs?.querySelector('#' + id)) {
       const ns = 'http://www.w3.org/2000/svg'
       const gradient = document.createElementNS(ns, 'linearGradient')
       gradient.id = id
-      const vector = parsed.shape === 'L'
-        ? { x1: '0%', y1: '0%', x2: '0%', y2: '100%' }
-        : parsed.shape === 'DL'
-          ? { x1: '100%', y1: '0%', x2: '0%', y2: '100%' }
-          : { x1: '0%', y1: '0%', x2: '100%', y2: '100%' }
-      for (const [key, value] of Object.entries(vector)) gradient.setAttribute(key, value)
-      for (const [offset, letter] of [['0%', parsed.a], ['49.9%', parsed.a], ['50%', parsed.b], ['100%', parsed.b]]) {
+      for (const [key, value] of Object.entries(spec.split)) gradient.setAttribute(key, value)
+      for (const [offset, color] of spec.stops) {
         const stop = document.createElementNS(ns, 'stop')
         stop.setAttribute('offset', offset)
-        stop.setAttribute('stop-color', GAME_COLORS[letter] || '#cbd5e1')
+        stop.setAttribute('stop-color', color)
         gradient.appendChild(stop)
       }
       defs?.appendChild(gradient)
