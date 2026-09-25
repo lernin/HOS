@@ -8,11 +8,37 @@
 (() => {
   'use strict'
 
+  const GAME_COLORS = { A: '#60a5fa', B: '#fb923c', C: '#86efac', D: '#f0abfc' }
+  const SHAPE_NAMES = { W: 'Whole', L: 'Layer Cake', DL: 'Diagonal Left', DR: 'Diagonal Right' }
+  const SPLIT = {
+    L: { x1: '0%', y1: '0%', x2: '0%', y2: '100%' },
+    DL: { x1: '100%', y1: '0%', x2: '0%', y2: '100%' },
+    DR: { x1: '0%', y1: '0%', x2: '100%', y2: '100%' },
+  }
+
   function parsePaint(paint) {
     const [shape, a, b] = String(paint || '').split(':')
     if (shape === 'W' && a) return { shape, a, b: a }
     if ((shape === 'L' || shape === 'DL' || shape === 'DR') && a && b) return { shape, a, b }
     return null
+  }
+
+  // One description of the card face. The canvas gradient and the Word Bank
+  // thumbnail both read this, so the split is not redrawn in two places.
+  function paintSpec(paint) {
+    const parsed = parsePaint(paint)
+    if (!parsed) return null
+    const a = GAME_COLORS[parsed.a] || '#cbd5e1'
+    const b = GAME_COLORS[parsed.b] || '#cbd5e1'
+    const name = SHAPE_NAMES[parsed.shape] || parsed.shape
+    if (parsed.shape === 'W') return { name, solid: a }
+    const split = SPLIT[parsed.shape]
+    if (!split) return null
+    return {
+      name,
+      split: { x1: split.x1, y1: split.y1, x2: split.x2, y2: split.y2 },
+      stops: [['0%', a], ['49.9%', a], ['50%', b], ['100%', b]],
+    }
   }
 
   function edge(paint, side) {
@@ -139,5 +165,5 @@
     return contacts(copy)
   }
 
-  window.LOGYQGameGrammar = Object.freeze({ parsePaint, edge, touchesMatch, contacts, complete, canDrop, canAdd })
+  window.LOGYQGameGrammar = Object.freeze({ parsePaint, paintSpec, edge, touchesMatch, contacts, complete, canDrop, canAdd })
 })()

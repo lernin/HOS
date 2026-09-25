@@ -56,10 +56,272 @@ test('diagonal sibling orientation remains physically meaningful', () => {
 })
 
 
+test('home tabs share one even row at phone width and in landscape', () => {
+  const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
+  const phone = styles.slice(styles.indexOf('@media (max-width:700px)'), styles.indexOf('@media (pointer:coarse)'))
+  const landscape = styles.slice(styles.indexOf('@media (orientation:landscape)'))
+  for (const block of [phone, landscape]) {
+    assert.match(block, /grid-template-columns:repeat\(3,minmax\(0,1fr\)\)/)
+    assert.match(block, /white-space:nowrap/)
+    assert.match(block, /minmax\(0,1fr\)/)
+  }
+  assert.match(phone, /font-size:clamp\(13px,3\.7vw,16px\)/)
+})
+
+test('game play fits on entry and then keeps the camera fixed', () => {
+  const config = readFileSync(new URL('../public/logyq/js/engine/01-config.js', import.meta.url), 'utf8')
+  const tree = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
+  const history = readFileSync(new URL('../public/logyq/js/engine/05-history.js', import.meta.url), 'utf8')
+  const keyboard = readFileSync(new URL('../public/logyq/js/engine/17-keyboard.js', import.meta.url), 'utf8')
+  const bridge = readFileSync(new URL('../public/logyq/js/engine/18-bridge.js', import.meta.url), 'utf8')
+  const gestures = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  assert.match(config, /function gameCameraLocked\(\)/)
+  assert.match(config, /gameCameraLocked\(\)\) return/)
+  assert.match(tree, /gameCameraLocked\(\)\) return false/)
+  assert.match(tree, /wheel\.smooth[\s\S]*gameCameraLocked\(\)\) return/)
+  assert.match(tree, /fitBtn\.addEventListener\('click'[\s\S]*gameCameraLocked\(\)\) return/)
+  assert.match(history, /gameCameraLocked\(\)\) return/)
+  assert.match(bridge, /fit\(\) \{[\s\S]*gameCameraLocked\(\)\) return/)
+  assert.match(bridge, /if \(fit\) logyq\.treeManager\.autoFit\(\)/)
+  const gameKeys = keyboard.slice(keyboard.indexOf("contains('logyq-game')"), keyboard.indexOf('const phase'))
+  assert.match(gameKeys, /return;/)
+  assert.doesNotMatch(gameKeys, /settleRootAnchored|autoFit|createRelative/)
+  assert.match(gestures, /curriculumViewLocked\(doc\) \|\| gamePlay\(doc\)\) return false/)
+  assert.match(gestures, /curriculumViewLocked\(doc\) \|\| gamePlay\(doc\)\) return/)
+  assert.match(gestures, /contains\('logyq-game'\)\) return/)
+})
+
+test('game drags start after a few pixels and flicks cannot add, delete, or warehouse', () => {
+  const gestures = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
+  const dock = readFileSync(new URL('../public/logyq/js/engine/14-word-dock.js', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
+  assert.match(gestures, /GAME_DRAG_PX: 6/)
+  assert.match(gestures, /function gamePlay\(doc\)/)
+  assert.match(gestures, /if \(gamePlay\(doc\)\) return/)
+  assert.match(gestures, /GAME_DRAG_PX\)/)
+  assert.match(gestures, /armedBank && !gamePlay\(doc\)/)
+  assert.match(gestures, /gamePlay\(doc\) \? 'none'/)
+  assert.match(gestures, /Game taps do not nominate/)
+  assert.match(gestures, /logyq-game'\)\)/)
+  assert.match(dock, /logyq-game'\)\) \{\s*if \(Math\.hypot\(dx, dy\) < 6\) return\s*beginLift\(\[session\.word\]\)/)
+  assert.match(dock, /logyq-game'\)\) return/)
+  assert.doesNotMatch(styles, /body\.logyq-game #Dock,/)
+  assert.match(styles, /body\.logyq-game #logyq-warehouse/)
+  assert.match(styles, /body\.logyq-game #trash/)
+  assert.match(styles, /body\.logyq-game #addWordBtn/)
+  assert.match(styles, /body\.logyq-game #logiq-mobile-panel \[data-tool="add"\]/)
+  assert.match(styles, /body\.logyq-mobile-v162\.logyq-game\.v2-branch-drag #trash/)
+})
+
+test('paint spec is the shared face for every fixed card', () => {
+  const layer = grammar.paintSpec('L:A:B')
+  assert.equal(layer.name, 'Layer Cake')
+  assert.equal(layer.solid, undefined)
+  assert.equal(layer.split.x1, '0%')
+  assert.equal(layer.split.y1, '0%')
+  assert.equal(layer.split.x2, '0%')
+  assert.equal(layer.split.y2, '100%')
+  assert.equal(layer.stops.map((stop) => stop[1]).join(','), '#60a5fa,#60a5fa,#fb923c,#fb923c')
+  const left = grammar.paintSpec('DL:A:B')
+  assert.equal(left.name, 'Diagonal Left')
+  assert.equal(left.split.x1, '100%')
+  assert.equal(left.split.y1, '0%')
+  assert.equal(left.split.x2, '0%')
+  assert.equal(left.split.y2, '100%')
+  const right = grammar.paintSpec('DR:B:C')
+  assert.equal(right.name, 'Diagonal Right')
+  assert.equal(right.stops[0][1], '#fb923c')
+  assert.equal(right.stops.at(-1)[1], '#86efac')
+  assert.equal(right.split.x1, '0%')
+  assert.equal(right.split.y1, '0%')
+  assert.equal(right.split.x2, '100%')
+  assert.equal(right.split.y2, '100%')
+  assert.equal(grammar.paintSpec('W:A').name, 'Whole')
+  assert.equal(grammar.paintSpec('W:A').solid, '#60a5fa')
+})
+
+test('game chips thumbnail the card face and other banks stay text', () => {
+  const dock = readFileSync(new URL('../public/logyq/js/engine/14-word-dock.js', import.meta.url), 'utf8')
+  const game = readFileSync(new URL('../public/logyq/js/preview/10-game.js', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
+  assert.match(game, /gameGrammar\.paintSpec\(paint\)/)
+  assert.doesNotMatch(game, /x1: '100%', y1: '0%', x2: '0%', y2: '100%'/)
+  assert.match(dock, /contains\('logyq-game'\)/)
+  assert.match(dock, /LOGYQGameGrammar\?\.paintSpec/)
+  assert.match(dock, /CONFIG\.CARD_WIDTH/)
+  assert.match(dock, /CONFIG\.CARD_HEIGHT/)
+  assert.match(dock, /aria-label', spec\.name/)
+  assert.match(dock, /stroke', '#ffffff'/)
+  assert.match(dock, /key\.textContent = word/)
+  assert.match(dock, /if \(!spec\) \{\s*chip\.textContent = word/)
+  assert.match(dock, /paintBankChip\(ghost, word\)/)
+  assert.match(styles, /logyq-shape-chip svg\{display:block;height:30px;width:auto\}/)
+  assert.match(styles, /body\.logyq-game #Dock \.chip\.logyq-shape-chip/)
+})
+
 test('a loose bank card can solve from either starting side', () => {
   const root = card('r', 'L:A:B')
   const child = card('c', 'DR:B:C')
   assert.equal(grammar.canAdd(root, child, { type: 'node', targetUid: 'r' }), true)
   assert.equal(grammar.canAdd(child, root, { type: 'rootAbove' }), true)
   assert.equal(grammar.canAdd(root, child, { type: 'rootAbove' }), false)
+})
+
+function piecePool(level) {
+  const pieces = []
+  const take = (node) => {
+    if (!node?.gameId) return
+    pieces.push({ gameId: node.gameId, paint: node.paint, name: '', children: [] })
+    for (const child of node.children || []) take(child)
+  }
+  take(level.tree)
+  for (const card of Object.values(level.bankCards || {})) take(card)
+  return pieces
+}
+
+function physicalSolutions(pieces) {
+  const found = []
+  const ids = pieces.map((piece) => piece.gameId)
+  const consider = (tree) => {
+    if (grammar.complete(tree, ids)) found.push(tree)
+  }
+  if (pieces.length === 2) {
+    const [a, b] = pieces
+    consider(card(a.gameId, a.paint, [card(b.gameId, b.paint)]))
+    consider(card(b.gameId, b.paint, [card(a.gameId, a.paint)]))
+    return found
+  }
+  for (const root of pieces) {
+    const rest = pieces.filter((piece) => piece !== root)
+    consider(card(root.gameId, root.paint, rest.map((piece) => card(piece.gameId, piece.paint))))
+    consider(card(root.gameId, root.paint, rest.slice().reverse().map((piece) => card(piece.gameId, piece.paint))))
+    consider(card(root.gameId, root.paint, [card(rest[0].gameId, rest[0].paint, [card(rest[1].gameId, rest[1].paint)])]))
+    consider(card(root.gameId, root.paint, [card(rest[1].gameId, rest[1].paint, [card(rest[0].gameId, rest[0].paint)])]))
+  }
+  return found
+}
+
+function loadGameFragment() {
+  const store = {}
+  const listeners = {}
+  const elements = {}
+  const bodyClass = new Set()
+  function el(id) {
+    return {
+      id,
+      hidden: true,
+      style: {},
+      innerHTML: '',
+      textContent: '',
+      dataset: {},
+      listeners: {},
+      addEventListener(type, fn) { (listeners[id + ':' + type] ||= []).push(fn) },
+      querySelector() { return null },
+      insertBefore() {},
+      firstChild: null,
+    }
+  }
+  const sandbox = {
+    window: {},
+    document: {
+      body: {
+        classList: {
+          add(...names) { names.forEach((name) => bodyClass.add(name)) },
+          remove(...names) { names.forEach((name) => bodyClass.delete(name)) },
+          toggle(name, on) { if (on) bodyClass.add(name); else bodyClass.delete(name) },
+          contains(name) { return bodyClass.has(name) },
+        },
+      },
+      getElementById(id) { return elements[id] ||= el(id) },
+      createElementNS() {
+        return { setAttribute() {}, appendChild() {}, querySelector() { return null } }
+      },
+    },
+    readJson(key, fallback) {
+      if (!store[key]) return fallback
+      return JSON.parse(store[key])
+    },
+    localStorage: {
+      setItem(key, value) { store[key] = value },
+      getItem(key) { return store[key] ?? null },
+    },
+    structuredClone: globalThis.structuredClone,
+    app: {},
+    preview: {},
+    bridge: { loadMap() {}, snapshot() { return sandbox.bridge._snapshot || { tree: null } } },
+    leaveCurriculumPlay() {},
+    updateMapName() {},
+    hideLibrary() {},
+    setSaveState() {},
+    openLibrary() { return Promise.resolve() },
+    setHomeTab() {},
+    DEFAULT_NAME: 'Untitled',
+  }
+  runInNewContext(readFileSync(new URL('game-grammar.js', root), 'utf8'), sandbox)
+  runInNewContext(readFileSync(new URL('preview/10-game.js', root), 'utf8'), sandbox)
+  return { sandbox, elements, listeners, store }
+}
+
+test('every game level is selectable without clearing an earlier one', () => {
+  const { sandbox, elements, listeners } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  assert.equal(levels.length, 39)
+  levels.forEach((level, index) => {
+    assert.equal(level.title.startsWith((index + 1) + ' · '), true, level.title)
+  })
+  sandbox.preview.game.render()
+  const html = elements['logyq-game-path'].innerHTML
+  assert.equal(html.match(/data-game-level=/g).length, 39)
+  assert.doesNotMatch(html, /disabled/)
+  assert.doesNotMatch(html, /Clear the previous level/)
+  const open = (id) => {
+    const button = { dataset: { gameLevel: id } }
+    for (const fn of listeners['logyq-game-path:click']) {
+      fn({ target: { closest: (sel) => sel === '[data-game-level]' ? button : null } })
+    }
+  }
+  for (const index of [0, 15, 27, 38]) {
+    open(levels[index].id)
+    assert.equal(sandbox.app.game.id, levels[index].id, 'level ' + (index + 1) + ' opens with an empty progress record')
+    assert.equal(sandbox.app.game.cleared, false)
+  }
+})
+
+test('completion is recorded and never required for the next pick', () => {
+  const { sandbox, elements } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  const first = levels[0]
+  const pieces = piecePool(first)
+  const solved = physicalSolutions(pieces)[0]
+  assert.ok(solved, first.id)
+  sandbox.preview.game.begin(first)
+  sandbox.bridge._snapshot = { tree: solved }
+  sandbox.preview.game.check()
+  assert.equal(elements['logyq-game-status'].textContent, 'It fits!')
+  assert.equal(elements['logyq-game-next'].hidden, false)
+  assert.doesNotMatch(elements['logyq-game-status'].textContent, /unlock/i)
+  sandbox.preview.game.render()
+  assert.match(elements['logyq-game-path'].innerHTML, new RegExp('data-game-level="' + first.id + '" class="is-cleared"'))
+  assert.match(elements['logyq-game-path'].innerHTML, /✓/)
+  sandbox.preview.game.begin(levels[27])
+  assert.equal(sandbox.app.game.id, levels[27].id)
+  const last = levels.at(-1)
+  const lastSolved = physicalSolutions(piecePool(last))[0]
+  assert.ok(lastSolved, last.id)
+  sandbox.preview.game.begin(last)
+  sandbox.bridge._snapshot = { tree: lastSolved }
+  sandbox.preview.game.check()
+  assert.equal(elements['logyq-game-status'].textContent, 'All 39 levels cleared.')
+  assert.equal(elements['logyq-game-next'].hidden, true)
+})
+
+test('each playtest level has a solution made only of visible contacts', () => {
+  const { sandbox } = loadGameFragment()
+  const stuck = []
+  for (const level of sandbox.preview.game.levels) {
+    const pieces = piecePool(level)
+    assert.equal(new Set(pieces.map((piece) => piece.gameId)).size, level.ids.length, level.id)
+    if (!physicalSolutions(pieces).length) stuck.push(level.id + ' ' + level.title)
+  }
+  assert.deepEqual(stuck, [])
 })

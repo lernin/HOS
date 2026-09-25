@@ -45,6 +45,38 @@
     }
   }
 
+  // Open playtest expansion: chains first, then branches. Every level stays
+  // selectable so the learning sequence can be sampled and tuned out of order.
+  function addOpenLevel(id, title, tree, anchorId) {
+    const nodes = []
+    ;(function walk(n){ nodes.push(n); for (const x of n.children || []) walk(x) })(tree)
+    const anchor = nodes.find(n => n.gameId === anchorId) || nodes[0]
+    const bankCards = {}, bank = []
+    for (const n of nodes) if (n.gameId !== anchor.gameId) {
+      const key = '__TREE_CARD__:' + id + ':' + n.gameId
+      bank.push(key); bankCards[key] = { ...n, children: [] }
+    }
+    gameLevels.push({ id, title, hint: '', ids: nodes.map(n => n.gameId),
+      tree: { ...anchor, children: [] }, bank, bankCards })
+  }
+  const chainSets = [
+    ['L:A:B','DL:B:C','DR:C:D'], ['DL:A:B','L:B:C','DR:C:D'],
+    ['DR:A:B','DL:B:C','L:C:D'], ['L:A:B','DR:B:C','DL:C:D']
+  ]
+  for (let round=0; round<3; round++) chainSets.forEach((p,i) => {
+    const t={name:'',gameId:'a',paint:p[0],children:[{name:'',gameId:'b',paint:p[1],children:[{name:'',gameId:'c',paint:p[2],children:[]}]}]}
+    addOpenLevel('chain-'+round+'-'+i, (16+round*4+i)+' · Chain', t, ['a','b','c'][(round+i)%3])
+  })
+  const branches = [
+    ['L:A:B','DL:B:C','DR:B:D'], ['DL:A:B','DR:B:C','DL:B:D'],
+    ['DR:A:B','DL:B:C','DR:B:D'], ['L:A:B','DR:B:C','DL:B:D']
+  ]
+  for (let round=0; round<3; round++) branches.forEach((p,i) => {
+    const t={name:'',gameId:'a',paint:p[0],children:[
+      {name:'',gameId:'b',paint:p[1],children:[]},{name:'',gameId:'c',paint:p[2],children:[]}]}
+    addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
+  })
+
   function gameProgress() {
     const value = readJson(GAME_KEY, {})
     return value && typeof value === 'object' ? value : {}
@@ -54,11 +86,11 @@
     const path = document.getElementById('logyq-game-path')
     if (!path) return
     const progress = gameProgress()
-    path.innerHTML = gameLevels.map((level, index) => {
-      const unlocked = index === 0 || !!progress[gameLevels[index - 1].id]
+    path.innerHTML = gameLevels.map((level) => {
       const done = !!progress[level.id]
-      return '<li><button type="button" data-game-level="' + level.id + '" ' + (unlocked ? '' : 'disabled') + '>' +
-        level.title + (done ? ' ✓' : '') + '<span>' + (unlocked ? level.hint : 'Clear the previous level first.') + '</span></button></li>'
+      return '<li><button type="button" data-game-level="' + level.id + '"' +
+        (done ? ' class="is-cleared"' : '') + '>' +
+        level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
     }).join('')
   }
 
@@ -73,31 +105,24 @@
     }
   }
 
-  const GAME_COLORS = { A: '#60a5fa', B: '#fb923c', C: '#86efac', D: '#f0abfc' }
-
   function gameColor(paint) {
-    const parsed = gameGrammar.parsePaint(paint)
-    if (!parsed) return '#cbd5e1'
-    if (parsed.shape === 'W') return GAME_COLORS[parsed.a] || '#cbd5e1'
+    const spec = gameGrammar.paintSpec(paint)
+    if (!spec) return '#cbd5e1'
+    if (spec.solid) return spec.solid
     ensureGamePaint()
     const svg = document.getElementById('canvas')
     const defs = svg?.querySelector('#logyq-game-defs')
-    const safe = paint.replace(/[^A-Za-z0-9_-]/g, '-')
+    const safe = String(paint).replace(/[^A-Za-z0-9_-]/g, '-')
     const id = 'logyq-game-' + safe
     if (!defs?.querySelector('#' + id)) {
       const ns = 'http://www.w3.org/2000/svg'
       const gradient = document.createElementNS(ns, 'linearGradient')
       gradient.id = id
-      const vector = parsed.shape === 'L'
-        ? { x1: '0%', y1: '0%', x2: '0%', y2: '100%' }
-        : parsed.shape === 'DL'
-          ? { x1: '100%', y1: '0%', x2: '0%', y2: '100%' }
-          : { x1: '0%', y1: '0%', x2: '100%', y2: '100%' }
-      for (const [key, value] of Object.entries(vector)) gradient.setAttribute(key, value)
-      for (const [offset, letter] of [['0%', parsed.a], ['49.9%', parsed.a], ['50%', parsed.b], ['100%', parsed.b]]) {
+      for (const [key, value] of Object.entries(spec.split)) gradient.setAttribute(key, value)
+      for (const [offset, color] of spec.stops) {
         const stop = document.createElementNS(ns, 'stop')
         stop.setAttribute('offset', offset)
-        stop.setAttribute('stop-color', GAME_COLORS[letter] || '#cbd5e1')
+        stop.setAttribute('stop-color', color)
         gradient.appendChild(stop)
       }
       defs?.appendChild(gradient)
@@ -189,7 +214,7 @@
     progress[level.id] = Date.now()
     try { localStorage.setItem(GAME_KEY, JSON.stringify(progress)) } catch (_error) {}
     const next = gameLevels[gameLevels.indexOf(level) + 1]
-    gameStatus(next ? 'It fits! Next level unlocked.' : 'All 15 two-card levels cleared.', true)
+    gameStatus(next ? 'It fits!' : 'All ' + gameLevels.length + ' levels cleared.', true)
     document.getElementById('logyq-game-next').hidden = !next
     return true
   }
@@ -203,9 +228,9 @@
 
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-game-level]')
-    if (!button || button.disabled) return
+    if (!button) return
     const index = gameLevels.findIndex((level) => level.id === button.dataset.gameLevel)
-    if (index > 0 && !gameProgress()[gameLevels[index - 1].id]) return
+    if (index < 0) return
     beginGameLevel(gameLevels[index])
   })
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
@@ -216,4 +241,4 @@
   document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
     openLibrary().then(() => setHomeTab('game'))
   })
-  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay }
+  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath }

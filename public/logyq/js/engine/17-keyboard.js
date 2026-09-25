@@ -38,6 +38,12 @@ function keyDispatcher(e){
   // Curriculum Mix calls the same randomizeTree as a normal map.
   // No add, rename, delete, or bank. The Start gate swallows keys.
   if (typeof curriculumPlayLocked === 'function' && curriculumPlayLocked()) {
+    if (document.body?.classList?.contains('logyq-game')) {
+      e.preventDefault();
+      if (lower === 'u' && e.shiftKey) { logyq.history.redo?.(); return; }
+      if (lower === 'u') { logyq.history.undo(); return; }
+      return;
+    }
     const phase = document.body?.dataset?.curriculumPhase || '';
     if (phase === 'gate' || phase === 'shuffle') {
       e.preventDefault();

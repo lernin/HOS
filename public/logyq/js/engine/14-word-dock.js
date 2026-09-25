@@ -249,6 +249,79 @@
     paintChipSelection()
   }
 
+  let shapeChipSerial = 0
+
+  // Game pieces share the card's paint spec. My maps and Curriculum stay text.
+  function gamePieceSpec(word) {
+    if (!document.body?.classList?.contains('logyq-game')) return null
+    let node = null
+    try { node = window.__logyqGameBankNode?.(word) } catch (_error) { return null }
+    if (!node?.paint) return null
+    return window.LOGYQGameGrammar?.paintSpec?.(node.paint) || null
+  }
+
+  function shapeChipSvg(spec) {
+    const ns = 'http://www.w3.org/2000/svg'
+    const width = CONFIG.CARD_WIDTH
+    const height = CONFIG.CARD_HEIGHT
+    const svg = document.createElementNS(ns, 'svg')
+    svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height)
+    svg.setAttribute('aria-hidden', 'true')
+    const stroke = 3
+    const rect = document.createElementNS(ns, 'rect')
+    rect.setAttribute('x', String(stroke / 2))
+    rect.setAttribute('y', String(stroke / 2))
+    rect.setAttribute('width', String(width - stroke))
+    rect.setAttribute('height', String(height - stroke))
+    rect.setAttribute('rx', '10')
+    rect.setAttribute('ry', '10')
+    rect.setAttribute('stroke', '#ffffff')
+    rect.setAttribute('stroke-width', String(stroke))
+    if (spec.solid) {
+      rect.setAttribute('fill', spec.solid)
+    } else {
+      const id = 'logyq-chip-fill-' + (++shapeChipSerial)
+      const defs = document.createElementNS(ns, 'defs')
+      const gradient = document.createElementNS(ns, 'linearGradient')
+      gradient.id = id
+      for (const [key, value] of Object.entries(spec.split)) gradient.setAttribute(key, value)
+      for (const [offset, color] of spec.stops) {
+        const stop = document.createElementNS(ns, 'stop')
+        stop.setAttribute('offset', offset)
+        stop.setAttribute('stop-color', color)
+        gradient.appendChild(stop)
+      }
+      defs.appendChild(gradient)
+      svg.appendChild(defs)
+      rect.setAttribute('fill', 'url(#' + id + ')')
+    }
+    svg.appendChild(rect)
+    return svg
+  }
+
+  function paintBankChip(chip, word) {
+    const spec = gamePieceSpec(word)
+    chip.className = 'chip'
+    if (!spec) {
+      chip.textContent = word
+      return
+    }
+    chip.replaceChildren()
+    chip.removeAttribute('role')
+    chip.removeAttribute('aria-label')
+    chip.removeAttribute('title')
+    chip.classList.add('logyq-shape-chip')
+    chip.setAttribute('role', 'img')
+    chip.setAttribute('aria-label', spec.name)
+    chip.title = spec.name
+    const key = document.createElement('span')
+    key.className = 'logyq-shape-key'
+    key.setAttribute('aria-hidden', 'true')
+    key.textContent = word
+    chip.appendChild(key)
+    chip.appendChild(shapeChipSvg(spec))
+  }
+
   function render(){
     const { state, elements, utils } = logyq
     const list = elements.Dock
@@ -261,7 +334,7 @@
       const shelfName = String(w || '').trim()
       if (!shelfName || (hidden && hidden.has(shelfName))) return
       const chip = document.createElement('div');
-      chip.className='chip'; chip.textContent=w;
+      paintBankChip(chip, w);
       // Native HTML5 drag cancels the pointer as soon as it moves, so a
       // finger never finishes the gesture. Press-drag below places the chip.
       chip.draggable=false;
@@ -283,7 +356,9 @@
 chip.addEventListener('dragend', () => endChipDragVisuals());
 
       chip.addEventListener("contextmenu", (e) => {e.preventDefault();
-        e.stopPropagation(); const sel = Array.from((state.selectedUids || new Set()).values());
+        e.stopPropagation();
+        if (document.body.classList.contains('logyq-game')) return;
+        const sel = Array.from((state.selectedUids || new Set()).values());
 if (!state.root || sel.length !== 1) {logyq.selection.showToast(sel.length === 0 ? "Select a node first" : "Select just one node");
   return;}
 const target = utils.findByUid(state.root.data, sel[0]);
@@ -507,8 +582,7 @@ function bindChipPointerPlace() {
       stack.dataset.words = label
       stack.replaceChildren(...words.map((word) => {
         const ghost = document.createElement('div')
-        ghost.className = 'chip'
-        ghost.textContent = word
+        paintBankChip(ghost, word)
         ghost.style.opacity = '0.55'
         return ghost
       }))
@@ -630,7 +704,12 @@ function bindChipPointerPlace() {
     if (!session.dragging && !session.deleting && !session.panning) {
       // Claim the gesture while the finger is still on the chip. Waiting
       // until it has left the dock lets the browser cancel the pointer first.
-      if (!moved) return
+      if (document.body.classList.contains('logyq-game')) {
+        if (Math.hypot(dx, dy) < 6) return
+        beginLift([session.word])
+        try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      } else if (!moved) return
+      else {
       const axis = shelfScrollAxis()
       if (axis === 'x') {
         // Portrait: only an upward drag lifts. Horizontal movement pans the shelf.
@@ -648,6 +727,7 @@ function bindChipPointerPlace() {
         beginLift(swipeWords(session.word))
       }
       try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
+      }
     }
     if (session.panning) {
       const axis = shelfScrollAxis()
@@ -717,7 +797,9 @@ function bindChipPointerPlace() {
     }
     event.preventDefault()
     event.stopPropagation()
-    const corner = commit ? cornerUnderFinger(event.clientX, event.clientY) : null
+    const corner = commit && !document.body.classList.contains('logyq-game')
+      ? cornerUnderFinger(event.clientX, event.clientY)
+      : null
     if (corner === 'trash') {
       removeBankWords(words)
     } else if (corner === 'warehouse') {
@@ -922,12 +1004,14 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     render();
     logyq.treeManager.layoutAndRender(false);
 
-    // Keep your “drop under pointer” behavior
+    // Keep your “drop under pointer” behavior. Game keeps the fitted camera.
+    if (!(typeof gameCameraLocked === 'function' && gameCameraLocked())) {
     const current = d3.zoomTransform(elements.svg.node());
     const s = current.k || 1;
     const rx = state.root.x, ry = state.root.y;
     const tx = drop.px - s * rx, ty = drop.py - s * ry;
     elements.svg.call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
+    }
     return;
   }
 

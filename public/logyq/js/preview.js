@@ -323,6 +323,11 @@
       #logiq-library[data-shelf="game"] #logyq-game-levels{display:block}
       #logyq-game-path{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
       #logyq-game-path button{width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
+      #logyq-game-path button.is-cleared{border-color:#86efac;background:#f0fdf4}
+      body.logyq-game .logyq-shape-chip{position:relative;box-sizing:border-box;width:auto;max-width:none;padding:2px;background:transparent;border:0;min-height:0}
+      body.logyq-game .logyq-shape-key{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+      body.logyq-game .logyq-shape-chip svg{display:block;height:30px;width:auto}
+      body.logyq-game .logyq-shape-chip.is-outlined{background:transparent;box-shadow:0 0 0 2px #60a5fa}
       #logyq-game-path button:disabled{cursor:not-allowed;color:#94a3b8;background:#f8fafc}
       #logyq-game-path span{display:block;font-size:13px;font-weight:500;color:#64748b;margin-top:3px}
       #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(15,23,42,.08)}
@@ -442,9 +447,9 @@
         #logyq-warehouse{display:flex;position:fixed;z-index:30;width:44px;height:44px;left:10px;right:auto;top:auto;bottom:calc(56px + env(safe-area-inset-bottom) + 8px)}
         #logyq-bank-trash{display:none;position:fixed;z-index:30;width:44px;height:44px;right:10px;left:auto;top:auto;bottom:calc(56px + env(safe-area-inset-bottom) + 8px)}
         body:has(#Dock.dock-hidden) #logyq-warehouse,body:has(#Dock.dock-hidden) #logyq-bank-trash,body.logyq-home:not(.logyq-map-open) #logyq-warehouse,body.logyq-home:not(.logyq-map-open) #logyq-bank-trash{display:none!important}
-        body.logyq-chip-drag #logyq-bank-trash,body.v2-branch-drag #logyq-bank-trash,body:has(#Dock.dock-hidden).logyq-chip-drag #logyq-bank-trash,body:has(#Dock.dock-hidden).v2-branch-drag #logyq-bank-trash{display:flex!important}
+        body.logyq-chip-drag:not(.logyq-game) #logyq-bank-trash,body.v2-branch-drag:not(.logyq-game) #logyq-bank-trash,body:has(#Dock.dock-hidden).logyq-chip-drag:not(.logyq-game) #logyq-bank-trash,body:has(#Dock.dock-hidden).v2-branch-drag:not(.logyq-game) #logyq-bank-trash{display:flex!important}
         #logyq-warehouse.is-bank-empty{display:none!important}
-        body.logyq-chip-drag:not(.logyq-curriculum) #logyq-warehouse.is-bank-empty{display:flex!important}
+        body.logyq-chip-drag:not(.logyq-curriculum):not(.logyq-game) #logyq-warehouse.is-bank-empty{display:flex!important}
         body:has(#Dock.is-empty) #logyq-warehouse{bottom:max(10px,env(safe-area-inset-bottom))}
         #Toast{bottom:72px;max-width:calc(100vw - 36px);text-align:center}
         #logiq-mobile-header{position:fixed;display:flex;top:0;left:0;right:0;z-index:3000;height:48px;box-sizing:border-box;align-items:center;justify-content:space-between;gap:5px;padding:5px 7px;background:rgba(255,255,255,.95);border-bottom:1px solid rgba(226,232,240,.9);box-shadow:0 1px 4px rgba(15,23,42,.1);backdrop-filter:blur(8px);overflow:hidden;flex-wrap:nowrap}
@@ -492,6 +497,9 @@
         @keyframes logyq-v162-pulse{0%{transform:scale(.72);opacity:.95}100%{transform:scale(1.28);opacity:0}}
         @keyframes logyq-smite-march{from{stroke-dashoffset:0}to{stroke-dashoffset:-14px}}
         .logiq-backdrop{padding:8px;align-items:flex-end}.logiq-modal{max-height:88dvh;border-radius:18px 18px 10px 10px}.logiq-map-row,.logyq-folder-row{grid-template-columns:minmax(0,1fr)}.logiq-map-actions{justify-content:flex-start}
+        body.logyq-home .logiq-modal-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;align-items:center}
+        body.logyq-home .logyq-home-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:stretch;gap:4px;width:100%;min-width:0;flex:none}
+        body.logyq-home .logyq-home-tab{min-width:0;width:100%;max-width:100%;box-sizing:border-box;margin:0;padding:8px 4px;font-size:clamp(13px,3.7vw,16px);line-height:1.15;text-align:center;white-space:nowrap;overflow:hidden}
       }
       @media (pointer:coarse) and (max-width:1200px),(hover:none) and (max-width:1200px){
         body.logyq-mobile-v162 #logiq-v2-drag-card,body.logyq-mobile-v162 .drag-mini,body.logyq-mobile-v162 g.drag-mini{display:none!important;opacity:0!important;visibility:hidden!important}
@@ -530,14 +538,21 @@
         #logyq-bank-chips{flex:1 1 auto;width:100%;min-height:0;flex-direction:column;align-items:stretch;justify-content:flex-start;overflow-x:hidden;overflow-y:auto}
         #logyq-bank-all{margin:8px 0 0;align-self:stretch}
         #Dock .chip,#Dock.dock-left .chip{touch-action:none;width:100%;max-width:100%}
+        body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{width:auto;max-width:none;align-self:center}
         #logyq-map-title{left:calc(148px + env(safe-area-inset-left) + 12px)}
         #logyq-warehouse,#logyq-bank-trash{left:calc(148px + env(safe-area-inset-left) + 8px);right:auto}
         #logyq-warehouse{top:max(8px,env(safe-area-inset-top));bottom:auto}
         #logyq-bank-trash{top:auto;bottom:max(8px,env(safe-area-inset-bottom))}
         body.logyq-home #logiq-library .logiq-modal{display:flex;flex-direction:column}
-        body.logyq-home #logiq-library .logiq-modal-head{flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
+        body.logyq-home #logiq-library .logiq-modal-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto auto;flex-direction:row;width:auto;height:auto;border-right:0;border-bottom:1px solid #e2e8f0}
+        body.logyq-home .logyq-home-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;min-width:0}
+        body.logyq-home .logyq-home-tab{min-width:0;width:100%;box-sizing:border-box;text-align:center;white-space:nowrap;overflow:hidden;font-size:clamp(13px,3.7vw,16px)}
       }
-      body.logyq-game #Dock,
+      body.logyq-game .word-tools,
+      body.logyq-game #wordInput,
+      body.logyq-game #addWordBtn,
+      body.logyq-game #fitBtn,
+      body.logyq-game #logiq-mobile-header [data-tool="fit"],
       body.logyq-game #logyq-warehouse,
       body.logyq-game #logyq-bank-trash,
       body.logyq-game #logyq-warehouse-sheet,
@@ -566,8 +581,11 @@
       body.logyq-curriculum #logiq-mobile-panel [data-tool="paint"],
       body.logyq-curriculum #logiq-mobile-panel [data-tool="dock"],
       body.logyq-mobile-v162.logyq-curriculum.v2-branch-drag #trash,
+      body.logyq-mobile-v162.logyq-game.v2-branch-drag #trash,
       body.logyq-curriculum.logyq-chip-drag #logyq-bank-trash,
-      body.logyq-curriculum.v2-branch-drag #logyq-bank-trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
+      body.logyq-game.logyq-chip-drag #logyq-bank-trash,
+      body.logyq-curriculum.v2-branch-drag #logyq-bank-trash,
+      body.logyq-game.v2-branch-drag #logyq-bank-trash{display:none!important;visibility:hidden!important;pointer-events:none!important}
       body.logyq-curriculum g.node.logyq-pile,
       body.logyq-curriculum g.hit-slot.logyq-pile,
       body.logyq-curriculum path.link.logyq-pile-link{display:none!important;pointer-events:none!important}
@@ -1081,6 +1099,7 @@
       FLICK_FAST_MS: 180,
       HOLD_MS: 160,
       HOLD_SLOP: 8,
+      GAME_DRAG_PX: 6,
       TAP_MOVE: 11,
       DOUBLE_TAP_MS: 360,
       PAN_DEAD_PX: 56,
@@ -1888,9 +1907,11 @@
     }
 
     const hold = { pointerId: event.pointerId, ...pointer, timer: 0 }
-    hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     state.hold = hold
     win.__logyqHoldArming = true
+    // Game has no pan, so a few pixels of movement starts the drag at once.
+    if (gamePlay(doc)) return
+    hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     beginCardRace(doc, win, state, event)
   }
 
@@ -1899,6 +1920,15 @@
     if (!pointer) return
     pointer.lastX = event.clientX
     pointer.lastY = event.clientY
+
+    if (gamePlay(doc) && state.hold?.pointerId === event.pointerId) {
+      state.hold.lastX = event.clientX
+      state.hold.lastY = event.clientY
+      if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) >= v162Constants().GAME_DRAG_PX) {
+        latchHold(doc, win, state, state.hold)
+      }
+      return
+    }
 
     if (state.hold?.pointerId === event.pointerId) {
       state.hold.lastX = event.clientX
@@ -1955,7 +1985,7 @@
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
     const releasedAtOrigin = Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= v162Constants().STILL_PX
-    const dockKind = (canceled || releasedAtOrigin)
+    const dockKind = (canceled || releasedAtOrigin || gamePlay(doc))
       ? 'none'
       : activeDockKind(doc, drag, event.clientX, event.clientY)
     const armedBank = !canceled && !releasedAtOrigin && drag.moved && dockKind === 'bank' && drag.bankArmed
@@ -1978,7 +2008,7 @@
 
       cleanupDrag(doc, win, state, drag)
       dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
-      if (armedBank) sendDragToWordBank(doc, drag)
+      if (armedBank && !gamePlay(doc)) sendDragToWordBank(doc, drag)
     } finally {
       win.__logyqHoldDragCommit = false
       win.__logyqHoldDragAllowBank = false
@@ -2121,7 +2151,7 @@
       if (!drag) { state.feedbackRaf = 0; return }
       restoreOriginLayout(doc, drag.originLayout)
       stampOriginGhost(doc, drag.uids)
-      const dockKind = activeDockKind(doc, drag, drag.lastX, drag.lastY)
+      const dockKind = gamePlay(doc) ? 'none' : activeDockKind(doc, drag, drag.lastX, drag.lastY)
       armBankHover(win, drag, dockKind, doc)
       doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
       movePreview(drag, drag.lastX, drag.lastY)
@@ -2308,7 +2338,7 @@
   }
 
   function edgePan(doc, win, x, y) {
-    if (curriculumViewLocked(doc)) return false
+    if (curriculumViewLocked(doc) || gamePlay(doc)) return false
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3) return false
     const view = viewRect(doc, win)
@@ -2549,6 +2579,7 @@
   }
 
   function resolveCardRace(doc, win, state, event) {
+    if (gamePlay(doc)) return
     const race = state.race
     if (!race || race.mode === 'drag') return
     const now = win.performance.now()
@@ -2624,7 +2655,7 @@
   function applyFingerPan(doc, win, pan, x, y) {
     const locked = doc?.body?.classList?.contains('logyq-curriculum')
       && (doc.body.classList.contains('logyq-curriculum-frozen') || doc.body.classList.contains('logyq-curriculum-gate'))
-    if (locked) return
+    if (locked || doc?.body?.classList?.contains('logyq-game')) return
     const svg = doc.getElementById('canvas')
     if (!svg || !win.d3 || !pan) return
     const dx = x - pan.lastX
@@ -2678,6 +2709,10 @@
   function curriculumSandbox(doc) {
     return !!doc.body?.classList.contains('logyq-curriculum') ||
       !!doc.body?.classList.contains('logyq-game')
+  }
+
+  function gamePlay(doc) {
+    return !!doc?.body?.classList?.contains('logyq-game')
   }
 
   // After the Start settle, and during the haze gate, the board stays put.
@@ -2760,6 +2795,14 @@
 
     if (candidate.moved) {
       state.lastTap = null
+      return
+    }
+
+    // Game taps do not nominate, edit, or create. Fitting is drag-only.
+    if (gamePlay(doc)) {
+      state.lastTap = null
+      clearCardMic(state.mic)
+      smiteSetArm(doc, null)
       return
     }
 
@@ -3322,7 +3365,7 @@
   }
 
   function smiteApplyPinch(doc, win, smite) {
-    if (curriculumViewLocked(doc)) return
+    if (curriculumViewLocked(doc) || gamePlay(doc)) return
     const fingers = Array.from(smite.pointers.values())
     if (fingers.length < 2 || !win.d3) return
     const a = fingers[0]
@@ -6906,6 +6949,38 @@
     }
   }
 
+  // Open playtest expansion: chains first, then branches. Every level stays
+  // selectable so the learning sequence can be sampled and tuned out of order.
+  function addOpenLevel(id, title, tree, anchorId) {
+    const nodes = []
+    ;(function walk(n){ nodes.push(n); for (const x of n.children || []) walk(x) })(tree)
+    const anchor = nodes.find(n => n.gameId === anchorId) || nodes[0]
+    const bankCards = {}, bank = []
+    for (const n of nodes) if (n.gameId !== anchor.gameId) {
+      const key = '__TREE_CARD__:' + id + ':' + n.gameId
+      bank.push(key); bankCards[key] = { ...n, children: [] }
+    }
+    gameLevels.push({ id, title, hint: '', ids: nodes.map(n => n.gameId),
+      tree: { ...anchor, children: [] }, bank, bankCards })
+  }
+  const chainSets = [
+    ['L:A:B','DL:B:C','DR:C:D'], ['DL:A:B','L:B:C','DR:C:D'],
+    ['DR:A:B','DL:B:C','L:C:D'], ['L:A:B','DR:B:C','DL:C:D']
+  ]
+  for (let round=0; round<3; round++) chainSets.forEach((p,i) => {
+    const t={name:'',gameId:'a',paint:p[0],children:[{name:'',gameId:'b',paint:p[1],children:[{name:'',gameId:'c',paint:p[2],children:[]}]}]}
+    addOpenLevel('chain-'+round+'-'+i, (16+round*4+i)+' · Chain', t, ['a','b','c'][(round+i)%3])
+  })
+  const branches = [
+    ['L:A:B','DL:B:C','DR:B:D'], ['DL:A:B','DR:B:C','DL:B:D'],
+    ['DR:A:B','DL:B:C','DR:B:D'], ['L:A:B','DR:B:C','DL:B:D']
+  ]
+  for (let round=0; round<3; round++) branches.forEach((p,i) => {
+    const t={name:'',gameId:'a',paint:p[0],children:[
+      {name:'',gameId:'b',paint:p[1],children:[]},{name:'',gameId:'c',paint:p[2],children:[]}]}
+    addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
+  })
+
   function gameProgress() {
     const value = readJson(GAME_KEY, {})
     return value && typeof value === 'object' ? value : {}
@@ -6915,11 +6990,11 @@
     const path = document.getElementById('logyq-game-path')
     if (!path) return
     const progress = gameProgress()
-    path.innerHTML = gameLevels.map((level, index) => {
-      const unlocked = index === 0 || !!progress[gameLevels[index - 1].id]
+    path.innerHTML = gameLevels.map((level) => {
       const done = !!progress[level.id]
-      return '<li><button type="button" data-game-level="' + level.id + '" ' + (unlocked ? '' : 'disabled') + '>' +
-        level.title + (done ? ' ✓' : '') + '<span>' + (unlocked ? level.hint : 'Clear the previous level first.') + '</span></button></li>'
+      return '<li><button type="button" data-game-level="' + level.id + '"' +
+        (done ? ' class="is-cleared"' : '') + '>' +
+        level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
     }).join('')
   }
 
@@ -6934,31 +7009,24 @@
     }
   }
 
-  const GAME_COLORS = { A: '#60a5fa', B: '#fb923c', C: '#86efac', D: '#f0abfc' }
-
   function gameColor(paint) {
-    const parsed = gameGrammar.parsePaint(paint)
-    if (!parsed) return '#cbd5e1'
-    if (parsed.shape === 'W') return GAME_COLORS[parsed.a] || '#cbd5e1'
+    const spec = gameGrammar.paintSpec(paint)
+    if (!spec) return '#cbd5e1'
+    if (spec.solid) return spec.solid
     ensureGamePaint()
     const svg = document.getElementById('canvas')
     const defs = svg?.querySelector('#logyq-game-defs')
-    const safe = paint.replace(/[^A-Za-z0-9_-]/g, '-')
+    const safe = String(paint).replace(/[^A-Za-z0-9_-]/g, '-')
     const id = 'logyq-game-' + safe
     if (!defs?.querySelector('#' + id)) {
       const ns = 'http://www.w3.org/2000/svg'
       const gradient = document.createElementNS(ns, 'linearGradient')
       gradient.id = id
-      const vector = parsed.shape === 'L'
-        ? { x1: '0%', y1: '0%', x2: '0%', y2: '100%' }
-        : parsed.shape === 'DL'
-          ? { x1: '100%', y1: '0%', x2: '0%', y2: '100%' }
-          : { x1: '0%', y1: '0%', x2: '100%', y2: '100%' }
-      for (const [key, value] of Object.entries(vector)) gradient.setAttribute(key, value)
-      for (const [offset, letter] of [['0%', parsed.a], ['49.9%', parsed.a], ['50%', parsed.b], ['100%', parsed.b]]) {
+      for (const [key, value] of Object.entries(spec.split)) gradient.setAttribute(key, value)
+      for (const [offset, color] of spec.stops) {
         const stop = document.createElementNS(ns, 'stop')
         stop.setAttribute('offset', offset)
-        stop.setAttribute('stop-color', GAME_COLORS[letter] || '#cbd5e1')
+        stop.setAttribute('stop-color', color)
         gradient.appendChild(stop)
       }
       defs?.appendChild(gradient)
@@ -7050,7 +7118,7 @@
     progress[level.id] = Date.now()
     try { localStorage.setItem(GAME_KEY, JSON.stringify(progress)) } catch (_error) {}
     const next = gameLevels[gameLevels.indexOf(level) + 1]
-    gameStatus(next ? 'It fits! Next level unlocked.' : 'All 15 two-card levels cleared.', true)
+    gameStatus(next ? 'It fits!' : 'All ' + gameLevels.length + ' levels cleared.', true)
     document.getElementById('logyq-game-next').hidden = !next
     return true
   }
@@ -7064,9 +7132,9 @@
 
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-game-level]')
-    if (!button || button.disabled) return
+    if (!button) return
     const index = gameLevels.findIndex((level) => level.id === button.dataset.gameLevel)
-    if (index > 0 && !gameProgress()[gameLevels[index - 1].id]) return
+    if (index < 0) return
     beginGameLevel(gameLevels[index])
   })
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
@@ -7077,7 +7145,7 @@
   document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
     openLibrary().then(() => setHomeTab('game'))
   })
-  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay }
+  preview.game = { levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath }
   // FOLDER_PURE_START
   function cloneFolderIndex(index) {
     return {

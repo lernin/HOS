@@ -768,29 +768,35 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   async function nodeCenter(name) {
     return page.evaluate((label) => {
       const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === label)
-      const rect = node.getBoundingClientRect()
+      const face = node.querySelector('rect:not(.grabzone)')
+      const rect = (face || node).getBoundingClientRect()
       return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
     }, name)
   }
 
-  async function touch(type, x, y, pointerId = 51) {
-    await page.evaluate(({ type, x, y, pointerId }) => {
+  // Down and up share one evaluate so the 160ms hold timer cannot latch
+  // between two Playwright round trips. A still press that actually lasts
+  // past the hold timer is still a hold in the app.
+  async function touch(x, y, x2 = x, y2 = y, pointerId = 51) {
+    await page.evaluate(({ x, y, x2, y2, pointerId }) => {
       const canvas = document.getElementById('canvas')
-      canvas.dispatchEvent(new PointerEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        pointerType: 'touch',
-        pointerId,
-        isPrimary: true,
-        button: 0,
-        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
-        clientX: x,
-        clientY: y,
-        screenX: x,
-        screenY: y,
-      }))
-    }, { type, x, y, pointerId })
+      for (const [type, px, py] of [['pointerdown', x, y], ['pointerup', x2, y2]]) {
+        canvas.dispatchEvent(new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerType: 'touch',
+          pointerId,
+          isPrimary: true,
+          button: 0,
+          buttons: type === 'pointerdown' ? 1 : 0,
+          clientX: px,
+          clientY: py,
+          screenX: px,
+          screenY: py,
+        }))
+      }
+    }, { x, y, x2, y2, pointerId })
   }
 
   async function zoomNow() {
@@ -802,8 +808,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
 
   const beforeTap = await zoomNow()
   const idle = await nodeCenter('Node 07')
-  await touch('pointerdown', idle.x, idle.y, 51)
-  await touch('pointerup', idle.x, idle.y, 51)
+  await touch(idle.x, idle.y, idle.x, idle.y, 51)
   await page.waitForTimeout(400)
   const afterTap = await zoomNow()
   assert.ok(Math.hypot(afterTap.x - beforeTap.x, afterTap.y - beforeTap.y) < 6, 'tap must not re-center the map')
@@ -826,8 +831,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
 
   const beforePaint = await zoomNow()
   const paintCard = await nodeCenter('Node 08')
-  await touch('pointerdown', paintCard.x, paintCard.y, 52)
-  await touch('pointerup', paintCard.x, paintCard.y, 52)
+  await touch(paintCard.x, paintCard.y, paintCard.x, paintCard.y, 52)
   await page.waitForFunction(() => {
     const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 08')
     return node?.__data__?.data?.color === '#fde68a'
@@ -849,8 +853,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
 
   const beforeBranch = await page.locator('svg#canvas g.node').count()
   const branch = await nodeCenter('Node 02')
-  await touch('pointerdown', branch.x, branch.y, 53)
-  await touch('pointerup', branch.x, branch.y + 70, 53)
+  await touch(branch.x, branch.y, branch.x, branch.y + 70, 53)
   await page.waitForFunction(() => {
     const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 02')
     return node?.__data__?.descendants?.().every((item) => item.data.color === '#fde68a')
@@ -899,8 +902,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
 
   const beforeCreate = await page.locator('svg#canvas g.node').count()
   const side = await nodeCenter('Node 04')
-  await touch('pointerdown', side.x, side.y, 54)
-  await touch('pointerup', side.x + 80, side.y, 54)
+  await touch(side.x, side.y, side.x + 80, side.y, 54)
   await page.waitForFunction((count) => document.querySelectorAll('g.node').length > count, beforeCreate)
 
   await page.locator('#logyq-paint-btn').click()
@@ -909,8 +911,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   await page.waitForFunction(() => window.LOGYQPreview.paint?.active === false)
   const beforeDownCreate = await page.locator('svg#canvas g.node').count()
   const createDown = await nodeCenter('Node 10')
-  await touch('pointerdown', createDown.x, createDown.y, 55)
-  await touch('pointerup', createDown.x, createDown.y + 70, 55)
+  await touch(createDown.x, createDown.y, createDown.x, createDown.y + 70, 55)
   await page.waitForFunction((count) => document.querySelectorAll('g.node').length > count, beforeDownCreate)
 
   assert.deepEqual(errors, [])
@@ -4649,9 +4650,29 @@ test('LOGYQ ends a cast when nothing is left on delete or Word Bank', async () =
   }
 
   async function tap(name, pointerId) {
-    const point = await face(name)
-    await touch('pointerdown', point.x, point.y, pointerId)
-    await touch('pointerup', point.x, point.y, pointerId)
+    // One turn, on the painted face. A wash or clock above the card, or a
+    // round trip longer than the hold timer, would swallow the tap.
+    await page.evaluate(({ label, pointerId }) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const face = node?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)') || node
+      const rect = face.getBoundingClientRect()
+      const x = rect.left + rect.width / 2
+      const y = rect.top + rect.height / 2
+      const fire = (type) => face.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+      fire('pointerdown')
+      fire('pointerup')
+    }, { label: name, pointerId })
     await page.waitForTimeout(40)
   }
 
@@ -4684,11 +4705,28 @@ test('LOGYQ ends a cast when nothing is left on delete or Word Bank', async () =
   await castKids()
   await tap('A1', 97)
   await tap('A1', 98)
-  const flick = await face('C')
-  await touch('pointerdown', flick.x, flick.y, 99)
-  await touch('pointermove', flick.x, flick.y + 40, 99)
-  await page.waitForTimeout(16)
-  await touch('pointerup', flick.x, flick.y + 74, 99)
+  await page.evaluate(() => {
+    const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === 'C')
+    const face = node?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)') || node
+    const rect = face.getBoundingClientRect()
+    const x = rect.left + rect.width / 2
+    const y = rect.top + rect.height / 2
+    const fire = (type, px, py) => face.dispatchEvent(new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      pointerType: 'touch',
+      pointerId: 99,
+      isPrimary: true,
+      button: 0,
+      buttons: type === 'pointerup' ? 0 : 1,
+      clientX: px,
+      clientY: py,
+    }))
+    fire('pointerdown', x, y)
+    fire('pointermove', x, y + 40)
+    fire('pointerup', x, y + 74)
+  })
   await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'C'))
   const afterFlick = await chrome()
   assert.equal(afterFlick.mercy, false, 'a flick that leaves only white cards ends the cast')
@@ -4987,9 +5025,22 @@ test('LOGYQ one-thumb tap arms green and a swipe nominates by target', async () 
   const gesture = async (x, y, dx, dy) => {
     await page.evaluate(({ x, y, dx, dy }) => {
       const canvas = document.getElementById('canvas')
+      const faceAt = (px, py) => {
+        const nodes = Array.from(document.querySelectorAll('svg#canvas g.node'))
+        for (const node of nodes) {
+          const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)')
+          const rect = face?.getBoundingClientRect()
+          if (!face || !rect || rect.width < 1) continue
+          if (px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom) return face
+        }
+        return null
+      }
       const fire = (type, px, py) => {
+        // Aim at the painted face that contains the point. elementFromPoint
+        // can land on a wash, clock, or shelf and drop the nomination.
+        const face = faceAt(px, py)
         const hit = document.elementFromPoint(px, py)
-        const target = hit && canvas.contains(hit) ? hit : canvas
+        const target = face || (hit && canvas.contains(hit) ? hit : canvas)
         target.dispatchEvent(new PointerEvent(type, {
           bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 8,
           isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: px, clientY: py,
@@ -5186,9 +5237,16 @@ test('LOGYQ rename mirrors onto the card and clears the green focus', async () =
   })
   const tap = async () => {
     await page.evaluate(({ x, y }) => {
+      const nodes = Array.from(document.querySelectorAll('svg#canvas g.node'))
+      const host = nodes.find((node) => {
+        const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)')
+        const rect = face?.getBoundingClientRect()
+        return rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+      })
+      const face = host?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)')
       const canvas = document.getElementById('canvas')
       const hit = document.elementFromPoint(x, y)
-      const target = hit && canvas.contains(hit) ? hit : canvas
+      const target = face || (hit && canvas.contains(hit) ? hit : canvas)
       const fire = (type) => target.dispatchEvent(new PointerEvent(type, {
         bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
         isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
@@ -5241,9 +5299,16 @@ test('LOGYQ rename mirrors onto the card and clears the green focus', async () =
   })
   const tapAt = async (spot) => {
     await page.evaluate(({ x, y }) => {
+      const nodes = Array.from(document.querySelectorAll('svg#canvas g.node'))
+      const host = nodes.find((node) => {
+        const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)')
+        const rect = face?.getBoundingClientRect()
+        return rect && x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+      })
+      const face = host?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)')
       const canvas = document.getElementById('canvas')
       const hit = document.elementFromPoint(x, y)
-      const target = hit && canvas.contains(hit) ? hit : canvas
+      const target = face || (hit && canvas.contains(hit) ? hit : canvas)
       const fire = (type) => target.dispatchEvent(new PointerEvent(type, {
         bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 9,
         isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: x, clientY: y,
@@ -5264,6 +5329,7 @@ test('LOGYQ rename mirrors onto the card and clears the green focus', async () =
     }
   }, again)
   assert.equal(second.editors, 1, JSON.stringify(second))
+  await page.waitForFunction(() => document.activeElement?.classList?.contains('node-edit-input'))
   await page.locator('.node-edit-input').fill('Citrus')
   const live = await read()
   assert.equal(live.name, 'Citrus')
@@ -5605,9 +5671,27 @@ test('LOGYQ clears white outlines on the midfield parents Ashley photographed', 
   }
 
   async function tap(name, pointerId) {
-    const point = await face(name)
-    await touch('pointerdown', point.x, point.y, pointerId)
-    await touch('pointerup', point.x, point.y, pointerId)
+    await page.evaluate(({ label, pointerId }) => {
+      const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((el) => el.__data__?.data?.name === label)
+      const face = node?.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)') || node
+      const rect = face.getBoundingClientRect()
+      const x = rect.left + rect.width / 2
+      const y = rect.top + rect.height / 2
+      const fire = (type) => face.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: x,
+        clientY: y,
+      }))
+      fire('pointerdown')
+      fire('pointerup')
+    }, { label: name, pointerId })
     await page.waitForTimeout(40)
   }
 

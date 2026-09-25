@@ -169,7 +169,10 @@
     },
     undo() { undo(); },
     mix(includeBank = false) { logyq.mix.randomizeTree(!!includeBank); },
-    fit() { logyq.treeManager.autoFit(); },
+    fit() {
+      if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
+      logyq.treeManager.autoFit();
+    },
     loadMap(tree, wordBank = [], options = {}) {
       const keepEditor = !!options.keepEditor;
       const keepSelection = !!options.keepSelection || keepEditor;
