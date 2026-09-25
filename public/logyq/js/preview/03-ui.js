@@ -71,6 +71,7 @@
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
       <div id="logyq-game-bar">
+        <span id="logyq-game-name"></span>
         <span id="logyq-game-tier"></span>
         <p id="logyq-game-status" role="status" aria-live="polite"></p>
         <button type="button" id="logyq-game-check">Check</button>

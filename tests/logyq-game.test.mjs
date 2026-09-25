@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import test from 'node:test'
+import * as d3 from 'd3'
 
 const root = new URL('../public/logyq/js/', import.meta.url)
 const sandbox = { window: {} }
@@ -234,6 +235,7 @@ function loadGameFragment() {
       getItem(key) { return store[key] ?? null },
     },
     structuredClone: globalThis.structuredClone,
+    d3,
     app: {},
     preview: {},
     bridge: { loadMap() {}, snapshot() { return sandbox.bridge._snapshot || { tree: null } } },
@@ -364,4 +366,42 @@ test('saved progress for an older level set still opens', () => {
   sandbox.preview.game.begin(sandbox.preview.game.levels[128])
   assert.equal(sandbox.app.game.id, 'climb-129')
   assert.equal(sandbox.app.game.cleared, false)
+})
+
+test('every solved tree fits a 360x640 phone at the readable card scale', () => {
+  const game = readFileSync(new URL('../public/logyq/js/preview/10-game.js', import.meta.url), 'utf8')
+  const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
+  assert.doesNotMatch(game, /Next level unlocked/)
+  assert.match(game, /'It fits!'/)
+  assert.match(styles, /#logyq-game-status\{[^}]*text-overflow:ellipsis/)
+  assert.match(styles, /#logyq-game-name/)
+  assert.match(styles, /height:32px/)
+  const { sandbox } = loadGameFragment()
+  const budget = sandbox.preview.game.layoutBudget
+  assert.equal(budget.minScale, 0.8)
+  assert.equal(budget.safeWidth, 344)
+  assert.equal(budget.safeHeight, 472)
+  assert.equal(budget.maxRows, 4)
+  assert.equal(budget.maxCardsWide, 3)
+  const fails = []
+  let widest = 0
+  let tallest = 0
+  for (const level of sandbox.preview.game.levels) {
+    const pieces = solutionPieces(level)
+    const tree = level.solution || grammar.physicalSolutions(pieces, 1)[0]
+    const box = sandbox.preview.game.measureSolved(tree)
+    widest = Math.max(widest, box.bounds.width)
+    tallest = Math.max(tallest, box.bounds.height)
+    if (box.rows > budget.maxRows || box.bounds.width * budget.minScale > budget.safeWidth + 0.05 || box.bounds.height * budget.minScale > budget.safeHeight + 0.05) {
+      fails.push(level.title + ' ' + box.rows + ' rows ' + box.bounds.width.toFixed(0) + 'x' + box.bounds.height.toFixed(0))
+    }
+  }
+  assert.deepEqual(fails, [])
+  assert.ok(widest <= 428.01, 'widest solved tree is ' + widest)
+  assert.ok(tallest <= 486.01, 'tallest solved tree is ' + tallest)
+  let chain = null
+  for (let i = 4; i >= 0; i--) chain = { gameId: 'p' + i, paint: 'L:A:B', children: chain ? [chain] : [] }
+  const five = sandbox.preview.game.measureSolved(chain)
+  assert.equal(five.rows, 5)
+  assert.ok(five.bounds.height * budget.minScale > budget.safeHeight)
 })

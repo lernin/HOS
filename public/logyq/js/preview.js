@@ -332,12 +332,20 @@
       body.logyq-game .logyq-shape-chip.is-outlined{background:transparent;box-shadow:0 0 0 2px #60a5fa}
       #logyq-game-path button:disabled{cursor:not-allowed;color:#94a3b8;background:#f8fafc}
       #logyq-game-path span{display:block;font-size:13px;font-weight:500;color:#64748b;margin-top:3px}
-      #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+      #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;height:32px;box-sizing:border-box;display:none;align-items:center;gap:6px;padding:0 6px;border:1px solid #cbd5e1;border-radius:10px;background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.08);overflow:hidden}
       body.logyq-game:not(.logyq-home) #logyq-game-bar{display:flex}
-      #logyq-game-tier{flex:none;font:700 11px/1 system-ui,sans-serif;color:#64748b;background:#f1f5f9;border-radius:999px;padding:5px 7px;white-space:nowrap}
+      body.logyq-game:not(.logyq-home) #logyq-map-title{display:none}
+      #logyq-game-name{flex:0 1 auto;min-width:0;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:750 12px/1 system-ui,sans-serif;color:#0f172a}
+      #logyq-game-tier{flex:none;font:700 10px/1 system-ui,sans-serif;color:#64748b;background:#f1f5f9;border-radius:999px;padding:3px 6px;white-space:nowrap}
       #logyq-game-tier.is-up{color:#166534;background:#dcfce7}
-      #logyq-game-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
-      #logyq-game-bar button{border:1px solid #bfdbfe;background:#fff;color:#1e40af;border-radius:9px;padding:8px 10px;font-weight:750;cursor:pointer}
+      #logyq-game-status{margin:0;flex:1 1 auto;min-width:3.4em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650;line-height:1.1;color:#334155}
+      #logyq-game-bar button{flex:none;border:1px solid #bfdbfe;background:#fff;color:#1e40af;border-radius:7px;padding:3px 7px;font:750 12px/1 system-ui,sans-serif;cursor:pointer}
+      @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+        body.logyq-game:not(.logyq-home) #logyq-game-bar{top:48px;left:8px;right:8px}
+      }
+      @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
+        body.logyq-game:not(.logyq-home) #logyq-game-bar{top:8px;left:calc(148px + env(safe-area-inset-left) + 8px);right:68px}
+      }
       #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
       #logyq-game-next[hidden]{display:none}
       #logyq-curriculum .logiq-empty p{margin:0}
@@ -727,6 +735,7 @@
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
       <div id="logyq-game-bar">
+        <span id="logyq-game-name"></span>
         <span id="logyq-game-tier"></span>
         <p id="logyq-game-status" role="status" aria-live="polite"></p>
         <button type="button" id="logyq-game-check">Check</button>
@@ -7020,13 +7029,76 @@
     ['decoy', 'Decoy'],
   ]
   const CLIMB_ALT = {
-    chain4: 'Chain Link', chain5: 'Five Chain', fork: 'Branch Chain',
+    chain4: 'Chain Link', chain5: 'Tall Chain', fork: 'Branch Chain',
     deep: 'Grandchild', wide: 'Wide Fork', mixed: 'Wide Mix', decoy: 'Decoy Mix',
   }
   const CLIMB_TIER_SIZES = [[4, 14], [5, 14], [6, 14], [7, 15], [8, 15], [9, 14], [10, 14]]
   const CLIMB_CHAINS = {
     chain4: [['A', 'B', 'C', 'D', 'B'], ['A', 'B', 'C', 'D', 'C']],
-    chain5: [['A', 'B', 'C', 'D', 'C', 'B'], ['A', 'B', 'A', 'C', 'D', 'C']],
+    // Four contacts, not five. A fifth row is 627px tall and cannot fit the
+    // 360×640 safe area at the readable scale. These flows stay unique for
+    // every Layer / Diagonal mix, and they are not the Four Chain flows.
+    chain5: [['A', 'B', 'D', 'C', 'B'], ['A', 'B', 'D', 'C', 'D']],
+  }
+  // Same spacing as treeManager.applyLayout (card 140×63, gaps 20 and 78).
+  // minScale is 70% of the 1.15 overview cap measured on a 390×844 phone,
+  // where one card draws at 161×72. The safe box is a 360×640 portrait after
+  // the 48px header, this 32px strip, the 56px Word Bank, and the 8px gaps
+  // the game camera adds around that chrome.
+  const GAME_LAYOUT = {
+    cardWidth: 140,
+    cardHeight: 63,
+    nodeWidth: 160,
+    nodeHeight: 141,
+    minScale: 0.8,
+    safeWidth: 344,
+    safeHeight: 472,
+    maxRows: 4,
+    maxCardsWide: 3,
+  }
+
+  function gameSeparation(a, b) {
+    let A = a
+    let B = b
+    while (A.depth > B.depth) A = A.parent
+    while (B.depth > A.depth) B = B.parent
+    while (A !== B) { A = A.parent; B = B.parent }
+    const up = Math.max(1, a.depth - A.depth)
+    const base = up === 1 ? 0.9 : 0.75
+    const inc = up > 1 ? 0.35 * (up - 1) : 0
+    const bonus = 0.2 * Math.max(0, (a.children?.length ?? 0) - 1) + 0.2 * Math.max(0, (b.children?.length ?? 0) - 1)
+    return Math.max(0.1, base + inc + bonus)
+  }
+
+  function layoutSolvedTree(tree) {
+    const root = d3.hierarchy(tree)
+    d3.tree().nodeSize([GAME_LAYOUT.nodeWidth, GAME_LAYOUT.nodeHeight]).separation(gameSeparation)(root)
+    const positions = {}
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    let depth = 0
+    root.each((node) => {
+      if (node.data?.gameId) positions[node.data.gameId] = { x: node.x, y: node.y }
+      minX = Math.min(minX, node.x - GAME_LAYOUT.cardWidth / 2)
+      maxX = Math.max(maxX, node.x + GAME_LAYOUT.cardWidth / 2)
+      minY = Math.min(minY, node.y - GAME_LAYOUT.cardHeight / 2)
+      maxY = Math.max(maxY, node.y + GAME_LAYOUT.cardHeight / 2)
+      if (node.depth > depth) depth = node.depth
+    })
+    return {
+      positions,
+      rows: depth + 1,
+      bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+    }
+  }
+
+  function solvedTreeFits(tree) {
+    const box = layoutSolvedTree(tree)
+    return box.rows <= GAME_LAYOUT.maxRows
+      && box.bounds.width * GAME_LAYOUT.minScale <= GAME_LAYOUT.safeWidth + 0.05
+      && box.bounds.height * GAME_LAYOUT.minScale <= GAME_LAYOUT.safeHeight + 0.05
   }
 
   function climbRng(seed) {
@@ -7147,6 +7219,7 @@
       for (let attempt = 0; attempt < 12 && !tree; attempt++) {
         const candidate = climbRelabel(climbCandidate(kind, rng, attempt === 11), climbPermute(rng))
         if (!climbUnique(candidate)) continue
+        if (!solvedTreeFits(candidate)) continue
         const extra = wantDecoy ? climbDecoy(candidate) : null
         if (wantDecoy && !extra) continue
         tree = candidate
@@ -7292,14 +7365,60 @@
     const status = document.getElementById('logyq-game-status')
     if (status) {
       status.textContent = message
+      status.title = message
       status.style.color = cleared ? '#166534' : ''
     }
+  }
+
+  function solutionOf(level) {
+    if (level.solution) return level.solution
+    const ids = new Set(level.ids || [])
+    const pieces = []
+    const take = (node) => {
+      if (!node?.gameId || !ids.has(node.gameId)) return
+      if (!pieces.some((piece) => piece.gameId === node.gameId)) pieces.push({ gameId: node.gameId, paint: node.paint })
+      for (const child of node.children || []) take(child)
+    }
+    take(level.tree)
+    for (const card of Object.values(level.bankCards || {})) {
+      if (ids.has(card.gameId) && !pieces.some((piece) => piece.gameId === card.gameId)) {
+        pieces.push({ gameId: card.gameId, paint: card.paint })
+      }
+    }
+    return gameGrammar.physicalSolutions(pieces, 1)[0] || null
+  }
+
+  function armGameCamera(level) {
+    const engine = bridge.core
+    if (!engine?.state || typeof d3 === 'undefined') return null
+    const solution = solutionOf(level)
+    if (!solution) return null
+    const laid = layoutSolvedTree(solution)
+    engine.state.gameSolvedFrame = {
+      anchorId: level.tree?.gameId,
+      positions: laid.positions,
+      bounds: laid.bounds,
+    }
+    return laid
+  }
+
+  function fitGameCamera() {
+    const frame = bridge.core?.state?.gameSolvedFrame
+    if (!frame?.bounds) return
+    bridge.core.treeManager?.fitGameSolution?.(frame.bounds)
+  }
+
+  function refitGameCamera() {
+    if (typeof gameCameraLocked !== 'function' || !gameCameraLocked()) return
+    if (document.body.classList.contains('logyq-home')) return
+    fitGameCamera()
   }
 
   function leaveGamePlay() {
     const session = app.game
     if (!session) return
     app.game = null
+    if (bridge.core?.state) bridge.core.state.gameSolvedFrame = null
     document.body.classList.remove('logyq-game')
     delete window.__logyqGameDropAllowed
     delete window.__logyqGameBankNode
@@ -7322,9 +7441,12 @@
 
   function showGameTier(level, levelUp) {
     const tierEl = document.getElementById('logyq-game-tier')
-    if (!tierEl) return
-    tierEl.textContent = 'Tier ' + level.tier
-    if (tierEl.classList) tierEl.classList.toggle('is-up', !!levelUp)
+    if (tierEl) {
+      tierEl.textContent = 'Tier ' + level.tier
+      if (tierEl.classList) tierEl.classList.toggle('is-up', !!levelUp)
+    }
+    const nameEl = document.getElementById('logyq-game-name')
+    if (nameEl) nameEl.textContent = level.title || ''
   }
 
   function beginGameLevel(level, opts) {
@@ -7383,8 +7505,20 @@
     updateMapName()
     hideLibrary()
     gameStatus(levelUp ? 'Level up!' : level.hint)
-    bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice())
+    const laid = armGameCamera(level)
+    bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice(), { fit: false })
+    if (laid) fitGameCamera()
     setSaveState('saved')
+  }
+
+  function presentSolved(level) {
+    beginGameLevel(level)
+    const solution = solutionOf(level)
+    const engine = bridge.core
+    if (!solution || !engine?.state) return
+    engine.state.layoutMotionMs = 0
+    bridge.loadMap(paintGameTree(structuredClone(solution)), level.bank.slice(), { fit: false })
+    engine.state.layoutMotionMs = null
   }
 
   function maybeGameClear(snapshot) {
@@ -7427,9 +7561,13 @@
   document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
     openLibrary().then(() => setHomeTab('game'))
   })
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('resize', refitGameCamera)
+    window.addEventListener('orientationchange', refitGameCamera)
+  }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
-    recordSolve, chooseNext,
+    recordSolve, chooseNext, presentSolved, layoutBudget: GAME_LAYOUT, measureSolved: layoutSolvedTree,
   }
   // FOLDER_PURE_START
   function cloneFolderIndex(index) {
