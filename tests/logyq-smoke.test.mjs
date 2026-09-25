@@ -4988,9 +4988,22 @@ test('LOGYQ one-thumb tap arms green and a swipe nominates by target', async () 
   const gesture = async (x, y, dx, dy) => {
     await page.evaluate(({ x, y, dx, dy }) => {
       const canvas = document.getElementById('canvas')
+      const faceAt = (px, py) => {
+        const nodes = Array.from(document.querySelectorAll('svg#canvas g.node'))
+        for (const node of nodes) {
+          const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow):not(.logyq-edit-focus)')
+          const rect = face?.getBoundingClientRect()
+          if (!face || !rect || rect.width < 1) continue
+          if (px >= rect.left && px <= rect.right && py >= rect.top && py <= rect.bottom) return face
+        }
+        return null
+      }
       const fire = (type, px, py) => {
+        // Aim at the painted face that contains the point. elementFromPoint
+        // can land on a wash, clock, or shelf and drop the nomination.
+        const face = faceAt(px, py)
         const hit = document.elementFromPoint(px, py)
-        const target = hit && canvas.contains(hit) ? hit : canvas
+        const target = face || (hit && canvas.contains(hit) ? hit : canvas)
         target.dispatchEvent(new PointerEvent(type, {
           bubbles: true, cancelable: true, composed: true, pointerType: 'touch', pointerId: 8,
           isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1, clientX: px, clientY: py,
