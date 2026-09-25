@@ -117,6 +117,28 @@
         window.addEventListener('popstate', () => setTimeout(addTimerCard, 0));
         setTimeout(addTimerCard, 0);
       })();
+
+      // Phonics is a standalone letter-card page. Sibling Lab card only.
+      (() => {
+        const addPhonicsCard = () => {
+          const grid = document.querySelector('.experience-grid');
+          if (!grid || document.getElementById('phonics-hub-card')) return;
+
+          const card = document.createElement('article');
+          card.className = 'experience-card';
+          card.id = 'phonics-hub-card';
+          card.innerHTML = '<span class="experience-icon">Ph</span><span class="experience-copy"><strong>Phonics</strong><small>Letter cards for classroom phonics. Swipe to record what each child can do.</small></span><button class="experience-go" type="button">Go</button>';
+          card.querySelector('button')?.addEventListener('click', () => { window.location.href = '/phonics-swipe'; });
+
+          const timerCard = document.getElementById('timer-hub-card');
+          if (timerCard) timerCard.after(card); else grid.append(card);
+        };
+
+        const root = document.getElementById('root');
+        if (root) new MutationObserver(addPhonicsCard).observe(root, { childList: true, subtree: true });
+        window.addEventListener('popstate', () => setTimeout(addPhonicsCard, 0));
+        setTimeout(addPhonicsCard, 0);
+      })();
     </script>
   </body>
 </html>

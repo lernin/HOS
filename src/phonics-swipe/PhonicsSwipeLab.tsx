@@ -309,6 +309,13 @@ export function PhonicsSwipeLab() {
       </section>
 
       <section className="phonics-teacher-panel" aria-label="Teacher evidence controls">
+        <button
+          className="phonics-lab-back"
+          type="button"
+          onClick={() => { window.location.href = '/' }}
+        >
+          ← The Lab
+        </button>
         <div className="phonics-deck-row">
           <label className="phonics-deck-select">
             <span>Set</span>
