@@ -2504,7 +2504,7 @@ test('map folders nest, move, and delete without touching map rows', () => {
   const start = source.indexOf('// FOLDER_PURE_START')
   const end = source.indexOf('// FOLDER_PURE_END')
   assert.ok(start >= 0 && end > start)
-  const api = new Function(`${source.slice(start, end)}; return { normalizeFolderIndex, createFolder, renameFolder, moveFolder, deleteFolder, placeMap, libraryView, folderCrumbs, moveChoices, directCount, prunePlacements };`)()
+  const api = new Function(`${source.slice(start, end)}; return { normalizeFolderIndex, createFolder, renameFolder, libraryRenameDecision, moveFolder, deleteFolder, placeMap, libraryView, folderCrumbs, moveChoices, directCount, prunePlacements };`)()
   const maps = [
     { id: 'robins', name: 'Robins', tree: { name: 'Robins' }, word_bank: ['red'] },
     { id: 'oaks', name: 'Oaks', tree: { name: 'Oaks' }, word_bank: [] },
@@ -2529,7 +2529,21 @@ test('map folders nest, move, and delete without touching map rows', () => {
   assert.equal(api.moveFolder(index, 'animals', 'birds').index.folders.find((folder) => folder.id === 'animals').parentId, null)
   const renamed = api.renameFolder(index, 'birds', 'Songbirds')
   assert.equal(renamed.ok, true)
+  assert.equal(renamed.index.folders.find((folder) => folder.id === 'birds').name, 'Songbirds')
+  assert.equal(renamed.index.folders.find((folder) => folder.id === 'birds').parentId, 'animals')
+  assert.equal(renamed.index.folders.find((folder) => folder.id === 'nests').parentId, 'birds')
+  assert.equal(renamed.index.placements.robins, 'birds')
+  assert.equal(renamed.index.placements.oaks, 'animals')
+  assert.equal(api.renameFolder(renamed.index, 'birds', '   ').ok, false)
+  assert.equal(api.renameFolder(renamed.index, 'birds', '   ').index.folders.find((folder) => folder.id === 'birds').name, 'Songbirds')
   index = renamed.index
+  assert.equal(api.libraryRenameDecision('Birds', '  Songbirds  ', { max: 80, blank: 'cancel' }).action, 'save')
+  assert.equal(api.libraryRenameDecision('Birds', '  Songbirds  ', { max: 80, blank: 'cancel' }).name, 'Songbirds')
+  assert.deepEqual(api.libraryRenameDecision('Birds', '   ', { max: 80, blank: 'cancel' }), { action: 'cancel' })
+  assert.deepEqual(api.libraryRenameDecision('Birds', 'Birds', { max: 80, blank: 'cancel' }), { action: 'keep' })
+  assert.equal(api.libraryRenameDecision('Robins', 'x'.repeat(200), { max: 120, blank: 'fallback', fallback: 'Untitled map' }).name.length, 120)
+  assert.deepEqual(api.libraryRenameDecision('Robins', '   ', { max: 120, blank: 'fallback', fallback: 'Untitled map' }), { action: 'save', name: 'Untitled map' })
+  assert.deepEqual(api.libraryRenameDecision('Untitled map', ' ', { max: 120, blank: 'fallback', fallback: 'Untitled map' }), { action: 'keep' })
   const lifted = api.deleteFolder(index, 'songbirds')
   assert.equal(lifted.removed, false)
   const removed = api.deleteFolder(index, 'birds')
