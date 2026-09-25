@@ -179,26 +179,14 @@ function piecePool(level) {
   return pieces
 }
 
-function physicalSolutions(pieces) {
-  const found = []
-  const ids = pieces.map((piece) => piece.gameId)
-  const consider = (tree) => {
-    if (grammar.complete(tree, ids)) found.push(tree)
-  }
-  if (pieces.length === 2) {
-    const [a, b] = pieces
-    consider(card(a.gameId, a.paint, [card(b.gameId, b.paint)]))
-    consider(card(b.gameId, b.paint, [card(a.gameId, a.paint)]))
-    return found
-  }
-  for (const root of pieces) {
-    const rest = pieces.filter((piece) => piece !== root)
-    consider(card(root.gameId, root.paint, rest.map((piece) => card(piece.gameId, piece.paint))))
-    consider(card(root.gameId, root.paint, rest.slice().reverse().map((piece) => card(piece.gameId, piece.paint))))
-    consider(card(root.gameId, root.paint, [card(rest[0].gameId, rest[0].paint, [card(rest[1].gameId, rest[1].paint)])]))
-    consider(card(root.gameId, root.paint, [card(rest[1].gameId, rest[1].paint, [card(rest[0].gameId, rest[0].paint)])]))
-  }
-  return found
+function solutionPieces(level) {
+  const ids = new Set(level.ids)
+  return piecePool(level).filter((piece) => ids.has(piece.gameId))
+}
+
+function decoyPieces(level) {
+  const ids = new Set(level.ids)
+  return piecePool(level).filter((piece) => !ids.has(piece.gameId))
 }
 
 function loadGameFragment() {
@@ -265,13 +253,13 @@ function loadGameFragment() {
 test('every game level is selectable without clearing an earlier one', () => {
   const { sandbox, elements, listeners } = loadGameFragment()
   const levels = sandbox.preview.game.levels
-  assert.equal(levels.length, 39)
+  assert.equal(levels.length, 139)
   levels.forEach((level, index) => {
     assert.equal(level.title.startsWith((index + 1) + ' · '), true, level.title)
   })
   sandbox.preview.game.render()
   const html = elements['logyq-game-path'].innerHTML
-  assert.equal(html.match(/data-game-level=/g).length, 39)
+  assert.equal(html.match(/data-game-level=/g).length, 139)
   assert.doesNotMatch(html, /disabled/)
   assert.doesNotMatch(html, /Clear the previous level/)
   const open = (id) => {
@@ -291,8 +279,8 @@ test('completion is recorded and never required for the next pick', () => {
   const { sandbox, elements } = loadGameFragment()
   const levels = sandbox.preview.game.levels
   const first = levels[0]
-  const pieces = piecePool(first)
-  const solved = physicalSolutions(pieces)[0]
+  const pieces = solutionPieces(first)
+  const solved = grammar.physicalSolutions(pieces, 2)[0]
   assert.ok(solved, first.id)
   sandbox.preview.game.begin(first)
   sandbox.bridge._snapshot = { tree: solved }
@@ -306,22 +294,74 @@ test('completion is recorded and never required for the next pick', () => {
   sandbox.preview.game.begin(levels[27])
   assert.equal(sandbox.app.game.id, levels[27].id)
   const last = levels.at(-1)
-  const lastSolved = physicalSolutions(piecePool(last))[0]
+  const lastSolved = grammar.physicalSolutions(solutionPieces(last), 1)[0]
   assert.ok(lastSolved, last.id)
   sandbox.preview.game.begin(last)
   sandbox.bridge._snapshot = { tree: lastSolved }
   sandbox.preview.game.check()
-  assert.equal(elements['logyq-game-status'].textContent, 'All 39 levels cleared.')
-  assert.equal(elements['logyq-game-next'].hidden, true)
+  assert.equal(elements['logyq-game-status'].textContent, 'It fits!')
+  assert.equal(elements['logyq-game-next'].hidden, false)
+  for (const level of levels) {
+    const progress = JSON.parse(sandbox.localStorage.getItem('logyq_game_progress_v2') || '{}')
+    if (progress[level.id]) continue
+    const tree = grammar.physicalSolutions(solutionPieces(level), 1)[0]
+    assert.ok(tree, level.id)
+    sandbox.preview.game.begin(level)
+    sandbox.bridge._snapshot = { tree }
+    sandbox.preview.game.check()
+  }
+  assert.equal(elements['logyq-game-status'].textContent, 'All 139 levels cleared.')
+  assert.equal(elements['logyq-game-next'].hidden, false)
 })
 
 test('each playtest level has a solution made only of visible contacts', () => {
   const { sandbox } = loadGameFragment()
   const stuck = []
   for (const level of sandbox.preview.game.levels) {
-    const pieces = piecePool(level)
+    const pieces = solutionPieces(level)
     assert.equal(new Set(pieces.map((piece) => piece.gameId)).size, level.ids.length, level.id)
-    if (!physicalSolutions(pieces).length) stuck.push(level.id + ' ' + level.title)
+    if (!grammar.physicalSolutions(pieces, 2).length) stuck.push(level.id + ' ' + level.title)
   }
   assert.deepEqual(stuck, [])
+})
+
+test('every level has one physical solution and every decoy has no seat', () => {
+  const { sandbox } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  assert.equal(levels.length, 139)
+  const tiers = {}
+  for (const level of levels) tiers[level.tier] = (tiers[level.tier] || 0) + 1
+  assert.deepEqual(tiers, { 1: 15, 2: 12, 3: 12, 4: 14, 5: 14, 6: 14, 7: 15, 8: 15, 9: 14, 10: 14 })
+  for (const level of levels) {
+    const pieces = solutionPieces(level)
+    const sols = grammar.physicalSolutions(pieces, 2)
+    assert.equal(sols.length, 1, level.title)
+    assert.equal(grammar.complete(sols[0], level.ids), true, level.title)
+    const paints = pieces.map((piece) => piece.paint)
+    if (level.id.startsWith('climb-')) {
+      assert.equal(new Set(paints).size, paints.length, level.title + ' repeats a face')
+      assert.equal(paints.some((paint) => {
+        const parsed = grammar.parsePaint(paint)
+        return parsed.shape === 'W' || parsed.a === parsed.b
+      }), false, level.title + ' has a solid card')
+    }
+    for (const decoy of decoyPieces(level)) {
+      assert.equal(grammar.validSeats(sols[0], decoy, 1), 0, level.title + ' decoy ' + decoy.paint)
+    }
+  }
+})
+
+test('saved progress for an older level set still opens', () => {
+  const { sandbox, elements, store } = loadGameFragment()
+  store.logyq_game_progress_v2 = JSON.stringify({
+    'two-l-dl': 1,
+    'climb-129': 2,
+    'retired-level': 3,
+    _adaptive: { clean: 2, tier: 10, played: { 'climb-129': 2, 'missing-id': 4 } },
+  })
+  assert.doesNotThrow(() => sandbox.preview.game.render())
+  assert.match(elements['logyq-game-path'].innerHTML, /data-game-level="climb-129" class="is-cleared"/)
+  sandbox.preview.game.begin(sandbox.preview.game.levels[128])
+  assert.equal(sandbox.app.game.id, 'climb-129')
+  assert.equal(sandbox.app.game.cleared, false)
 })
