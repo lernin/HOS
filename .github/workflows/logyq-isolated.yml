@@ -5,6 +5,7 @@ on:
       - 'refactor/logyq-isolated'
     paths:
       - public/logyq/**
+      - api/logyq-maps.ts
       - tests/logyq-*
       - scripts/assemble-logyq.mjs
       - package.json
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - public/logyq/**
+      - api/logyq-maps.ts
       - tests/logyq-*
       - scripts/assemble-logyq.mjs
       - package.json

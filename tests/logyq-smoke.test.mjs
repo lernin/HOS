@@ -18,53 +18,68 @@ test.after(async () => {
   await browser?.close()
 })
 
+function rpcFromRequest(route) {
+  const url = route.request().url()
+  let posted = {}
+  try { posted = route.request().postDataJSON() || {} } catch (_error) {}
+  if (url.includes('/api/logyq-maps')) {
+    const args = posted.args && typeof posted.args === 'object' ? posted.args : {}
+    return { name: posted.name || '', body: args, url, method: route.request().method() }
+  }
+  const name = url.includes('/rpc/') ? url.split('/rpc/')[1].split('?')[0] : ''
+  return { name, body: posted, url, method: route.request().method() }
+}
+
+async function fulfillMapRpc(route, { store, capture, acceptPin, listBody }) {
+  const request = rpcFromRequest(route)
+  const { name, body } = request
+  capture.push(request)
+  if (acceptPin && Object.prototype.hasOwnProperty.call(body, 'pin') && body.pin !== acceptPin && ['logiq_map_list', 'logiq_map_save', 'logiq_map_delete'].includes(name)) {
+    await route.fulfill({
+      status: 403,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Wrong Lab password', code: '28000' }),
+    })
+    return
+  }
+  if (name === 'logiq_map_list' && listBody) {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(listBody) })
+    return
+  }
+  if (name === 'logiq_map_list') {
+    const rows = store.maps.slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) })
+    return
+  }
+  if (name === 'logiq_map_save') {
+    const id = body.map_id || `map-${store.maps.length + 1}`
+    const row = {
+      id,
+      name: body.map_name,
+      tree: body.map_tree,
+      word_bank: body.map_word_bank,
+      updated_at: new Date().toISOString(),
+    }
+    const index = store.maps.findIndex((item) => item.id === id)
+    if (index >= 0) store.maps[index] = { ...store.maps[index], ...row }
+    else store.maps.unshift(row)
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(id) })
+    return
+  }
+  if (name === 'logiq_map_delete') {
+    store.maps = store.maps.filter((item) => item.id !== body.map_id)
+    await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' })
+    return
+  }
+  await route.fulfill({ status: 404, body: 'not found' })
+}
+
 async function stubMaps(context, { maps = [], capture = [], acceptPin = null, listBody = null } = {}) {
   const store = { maps: maps.map((row) => ({ ...row })) }
-  await context.route('https://jzaghifuhinkzzhiojre.supabase.co/**', async (route) => {
-    const url = route.request().url()
-    const name = url.includes('/rpc/') ? url.split('/rpc/')[1].split('?')[0] : ''
-    let body = {}
-    try { body = route.request().postDataJSON() || {} } catch (_error) {}
-    capture.push({ name, url, method: route.request().method(), body })
-    if (acceptPin && body.pin !== acceptPin && ['logiq_map_list', 'logiq_map_save', 'logiq_map_delete'].includes(name)) {
-      await route.fulfill({
-        status: 403,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'Wrong Lab password', code: '28000' }),
-      })
-      return
-    }
-    if (name === 'logiq_map_list' && listBody) {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(listBody) })
-      return
-    }
-    if (name === 'logiq_map_list') {
-      const rows = store.maps.slice().sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(rows) })
-      return
-    }
-    if (name === 'logiq_map_save') {
-      const id = body.map_id || `map-${store.maps.length + 1}`
-      const row = {
-        id,
-        name: body.map_name,
-        tree: body.map_tree,
-        word_bank: body.map_word_bank,
-        updated_at: new Date().toISOString(),
-      }
-      const index = store.maps.findIndex((item) => item.id === id)
-      if (index >= 0) store.maps[index] = { ...store.maps[index], ...row }
-      else store.maps.unshift(row)
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(id) })
-      return
-    }
-    if (name === 'logiq_map_delete') {
-      store.maps = store.maps.filter((item) => item.id !== body.map_id)
-      await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' })
-      return
-    }
-    await route.fulfill({ status: 404, body: 'not found' })
-  })
+  const options = { store, capture, acceptPin, listBody }
+  const handle = (route) => fulfillMapRpc(route, options)
+  await context.route('**/api/logyq-maps', handle)
+  await context.route('https://jzaghifuhinkzzhiojre.supabase.co/**', handle)
   return store
 }
 
@@ -1421,12 +1436,11 @@ test('LOGYQ normal map above-root reparent still promotes the dragged card', asy
   await context.close()
 })
 
-test('LOGYQ missing Lab PIN asks to connect and does not claim the library is empty', async () => {
+test('LOGYQ opens live maps without a Lab PIN prompt', async () => {
   const capture = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, pin: null })
   await stubMaps(context, {
     capture,
-    acceptPin: 'test-pin',
     maps: [
       { id: 'animals', name: 'Animals', tree: { name: 'Animals', formatVersion: 2 }, word_bank: [], updated_at: '2026-09-22T00:12:35.000Z' },
       { id: 'logyq-2', name: 'LOGYQ 2', tree: { name: 'LOGYQ 2', formatVersion: 2 }, word_bank: [], updated_at: '2026-09-22T00:11:39.000Z' },
@@ -1437,28 +1451,19 @@ test('LOGYQ missing Lab PIN asks to connect and does not claim the library is em
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
-  await page.waitForSelector('#logiq-pin.is-open')
-  assert.doesNotMatch(await page.locator('#logiq-map-list').innerText(), /No maps yet/)
-  await page.locator('#logiq-pin-cancel').click()
   await waitForBoot(page)
-  const locked = await page.locator('#logiq-map-list').innerText()
-  assert.match(locked, /still saved/)
-  assert.doesNotMatch(locked, /No maps yet/)
-  await page.locator('[data-connect]').click()
-  await page.waitForSelector('#logiq-pin.is-open')
-  await page.locator('#logiq-pin-input').fill('0000')
-  await page.locator('#logiq-pin-form button[type="submit"]').click()
-  await page.waitForSelector('.logiq-pin-error.is-visible')
-  assert.match(await page.locator('.logiq-pin-error').innerText(), /still saved/)
-  assert.doesNotMatch(await page.locator('#logiq-map-list').innerText(), /No maps yet/)
-  await page.locator('#logiq-pin-input').fill('test-pin')
-  await page.locator('#logiq-pin-form button[type="submit"]').click()
   await page.waitForSelector('.logiq-map-name')
+  assert.equal(await page.locator('#logiq-pin.is-open').count(), 0)
+  const library = await page.locator('#logiq-map-list').innerText()
+  assert.doesNotMatch(library, /Enter the Lab PIN|No maps yet/)
   const names = await page.locator('.logiq-map-name').allTextContents()
   assert.ok(names.includes('Animals'))
   assert.ok(names.includes('LOGYQ'))
   assert.ok(names.includes('LOGYQ 2'))
-  assert.equal(capture.filter((request) => request.name === 'logiq_map_list').at(-1)?.body?.pin, 'test-pin')
+  const lists = capture.filter((request) => request.name === 'logiq_map_list')
+  assert.ok(lists.length > 0)
+  assert.equal(lists.at(-1)?.body?.pin, undefined)
+  assert.ok(lists.every((request) => request.url.includes('/api/logyq-maps')))
   assert.deepEqual(errors, [])
   await context.close()
 })
@@ -6608,10 +6613,11 @@ test('LOGYQ Thekonym mode pairs a Roboto Condensed onym with a sans essence, and
   const calls = []
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
   await stubMaps(context)
-  await context.route('https://jzaghifuhinkzzhiojre.supabase.co/**', async (route) => {
-    const url = route.request().url()
-    if (!url.includes('/rpc/lab_thekonym_')) return route.fallback()
-    const name = url.split('/rpc/')[1].split('?')[0]
+  await context.route('**/api/logyq-maps', async (route) => {
+    let posted = {}
+    try { posted = route.request().postDataJSON() || {} } catch (_error) {}
+    const name = posted.name || ''
+    if (!name.startsWith('lab_thekonym_')) return route.fallback()
     calls.push(name)
     await route.fulfill({
       status: 200,
