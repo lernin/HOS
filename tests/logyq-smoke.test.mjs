@@ -7640,3 +7640,101 @@ test('LOGYQ my maps list fits a phone viewport', async () => {
   assert.deepEqual(errors, [])
   await context.close()
 })
+
+test('LOGYQ phone rename saves a folder and a map file name', async () => {
+  const capture = []
+  const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  const store = await stubMaps(context, {
+    capture,
+    maps: [{
+      id: 'robins',
+      name: 'Robins',
+      tree: { name: 'Robin card', formatVersion: 2, _uid: 'root', children: [{ name: 'Nest', _uid: 'nest' }] },
+      word_bank: ['red'],
+      updated_at: '2026-09-24T00:00:00.000Z',
+    }],
+  })
+  const page = await context.newPage()
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
+  await waitForBoot(page)
+  await page.waitForSelector('#logiq-library.is-open')
+
+  await page.locator('#logyq-new-folder').click()
+  await page.locator('[data-new-folder] input').fill('Birds')
+  await page.locator('[data-new-folder] button').click()
+  await page.locator('.logiq-map-row').locator('[data-map-action="move"]').click()
+  await page.locator('.logiq-map-row select').selectOption({ label: 'Birds' })
+  await page.locator('.logiq-map-row [data-map-move] button').click()
+
+  const birds = page.locator('.logyq-folder-row', { hasText: 'Birds' })
+  await birds.locator('[data-folder-action="rename"]').click()
+  const folderInput = birds.locator('[data-folder-rename] input')
+  await page.waitForFunction(() => {
+    const input = document.querySelector('[data-folder-rename].is-open input')
+    return input && document.activeElement === input && input.selectionStart === 0 && input.selectionEnd === input.value.length
+  })
+  await folderInput.fill('Songbirds')
+  await folderInput.press('Enter')
+  await page.waitForFunction(() => document.querySelector('.logyq-folder-open .logiq-map-name')?.textContent === 'Songbirds')
+
+  const song = page.locator('.logyq-folder-row', { hasText: 'Songbirds' })
+  await song.locator('[data-folder-action="rename"]').click()
+  await song.locator('[data-folder-rename] input').fill('Nope')
+  await song.locator('[data-folder-rename] input').press('Escape')
+  assert.equal(await page.locator('.logyq-folder-open', { hasText: 'Songbirds' }).count(), 1)
+  assert.equal(await page.locator('#logiq-library.is-open').count(), 1)
+
+  await page.locator('.logyq-folder-open', { hasText: 'Songbirds' }).click()
+  assert.equal(await page.locator('.logiq-map-name', { hasText: 'Robins' }).count(), 1)
+  const placed = await page.evaluate(() => JSON.parse(localStorage.getItem('logyq_map_folders_v1')))
+  const folderId = placed.folders.find((folder) => folder.name === 'Songbirds').id
+  assert.equal(placed.placements.robins, folderId)
+  assert.equal(placed.folders.find((folder) => folder.id === folderId).parentId, null)
+
+  await page.locator('[data-map-action="rename"]').click()
+  const mapInput = page.locator('[data-map-rename] input')
+  await page.waitForFunction(() => {
+    const input = document.querySelector('[data-map-rename].is-open input')
+    return input && document.activeElement === input && input.selectionStart === 0 && input.selectionEnd === input.value.length
+  })
+  await mapInput.fill('Thrushes')
+  await mapInput.press('Enter')
+  await page.waitForFunction(() => document.querySelector('.logiq-map-name')?.textContent === 'Thrushes')
+  const save = capture.filter((request) => request.name === 'logiq_map_save').at(-1)
+  assert.equal(save.body.map_id, 'robins')
+  assert.equal(save.body.map_name, 'Thrushes')
+  assert.equal(save.body.map_tree.name, 'Robin card')
+  assert.equal(save.body.map_tree.children[0].name, 'Nest')
+  assert.deepEqual(save.body.map_word_bank, ['red'])
+  assert.equal(store.maps[0].name, 'Thrushes')
+  assert.equal(store.maps[0].tree.name, 'Robin card')
+
+  const saves = capture.filter((request) => request.name === 'logiq_map_save').length
+  await page.locator('[data-map-action="rename"]').click()
+  await page.locator('[data-map-rename] input').fill('Cancelled')
+  await page.locator('[data-map-rename] input').press('Escape')
+  assert.equal(await page.locator('.logiq-map-name', { hasText: 'Thrushes' }).count(), 1)
+  assert.equal(await page.locator('#logiq-library.is-open').count(), 1)
+  assert.equal(capture.filter((request) => request.name === 'logiq_map_save').length, saves)
+
+  await page.locator('[data-map-action="rename"]').click()
+  await page.locator('[data-map-rename] input').fill('Warblers')
+  await page.locator('[data-map-rename] input').evaluate((input) => input.blur())
+  await page.waitForFunction(() => document.querySelector('.logiq-map-name')?.textContent === 'Warblers')
+  assert.equal(capture.filter((request) => request.name === 'logiq_map_save').at(-1).body.map_name, 'Warblers')
+  assert.equal(capture.filter((request) => request.name === 'logiq_map_save').at(-1).body.map_tree.name, 'Robin card')
+  const stillInside = await page.evaluate(() => JSON.parse(localStorage.getItem('logyq_map_folders_v1')))
+  assert.equal(stillInside.placements.robins, folderId)
+
+  const fit = await page.evaluate(() => ({
+    view: document.documentElement.clientWidth,
+    doc: document.documentElement.scrollWidth,
+    list: document.getElementById('logiq-map-list').scrollWidth - document.getElementById('logiq-map-list').clientWidth,
+  }))
+  assert.ok(fit.doc <= fit.view + 1, `document ${fit.doc} > ${fit.view}`)
+  assert.ok(fit.list <= 1, `list overflow ${fit.list}`)
+  assert.deepEqual(errors, [])
+  await context.close()
+})
