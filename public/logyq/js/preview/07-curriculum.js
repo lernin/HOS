@@ -119,6 +119,7 @@
   ]
   const CURRICULUM_VEGAS_SETTLE_AT = 7200
   const CURRICULUM_VEGAS_SETTLE_MS = 900
+  const CURRICULUM_HAZE_FADE_MS = 250
 
   const curriculumVegas = { token: 0, timers: [] }
 
@@ -126,6 +127,27 @@
     curriculumVegas.token += 1
     curriculumVegas.timers.forEach((id) => clearTimeout(id))
     curriculumVegas.timers = []
+  }
+
+  // Haze is only the pre-Start gate. Start fades it off as the tumble
+  // begins, then the layer leaves the stack so nothing sits on the cards.
+  function showCurriculumHaze(gate) {
+    gate._hazeToken = (gate._hazeToken || 0) + 1
+    gate.classList.remove('is-clearing')
+    gate.hidden = false
+  }
+
+  function fadeCurriculumHaze(gate) {
+    if (!gate || gate.hidden || gate.classList.contains('is-clearing')) return
+    gate.classList.add('is-clearing')
+    const token = (gate._hazeToken || 0) + 1
+    gate._hazeToken = token
+    window.setTimeout(() => {
+      if (gate._hazeToken !== token) return
+      if (app.curriculum?.phase === 'gate') return
+      gate.hidden = true
+      gate.classList.remove('is-clearing')
+    }, CURRICULUM_HAZE_FADE_MS)
   }
 
   function renderCurriculumChrome() {
@@ -138,7 +160,14 @@
     if (playing) document.body.dataset.curriculumPhase = phase
     else delete document.body.dataset.curriculumPhase
     const gate = document.getElementById('logyq-curriculum-gate')
-    if (gate) gate.hidden = !(playing && phase !== 'play')
+    if (gate) {
+      if (playing && phase === 'gate') showCurriculumHaze(gate)
+      else if (!playing) {
+        gate._hazeToken = (gate._hazeToken || 0) + 1
+        gate.classList.remove('is-clearing')
+        gate.hidden = true
+      } else fadeCurriculumHaze(gate)
+    }
     const start = document.getElementById('logyq-curriculum-start')
     if (start) start.hidden = phase !== 'gate'
     const status = document.getElementById('logyq-curriculum-status')

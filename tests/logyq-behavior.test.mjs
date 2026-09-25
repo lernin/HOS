@@ -2403,6 +2403,13 @@ test('curriculum pack matches parent structure and ignores sibling order', () =>
   const frost = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
   assert.match(frost, /logyq-curriculum-frost/)
   assert.match(frost, /rgba\(244,241,228,\.36\)/)
+  assert.match(frost, /is-clearing/)
+  assert.match(frost, /backdrop-filter:none/)
+  assert.doesNotMatch(frost, /blur\(1px\)/)
+  assert.doesNotMatch(frost, /rgba\(244,241,228,\.08\)/)
+  assert.match(source, /CURRICULUM_HAZE_FADE_MS = 250/)
+  assert.match(source, /phase === 'gate'/)
+  assert.match(source, /fadeCurriculumHaze/)
   assert.doesNotMatch(source, /state\.wordBank = words/)
 })
 

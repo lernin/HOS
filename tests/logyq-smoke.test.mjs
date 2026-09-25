@@ -1084,16 +1084,31 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
   await page.waitForTimeout(450)
   const midShuffle = await page.evaluate((before) => {
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
+    const gate = document.getElementById('logyq-curriculum-gate')
+    const frost = document.querySelector('.logyq-curriculum-frost')
+    const blurOf = (el, pseudo) => {
+      if (!el) return 'none'
+      const live = getComputedStyle(el, pseudo)
+      return live.backdropFilter || live.webkitBackdropFilter || 'none'
+    }
     return {
       phase: document.body.dataset.curriculumPhase,
       x: t.x,
       y: t.y,
       k: t.k,
       same: Math.abs(t.x - before.x) < 0.5 && Math.abs(t.y - before.y) < 0.5 && Math.abs(t.k - before.k) < 0.001,
+      gateHidden: !gate || gate.hidden || getComputedStyle(gate).display === 'none',
+      frostBlur: blurOf(frost),
+      gateBefore: blurOf(gate, '::before'),
+      gateAfter: blurOf(gate, '::after'),
     }
   }, gateCamera)
   assert.equal(midShuffle.phase, 'shuffle')
   assert.equal(midShuffle.same, true, `camera moved during shuffle x=${midShuffle.x} y=${midShuffle.y} k=${midShuffle.k}`)
+  assert.equal(midShuffle.gateHidden, true, 'haze gate should leave the stack once Start fades')
+  assert.equal(midShuffle.frostBlur, 'none')
+  assert.equal(midShuffle.gateBefore, 'none')
+  assert.equal(midShuffle.gateAfter, 'none')
 
   await page.waitForFunction(() => document.body.dataset.curriculumPhase === 'play', null, { timeout: 12000 })
   assert.equal(await page.locator('#logyq-curriculum-start').isVisible(), false)
@@ -1115,7 +1130,15 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
   const beforeKey = await page.evaluate(() => window.LOGYQPreview.curriculum.structureKey(window.LOGYQBridge.snapshot().tree))
   const mixing = await page.evaluate(() => {
     window.__logyqCurriculumMix()
-    return window.LOGYQBridge.core.state.repositionMode
+    const gate = document.getElementById('logyq-curriculum-gate')
+    const frost = document.querySelector('.logyq-curriculum-frost')
+    const frostStyle = frost ? getComputedStyle(frost) : null
+    return {
+      reposition: window.LOGYQBridge.core.state.repositionMode,
+      phase: document.body.dataset.curriculumPhase,
+      gateHidden: !gate || gate.hidden || getComputedStyle(gate).display === 'none',
+      frostBlur: frostStyle ? (frostStyle.backdropFilter || frostStyle.webkitBackdropFilter || 'none') : 'none',
+    }
   })
   const mixedSpread = await page.evaluate((previous) => {
     const cards = window.LOGYQBridge.core.state.root.descendants()
@@ -1129,7 +1152,10 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
       pile: !!window.LOGYQBridge.snapshot().tree?.curriculumPile,
     }
   }, beforeKey)
-  assert.equal(mixing, 'mix')
+  assert.equal(mixing.reposition, 'mix')
+  assert.equal(mixing.phase, 'shuffle')
+  assert.equal(mixing.gateHidden, true, 're-Mix must not put the haze back over the cards')
+  assert.equal(mixing.frostBlur, 'none')
   assert.notEqual(mixedSpread.key, mixedSpread.previous)
   assert.equal(mixedSpread.roots, 1)
   assert.equal(mixedSpread.linked, true)
