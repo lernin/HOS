@@ -4651,8 +4651,28 @@ test('LOGYQ ends a cast when nothing is left on delete or Word Bank', async () =
 
   async function tap(name, pointerId) {
     const point = await face(name)
-    await touch('pointerdown', point.x, point.y, pointerId)
-    await touch('pointerup', point.x, point.y, pointerId)
+    // Down and up in one turn so a slow runner cannot latch a hold between them.
+    await page.evaluate(({ x, y, pointerId }) => {
+      const fire = (type) => {
+        const hit = document.elementFromPoint(x, y)
+        const canvas = document.getElementById('canvas')
+        const target = hit && canvas?.contains(hit) ? hit : canvas
+        target.dispatchEvent(new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerType: 'touch',
+          pointerId,
+          isPrimary: true,
+          button: 0,
+          buttons: type === 'pointerup' ? 0 : 1,
+          clientX: x,
+          clientY: y,
+        }))
+      }
+      fire('pointerdown')
+      fire('pointerup')
+    }, { x: point.x, y: point.y, pointerId })
     await page.waitForTimeout(40)
   }
 
@@ -4686,10 +4706,28 @@ test('LOGYQ ends a cast when nothing is left on delete or Word Bank', async () =
   await tap('A1', 97)
   await tap('A1', 98)
   const flick = await face('C')
-  await touch('pointerdown', flick.x, flick.y, 99)
-  await touch('pointermove', flick.x, flick.y + 40, 99)
-  await page.waitForTimeout(16)
-  await touch('pointerup', flick.x, flick.y + 74, 99)
+  await page.evaluate(({ x, y }) => {
+    const fire = (type, px, py) => {
+      const hit = document.elementFromPoint(px, py)
+      const canvas = document.getElementById('canvas')
+      const target = hit && canvas?.contains(hit) ? hit : canvas
+      target.dispatchEvent(new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        pointerType: 'touch',
+        pointerId: 99,
+        isPrimary: true,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        clientX: px,
+        clientY: py,
+      }))
+    }
+    fire('pointerdown', x, y)
+    fire('pointermove', x, y + 40)
+    fire('pointerup', x, y + 74)
+  }, { x: flick.x, y: flick.y })
   await page.waitForFunction(() => !window.LOGYQBridge.core.state.root.descendants().some((node) => node.data.name === 'C'))
   const afterFlick = await chrome()
   assert.equal(afterFlick.mercy, false, 'a flick that leaves only white cards ends the cast')
