@@ -768,29 +768,35 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   async function nodeCenter(name) {
     return page.evaluate((label) => {
       const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === label)
-      const rect = node.getBoundingClientRect()
+      const face = node.querySelector('rect:not(.grabzone)')
+      const rect = (face || node).getBoundingClientRect()
       return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
     }, name)
   }
 
-  async function touch(type, x, y, pointerId = 51) {
-    await page.evaluate(({ type, x, y, pointerId }) => {
+  // Down and up share one evaluate so the 160ms hold timer cannot latch
+  // between two Playwright round trips. A still press that actually lasts
+  // past the hold timer is still a hold in the app.
+  async function touch(x, y, x2 = x, y2 = y, pointerId = 51) {
+    await page.evaluate(({ x, y, x2, y2, pointerId }) => {
       const canvas = document.getElementById('canvas')
-      canvas.dispatchEvent(new PointerEvent(type, {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        pointerType: 'touch',
-        pointerId,
-        isPrimary: true,
-        button: 0,
-        buttons: type === 'pointerdown' || type === 'pointermove' ? 1 : 0,
-        clientX: x,
-        clientY: y,
-        screenX: x,
-        screenY: y,
-      }))
-    }, { type, x, y, pointerId })
+      for (const [type, px, py] of [['pointerdown', x, y], ['pointerup', x2, y2]]) {
+        canvas.dispatchEvent(new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+          pointerType: 'touch',
+          pointerId,
+          isPrimary: true,
+          button: 0,
+          buttons: type === 'pointerdown' ? 1 : 0,
+          clientX: px,
+          clientY: py,
+          screenX: px,
+          screenY: py,
+        }))
+      }
+    }, { x, y, x2, y2, pointerId })
   }
 
   async function zoomNow() {
@@ -802,8 +808,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
 
   const beforeTap = await zoomNow()
   const idle = await nodeCenter('Node 07')
-  await touch('pointerdown', idle.x, idle.y, 51)
-  await touch('pointerup', idle.x, idle.y, 51)
+  await touch(idle.x, idle.y, idle.x, idle.y, 51)
   await page.waitForTimeout(400)
   const afterTap = await zoomNow()
   assert.ok(Math.hypot(afterTap.x - beforeTap.x, afterTap.y - beforeTap.y) < 6, 'tap must not re-center the map')
@@ -826,8 +831,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
 
   const beforePaint = await zoomNow()
   const paintCard = await nodeCenter('Node 08')
-  await touch('pointerdown', paintCard.x, paintCard.y, 52)
-  await touch('pointerup', paintCard.x, paintCard.y, 52)
+  await touch(paintCard.x, paintCard.y, paintCard.x, paintCard.y, 52)
   await page.waitForFunction(() => {
     const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 08')
     return node?.__data__?.data?.color === '#fde68a'
@@ -849,8 +853,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
 
   const beforeBranch = await page.locator('svg#canvas g.node').count()
   const branch = await nodeCenter('Node 02')
-  await touch('pointerdown', branch.x, branch.y, 53)
-  await touch('pointerup', branch.x, branch.y + 70, 53)
+  await touch(branch.x, branch.y, branch.x, branch.y + 70, 53)
   await page.waitForFunction(() => {
     const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 02')
     return node?.__data__?.descendants?.().every((item) => item.data.color === '#fde68a')
@@ -899,8 +902,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
 
   const beforeCreate = await page.locator('svg#canvas g.node').count()
   const side = await nodeCenter('Node 04')
-  await touch('pointerdown', side.x, side.y, 54)
-  await touch('pointerup', side.x + 80, side.y, 54)
+  await touch(side.x, side.y, side.x + 80, side.y, 54)
   await page.waitForFunction((count) => document.querySelectorAll('g.node').length > count, beforeCreate)
 
   await page.locator('#logyq-paint-btn').click()
@@ -909,8 +911,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
   await page.waitForFunction(() => window.LOGYQPreview.paint?.active === false)
   const beforeDownCreate = await page.locator('svg#canvas g.node').count()
   const createDown = await nodeCenter('Node 10')
-  await touch('pointerdown', createDown.x, createDown.y, 55)
-  await touch('pointerup', createDown.x, createDown.y + 70, 55)
+  await touch(createDown.x, createDown.y, createDown.x, createDown.y + 70, 55)
   await page.waitForFunction((count) => document.querySelectorAll('g.node').length > count, beforeDownCreate)
 
   assert.deepEqual(errors, [])
