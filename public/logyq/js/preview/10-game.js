@@ -469,37 +469,60 @@
     return gameGrammar.physicalSolutions(pieces, 1)[0] || null
   }
 
-  function armGameCamera(level) {
-    const engine = bridge.core
-    if (!engine?.state || typeof d3 === 'undefined') return null
-    const solution = solutionOf(level)
-    if (!solution) return null
-    const laid = layoutSolvedTree(solution)
-    engine.state.gameSolvedFrame = {
-      anchorId: level.tree?.gameId,
-      positions: laid.positions,
-      bounds: laid.bounds,
-    }
-    return laid
+  let gameFitTimer = null
+  let gameFitPending = false
+  const gamePointers = new Set()
+
+  function cancelGameCameraFit() {
+    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
+    gameFitTimer = null
+    bridge.core?.elements?.svg?.interrupt?.('game-fit')
   }
 
-  function fitGameCamera() {
-    const frame = bridge.core?.state?.gameSolvedFrame
-    if (!frame?.bounds) return
-    bridge.core.treeManager?.fitGameSolution?.(frame.bounds)
+  function fitGameCamera(duration = 0) {
+    const engine = bridge.core
+    const root = engine?.state?.root
+    if (!app.game || !root || gamePointers.size) return
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
+    root.each(node => {
+      left = Math.min(left, node.x - GAME_LAYOUT.cardWidth / 2)
+      right = Math.max(right, node.x + GAME_LAYOUT.cardWidth / 2)
+      top = Math.min(top, node.y - GAME_LAYOUT.cardHeight / 2)
+      bottom = Math.max(bottom, node.y + GAME_LAYOUT.cardHeight / 2)
+    })
+    engine.treeManager?.fitGameBounds?.({x:left,y:top,width:right-left,height:bottom-top}, {duration})
+  }
+
+  function scheduleGameCameraFit(delay = 280) {
+    if (!app.game || !bridge.core?.state?.root) return
+    gameFitPending = true
+    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
+    gameFitTimer = null
+    if (gamePointers.size) return
+    gameFitTimer = setTimeout(() => {
+      gameFitTimer = null
+      if (!app.game || document.body.classList.contains('logyq-home')) return
+      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
+          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
+        scheduleGameCameraFit(100)
+        return
+      }
+      gameFitPending = false
+      fitGameCamera(280)
+    }, delay)
   }
 
   function refitGameCamera() {
-    if (typeof gameCameraLocked !== 'function' || !gameCameraLocked()) return
-    if (document.body.classList.contains('logyq-home')) return
-    fitGameCamera()
+    scheduleGameCameraFit(80)
   }
 
   function leaveGamePlay() {
     const session = app.game
     if (!session) return
     app.game = null
-    if (bridge.core?.state) bridge.core.state.gameSolvedFrame = null
+    cancelGameCameraFit()
+    gamePointers.clear()
+    gameFitPending = false
     document.body.classList.remove('logyq-game')
     delete window.__logyqGameDropAllowed
     delete window.__logyqGameBankNode
@@ -559,36 +582,24 @@
     document.body.classList.add('logyq-game', 'logyq-map-open')
     document.getElementById('logyq-game-next').hidden = true
     showGameTier(level, levelUp)
-    window.__logyqGameDropAllowed = ({ tree, movingUid, drop, trash, multi }) => {
-      if (trash || multi) return false
-      const allowed = gameGrammar.canDrop(tree, movingUid, drop)
-      if (!allowed && drop) {
-        noteWrongDrop()
-        gameStatus('Those visible edges do not fit. Try the other order.')
-      }
-      return allowed
-    }
+    // Movement uses the mapper's structural rules. Edge matching is checked
+    // on the completed board, so an intermediate mismatch never locks a card.
+    window.__logyqGameDropAllowed = ({ drop, trash, multi }) => !!drop && !trash && !multi
     window.__logyqGameBankNode = (word) => {
       const card = level.bankCards?.[word]
       return card ? paintGameTree(structuredClone(card)) : null
     }
-    window.__logyqGameBankDropAllowed = ({ tree, words, drop }) => {
-      if (words.length !== 1) return false
-      const card = level.bankCards?.[words[0]]
-      const allowed = !!card && gameGrammar.canAdd(tree, card, drop)
-      if (!allowed && drop) {
-        noteWrongDrop()
-        gameStatus('That card does not fit there. Try the other side of the tree.')
-      }
-      return allowed
-    }
+    window.__logyqGameBankDropAllowed = ({ words, drop }) =>
+      !!drop && words.length === 1 && !!level.bankCards?.[words[0]]
     ensureGamePaint()
     updateMapName()
     hideLibrary()
     gameStatus(levelUp ? 'Level up!' : level.hint)
-    const laid = armGameCamera(level)
+    cancelGameCameraFit()
+    gamePointers.clear()
+    gameFitPending = false
     bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice(), { fit: false })
-    if (laid) fitGameCamera()
+    fitGameCamera()
     setSaveState('saved')
   }
 
@@ -600,13 +611,22 @@
     engine.state.layoutMotionMs = 0
     bridge.loadMap(paintGameTree(structuredClone(solution)), level.bank.slice(), { fit: false })
     engine.state.layoutMotionMs = null
+    fitGameCamera()
   }
 
   function maybeGameClear(snapshot) {
     const session = app.game
-    if (!session || session.cleared) return false
+    if (!session) return false
     const level = gameLevels.find((item) => item.id === session.id)
-    if (!level || !gameGrammar.complete(snapshot?.tree, level.ids)) return false
+    if (!level || !gameGrammar.complete(snapshot?.tree, level.ids)) {
+      if (session.cleared) {
+        session.cleared = false
+        document.getElementById('logyq-game-next').hidden = true
+        gameStatus('Keep arranging the pieces, then check the contacts.')
+      }
+      return false
+    }
+    if (session.cleared) return true
     session.cleared = true
     const progress = writeProgress(recordSolve(gameProgress(), level.id, session.wrongDrops || 0))
     const solvedCount = gameLevels.filter((item) => progress[item.id]).length
@@ -620,6 +640,7 @@
     if (!app.game) return
     if (maybeGameClear(bridge.snapshot())) return
     if (app.game.cleared) return
+    noteWrongDrop()
     gameStatus('Not yet. Only the physical color contacts count.')
   }
 
@@ -643,6 +664,22 @@
     openLibrary().then(() => setHomeTab('game'))
   })
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pointerdown', event => {
+      if (!app.game) return
+      gamePointers.add(event.pointerId)
+      gameFitPending = true
+      cancelGameCameraFit()
+    }, true)
+    const release = event => {
+      gamePointers.delete(event.pointerId)
+      if (!gamePointers.size && gameFitPending) scheduleGameCameraFit()
+    }
+    window.addEventListener('pointerup', release, true)
+    window.addEventListener('pointercancel', release, true)
+    window.addEventListener('blur', () => {
+      gamePointers.clear()
+      if (gameFitPending) scheduleGameCameraFit()
+    })
     window.addEventListener('resize', refitGameCamera)
     window.addEventListener('orientationchange', refitGameCamera)
   }

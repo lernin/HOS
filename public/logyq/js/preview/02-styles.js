@@ -62,6 +62,10 @@
       }
       #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
       #logyq-game-next[hidden]{display:none}
+      body.logyq-game svg#canvas g.node rect:not(.grabzone),
+      body.logyq-mobile-v162.logyq-game.v2-branch-drag svg#canvas g.node rect:not(.grabzone){fill:var(--logyq-piece-fill,#fff)!important;stroke:#fff!important}
+      body.logyq-game svg#canvas .caret-dot{fill:#22c55e!important;stroke:#fff;stroke-width:2;pointer-events:none}
+
       #logyq-curriculum .logiq-empty p{margin:0}
       .logyq-level-intro{margin:4px 0 14px;color:#64748b;font-size:13px}
       #logyq-level-path{list-style:none;margin:0 auto 28px;padding:8px 0 12px;width:min(440px,100%);display:grid;gap:16px;position:relative}

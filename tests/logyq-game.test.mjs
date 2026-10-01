@@ -69,7 +69,7 @@ test('home tabs share one even row at phone width and in landscape', () => {
   assert.match(phone, /font-size:clamp\(13px,3\.7vw,16px\)/)
 })
 
-test('game play fits on entry and then keeps the camera fixed', () => {
+test('game play keeps manual camera gestures locked; board changes reframe separately', () => {
   const config = readFileSync(new URL('../public/logyq/js/engine/01-config.js', import.meta.url), 'utf8')
   const tree = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
   const history = readFileSync(new URL('../public/logyq/js/engine/05-history.js', import.meta.url), 'utf8')

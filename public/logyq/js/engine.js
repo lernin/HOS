@@ -2555,6 +2555,22 @@ function setSelected(uid){
   }
 
   /* ======================= CARET POSITION ======================= */
+  function showGameChildCaret(targetUid) {
+    const { state, elements, config: CONFIG } = logyq;
+    if (!document.body.classList.contains('logyq-game')) return false;
+    const target = state.root?.descendants().find(n => n.data._uid === targetUid);
+    if (!target) return false;
+    const moving = new Set(elements.gNodes.selectAll('g.node.is-subtree').data().map(n => n.data._uid));
+    const children = (target.children || []).filter(n => !moving.has(n.data._uid));
+    const last = children[children.length - 1];
+    // A node drop appends a child. Show that same slot, not a color overlay.
+    const x = last ? last.x + CONFIG.CARD_WIDTH / 2 + 10 : target.x;
+    const y = last ? last.y : target.y + CONFIG.CARD_HEIGHT / 2 + 14;
+    elements.caretDot.attr('cx', x).attr('cy', y)
+      .attr('r', CONFIG.CARET_DOT_RADIUS).style('opacity', 1);
+    return true;
+  }
+
   function caretXYFromHit(hit){
     const { state, config: CONFIG } = logyq
     /* [patch] edgeSibling-caret-sibling start */
@@ -2944,6 +2960,7 @@ window.addEventListener('keydown', onGroupHotkeys, { passive: false });
     showToast,
     flashMoved,
     caretXYFromHit,
+    showGameChildCaret,
     insertNodeAtDrop,
     moveSelectionToTarget,
     removeNode,
@@ -3913,6 +3930,7 @@ state.dragState.drop = null;
 } else if (drop.type === 'node') {
   const targetUid = drop.targetUid;
 
+  if (!logyq.selection.showGameChildCaret(targetUid)) {
   // highlight the target node
   elements.gNodes.selectAll("g.node")
     .filter(n => n.data && n.data._uid === targetUid)
@@ -3928,6 +3946,7 @@ state.dragState.drop = null;
       .classed("hover-adopt-sub", true);
   }
 
+  }
   state.dragState.drop = { type: 'node', targetUid };
 
     
@@ -5386,7 +5405,7 @@ state.chipDrag.drop = {
   const targetH = state.root?.descendants()
     .find(n => n.data && n.data._uid === targetUid);
 
-  if (targetH) {
+  if (targetH && !logyq.selection.showGameChildCaret(targetUid)) {
     // highlight target node
     elements.gNodes.selectAll("g.node")
       .filter(n => n.data && n.data._uid === targetUid)
@@ -5406,6 +5425,10 @@ state.chipDrag.drop = {
   // Normal maps keep the historical behavior. LOGYQ Game explicitly allows
   // a loose puzzle card to become the new root when its physical edge fits.
   state.chipDrag.drop = window.__logyqGameBankNode ? { type: 'rootAbove' } : null
+  if (state.chipDrag.drop) {
+    const [x, y] = logyq.selection.caretXYFromHit(drop._hit);
+    elements.caretDot.attr('cx', x).attr('cy', y).style('opacity', 1);
+  }
 }
 
 
@@ -6038,32 +6061,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       return Math.max(0.1, base+inc+bonus);
     });
     state.layout(root);
-    this.pinGameAnchor(root);
     return root;
-  },
-
-  // Game play frames the finished tree once. Later layouts keep the starting
-  // card on the spot it occupies in that finished tree, so the frozen camera
-  // still contains the solve. Maps and Curriculum never set this frame.
-  pinGameAnchor(root){
-    const { state } = logyq
-    const frame = state.gameSolvedFrame
-    if (!frame || !root) return
-    if (typeof gameCameraLocked !== 'function' || !gameCameraLocked()) return
-    const spot = frame.positions && frame.positions[frame.anchorId]
-    if (!spot) return
-    let anchor = null
-    root.each((node) => {
-      if (!anchor && node.data && node.data.gameId === frame.anchorId) anchor = node
-    })
-    if (!anchor) return
-    const dx = spot.x - anchor.x
-    const dy = spot.y - anchor.y
-    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return
-    root.each((node) => {
-      node.x += dx
-      node.y += dy
-    })
   },
 
   syncCreateHitSlots(){
@@ -6353,6 +6351,7 @@ const nEnter = selNodes.enter()
       .style("pointer-events", "none");
     allNodes.select("rect:not(.grabzone)")
       .attr("data-uid", d => d.data._uid)
+      .style("--logyq-piece-fill", d => d.data.gameId ? d.data.color : null)
       .style("fill", d => d.data.color || null);
     this.bindUidStamp(allNodes);
     glide(allNodes).attr("transform", d=>`translate(${d.x},${d.y})`);
@@ -6477,9 +6476,8 @@ centerOnSelected(opts = {}) {
       .call(state.zoom.transform, target)
   },
 
-  // One instant frame of the solved tree inside the measured safe area.
-  // Called at level start and again on resize. Play itself never calls it.
-  fitGameSolution(bounds){
+  // Fit the current assembled board inside the measured safe area.
+  fitGameBounds(bounds, { duration = 0 } = {}){
     const { state, elements } = logyq
     if (typeof gameCameraLocked === 'function' && !gameCameraLocked()) return
     const frame = this.usableFrame()
@@ -6529,7 +6527,15 @@ centerOnSelected(opts = {}) {
     if (!isFinite(scale) || scale <= 0) return
     const tx = (innerL + innerR) / 2 - scale * (bounds.x + bounds.width / 2)
     const ty = (innerT + innerB) / 2 - scale * (bounds.y + bounds.height / 2)
-    elements.svg.interrupt().call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+    const target = d3.zoomIdentity.translate(tx, ty).scale(scale)
+    const current = d3.zoomTransform(frame.svgNode)
+    if (Math.abs(current.x - tx) < 0.5 && Math.abs(current.y - ty) < 0.5 && Math.abs(current.k - scale) < 0.0005) return
+    elements.svg.interrupt('game-fit')
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (duration > 0 && !reduced) {
+      elements.svg.transition('game-fit').duration(duration).ease(d3.easeCubicInOut)
+        .call(state.zoom.transform, target)
+    } else elements.svg.call(state.zoom.transform, target)
   },
 
   autoFit(pad=24){

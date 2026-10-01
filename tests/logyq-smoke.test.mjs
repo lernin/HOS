@@ -10,6 +10,7 @@ let browser
 test.before(async () => {
   browser = await chromium.launch({
     headless: true,
+    ...(process.env.LOGYQ_EXECUTABLE_PATH ? { executablePath: process.env.LOGYQ_EXECUTABLE_PATH } : {}),
     ...(process.env.LOGYQ_CHROME ? { channel: 'chrome' } : {}),
   })
 })
@@ -7728,5 +7729,108 @@ test('every solved game tree stays in the phone safe area', async () => {
   await page.waitForSelector('#logiq-library.is-open')
   assert.equal(await page.locator('#logiq-library').getAttribute('data-shelf'), 'game')
   assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('game reframes smoothly after a layout change and freezes while a pointer is held', async () => {
+  const context = await newContext({ viewport: {width:390,height:844}, isMobile:true, hasTouch:true })
+  await stubMaps(context, { maps: [] })
+  const page = await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`, {waitUntil:'networkidle'})
+  await waitForBoot(page)
+  const camera = () => page.evaluate(() => {
+    const t = window.LOGYQBridge.core.elements.svg.node().__zoom
+    return {x:t.x,y:t.y,k:t.k}
+  })
+  await page.evaluate(() => window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[129]))
+  await page.waitForTimeout(650)
+  const before = await camera()
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent('pointerdown',{pointerId:7}))
+    const level = window.LOGYQPreview.game.levels[129]
+    window.LOGYQBridge.loadMap(structuredClone(level.solution),[],{fit:false})
+  })
+  await page.waitForTimeout(700)
+  assert.deepEqual(await camera(), before, 'a held pointer must not chase a moving viewport')
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup',{pointerId:7})))
+  await page.waitForFunction(k => window.LOGYQBridge.core.elements.svg.node().__zoom.k < k - 0.01, before.k, {timeout:2000})
+  const during = await camera()
+  await page.waitForTimeout(600)
+  const after = await camera()
+  assert.ok(after.k < before.k, 'the wider board must resize to fit')
+  assert.ok(during.k > after.k + 0.001, 'the camera must pass through intermediate scales')
+  const bounds = await page.locator('svg#canvas g.nodes').boundingBox()
+  const bar = await page.locator('#logyq-game-bar').boundingBox()
+  const dock = await page.locator('#Dock').boundingBox()
+  assert.ok(bounds.y >= bar.y + bar.height + 7)
+  assert.ok(bounds.y + bounds.height <= (dock?.y ?? 844) - 7)
+  assert.ok(bounds.x >= 7 && bounds.x + bounds.width <= 383)
+  await context.close()
+})
+
+test('game placed cards can be picked up and reparented with a visible destination dot', async () => {
+  const context = await newContext({ viewport: {width:390,height:844}, isMobile:true, hasTouch:true })
+  await stubMaps(context, {maps:[]})
+  const page = await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`, {waitUntil:'networkidle'})
+  await waitForBoot(page)
+  await page.evaluate(() => window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[125]))
+  await page.waitForTimeout(700)
+  await page.locator('#logyq-game-check').click()
+  assert.equal(await page.locator('#logyq-game-next').isVisible(),true)
+  const info = await page.evaluate(() => {
+    const root = window.LOGYQBridge.core.state.root
+    const leaf = root.descendants().find(n => n.depth === root.height)
+    const center = n => {
+      const el = Array.from(document.querySelectorAll('svg#canvas g.node')).find(el => el.__data__?.data._uid === n.data._uid)
+      const r = el.getBoundingClientRect()
+      return {x:r.x+r.width/2,y:r.y+r.height/2}
+    }
+    return {uid:leaf.data._uid,rootUid:root.data._uid,from:center(leaf),to:center(root)}
+  })
+  const cdp = await context.newCDPSession(page)
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...info.from,id:1}]})
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:info.from.x+18,y:info.from.y-18,id:1}]})
+  await page.waitForTimeout(60)
+  const offset = await page.evaluate(point => {
+    const r = document.querySelector('#logyq-v162-branch-preview svg')?.getBoundingClientRect()
+    return r ? {x:r.x+r.width/2-point.x,y:r.y+r.height/2-point.y} : {x:0,y:0}
+  }, {x:info.from.x+18,y:info.from.y-18})
+  const destination = {x:info.to.x-offset.x,y:info.to.y-offset.y}
+  for(let i=1;i<=12;i++) {
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:info.from.x+(destination.x-info.from.x)*i/12,y:info.from.y+(destination.y-info.from.y)*i/12,id:1}]})
+    await page.waitForTimeout(20)
+  }
+  const aim = await page.evaluate(() => {
+    const core = window.LOGYQBridge.core
+    const dot = core.elements.caretDot.node()
+    const root = core.state.root
+    const last = root.children.at(-1)
+    const faces = Array.from(document.querySelectorAll('svg#canvas g.node rect:not(.grabzone)'))
+    return {drop:core.state.dragState.drop,dotOpacity:getComputedStyle(dot).opacity,
+      dotX:+dot.getAttribute('cx'),lastX:last.x,lastHalf:core.config.CARD_WIDTH/2,
+      colors:faces.map(el=>({actual:getComputedStyle(el).fill,expected:el.style.fill}))}
+  })
+  assert.equal(aim.drop?.type,'node')
+  assert.equal(aim.drop.targetUid,info.rootUid)
+  assert.equal(aim.dotOpacity,'1')
+  assert.ok(aim.dotX > aim.lastX+aim.lastHalf)
+  assert.ok(aim.colors.every(face=>face.actual === face.expected),JSON.stringify(aim.colors))
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+  await page.waitForTimeout(900)
+  const parent = await page.evaluate(uid => window.LOGYQBridge.core.state.root.descendants().find(n=>n.data._uid===uid)?.parent?.data._uid,info.uid)
+  assert.equal(parent,info.rootUid,'a placed card can move even when its new contacts do not match yet')
+  await page.locator('#logyq-game-check').click()
+  assert.equal(await page.locator('#logyq-game-next').isVisible(),false)
+  assert.match(await page.locator('#logyq-game-status').textContent(),/Not yet/)
+  const leafDot = await page.evaluate(uid => {
+    const core = window.LOGYQBridge.core
+    const leaf = core.state.root.descendants().find(n=>n.data._uid===uid)
+    core.selection.showGameChildCaret(uid)
+    return {x:+core.elements.caretDot.attr('cx'),y:+core.elements.caretDot.attr('cy'),leafX:leaf.x,leafBottom:leaf.y+core.config.CARD_HEIGHT/2}
+  },info.uid)
+  assert.equal(leafDot.x,leafDot.leafX)
+  assert.ok(leafDot.y > leafDot.leafBottom)
+  await cdp.detach()
   await context.close()
 })

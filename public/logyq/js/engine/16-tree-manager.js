@@ -260,32 +260,7 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       return Math.max(0.1, base+inc+bonus);
     });
     state.layout(root);
-    this.pinGameAnchor(root);
     return root;
-  },
-
-  // Game play frames the finished tree once. Later layouts keep the starting
-  // card on the spot it occupies in that finished tree, so the frozen camera
-  // still contains the solve. Maps and Curriculum never set this frame.
-  pinGameAnchor(root){
-    const { state } = logyq
-    const frame = state.gameSolvedFrame
-    if (!frame || !root) return
-    if (typeof gameCameraLocked !== 'function' || !gameCameraLocked()) return
-    const spot = frame.positions && frame.positions[frame.anchorId]
-    if (!spot) return
-    let anchor = null
-    root.each((node) => {
-      if (!anchor && node.data && node.data.gameId === frame.anchorId) anchor = node
-    })
-    if (!anchor) return
-    const dx = spot.x - anchor.x
-    const dy = spot.y - anchor.y
-    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return
-    root.each((node) => {
-      node.x += dx
-      node.y += dy
-    })
   },
 
   syncCreateHitSlots(){
@@ -575,6 +550,7 @@ const nEnter = selNodes.enter()
       .style("pointer-events", "none");
     allNodes.select("rect:not(.grabzone)")
       .attr("data-uid", d => d.data._uid)
+      .style("--logyq-piece-fill", d => d.data.gameId ? d.data.color : null)
       .style("fill", d => d.data.color || null);
     this.bindUidStamp(allNodes);
     glide(allNodes).attr("transform", d=>`translate(${d.x},${d.y})`);
@@ -699,9 +675,8 @@ centerOnSelected(opts = {}) {
       .call(state.zoom.transform, target)
   },
 
-  // One instant frame of the solved tree inside the measured safe area.
-  // Called at level start and again on resize. Play itself never calls it.
-  fitGameSolution(bounds){
+  // Fit the current assembled board inside the measured safe area.
+  fitGameBounds(bounds, { duration = 0 } = {}){
     const { state, elements } = logyq
     if (typeof gameCameraLocked === 'function' && !gameCameraLocked()) return
     const frame = this.usableFrame()
@@ -751,7 +726,15 @@ centerOnSelected(opts = {}) {
     if (!isFinite(scale) || scale <= 0) return
     const tx = (innerL + innerR) / 2 - scale * (bounds.x + bounds.width / 2)
     const ty = (innerT + innerB) / 2 - scale * (bounds.y + bounds.height / 2)
-    elements.svg.interrupt().call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
+    const target = d3.zoomIdentity.translate(tx, ty).scale(scale)
+    const current = d3.zoomTransform(frame.svgNode)
+    if (Math.abs(current.x - tx) < 0.5 && Math.abs(current.y - ty) < 0.5 && Math.abs(current.k - scale) < 0.0005) return
+    elements.svg.interrupt('game-fit')
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (duration > 0 && !reduced) {
+      elements.svg.transition('game-fit').duration(duration).ease(d3.easeCubicInOut)
+        .call(state.zoom.transform, target)
+    } else elements.svg.call(state.zoom.transform, target)
   },
 
   autoFit(pad=24){

@@ -265,6 +265,7 @@ state.dragState.drop = null;
 } else if (drop.type === 'node') {
   const targetUid = drop.targetUid;
 
+  if (!logyq.selection.showGameChildCaret(targetUid)) {
   // highlight the target node
   elements.gNodes.selectAll("g.node")
     .filter(n => n.data && n.data._uid === targetUid)
@@ -280,6 +281,7 @@ state.dragState.drop = null;
       .classed("hover-adopt-sub", true);
   }
 
+  }
   state.dragState.drop = { type: 'node', targetUid };
 
     

@@ -165,104 +165,63 @@
     return contacts(copy)
   }
 
-  // Every ordered tree on these pieces, accepted only by contacts().
-  // Stops once `limit` solutions exist so callers can tell 1 from many.
-  function physicalSolutions(pieces, limit = 2) {
-    const pool = (Array.isArray(pieces) ? pieces : []).map((piece) => ({
-      gameId: piece?.gameId,
-      paint: piece?.paint,
-      name: '',
+  // All ordered rooted trees on distinct physical IDs. Subtree results are
+  // memoized by inventory and root. The rest of a tree can observe only that
+  // root's edge signatures, so retaining `cap` witnesses for it is sufficient.
+  // The count saturates at cap; a returned pair is evidence of ambiguity.
+  function physicalSolutions(pieces, limit = 2, { singleSpine = false } = {}) {
+    const pool = (Array.isArray(pieces) ? pieces : []).map(piece => ({
+      gameId: piece?.gameId, paint: piece?.paint, name: '',
     }))
     const n = pool.length
-    const cap = limit > 0 ? limit : 0
-    if (!n || !cap || pool.some((piece) => !piece.gameId || !edge(piece.paint, 'top'))) return []
-    const full = (1 << n) - 1
-    const cache = new Map()
-    const groupsOf = new Map()
-
-    function compositions(mask) {
-      if (groupsOf.has(mask)) return groupsOf.get(mask)
-      const bits = []
-      for (let i = 0; i < n; i++) if (mask & (1 << i)) bits.push(i)
-      const rec = (remaining) => {
-        if (!remaining.length) return [[]]
-        const out = []
-        const width = remaining.length
-        for (let sub = 1; sub < (1 << width); sub++) {
-          let first = 0
-          const rest = []
-          for (let i = 0; i < width; i++) {
-            if (sub & (1 << i)) first |= 1 << remaining[i]
-            else rest.push(remaining[i])
-          }
-          for (const tail of rec(rest)) out.push([first].concat(tail))
-        }
-        return out
-      }
-      const groups = rec(bits)
-      groupsOf.set(mask, groups)
-      return groups
-    }
-
-    function treesFor(mask) {
-      if (cache.has(mask)) return cache.get(mask)
-      const idxs = []
-      for (let i = 0; i < n; i++) if (mask & (1 << i)) idxs.push(i)
-      const trees = []
-      if (idxs.length === 1) {
-        const piece = pool[idxs[0]]
-        trees.push({ gameId: piece.gameId, paint: piece.paint, name: '', children: [] })
-      } else {
-        for (const rootIdx of idxs) {
-          const piece = pool[rootIdx]
-          for (const groups of compositions(mask ^ (1 << rootIdx))) {
-            const options = groups.map((group) => treesFor(group))
-            if (options.some((option) => !option.length)) continue
-            const combo = []
-            const walk = (depth) => {
-              if (depth === options.length) {
-                const tree = { gameId: piece.gameId, paint: piece.paint, name: '', children: combo.slice() }
-                if (contacts(tree)) trees.push(tree)
-                return
-              }
-              for (const child of options[depth]) {
-                combo[depth] = child
-                walk(depth + 1)
-              }
-            }
-            walk(0)
+    const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0
+    if (n > 20) throw new Error('Unsupported inventory size: maximum 20 pieces')
+    if (new Set(pool.map(p => p.gameId)).size !== n) throw new Error('Physical IDs must be unique')
+    if (!n || !cap || pool.some(p => !p.gameId || !parsePaint(p.paint))) return []
+    const signatures = pool.map(p => ({
+      top: edge(p.paint, 'top'), bottom: edge(p.paint, 'bottom'),
+      left: edge(p.paint, 'left'), right: edge(p.paint, 'right'),
+    }))
+    const trees = new Map()
+    const forests = new Map()
+    function forest(mask, bottom, previousRight, hasNonleaf = false) {
+      if (!mask) return [[]]
+      const key = JSON.stringify([mask, bottom, previousRight, hasNonleaf])
+      if (forests.has(key)) return forests.get(key)
+      const out = []
+      for (let sub = mask; sub; sub = (sub - 1) & mask) {
+        const nonleaf = (sub & (sub - 1)) !== 0
+        // Audit certificates can search only layouts with no cousins. This
+        // narrows the search; it must never be used to certify uniqueness.
+        if (singleSpine && hasNonleaf && nonleaf) continue
+        for (let i = 0; i < n; i++) {
+          if (!(sub & (1 << i)) || signatures[i].top !== bottom) continue
+          if (previousRight !== null && signatures[i].left !== previousRight) continue
+          const firsts = tree(sub, i)
+          if (!firsts.length) continue
+          const tails = forest(mask ^ sub, bottom, signatures[i].right, hasNonleaf || nonleaf)
+          for (const first of firsts) for (const tail of tails) {
+            out.push([first, ...tail])
+            if (out.length >= cap) { forests.set(key, out); return out }
           }
         }
       }
-      cache.set(mask, trees)
-      return trees
+      forests.set(key, out)
+      return out
     }
-
+    function tree(mask, root) {
+      const key = mask + ':' + root
+      if (trees.has(key)) return trees.get(key)
+      const out = forest(mask ^ (1 << root), signatures[root].bottom, null)
+        .map(children => ({...pool[root], children}))
+      trees.set(key, out)
+      return out
+    }
     const found = []
-    const idxs = []
-    for (let i = 0; i < n; i++) idxs.push(i)
-    for (const rootIdx of idxs) {
-      if (found.length >= cap) break
-      const piece = pool[rootIdx]
-      for (const groups of compositions(full ^ (1 << rootIdx))) {
-        if (found.length >= cap) break
-        const options = groups.map((group) => treesFor(group))
-        if (options.some((option) => !option.length)) continue
-        const combo = []
-        const walk = (depth) => {
-          if (found.length >= cap) return
-          if (depth === options.length) {
-            const tree = { gameId: piece.gameId, paint: piece.paint, name: '', children: combo.slice() }
-            if (contacts(tree)) found.push(tree)
-            return
-          }
-          for (const child of options[depth]) {
-            if (found.length >= cap) return
-            combo[depth] = child
-            walk(depth + 1)
-          }
-        }
-        walk(0)
+    for (let root = 0; root < n; root++) {
+      for (const solution of tree((1 << n) - 1, root)) {
+        found.push(solution)
+        if (found.length >= cap) return found
       }
     }
     return found
