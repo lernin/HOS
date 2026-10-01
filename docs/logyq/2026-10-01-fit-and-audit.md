@@ -164,3 +164,25 @@ No puzzle data, contact logic, progress or database records are changed.
 Verification: 103 unit checks, including viewport coverage and exact diagonal
 continuation geometry; 4 focused Chromium checks, including completion/reset,
 reduced motion and landscape, plus existing pickup/matching/camera coverage.
+
+## Game sounds — 2026-10-01
+
+Ashley approved a quiet wooden click for accepted drops and a warm three-note
+completion chime. game-sound.js synthesizes both with native Web Audio; no sound
+files or additional dependencies. Audio initializes/resumes during a Game user
+gesture, and unsupported/blocked audio never prevents play.
+
+A remembered Sound: On/Off control lives in the phone controls menu and desktop
+settings, without crowding the game strip. Muting stops active voices. Next and
+leaving stop voices too. Drop sound is queued by an accepted node/bank drop and
+played only after the serialized board actually changes; rejected/no-op drops
+stay quiet. Completion sound starts with the background expansion, once per
+presentation; resize does not retrigger it. Check can replay after restoration.
+
+Verification: 103 unit checks and 5 focused Chromium checks passed. Real Web Audio
+contexts/oscillators were observed in the browser: accepted matching touch moves
+schedule the two-tone click; rejected moves schedule none; completion schedules
+three rising notes at expansion onset. Tests cover mute, remembered mute after
+reload, user-gesture activation, and no stacked chimes on repeated Check, plus
+prior movement, safe area, composition and reduced-motion checks. Sound balance
+still needs Ashley's phone listening test. No database/production changes.

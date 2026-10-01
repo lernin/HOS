@@ -50,6 +50,7 @@
 
   function queueAutosave(snapshot) {
     if (app.game) {
+      playGameDrop(snapshot)
       scheduleGameCameraFit()
       setSaveState('saved')
       maybeGameClear(snapshot)

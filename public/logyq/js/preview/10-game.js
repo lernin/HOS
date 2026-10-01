@@ -469,6 +469,33 @@
     return gameGrammar.physicalSolutions(pieces, 1)[0] || null
   }
 
+  let gameDropBefore = null
+  function rememberGameDrop() {
+    gameDropBefore = JSON.stringify(bridge.snapshot().tree)
+  }
+  function playGameDrop(snapshot) {
+    const before = gameDropBefore
+    gameDropBefore = null
+    if (before !== null && before !== JSON.stringify(snapshot?.tree)) window.LOGYQGameSound?.drop()
+  }
+  function setupGameSound() {
+    const sound = window.LOGYQGameSound
+    if (!sound) return
+    const buttons = Array.from(document.querySelectorAll('[data-game-sound]'))
+    const update = () => buttons.forEach(button => {
+      button.disabled = !sound.supported
+      button.textContent = sound.supported ? 'Sound: ' + (sound.enabled() ? 'On' : 'Off') : 'Sound unavailable'
+      button.setAttribute('aria-pressed', String(sound.enabled()))
+    })
+    buttons.forEach(button => button.addEventListener('click', () => {
+      sound.setEnabled(!sound.enabled())
+      if (sound.enabled()) sound.unlock()
+      update()
+    }))
+    update()
+  }
+  setupGameSound()
+
   let gameArtTimer = null
   let gameArtEpoch = 0
   let gameArtElement = null
@@ -554,6 +581,7 @@
       }
       document.body.insertBefore(svg, document.getElementById('canvas'))
       gameArtElement = svg
+      if (animate) window.LOGYQGameSound?.complete()
       document.body.classList.add('logyq-game-completion')
     }, delay)
   }
@@ -610,6 +638,8 @@
     const session = app.game
     if (!session) return
     clearGameCompletionArt()
+    window.LOGYQGameSound?.stop()
+    gameDropBefore = null
     app.game = null
     cancelGameCameraFit()
     gamePointers.clear()
@@ -647,6 +677,8 @@
   function beginGameLevel(level, opts) {
     if (!level || !gameGrammar) return
     clearGameCompletionArt()
+    window.LOGYQGameSound?.stop()
+    gameDropBefore = null
     const origin = app.game?.origin || (app.curriculum ? {
       current: { id: null, name: DEFAULT_NAME }, hasOpenMap: false,
       lastSnapshot: '', snapshot: { tree: null, wordBank: [] },
@@ -679,6 +711,7 @@
       if (!drop || trash || multi) return false
       const allowed = gameGrammar.canDrop(tree, movingUid, drop)
       if (!allowed) gameStatus('Those colors do not match here. Try another position.')
+      else rememberGameDrop()
       return allowed
     }
     window.__logyqGameBankNode = (word) => {
@@ -690,6 +723,7 @@
       const card = level.bankCards?.[words[0]]
       const allowed = !!card && gameGrammar.canAdd(tree, card, drop)
       if (!allowed) gameStatus('Those colors do not match here. Try another position.')
+      else rememberGameDrop()
       return allowed
     }
     ensureGamePaint()
@@ -773,6 +807,7 @@
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('pointerdown', event => {
       if (!app.game) return
+      if (window.LOGYQGameSound?.enabled()) window.LOGYQGameSound.unlock()
       if (event.target?.closest?.('svg#canvas')) clearGameCompletionArt()
       gamePointers.add(event.pointerId)
       gameFitPending = true

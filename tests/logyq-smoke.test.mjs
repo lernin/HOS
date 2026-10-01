@@ -7771,6 +7771,7 @@ test('game reframes smoothly after a layout change and freezes while a pointer i
 test('game rejects mismatches but permits matching touch moves; hides Undo and All', async () => {
   const context = await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
   await stubMaps(context,{maps:[]})
+  await observeGameAudio(context)
   const page = await context.newPage()
   await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'})
   await waitForBoot(page)
@@ -7795,6 +7796,7 @@ test('game rejects mismatches but permits matching touch moves; hides Undo and A
       await page.waitForTimeout(700)
     }
     const before = await snapshot()
+    const notesBefore = await page.evaluate(()=>window.__audioNotes.length)
     const info = await page.evaluate(rootMove => {
       const root=window.LOGYQBridge.core.state.root
       const leaf=root.descendants().find(n=>n.depth===root.height)
@@ -7830,6 +7832,8 @@ test('game rejects mismatches but permits matching touch moves; hides Undo and A
     assert.equal(aim.opacity,'1');assert.ok(aim.x>aim.lastRight);assert.equal(aim.colors,true)
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
     await page.waitForTimeout(900)
+    const newNotes=await page.evaluate(count=>window.__audioNotes.slice(count),notesBefore)
+    assert.deepEqual(newNotes.map(n=>n.frequency),matching?[620,180]:[], 'only a committed matching drop plays the click')
     if(matching){
       const parent=await page.evaluate(uid=>window.LOGYQBridge.core.state.root.descendants().find(n=>n.data._uid===uid)?.parent?.data._uid,info.uid)
       assert.equal(parent,info.rootUid)
@@ -7895,5 +7899,58 @@ test('completion colors expand into a background and reset without changing the 
   await page.setViewportSize({width:844,height:390})
   await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.getAttribute('viewBox')==='0 0 844 390',null,{timeout:2000})
   await page.screenshot({path:'/workspace/scratch/ae226cb204ec/logyq-completion-landscape.png'})
+  await context.close()
+})
+
+async function observeGameAudio(context){
+  await context.addInitScript(()=>{
+    window.__audioNotes=[];window.__audioContexts=[]
+    const Native=window.AudioContext
+    window.AudioContext=class extends Native{
+      constructor(...args){super(...args);window.__audioContexts.push(this)}
+      createOscillator(){
+        const osc=super.createOscillator(),start=osc.start.bind(osc)
+        let frequency=osc.frequency.value
+        const set=osc.frequency.setValueAtTime.bind(osc.frequency)
+        osc.frequency.setValueAtTime=(value,time)=>{frequency=value;return set(value,time)}
+        osc.start=(...args)=>{window.__audioNotes.push({frequency,time:args[0]});return start(...args)}
+        return osc
+      }
+    }
+  })
+}
+
+test('game sound unlocks on interaction, chimes with completion, and remembers mute',async()=>{
+  const context=await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
+  await stubMaps(context,{maps:[]});await observeGameAudio(context)
+  const page=await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'});await waitForBoot(page)
+  assert.equal(await page.evaluate(()=>window.__audioContexts.length),0)
+  await page.evaluate(()=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[51]))
+  assert.equal(await page.locator('#logyq-game-sound').count(),1,'game has an accessible sound toggle')
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.locator('#logyq-game-sound').click()
+  assert.equal(await page.locator('#logyq-game-sound').getAttribute('aria-pressed'),'false')
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.evaluate(()=>window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[51]))
+  await page.locator('#logyq-game-check').click()
+  await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.dataset.phase==='complete')
+  assert.equal(await page.evaluate(()=>window.__audioNotes.length),0,'muted completion is silent')
+  await page.reload({waitUntil:'networkidle'});await waitForBoot(page)
+  await page.evaluate(()=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[51]))
+  assert.equal(await page.locator('#logyq-game-sound').getAttribute('aria-pressed'),'false')
+  assert.equal(await page.evaluate(()=>window.__audioContexts.length),0,'remembered mute does not create an audio context')
+  await page.locator('#logiq-mobile-menu-btn').click();await page.locator('#logyq-game-sound').click()
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.waitForFunction(()=>window.__audioContexts[0]?.state==='running')
+  await page.evaluate(()=>window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[51]))
+  await page.locator('#logyq-game-check').click()
+  await page.waitForFunction(()=>window.__audioNotes.length===3)
+  assert.equal(await page.locator('#logyq-completion-art').getAttribute('data-phase'),'expanding')
+  const notes=await page.evaluate(()=>window.__audioNotes)
+  assert.deepEqual(notes.map(n=>Math.round(n.frequency)),[523,659,784])
+  assert.ok(notes[1].time>notes[0].time&&notes[2].time>notes[1].time)
+  await page.locator('#logyq-game-check').click()
+  assert.equal(await page.evaluate(()=>window.__audioNotes.length),3,'repeated Check does not stack chimes')
   await context.close()
 })

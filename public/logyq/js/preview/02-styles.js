@@ -62,6 +62,8 @@
       }
       #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
       #logyq-game-next[hidden]{display:none}
+      .logyq-game-sound-control{display:none!important}
+      body.logyq-game .logyq-game-sound-control{display:block!important}
       #logyq-completion-art{position:fixed;inset:0;width:100%;height:100dvh;z-index:0;pointer-events:none}
       body.logyq-game svg#canvas{z-index:1}
       body.logyq-game svg#canvas g.nodes,body.logyq-game svg#canvas g.links,body.logyq-game #Dock{transition:opacity 250ms ease}
