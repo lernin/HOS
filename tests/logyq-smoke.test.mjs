@@ -10,6 +10,7 @@ let browser
 test.before(async () => {
   browser = await chromium.launch({
     headless: true,
+    ...(process.env.LOGYQ_EXECUTABLE_PATH ? { executablePath: process.env.LOGYQ_EXECUTABLE_PATH } : {}),
     ...(process.env.LOGYQ_CHROME ? { channel: 'chrome' } : {}),
   })
 })
@@ -7734,5 +7735,312 @@ test('every solved game tree stays in the phone safe area', async () => {
   await page.waitForSelector('#logiq-library.is-open')
   assert.equal(await page.locator('#logiq-library').getAttribute('data-shelf'), 'game')
   assert.deepEqual(errors, [])
+  await context.close()
+})
+
+test('game reframes smoothly after a layout change and freezes while a pointer is held', async () => {
+  const context = await newContext({ viewport: {width:390,height:844}, isMobile:true, hasTouch:true })
+  await stubMaps(context, { maps: [] })
+  const page = await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`, {waitUntil:'networkidle'})
+  await waitForBoot(page)
+  const camera = () => page.evaluate(() => {
+    const t = window.LOGYQBridge.core.elements.svg.node().__zoom
+    return {x:t.x,y:t.y,k:t.k}
+  })
+  await page.evaluate(() => window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[129]))
+  await page.waitForTimeout(650)
+  const before = await camera()
+  await page.evaluate(() => {
+    window.dispatchEvent(new PointerEvent('pointerdown',{pointerId:7}))
+    const level = window.LOGYQPreview.game.levels[129]
+    window.LOGYQBridge.loadMap(structuredClone(level.solution),[],{fit:false})
+  })
+  await page.waitForTimeout(700)
+  assert.deepEqual(await camera(), before, 'a held pointer must not chase a moving viewport')
+  await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup',{pointerId:7})))
+  await page.waitForFunction(k => window.LOGYQBridge.core.elements.svg.node().__zoom.k < k - 0.01, before.k, {timeout:2000})
+  const during = await camera()
+  await page.waitForTimeout(600)
+  const after = await camera()
+  assert.ok(after.k < before.k, 'the wider board must resize to fit')
+  assert.ok(during.k > after.k + 0.001, 'the camera must pass through intermediate scales')
+  const bounds = await page.locator('svg#canvas g.nodes').boundingBox()
+  const bar = await page.locator('#logyq-game-bar').boundingBox()
+  const dock = await page.locator('#Dock').boundingBox()
+  assert.ok(bounds.y >= bar.y + bar.height + 7)
+  assert.ok(bounds.y + bounds.height <= (dock?.y ?? 844) - 7)
+  assert.ok(bounds.x >= 19 && bounds.x + bounds.width <= 371)
+  await context.close()
+})
+
+test('game rejects mismatches but permits matching touch moves; hides Undo and All', async () => {
+  const context = await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
+  await stubMaps(context,{maps:[]})
+  await observeGameAudio(context)
+  const page = await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'})
+  await waitForBoot(page)
+  await page.evaluate(() => window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[125]))
+  await page.waitForTimeout(700)
+  await page.locator('#logyq-game-check').click()
+  assert.equal(await page.locator('#logyq-game-next').isVisible(),true)
+  assert.equal(await page.locator('#logiq-mobile-header [data-tool="undo"]').isVisible(),false)
+  assert.equal(await page.locator('#logyq-bank-all').count(),0)
+  const cdp = await context.newCDPSession(page)
+  const snapshot = () => page.evaluate(() => JSON.stringify(window.LOGYQBridge.snapshot().tree))
+  for (const matching of [false,true,'root']) {
+    if (matching === true) {
+      // Interaction fixture: matching faces permit different seats. Catalog
+      // uniqueness is tested separately; this fixture is never a catalog level.
+      await page.evaluate(() => {
+        const tree = window.LOGYQBridge.snapshot().tree
+        const paint = n => {n.paint='W:A';n.color='#60a5fa';for(const c of n.children||[])paint(c)}
+        paint(tree)
+        window.LOGYQBridge.loadMap(tree,[],{fit:false})
+      })
+      await page.waitForTimeout(700)
+    }
+    const before = await snapshot()
+    const notesBefore = await page.evaluate(()=>window.__audioNotes.length)
+    const info = await page.evaluate(rootMove => {
+      const root=window.LOGYQBridge.core.state.root
+      const leaf=root.descendants().find(n=>n.depth===root.height)
+      const center=n=>{
+        const el=Array.from(document.querySelectorAll('svg#canvas g.node')).find(el=>el.__data__?.data._uid===n.data._uid)
+        const r=el.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}
+      }
+      const source=rootMove?root:leaf,target=rootMove?root.children[0]:root
+      return{uid:source.data._uid,rootUid:target.data._uid,from:center(source),to:center(target)}
+    },matching==='root')
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...info.from,id:1}]})
+    const nudge={x:info.from.x+18,y:info.from.y-18}
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...nudge,id:1}]})
+    await page.waitForTimeout(60)
+    const offset=await page.evaluate(point=>{
+      const r=document.querySelector('#logyq-v162-branch-preview svg').getBoundingClientRect()
+      return{x:r.x+r.width/2-point.x,y:r.y+r.height/2-point.y}
+    },nudge)
+    const dest={x:info.to.x-offset.x,y:info.to.y-offset.y}
+    for(let i=1;i<=12;i++){
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:info.from.x+(dest.x-info.from.x)*i/12,y:info.from.y+(dest.y-info.from.y)*i/12,id:1}]})
+      await page.waitForTimeout(20)
+    }
+    const aim=await page.evaluate(uid=>{
+      const core=window.LOGYQBridge.core,dot=core.elements.caretDot.node()
+      const target=core.state.root.descendants().find(n=>n.data._uid===uid),last=target.children.at(-1)
+      const faces=Array.from(document.querySelectorAll('svg#canvas g.node rect:not(.grabzone)'))
+      return{drop:core.state.dragState.drop,opacity:getComputedStyle(dot).opacity,
+        x:+dot.getAttribute('cx'),lastRight:last.x+core.config.CARD_WIDTH/2,
+        colors:faces.every(el=>getComputedStyle(el).fill===el.style.fill)}
+    },info.rootUid)
+    assert.equal(aim.drop?.targetUid,info.rootUid)
+    assert.equal(aim.opacity,'1');assert.ok(aim.x>aim.lastRight);assert.equal(aim.colors,true)
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+    await page.waitForTimeout(900)
+    const newNotes=await page.evaluate(count=>window.__audioNotes.slice(count),notesBefore)
+    assert.deepEqual(newNotes.map(n=>n.frequency),matching?[620,180]:[], 'only a committed matching drop plays the click')
+    if(matching){
+      const parent=await page.evaluate(uid=>window.LOGYQBridge.core.state.root.descendants().find(n=>n.data._uid===uid)?.parent?.data._uid,info.uid)
+      assert.equal(parent,info.rootUid)
+      const moved=await snapshot()
+      await page.evaluate(()=>window.LOGYQBridge.undo())
+      await page.keyboard.press('Control+z')
+      assert.equal(await snapshot(),moved,'game undo cannot move cards or restore the bank')
+      const dot=await page.evaluate(uid=>{
+        const core=window.LOGYQBridge.core,leaf=core.state.root.descendants().find(n=>n.data._uid===uid)
+        core.selection.showGameChildCaret(uid)
+        return{x:+core.elements.caretDot.attr('cx'),y:+core.elements.caretDot.attr('cy'),leafX:leaf.x,bottom:leaf.y+core.config.CARD_HEIGHT/2}
+      },info.uid)
+      assert.equal(dot.x,dot.leafX);assert.ok(dot.y>dot.bottom)
+    }else{
+      assert.equal(await snapshot(),before,'rejected contact leaves the board untouched')
+      assert.match(await page.locator('#logyq-game-status').textContent(),/do not match/)
+    }
+  }
+  await cdp.detach();await context.close()
+})
+
+test('completion colors expand into a background and reset without changing the puzzle',async()=>{
+  const context=await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
+  await stubMaps(context,{maps:[]})
+  const page=await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'})
+  await waitForBoot(page)
+  await page.evaluate(()=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[51]))
+  await page.waitForTimeout(750)
+  assert.equal(await page.locator('#logyq-completion-art').count(),0,'unfinished puzzles have no completion art')
+  await page.evaluate(()=>window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[51]))
+  const before=await page.evaluate(()=>JSON.stringify(window.LOGYQBridge.snapshot().tree))
+  await page.locator('#logyq-game-check').click()
+  await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.dataset.phase==='complete',null,{timeout:4000})
+  const art=await page.evaluate(()=>{
+    const svg=document.getElementById('logyq-completion-art')
+    return{viewBox:svg.getAttribute('viewBox'),cards:svg.querySelectorAll('[data-piece]').length,
+      colors:Array.from(svg.querySelectorAll('path')).map(p=>p.getAttribute('fill')),
+      opacity:+getComputedStyle(document.querySelector('svg#canvas g.nodes')).opacity,
+      pointerEvents:getComputedStyle(svg).pointerEvents}
+  })
+  assert.equal(art.viewBox,'0 0 390 844');assert.equal(art.cards,5)
+  assert.ok(art.colors.includes('#86efac')&&art.colors.includes('#f0abfc'))
+  assert.equal(art.opacity,0);assert.equal(art.pointerEvents,'none')
+  assert.equal(await page.locator('#Dock').evaluate(el=>+getComputedStyle(el).opacity),0)
+  assert.equal(await page.locator('#logyq-game-next').isVisible(),true)
+  assert.equal(await page.evaluate(()=>JSON.stringify(window.LOGYQBridge.snapshot().tree)),before)
+  await page.screenshot({path:'/workspace/scratch/ae226cb204ec/logyq-completion-phone.png'})
+  await page.locator('svg#canvas').tap({position:{x:200,y:300}})
+  await page.waitForTimeout(350)
+  assert.equal(await page.locator('#logyq-completion-art').count(),0)
+  assert.equal(await page.locator('svg#canvas g.nodes').evaluate(el=>+getComputedStyle(el).opacity),1)
+  assert.equal(await page.evaluate(()=>JSON.stringify(window.LOGYQBridge.snapshot().tree)),before)
+  await page.locator('#logyq-game-check').click()
+  await page.locator('#logyq-game-next').click()
+  await page.waitForTimeout(2200)
+  assert.equal(await page.locator('#logyq-completion-art').count(),0,'switching levels cancels pending effects')
+  await page.emulateMedia({reducedMotion:'reduce'})
+  await page.evaluate(()=>window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[51]))
+  await page.locator('#logyq-game-check').click()
+  await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.dataset.phase==='complete',null,{timeout:2000})
+  assert.equal(await page.locator('svg#canvas g.nodes').evaluate(el=>getComputedStyle(el).transitionDuration),'0s')
+  await page.setViewportSize({width:844,height:390})
+  await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.getAttribute('viewBox')==='0 0 844 390',null,{timeout:2000})
+  await page.screenshot({path:'/workspace/scratch/ae226cb204ec/logyq-completion-landscape.png'})
+  await context.close()
+})
+
+async function observeGameAudio(context){
+  await context.addInitScript(()=>{
+    window.__audioNotes=[];window.__audioContexts=[]
+    const Native=window.AudioContext
+    window.AudioContext=class extends Native{
+      constructor(...args){super(...args);window.__audioContexts.push(this)}
+      createOscillator(){
+        const osc=super.createOscillator(),start=osc.start.bind(osc)
+        let frequency=osc.frequency.value
+        const set=osc.frequency.setValueAtTime.bind(osc.frequency)
+        osc.frequency.setValueAtTime=(value,time)=>{frequency=value;return set(value,time)}
+        osc.start=(...args)=>{window.__audioNotes.push({frequency,time:args[0]});return start(...args)}
+        return osc
+      }
+    }
+  })
+}
+
+test('game sound unlocks on interaction, chimes with completion, and remembers mute',async()=>{
+  const context=await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
+  await stubMaps(context,{maps:[]});await observeGameAudio(context)
+  const page=await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'});await waitForBoot(page)
+  assert.equal(await page.evaluate(()=>window.__audioContexts.length),0)
+  await page.evaluate(()=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[51]))
+  assert.equal(await page.locator('#logyq-game-sound').count(),1,'game has an accessible sound toggle')
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.locator('#logyq-game-sound').click()
+  assert.equal(await page.locator('#logyq-game-sound').getAttribute('aria-pressed'),'false')
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.evaluate(()=>window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[51]))
+  await page.locator('#logyq-game-check').click()
+  await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.dataset.phase==='complete')
+  assert.equal(await page.evaluate(()=>window.__audioNotes.length),0,'muted completion is silent')
+  await page.reload({waitUntil:'networkidle'});await waitForBoot(page)
+  await page.evaluate(()=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[51]))
+  assert.equal(await page.locator('#logyq-game-sound').getAttribute('aria-pressed'),'false')
+  assert.equal(await page.evaluate(()=>window.__audioContexts.length),0,'remembered mute does not create an audio context')
+  await page.locator('#logiq-mobile-menu-btn').click();await page.locator('#logyq-game-sound').click()
+  await page.locator('#logiq-mobile-menu-btn').click()
+  await page.waitForFunction(()=>window.__audioContexts[0]?.state==='running')
+  await page.evaluate(()=>window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[51]))
+  await page.locator('#logyq-game-check').click()
+  await page.waitForFunction(()=>window.__audioNotes.length===3)
+  assert.equal(await page.locator('#logyq-completion-art').getAttribute('data-phase'),'expanding')
+  const notes=await page.evaluate(()=>window.__audioNotes)
+  assert.deepEqual(notes.map(n=>Math.round(n.frequency)),[523,659,784])
+  assert.ok(notes[1].time>notes[0].time&&notes[2].time>notes[1].time)
+  await page.locator('#logyq-game-check').click()
+  assert.equal(await page.evaluate(()=>window.__audioNotes.length),3,'repeated Check does not stack chimes')
+  await context.close()
+})
+
+test('clean completion joins render the reported chain and fork examples',async()=>{
+  const context=await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
+  await stubMaps(context,{maps:[]})
+  const page=await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'})
+  await waitForBoot(page)
+  await page.emulateMedia({reducedMotion:'reduce'})
+  for(const index of [39,40,41,53]){
+    await page.evaluate(i=>window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[i]),index)
+    await page.locator('#logyq-game-check').click()
+    await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.dataset.phase==='complete')
+    assert.ok(await page.locator('#logyq-completion-art path').count()>0)
+    await page.screenshot({path:`/workspace/scratch/ae226cb204ec/logyq-clean-${index+1}.png`})
+  }
+  await context.close()
+})
+
+test('game tray leaves gesture margins and first concepts show drag destinations',async()=>{
+  const context=await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
+  await stubMaps(context,{maps:[]})
+  const page=await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'})
+  await waitForBoot(page)
+  for(const [index,kind,count] of [[0,'below',1],[1,'above',1],[27,'sibling',2]]){
+    await page.evaluate(i=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[i]),index)
+    await page.waitForTimeout(750)
+    const tray=await page.locator('#Dock').boundingBox()
+    assert.ok(tray.x>=20&&390-tray.x-tray.width>=20,'tray is inset from both phone edges')
+    assert.ok(844-tray.y-tray.height>=30,'tray clears the bottom gesture region')
+    assert.equal(await page.locator('#logyq-drag-guide').getAttribute('data-kind'),kind)
+    assert.equal(await page.locator('svg#canvas g.node').count(),count)
+    const target=await page.locator('#logyq-guide-target').boundingBox()
+    assert.ok(target.x>=15&&target.x+target.width<=375&&target.y>=90&&target.y+target.height<tray.y)
+    const chip=await page.locator('#Dock .chip').first().boundingBox()
+    assert.ok(Math.abs(chip.x+chip.width/2-195)<2,'single loose piece is centered')
+    await page.screenshot({path:`/workspace/scratch/ae226cb204ec/logyq-guide-${kind}.png`})
+    const cdp=await context.newCDPSession(page)
+    const from={x:chip.x+chip.width/2,y:chip.y+chip.height/2}
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...from,id:1}]})
+    const nudge={x:from.x,y:from.y-22}
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...nudge,id:1}]})
+    await page.waitForTimeout(60)
+    const lifted=await page.locator('#logyq-chip-ghost').boundingBox()
+    const dest={x:target.x+target.width/2-(lifted.x+lifted.width/2-nudge.x),
+      y:target.y+target.height/2-(lifted.y+lifted.height/2-nudge.y)}
+    for(let i=1;i<=12;i++){
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:from.x+(dest.x-from.x)*i/12,y:from.y+(dest.y-from.y)*i/12,id:1}]})
+      await page.waitForTimeout(20)
+    }
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+    await page.waitForTimeout(400)
+    assert.equal(await page.locator('#logyq-drag-guide').count(),0,'successful drop dismisses guide')
+    assert.equal(await page.evaluate(()=>window.LOGYQPreview.game.check()),undefined)
+    assert.equal(await page.evaluate(()=>window.LOGYQBridge.core.state.root.descendants().length),kind==='sibling'?3:2)
+    await cdp.detach()
+
+  }
+  for(const viewport of [{width:360,height:640},{width:844,height:390}]){
+    await page.setViewportSize(viewport)
+    await page.evaluate(()=>localStorage.removeItem('logyq_game_progress_v2'))
+    for(const index of [0,1,27]){
+      await page.evaluate(i=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[i]),index)
+      await page.waitForTimeout(1000)
+      const tray=await page.locator('#Dock').boundingBox(), target=await page.locator('#logyq-guide-target').boundingBox()
+      assert.ok(target.x>=15&&target.x+target.width<=viewport.width-15)
+      assert.ok(target.y>=48&&target.y+target.height<tray.y-8)
+      assert.ok(viewport.height-tray.y-tray.height>=30)
+      if(index===1)assert.equal(await page.locator('#logyq-guide-target svg path').count(),0)
+      else assert.equal(await page.locator('#logyq-guide-target svg path').getAttribute('d'),index===0?'M0 0H140V31.5H0Z':'M0 0H140L0 63Z')
+    }
+    await page.evaluate(()=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[51]))
+    await page.waitForTimeout(750)
+    assert.equal(await page.locator('#logyq-drag-guide').count(),0,'other puzzles have no guide')
+    const tray=await page.locator('#Dock').boundingBox()
+    for(const chip of await page.locator('#Dock .chip').all()){
+      const r=await chip.boundingBox()
+      assert.ok(r.x>=tray.x&&r.x+r.width<=tray.x+tray.width&&r.y>=tray.y&&r.y+r.height<=tray.y+tray.height,'every loose card is reachable inside the tray')
+    }
+  }
+  await page.evaluate(()=>window.LOGYQPreview.game.leave())
+  assert.equal(await page.locator('#logyq-drag-guide').count(),0)
   await context.close()
 })

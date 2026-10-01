@@ -69,7 +69,7 @@ test('home tabs share one even row at phone width and in landscape', () => {
   assert.match(phone, /font-size:clamp\(13px,3\.7vw,16px\)/)
 })
 
-test('game play fits on entry and then keeps the camera fixed', () => {
+test('game play keeps manual camera gestures locked; board changes reframe separately', () => {
   const config = readFileSync(new URL('../public/logyq/js/engine/01-config.js', import.meta.url), 'utf8')
   const tree = readFileSync(new URL('../public/logyq/js/engine/16-tree-manager.js', import.meta.url), 'utf8')
   const history = readFileSync(new URL('../public/logyq/js/engine/05-history.js', import.meta.url), 'utf8')
@@ -106,7 +106,7 @@ test('game drags start after a few pixels and flicks cannot add, delete, or ware
   assert.match(gestures, /logyq-game'\)\)/)
   assert.match(dock, /logyq-game'\)\) \{\s*if \(Math\.hypot\(dx, dy\) < 6\) return\s*beginLift\(\[session\.word\]\)/)
   assert.match(dock, /logyq-game'\)\) return/)
-  assert.doesNotMatch(styles, /body\.logyq-game #Dock,/)
+  assert.doesNotMatch(styles, /body\.logyq-game #Dock[^{}]*\{[^}]*display:none/)
   assert.match(styles, /body\.logyq-game #logyq-warehouse/)
   assert.match(styles, /body\.logyq-game #trash/)
   assert.match(styles, /body\.logyq-game #addWordBtn/)
@@ -404,4 +404,15 @@ test('every solved tree fits a 360x640 phone at the readable card scale', () => 
   const five = sandbox.preview.game.measureSolved(chain)
   assert.equal(five.rows, 5)
   assert.ok(five.bounds.height * budget.minScale > budget.safeHeight)
+})
+
+test('matching root and descendant repositioning follows mapper promotion without cycles', () => {
+  const tree = card('root','W:A',[card('middle','W:A',[card('leaf','W:A')])])
+  assert.equal(grammar.canDrop(tree,'root',{type:'node',targetUid:'leaf'}),true)
+  assert.equal(grammar.canDrop(tree,'middle',{type:'node',targetUid:'leaf'}),true)
+  assert.equal(grammar.canDrop(tree,'root',{type:'gap',parentUid:'leaf'}),true)
+  assert.equal(grammar.canDrop(tree,'root',{type:'node',targetUid:'root'}),false)
+  assert.equal(grammar.canDrop(tree,'root',{type:'rootAbove'}),false)
+  const mismatch = card('root','DL:A:B',[card('child','W:B')])
+  assert.equal(grammar.canDrop(mismatch,'root',{type:'node',targetUid:'child'}),false)
 })

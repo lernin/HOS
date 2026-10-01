@@ -381,7 +381,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
       strip.appendChild(chip);
     });
     list.appendChild(strip);
-    if (chipNamesInBank().length) {
+    if (chipNamesInBank().length && !document.body?.classList?.contains('logyq-game')) {
       const allButton = document.createElement('button');
       allButton.type = 'button';
       allButton.id = 'logyq-bank-all';
@@ -797,7 +797,7 @@ function bindChipPointerPlace() {
     }
     event.preventDefault()
     event.stopPropagation()
-    const corner = commit && !document.body.classList.contains('logyq-game')
+    const corner = commit && !document.body?.classList?.contains('logyq-game')
       ? cornerUnderFinger(event.clientX, event.clientY)
       : null
     if (corner === 'trash') {
@@ -925,7 +925,7 @@ state.chipDrag.drop = {
   const targetH = state.root?.descendants()
     .find(n => n.data && n.data._uid === targetUid);
 
-  if (targetH) {
+  if (targetH && !logyq.selection.showGameChildCaret(targetUid)) {
     // highlight target node
     elements.gNodes.selectAll("g.node")
       .filter(n => n.data && n.data._uid === targetUid)
@@ -945,6 +945,10 @@ state.chipDrag.drop = {
   // Normal maps keep the historical behavior. LOGYQ Game explicitly allows
   // a loose puzzle card to become the new root when its physical edge fits.
   state.chipDrag.drop = window.__logyqGameBankNode ? { type: 'rootAbove' } : null
+  if (state.chipDrag.drop) {
+    const [x, y] = logyq.selection.caretXYFromHit(drop._hit);
+    elements.caretDot.attr('cx', x).attr('cy', y).style('opacity', 1);
+  }
 }
 
 

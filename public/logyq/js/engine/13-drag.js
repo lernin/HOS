@@ -129,7 +129,7 @@ start(event, d){
 
   // Shift+LEFT = "abandonment" (solo) mode
   const se = (event && event.sourceEvent) ? event.sourceEvent : event;
-  const isShiftLeft = !!(se && se.button === 0 && se.shiftKey);
+  const isShiftLeft = !document.body.classList.contains('logyq-game') && !!(se && se.button === 0 && se.shiftKey);
 
   // Abandonment flag (used later in B path)
   state.dragState.solo = isShiftLeft;
@@ -265,6 +265,7 @@ state.dragState.drop = null;
 } else if (drop.type === 'node') {
   const targetUid = drop.targetUid;
 
+  if (!logyq.selection.showGameChildCaret(targetUid)) {
   // highlight the target node
   elements.gNodes.selectAll("g.node")
     .filter(n => n.data && n.data._uid === targetUid)
@@ -280,6 +281,7 @@ state.dragState.drop = null;
       .classed("hover-adopt-sub", true);
   }
 
+  }
   state.dragState.drop = { type: 'node', targetUid };
 
     

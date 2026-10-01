@@ -348,6 +348,20 @@
       }
       #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
       #logyq-game-next[hidden]{display:none}
+      .logyq-game-sound-control{display:none!important}
+      body.logyq-game .logyq-game-sound-control{display:block!important}
+      #logyq-completion-art{position:fixed;inset:0;width:100%;height:100dvh;z-index:0;pointer-events:none}
+      body.logyq-game svg#canvas{z-index:1}
+      body.logyq-game svg#canvas g.nodes,body.logyq-game svg#canvas g.links,body.logyq-game #Dock{transition:opacity 250ms ease}
+      body.logyq-game-completion svg#canvas g.nodes,body.logyq-game-completion svg#canvas g.links{opacity:0;transition:opacity 900ms ease 450ms}
+      body.logyq-game-completion #Dock{opacity:0;pointer-events:none;transition:opacity 900ms ease 450ms}
+      @media (prefers-reduced-motion:reduce){
+        body.logyq-game svg#canvas g.nodes,body.logyq-game svg#canvas g.links,body.logyq-game #Dock{transition:none!important}
+      }
+      body.logyq-game svg#canvas g.node rect:not(.grabzone),
+      body.logyq-mobile-v162.logyq-game.v2-branch-drag svg#canvas g.node rect:not(.grabzone){fill:var(--logyq-piece-fill,#fff)!important;stroke:#fff!important}
+      body.logyq-game svg#canvas .caret-dot{fill:#22c55e!important;stroke:#fff;stroke-width:2;pointer-events:none}
+
       #logyq-curriculum .logiq-empty p{margin:0}
       .logyq-level-intro{margin:4px 0 14px;color:#64748b;font-size:13px}
       #logyq-level-path{list-style:none;margin:0 auto 28px;padding:8px 0 12px;width:min(440px,100%);display:grid;gap:16px;position:relative}
@@ -561,6 +575,9 @@
         body.logyq-home .logyq-home-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;min-width:0}
         body.logyq-home .logyq-home-tab{min-width:0;width:100%;box-sizing:border-box;text-align:center;white-space:nowrap;overflow:hidden;font-size:clamp(13px,3.7vw,16px)}
       }
+      body.logyq-game #undoBtn,
+      body.logyq-game [data-tool="undo"],
+      body.logyq-game #logyq-bank-all,
       body.logyq-game .word-tools,
       body.logyq-game #wordInput,
       body.logyq-game #addWordBtn,
@@ -659,10 +676,26 @@
       @media (min-width:701px){
         body.logyq-thekonym #logyq-thekonym-ask{top:12px;right:12px}
       }
+      /* Game pieces float clear of Android/browser edge gestures. */
+      body.logyq-game #Dock,body.logyq-game #Dock.dock-left{position:fixed;box-sizing:border-box;left:24px;right:24px;top:auto;bottom:calc(32px + env(safe-area-inset-bottom));width:auto;height:auto;min-height:64px;max-height:140px;padding:10px 12px;display:flex;flex-direction:row;align-items:center;justify-content:center;border:1px solid rgba(226,232,240,.9);border-radius:20px;background:rgba(255,255,255,.94);box-shadow:0 5px 20px rgba(15,23,42,.12);touch-action:none;overflow:hidden}
+      body.logyq-game #logyq-bank-chips{flex:1;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
+      body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{flex:0 0 auto;width:auto;max-width:none;min-height:44px;padding:7px 2px;touch-action:none}
+      @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left{left:calc(50% - 320px);right:calc(50% - 320px)}}
+      @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
+      #logyq-drag-guide{position:fixed;inset:0;z-index:6;pointer-events:none}
+      #logyq-guide-arrow{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+      #logyq-guide-target{position:absolute;box-sizing:border-box;border:2px dashed #64748b;border-radius:12px;background:rgba(255,255,255,.45);overflow:hidden;box-shadow:0 0 0 3px rgba(255,255,255,.7)}
+      #logyq-guide-target svg{display:block;width:100%;height:100%;opacity:.35}
+      #logyq-guide-instruction{position:absolute;left:24px;right:24px;text-align:center;margin:0;color:#334155;font:650 14px/1.25 system-ui;text-shadow:0 1px 3px white}
+      #logyq-guide-arrow .guide-flow{stroke-dasharray:7 9;animation:logyq-guide-flow 1.2s linear infinite}
+      @keyframes logyq-guide-flow{to{stroke-dashoffset:-32}}
+      @media (prefers-reduced-motion:reduce){#logyq-guide-arrow .guide-flow{animation:none}}
     `
     document.head.append(style)
   }
   function buildUi() {
+    document.querySelector('#settingsBackdrop .settings-modal')?.insertAdjacentHTML('beforeend',
+      '<div class="settings-row logyq-game-sound-control"><button type="button" data-game-sound aria-pressed="true">Sound: On</button></div>')
     const desktopState = document.createElement('span')
     desktopState.className = 'logiq-save-state'
     desktopState.setAttribute('role', 'status')
@@ -699,6 +732,7 @@
           <button data-tool="library">Your maps</button><button data-tool="mix">Mix</button>
           <button data-tool="paint">Paint colors</button><button data-tool="dock">Word Dock</button>
           <button data-tool="help">Help</button>
+          <button type="button" id="logyq-game-sound" class="logyq-game-sound-control" data-game-sound aria-pressed="true">Sound: On</button>
         </div>
       </section>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
@@ -4564,6 +4598,8 @@
 
   function queueAutosave(snapshot) {
     if (app.game) {
+      playGameDrop(snapshot)
+      scheduleGameCameraFit()
       setSaveState('saved')
       maybeGameClear(snapshot)
       return
@@ -6959,6 +6995,17 @@
     addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
   })
 
+  // Brief first-contact guides; keep the original puzzle IDs and inventory.
+  gameLevels[0].guide = 'below'
+  gameLevels[1].guide = 'above'
+  const firstBranch = gameLevels[27]
+  firstBranch.guide = 'sibling'
+  const firstChild = firstBranch.solution.children[0]
+  firstBranch.tree.children = [structuredClone({...firstChild, children:[]})]
+  const mountedKey = firstBranch.bank.find(key => firstBranch.bankCards[key].gameId === firstChild.gameId)
+  firstBranch.bank = firstBranch.bank.filter(key => key !== mountedKey)
+  delete firstBranch.bankCards[mountedKey]
+
   gameLevels.forEach((level, index) => {
     const number = index + 1
     level.tier = number <= 15 ? 1 : number <= 27 ? 2 : 3
@@ -7341,37 +7388,198 @@
     return gameGrammar.physicalSolutions(pieces, 1)[0] || null
   }
 
-  function armGameCamera(level) {
-    const engine = bridge.core
-    if (!engine?.state || typeof d3 === 'undefined') return null
-    const solution = solutionOf(level)
-    if (!solution) return null
-    const laid = layoutSolvedTree(solution)
-    engine.state.gameSolvedFrame = {
-      anchorId: level.tree?.gameId,
-      positions: laid.positions,
-      bounds: laid.bounds,
+  let gameDropBefore = null
+  function rememberGameDrop() {
+    gameDropBefore = JSON.stringify(bridge.snapshot().tree)
+  }
+  function playGameDrop(snapshot) {
+    const before = gameDropBefore
+    gameDropBefore = null
+    if (before !== null && before !== JSON.stringify(snapshot?.tree)) {
+      window.LOGYQGameSound?.drop()
+      window.LOGYQGameGuide?.hide()
+      app.game.guide = null
     }
-    return laid
+  }
+  function setupGameSound() {
+    const sound = window.LOGYQGameSound
+    if (!sound) return
+    const buttons = Array.from(document.querySelectorAll('[data-game-sound]'))
+    const update = () => buttons.forEach(button => {
+      button.disabled = !sound.supported
+      button.textContent = sound.supported ? 'Sound: ' + (sound.enabled() ? 'On' : 'Off') : 'Sound unavailable'
+      button.setAttribute('aria-pressed', String(sound.enabled()))
+    })
+    buttons.forEach(button => button.addEventListener('click', () => {
+      sound.setEnabled(!sound.enabled())
+      if (sound.enabled()) sound.unlock()
+      update()
+    }))
+    update()
+  }
+  setupGameSound()
+
+  let gameArtTimer = null
+  let gameArtEpoch = 0
+  let gameArtElement = null
+
+  function clearGameCompletionArt() {
+    gameArtEpoch++
+    if (gameArtTimer !== null) clearTimeout(gameArtTimer)
+    gameArtTimer = null
+    if (gameArtElement) {
+      d3.select(gameArtElement).selectAll('*').interrupt('completion')
+      gameArtElement.remove()
+      gameArtElement = null
+    }
+    document.body.classList.remove('logyq-game-completion')
   }
 
-  function fitGameCamera() {
-    const frame = bridge.core?.state?.gameSolvedFrame
-    if (!frame?.bounds) return
-    bridge.core.treeManager?.fitGameSolution?.(frame.bounds)
+  function scheduleGameCompletionArt(delay = 700, animate = true) {
+    if (!window.LOGYQCompletionArt || !app.game?.cleared) return
+    if (gameArtTimer !== null) clearTimeout(gameArtTimer)
+    const epoch = ++gameArtEpoch
+    gameArtTimer = setTimeout(() => {
+      gameArtTimer = null
+      if (epoch !== gameArtEpoch || !app.game?.cleared || document.body.classList.contains('logyq-home')) return
+      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
+          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
+        scheduleGameCompletionArt(150, animate)
+        return
+      }
+      const width = window.innerWidth, height = window.innerHeight
+      const cards = Array.from(document.querySelectorAll('svg#canvas g.node')).map(node => {
+        const data = node.__data__?.data
+        const rect = node.querySelector('rect:not(.grabzone)')?.getBoundingClientRect()
+        return data && rect ? {gameId:data.gameId, paint:data.paint,
+          x:rect.left, y:rect.top, width:rect.width, height:rect.height} : null
+      }).filter(Boolean)
+      const composition = window.LOGYQCompletionArt.build(cards, width, height)
+      if (!composition.length) return
+      if (gameArtElement) {
+        d3.select(gameArtElement).selectAll('*').interrupt('completion')
+        gameArtElement.remove()
+      }
+      const ns = 'http://www.w3.org/2000/svg'
+      const svg = document.createElementNS(ns, 'svg')
+      svg.id = 'logyq-completion-art'
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
+      svg.setAttribute('aria-hidden', 'true')
+      svg.dataset.phase = 'expanding'
+      const defs = document.createElementNS(ns, 'defs')
+      svg.appendChild(defs)
+      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      const duration = animate && !reduced ? 1400 : 0
+      let remaining = composition.length
+      for (const [i, card] of composition.entries()) {
+        const clip = document.createElementNS(ns, 'clipPath')
+        clip.id = `logyq-completion-reveal-${epoch}-${i}`
+        clip.setAttribute('clipPathUnits', 'userSpaceOnUse')
+        const reveal = document.createElementNS(ns, 'rect')
+        for (const [key, value] of Object.entries({x:card.x, y:card.y, width:card.width, height:card.height})) reveal.setAttribute(key, value)
+        clip.appendChild(reveal)
+        defs.appendChild(clip)
+        const group = document.createElementNS(ns, 'g')
+        group.setAttribute('data-piece', card.gameId)
+        group.setAttribute('clip-path', `url(#${clip.id})`)
+        for (const region of card.regions) {
+          const path = document.createElementNS(ns, 'path')
+          path.setAttribute('d', 'M' + region.polygon.map(point => point.join(',')).join('L') + 'Z')
+          path.setAttribute('fill', region.color)
+          path.setAttribute('stroke', region.color)
+          path.setAttribute('stroke-width', '0.5')
+          group.appendChild(path)
+        }
+        svg.appendChild(group)
+        const selection = d3.select(reveal)
+        const finish = () => {
+          if (epoch === gameArtEpoch && --remaining === 0) svg.dataset.phase = 'complete'
+        }
+        if (duration) selection.transition('completion').duration(duration).ease(d3.easeCubicInOut)
+          .attr('x', 0).attr('y', 0).attr('width', width).attr('height', height).on('end', finish)
+        else {
+          selection.attr('x', 0).attr('y', 0).attr('width', width).attr('height', height)
+          finish()
+        }
+      }
+      document.body.insertBefore(svg, document.getElementById('canvas'))
+      gameArtElement = svg
+      if (animate) window.LOGYQGameSound?.complete()
+      document.body.classList.add('logyq-game-completion')
+    }, delay)
+  }
+
+  let gameFitTimer = null
+  let gameFitPending = false
+  const gamePointers = new Set()
+
+  function cancelGameCameraFit() {
+    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
+    gameFitTimer = null
+    bridge.core?.elements?.svg?.interrupt?.('game-fit')
+  }
+
+  function levelForGuide() { return gameLevels.find(level => level.id === app.game?.id) }
+
+  function fitGameCamera(duration = 0) {
+    const engine = bridge.core
+    const root = engine?.state?.root
+    if (!app.game || !root || gamePointers.size) return
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
+    root.each(node => {
+      left = Math.min(left, node.x - GAME_LAYOUT.cardWidth / 2)
+      right = Math.max(right, node.x + GAME_LAYOUT.cardWidth / 2)
+      top = Math.min(top, node.y - GAME_LAYOUT.cardHeight / 2)
+      bottom = Math.max(bottom, node.y + GAME_LAYOUT.cardHeight / 2)
+    })
+    if (app.game.guide) {
+      const target = window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
+      if (target) {
+        left = Math.min(left, target.x - GAME_LAYOUT.cardWidth / 2)
+        right = Math.max(right, target.x + GAME_LAYOUT.cardWidth / 2)
+        top = Math.min(top, target.y - GAME_LAYOUT.cardHeight / 2)
+        bottom = Math.max(bottom, target.y + GAME_LAYOUT.cardHeight / 2)
+      }
+    }
+    engine.treeManager?.fitGameBounds?.({x:left,y:top,width:right-left,height:bottom-top}, {duration})
+  }
+
+  function scheduleGameCameraFit(delay = 280) {
+    if (!app.game || !bridge.core?.state?.root) return
+    gameFitPending = true
+    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
+    gameFitTimer = null
+    if (gamePointers.size) return
+    gameFitTimer = setTimeout(() => {
+      gameFitTimer = null
+      if (!app.game || document.body.classList.contains('logyq-home')) return
+      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
+          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
+        scheduleGameCameraFit(100)
+        return
+      }
+      gameFitPending = false
+      fitGameCamera(280)
+    }, delay)
   }
 
   function refitGameCamera() {
-    if (typeof gameCameraLocked !== 'function' || !gameCameraLocked()) return
-    if (document.body.classList.contains('logyq-home')) return
-    fitGameCamera()
+    scheduleGameCameraFit(80)
+    if (gameArtElement) scheduleGameCompletionArt(700, false)
+    window.LOGYQGameGuide?.refresh()
   }
 
   function leaveGamePlay() {
     const session = app.game
     if (!session) return
+    clearGameCompletionArt()
+    window.LOGYQGameGuide?.hide()
+    window.LOGYQGameSound?.stop()
+    gameDropBefore = null
     app.game = null
-    if (bridge.core?.state) bridge.core.state.gameSolvedFrame = null
+    cancelGameCameraFit()
+    gamePointers.clear()
+    gameFitPending = false
     document.body.classList.remove('logyq-game')
     delete window.__logyqGameDropAllowed
     delete window.__logyqGameBankNode
@@ -7404,6 +7612,10 @@
 
   function beginGameLevel(level, opts) {
     if (!level || !gameGrammar) return
+    clearGameCompletionArt()
+    window.LOGYQGameGuide?.hide()
+    window.LOGYQGameSound?.stop()
+    gameDropBefore = null
     const origin = app.game?.origin || (app.curriculum ? {
       current: { id: null, name: DEFAULT_NAME }, hasOpenMap: false,
       lastSnapshot: '', snapshot: { tree: null, wordBank: [] },
@@ -7424,20 +7636,19 @@
         played: { ...state.played, [level.id]: Date.now() },
       },
     })
-    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0 }
+    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
     app.lastSnapshot = 'game'
     document.body.classList.add('logyq-game', 'logyq-map-open')
     document.getElementById('logyq-game-next').hidden = true
     showGameTier(level, levelUp)
+    // Validate the mapper's resulting contacts, including root promotion.
     window.__logyqGameDropAllowed = ({ tree, movingUid, drop, trash, multi }) => {
-      if (trash || multi) return false
+      if (!drop || trash || multi) return false
       const allowed = gameGrammar.canDrop(tree, movingUid, drop)
-      if (!allowed && drop) {
-        noteWrongDrop()
-        gameStatus('Those visible edges do not fit. Try the other order.')
-      }
+      if (!allowed) gameStatus('Those colors do not match here. Try another position.')
+      else rememberGameDrop()
       return allowed
     }
     window.__logyqGameBankNode = (word) => {
@@ -7445,53 +7656,74 @@
       return card ? paintGameTree(structuredClone(card)) : null
     }
     window.__logyqGameBankDropAllowed = ({ tree, words, drop }) => {
-      if (words.length !== 1) return false
+      if (!drop || words.length !== 1) return false
       const card = level.bankCards?.[words[0]]
       const allowed = !!card && gameGrammar.canAdd(tree, card, drop)
-      if (!allowed && drop) {
-        noteWrongDrop()
-        gameStatus('That card does not fit there. Try the other side of the tree.')
-      }
+      if (!allowed) gameStatus('Those colors do not match here. Try another position.')
+      else rememberGameDrop()
       return allowed
     }
     ensureGamePaint()
     updateMapName()
     hideLibrary()
     gameStatus(levelUp ? 'Level up!' : level.hint)
-    const laid = armGameCamera(level)
+    cancelGameCameraFit()
+    gamePointers.clear()
+    gameFitPending = false
     bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice(), { fit: false })
-    if (laid) fitGameCamera()
+    fitGameCamera()
+    if (app.game.guide) window.LOGYQGameGuide?.show(level, bridge.core)
     setSaveState('saved')
   }
 
   function presentSolved(level) {
     beginGameLevel(level)
+    window.LOGYQGameGuide?.hide()
+    app.game.guide = null
     const solution = solutionOf(level)
     const engine = bridge.core
     if (!solution || !engine?.state) return
     engine.state.layoutMotionMs = 0
     bridge.loadMap(paintGameTree(structuredClone(solution)), level.bank.slice(), { fit: false })
     engine.state.layoutMotionMs = null
+    fitGameCamera()
   }
 
   function maybeGameClear(snapshot) {
     const session = app.game
-    if (!session || session.cleared) return false
+    if (!session) return false
     const level = gameLevels.find((item) => item.id === session.id)
-    if (!level || !gameGrammar.complete(snapshot?.tree, level.ids)) return false
+    if (!level || !gameGrammar.complete(snapshot?.tree, level.ids)) {
+      if (session.cleared) {
+        session.cleared = false
+        clearGameCompletionArt()
+        document.getElementById('logyq-game-next').hidden = true
+        gameStatus('Keep arranging the pieces, then check the contacts.')
+      }
+      return false
+    }
+    if (session.cleared) return true
+    window.LOGYQGameGuide?.hide()
+    session.guide = null
     session.cleared = true
     const progress = writeProgress(recordSolve(gameProgress(), level.id, session.wrongDrops || 0))
     const solvedCount = gameLevels.filter((item) => progress[item.id]).length
     const upcoming = chooseNext(progress, level.id).level
     gameStatus(solvedCount >= gameLevels.length ? 'All ' + gameLevels.length + ' levels cleared.' : 'It fits!', true)
     document.getElementById('logyq-game-next').hidden = !upcoming
+    scheduleGameCompletionArt()
     return true
   }
 
   function checkGame() {
     if (!app.game) return
+    if (app.game.cleared) {
+      if (!gameArtElement && gameArtTimer === null) scheduleGameCompletionArt()
+      return
+    }
     if (maybeGameClear(bridge.snapshot())) return
     if (app.game.cleared) return
+    noteWrongDrop()
     gameStatus('Not yet. Only the physical color contacts count.')
   }
 
@@ -7515,6 +7747,24 @@
     openLibrary().then(() => setHomeTab('game'))
   })
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('pointerdown', event => {
+      if (!app.game) return
+      if (window.LOGYQGameSound?.enabled()) window.LOGYQGameSound.unlock()
+      if (event.target?.closest?.('svg#canvas')) clearGameCompletionArt()
+      gamePointers.add(event.pointerId)
+      gameFitPending = true
+      cancelGameCameraFit()
+    }, true)
+    const release = event => {
+      gamePointers.delete(event.pointerId)
+      if (!gamePointers.size && gameFitPending) scheduleGameCameraFit()
+    }
+    window.addEventListener('pointerup', release, true)
+    window.addEventListener('pointercancel', release, true)
+    window.addEventListener('blur', () => {
+      gamePointers.clear()
+      if (gameFitPending) scheduleGameCameraFit()
+    })
     window.addEventListener('resize', refitGameCamera)
     window.addEventListener('orientationchange', refitGameCamera)
   }

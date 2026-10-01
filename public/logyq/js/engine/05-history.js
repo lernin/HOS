@@ -35,6 +35,7 @@ function autoFitSoon(delay){
 
 
   function undo(){
+    if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-game')) return;
     const { state, elements, utils } = logyq
     const a = state.history.pop();
       /* [patch] dock-bounds-init start */
@@ -125,6 +126,7 @@ function autoFitSoon(delay){
   }
 
   function redo(){
+    if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-game')) return;
     const { state, elements, utils } = logyq
     const a = (state.redo || []).pop();
     if (!a || !('redoRoot' in a)) return;

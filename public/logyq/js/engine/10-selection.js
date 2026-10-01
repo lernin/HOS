@@ -243,6 +243,29 @@ function setSelected(uid){
   }
 
   /* ======================= CARET POSITION ======================= */
+  function showGameChildCaret(targetUid) {
+    const { state, elements, config: CONFIG } = logyq;
+    if (!document.body.classList.contains('logyq-game')) return false;
+    const target = state.root?.descendants().find(n => n.data._uid === targetUid);
+    if (!target) return false;
+    const branch = elements.gNodes.selectAll('g.node.is-subtree').data();
+    const moving = new Set(branch.map(n => n.data._uid));
+    if (moving.has(targetUid)) {
+      // Descendant drops promote the children and move only the picked card.
+      const source = branch.reduce((a, n) => !a || n.depth < a.depth ? n : a, null);
+      moving.clear();
+      if (source) moving.add(source.data._uid);
+    }
+    const children = (target.children || []).filter(n => !moving.has(n.data._uid));
+    const last = children[children.length - 1];
+    // A node drop appends a child. Show that same slot, not a color overlay.
+    const x = last ? last.x + CONFIG.CARD_WIDTH / 2 + 10 : target.x;
+    const y = last ? last.y : target.y + CONFIG.CARD_HEIGHT / 2 + 14;
+    elements.caretDot.attr('cx', x).attr('cy', y)
+      .attr('r', CONFIG.CARET_DOT_RADIUS).style('opacity', 1);
+    return true;
+  }
+
   function caretXYFromHit(hit){
     const { state, config: CONFIG } = logyq
     /* [patch] edgeSibling-caret-sibling start */
@@ -632,6 +655,7 @@ window.addEventListener('keydown', onGroupHotkeys, { passive: false });
     showToast,
     flashMoved,
     caretXYFromHit,
+    showGameChildCaret,
     insertNodeAtDrop,
     moveSelectionToTarget,
     removeNode,

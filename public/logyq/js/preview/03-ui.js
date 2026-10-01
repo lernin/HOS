@@ -1,4 +1,6 @@
   function buildUi() {
+    document.querySelector('#settingsBackdrop .settings-modal')?.insertAdjacentHTML('beforeend',
+      '<div class="settings-row logyq-game-sound-control"><button type="button" data-game-sound aria-pressed="true">Sound: On</button></div>')
     const desktopState = document.createElement('span')
     desktopState.className = 'logiq-save-state'
     desktopState.setAttribute('role', 'status')
@@ -35,6 +37,7 @@
           <button data-tool="library">Your maps</button><button data-tool="mix">Mix</button>
           <button data-tool="paint">Paint colors</button><button data-tool="dock">Word Dock</button>
           <button data-tool="help">Help</button>
+          <button type="button" id="logyq-game-sound" class="logyq-game-sound-control" data-game-sound aria-pressed="true">Sound: On</button>
         </div>
       </section>
       <div id="logiq-voice-bar" role="status" aria-live="polite"><span id="logiq-voice-status">Listening…</span><button id="logiq-voice-stop">Stop</button></div>
