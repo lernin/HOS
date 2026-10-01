@@ -47,14 +47,13 @@ test('Game keeps automatic completion and preserves the existing Next control af
   assert.match(shell, /legacyCheck\?\.remove\(\)/)
 })
 
-test('initial live-map PIN gate cannot block Game or Curriculum startup', () => {
+test('LOGYQ renders no Lab PIN or Connect modal anywhere on the page', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const persistence = read('../public/logyq/js/preview/06-persistence.js')
   const shell = read('../public/logyq/js/game-sound.js')
 
-  assert.match(shell, /function releaseInitialPinGate\(\)/)
-  assert.match(shell, /window\.LOGYQPreview/)
-  assert.match(shell, /preview\.app\.booted/)
-  assert.match(shell, /sessionStorage\.getItem\('logyq_lab_pin_v1'\)/)
-  assert.match(shell, /pin\.classList\.contains\('is-open'\)/)
-  assert.match(shell, /cancel\.click\(\)/)
-  assert.match(shell, /releaseInitialPinGate\(\)/)
+  assert.doesNotMatch(ui, /logiq-pin|logiq-pin-form|Lab PIN/)
+  assert.doesNotMatch(ui, /\bui\.pin\b|\bui\.pinForm\b|\bui\.pinInput\b|\bui\.pinError\b/)
+  assert.doesNotMatch(persistence, /\bui\.pin\b|\bui\.pinForm\b|\bui\.pinInput\b|\bui\.pinError\b/)
+  assert.doesNotMatch(shell, /releaseInitialPinGate/)
 })
