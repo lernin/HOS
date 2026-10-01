@@ -92,7 +92,7 @@ test('game play keeps manual camera gestures locked; board changes reframe separ
   assert.match(gestures, /contains\('logyq-game'\)\) return/)
 })
 
-test('game drags start after a few pixels and flicks cannot add, delete, or warehouse', () => {
+test('game drags start after a few pixels and return to the bank without trashing', () => {
   const gestures = readFileSync(new URL('../public/logyq/js/preview/05-v162-gestures.js', import.meta.url), 'utf8')
   const dock = readFileSync(new URL('../public/logyq/js/engine/14-word-dock.js', import.meta.url), 'utf8')
   const styles = readFileSync(new URL('../public/logyq/js/preview/02-styles.js', import.meta.url), 'utf8')
@@ -100,18 +100,50 @@ test('game drags start after a few pixels and flicks cannot add, delete, or ware
   assert.match(gestures, /function gamePlay\(doc\)/)
   assert.match(gestures, /if \(gamePlay\(doc\)\) return/)
   assert.match(gestures, /GAME_DRAG_PX\)/)
-  assert.match(gestures, /armedBank && !gamePlay\(doc\)/)
-  assert.match(gestures, /gamePlay\(doc\) \? 'none'/)
+  assert.match(gestures, /armedBank && gamePlay\(doc\)/)
+  assert.match(gestures, /__logyqGameReturnToBank/)
   assert.match(gestures, /Game taps do not nominate/)
   assert.match(gestures, /logyq-game'\)\)/)
   assert.match(dock, /logyq-game'\)\) \{\s*if \(Math\.hypot\(dx, dy\) < 6\) return\s*beginLift\(\[session\.word\]\)/)
   assert.match(dock, /logyq-game'\)\) return/)
-  assert.doesNotMatch(styles, /body\.logyq-game #Dock[^{}]*\{[^}]*display:none/)
+  assert.match(dock, /const gain = 2\.4/)
+  assert.match(dock, /placeGhost\(session\.words, visual\.x, visual\.y\)/)
+  assert.match(dock, /if \(words\) placeGhost\(words, visual\.x, visual\.y\)/)
+  assert.match(styles, /body\.logyq-game\.v2-branch-drag #Dock\.is-empty[^{}]*\{display:flex!important/)
   assert.match(styles, /body\.logyq-game #logyq-warehouse/)
   assert.match(styles, /body\.logyq-game #trash/)
   assert.match(styles, /body\.logyq-game #addWordBtn/)
   assert.match(styles, /body\.logyq-game #logiq-mobile-panel \[data-tool="add"\]/)
   assert.match(styles, /body\.logyq-mobile-v162\.logyq-game\.v2-branch-drag #trash/)
+})
+
+test('returning a game branch restores each card to the tray, including the last root', () => {
+  const { sandbox } = loadGameFragment()
+  const level = sandbox.preview.game.levels[0]
+  const rootCard = structuredClone(level.tree)
+  rootCard._uid = 'root-uid'
+  const originalIds = []
+  const collect = node => { originalIds.push(node.gameId); (node.children || []).forEach(collect) }
+  collect(rootCard)
+  const result = sandbox.preview.game.returnBranch(rootCard, level.bank, level.bankCards, 'root-uid', level.id)
+  assert.equal(result.tree, null)
+  assert.equal(result.bank.length, level.bank.length + originalIds.length)
+  assert.deepEqual(Array.from(result.bankCards[result.bank.at(-1)].children), [])
+  const restoredIds = result.bank.slice(level.bank.length).map(key => result.bankCards[key].gameId)
+  assert.deepEqual(Array.from(restoredIds).sort(), originalIds.sort())
+  assert.equal(sandbox.preview.game.returnBranch(rootCard, level.bank, level.bankCards, 'missing', level.id), null)
+  const child = { gameId: 'child', paint: 'W:A', _uid: 'child-uid', children: [
+    { gameId: 'grandchild', paint: 'W:A', _uid: 'grand-uid', children: [] },
+  ] }
+  rootCard.children = [child]
+  const branch = sandbox.preview.game.returnBranch(rootCard, level.bank, level.bankCards, 'child-uid', level.id)
+  assert.equal(branch.tree.gameId, rootCard.gameId)
+  assert.equal(branch.tree.children.length, 0)
+  assert.deepEqual(Array.from(branch.bank.slice(level.bank.length), key => branch.bankCards[key].gameId), ['child', 'grandchild'])
+  sandbox.preview.game.begin(level)
+  const bankKey = result.bank.at(-1)
+  sandbox.app.game.bankCards = result.bankCards
+  assert.equal(sandbox.window.__logyqGameBankDropAllowed({ tree: null, words: [bankKey], drop: { type: 'newRootAt' } }), true)
 })
 
 test('paint spec is the shared face for every fixed card', () => {

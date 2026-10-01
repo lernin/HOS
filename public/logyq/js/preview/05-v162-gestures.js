@@ -892,7 +892,7 @@
 
     const canceled = doc.body.classList.contains('v2-cancel') || drag.multi
     const releasedAtOrigin = Math.hypot(event.clientX - drag.x, event.clientY - drag.y) <= v162Constants().STILL_PX
-    const dockKind = (canceled || releasedAtOrigin || gamePlay(doc))
+    const dockKind = (canceled || releasedAtOrigin)
       ? 'none'
       : activeDockKind(doc, drag, event.clientX, event.clientY)
     const armedBank = !canceled && !releasedAtOrigin && drag.moved && dockKind === 'bank' && drag.bankArmed
@@ -915,7 +915,8 @@
 
       cleanupDrag(doc, win, state, drag)
       dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
-      if (armedBank && !gamePlay(doc)) sendDragToWordBank(doc, drag)
+      if (armedBank && gamePlay(doc)) win.__logyqGameReturnToBank?.(drag.uid)
+      else if (armedBank) sendDragToWordBank(doc, drag)
     } finally {
       win.__logyqHoldDragCommit = false
       win.__logyqHoldDragAllowBank = false
@@ -1058,7 +1059,7 @@
       if (!drag) { state.feedbackRaf = 0; return }
       restoreOriginLayout(doc, drag.originLayout)
       stampOriginGhost(doc, drag.uids)
-      const dockKind = gamePlay(doc) ? 'none' : activeDockKind(doc, drag, drag.lastX, drag.lastY)
+      const dockKind = activeDockKind(doc, drag, drag.lastX, drag.lastY)
       armBankHover(win, drag, dockKind, doc)
       doc.body.classList.toggle('v2-dock-target', !!drag.bankArmed)
       movePreview(drag, drag.lastX, drag.lastY)

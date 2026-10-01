@@ -3736,6 +3736,7 @@ elements.gLinks.selectAll("path.link").classed("is-sub-link is-parent-link", fal
     state.dragState.groupAbandon = false;
 
     document.body.classList.remove("global-no-cursor");
+    document.body.classList.remove("logyq-game-board-drag");
   },
 
 
@@ -3800,6 +3801,7 @@ behavior(){
 start(event, d){
   const { state, elements, config: CONFIG } = logyq
   document.body.classList.add("global-no-cursor");
+  if (document.body.classList.contains('logyq-game')) document.body.classList.add('logyq-game-board-drag');
 
   // Shift+LEFT = "abandonment" (solo) mode
   const se = (event && event.sourceEvent) ? event.sourceEvent : event;
@@ -3981,6 +3983,21 @@ state.dragState.drop = null;
 
 
 
+
+    // Game cards can return to the tray, including the last card on the board.
+    if (window.__logyqGameReturnToBank && state.dragState?.didDrag &&
+        (state.dragState.multiUids?.length || 0) < 2) {
+      const dock = document.getElementById('Dock');
+      const rect = dock?.getBoundingClientRect();
+      const pointer = event.sourceEvent;
+      if (rect && pointer.clientX >= rect.left && pointer.clientX <= rect.right &&
+          pointer.clientY >= rect.top && pointer.clientY <= rect.bottom) {
+        const uid = d.data?._uid;
+        dragManager.clear();
+        window.__logyqGameReturnToBank(uid);
+        return;
+      }
+    }
 
     // 1) Trash?
     const src = event.sourceEvent, cx=src.clientX, cy=src.clientY;
@@ -4486,7 +4503,6 @@ state.dragState.drop = null;
   }
 };
 attach('drag', dragManager)
-
   /* ======================= CHIPS & INPUT ======================= */
   // Tap order. The first name tapped is the parent when a multi-select
   // starts an empty canvas. Render rebuilds the chips, so this lives here.
@@ -5088,6 +5104,15 @@ function bindChipPointerPlace() {
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
   }
 
+  const gameThumbPoint = (gesture, x, y) => {
+    if (!document.body.classList.contains('logyq-game')) return { x, y }
+    const gain = 2.4
+    return {
+      x: Math.max(24, Math.min(window.innerWidth - 24, gesture.x + (x - gesture.x) * gain)),
+      y: Math.max(56, Math.min(window.innerHeight - 24, gesture.y + (y - gesture.y) * gain)),
+    }
+  }
+
   const hoverMap = (x, y) => {
     const svg = logyq.elements.svg.node()
     if (!svg) return
@@ -5235,7 +5260,8 @@ function bindChipPointerPlace() {
       return
     }
     event.preventDefault()
-    placeGhost(session.words, event.clientX, event.clientY)
+    const visual = gameThumbPoint(session, event.clientX, event.clientY)
+    placeGhost(session.words, visual.x, visual.y)
     const corner = cornerUnderFinger(event.clientX, event.clientY)
     if (corner) {
       logyq.state.chipDrag.drop = null
@@ -5256,6 +5282,7 @@ function bindChipPointerPlace() {
     const words = session.words
     const dx = event.clientX - session.x
     const dy = event.clientY - session.y
+    const visual = gameThumbPoint(session, event.clientX, event.clientY)
     session = null
     if (panning) {
       event.preventDefault()
@@ -5294,7 +5321,7 @@ function bindChipPointerPlace() {
     } else if (corner === 'warehouse') {
       storeWordsInWarehouse(words)
     } else if (commit && !overDock(event.clientX, event.clientY)) {
-      if (words) placeGhost(words, event.clientX, event.clientY)
+      if (words) placeGhost(words, visual.x, visual.y)
       const aim = raisedGhostPoint(event.clientX, event.clientY)
       hoverMap(event.clientX, event.clientY)
       logyq.elements.svg.node()?.dispatchEvent(new DragEvent('drop', {

@@ -62,6 +62,7 @@ elements.gLinks.selectAll("path.link").classed("is-sub-link is-parent-link", fal
     state.dragState.groupAbandon = false;
 
     document.body.classList.remove("global-no-cursor");
+    document.body.classList.remove("logyq-game-board-drag");
   },
 
 
@@ -126,6 +127,7 @@ behavior(){
 start(event, d){
   const { state, elements, config: CONFIG } = logyq
   document.body.classList.add("global-no-cursor");
+  if (document.body.classList.contains('logyq-game')) document.body.classList.add('logyq-game-board-drag');
 
   // Shift+LEFT = "abandonment" (solo) mode
   const se = (event && event.sourceEvent) ? event.sourceEvent : event;
@@ -307,6 +309,21 @@ state.dragState.drop = null;
 
 
 
+
+    // Game cards can return to the tray, including the last card on the board.
+    if (window.__logyqGameReturnToBank && state.dragState?.didDrag &&
+        (state.dragState.multiUids?.length || 0) < 2) {
+      const dock = document.getElementById('Dock');
+      const rect = dock?.getBoundingClientRect();
+      const pointer = event.sourceEvent;
+      if (rect && pointer.clientX >= rect.left && pointer.clientX <= rect.right &&
+          pointer.clientY >= rect.top && pointer.clientY <= rect.bottom) {
+        const uid = d.data?._uid;
+        dragManager.clear();
+        window.__logyqGameReturnToBank(uid);
+        return;
+      }
+    }
 
     // 1) Trash?
     const src = event.sourceEvent, cx=src.clientX, cy=src.clientY;
@@ -812,4 +829,3 @@ state.dragState.drop = null;
   }
 };
 attach('drag', dragManager)
-

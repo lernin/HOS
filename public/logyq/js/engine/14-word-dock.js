@@ -599,6 +599,15 @@ function bindChipPointerPlace() {
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
   }
 
+  const gameThumbPoint = (gesture, x, y) => {
+    if (!document.body.classList.contains('logyq-game')) return { x, y }
+    const gain = 2.4
+    return {
+      x: Math.max(24, Math.min(window.innerWidth - 24, gesture.x + (x - gesture.x) * gain)),
+      y: Math.max(56, Math.min(window.innerHeight - 24, gesture.y + (y - gesture.y) * gain)),
+    }
+  }
+
   const hoverMap = (x, y) => {
     const svg = logyq.elements.svg.node()
     if (!svg) return
@@ -746,7 +755,8 @@ function bindChipPointerPlace() {
       return
     }
     event.preventDefault()
-    placeGhost(session.words, event.clientX, event.clientY)
+    const visual = gameThumbPoint(session, event.clientX, event.clientY)
+    placeGhost(session.words, visual.x, visual.y)
     const corner = cornerUnderFinger(event.clientX, event.clientY)
     if (corner) {
       logyq.state.chipDrag.drop = null
@@ -767,6 +777,7 @@ function bindChipPointerPlace() {
     const words = session.words
     const dx = event.clientX - session.x
     const dy = event.clientY - session.y
+    const visual = gameThumbPoint(session, event.clientX, event.clientY)
     session = null
     if (panning) {
       event.preventDefault()
@@ -805,7 +816,7 @@ function bindChipPointerPlace() {
     } else if (corner === 'warehouse') {
       storeWordsInWarehouse(words)
     } else if (commit && !overDock(event.clientX, event.clientY)) {
-      if (words) placeGhost(words, event.clientX, event.clientY)
+      if (words) placeGhost(words, visual.x, visual.y)
       const aim = raisedGhostPoint(event.clientX, event.clientY)
       hoverMap(event.clientX, event.clientY)
       logyq.elements.svg.node()?.dispatchEvent(new DragEvent('drop', {
