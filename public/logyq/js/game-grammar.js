@@ -110,7 +110,7 @@
   function canDrop(tree, movingUid, drop) {
     if (!tree || !drop) return false
     if (!['gap', 'node', 'rootAbove'].includes(drop.type)) return false
-    const copy = clone(tree)
+    let copy = clone(tree)
     const moving = find(copy, movingUid)
     if (!moving) return false
 
@@ -123,11 +123,36 @@
       return contacts(detached)
     }
 
-    if (isUid(copy, movingUid)) return false
     const targetUid = drop.type === 'node' ? drop.targetUid : drop.parentUid
     const target = find(copy, targetUid)
-    if (!target || isUid(moving, targetUid) || find(moving, targetUid)) return false
-    const detached = detach(copy, movingUid)
+    if (!target || isUid(moving, targetUid)) return false
+    const intoOwn = !!find(moving, targetUid)
+    let detached
+    if (isUid(copy, movingUid)) {
+      // Match the mapper's root promotion: its leftmost child becomes root,
+      // other root children append there, and the old root moves alone.
+      if (!intoOwn || !moving.children.length) return false
+      const [promoted, ...others] = moving.children
+      moving.children = []
+      promoted.children.push(...others)
+      copy = promoted
+      detached = moving
+    } else if (intoOwn) {
+      // Moving onto a descendant promotes children at the old parent first.
+      const parent = (() => {
+        const walk = node => {
+          if (node.children.some(child => isUid(child, movingUid))) return node
+          for (const child of node.children) { const found = walk(child); if (found) return found }
+          return null
+        }
+        return walk(copy)
+      })()
+      if (!parent) return false
+      const index = parent.children.indexOf(moving)
+      parent.children.splice(index, 1, ...moving.children)
+      moving.children = []
+      detached = moving
+    } else detached = detach(copy, movingUid)
     if (!detached) return false
     target.children ||= []
     let index = target.children.length

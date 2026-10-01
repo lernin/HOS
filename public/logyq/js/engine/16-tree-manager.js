@@ -713,7 +713,7 @@ centerOnSelected(opts = {}) {
     if (cluster && cluster.left > frame.fullW * 0.55 && cluster.width < frame.fullW * 0.4 && cluster.height > 40) {
       right = Math.min(right, cluster.left - gap)
     }
-    const margin = 8
+    const margin = Math.max(20, Math.min(32, (right - left) * 0.055))
     const innerL = left + margin
     const innerT = top + margin
     const innerR = right - margin

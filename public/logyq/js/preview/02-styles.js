@@ -279,6 +279,9 @@
         body.logyq-home .logyq-home-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;min-width:0}
         body.logyq-home .logyq-home-tab{min-width:0;width:100%;box-sizing:border-box;text-align:center;white-space:nowrap;overflow:hidden;font-size:clamp(13px,3.7vw,16px)}
       }
+      body.logyq-game #undoBtn,
+      body.logyq-game [data-tool="undo"],
+      body.logyq-game #logyq-bank-all,
       body.logyq-game .word-tools,
       body.logyq-game #wordInput,
       body.logyq-game #addWordBtn,

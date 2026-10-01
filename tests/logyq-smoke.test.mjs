@@ -7764,73 +7764,89 @@ test('game reframes smoothly after a layout change and freezes while a pointer i
   const dock = await page.locator('#Dock').boundingBox()
   assert.ok(bounds.y >= bar.y + bar.height + 7)
   assert.ok(bounds.y + bounds.height <= (dock?.y ?? 844) - 7)
-  assert.ok(bounds.x >= 7 && bounds.x + bounds.width <= 383)
+  assert.ok(bounds.x >= 19 && bounds.x + bounds.width <= 371)
   await context.close()
 })
 
-test('game placed cards can be picked up and reparented with a visible destination dot', async () => {
-  const context = await newContext({ viewport: {width:390,height:844}, isMobile:true, hasTouch:true })
-  await stubMaps(context, {maps:[]})
+test('game rejects mismatches but permits matching touch moves; hides Undo and All', async () => {
+  const context = await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
+  await stubMaps(context,{maps:[]})
   const page = await context.newPage()
-  await page.goto(`${baseUrl}/logyq/index.html`, {waitUntil:'networkidle'})
+  await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'})
   await waitForBoot(page)
   await page.evaluate(() => window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[125]))
   await page.waitForTimeout(700)
   await page.locator('#logyq-game-check').click()
   assert.equal(await page.locator('#logyq-game-next').isVisible(),true)
-  const info = await page.evaluate(() => {
-    const root = window.LOGYQBridge.core.state.root
-    const leaf = root.descendants().find(n => n.depth === root.height)
-    const center = n => {
-      const el = Array.from(document.querySelectorAll('svg#canvas g.node')).find(el => el.__data__?.data._uid === n.data._uid)
-      const r = el.getBoundingClientRect()
-      return {x:r.x+r.width/2,y:r.y+r.height/2}
-    }
-    return {uid:leaf.data._uid,rootUid:root.data._uid,from:center(leaf),to:center(root)}
-  })
+  assert.equal(await page.locator('#logiq-mobile-header [data-tool="undo"]').isVisible(),false)
+  assert.equal(await page.locator('#logyq-bank-all').count(),0)
   const cdp = await context.newCDPSession(page)
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...info.from,id:1}]})
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:info.from.x+18,y:info.from.y-18,id:1}]})
-  await page.waitForTimeout(60)
-  const offset = await page.evaluate(point => {
-    const r = document.querySelector('#logyq-v162-branch-preview svg')?.getBoundingClientRect()
-    return r ? {x:r.x+r.width/2-point.x,y:r.y+r.height/2-point.y} : {x:0,y:0}
-  }, {x:info.from.x+18,y:info.from.y-18})
-  const destination = {x:info.to.x-offset.x,y:info.to.y-offset.y}
-  for(let i=1;i<=12;i++) {
-    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:info.from.x+(destination.x-info.from.x)*i/12,y:info.from.y+(destination.y-info.from.y)*i/12,id:1}]})
-    await page.waitForTimeout(20)
+  const snapshot = () => page.evaluate(() => JSON.stringify(window.LOGYQBridge.snapshot().tree))
+  for (const matching of [false,true,'root']) {
+    if (matching === true) {
+      // Interaction fixture: matching faces permit different seats. Catalog
+      // uniqueness is tested separately; this fixture is never a catalog level.
+      await page.evaluate(() => {
+        const tree = window.LOGYQBridge.snapshot().tree
+        const paint = n => {n.paint='W:A';n.color='#60a5fa';for(const c of n.children||[])paint(c)}
+        paint(tree)
+        window.LOGYQBridge.loadMap(tree,[],{fit:false})
+      })
+      await page.waitForTimeout(700)
+    }
+    const before = await snapshot()
+    const info = await page.evaluate(rootMove => {
+      const root=window.LOGYQBridge.core.state.root
+      const leaf=root.descendants().find(n=>n.depth===root.height)
+      const center=n=>{
+        const el=Array.from(document.querySelectorAll('svg#canvas g.node')).find(el=>el.__data__?.data._uid===n.data._uid)
+        const r=el.getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}
+      }
+      const source=rootMove?root:leaf,target=rootMove?root.children[0]:root
+      return{uid:source.data._uid,rootUid:target.data._uid,from:center(source),to:center(target)}
+    },matching==='root')
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...info.from,id:1}]})
+    const nudge={x:info.from.x+18,y:info.from.y-18}
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...nudge,id:1}]})
+    await page.waitForTimeout(60)
+    const offset=await page.evaluate(point=>{
+      const r=document.querySelector('#logyq-v162-branch-preview svg').getBoundingClientRect()
+      return{x:r.x+r.width/2-point.x,y:r.y+r.height/2-point.y}
+    },nudge)
+    const dest={x:info.to.x-offset.x,y:info.to.y-offset.y}
+    for(let i=1;i<=12;i++){
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:info.from.x+(dest.x-info.from.x)*i/12,y:info.from.y+(dest.y-info.from.y)*i/12,id:1}]})
+      await page.waitForTimeout(20)
+    }
+    const aim=await page.evaluate(uid=>{
+      const core=window.LOGYQBridge.core,dot=core.elements.caretDot.node()
+      const target=core.state.root.descendants().find(n=>n.data._uid===uid),last=target.children.at(-1)
+      const faces=Array.from(document.querySelectorAll('svg#canvas g.node rect:not(.grabzone)'))
+      return{drop:core.state.dragState.drop,opacity:getComputedStyle(dot).opacity,
+        x:+dot.getAttribute('cx'),lastRight:last.x+core.config.CARD_WIDTH/2,
+        colors:faces.every(el=>getComputedStyle(el).fill===el.style.fill)}
+    },info.rootUid)
+    assert.equal(aim.drop?.targetUid,info.rootUid)
+    assert.equal(aim.opacity,'1');assert.ok(aim.x>aim.lastRight);assert.equal(aim.colors,true)
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+    await page.waitForTimeout(900)
+    if(matching){
+      const parent=await page.evaluate(uid=>window.LOGYQBridge.core.state.root.descendants().find(n=>n.data._uid===uid)?.parent?.data._uid,info.uid)
+      assert.equal(parent,info.rootUid)
+      const moved=await snapshot()
+      await page.evaluate(()=>window.LOGYQBridge.undo())
+      await page.keyboard.press('Control+z')
+      assert.equal(await snapshot(),moved,'game undo cannot move cards or restore the bank')
+      const dot=await page.evaluate(uid=>{
+        const core=window.LOGYQBridge.core,leaf=core.state.root.descendants().find(n=>n.data._uid===uid)
+        core.selection.showGameChildCaret(uid)
+        return{x:+core.elements.caretDot.attr('cx'),y:+core.elements.caretDot.attr('cy'),leafX:leaf.x,bottom:leaf.y+core.config.CARD_HEIGHT/2}
+      },info.uid)
+      assert.equal(dot.x,dot.leafX);assert.ok(dot.y>dot.bottom)
+    }else{
+      assert.equal(await snapshot(),before,'rejected contact leaves the board untouched')
+      assert.match(await page.locator('#logyq-game-status').textContent(),/do not match/)
+    }
   }
-  const aim = await page.evaluate(() => {
-    const core = window.LOGYQBridge.core
-    const dot = core.elements.caretDot.node()
-    const root = core.state.root
-    const last = root.children.at(-1)
-    const faces = Array.from(document.querySelectorAll('svg#canvas g.node rect:not(.grabzone)'))
-    return {drop:core.state.dragState.drop,dotOpacity:getComputedStyle(dot).opacity,
-      dotX:+dot.getAttribute('cx'),lastX:last.x,lastHalf:core.config.CARD_WIDTH/2,
-      colors:faces.map(el=>({actual:getComputedStyle(el).fill,expected:el.style.fill}))}
-  })
-  assert.equal(aim.drop?.type,'node')
-  assert.equal(aim.drop.targetUid,info.rootUid)
-  assert.equal(aim.dotOpacity,'1')
-  assert.ok(aim.dotX > aim.lastX+aim.lastHalf)
-  assert.ok(aim.colors.every(face=>face.actual === face.expected),JSON.stringify(aim.colors))
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
-  await page.waitForTimeout(900)
-  const parent = await page.evaluate(uid => window.LOGYQBridge.core.state.root.descendants().find(n=>n.data._uid===uid)?.parent?.data._uid,info.uid)
-  assert.equal(parent,info.rootUid,'a placed card can move even when its new contacts do not match yet')
-  await page.locator('#logyq-game-check').click()
-  assert.equal(await page.locator('#logyq-game-next').isVisible(),false)
-  assert.match(await page.locator('#logyq-game-status').textContent(),/Not yet/)
-  const leafDot = await page.evaluate(uid => {
-    const core = window.LOGYQBridge.core
-    const leaf = core.state.root.descendants().find(n=>n.data._uid===uid)
-    core.selection.showGameChildCaret(uid)
-    return {x:+core.elements.caretDot.attr('cx'),y:+core.elements.caretDot.attr('cy'),leafX:leaf.x,leafBottom:leaf.y+core.config.CARD_HEIGHT/2}
-  },info.uid)
-  assert.equal(leafDot.x,leafDot.leafX)
-  assert.ok(leafDot.y > leafDot.leafBottom)
-  await cdp.detach()
-  await context.close()
+  await cdp.detach();await context.close()
 })

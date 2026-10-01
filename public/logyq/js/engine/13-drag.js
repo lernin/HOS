@@ -129,7 +129,7 @@ start(event, d){
 
   // Shift+LEFT = "abandonment" (solo) mode
   const se = (event && event.sourceEvent) ? event.sourceEvent : event;
-  const isShiftLeft = !!(se && se.button === 0 && se.shiftKey);
+  const isShiftLeft = !document.body.classList.contains('logyq-game') && !!(se && se.button === 0 && se.shiftKey);
 
   // Abandonment flag (used later in B path)
   state.dragState.solo = isShiftLeft;

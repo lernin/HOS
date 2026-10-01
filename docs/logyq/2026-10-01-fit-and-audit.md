@@ -126,3 +126,22 @@ incorrect seat, checks the append dot and face colors during drag, and confirms
 completion resets. It also checks the below-leaf indicator. Unit suite: 100 pass.
 Focused browser checks: all solved boards in phone safe areas, animated fit with
 held-pointer freeze, and touch pickup/reparenting.
+
+## Playtest revision — 2026-10-01, second preview
+
+Ashley requested rejection of mismatched placements instead of temporary invalid
+boards. That supersedes the earlier free-placement decision. Drop validation now
+simulates the mapper's root and descendant promotion, checks every resulting
+contact, and rejects mismatches without changing the board. The root was blocked
+by the old validator even when the mapper could promote a child; this is covered
+by explicit root/descendant regression tests. Game Shift-drag uses the same
+normal move rules so validation and mutation agree.
+
+Game fit now reserves 20–32px margins (5.5% of available width), replacing the
+8px margin. Undo/redo is blocked in the history entry points during Game; Undo
+controls are hidden. Word Bank All is not rendered during Game. Mapper controls
+remain available outside Game.
+
+Follow-up idea: after a correct solve, extend the card color regions and diagonal
+boundaries into a full-background geometric design, then dissolve the cards into
+that composition. Deferred until the basic movement/matching experience is stable.

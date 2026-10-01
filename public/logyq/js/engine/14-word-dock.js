@@ -381,7 +381,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
       strip.appendChild(chip);
     });
     list.appendChild(strip);
-    if (chipNamesInBank().length) {
+    if (chipNamesInBank().length && !document.body?.classList?.contains('logyq-game')) {
       const allButton = document.createElement('button');
       allButton.type = 'button';
       allButton.id = 'logyq-bank-all';
@@ -797,7 +797,7 @@ function bindChipPointerPlace() {
     }
     event.preventDefault()
     event.stopPropagation()
-    const corner = commit && !document.body.classList.contains('logyq-game')
+    const corner = commit && !document.body?.classList?.contains('logyq-game')
       ? cornerUnderFinger(event.clientX, event.clientY)
       : null
     if (corner === 'trash') {

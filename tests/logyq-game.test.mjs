@@ -405,3 +405,14 @@ test('every solved tree fits a 360x640 phone at the readable card scale', () => 
   assert.equal(five.rows, 5)
   assert.ok(five.bounds.height * budget.minScale > budget.safeHeight)
 })
+
+test('matching root and descendant repositioning follows mapper promotion without cycles', () => {
+  const tree = card('root','W:A',[card('middle','W:A',[card('leaf','W:A')])])
+  assert.equal(grammar.canDrop(tree,'root',{type:'node',targetUid:'leaf'}),true)
+  assert.equal(grammar.canDrop(tree,'middle',{type:'node',targetUid:'leaf'}),true)
+  assert.equal(grammar.canDrop(tree,'root',{type:'gap',parentUid:'leaf'}),true)
+  assert.equal(grammar.canDrop(tree,'root',{type:'node',targetUid:'root'}),false)
+  assert.equal(grammar.canDrop(tree,'root',{type:'rootAbove'}),false)
+  const mismatch = card('root','DL:A:B',[card('child','W:B')])
+  assert.equal(grammar.canDrop(mismatch,'root',{type:'node',targetUid:'child'}),false)
+})

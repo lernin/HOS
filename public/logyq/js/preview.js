@@ -565,6 +565,9 @@
         body.logyq-home .logyq-home-tabs{grid-column:1 / -1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%;min-width:0}
         body.logyq-home .logyq-home-tab{min-width:0;width:100%;box-sizing:border-box;text-align:center;white-space:nowrap;overflow:hidden;font-size:clamp(13px,3.7vw,16px)}
       }
+      body.logyq-game #undoBtn,
+      body.logyq-game [data-tool="undo"],
+      body.logyq-game #logyq-bank-all,
       body.logyq-game .word-tools,
       body.logyq-game #wordInput,
       body.logyq-game #addWordBtn,
@@ -7506,15 +7509,24 @@
     document.body.classList.add('logyq-game', 'logyq-map-open')
     document.getElementById('logyq-game-next').hidden = true
     showGameTier(level, levelUp)
-    // Movement uses the mapper's structural rules. Edge matching is checked
-    // on the completed board, so an intermediate mismatch never locks a card.
-    window.__logyqGameDropAllowed = ({ drop, trash, multi }) => !!drop && !trash && !multi
+    // Validate the mapper's resulting contacts, including root promotion.
+    window.__logyqGameDropAllowed = ({ tree, movingUid, drop, trash, multi }) => {
+      if (!drop || trash || multi) return false
+      const allowed = gameGrammar.canDrop(tree, movingUid, drop)
+      if (!allowed) gameStatus('Those colors do not match here. Try another position.')
+      return allowed
+    }
     window.__logyqGameBankNode = (word) => {
       const card = level.bankCards?.[word]
       return card ? paintGameTree(structuredClone(card)) : null
     }
-    window.__logyqGameBankDropAllowed = ({ words, drop }) =>
-      !!drop && words.length === 1 && !!level.bankCards?.[words[0]]
+    window.__logyqGameBankDropAllowed = ({ tree, words, drop }) => {
+      if (!drop || words.length !== 1) return false
+      const card = level.bankCards?.[words[0]]
+      const allowed = !!card && gameGrammar.canAdd(tree, card, drop)
+      if (!allowed) gameStatus('Those colors do not match here. Try another position.')
+      return allowed
+    }
     ensureGamePaint()
     updateMapName()
     hideLibrary()

@@ -951,6 +951,7 @@ function autoFitSoon(delay){
 
 
   function undo(){
+    if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-game')) return;
     const { state, elements, utils } = logyq
     const a = state.history.pop();
       /* [patch] dock-bounds-init start */
@@ -1041,6 +1042,7 @@ function autoFitSoon(delay){
   }
 
   function redo(){
+    if (typeof document !== 'undefined' && document.body?.classList?.contains('logyq-game')) return;
     const { state, elements, utils } = logyq
     const a = (state.redo || []).pop();
     if (!a || !('redoRoot' in a)) return;
@@ -2560,7 +2562,14 @@ function setSelected(uid){
     if (!document.body.classList.contains('logyq-game')) return false;
     const target = state.root?.descendants().find(n => n.data._uid === targetUid);
     if (!target) return false;
-    const moving = new Set(elements.gNodes.selectAll('g.node.is-subtree').data().map(n => n.data._uid));
+    const branch = elements.gNodes.selectAll('g.node.is-subtree').data();
+    const moving = new Set(branch.map(n => n.data._uid));
+    if (moving.has(targetUid)) {
+      // Descendant drops promote the children and move only the picked card.
+      const source = branch.reduce((a, n) => !a || n.depth < a.depth ? n : a, null);
+      moving.clear();
+      if (source) moving.add(source.data._uid);
+    }
     const children = (target.children || []).filter(n => !moving.has(n.data._uid));
     const last = children[children.length - 1];
     // A node drop appends a child. Show that same slot, not a color overlay.
@@ -3794,7 +3803,7 @@ start(event, d){
 
   // Shift+LEFT = "abandonment" (solo) mode
   const se = (event && event.sourceEvent) ? event.sourceEvent : event;
-  const isShiftLeft = !!(se && se.button === 0 && se.shiftKey);
+  const isShiftLeft = !document.body.classList.contains('logyq-game') && !!(se && se.button === 0 && se.shiftKey);
 
   // Abandonment flag (used later in B path)
   state.dragState.solo = isShiftLeft;
@@ -4861,7 +4870,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
       strip.appendChild(chip);
     });
     list.appendChild(strip);
-    if (chipNamesInBank().length) {
+    if (chipNamesInBank().length && !document.body?.classList?.contains('logyq-game')) {
       const allButton = document.createElement('button');
       allButton.type = 'button';
       allButton.id = 'logyq-bank-all';
@@ -5277,7 +5286,7 @@ function bindChipPointerPlace() {
     }
     event.preventDefault()
     event.stopPropagation()
-    const corner = commit && !document.body.classList.contains('logyq-game')
+    const corner = commit && !document.body?.classList?.contains('logyq-game')
       ? cornerUnderFinger(event.clientX, event.clientY)
       : null
     if (corner === 'trash') {
@@ -6514,7 +6523,7 @@ centerOnSelected(opts = {}) {
     if (cluster && cluster.left > frame.fullW * 0.55 && cluster.width < frame.fullW * 0.4 && cluster.height > 40) {
       right = Math.min(right, cluster.left - gap)
     }
-    const margin = 8
+    const margin = Math.max(20, Math.min(32, (right - left) * 0.055))
     const innerL = left + margin
     const innerT = top + margin
     const innerR = right - margin

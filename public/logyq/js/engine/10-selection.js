@@ -248,7 +248,14 @@ function setSelected(uid){
     if (!document.body.classList.contains('logyq-game')) return false;
     const target = state.root?.descendants().find(n => n.data._uid === targetUid);
     if (!target) return false;
-    const moving = new Set(elements.gNodes.selectAll('g.node.is-subtree').data().map(n => n.data._uid));
+    const branch = elements.gNodes.selectAll('g.node.is-subtree').data();
+    const moving = new Set(branch.map(n => n.data._uid));
+    if (moving.has(targetUid)) {
+      // Descendant drops promote the children and move only the picked card.
+      const source = branch.reduce((a, n) => !a || n.depth < a.depth ? n : a, null);
+      moving.clear();
+      if (source) moving.add(source.data._uid);
+    }
     const children = (target.children || []).filter(n => !moving.has(n.data._uid));
     const last = children[children.length - 1];
     // A node drop appends a child. Show that same slot, not a color overlay.
