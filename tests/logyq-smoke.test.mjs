@@ -397,8 +397,7 @@ test('LOGYQ phone v162 flick creates a relative, hold latches drag, double-tap e
   assert.ok(Math.hypot(flickEdit.x - flickView.x, flickEdit.y - flickView.y) < 2, 'create must not pan')
   await page.waitForTimeout(400)
 
-  const panCard = await nodeCenter('Node 12')
-  const panOrigin = await page.evaluate(() => {
+  const panCard = await nodeCenter('Node 12')  const panOrigin = await page.evaluate(() => {
     const node = Array.from(document.querySelectorAll('g.node')).find((element) => element.__data__?.data?.name === 'Node 12')
     const t = window.d3.zoomTransform(document.getElementById('canvas'))
     return {
@@ -797,8 +796,7 @@ test('LOGYQ phone paints a card on tap and a branch on flick-down, and does not 
     await page.evaluate(({ x, y, x2, y2, pointerId }) => {
       const canvas = document.getElementById('canvas')
       for (const [type, px, py] of [['pointerdown', x, y], ['pointerup', x2, y2]]) {
-        canvas.dispatchEvent(new PointerEvent(type, {
-          bubbles: true,
+        canvas.dispatchEvent(new PointerEvent(type, {          bubbles: true,
           cancelable: true,
           composed: true,
           pointerType: 'touch',
@@ -1197,8 +1195,7 @@ test('LOGYQ curriculum level 1 starts mixed on the map and unlocks level 2', asy
     const overview = wide <= vw * 0.92 && tall <= (vh - usableTop) * 0.92
     return fits && overview && k <= 1.2 && k >= 0.2 && document.body.dataset.curriculumPhase === 'play'
   }, null, { timeout: 12000 })
-  const rootAfterMix = await page.evaluate(() => {
-    const root = Array.from(document.querySelectorAll('g.node')).find((el) => !el.__data__?.parent)
+  const rootAfterMix = await page.evaluate(() => {    const root = Array.from(document.querySelectorAll('g.node')).find((el) => !el.__data__?.parent)
     const box = root.getBoundingClientRect()
     return box.top + box.height / 2
   })
@@ -1597,8 +1594,7 @@ test('LOGYQ open map pulls a newer database row and notes it above the rename fi
   store.maps[0].tree = {
     name: 'Sky',
     formatVersion: 2,
-    _uid: 'root',
-    children: [{ name: 'Storm', _uid: 'cloud' }],
+    _uid: 'root',    children: [{ name: 'Storm', _uid: 'cloud' }],
   }
   store.maps[0].updated_at = '2026-09-23T00:00:00.000Z'
   await page.evaluate(() => window.LOGYQPreview.sync.pullRemote())
@@ -1997,8 +1993,7 @@ test('LOGYQ two blank cards edit by uid, not empty name', async () => {
   const firstEdit = await page.evaluate(() => window.LOGYQBridge.core.state.editingUid)
   assert.equal(firstEdit, targetUid, 'double-tap must edit the flicked blank, not the first empty name')
   assert.notEqual(firstEdit, decoy)
-  await page.locator('.node-edit-input').fill('cat')
-  await page.locator('.node-edit-input').press('Enter')
+  await page.locator('.node-edit-input').fill('cat')  await page.locator('.node-edit-input').press('Enter')
   await page.waitForFunction((uid) => {
     const node = Array.from(document.querySelectorAll('svg#canvas g.node')).find((element) => element.__data__?.data?._uid === uid)
     return node?.__data__?.data?.name === 'cat'
@@ -2397,8 +2392,7 @@ test('LOGYQ sequential flick-downs after background clear and pan do not overlap
 
   async function emptyPoint() {
     return page.evaluate(() => {
-      const canvas = document.getElementById('canvas')
-      const rect = canvas.getBoundingClientRect()
+      const canvas = document.getElementById('canvas')      const rect = canvas.getBoundingClientRect()
       const slots = Array.from(document.querySelectorAll('svg#canvas g.hit-slot, svg#canvas g.node'))
       for (let y = rect.top + 8; y < rect.bottom - 8; y += 20) {
         for (let x = rect.left + 8; x < rect.right - 8; x += 20) {
@@ -2797,8 +2791,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
       const face = node.querySelector('rect:not(.grabzone):not(.logyq-smite-wash):not(.logyq-smite-glow)')
       const wash = node.querySelector('rect.logyq-smite-wash')
       const text = node.querySelector('text.label')
-      return {
-        name: node.__data__?.data?.name ?? null,
+      return {        name: node.__data__?.data?.name ?? null,
         red: clock.classList.contains('logyq-smite-red'),
         amber: clock.classList.contains('logyq-smite-amber'),
         dash: clock.getAttribute('stroke-dasharray'),
@@ -3197,8 +3190,7 @@ test('LOGYQ phone smite cake parks a thumb, counts mercy, and banks only the amb
   await touch('pointermove', kidParent.x, kidParent.y + 84, 92, kidParent.uid)
   const kidsOnly = await heats()
   assert.equal(kidsOnly.find((card) => card.name === 'A'), undefined)
-  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.clock, false)
-  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.wash, 'none')
+  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.clock, false)  assert.equal(kidsOnly.find((card) => card.name === 'A1')?.wash, 'none')
   assert.equal((kidsOnly.find((card) => card.name === 'A1')?.washStroke || '').toLowerCase(), '#ff0000')
   assert.equal(kidsOnly.find((card) => card.name === '')?.wash, 'none')
   assert.equal((kidsOnly.find((card) => card.name === '')?.washStroke || '').toLowerCase(), '#ff0000')
@@ -3597,8 +3589,7 @@ test('LOGYQ Word Bank chip drag pans the map with the card-drag follow', async (
       name: 'Root',
       children: [{ name: 'Far' }],
     }, ['Pan'])
-  })
-  await page.waitForSelector('#Dock .chip')
+  })  await page.waitForSelector('#Dock .chip')
   await page.waitForFunction(() => {
     const far = Array.from(document.querySelectorAll('g.node')).find((el) => el.__data__?.data?.name === 'Far')
     return far?.getBoundingClientRect().width > 20 && !document.body.classList.contains('logyq-layout-settling')
@@ -3997,8 +3988,7 @@ test('LOGYQ drag a Word Bank chip onto the map on phone and desktop', async () =
     assert.ok(Number(ghost.opacity) < 0.9)
     assert.ok(ghost.bottom < point.y - 8)
   })
-  await phonePage.waitForFunction(() => {
-    const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
+  await phonePage.waitForFunction(() => {    const parent = window.LOGYQBridge.core.state.root.descendants().find((node) => node.data.name === 'A')
     return parent?.children?.some((child) => child.data.name === 'Pop')
   })
   assert.deepEqual(await phonePage.evaluate(() => window.LOGYQBridge.core.state.wordBank.slice()), ['Stay'])
@@ -4397,8 +4387,7 @@ test('LOGYQ repeated flicks keep the camera still and the touched card', async (
   const panFrom = await face('B')
   const panStart = await view()
   const panBefore = (await counts()).nodes
-  const panPoints = []
-  for (let i = 0; i <= 12; i += 1) {
+  const panPoints = []  for (let i = 0; i <= 12; i += 1) {
     panPoints.push({ x: panFrom.x + i * 4, y: panFrom.y + i * 3, wait: 45 })
   }
   await play(panPoints)
@@ -4797,8 +4786,7 @@ test('LOGYQ pocket cast edges march and parent-only connectors stay quiet', asyn
 
   async function paint(marksFor) {
     return page.evaluate(async (mode) => {
-      const core = window.LOGYQBridge.core
-      const byName = (label) => core.state.root.descendants().find((node) => node.data.name === label)
+      const core = window.LOGYQBridge.core      const byName = (label) => core.state.root.descendants().find((node) => node.data.name === label)
       const root = byName('Root')
       const cut = byName('Cut')
       const bank = byName('Bank')
@@ -5197,8 +5185,7 @@ test('LOGYQ one-thumb tap arms green and a swipe nominates by target', async () 
 test('LOGYQ rename mirrors onto the card and clears the green focus', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
   await stubMaps(context)
-  const page = await context.newPage()
-  const errors = []
+  const page = await context.newPage()  const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
   await waitForBoot(page)
@@ -5597,8 +5584,7 @@ test('LOGYQ partial smite conclude redraws connectors with the cards', async () 
 
 test('LOGYQ clears white outlines on the midfield parents Ashley photographed', async () => {
   const context = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 })
-  await stubMaps(context)
-  const page = await context.newPage()
+  await stubMaps(context)  const page = await context.newPage()
   const errors = []
   page.on('pageerror', (error) => errors.push(error.message))
   await page.goto(`${baseUrl}/logyq/index.html`, { waitUntil: 'networkidle' })
@@ -5997,8 +5983,7 @@ test('LOGYQ phone edit uses a keyboard field and does not move the map', async (
     const node = window.LOGYQBridge.core.state.root.descendants().find((item) => item.data._uid === selected)
     return {
       editors: document.querySelectorAll('.node-edit-input').length,
-      selected,
-      name: node?.data?.name ?? null,
+      selected,      name: node?.data?.name ?? null,
       parent: node?.parent?.data?._uid || null,
     }
   }, citrus.uid)
@@ -6397,8 +6382,7 @@ test('LOGYQ double-tap renames only the card under the finger', async () => {
   await page.waitForFunction((uid) => {
     return window.LOGYQBridge.core.utils.findByUid(window.LOGYQBridge.core.state.root.data, uid)?.name === 'Berry'
   }, opened.uid)
-  assert.equal(await label(food.uid), 'Food')
-  assert.equal(await label(fruit.uid), 'Berry')
+  assert.equal(await label(food.uid), 'Food')  assert.equal(await label(fruit.uid), 'Berry')
   assert.equal(await label(meatCard.uid), 'Meat')
   assert.equal(await label(flicked.selected), '')
 
@@ -6797,8 +6781,7 @@ test('LOGYQ Thekonym mode pairs a Roboto Condensed onym with a sans essence, and
   })
   assert.equal(flipMotion.flip, 'open')
   assert.equal(flipMotion.fly, 0)
-  assert.equal(flipMotion.layoutWide, true)
-  assert.equal(flipMotion.layoutTall, true)
+  assert.equal(flipMotion.layoutWide, true)  assert.equal(flipMotion.layoutTall, true)
   assert.ok(flipMotion.frames.length >= 2, 'the dossier has a flip')
   assert.ok(flipMotion.frames.every((value) => value.includes('rotateY') && !value.includes('scale')), flipMotion.frames.join(' | '))
   assert.ok(flipMotion.edgeW < flipMotion.faceW * 0.5, 'the flip starts edge-on')
@@ -7197,8 +7180,7 @@ test('LOGYQ phone shelf pans in place, and warehouse or trash only take a dragge
   await page.waitForFunction(() => !Array.from(document.querySelectorAll('#Dock .chip')).some((el) => el.textContent.trim() === 'Pop'))
   const housed = await page.evaluate(() => {
     const el = document.getElementById('logyq-warehouse')
-    const box = el.getBoundingClientRect()
-    const shelf = document.getElementById('Dock').getBoundingClientRect()
+    const box = el.getBoundingClientRect()    const shelf = document.getElementById('Dock').getBoundingClientRect()
     return { display: getComputedStyle(el).display, bottom: box.bottom, left: box.left, w: box.width, shelfTop: shelf.top }
   })
   assert.notEqual(housed.display, 'none', 'warehouse shows once a word is stored')
@@ -7597,8 +7579,7 @@ test('LOGYQ my maps list fits a phone viewport', async () => {
         docScroll: document.documentElement.scrollWidth,
         modalClient: modal.clientWidth,
         modalScroll: modal.scrollWidth,
-        listClient: list.clientWidth,
-        listScroll: list.scrollWidth,
+        listClient: list.clientWidth,        listScroll: list.scrollWidth,
         rows,
       }
     })
@@ -7997,8 +7978,7 @@ test('game tray leaves gesture margins and first concepts show drag destinations
     const chip=await page.locator('#Dock .chip').first().boundingBox()
     assert.ok(Math.abs(chip.x+chip.width/2-195)<2,'single loose piece is centered')
     await page.screenshot({path:`/workspace/scratch/ae226cb204ec/logyq-guide-${kind}.png`})
-    const cdp=await context.newCDPSession(page)
-    const from={x:chip.x+chip.width/2,y:chip.y+chip.height/2}
+    const cdp=await context.newCDPSession(page)    const from={x:chip.x+chip.width/2,y:chip.y+chip.height/2}
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...from,id:1}]})
     const nudge={x:from.x,y:from.y-22}
     await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...nudge,id:1}]})
