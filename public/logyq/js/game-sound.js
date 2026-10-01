@@ -3,7 +3,10 @@
   'use strict'
   const KEY = 'logyq_game_sound_v1'
   const VOLUME_KEY = 'logyq_game_sfx_volume_v1'
+  const MUSIC_VOLUME_KEY = 'logyq_game_music_volume_v1'
+  const MUSIC_SOURCE = 'https://opengameart.org/sites/default/files/my_street.ogg'
   const DEFAULT_VOLUME = 0.55
+  const DEFAULT_MUSIC_VOLUME = 0.16
   let volume = DEFAULT_VOLUME, context = null, master = null, lastDrop = -Infinity
   const voices = new Set()
   try {
@@ -78,5 +81,72 @@
   window.LOGYQGameSound = Object.freeze({
     supported:!!Audio, enabled:on, volume:() => volume, setVolume, setEnabled, unlock, stop,
     drop:() => play('drop'), complete:() => play('complete'),
+  })
+
+  let musicVolume = DEFAULT_MUSIC_VOLUME
+  try {
+    const savedMusicVolume = localStorage.getItem(MUSIC_VOLUME_KEY)
+    if (savedMusicVolume !== null && Number.isFinite(Number(savedMusicVolume))) {
+      musicVolume = Math.max(0, Math.min(1, Number(savedMusicVolume)))
+    }
+  } catch (_error) {}
+  let musicPlayer = null
+  let musicActive = false
+  let musicPaused = false
+
+  function getMusicPlayer() {
+    if (musicPlayer || typeof window.Audio !== 'function') return musicPlayer
+    musicPlayer = new window.Audio(MUSIC_SOURCE)
+    musicPlayer.loop = true
+    musicPlayer.preload = 'none'
+    musicPlayer.volume = musicVolume
+    return musicPlayer
+  }
+  function playMusic() {
+    const player = getMusicPlayer()
+    if (!player || !musicActive || musicPaused || musicVolume <= 0) return false
+    player.volume = musicVolume
+    try {
+      const result = player.play()
+      result?.catch?.(() => {})
+      return true
+    } catch (_error) { return false }
+  }
+  function setMusicVolume(value) {
+    const next = Number(value)
+    musicVolume = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : DEFAULT_MUSIC_VOLUME
+    try { localStorage.setItem(MUSIC_VOLUME_KEY, String(musicVolume)) } catch (_error) {}
+    if (musicPlayer) musicPlayer.volume = musicVolume
+    if (musicVolume === 0) musicPlayer?.pause()
+    else playMusic()
+    return musicVolume
+  }
+  function enterMusic() {
+    musicActive = true
+    musicPaused = false
+    return playMusic()
+  }
+  function pauseMusic() {
+    musicPaused = true
+    musicPlayer?.pause()
+  }
+  function resumeMusic() {
+    musicPaused = false
+    return playMusic()
+  }
+  function leaveMusic() {
+    musicActive = false
+    musicPaused = false
+    musicPlayer?.pause()
+  }
+  window.LOGYQGameMusic = Object.freeze({
+    supported: typeof window.Audio === 'function',
+    source: MUSIC_SOURCE,
+    volume: () => musicVolume,
+    setVolume: setMusicVolume,
+    enter: enterMusic,
+    pause: pauseMusic,
+    resume: resumeMusic,
+    leave: leaveMusic,
   })
 })()
