@@ -332,12 +332,20 @@
       body.logyq-game .logyq-shape-chip.is-outlined{background:transparent;box-shadow:0 0 0 2px #60a5fa}
       #logyq-game-path button:disabled{cursor:not-allowed;color:#94a3b8;background:#f8fafc}
       #logyq-game-path span{display:block;font-size:13px;font-weight:500;color:#64748b;margin-top:3px}
-      #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+      #logyq-game-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;height:32px;box-sizing:border-box;display:none;align-items:center;gap:6px;padding:0 6px;border:1px solid #cbd5e1;border-radius:10px;background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.08);overflow:hidden}
       body.logyq-game:not(.logyq-home) #logyq-game-bar{display:flex}
-      #logyq-game-tier{flex:none;font:700 11px/1 system-ui,sans-serif;color:#64748b;background:#f1f5f9;border-radius:999px;padding:5px 7px;white-space:nowrap}
+      body.logyq-game:not(.logyq-home) #logyq-map-title{display:none}
+      #logyq-game-name{flex:0 1 auto;min-width:0;max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:750 12px/1 system-ui,sans-serif;color:#0f172a}
+      #logyq-game-tier{flex:none;font:700 10px/1 system-ui,sans-serif;color:#64748b;background:#f1f5f9;border-radius:999px;padding:3px 6px;white-space:nowrap}
       #logyq-game-tier.is-up{color:#166534;background:#dcfce7}
-      #logyq-game-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
-      #logyq-game-bar button{border:1px solid #bfdbfe;background:#fff;color:#1e40af;border-radius:9px;padding:8px 10px;font-weight:750;cursor:pointer}
+      #logyq-game-status{margin:0;flex:1 1 auto;min-width:3.4em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650;line-height:1.1;color:#334155}
+      #logyq-game-bar button{flex:none;border:1px solid #bfdbfe;background:#fff;color:#1e40af;border-radius:7px;padding:3px 7px;font:750 12px/1 system-ui,sans-serif;cursor:pointer}
+      @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+        body.logyq-game:not(.logyq-home) #logyq-game-bar{top:48px;left:8px;right:8px}
+      }
+      @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
+        body.logyq-game:not(.logyq-home) #logyq-game-bar{top:8px;left:calc(148px + env(safe-area-inset-left) + 8px);right:68px}
+      }
       #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
       #logyq-game-next[hidden]{display:none}
       #logyq-curriculum .logiq-empty p{margin:0}
@@ -727,6 +735,7 @@
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
       <div id="logyq-game-bar">
+        <span id="logyq-game-name"></span>
         <span id="logyq-game-tier"></span>
         <p id="logyq-game-status" role="status" aria-live="polite"></p>
         <button type="button" id="logyq-game-check">Check</button>
@@ -6955,16 +6964,14 @@
     level.tier = number <= 15 ? 1 : number <= 27 ? 2 : 3
   })
 
-  // Levels 40–139. Fixed recipes, not a slow ramp: every tier from 4 up
-  // mixes chains, forks, deep branches, three-wide trees, and a distractor.
-  // Color D is reserved for the distractor so it has no visible-contact seat.
-  const CLIMB_COLORS = ['A', 'B', 'C']
-  const CLIMB_ROOTS = [
-    ['L', 'A', 'B'], ['DL', 'A', 'B'], ['DR', 'A', 'B'],
-    ['L', 'B', 'C'], ['DL', 'B', 'C'], ['DR', 'B', 'C'],
-    ['L', 'C', 'A'], ['DL', 'C', 'A'], ['DR', 'C', 'A'],
-    ['L', 'A', 'C'], ['DL', 'B', 'A'], ['DR', 'C', 'B'],
-  ]
+  // Levels 40–139. Every tier from 4 up still mixes a short chain, a long
+  // chain, a fork, a deep branch, a three-wide tree, and a distractor.
+  // Colours are a seeded shuffle of the whole grammar palette. A candidate
+  // is kept only when the physical solver finds exactly one arrangement,
+  // no two pieces share a face, and no card is a solid wildcard. Distractors
+  // use a contact the finished tree never offers, so they have no seat.
+  const CLIMB_COLORS = ['A', 'B', 'C', 'D']
+  const CLIMB_SHAPES = ['L', 'DL', 'DR']
   const CLIMB_ARCHETYPES = [
     ['chain4', 'Four Chain'],
     ['chain5', 'Long Chain'],
@@ -6975,143 +6982,180 @@
     ['decoy', 'Decoy'],
   ]
   const CLIMB_ALT = {
-    chain4: 'Chain Link', chain5: 'Five Chain', fork: 'Branch Chain',
+    chain4: 'Chain Link', chain5: 'Tall Chain', fork: 'Branch Chain',
     deep: 'Grandchild', wide: 'Wide Fork', mixed: 'Wide Mix', decoy: 'Decoy Mix',
   }
   const CLIMB_TIER_SIZES = [[4, 14], [5, 14], [6, 14], [7, 15], [8, 15], [9, 14], [10, 14]]
+  const CLIMB_CHAINS = {
+    chain4: [['A', 'B', 'C', 'D', 'B'], ['A', 'B', 'C', 'D', 'C']],
+    // Four contacts, not five. A fifth row is 627px tall and cannot fit the
+    // 360×640 safe area at the readable scale. These flows stay unique for
+    // every Layer / Diagonal mix, and they are not the Four Chain flows.
+    chain5: [['A', 'B', 'D', 'C', 'B'], ['A', 'B', 'D', 'C', 'D']],
+  }
+  // Same spacing as treeManager.applyLayout (card 140×63, gaps 20 and 78).
+  // minScale is 70% of the 1.15 overview cap measured on a 390×844 phone,
+  // where one card draws at 161×72. The safe box is a 360×640 portrait after
+  // the 48px header, this 32px strip, the 56px Word Bank, and the 8px gaps
+  // the game camera adds around that chrome.
+  const GAME_LAYOUT = {
+    cardWidth: 140,
+    cardHeight: 63,
+    nodeWidth: 160,
+    nodeHeight: 141,
+    minScale: 0.8,
+    safeWidth: 344,
+    safeHeight: 472,
+    maxRows: 4,
+    maxCardsWide: 3,
+  }
 
-  function climbEdge(paint, side) {
-    return gameGrammar.edge(paint, side)
+  function gameSeparation(a, b) {
+    let A = a
+    let B = b
+    while (A.depth > B.depth) A = A.parent
+    while (B.depth > A.depth) B = B.parent
+    while (A !== B) { A = A.parent; B = B.parent }
+    const up = Math.max(1, a.depth - A.depth)
+    const base = up === 1 ? 0.9 : 0.75
+    const inc = up > 1 ? 0.35 * (up - 1) : 0
+    const bonus = 0.2 * Math.max(0, (a.children?.length ?? 0) - 1) + 0.2 * Math.max(0, (b.children?.length ?? 0) - 1)
+    return Math.max(0.1, base + inc + bonus)
   }
-  function climbNode(id, paint, children) {
-    return { name: '', gameId: id, paint, children: children || [] }
-  }
-  function climbSingle(shape, parentBottom, bias) {
-    const bottom = CLIMB_COLORS[(bias + parentBottom.charCodeAt(0)) % 3]
-    if (shape === 'W') return 'W:' + parentBottom
-    return shape + ':' + parentBottom + ':' + bottom
-  }
-  function climbWide(shapes, parentBottom, bias) {
-    const paints = []
-    let prevRight = null
-    for (let i = 0; i < shapes.length; i++) {
-      const shape = shapes[i]
-      let paint = null
-      for (let k = 0; k < 3 && !paint; k++) {
-        const bottom = CLIMB_COLORS[(bias + i + k) % 3]
-        if (shape === 'DL') {
-          const b = prevRight == null ? bottom : prevRight
-          if (CLIMB_COLORS.includes(b)) paint = 'DL:' + parentBottom + ':' + b
-        } else if (shape === 'DR') {
-          if (prevRight == null || prevRight === parentBottom) paint = 'DR:' + parentBottom + ':' + bottom
-        } else if (shape === 'L') {
-          const left = parentBottom + '|' + bottom
-          if (prevRight == null || prevRight === left) paint = 'L:' + parentBottom + ':' + bottom
-        } else if (shape === 'W') {
-          if (prevRight == null || prevRight === parentBottom) paint = 'W:' + parentBottom
-        }
-        if (paint && (climbEdge(paint, 'top') !== parentBottom || (prevRight != null && climbEdge(paint, 'left') !== prevRight))) {
-          paint = null
-        }
-      }
-      if (!paint) return null
-      paints.push(paint)
-      prevRight = climbEdge(paint, 'right')
+
+  function layoutSolvedTree(tree) {
+    const root = d3.hierarchy(tree)
+    d3.tree().nodeSize([GAME_LAYOUT.nodeWidth, GAME_LAYOUT.nodeHeight]).separation(gameSeparation)(root)
+    const positions = {}
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    let depth = 0
+    root.each((node) => {
+      if (node.data?.gameId) positions[node.data.gameId] = { x: node.x, y: node.y }
+      minX = Math.min(minX, node.x - GAME_LAYOUT.cardWidth / 2)
+      maxX = Math.max(maxX, node.x + GAME_LAYOUT.cardWidth / 2)
+      minY = Math.min(minY, node.y - GAME_LAYOUT.cardHeight / 2)
+      maxY = Math.max(maxY, node.y + GAME_LAYOUT.cardHeight / 2)
+      if (node.depth > depth) depth = node.depth
+    })
+    return {
+      positions,
+      rows: depth + 1,
+      bounds: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
     }
-    return paints
   }
-  function climbChain(shapes, top, bottom) {
-    const paints = []
-    let parentBottom = null
-    for (let i = 0; i < shapes.length; i++) {
-      const shape = shapes[i]
-      const paint = i === 0
-        ? (shape === 'W' ? 'W:' + top : shape + ':' + top + ':' + bottom)
-        : climbSingle(shape, parentBottom, i + top.charCodeAt(0))
-      paints.push(paint)
-      parentBottom = climbEdge(paint, 'bottom')
-    }
-    let node = null
-    for (let i = paints.length - 1; i >= 0; i--) node = climbNode('p' + i, paints[i], node ? [node] : [])
-    return node
+
+  function solvedTreeFits(tree) {
+    const box = layoutSolvedTree(tree)
+    return box.rows <= GAME_LAYOUT.maxRows
+      && box.bounds.width * GAME_LAYOUT.minScale <= GAME_LAYOUT.safeWidth + 0.05
+      && box.bounds.height * GAME_LAYOUT.minScale <= GAME_LAYOUT.safeHeight + 0.05
   }
-  function climbRooted(rootSpec, childShapes, bias) {
-    const paints = climbWide(childShapes, rootSpec[2], bias)
-    if (!paints) return null
-    return climbNode('r', rootSpec[0] + ':' + rootSpec[1] + ':' + rootSpec[2], paints.map((paint, i) => climbNode('c' + i, paint)))
+
+  function climbRng(seed) {
+    let state = seed >>> 0
+    return (span) => {
+      state = (state + 0x6D2B79F5) >>> 0
+      let mixed = Math.imul(state ^ (state >>> 15), 1 | state)
+      mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed
+      return Math.floor((((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296) * span)
+    }
   }
-  function climbHang(tree, childIndex, shape, id, bias) {
-    const parent = tree.children[childIndex] || tree.children[0]
-    parent.children = [climbNode(id, climbSingle(shape, climbEdge(parent.paint, 'bottom'), bias))]
-    return parent.children[0]
-  }
-  const CLIMB_PAIRS = [['DL', 'DR'], ['DR', 'DL'], ['L', 'L'], ['DL', 'L'], ['DR', 'L'], ['DL', 'W']]
-  const CLIMB_TRIOS = [['DL', 'DR', 'DL'], ['DR', 'DL', 'DR'], ['L', 'L', 'L'], ['DL', 'DR', 'W'], ['DL', 'W', 'DR'], ['L', 'DL', 'DR']]
-  const CLIMB_CHAINS = [
-    ['L', 'DL', 'DR', 'L'],
-    ['DL', 'L', 'DR', 'DL'],
-    ['DR', 'DL', 'L', 'DR'],
-    ['L', 'DR', 'DL', 'W'],
-    ['DL', 'DR', 'L', 'W'],
-    ['DR', 'L', 'DL', 'W'],
-    ['L', 'DL', 'L', 'DR'],
-  ]
-  function climbBuild(kind, salt) {
-    const root = CLIMB_ROOTS[salt % CLIMB_ROOTS.length]
-    const bias = salt * 3 + 1
-    if (kind === 'chain4' || kind === 'chain5') {
-      const shapes = CLIMB_CHAINS[salt % CLIMB_CHAINS.length].slice()
-      if (kind === 'chain5') shapes.push(['W', 'DL', 'DR', 'L'][salt % 4])
-      return climbChain(shapes, root[1], root[2])
-    }
-    if (kind === 'fork' || kind === 'deep') {
-      const pair = CLIMB_PAIRS[salt % CLIMB_PAIRS.length]
-      let tree = null
-      for (let shift = 0; shift < CLIMB_ROOTS.length && !tree; shift++) {
-        tree = climbRooted(CLIMB_ROOTS[(salt + shift) % CLIMB_ROOTS.length], pair, bias + shift)
-      }
-      if (!tree) return null
-      const tail = climbHang(tree, salt % 2, ['L', 'DL', 'DR', 'W'][salt % 4], 't', bias)
-      if (kind === 'deep') {
-        tail.children = [climbNode('g', climbSingle(['DL', 'DR', 'L', 'W'][(salt + 1) % 4], climbEdge(tail.paint, 'bottom'), bias + 2))]
-      }
-      return tree
-    }
-    const trio = CLIMB_TRIOS[salt % CLIMB_TRIOS.length]
-    let tree = null
-    for (let shift = 0; shift < CLIMB_ROOTS.length && !tree; shift++) {
-      tree = climbRooted(CLIMB_ROOTS[(salt + shift) % CLIMB_ROOTS.length], trio, bias + shift)
-    }
-    if (!tree) return null
-    if (kind === 'mixed' || kind === 'decoy' || kind === 'decoy-deep') {
-      const mid = climbHang(tree, 1, ['DL', 'DR', 'L', 'W'][salt % 4], 'm', bias + 4)
-      if (kind === 'decoy-deep') {
-        mid.children = [climbNode('g', climbSingle(['DR', 'L', 'DL', 'W'][(salt + 2) % 4], climbEdge(mid.paint, 'bottom'), bias + 5))]
-      }
-    }
-    return tree
+  function climbNode(id, shape, top, bottom, children) {
+    return { name: '', gameId: id, paint: shape + ':' + top + ':' + bottom, children: children || [] }
   }
   function climbNodes(node, out) {
     out.push(node)
     for (const child of node.children || []) climbNodes(child, out)
     return out
   }
-  function climbDecoyFits(tree) {
-    const card = { gameId: 'decoy', paint: 'W:D', children: [] }
-    const drops = [{ type: 'rootAbove' }]
-    const walk = (node) => {
-      drops.push({ type: 'node', targetUid: node.gameId })
-      const kids = node.children || []
-      for (let i = 0; i <= kids.length; i++) {
-        const drop = { type: 'gap', parentUid: node.gameId }
-        if (kids[i - 1]) drop.prevUid = kids[i - 1].gameId
-        if (kids[i]) drop.nextUid = kids[i].gameId
-        drops.push(drop)
-      }
-      for (const child of kids) walk(child)
+  function climbPermute(rng) {
+    const colors = CLIMB_COLORS.slice()
+    for (let i = colors.length - 1; i > 0; i--) {
+      const j = rng(i + 1)
+      const held = colors[i]
+      colors[i] = colors[j]
+      colors[j] = held
     }
-    walk(tree)
-    return drops.some((drop) => gameGrammar.canAdd(tree, card, drop))
+    return colors
+  }
+  function climbRelabel(tree, perm) {
+    const map = { A: perm[0], B: perm[1], C: perm[2], D: perm[3] }
+    const walk = (node) => {
+      const parsed = gameGrammar.parsePaint(node.paint)
+      return {
+        name: '',
+        gameId: node.gameId,
+        paint: parsed.shape + ':' + map[parsed.a] + ':' + map[parsed.b],
+        children: (node.children || []).map(walk),
+      }
+    }
+    return walk(tree)
+  }
+  // Canonical faces. Renaming colours keeps the same contact graph, and the
+  // solver below rejects any shape mix that opens a second arrangement.
+  function climbCandidate(kind, rng, safe) {
+    const shape = () => safe ? 'L' : CLIMB_SHAPES[rng(CLIMB_SHAPES.length)]
+    if (kind === 'chain4' || kind === 'chain5') {
+      const patterns = CLIMB_CHAINS[kind]
+      const colors = patterns[safe ? 0 : rng(patterns.length)]
+      let tree = null
+      for (let i = colors.length - 2; i >= 0; i--) {
+        tree = climbNode('p' + i, shape(), colors[i], colors[i + 1], tree ? [tree] : [])
+      }
+      return tree
+    }
+    if (kind === 'fork' || kind === 'deep') {
+      const tailBottom = kind === 'deep' ? 'A' : 'D'
+      const tailKids = kind === 'deep' ? [climbNode('g', shape(), 'A', 'D')] : []
+      return climbNode('r', shape(), 'A', 'B', [
+        climbNode('c0', 'DL', 'B', 'C', [climbNode('t', shape(), 'C', tailBottom, tailKids)]),
+        climbNode('c1', 'DR', 'B', 'D'),
+      ])
+    }
+    if (kind === 'decoy-deep') {
+      return climbNode('r', shape(), 'A', 'B', [
+        climbNode('c0', 'DL', 'B', 'C', [
+          climbNode('t', shape(), 'C', 'B', [climbNode('g', 'L', 'B', 'D')]),
+        ]),
+        climbNode('c1', 'DR', 'B', 'D'),
+      ])
+    }
+    const mid = kind === 'mixed' || kind === 'decoy' ? [climbNode('m', shape(), 'C', 'D')] : []
+    return climbNode('r', shape(), 'A', 'B', [
+      climbNode('c0', 'DL', 'B', 'C', mid),
+      climbNode('c1', 'DR', 'B', 'D'),
+      climbNode('c2', 'DL', 'B', 'D'),
+    ])
+  }
+  function climbUnique(tree) {
+    if (!gameGrammar.contacts(tree)) return false
+    const nodes = climbNodes(tree, [])
+    const paints = nodes.map((node) => node.paint)
+    if (new Set(paints).size !== paints.length) return false
+    if (nodes.some((node) => {
+      const parsed = gameGrammar.parsePaint(node.paint)
+      return !parsed || parsed.shape === 'W' || parsed.a === parsed.b
+    })) return false
+    const pieces = nodes.map((node) => ({ gameId: node.gameId, paint: node.paint }))
+    return gameGrammar.physicalSolutions(pieces, 2).length === 1
+  }
+  function climbDecoy(tree) {
+    const nodes = climbNodes(tree, [])
+    const tops = new Set(nodes.map((node) => gameGrammar.edge(node.paint, 'top')))
+    const bottoms = new Set(nodes.map((node) => gameGrammar.edge(node.paint, 'bottom')))
+    const missingTop = CLIMB_COLORS.find((color) => !tops.has(color))
+    const missingBottom = CLIMB_COLORS.find((color) => !bottoms.has(color))
+    if (!missingTop || !missingBottom) return null
+    const paint = missingBottom === missingTop
+      ? 'W:' + missingBottom
+      : 'DL:' + missingBottom + ':' + missingTop
+    if (nodes.some((node) => node.paint === paint)) return null
+    const card = { gameId: 'decoy', paint, children: [] }
+    if (gameGrammar.validSeats(tree, card, 1) !== 0) return null
+    return card
   }
 
   for (const [tier, count] of CLIMB_TIER_SIZES) {
@@ -7121,21 +7165,23 @@
       const extraHard = slot === CLIMB_ARCHETYPES.length
       const arch = extraHard ? ['decoy-deep', 'Decoy Deep'] : CLIMB_ARCHETYPES[slot % CLIMB_ARCHETYPES.length]
       const kind = arch[0]
-      const salt = tier * 17 + slot * 5 + 3
+      const wantDecoy = kind === 'decoy' || kind === 'decoy-deep'
+      const rng = climbRng((0x4C4F4759 + tier * 10007 + slot * 97) >>> 0)
       let tree = null
-      for (let attempt = 0; attempt < 8 && !tree; attempt++) {
-        const built = climbBuild(kind === 'decoy' ? 'decoy' : kind, salt + attempt * 11)
-        if (!built || !gameGrammar.contacts(built)) continue
-        const ids = climbNodes(built, []).map((node) => node.gameId)
-        if (new Set(ids).size !== ids.length) continue
-        if ((kind === 'decoy' || kind === 'decoy-deep') && climbDecoyFits(built)) continue
-        tree = built
+      let decoy = null
+      for (let attempt = 0; attempt < 12 && !tree; attempt++) {
+        const candidate = climbRelabel(climbCandidate(kind, rng, attempt === 11), climbPermute(rng))
+        if (!climbUnique(candidate)) continue
+        if (!solvedTreeFits(candidate)) continue
+        const extra = wantDecoy ? climbDecoy(candidate) : null
+        if (wantDecoy && !extra) continue
+        tree = candidate
+        decoy = extra
       }
-      if (!tree) throw new Error('Could not build level ' + number)
+      if (!tree) throw new Error('Could not build a unique level ' + number)
       const nodes = climbNodes(tree, [])
       const anchor = nodes[(number + tier + slot) % nodes.length]
       const name = variant && CLIMB_ALT[kind] ? CLIMB_ALT[kind] : arch[1]
-      const decoy = kind === 'decoy' || kind === 'decoy-deep' ? { gameId: 'decoy', paint: 'W:D' } : null
       addOpenLevel('climb-' + number, number + ' · ' + name, tree, anchor.gameId, { tier, decoy })
     }
   }
@@ -7272,14 +7318,60 @@
     const status = document.getElementById('logyq-game-status')
     if (status) {
       status.textContent = message
+      status.title = message
       status.style.color = cleared ? '#166534' : ''
     }
+  }
+
+  function solutionOf(level) {
+    if (level.solution) return level.solution
+    const ids = new Set(level.ids || [])
+    const pieces = []
+    const take = (node) => {
+      if (!node?.gameId || !ids.has(node.gameId)) return
+      if (!pieces.some((piece) => piece.gameId === node.gameId)) pieces.push({ gameId: node.gameId, paint: node.paint })
+      for (const child of node.children || []) take(child)
+    }
+    take(level.tree)
+    for (const card of Object.values(level.bankCards || {})) {
+      if (ids.has(card.gameId) && !pieces.some((piece) => piece.gameId === card.gameId)) {
+        pieces.push({ gameId: card.gameId, paint: card.paint })
+      }
+    }
+    return gameGrammar.physicalSolutions(pieces, 1)[0] || null
+  }
+
+  function armGameCamera(level) {
+    const engine = bridge.core
+    if (!engine?.state || typeof d3 === 'undefined') return null
+    const solution = solutionOf(level)
+    if (!solution) return null
+    const laid = layoutSolvedTree(solution)
+    engine.state.gameSolvedFrame = {
+      anchorId: level.tree?.gameId,
+      positions: laid.positions,
+      bounds: laid.bounds,
+    }
+    return laid
+  }
+
+  function fitGameCamera() {
+    const frame = bridge.core?.state?.gameSolvedFrame
+    if (!frame?.bounds) return
+    bridge.core.treeManager?.fitGameSolution?.(frame.bounds)
+  }
+
+  function refitGameCamera() {
+    if (typeof gameCameraLocked !== 'function' || !gameCameraLocked()) return
+    if (document.body.classList.contains('logyq-home')) return
+    fitGameCamera()
   }
 
   function leaveGamePlay() {
     const session = app.game
     if (!session) return
     app.game = null
+    if (bridge.core?.state) bridge.core.state.gameSolvedFrame = null
     document.body.classList.remove('logyq-game')
     delete window.__logyqGameDropAllowed
     delete window.__logyqGameBankNode
@@ -7302,9 +7394,12 @@
 
   function showGameTier(level, levelUp) {
     const tierEl = document.getElementById('logyq-game-tier')
-    if (!tierEl) return
-    tierEl.textContent = 'Tier ' + level.tier
-    if (tierEl.classList) tierEl.classList.toggle('is-up', !!levelUp)
+    if (tierEl) {
+      tierEl.textContent = 'Tier ' + level.tier
+      if (tierEl.classList) tierEl.classList.toggle('is-up', !!levelUp)
+    }
+    const nameEl = document.getElementById('logyq-game-name')
+    if (nameEl) nameEl.textContent = level.title || ''
   }
 
   function beginGameLevel(level, opts) {
@@ -7363,8 +7458,20 @@
     updateMapName()
     hideLibrary()
     gameStatus(levelUp ? 'Level up!' : level.hint)
-    bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice())
+    const laid = armGameCamera(level)
+    bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice(), { fit: false })
+    if (laid) fitGameCamera()
     setSaveState('saved')
+  }
+
+  function presentSolved(level) {
+    beginGameLevel(level)
+    const solution = solutionOf(level)
+    const engine = bridge.core
+    if (!solution || !engine?.state) return
+    engine.state.layoutMotionMs = 0
+    bridge.loadMap(paintGameTree(structuredClone(solution)), level.bank.slice(), { fit: false })
+    engine.state.layoutMotionMs = null
   }
 
   function maybeGameClear(snapshot) {
@@ -7407,9 +7514,13 @@
   document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
     openLibrary().then(() => setHomeTab('game'))
   })
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('resize', refitGameCamera)
+    window.addEventListener('orientationchange', refitGameCamera)
+  }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
-    recordSolve, chooseNext,
+    recordSolve, chooseNext, presentSolved, layoutBudget: GAME_LAYOUT, measureSolved: layoutSolvedTree,
   }
   // FOLDER_PURE_START
   function cloneFolderIndex(index) {

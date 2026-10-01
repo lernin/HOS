@@ -260,7 +260,32 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
       return Math.max(0.1, base+inc+bonus);
     });
     state.layout(root);
+    this.pinGameAnchor(root);
     return root;
+  },
+
+  // Game play frames the finished tree once. Later layouts keep the starting
+  // card on the spot it occupies in that finished tree, so the frozen camera
+  // still contains the solve. Maps and Curriculum never set this frame.
+  pinGameAnchor(root){
+    const { state } = logyq
+    const frame = state.gameSolvedFrame
+    if (!frame || !root) return
+    if (typeof gameCameraLocked !== 'function' || !gameCameraLocked()) return
+    const spot = frame.positions && frame.positions[frame.anchorId]
+    if (!spot) return
+    let anchor = null
+    root.each((node) => {
+      if (!anchor && node.data && node.data.gameId === frame.anchorId) anchor = node
+    })
+    if (!anchor) return
+    const dx = spot.x - anchor.x
+    const dy = spot.y - anchor.y
+    if (Math.abs(dx) < 0.01 && Math.abs(dy) < 0.01) return
+    root.each((node) => {
+      node.x += dx
+      node.y += dy
+    })
   },
 
   syncCreateHitSlots(){
@@ -493,7 +518,8 @@ elements.mixBtn && elements.mixBtn.addEventListener('keydown', (e) => {
     enteredLinks.merge(selLinks).classed("logyq-pile-link", d => !!d.source?.data?.curriculumPile);
     glide(enteredLinks).attr("d", d=> logyq.visual.vLink(d));
     glide(selLinks).style("stroke-width", 2.8).style("opacity", 0.5).attr("d", d=> logyq.visual.vLink(d));
-    selLinks.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
+    if (motion === 0) selLinks.exit().remove();
+    else selLinks.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
 
 
@@ -553,7 +579,8 @@ const nEnter = selNodes.enter()
     this.bindUidStamp(allNodes);
     glide(allNodes).attr("transform", d=>`translate(${d.x},${d.y})`);
     allNodes.select("text.label").text(d=>d.data.name).style("font-size", `${CONFIG.FONT_SIZE}px`);
-    selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
+    if (motion === 0) selNodes.exit().remove();
+    else selNodes.exit().transition().duration(isDelete?50:180).style("opacity",0).remove();
 
     this.syncHitSlots(nodes);
     state.lastNodes=state.root.descendants();
@@ -670,6 +697,61 @@ centerOnSelected(opts = {}) {
       .duration(duration)
       .ease(d3.easeCubicInOut)
       .call(state.zoom.transform, target)
+  },
+
+  // One instant frame of the solved tree inside the measured safe area.
+  // Called at level start and again on resize. Play itself never calls it.
+  fitGameSolution(bounds){
+    const { state, elements } = logyq
+    if (typeof gameCameraLocked === 'function' && !gameCameraLocked()) return
+    const frame = this.usableFrame()
+    if (!frame || !bounds || !(bounds.width > 0) || !(bounds.height > 0)) return
+    const svgBox = frame.svgNode.getBoundingClientRect()
+    const shownRect = (id) => {
+      const el = document.getElementById(id)
+      if (!el) return null
+      const style = getComputedStyle(el)
+      if (style.display === 'none' || style.visibility === 'hidden') return null
+      const rect = el.getBoundingClientRect()
+      if (rect.width < 2 || rect.height < 2) return null
+      return {
+        left: rect.left - svgBox.left,
+        top: rect.top - svgBox.top,
+        right: rect.right - svgBox.left,
+        bottom: rect.bottom - svgBox.top,
+        width: rect.width,
+        height: rect.height,
+      }
+    }
+    let left = frame.left
+    let top = frame.top
+    let right = frame.right
+    let bottom = frame.bottom
+    const gap = 8
+    const bar = shownRect('logyq-game-bar')
+    if (bar) {
+      const midY = (top + bottom) / 2
+      if (bar.height < frame.fullH * 0.45 && bar.bottom <= midY) top = Math.max(top, bar.bottom + gap)
+      else if (bar.height < frame.fullH * 0.45 && bar.top >= midY) bottom = Math.min(bottom, bar.top - gap)
+    }
+    const cluster = shownRect('logyq-corner-cluster')
+    if (cluster && cluster.left > frame.fullW * 0.55 && cluster.width < frame.fullW * 0.4 && cluster.height > 40) {
+      right = Math.min(right, cluster.left - gap)
+    }
+    const margin = 8
+    const innerL = left + margin
+    const innerT = top + margin
+    const innerR = right - margin
+    const innerB = bottom - margin
+    const availW = Math.max(40, innerR - innerL)
+    const availH = Math.max(40, innerB - innerT)
+    const maxK = (state.zoom?.scaleExtent?.() || [0.02, 2.4])[1]
+    const fitScale = Math.min(availW / bounds.width, availH / bounds.height)
+    const scale = Math.min(maxK, 1.15, Math.max(0.02, fitScale))
+    if (!isFinite(scale) || scale <= 0) return
+    const tx = (innerL + innerR) / 2 - scale * (bounds.x + bounds.width / 2)
+    const ty = (innerT + innerB) / 2 - scale * (bounds.y + bounds.height / 2)
+    elements.svg.interrupt().call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
   },
 
   autoFit(pad=24){
