@@ -12,7 +12,7 @@ const nodes=tree=>[tree,...(tree.children||[]).flatMap(nodes)]
 const key=tree=>tree.gameId+'('+(tree.children||[]).map(key).join(',')+')'
 const clone=tree=>({...tree,children:(tree.children||[]).map(clone)})
 function assess(level){
- const pool=[level.tree,...Object.values(level.bankCards)].map(p=>({...p,children:[]}))
+ const pool=[...nodes(level.tree),...Object.values(level.bankCards)].map(p=>({...p,children:[]}))
  const memo=new Map();let edges=0,deadEnds=0,maxChoices=0
  function visit(tree){
   const k=key(tree);if(memo.has(k))return memo.get(k)

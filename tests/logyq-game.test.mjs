@@ -106,7 +106,7 @@ test('game drags start after a few pixels and flicks cannot add, delete, or ware
   assert.match(gestures, /logyq-game'\)\)/)
   assert.match(dock, /logyq-game'\)\) \{\s*if \(Math\.hypot\(dx, dy\) < 6\) return\s*beginLift\(\[session\.word\]\)/)
   assert.match(dock, /logyq-game'\)\) return/)
-  assert.doesNotMatch(styles, /body\.logyq-game #Dock,/)
+  assert.doesNotMatch(styles, /body\.logyq-game #Dock[^{}]*\{[^}]*display:none/)
   assert.match(styles, /body\.logyq-game #logyq-warehouse/)
   assert.match(styles, /body\.logyq-game #trash/)
   assert.match(styles, /body\.logyq-game #addWordBtn/)

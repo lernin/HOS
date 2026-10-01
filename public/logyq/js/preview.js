@@ -676,6 +676,20 @@
       @media (min-width:701px){
         body.logyq-thekonym #logyq-thekonym-ask{top:12px;right:12px}
       }
+      /* Game pieces float clear of Android/browser edge gestures. */
+      body.logyq-game #Dock,body.logyq-game #Dock.dock-left{position:fixed;box-sizing:border-box;left:24px;right:24px;top:auto;bottom:calc(32px + env(safe-area-inset-bottom));width:auto;height:auto;min-height:64px;max-height:140px;padding:10px 12px;display:flex;flex-direction:row;align-items:center;justify-content:center;border:1px solid rgba(226,232,240,.9);border-radius:20px;background:rgba(255,255,255,.94);box-shadow:0 5px 20px rgba(15,23,42,.12);touch-action:none;overflow:hidden}
+      body.logyq-game #logyq-bank-chips{flex:1;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
+      body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{flex:0 0 auto;width:auto;max-width:none;min-height:44px;padding:7px 2px;touch-action:none}
+      @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left{left:calc(50% - 320px);right:calc(50% - 320px)}}
+      @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
+      #logyq-drag-guide{position:fixed;inset:0;z-index:6;pointer-events:none}
+      #logyq-guide-arrow{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+      #logyq-guide-target{position:absolute;box-sizing:border-box;border:2px dashed #64748b;border-radius:12px;background:rgba(255,255,255,.45);overflow:hidden;box-shadow:0 0 0 3px rgba(255,255,255,.7)}
+      #logyq-guide-target svg{display:block;width:100%;height:100%;opacity:.35}
+      #logyq-guide-instruction{position:absolute;left:24px;right:24px;text-align:center;margin:0;color:#334155;font:650 14px/1.25 system-ui;text-shadow:0 1px 3px white}
+      #logyq-guide-arrow .guide-flow{stroke-dasharray:7 9;animation:logyq-guide-flow 1.2s linear infinite}
+      @keyframes logyq-guide-flow{to{stroke-dashoffset:-32}}
+      @media (prefers-reduced-motion:reduce){#logyq-guide-arrow .guide-flow{animation:none}}
     `
     document.head.append(style)
   }
@@ -7028,6 +7042,17 @@
     addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
   })
 
+  // Brief first-contact guides; keep the original puzzle IDs and inventory.
+  gameLevels[0].guide = 'below'
+  gameLevels[1].guide = 'above'
+  const firstBranch = gameLevels[27]
+  firstBranch.guide = 'sibling'
+  const firstChild = firstBranch.solution.children[0]
+  firstBranch.tree.children = [structuredClone({...firstChild, children:[]})]
+  const mountedKey = firstBranch.bank.find(key => firstBranch.bankCards[key].gameId === firstChild.gameId)
+  firstBranch.bank = firstBranch.bank.filter(key => key !== mountedKey)
+  delete firstBranch.bankCards[mountedKey]
+
   gameLevels.forEach((level, index) => {
     const number = index + 1
     level.tier = number <= 15 ? 1 : number <= 27 ? 2 : 3
@@ -7417,7 +7442,11 @@
   function playGameDrop(snapshot) {
     const before = gameDropBefore
     gameDropBefore = null
-    if (before !== null && before !== JSON.stringify(snapshot?.tree)) window.LOGYQGameSound?.drop()
+    if (before !== null && before !== JSON.stringify(snapshot?.tree)) {
+      window.LOGYQGameSound?.drop()
+      window.LOGYQGameGuide?.hide()
+      app.game.guide = null
+    }
   }
   function setupGameSound() {
     const sound = window.LOGYQGameSound
@@ -7537,6 +7566,8 @@
     bridge.core?.elements?.svg?.interrupt?.('game-fit')
   }
 
+  function levelForGuide() { return gameLevels.find(level => level.id === app.game?.id) }
+
   function fitGameCamera(duration = 0) {
     const engine = bridge.core
     const root = engine?.state?.root
@@ -7548,6 +7579,15 @@
       top = Math.min(top, node.y - GAME_LAYOUT.cardHeight / 2)
       bottom = Math.max(bottom, node.y + GAME_LAYOUT.cardHeight / 2)
     })
+    if (app.game.guide) {
+      const target = window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
+      if (target) {
+        left = Math.min(left, target.x - GAME_LAYOUT.cardWidth / 2)
+        right = Math.max(right, target.x + GAME_LAYOUT.cardWidth / 2)
+        top = Math.min(top, target.y - GAME_LAYOUT.cardHeight / 2)
+        bottom = Math.max(bottom, target.y + GAME_LAYOUT.cardHeight / 2)
+      }
+    }
     engine.treeManager?.fitGameBounds?.({x:left,y:top,width:right-left,height:bottom-top}, {duration})
   }
 
@@ -7573,12 +7613,14 @@
   function refitGameCamera() {
     scheduleGameCameraFit(80)
     if (gameArtElement) scheduleGameCompletionArt(700, false)
+    window.LOGYQGameGuide?.refresh()
   }
 
   function leaveGamePlay() {
     const session = app.game
     if (!session) return
     clearGameCompletionArt()
+    window.LOGYQGameGuide?.hide()
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
     app.game = null
@@ -7618,6 +7660,7 @@
   function beginGameLevel(level, opts) {
     if (!level || !gameGrammar) return
     clearGameCompletionArt()
+    window.LOGYQGameGuide?.hide()
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
     const origin = app.game?.origin || (app.curriculum ? {
@@ -7640,7 +7683,7 @@
         played: { ...state.played, [level.id]: Date.now() },
       },
     })
-    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0 }
+    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
     app.lastSnapshot = 'game'
@@ -7676,11 +7719,14 @@
     gameFitPending = false
     bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice(), { fit: false })
     fitGameCamera()
+    if (app.game.guide) window.LOGYQGameGuide?.show(level, bridge.core)
     setSaveState('saved')
   }
 
   function presentSolved(level) {
     beginGameLevel(level)
+    window.LOGYQGameGuide?.hide()
+    app.game.guide = null
     const solution = solutionOf(level)
     const engine = bridge.core
     if (!solution || !engine?.state) return
@@ -7704,6 +7750,8 @@
       return false
     }
     if (session.cleared) return true
+    window.LOGYQGameGuide?.hide()
+    session.guide = null
     session.cleared = true
     const progress = writeProgress(recordSolve(gameProgress(), level.id, session.wrongDrops || 0))
     const solvedCount = gameLevels.filter((item) => progress[item.id]).length

@@ -87,6 +87,17 @@
     addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
   })
 
+  // Brief first-contact guides; keep the original puzzle IDs and inventory.
+  gameLevels[0].guide = 'below'
+  gameLevels[1].guide = 'above'
+  const firstBranch = gameLevels[27]
+  firstBranch.guide = 'sibling'
+  const firstChild = firstBranch.solution.children[0]
+  firstBranch.tree.children = [structuredClone({...firstChild, children:[]})]
+  const mountedKey = firstBranch.bank.find(key => firstBranch.bankCards[key].gameId === firstChild.gameId)
+  firstBranch.bank = firstBranch.bank.filter(key => key !== mountedKey)
+  delete firstBranch.bankCards[mountedKey]
+
   gameLevels.forEach((level, index) => {
     const number = index + 1
     level.tier = number <= 15 ? 1 : number <= 27 ? 2 : 3
@@ -476,7 +487,11 @@
   function playGameDrop(snapshot) {
     const before = gameDropBefore
     gameDropBefore = null
-    if (before !== null && before !== JSON.stringify(snapshot?.tree)) window.LOGYQGameSound?.drop()
+    if (before !== null && before !== JSON.stringify(snapshot?.tree)) {
+      window.LOGYQGameSound?.drop()
+      window.LOGYQGameGuide?.hide()
+      app.game.guide = null
+    }
   }
   function setupGameSound() {
     const sound = window.LOGYQGameSound
@@ -596,6 +611,8 @@
     bridge.core?.elements?.svg?.interrupt?.('game-fit')
   }
 
+  function levelForGuide() { return gameLevels.find(level => level.id === app.game?.id) }
+
   function fitGameCamera(duration = 0) {
     const engine = bridge.core
     const root = engine?.state?.root
@@ -607,6 +624,15 @@
       top = Math.min(top, node.y - GAME_LAYOUT.cardHeight / 2)
       bottom = Math.max(bottom, node.y + GAME_LAYOUT.cardHeight / 2)
     })
+    if (app.game.guide) {
+      const target = window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
+      if (target) {
+        left = Math.min(left, target.x - GAME_LAYOUT.cardWidth / 2)
+        right = Math.max(right, target.x + GAME_LAYOUT.cardWidth / 2)
+        top = Math.min(top, target.y - GAME_LAYOUT.cardHeight / 2)
+        bottom = Math.max(bottom, target.y + GAME_LAYOUT.cardHeight / 2)
+      }
+    }
     engine.treeManager?.fitGameBounds?.({x:left,y:top,width:right-left,height:bottom-top}, {duration})
   }
 
@@ -632,12 +658,14 @@
   function refitGameCamera() {
     scheduleGameCameraFit(80)
     if (gameArtElement) scheduleGameCompletionArt(700, false)
+    window.LOGYQGameGuide?.refresh()
   }
 
   function leaveGamePlay() {
     const session = app.game
     if (!session) return
     clearGameCompletionArt()
+    window.LOGYQGameGuide?.hide()
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
     app.game = null
@@ -677,6 +705,7 @@
   function beginGameLevel(level, opts) {
     if (!level || !gameGrammar) return
     clearGameCompletionArt()
+    window.LOGYQGameGuide?.hide()
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
     const origin = app.game?.origin || (app.curriculum ? {
@@ -699,7 +728,7 @@
         played: { ...state.played, [level.id]: Date.now() },
       },
     })
-    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0 }
+    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
     app.lastSnapshot = 'game'
@@ -735,11 +764,14 @@
     gameFitPending = false
     bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice(), { fit: false })
     fitGameCamera()
+    if (app.game.guide) window.LOGYQGameGuide?.show(level, bridge.core)
     setSaveState('saved')
   }
 
   function presentSolved(level) {
     beginGameLevel(level)
+    window.LOGYQGameGuide?.hide()
+    app.game.guide = null
     const solution = solutionOf(level)
     const engine = bridge.core
     if (!solution || !engine?.state) return
@@ -763,6 +795,8 @@
       return false
     }
     if (session.cleared) return true
+    window.LOGYQGameGuide?.hide()
+    session.guide = null
     session.cleared = true
     const progress = writeProgress(recordSolve(gameProgress(), level.id, session.wrongDrops || 0))
     const solvedCount = gameLevels.filter((item) => progress[item.id]).length

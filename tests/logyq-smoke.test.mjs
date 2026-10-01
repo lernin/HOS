@@ -7971,3 +7971,70 @@ test('clean completion joins render the reported chain and fork examples',async(
   }
   await context.close()
 })
+
+test('game tray leaves gesture margins and first concepts show drag destinations',async()=>{
+  const context=await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
+  await stubMaps(context,{maps:[]})
+  const page=await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'})
+  await waitForBoot(page)
+  for(const [index,kind,count] of [[0,'below',1],[1,'above',1],[27,'sibling',2]]){
+    await page.evaluate(i=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[i]),index)
+    await page.waitForTimeout(750)
+    const tray=await page.locator('#Dock').boundingBox()
+    assert.ok(tray.x>=20&&390-tray.x-tray.width>=20,'tray is inset from both phone edges')
+    assert.ok(844-tray.y-tray.height>=30,'tray clears the bottom gesture region')
+    assert.equal(await page.locator('#logyq-drag-guide').getAttribute('data-kind'),kind)
+    assert.equal(await page.locator('svg#canvas g.node').count(),count)
+    const target=await page.locator('#logyq-guide-target').boundingBox()
+    assert.ok(target.x>=15&&target.x+target.width<=375&&target.y>=90&&target.y+target.height<tray.y)
+    const chip=await page.locator('#Dock .chip').first().boundingBox()
+    assert.ok(Math.abs(chip.x+chip.width/2-195)<2,'single loose piece is centered')
+    await page.screenshot({path:`/workspace/scratch/ae226cb204ec/logyq-guide-${kind}.png`})
+    const cdp=await context.newCDPSession(page)
+    const from={x:chip.x+chip.width/2,y:chip.y+chip.height/2}
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...from,id:1}]})
+    const nudge={x:from.x,y:from.y-22}
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...nudge,id:1}]})
+    await page.waitForTimeout(60)
+    const lifted=await page.locator('#logyq-chip-ghost').boundingBox()
+    const dest={x:target.x+target.width/2-(lifted.x+lifted.width/2-nudge.x),
+      y:target.y+target.height/2-(lifted.y+lifted.height/2-nudge.y)}
+    for(let i=1;i<=12;i++){
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:from.x+(dest.x-from.x)*i/12,y:from.y+(dest.y-from.y)*i/12,id:1}]})
+      await page.waitForTimeout(20)
+    }
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+    await page.waitForTimeout(400)
+    assert.equal(await page.locator('#logyq-drag-guide').count(),0,'successful drop dismisses guide')
+    assert.equal(await page.evaluate(()=>window.LOGYQPreview.game.check()),undefined)
+    assert.equal(await page.evaluate(()=>window.LOGYQBridge.core.state.root.descendants().length),kind==='sibling'?3:2)
+    await cdp.detach()
+
+  }
+  for(const viewport of [{width:360,height:640},{width:844,height:390}]){
+    await page.setViewportSize(viewport)
+    await page.evaluate(()=>localStorage.removeItem('logyq_game_progress_v2'))
+    for(const index of [0,1,27]){
+      await page.evaluate(i=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[i]),index)
+      await page.waitForTimeout(1000)
+      const tray=await page.locator('#Dock').boundingBox(), target=await page.locator('#logyq-guide-target').boundingBox()
+      assert.ok(target.x>=15&&target.x+target.width<=viewport.width-15)
+      assert.ok(target.y>=48&&target.y+target.height<tray.y-8)
+      assert.ok(viewport.height-tray.y-tray.height>=30)
+      if(index===1)assert.equal(await page.locator('#logyq-guide-target svg path').count(),0)
+      else assert.equal(await page.locator('#logyq-guide-target svg path').getAttribute('d'),index===0?'M0 0H140V31.5H0Z':'M0 0H140L0 63Z')
+    }
+    await page.evaluate(()=>window.LOGYQPreview.game.begin(window.LOGYQPreview.game.levels[51]))
+    await page.waitForTimeout(750)
+    assert.equal(await page.locator('#logyq-drag-guide').count(),0,'other puzzles have no guide')
+    const tray=await page.locator('#Dock').boundingBox()
+    for(const chip of await page.locator('#Dock .chip').all()){
+      const r=await chip.boundingBox()
+      assert.ok(r.x>=tray.x&&r.x+r.width<=tray.x+tray.width&&r.y>=tray.y&&r.y+r.height<=tray.y+tray.height,'every loose card is reachable inside the tray')
+    }
+  }
+  await page.evaluate(()=>window.LOGYQPreview.game.leave())
+  assert.equal(await page.locator('#logyq-drag-guide').count(),0)
+  await context.close()
+})

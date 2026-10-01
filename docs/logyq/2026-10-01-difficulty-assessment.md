@@ -1,5 +1,7 @@
 # LOGYQ difficulty assessment — 2026-10-01
 
+Snapshot before the drag-guide revision: the first branch later starts with its first child already mounted for the sibling lesson, reducing that one puzzle’s required additions. The script now includes every mounted card when reassessing. Existing tier/pacing rules remain unchanged.
+
 Assessed the 139 levels actually shipped in the preview, not the separate Supabase catalog. No gameplay, level IDs, progress, production data or matching rules changed in this assessment.
 
 ## Findings

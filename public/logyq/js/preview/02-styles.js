@@ -390,6 +390,20 @@
       @media (min-width:701px){
         body.logyq-thekonym #logyq-thekonym-ask{top:12px;right:12px}
       }
+      /* Game pieces float clear of Android/browser edge gestures. */
+      body.logyq-game #Dock,body.logyq-game #Dock.dock-left{position:fixed;box-sizing:border-box;left:24px;right:24px;top:auto;bottom:calc(32px + env(safe-area-inset-bottom));width:auto;height:auto;min-height:64px;max-height:140px;padding:10px 12px;display:flex;flex-direction:row;align-items:center;justify-content:center;border:1px solid rgba(226,232,240,.9);border-radius:20px;background:rgba(255,255,255,.94);box-shadow:0 5px 20px rgba(15,23,42,.12);touch-action:none;overflow:hidden}
+      body.logyq-game #logyq-bank-chips{flex:1;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
+      body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{flex:0 0 auto;width:auto;max-width:none;min-height:44px;padding:7px 2px;touch-action:none}
+      @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left{left:calc(50% - 320px);right:calc(50% - 320px)}}
+      @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
+      #logyq-drag-guide{position:fixed;inset:0;z-index:6;pointer-events:none}
+      #logyq-guide-arrow{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+      #logyq-guide-target{position:absolute;box-sizing:border-box;border:2px dashed #64748b;border-radius:12px;background:rgba(255,255,255,.45);overflow:hidden;box-shadow:0 0 0 3px rgba(255,255,255,.7)}
+      #logyq-guide-target svg{display:block;width:100%;height:100%;opacity:.35}
+      #logyq-guide-instruction{position:absolute;left:24px;right:24px;text-align:center;margin:0;color:#334155;font:650 14px/1.25 system-ui;text-shadow:0 1px 3px white}
+      #logyq-guide-arrow .guide-flow{stroke-dasharray:7 9;animation:logyq-guide-flow 1.2s linear infinite}
+      @keyframes logyq-guide-flow{to{stroke-dashoffset:-32}}
+      @media (prefers-reduced-motion:reduce){#logyq-guide-arrow .guide-flow{animation:none}}
     `
     document.head.append(style)
   }
