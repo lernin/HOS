@@ -153,11 +153,28 @@
     unlock: playMusic,
   })
 
+  // The legacy map library asks for its private Lab PIN during initial boot.
+  // Game/Curriculum do not need live maps, so cancel only that first automatic
+  // prompt. A later explicit Maps > Connect action still opens the PIN normally.
+  function releaseInitialPinGate() {
+    const preview = window.LOGYQPreview
+    const pin = document.getElementById('logiq-pin')
+    const cancel = document.getElementById('logiq-pin-cancel')
+    if (!preview?.app || !pin || !cancel || preview.app.booted) return false
+    let stored = ''
+    try { stored = sessionStorage.getItem('logyq_lab_pin_v1') || '' } catch (_error) {}
+    if (stored || !pin.classList.contains('is-open')) return false
+    cancel.click()
+    return true
+  }
+
   // --- game-only shell ------------------------------------------------------------
   function installGameShell() {
     if (document.getElementById('logyq-game-pause-panel')) return
     const bar = document.getElementById('logyq-game-bar')
     if (!bar) return
+
+    releaseInitialPinGate()
 
     const legacyName = document.getElementById('logyq-game-name')
     const legacyTier = document.getElementById('logyq-game-tier')
