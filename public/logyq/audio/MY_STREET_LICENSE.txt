@@ -1,0 +1,7 @@
+My Street
+Author: congusbongus
+License: CC0 1.0 Universal (public domain dedication)
+Official source: https://opengameart.org/content/my-street
+Gameplay source file: https://opengameart.org/sites/default/files/my_street.ogg
+
+Used by LOGYQ as quiet looping gameplay music.
