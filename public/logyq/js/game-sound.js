@@ -2,28 +2,46 @@
 (() => {
   'use strict'
   const KEY = 'logyq_game_sound_v1'
-  let on = true, context = null, master = null, lastDrop = -Infinity
+  const VOLUME_KEY = 'logyq_game_sfx_volume_v1'
+  const DEFAULT_VOLUME = 0.55
+  let volume = DEFAULT_VOLUME, context = null, master = null, lastDrop = -Infinity
   const voices = new Set()
-  try { on = localStorage.getItem(KEY) !== 'off' } catch (_error) {}
+  try {
+    const savedVolume = localStorage.getItem(VOLUME_KEY)
+    if (savedVolume !== null && Number.isFinite(Number(savedVolume))) volume = Math.max(0, Math.min(1, Number(savedVolume)))
+    else if (localStorage.getItem(KEY) === 'off') volume = 0
+  } catch (_error) {}
+  let previousVolume = volume > 0 ? volume : DEFAULT_VOLUME
+  const on = () => volume > 0
   const Audio = window.AudioContext || window.webkitAudioContext
   function stop() {
     for (const voice of voices) { try { voice.stop() } catch (_error) {} }
     voices.clear()
   }
   function setEnabled(value) {
-    on = !!value
-    try { localStorage.setItem(KEY, on ? 'on' : 'off') } catch (_error) {}
-    if (!on) stop()
-    if (master) master.gain.setValueAtTime(on ? 0.55 : 0, context.currentTime)
+    setVolume(value ? (previousVolume || DEFAULT_VOLUME) : 0)
+  }
+  function setVolume(value) {
+    const next = Number(value)
+    volume = Number.isFinite(next) ? Math.max(0, Math.min(1, next)) : DEFAULT_VOLUME
+    if (volume > 0) previousVolume = volume
+    try {
+      localStorage.setItem(VOLUME_KEY, String(volume))
+      localStorage.setItem(KEY, volume > 0 ? 'on' : 'off')
+    } catch (_error) {}
+    if (!volume) stop()
+    if (master) master.gain.setValueAtTime(volume, context.currentTime)
+    window.dispatchEvent(new Event('logyq-game-soundchange'))
+    return volume
   }
   // Called inside a user gesture; autoplay policy never blocks the puzzle.
   async function unlock() {
-    if (!on || !Audio) return false
+    if (!on() || !Audio) return false
     try {
       if (!context) {
         context = new Audio()
         master = context.createGain()
-        master.gain.value = 0.55
+        master.gain.value = volume
         master.connect(context.destination)
       }
       if (context.state === 'suspended') await context.resume()
@@ -43,7 +61,7 @@
     voice.start(at); voice.stop(at + length + 0.01)
   }
   function play(kind) {
-    if (!on || context?.state !== 'running') return false
+    if (!on() || context?.state !== 'running') return false
     try {
       const now = context.currentTime + 0.005
       if (kind === 'drop') {
@@ -58,7 +76,7 @@
     } catch (_error) { return false }
   }
   window.LOGYQGameSound = Object.freeze({
-    supported:!!Audio, enabled:() => on, setEnabled, unlock, stop,
+    supported:!!Audio, enabled:on, volume:() => volume, setVolume, setEnabled, unlock, stop,
     drop:() => play('drop'), complete:() => play('complete'),
   })
 })()
