@@ -5270,7 +5270,8 @@ function bindChipPointerPlace() {
       d3.selectAll('g.node').classed('drop-target hover-adopt hover-adopt-sub', false)
       return
     }
-    hoverMap(event.clientX, event.clientY)
+    const aim = raisedGhostPoint(visual.x, visual.y)
+    hoverMap(aim.x, aim.y)
   }, { passive: false })
 
   const finishPointer = (event, commit) => {
@@ -5321,16 +5322,18 @@ function bindChipPointerPlace() {
       removeBankWords(words)
     } else if (corner === 'warehouse') {
       storeWordsInWarehouse(words)
-    } else if (commit && !overDock(event.clientX, event.clientY)) {
+    } else if (commit) {
       if (words) placeGhost(words, visual.x, visual.y)
-      const aim = raisedGhostPoint(event.clientX, event.clientY)
-      hoverMap(event.clientX, event.clientY)
-      logyq.elements.svg.node()?.dispatchEvent(new DragEvent('drop', {
-        bubbles: true,
-        cancelable: true,
-        clientX: aim.x,
-        clientY: aim.y,
-      }))
+      const aim = raisedGhostPoint(visual.x, visual.y)
+      if (!overDock(aim.x, aim.y)) {
+        hoverMap(aim.x, aim.y)
+        logyq.elements.svg.node()?.dispatchEvent(new DragEvent('drop', {
+          bubbles: true,
+          cancelable: true,
+          clientX: aim.x,
+          clientY: aim.y,
+        }))
+      }
     }
     endChipDragVisuals()
     window.setTimeout(() => { window.__logyqChipPlacing = false }, 400)

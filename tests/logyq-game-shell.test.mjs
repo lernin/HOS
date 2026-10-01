@@ -57,6 +57,13 @@ test('thumb movement control lives in settings and uses the saved multiplier whi
   assert.match(engine, /window\.LOGYQGameThumbGain\?\.value\?\.\(\)/)
 })
 
+test('thumb movement targets the lifted card consistently during hover and release', () => {
+  const engine = read('../public/logyq/js/engine/14-word-dock.js')
+  assert.equal((engine.match(/hoverMap\(aim\.x, aim\.y\)/g) || []).length, 2)
+  assert.match(engine, /!overDock\(aim\.x, aim\.y\)/)
+  assert.doesNotMatch(engine, /hoverMap\(event\.clientX, event\.clientY\)/)
+})
+
 test('thumb movement gain starts at 2.4x, persists, steps by 0.2x, and stays in range', () => {
   const source = read('../public/logyq/js/game-thumb-gain.js')
   const create = (initial = null) => {
