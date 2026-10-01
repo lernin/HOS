@@ -153,20 +153,20 @@
     unlock: playMusic,
   })
 
-  // The legacy map library asks for its private Lab PIN during initial boot.
-  // Game/Curriculum do not need live maps, so cancel only that first automatic
-  // prompt. A later explicit Maps > Connect action still opens the PIN normally.
-  function releaseInitialPinGate() {
-    const preview = window.LOGYQPreview
+  // LOGYQ does not use a PIN screen. Legacy preview code can still create the old
+  // modal while this branch is being reconciled with main, so remove that surface
+  // from the DOM immediately and resolve any boot-time waiter before removing it.
+  function removePinUi() {
     const pin = document.getElementById('logiq-pin')
-    const cancel = document.getElementById('logiq-pin-cancel')
-    if (!preview?.app || !pin || !cancel || preview.app.booted) return false
-    let stored = ''
-    try { stored = sessionStorage.getItem('logyq_lab_pin_v1') || '' } catch (_error) {}
-    if (stored || !pin.classList.contains('is-open')) return false
-    cancel.click()
+    if (!pin) return false
+    document.getElementById('logiq-pin-cancel')?.click()
+    pin.remove()
     return true
   }
+
+  removePinUi()
+  const pinObserver = new MutationObserver(() => removePinUi())
+  pinObserver.observe(document.documentElement, { childList: true, subtree: true })
 
   // --- game-only shell ------------------------------------------------------------
   function installGameShell() {
@@ -174,7 +174,7 @@
     const bar = document.getElementById('logyq-game-bar')
     if (!bar) return
 
-    releaseInitialPinGate()
+    removePinUi()
 
     const legacyName = document.getElementById('logyq-game-name')
     const legacyTier = document.getElementById('logyq-game-tier')
