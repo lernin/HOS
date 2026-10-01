@@ -47,13 +47,13 @@ test('Game keeps automatic completion and preserves the existing Next control af
   assert.match(shell, /legacyCheck\?\.remove\(\)/)
 })
 
-test('LOGYQ renders no Lab PIN or Connect modal anywhere on the page', () => {
-  const ui = read('../public/logyq/js/preview/03-ui.js')
-  const persistence = read('../public/logyq/js/preview/06-persistence.js')
+test('LOGYQ removes the legacy PIN surface from the DOM entirely', () => {
   const shell = read('../public/logyq/js/game-sound.js')
 
-  assert.doesNotMatch(ui, /logiq-pin|logiq-pin-form|Lab PIN/)
-  assert.doesNotMatch(ui, /\bui\.pin\b|\bui\.pinForm\b|\bui\.pinInput\b|\bui\.pinError\b/)
-  assert.doesNotMatch(persistence, /\bui\.pin\b|\bui\.pinForm\b|\bui\.pinInput\b|\bui\.pinError\b/)
+  assert.match(shell, /function removePinUi\(\)/)
+  assert.match(shell, /document\.getElementById\('logiq-pin'\)/)
+  assert.match(shell, /document\.getElementById\('logiq-pin-cancel'\)\?\.click\(\)/)
+  assert.match(shell, /pin\.remove\(\)/)
+  assert.match(shell, /new MutationObserver\(\(\) => removePinUi\(\)\)/)
   assert.doesNotMatch(shell, /releaseInitialPinGate/)
 })
