@@ -47,12 +47,14 @@ test('Game keeps automatic completion and preserves the existing Next control af
   assert.match(shell, /legacyCheck\?\.remove\(\)/)
 })
 
-test('boot does not require the Lab PIN before Game and Curriculum are usable', () => {
-  const persistence = read('../public/logyq/js/preview/06-persistence.js')
-  const boot = persistence.slice(persistence.indexOf('async function bootSession()'))
+test('initial live-map PIN gate cannot block Game or Curriculum startup', () => {
+  const shell = read('../public/logyq/js/game-sound.js')
 
-  assert.doesNotMatch(boot, /await refreshLibrary\(\)\s*\n\s*app\.booted = true/)
-  assert.match(boot, /app\.booted = true/)
-  assert.match(boot, /readStoredPin\(\)/)
-  assert.match(boot, /app\.libraryStatus = 'locked'/)
+  assert.match(shell, /function releaseInitialPinGate\(\)/)
+  assert.match(shell, /window\.LOGYQPreview/)
+  assert.match(shell, /preview\.app\.booted/)
+  assert.match(shell, /sessionStorage\.getItem\('logyq_lab_pin_v1'\)/)
+  assert.match(shell, /pin\.classList\.contains\('is-open'\)/)
+  assert.match(shell, /cancel\.click\(\)/)
+  assert.match(shell, /releaseInitialPinGate\(\)/)
 })
