@@ -732,6 +732,7 @@
     delete window.__logyqGameDropAllowed
     delete window.__logyqGameBankNode
     delete window.__logyqGameBankDropAllowed
+    delete window.__logyqGameReturnToBank
     document.getElementById('logyq-game-next').hidden = true
     if (session.origin) {
       app.current = session.origin.current
@@ -756,6 +757,36 @@
     }
     const nameEl = document.getElementById('logyq-game-name')
     if (nameEl) nameEl.textContent = level.title || ''
+  }
+
+  function returnGameBranch(tree, bank, bankCards, uid, levelId) {
+    if (!tree || !uid) return null
+    const nextTree = structuredClone(tree)
+    let removed = null
+    if (nextTree._uid === uid) removed = nextTree
+    else {
+      const detach = node => {
+        const index = (node.children || []).findIndex(child => child._uid === uid)
+        if (index >= 0) {
+          removed = node.children.splice(index, 1)[0]
+          return true
+        }
+        return (node.children || []).some(detach)
+      }
+      detach(nextTree)
+    }
+    if (!removed) return null
+    const nextBank = bank.slice()
+    const nextCards = { ...bankCards }
+    const restore = node => {
+      const key = Object.keys(nextCards).find(word => nextCards[word]?.gameId === node.gameId)
+        || `__TREE_CARD__:${levelId}:${node.gameId}`
+      nextCards[key] = { name: '', gameId: node.gameId, paint: node.paint, children: [] }
+      if (!nextBank.includes(key)) nextBank.push(key)
+      ;(node.children || []).forEach(restore)
+    }
+    restore(removed)
+    return { tree: removed === nextTree ? null : nextTree, bank: nextBank, bankCards: nextCards }
   }
 
   function beginGameLevel(level, opts) {
@@ -784,7 +815,8 @@
         played: { ...state.played, [level.id]: Date.now() },
       },
     })
-    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide }
+    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide,
+      bankCards: { ...level.bankCards } }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
     app.lastSnapshot = 'game'
@@ -800,16 +832,38 @@
       return allowed
     }
     window.__logyqGameBankNode = (word) => {
-      const card = level.bankCards?.[word]
+      const card = app.game?.bankCards?.[word]
       return card ? paintGameTree(structuredClone(card)) : null
     }
     window.__logyqGameBankDropAllowed = ({ tree, words, drop }) => {
       if (!drop || words.length !== 1) return false
-      const card = level.bankCards?.[words[0]]
-      const allowed = !!card && gameGrammar.canAdd(tree, card, drop)
+      const card = app.game?.bankCards?.[words[0]]
+      const allowed = !!card && (drop.type === 'newRootAt' && !tree
+        ? true : gameGrammar.canAdd(tree, card, drop))
       if (!allowed) gameStatus('Those colors do not match here. Try another position.')
       else rememberGameDrop()
       return allowed
+    }
+    window.__logyqGameReturnToBank = (uid) => {
+      const engine = bridge.core
+      const session = app.game
+      if (!engine?.state || !session || session.id !== level.id) return false
+      const result = returnGameBranch(engine.state.root?.data, engine.state.wordBank || [], session.bankCards, uid, level.id)
+      if (!result) return false
+      session.bankCards = result.bankCards
+      engine.state.wordBank = result.bank
+      engine.state.root = result.tree ? d3.hierarchy(result.tree) : null
+      if (engine.state.root) {
+        engine.utils.assignIds(engine.state.root)
+        engine.treeManager.layoutAndRender(false)
+      } else {
+        engine.state.lastNodes = []
+        engine.treeManager.renderEmpty()
+      }
+      engine.wordDock.render()
+      gameStatus('Piece back in the bank. Keep arranging!')
+      bridge.notifyChange?.()
+      return true
     }
     ensureGamePaint()
     updateMapName()
@@ -919,5 +973,5 @@
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
     recordSolve, chooseNext, presentSolved, layoutBudget: GAME_LAYOUT,
-    challengeLayoutBudget: CHALLENGE_LAYOUT, measureSolved: layoutSolvedTree,
+    challengeLayoutBudget: CHALLENGE_LAYOUT, measureSolved: layoutSolvedTree, returnBranch: returnGameBranch,
   }
