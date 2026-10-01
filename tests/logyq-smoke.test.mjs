@@ -7954,3 +7954,20 @@ test('game sound unlocks on interaction, chimes with completion, and remembers m
   assert.equal(await page.evaluate(()=>window.__audioNotes.length),3,'repeated Check does not stack chimes')
   await context.close()
 })
+
+test('clean completion joins render the reported chain and fork examples',async()=>{
+  const context=await newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true})
+  await stubMaps(context,{maps:[]})
+  const page=await context.newPage()
+  await page.goto(`${baseUrl}/logyq/index.html`,{waitUntil:'networkidle'})
+  await waitForBoot(page)
+  await page.emulateMedia({reducedMotion:'reduce'})
+  for(const index of [39,40,41,53]){
+    await page.evaluate(i=>window.LOGYQPreview.game.presentSolved(window.LOGYQPreview.game.levels[i]),index)
+    await page.locator('#logyq-game-check').click()
+    await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.dataset.phase==='complete')
+    assert.ok(await page.locator('#logyq-completion-art path').count()>0)
+    await page.screenshot({path:`/workspace/scratch/ae226cb204ec/logyq-clean-${index+1}.png`})
+  }
+  await context.close()
+})

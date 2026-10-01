@@ -29,3 +29,24 @@ test('diagonal continuations keep the exact card angle and side colors',()=>{
   const dr=scope.window.LOGYQCompletionArt.build([{gameId:'b',paint:'DR:A:D',x:120,y:180,width:140,height:63}],390,844)[0]
   for(const [x,y] of dr.regions[0].polygon)assert.ok(y-cy+slope*(x-cx)<=0.001)
 })
+
+test('diagonals meet at line intersections without artificial territory ledges',()=>{
+  const cards=[{gameId:'a',paint:'DL:A:D',x:120,y:180,width:140,height:63},
+    {gameId:'b',paint:'DR:D:C',x:30,y:400,width:140,height:63},
+    {gameId:'c',paint:'DL:D:B',x:220,y:400,width:140,height:63}]
+  const regions=scope.window.LOGYQCompletionArt.build(cards,390,844).flatMap(c=>c.regions)
+  const onLine=(p,a,c)=>Math.abs(a*p[0]+p[1]-c)<0.001
+  for(const region of regions)for(let i=0;i<region.polygon.length;i++){
+    const p=region.polygon[i],q=region.polygon[(i+1)%region.polygon.length]
+    if(Math.hypot(p[0]-q[0],p[1]-q[1])<0.001)continue
+    const viewport=[0,390].some(x=>Math.abs(p[0]-x)<0.001&&Math.abs(q[0]-x)<0.001)||
+      [0,844].some(y=>Math.abs(p[1]-y)<0.001&&Math.abs(q[1]-y)<0.001)
+    const original=cards.some(card=>{
+      const a=(card.paint.startsWith('DL')?-1:1)*card.height/card.width
+      const c=a*(card.x+card.width/2)+card.y+card.height/2
+      return onLine(p,a,c)&&onLine(q,a,c)
+    })
+    assert.ok(viewport||original,`unexpected ledge ${JSON.stringify([p,q])}`)
+  }
+  assert.ok(Math.abs(regions.reduce((sum,r)=>sum+area(r.polygon),0)-390*844)<0.01)
+})
