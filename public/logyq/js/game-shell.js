@@ -54,6 +54,14 @@
         <label class="logyq-game-volume">Sound effects
           <input id="logyq-game-sfx-volume" type="range" min="0" max="100" step="1" aria-label="Sound effects volume">
         </label>
+        <div class="logyq-game-thumb-gain">
+          <span>Thumb movement</span>
+          <div class="logyq-game-thumb-gain-controls">
+            <button type="button" id="logyq-game-thumb-gain-down" aria-label="Reduce thumb movement">−</button>
+            <output id="logyq-game-thumb-gain-value" aria-live="polite">2.4×</output>
+            <button type="button" id="logyq-game-thumb-gain-up" aria-label="Increase thumb movement">+</button>
+          </div>
+        </div>
       </section>`
     document.body.appendChild(panel)
 
@@ -77,6 +85,10 @@
       .logyq-game-pause-card>button:first-of-type{background:#0f172a;color:#fff;border-color:#0f172a}
       .logyq-game-volume{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:12px;color:#334155;font:650 14px/1.2 system-ui}
       .logyq-game-volume input{width:100%;accent-color:#334155}
+      .logyq-game-thumb-gain{display:grid;grid-template-columns:110px 1fr;align-items:center;gap:12px;color:#334155;font:650 14px/1.2 system-ui}
+      .logyq-game-thumb-gain-controls{display:flex;align-items:center;justify-content:flex-end;gap:12px}
+      .logyq-game-thumb-gain-controls button{width:38px;height:38px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#0f172a;font:700 21px/1 system-ui;touch-action:manipulation}
+      #logyq-game-thumb-gain-value{min-width:48px;text-align:center;color:#0f172a;font:750 16px/1 system-ui;font-variant-numeric:tabular-nums}
       body.logyq-game.logyq-game-paused svg#canvas,body.logyq-game.logyq-game-paused #Dock{pointer-events:none}
       @media (orientation:landscape) and (max-height:600px){.logyq-game-pause-card{padding:14px;gap:8px}.logyq-game-pause-card>button{min-height:42px}}
     `
@@ -93,6 +105,19 @@
     const volume = document.getElementById('logyq-game-sfx-volume')
     const music = window.LOGYQGameMusic
     const musicVolume = document.getElementById('logyq-game-music-volume')
+    const thumbGain = window.LOGYQGameThumbGain
+    const thumbGainDown = document.getElementById('logyq-game-thumb-gain-down')
+    const thumbGainUp = document.getElementById('logyq-game-thumb-gain-up')
+    const thumbGainValue = document.getElementById('logyq-game-thumb-gain-value')
+    const syncThumbGain = () => {
+      const value = thumbGain?.value?.() ?? 2.4
+      if (thumbGainValue) thumbGainValue.textContent = value.toFixed(1) + '×'
+      if (thumbGainDown) thumbGainDown.disabled = value <= (thumbGain?.min ?? 1)
+      if (thumbGainUp) thumbGainUp.disabled = value >= (thumbGain?.max ?? 6)
+    }
+    thumbGainDown?.addEventListener('click', () => { thumbGain?.step(-1); syncThumbGain() })
+    thumbGainUp?.addEventListener('click', () => { thumbGain?.step(1); syncThumbGain() })
+    syncThumbGain()
     const syncSoundControls = () => document.querySelectorAll('[data-game-sound]').forEach((control) => {
       control.disabled = !sound?.supported
       control.textContent = sound?.supported ? 'Sound: ' + (sound.enabled() ? 'On' : 'Off') : 'Sound unavailable'

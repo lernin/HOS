@@ -5107,7 +5107,7 @@ function bindChipPointerPlace() {
   const gameThumbPoint = (gesture, x, y) => {
     if (!document.body.classList.contains('logyq-game') ||
         !(window.matchMedia?.('(pointer: coarse)').matches || document.body.classList.contains('logyq-mobile-v162'))) return { x, y }
-    const gain = 2.4
+    const gain = window.LOGYQGameThumbGain?.value?.() ?? 2.4
     return {
       x: Math.max(24, Math.min(window.innerWidth - 24, gesture.x + (x - gesture.x) * gain)),
       y: Math.max(56, Math.min(window.innerHeight - 24, gesture.y + (y - gesture.y) * gain)),
