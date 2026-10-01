@@ -72,3 +72,48 @@ test('effects volume survives reload and the existing sound toggle restores the 
   assert.equal(reloaded.sound.volume(), 0.31)
   assert.equal(reloaded.sound.enabled(), true)
 })
+
+test('game music is a quiet persistent loop that starts on entry and stops on exit', async () => {
+  const source = read('../public/logyq/js/game-sound.js')
+  const values = new Map()
+  const calls = []
+  const player = {
+    loop: false,
+    volume: 1,
+    preload: '',
+    play() { calls.push('play'); return Promise.resolve() },
+    pause() { calls.push('pause') },
+  }
+  const window = {
+    Audio: function Audio(url) { calls.push(url); return player },
+    AudioContext: function AudioContext() {},
+    dispatchEvent() {},
+  }
+  runInNewContext(source, {
+    window,
+    document: { readyState: 'loading', addEventListener() {} },
+    Event: function Event(type) { this.type = type },
+    localStorage: {
+      getItem: (key) => values.has(key) ? values.get(key) : null,
+      setItem: (key, value) => values.set(key, String(value)),
+    },
+    setTimeout,
+  })
+
+  const music = window.LOGYQGameMusic
+  assert.equal(music.volume(), 0.16)
+  assert.equal(music.source, 'https://opengameart.org/sites/default/files/my_street.ogg')
+  music.enter()
+  assert.equal(player.loop, true)
+  assert.equal(player.volume, 0.16)
+  assert.equal(calls.filter((call) => call === 'play').length, 1)
+  music.pause()
+  assert.equal(calls.at(-1), 'pause')
+  music.resume()
+  assert.equal(calls.at(-1), 'play')
+  music.setVolume(0.23)
+  assert.equal(player.volume, 0.23)
+  assert.equal(values.get('logyq_game_music_volume_v1'), '0.23')
+  music.leave()
+  assert.equal(calls.at(-1), 'pause')
+})
