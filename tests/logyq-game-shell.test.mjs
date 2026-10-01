@@ -46,3 +46,13 @@ test('Game keeps automatic completion and preserves the existing Next control af
   assert.match(shell, /legacyNext\.hidden = true/)
   assert.match(shell, /legacyCheck\?\.remove\(\)/)
 })
+
+test('boot does not require the Lab PIN before Game and Curriculum are usable', () => {
+  const persistence = read('../public/logyq/js/preview/06-persistence.js')
+  const boot = persistence.slice(persistence.indexOf('async function bootSession()'))
+
+  assert.doesNotMatch(boot, /await refreshLibrary\(\)\s*\n\s*app\.booted = true/)
+  assert.match(boot, /app\.booted = true/)
+  assert.match(boot, /readStoredPin\(\)/)
+  assert.match(boot, /app\.libraryStatus = 'locked'/)
+})
