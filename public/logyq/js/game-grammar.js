@@ -8,7 +8,10 @@
 (() => {
   'use strict'
 
-  const GAME_COLORS = { A: '#60a5fa', B: '#fb923c', C: '#86efac', D: '#f0abfc' }
+  const GAME_COLORS = {
+    A: '#60a5fa', B: '#fb923c', C: '#86efac', D: '#f0abfc',
+    E: '#facc15', F: '#f87171', G: '#2dd4bf',
+  }
   const SHAPE_NAMES = { W: 'Whole', L: 'Layer Cake', DL: 'Diagonal Left', DR: 'Diagonal Right' }
   const SPLIT = {
     L: { x1: '0%', y1: '0%', x2: '0%', y2: '100%' },

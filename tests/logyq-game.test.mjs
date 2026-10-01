@@ -255,13 +255,13 @@ function loadGameFragment() {
 test('every game level is selectable without clearing an earlier one', () => {
   const { sandbox, elements, listeners } = loadGameFragment()
   const levels = sandbox.preview.game.levels
-  assert.equal(levels.length, 139)
+  assert.equal(levels.length, 159)
   levels.forEach((level, index) => {
     assert.equal(level.title.startsWith((index + 1) + ' · '), true, level.title)
   })
   sandbox.preview.game.render()
   const html = elements['logyq-game-path'].innerHTML
-  assert.equal(html.match(/data-game-level=/g).length, 139)
+  assert.equal(html.match(/data-game-level=/g).length, 159)
   assert.doesNotMatch(html, /disabled/)
   assert.doesNotMatch(html, /Clear the previous level/)
   const open = (id) => {
@@ -312,7 +312,7 @@ test('completion is recorded and never required for the next pick', () => {
     sandbox.bridge._snapshot = { tree }
     sandbox.preview.game.check()
   }
-  assert.equal(elements['logyq-game-status'].textContent, 'All 139 levels cleared.')
+  assert.equal(elements['logyq-game-status'].textContent, 'All 159 levels cleared.')
   assert.equal(elements['logyq-game-next'].hidden, false)
 })
 
@@ -330,17 +330,17 @@ test('each playtest level has a solution made only of visible contacts', () => {
 test('every level has one physical solution and every decoy has no seat', () => {
   const { sandbox } = loadGameFragment()
   const levels = sandbox.preview.game.levels
-  assert.equal(levels.length, 139)
+  assert.equal(levels.length, 159)
   const tiers = {}
   for (const level of levels) tiers[level.tier] = (tiers[level.tier] || 0) + 1
-  assert.deepEqual(tiers, { 1: 15, 2: 12, 3: 12, 4: 14, 5: 14, 6: 14, 7: 15, 8: 15, 9: 14, 10: 14 })
+  assert.deepEqual(tiers, { 1: 15, 2: 12, 3: 12, 4: 14, 5: 14, 6: 14, 7: 15, 8: 15, 9: 14, 10: 14, 11: 10, 12: 10 })
   for (const level of levels) {
     const pieces = solutionPieces(level)
     const sols = grammar.physicalSolutions(pieces, 2)
     assert.equal(sols.length, 1, level.title)
     assert.equal(grammar.complete(sols[0], level.ids), true, level.title)
     const paints = pieces.map((piece) => piece.paint)
-    if (level.id.startsWith('climb-')) {
+    if (level.id.startsWith('climb-') || level.id.startsWith('challenge-')) {
       assert.equal(new Set(paints).size, paints.length, level.title + ' repeats a face')
       assert.equal(paints.some((paint) => {
         const parsed = grammar.parsePaint(paint)
@@ -350,6 +350,58 @@ test('every level has one physical solution and every decoy has no seat', () => 
     for (const decoy of decoyPieces(level)) {
       assert.equal(grammar.validSeats(sols[0], decoy, 1), 0, level.title + ' decoy ' + decoy.paint)
     }
+  }
+})
+
+test('the 20 challenge levels use 6–8 pieces, fit a phone, and have one solution each', () => {
+  const { sandbox } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  const challenge = levels.filter((level) => level.id.startsWith('challenge-'))
+  assert.equal(challenge.length, 20)
+  assert.deepEqual(Array.from(challenge, (level) => level.id),
+    Array.from({ length: 20 }, (_, index) => 'challenge-' + (140 + index)))
+  const counts = new Set()
+  const budget = sandbox.preview.game.challengeLayoutBudget
+  assert.equal(budget.minScale, 0.7)
+  for (const level of challenge) {
+    const pieces = solutionPieces(level)
+    counts.add(pieces.length)
+    assert.ok(pieces.length >= 6 && pieces.length <= 8, level.id + ' has ' + pieces.length + ' pieces')
+    assert.equal(piecePool(level).length, pieces.length, level.id + ' has an extra card')
+    const solutions = grammar.physicalSolutions(pieces, 2)
+    assert.equal(solutions.length, 1, level.id)
+    assert.equal(grammar.complete(solutions[0], level.ids), true, level.id)
+    const box = sandbox.preview.game.measureSolved(level.solution)
+    assert.ok(box.rows <= budget.maxRows, level.id + ' has ' + box.rows + ' rows')
+    assert.ok(box.bounds.width * budget.minScale <= budget.safeWidth + 0.05, level.id + ' too wide')
+    assert.ok(box.bounds.height * budget.minScale <= budget.safeHeight + 0.05, level.id + ' too tall')
+  }
+  assert.deepEqual([...counts].sort(), [6, 7, 8])
+})
+
+test('loose pieces are shuffled consistently and do not disclose solution traversal order', () => {
+  const first = loadGameFragment().sandbox.preview.game.levels
+  const second = loadGameFragment().sandbox.preview.game.levels
+  for (let index = 0; index < first.length; index++) {
+    const level = first[index]
+    const actual = Array.from(level.bank, (key) => level.bankCards[key].gameId)
+    const again = Array.from(second[index].bank, (key) => second[index].bankCards[key].gameId)
+    assert.deepEqual(actual, again, level.id + ' changed order on reload')
+    if (actual.length < 2 || !level.solution) continue
+    const mounted = new Set()
+    const collect = (node, into) => {
+      into.push(node.gameId)
+      for (const child of node.children || []) collect(child, into)
+    }
+    const onBoard = []
+    collect(level.tree, onBoard)
+    onBoard.forEach((id) => mounted.add(id))
+    const solvedOrder = []
+    collect(level.solution, solvedOrder)
+    const originalOrder = solvedOrder.filter((id) => !mounted.has(id))
+      .concat(decoyPieces(level).map((piece) => piece.gameId))
+    assert.deepEqual([...actual].sort(), [...originalOrder].sort(), level.id + ' lost a piece')
+    assert.notDeepEqual(actual, originalOrder, level.id + ' still reveals the solution order')
   }
 })
 
@@ -387,12 +439,16 @@ test('every solved tree fits a 360x640 phone at the readable card scale', () => 
   let widest = 0
   let tallest = 0
   for (const level of sandbox.preview.game.levels) {
+    const levelBudget = level.id.startsWith('challenge-')
+      ? sandbox.preview.game.challengeLayoutBudget : budget
     const pieces = solutionPieces(level)
     const tree = level.solution || grammar.physicalSolutions(pieces, 1)[0]
     const box = sandbox.preview.game.measureSolved(tree)
-    widest = Math.max(widest, box.bounds.width)
-    tallest = Math.max(tallest, box.bounds.height)
-    if (box.rows > budget.maxRows || box.bounds.width * budget.minScale > budget.safeWidth + 0.05 || box.bounds.height * budget.minScale > budget.safeHeight + 0.05) {
+    if (!level.id.startsWith('challenge-')) {
+      widest = Math.max(widest, box.bounds.width)
+      tallest = Math.max(tallest, box.bounds.height)
+    }
+    if (box.rows > levelBudget.maxRows || box.bounds.width * levelBudget.minScale > levelBudget.safeWidth + 0.05 || box.bounds.height * levelBudget.minScale > levelBudget.safeHeight + 0.05) {
       fails.push(level.title + ' ' + box.rows + ' rows ' + box.bounds.width.toFixed(0) + 'x' + box.bounds.height.toFixed(0))
     }
   }
