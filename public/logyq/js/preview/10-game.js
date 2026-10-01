@@ -47,6 +47,20 @@
 
   // Open playtest expansion: chains first, then branches. Every level stays
   // selectable so the learning sequence can be sampled and tuned out of order.
+  function shuffledGameBank(bank, id) {
+    const mixed = bank.slice()
+    let seed = 2166136261
+    for (const char of id) seed = Math.imul(seed ^ char.charCodeAt(0), 16777619) >>> 0
+    const rng = climbRng(seed)
+    for (let i = mixed.length - 1; i > 0; i--) {
+      const j = rng(i + 1)
+      ;[mixed[i], mixed[j]] = [mixed[j], mixed[i]]
+    }
+    if (mixed.length > 1 && mixed.every((key, index) => key === bank[index])) {
+      mixed.push(mixed.shift())
+    }
+    return mixed
+  }
   function addOpenLevel(id, title, tree, anchorId, extra) {
     const nodes = []
     ;(function walk(n){ nodes.push(n); for (const x of n.children || []) walk(x) })(tree)
@@ -65,7 +79,7 @@
     gameLevels.push({
       id, title, tier: extra && extra.tier, hint: decoy ? 'One piece does not fit.' : '',
       ids: nodes.map(n => n.gameId),
-      tree: { ...anchor, children: [] }, bank, bankCards,
+      tree: { ...anchor, children: [] }, bank: shuffledGameBank(bank, id), bankCards,
       solution: tree,
     })
   }
@@ -148,6 +162,9 @@
     maxRows: 4,
     maxCardsWide: 3,
   }
+  // Seven loose cards need two rows in the bank. Four-row challenge boards
+  // still fit on a phone with cards at least 70% of their base size.
+  const CHALLENGE_LAYOUT = { ...GAME_LAYOUT, minScale: 0.7 }
 
   function gameSeparation(a, b) {
     let A = a
@@ -324,6 +341,45 @@
       addOpenLevel('climb-' + number, number + ' · ' + name, tree, anchor.gameId, { tier, decoy })
     }
   }
+
+  // Twenty fixed boards, pre-checked with the physical solver. Each nested
+  // array is [paint, ...children]; no search runs while the game loads.
+  const CHALLENGE_TREES = [
+    ["DR:D:C",["DL:C:D",["DL:D:A"],["DR:D:E",["DL:E:A"],["DR:E:B"]]]],
+    ["DL:D:B",["DL:B:C",["L:C:A",["L:A:E"]]],["DR:B:F"],["DL:B:F"]],
+    ["L:C:A",["DL:A:D",["L:D:E",["DL:E:B"]]],["DR:A:B"],["DL:A:B"]],
+    ["DL:B:C",["DR:C:E"],["DL:C:E"],["DR:C:B",["L:B:A",["DR:A:E"]]]],
+    ["L:D:A",["DR:A:E",["DL:E:C",["DL:C:A"]],["DR:E:F"],["DL:E:F"]]],
+    ["DL:F:D",["DL:D:A",["DL:A:B",["DR:B:C"]],["DR:A:E"],["DL:A:E"]]],
+    ["DL:E:A",["L:A:B",["DR:B:D",["DR:D:F"],["DL:D:F"],["DR:D:B"]]]],
+    ["DL:F:D",["DL:D:E",["L:E:B",["DR:B:E"],["DL:B:E"],["DR:B:A"]]],["DR:D:A"]],
+    ["L:C:D",["DL:D:E",["DR:E:C",["DR:C:A"],["DL:C:A"],["DR:C:F"]]],["DR:D:F"]],
+    ["L:C:F",["DL:F:E",["DL:E:C",["DR:C:A"],["DL:C:A"],["DR:C:B"]]],["DR:F:B"]],
+    ["L:B:D",["DL:D:C",["DL:C:D",["L:D:A"]],["DR:C:F",["DL:F:E"]]],["DR:D:E"]],
+    ["L:C:E",["DL:E:C",["DL:C:D",["DR:D:A"],["DL:D:A"],["DR:D:B"]]],["DR:E:A"]],
+    ["L:D:F",["DL:F:B",["DR:B:D",["DL:D:C"],["DR:D:E"],["DL:D:E"]]],["DR:F:E"]],
+    ["DL:A:C",["DL:C:A",["L:A:D",["DR:D:F"]]],["DR:C:B",["DR:B:E",["DR:E:F"]]]],
+    ["L:E:D",["DL:D:E",["DL:E:D",["L:D:G"]],["DR:E:A",["DL:A:F"],["DR:A:B"]]],["DR:D:F"]],
+    ["DR:G:C",["DL:C:E",["DR:E:A",["DL:A:B"]]],["DR:C:D",["DL:D:B"],["DR:D:C",["L:C:B"]]]],
+    ["DL:B:F",["DL:F:C",["DL:C:B",["L:B:G"]],["DR:C:A",["DL:A:G"],["DR:A:D"]]],["DR:F:E"]],
+    ["DR:C:A",["DL:A:C",["DL:C:B",["DL:B:E"]],["DR:C:F"]],["DR:A:G",["DR:G:D",["DL:D:G"]]]],
+    ["DR:G:D",["DL:D:A",["DL:A:G",["DR:G:E"]],["DR:A:E"]],["DR:D:F",["DL:F:C",["L:C:E"]]]],
+    ["DR:D:A",["DL:A:D",["DL:D:G",["L:G:B"]],["DR:D:F"]],["DR:A:E",["DR:E:C",["L:C:F"]]]],
+  ]
+  function challengeTree(spec, ids = { next: 0 }) {
+    return {
+      name: '', gameId: 'p' + ids.next++, paint: spec[0],
+      children: spec.slice(1).map(child => challengeTree(child, ids)),
+    }
+  }
+  CHALLENGE_TREES.forEach((spec, index) => {
+    const number = 140 + index
+    const tree = challengeTree(spec)
+    const nodes = climbNodes(tree, [])
+    const anchor = nodes[(number + index) % nodes.length]
+    addOpenLevel('challenge-' + number, number + ' · ' + nodes.length + ' Pieces',
+      tree, anchor.gameId, { tier: index < 10 ? 11 : 12 })
+  })
 
   const GAME_ADAPTIVE = '_adaptive'
 
@@ -862,5 +918,6 @@
   }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
-    recordSolve, chooseNext, presentSolved, layoutBudget: GAME_LAYOUT, measureSolved: layoutSolvedTree,
+    recordSolve, chooseNext, presentSolved, layoutBudget: GAME_LAYOUT,
+    challengeLayoutBudget: CHALLENGE_LAYOUT, measureSolved: layoutSolvedTree,
   }
