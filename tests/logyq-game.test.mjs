@@ -106,7 +106,7 @@ test('game drags start after a few pixels and return to the bank without trashin
   assert.match(gestures, /logyq-game'\)\)/)
   assert.match(dock, /logyq-game'\)\) \{\s*if \(Math\.hypot\(dx, dy\) < 6\) return\s*beginLift\(\[session\.word\]\)/)
   assert.match(dock, /logyq-game'\)\) return/)
-  assert.match(dock, /const gain = 2\.4/)
+  assert.match(dock, /const gain = window\.LOGYQGameThumbGain\?\.value\?\.\(\) \?\? 2\.4/)
   assert.match(dock, /placeGhost\(session\.words, visual\.x, visual\.y\)/)
   assert.match(dock, /if \(words\) placeGhost\(words, visual\.x, visual\.y\)/)
   assert.match(styles, /body\.logyq-game\.v2-branch-drag #Dock\.is-empty[^{}]*\{display:flex!important/)

@@ -44,6 +44,53 @@ test('sound effects expose a persistent adjustable volume for the pause panel', 
   assert.match(shell, /sound\.setVolume/)
 })
 
+test('thumb movement control lives in settings and uses the saved multiplier while dragging', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  const engine = read('../public/logyq/js/engine/14-word-dock.js')
+  const html = read('../public/logyq/index.html')
+  assert.match(html, /game-thumb-gain\.js/)
+  assert.match(shell, /logyq-game-thumb-gain-down/)
+  assert.match(shell, /logyq-game-thumb-gain-up/)
+  assert.match(shell, /logyq-game-thumb-gain-value/)
+  assert.match(shell, /thumbGain\?\.step\(-1\)/)
+  assert.match(shell, /thumbGain\?\.step\(1\)/)
+  assert.match(engine, /window\.LOGYQGameThumbGain\?\.value\?\.\(\)/)
+})
+
+test('thumb movement targets the lifted card consistently during hover and release', () => {
+  const engine = read('../public/logyq/js/engine/14-word-dock.js')
+  assert.equal((engine.match(/hoverMap\(aim\.x, aim\.y\)/g) || []).length, 2)
+  assert.match(engine, /!overDock\(aim\.x, aim\.y\)/)
+  assert.doesNotMatch(engine, /hoverMap\(event\.clientX, event\.clientY\)/)
+})
+
+test('thumb movement gain starts at 2.4x, persists, steps by 0.2x, and stays in range', () => {
+  const source = read('../public/logyq/js/game-thumb-gain.js')
+  const create = (initial = null) => {
+    const values = new Map(initial == null ? [] : [['logyq_game_thumb_gain_v1', String(initial)]])
+    const window = {}
+    runInNewContext(source, {
+      window,
+      localStorage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, String(value)),
+      },
+    })
+    return { gain: window.LOGYQGameThumbGain, values }
+  }
+  const first = create()
+  assert.equal(first.gain.value(), 2.4)
+  assert.equal(first.gain.step(1), 2.6)
+  assert.equal(first.values.get('logyq_game_thumb_gain_v1'), '2.6')
+  assert.equal(first.gain.step(-1), 2.4)
+  assert.equal(first.gain.set(50), 6)
+  assert.equal(first.gain.step(1), 6)
+  assert.equal(first.gain.set(-1), 1)
+  assert.equal(first.gain.step(-1), 1)
+  assert.equal(create('not a number').gain.value(), 2.4)
+  assert.equal(create('3.8').gain.value(), 3.8)
+})
+
 test('effects volume survives reload and the existing sound toggle restores the chosen level', () => {
   const source = read('../public/logyq/js/game-sound.js')
   const load = (initial = {}) => {
