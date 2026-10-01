@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'refactor/logyq-isolated'
+      - 'feat/logyq-game-shell-music-20261001'
     paths:
       - public/logyq/**
       - tests/logyq-*
