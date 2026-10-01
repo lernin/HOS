@@ -348,6 +348,14 @@
       }
       #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
       #logyq-game-next[hidden]{display:none}
+      #logyq-completion-art{position:fixed;inset:0;width:100%;height:100dvh;z-index:0;pointer-events:none}
+      body.logyq-game svg#canvas{z-index:1}
+      body.logyq-game svg#canvas g.nodes,body.logyq-game svg#canvas g.links,body.logyq-game #Dock{transition:opacity 250ms ease}
+      body.logyq-game-completion svg#canvas g.nodes,body.logyq-game-completion svg#canvas g.links{opacity:0;transition:opacity 900ms ease 450ms}
+      body.logyq-game-completion #Dock{opacity:0;pointer-events:none;transition:opacity 900ms ease 450ms}
+      @media (prefers-reduced-motion:reduce){
+        body.logyq-game svg#canvas g.nodes,body.logyq-game svg#canvas g.links,body.logyq-game #Dock{transition:none!important}
+      }
       body.logyq-game svg#canvas g.node rect:not(.grabzone),
       body.logyq-mobile-v162.logyq-game.v2-branch-drag svg#canvas g.node rect:not(.grabzone){fill:var(--logyq-piece-fill,#fff)!important;stroke:#fff!important}
       body.logyq-game svg#canvas .caret-dot{fill:#22c55e!important;stroke:#fff;stroke-width:2;pointer-events:none}
@@ -7396,6 +7404,95 @@
     return gameGrammar.physicalSolutions(pieces, 1)[0] || null
   }
 
+  let gameArtTimer = null
+  let gameArtEpoch = 0
+  let gameArtElement = null
+
+  function clearGameCompletionArt() {
+    gameArtEpoch++
+    if (gameArtTimer !== null) clearTimeout(gameArtTimer)
+    gameArtTimer = null
+    if (gameArtElement) {
+      d3.select(gameArtElement).selectAll('*').interrupt('completion')
+      gameArtElement.remove()
+      gameArtElement = null
+    }
+    document.body.classList.remove('logyq-game-completion')
+  }
+
+  function scheduleGameCompletionArt(delay = 700, animate = true) {
+    if (!window.LOGYQCompletionArt || !app.game?.cleared) return
+    if (gameArtTimer !== null) clearTimeout(gameArtTimer)
+    const epoch = ++gameArtEpoch
+    gameArtTimer = setTimeout(() => {
+      gameArtTimer = null
+      if (epoch !== gameArtEpoch || !app.game?.cleared || document.body.classList.contains('logyq-home')) return
+      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
+          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
+        scheduleGameCompletionArt(150, animate)
+        return
+      }
+      const width = window.innerWidth, height = window.innerHeight
+      const cards = Array.from(document.querySelectorAll('svg#canvas g.node')).map(node => {
+        const data = node.__data__?.data
+        const rect = node.querySelector('rect:not(.grabzone)')?.getBoundingClientRect()
+        return data && rect ? {gameId:data.gameId, paint:data.paint,
+          x:rect.left, y:rect.top, width:rect.width, height:rect.height} : null
+      }).filter(Boolean)
+      const composition = window.LOGYQCompletionArt.build(cards, width, height)
+      if (!composition.length) return
+      if (gameArtElement) {
+        d3.select(gameArtElement).selectAll('*').interrupt('completion')
+        gameArtElement.remove()
+      }
+      const ns = 'http://www.w3.org/2000/svg'
+      const svg = document.createElementNS(ns, 'svg')
+      svg.id = 'logyq-completion-art'
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
+      svg.setAttribute('aria-hidden', 'true')
+      svg.dataset.phase = 'expanding'
+      const defs = document.createElementNS(ns, 'defs')
+      svg.appendChild(defs)
+      const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      const duration = animate && !reduced ? 1400 : 0
+      let remaining = composition.length
+      for (const [i, card] of composition.entries()) {
+        const clip = document.createElementNS(ns, 'clipPath')
+        clip.id = `logyq-completion-reveal-${epoch}-${i}`
+        clip.setAttribute('clipPathUnits', 'userSpaceOnUse')
+        const reveal = document.createElementNS(ns, 'rect')
+        for (const [key, value] of Object.entries({x:card.x, y:card.y, width:card.width, height:card.height})) reveal.setAttribute(key, value)
+        clip.appendChild(reveal)
+        defs.appendChild(clip)
+        const group = document.createElementNS(ns, 'g')
+        group.setAttribute('data-piece', card.gameId)
+        group.setAttribute('clip-path', `url(#${clip.id})`)
+        for (const region of card.regions) {
+          const path = document.createElementNS(ns, 'path')
+          path.setAttribute('d', 'M' + region.polygon.map(point => point.join(',')).join('L') + 'Z')
+          path.setAttribute('fill', region.color)
+          path.setAttribute('stroke', region.color)
+          path.setAttribute('stroke-width', '0.5')
+          group.appendChild(path)
+        }
+        svg.appendChild(group)
+        const selection = d3.select(reveal)
+        const finish = () => {
+          if (epoch === gameArtEpoch && --remaining === 0) svg.dataset.phase = 'complete'
+        }
+        if (duration) selection.transition('completion').duration(duration).ease(d3.easeCubicInOut)
+          .attr('x', 0).attr('y', 0).attr('width', width).attr('height', height).on('end', finish)
+        else {
+          selection.attr('x', 0).attr('y', 0).attr('width', width).attr('height', height)
+          finish()
+        }
+      }
+      document.body.insertBefore(svg, document.getElementById('canvas'))
+      gameArtElement = svg
+      document.body.classList.add('logyq-game-completion')
+    }, delay)
+  }
+
   let gameFitTimer = null
   let gameFitPending = false
   const gamePointers = new Set()
@@ -7441,11 +7538,13 @@
 
   function refitGameCamera() {
     scheduleGameCameraFit(80)
+    if (gameArtElement) scheduleGameCompletionArt(700, false)
   }
 
   function leaveGamePlay() {
     const session = app.game
     if (!session) return
+    clearGameCompletionArt()
     app.game = null
     cancelGameCameraFit()
     gamePointers.clear()
@@ -7482,6 +7581,7 @@
 
   function beginGameLevel(level, opts) {
     if (!level || !gameGrammar) return
+    clearGameCompletionArt()
     const origin = app.game?.origin || (app.curriculum ? {
       current: { id: null, name: DEFAULT_NAME }, hasOpenMap: false,
       lastSnapshot: '', snapshot: { tree: null, wordBank: [] },
@@ -7557,6 +7657,7 @@
     if (!level || !gameGrammar.complete(snapshot?.tree, level.ids)) {
       if (session.cleared) {
         session.cleared = false
+        clearGameCompletionArt()
         document.getElementById('logyq-game-next').hidden = true
         gameStatus('Keep arranging the pieces, then check the contacts.')
       }
@@ -7569,11 +7670,16 @@
     const upcoming = chooseNext(progress, level.id).level
     gameStatus(solvedCount >= gameLevels.length ? 'All ' + gameLevels.length + ' levels cleared.' : 'It fits!', true)
     document.getElementById('logyq-game-next').hidden = !upcoming
+    scheduleGameCompletionArt()
     return true
   }
 
   function checkGame() {
     if (!app.game) return
+    if (app.game.cleared) {
+      if (!gameArtElement && gameArtTimer === null) scheduleGameCompletionArt()
+      return
+    }
     if (maybeGameClear(bridge.snapshot())) return
     if (app.game.cleared) return
     noteWrongDrop()
@@ -7602,6 +7708,7 @@
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('pointerdown', event => {
       if (!app.game) return
+      if (event.target?.closest?.('svg#canvas')) clearGameCompletionArt()
       gamePointers.add(event.pointerId)
       gameFitPending = true
       cancelGameCameraFit()

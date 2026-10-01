@@ -145,3 +145,22 @@ remain available outside Game.
 Follow-up idea: after a correct solve, extend the card color regions and diagonal
 boundaries into a full-background geometric design, then dissolve the cards into
 that composition. Deferred until the basic movement/matching experience is stable.
+
+## Completion composition — 2026-10-01
+
+Ashley confirmed movement and approved the completion effect. A small pure
+geometry helper clips a viewport partition around the solved card positions,
+then extends each card's whole/layer/diagonal regions within its surrounding
+cell. Diagonals retain the displayed card height/width slope and side colors.
+The composition uses actual assembled cards, not a stored target solution.
+
+After a correct solve and layout settling, reveal rectangles grow from each
+card into the background over 1.4 seconds. Cards, links and Word Bank fade
+into the composition. Next/Levels remain available. A board press restores
+the pieces; Check can replay the effect. Next/leaving cancels pending work.
+Resize rebuilds at the new positions. Reduced motion uses no animation.
+No puzzle data, contact logic, progress or database records are changed.
+
+Verification: 103 unit checks, including viewport coverage and exact diagonal
+continuation geometry; 4 focused Chromium checks, including completion/reset,
+reduced motion and landscape, plus existing pickup/matching/camera coverage.
