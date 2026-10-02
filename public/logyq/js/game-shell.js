@@ -183,7 +183,7 @@
     document.getElementById('logyq-game-pause-levels').addEventListener('click', openLevels)
     legacyNext.addEventListener('click', () => music?.resume())
     document.addEventListener('pointerdown', (event) => {
-      if (event.target?.closest?.('[data-game-level]')) music?.enter()
+      if (event.target?.closest?.('[data-game-level], [data-trail-level], #logyq-trail-continue')) music?.enter()
     }, true)
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !panel.hidden) { event.preventDefault(); closePause() }
