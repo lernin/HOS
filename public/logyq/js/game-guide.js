@@ -5,7 +5,7 @@
   let active = null, frame = null, until = 0
   function target(level, nodes) {
     if (!level?.guide) return null
-    const anchor = nodes.find(node => node.data.gameId === level.tree.gameId)
+    const anchor = nodes.find(node => node.data.gameId === level.tree.gameId || node.data.name === level.tree.name)
     if (!anchor) return null
     if (level.guide === 'sibling') {
       const child = nodes.find(node => node.data.gameId === level.tree.children[0]?.gameId)
@@ -42,7 +42,9 @@
     const sx = source.left + source.width/2, sy = source.top - 8
     const endY = y + h/2 + 8
     const bend = Math.min(innerWidth - 20, Math.max(sx, x) + w/2 + 60)
-    const d = `M${sx},${sy} C${bend},${sy-70} ${bend},${endY+60} ${x},${endY}`
+    const d = level.guide === 'below'
+      ? `M${sx},${sy} L${x},${endY}`
+      : `M${sx},${sy} C${bend},${sy-70} ${bend},${endY+60} ${x},${endY}`
     element.querySelectorAll('#logyq-guide-arrow path').forEach(path => path.setAttribute('d',d))
     element.querySelector('#logyq-guide-instruction').style.top = (dock.top-34)+'px'
   }
@@ -70,11 +72,17 @@
     const ghost = document.createElement('div'); ghost.id = 'logyq-guide-target'; ghost.setAttribute('aria-hidden','true')
     const face = svg('svg',{viewBox:'0 0 140 63'},ghost)
     const card = level.bankCards[level.bank[0]], grammar = window.LOGYQGameGrammar
-    const paint = grammar.parsePaint(card.paint), spec = grammar.paintSpec(card.paint)
-    svg('rect',{width:140,height:63,fill:paint.shape==='W'?spec.solid:spec.stops[3][1]},face)
-    if (paint.shape!=='W') {
-      const d = paint.shape==='L'?'M0 0H140V31.5H0Z':paint.shape==='DL'?'M0 0H140V63Z':'M0 0H140L0 63Z'
-      svg('path',{d,fill:spec.stops[0][1]},face)
+    if (card?.paint) {
+      const paint = grammar.parsePaint(card.paint), spec = grammar.paintSpec(card.paint)
+      svg('rect',{width:140,height:63,fill:paint.shape==='W'?spec.solid:spec.stops[3][1]},face)
+      if (paint.shape!=='W') {
+        const d = paint.shape==='L'?'M0 0H140V31.5H0Z':paint.shape==='DL'?'M0 0H140V63Z':'M0 0H140L0 63Z'
+        svg('path',{d,fill:spec.stops[0][1]},face)
+      }
+    } else {
+      svg('rect',{width:140,height:63,rx:14,fill:'#fff',stroke:'#e2e8f0','stroke-width':2},face)
+      const label = svg('text',{x:70,y:39,'text-anchor':'middle',fill:'#0f172a','font-size':22,'font-weight':700},face)
+      label.textContent = String(card?.name || '')
     }
     const arrow = svg('svg',{id:'logyq-guide-arrow','aria-hidden':'true'})
     const defs = svg('defs',{},arrow)
