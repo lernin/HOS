@@ -623,14 +623,31 @@ function bindChipPointerPlace() {
   }
 
   const chipUnderPoint = (x, y) => {
-    if (typeof document.elementsFromPoint !== 'function') return null
-    const stack = document.elementsFromPoint(x, y) || []
-    for (const el of stack) {
-      const chip = el?.closest?.('.chip')
-      if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') continue
-      return chip
+    if (typeof document.elementsFromPoint === 'function') {
+      const stack = document.elementsFromPoint(x, y) || []
+      for (const el of stack) {
+        const chip = el?.closest?.('.chip')
+        if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') continue
+        return chip
+      }
     }
-    return null
+    // Game pieces are intentionally forgiving: the visible card is smaller
+    // than a child's finger target. Pick the nearest card within a generous halo.
+    if (!document.body.classList.contains('logyq-game')) return null
+    const halo = 26
+    let best = null
+    let bestDistance = Infinity
+    for (const chip of dock.querySelectorAll('.chip')) {
+      if (chip.id === 'logyq-bank-all') continue
+      const rect = chip.getBoundingClientRect?.()
+      if (!rect || rect.width < 1 || rect.height < 1) continue
+      const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0
+      const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0
+      if (dx > halo || dy > halo) continue
+      const distance = Math.hypot(dx, dy)
+      if (distance < bestDistance) { best = chip; bestDistance = distance }
+    }
+    return best
   }
 
   dock.addEventListener('pointerdown', (event) => {
@@ -638,8 +655,6 @@ function bindChipPointerPlace() {
     const direct = event.target?.closest?.('.chip')
     const chip = chipUnderPoint(event.clientX, event.clientY) || direct
     if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') return
-    const rect = chip.getBoundingClientRect?.()
-    if (rect && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) return
     const word = chip.textContent.trim()
     if (!word) return
     session = { pointerId: event.pointerId, word, x: event.clientX, y: event.clientY, dragging: false, chip }
