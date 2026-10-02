@@ -233,10 +233,10 @@
     resolve(value || null)
   }
 
-  function showLibrary() {
+  function showLibrary(shelf = 'maps') {
     document.body.classList.add('logyq-home')
     document.body.classList.toggle('logyq-map-open', !!app.hasOpenMap)
-    setHomeTab('maps')
+    setHomeTab(shelf)
     ui.library.classList.add('is-open')
     ui.library.setAttribute('aria-hidden', 'false')
   }
@@ -984,7 +984,7 @@
     if (recovered) localStorage.removeItem(PENDING_KEY)
     app.hasOpenMap = false
     document.body.classList.remove('logyq-map-open')
-    showLibrary()
+    showLibrary('game')
     app.libraryStatus = 'loading'
     ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
     await refreshLibrary()

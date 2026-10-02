@@ -759,8 +759,28 @@
               <ol id="logyq-level-path"></ol>
             </div>
             <div id="logyq-game-levels" role="tabpanel" aria-labelledby="logyq-tab-game" hidden>
-              <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
-              <ol id="logyq-game-path"></ol>
+              <div id="logyq-game-trail" aria-label="Forest puzzle trail">
+                <div id="logyq-trail-world" tabindex="0" role="region" aria-label="Scrollable forest level map">
+                  <div id="logyq-trail-map">
+                    <svg id="logyq-trail-path" aria-hidden="true" preserveAspectRatio="none"></svg>
+                    <div id="logyq-trail-stars" aria-label="Puzzle levels"></div>
+                  </div>
+                </div>
+                <div class="logyq-trail-heading">
+                  <h3>LOGYQ</h3>
+                  <span id="logyq-trail-leaves" aria-label="0 puzzles solved">🍃 0</span>
+                </div>
+                <div class="logyq-trail-actions">
+                  <p id="logyq-trail-caption">Your next puzzle is waiting</p>
+                  <button type="button" id="logyq-trail-continue">Continue</button>
+                  <button type="button" id="logyq-trail-all-levels" aria-controls="logyq-trail-drawer" aria-expanded="false">All levels</button>
+                </div>
+                <div id="logyq-trail-drawer" hidden>
+                  <div class="logyq-trail-drawer-head"><strong>Choose a puzzle</strong><button type="button" id="logyq-trail-close-levels">Close</button></div>
+                  <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
+                  <ol id="logyq-game-path"></ol>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -4787,10 +4807,10 @@
     resolve(value || null)
   }
 
-  function showLibrary() {
+  function showLibrary(shelf = 'maps') {
     document.body.classList.add('logyq-home')
     document.body.classList.toggle('logyq-map-open', !!app.hasOpenMap)
-    setHomeTab('maps')
+    setHomeTab(shelf)
     ui.library.classList.add('is-open')
     ui.library.setAttribute('aria-hidden', 'false')
   }
@@ -5538,7 +5558,7 @@
     if (recovered) localStorage.removeItem(PENDING_KEY)
     app.hasOpenMap = false
     document.body.classList.remove('logyq-map-open')
-    showLibrary()
+    showLibrary('game')
     app.libraryStatus = 'loading'
     ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
     await refreshLibrary()
@@ -7360,6 +7380,86 @@
     }
   }
 
+  let trailReturnTop = null
+  function trailWindow(progress) {
+    const choice = chooseNext(progress, null)
+    const current = choice.level || gameLevels[0]
+    return { current, levels: gameLevels, choice }
+  }
+
+  function trailPoint(index) {
+    return { x: 200 + 68 * Math.sin(index * .93), y: 190 + index * 124 }
+  }
+
+  function trailPath(count) {
+    if (!count) return ''
+    const first = trailPoint(0)
+    let route = `M ${first.x} ${first.y}`
+    for (let index = 1; index < count; index++) {
+      const before = trailPoint(index - 1)
+      const next = trailPoint(index)
+      route += ` C ${before.x} ${before.y + 62}, ${next.x} ${next.y - 62}, ${next.x} ${next.y}`
+    }
+    return route
+  }
+
+  function renderGameTrail(progress) {
+    const stars = document.getElementById('logyq-trail-stars')
+    if (!stars) return
+    const map = document.getElementById('logyq-trail-map')
+    const path = document.getElementById('logyq-trail-path')
+    const viewport = document.getElementById('logyq-trail-world')
+    const { current, levels } = trailWindow(progress)
+    const height = trailPoint(levels.length - 1).y + 210
+    if (map) map.style.height = height + 'px'
+    if (path) {
+      path.setAttribute('viewBox', `0 0 400 ${height}`)
+      const route = trailPath(levels.length)
+      path.innerHTML = `<path class="trail-border" d="${route}"/><path class="trail-earth" d="${route}"/>`
+    }
+    const solved = gameLevels.filter((level) => progress[level.id]).length
+    const leaves = document.getElementById('logyq-trail-leaves')
+    if (leaves) {
+      leaves.textContent = '🍃 ' + solved
+      leaves.setAttribute('aria-label', solved + ' puzzles solved')
+    }
+    const caption = document.getElementById('logyq-trail-caption')
+    if (caption) caption.textContent = 'Next: Puzzle ' + (gameLevels.indexOf(current) + 1)
+    stars.replaceChildren(...levels.map((level, index) => {
+      const number = index + 1
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'logyq-trail-star' + (progress[level.id] ? ' is-cleared' : '') +
+        (level.id === current.id ? ' is-current' : '')
+      button.dataset.trailLevel = level.id
+      const point = trailPoint(index)
+      button.style.left = (point.x / 4) + '%'
+      button.style.top = point.y + 'px'
+      button.setAttribute('aria-label', 'Puzzle ' + number + (progress[level.id] ? ', completed' : ', ready'))
+      if (level.id === current.id) button.setAttribute('aria-current', 'step')
+      const icon = document.createElement('span')
+      icon.className = 'star-icon'
+      icon.setAttribute('aria-hidden', 'true')
+      icon.textContent = '★'
+      const label = document.createElement('span')
+      label.className = 'star-number'
+      label.setAttribute('aria-hidden', 'true')
+      label.textContent = String(number)
+      button.append(icon, label)
+      return button
+    }))
+    if (viewport) {
+      const currentIndex = Math.max(0, gameLevels.indexOf(current))
+      const returnTop = trailReturnTop
+      trailReturnTop = null
+      const centerCurrent = () => {
+        viewport.scrollTop = returnTop ?? Math.max(0, trailPoint(currentIndex).y - viewport.clientHeight * .42)
+      }
+      centerCurrent()
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(centerCurrent)
+    }
+  }
+
   function renderGamePath() {
     const path = document.getElementById('logyq-game-path')
     if (!path) return
@@ -7377,6 +7477,7 @@
         level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
     }
     path.innerHTML = html
+    renderGameTrail(progress)
   }
 
   function ensureGamePaint() {
@@ -7841,11 +7942,41 @@
     gameStatus('Not yet. Only the physical color contacts count.')
   }
 
+  function openTrailLevel(level, opts) {
+    if (!level) return
+    trailReturnTop = document.getElementById('logyq-trail-world')?.scrollTop ?? null
+    beginGameLevel(level, opts)
+  }
+
+  const trailDrawer = document.getElementById('logyq-trail-drawer')
+  const allLevels = document.getElementById('logyq-trail-all-levels')
+  function setTrailDrawer(open) {
+    if (!trailDrawer || !allLevels) return
+    trailDrawer.hidden = !open
+    allLevels.setAttribute('aria-expanded', String(open))
+    if (open) document.getElementById('logyq-trail-close-levels')?.focus()
+    else allLevels.focus()
+  }
+  document.getElementById('logyq-trail-stars')?.addEventListener('click', (event) => {
+    const star = event.target.closest('[data-trail-level]')
+    const level = gameLevels.find((item) => item.id === star?.dataset.trailLevel)
+    if (!level) return
+    const choice = trailWindow(gameProgress()).choice
+    openTrailLevel(level, { levelUp: choice.leveledUp && choice.level?.id === level.id })
+  })
+  document.getElementById('logyq-trail-continue')?.addEventListener('click', () => {
+    const choice = trailWindow(gameProgress()).choice
+    openTrailLevel(choice.level, { levelUp: choice.leveledUp })
+  })
+  allLevels?.addEventListener('click', () => setTrailDrawer(true))
+  document.getElementById('logyq-trail-close-levels')?.addEventListener('click', () => setTrailDrawer(false))
+
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-game-level]')
     if (!button) return
     const index = gameLevels.findIndex((level) => level.id === button.dataset.gameLevel)
     if (index < 0) return
+    setTrailDrawer(false)
     beginGameLevel(gameLevels[index])
   })
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
@@ -7858,7 +7989,7 @@
     beginGameLevel(choice.level, { levelUp: choice.leveledUp })
   })
   document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
-    openLibrary().then(() => setHomeTab('game'))
+    openLibrary()
   })
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('pointerdown', event => {
@@ -7884,7 +8015,7 @@
   }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
-    recordSolve, chooseNext, presentSolved, layoutBudget: GAME_LAYOUT,
+    recordSolve, chooseNext, trailWindow, presentSolved, layoutBudget: GAME_LAYOUT,
     challengeLayoutBudget: CHALLENGE_LAYOUT, measureSolved: layoutSolvedTree, returnBranch: returnGameBranch,
   }
   // FOLDER_PURE_START

@@ -61,8 +61,28 @@
               <ol id="logyq-level-path"></ol>
             </div>
             <div id="logyq-game-levels" role="tabpanel" aria-labelledby="logyq-tab-game" hidden>
-              <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
-              <ol id="logyq-game-path"></ol>
+              <div id="logyq-game-trail" aria-label="Forest puzzle trail">
+                <div id="logyq-trail-world" tabindex="0" role="region" aria-label="Scrollable forest level map">
+                  <div id="logyq-trail-map">
+                    <svg id="logyq-trail-path" aria-hidden="true" preserveAspectRatio="none"></svg>
+                    <div id="logyq-trail-stars" aria-label="Puzzle levels"></div>
+                  </div>
+                </div>
+                <div class="logyq-trail-heading">
+                  <h3>LOGYQ</h3>
+                  <span id="logyq-trail-leaves" aria-label="0 puzzles solved">🍃 0</span>
+                </div>
+                <div class="logyq-trail-actions">
+                  <p id="logyq-trail-caption">Your next puzzle is waiting</p>
+                  <button type="button" id="logyq-trail-continue">Continue</button>
+                  <button type="button" id="logyq-trail-all-levels" aria-controls="logyq-trail-drawer" aria-expanded="false">All levels</button>
+                </div>
+                <div id="logyq-trail-drawer" hidden>
+                  <div class="logyq-trail-drawer-head"><strong>Choose a puzzle</strong><button type="button" id="logyq-trail-close-levels">Close</button></div>
+                  <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
+                  <ol id="logyq-game-path"></ol>
+                </div>
+              </div>
             </div>
           </div>
         </section>

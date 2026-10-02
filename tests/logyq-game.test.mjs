@@ -235,8 +235,14 @@ function loadGameFragment() {
       innerHTML: '',
       textContent: '',
       dataset: {},
+      children: [],
+      attributes: {},
       listeners: {},
       addEventListener(type, fn) { (listeners[id + ':' + type] ||= []).push(fn) },
+      setAttribute(name, value) { this.attributes[name] = String(value) },
+      append(...nodes) { this.children.push(...nodes) },
+      replaceChildren(...nodes) { this.children = nodes },
+      focus() {},
       querySelector() { return null },
       insertBefore() {},
       firstChild: null,
@@ -254,6 +260,7 @@ function loadGameFragment() {
         },
       },
       getElementById(id) { return elements[id] ||= el(id) },
+      createElement(tag) { return el(tag) },
       createElementNS() {
         return { setAttribute() {}, appendChild() {}, querySelector() { return null } }
       },
@@ -283,6 +290,82 @@ function loadGameFragment() {
   runInNewContext(readFileSync(new URL('preview/10-game.js', root), 'utf8'), sandbox)
   return { sandbox, elements, listeners, store }
 }
+
+test('forest map lays every puzzle on one scrollable route and centers the next puzzle', () => {
+  const { sandbox, elements, store } = loadGameFragment()
+  const game = sandbox.preview.game
+  const first = game.trailWindow({})
+  assert.equal(first.current.id, game.levels[0].id)
+  assert.equal(first.levels.length, 159)
+  sandbox.document.getElementById('logyq-trail-world').clientHeight = 600
+  game.render()
+  assert.equal(elements['logyq-trail-stars'].children.length, 159)
+  assert.ok(Number.parseFloat(elements['logyq-trail-stars'].children[3].style.top) >
+    Number.parseFloat(elements['logyq-trail-stars'].children[2].style.top))
+  assert.match(elements['logyq-trail-path'].innerHTML, /<path/)
+
+  const progress = game.recordSolve({}, game.levels[0].id, 0)
+  const second = game.trailWindow(progress)
+  assert.equal(second.current.id, game.levels[1].id)
+  assert.equal(second.levels[0].id, game.levels[0].id)
+
+  const later = game.trailWindow({ ...progress, _adaptive: { clean: 0, tier: 4, played: {} } })
+  assert.equal(later.current.tier, 4)
+  assert.equal(later.levels.length, 159)
+  assert.ok(later.levels.some(level => level.id === later.current.id))
+  store.logyq_game_progress_v2 = JSON.stringify({ ...progress, _adaptive: { clean: 0, tier: 4, played: {} } })
+  game.render()
+  assert.ok(elements['logyq-trail-world'].scrollTop > 1000)
+})
+
+test('forest map centers progress after the home dialog becomes visible', () => {
+  const { sandbox, elements, store } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  store.logyq_game_progress_v2 = JSON.stringify({ _adaptive: { clean: 0, tier: 4, played: {} } })
+  let frame
+  sandbox.requestAnimationFrame = callback => { frame = callback }
+  sandbox.preview.game.render()
+  assert.equal(typeof frame, 'function')
+  elements['logyq-trail-world'].clientHeight = 600
+  frame()
+  assert.ok(elements['logyq-trail-world'].scrollTop > 1000)
+  assert.equal(elements['logyq-trail-stars'].children.length, levels.length)
+})
+
+test('opening a distant map star restores the same scroll position on return', () => {
+  const { sandbox, elements, listeners } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  sandbox.preview.game.render()
+  const viewport = elements['logyq-trail-world']
+  viewport.clientHeight = 600
+  viewport.scrollTop = 1400
+  const star = { dataset: { trailLevel: levels[9].id } }
+  listeners['logyq-trail-stars:click'][0]({ target: { closest: () => star } })
+  assert.equal(sandbox.app.game.id, levels[9].id)
+  viewport.scrollTop = 0
+  sandbox.preview.game.render()
+  assert.equal(viewport.scrollTop, 1400)
+})
+
+test('Back to levels does not render the map twice and lose its return position', async () => {
+  const { sandbox, elements, listeners } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  sandbox.preview.game.render()
+  const viewport = elements['logyq-trail-world']
+  viewport.clientHeight = 600
+  viewport.scrollTop = 1400
+  const star = { dataset: { trailLevel: levels[9].id } }
+  listeners['logyq-trail-stars:click'][0]({ target: { closest: () => star } })
+  viewport.scrollTop = 0
+  sandbox.openLibrary = () => {
+    sandbox.preview.game.render()
+    return Promise.resolve()
+  }
+  sandbox.setHomeTab = () => sandbox.preview.game.render()
+  listeners['logyq-game-levels-button:click'][0]()
+  await Promise.resolve()
+  assert.equal(viewport.scrollTop, 1400)
+})
 
 test('every game level is selectable without clearing an earlier one', () => {
   const { sandbox, elements, listeners } = loadGameFragment()
