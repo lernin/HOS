@@ -55,6 +55,7 @@
       return
     }
     if (app.curriculum) {
+      window.LOGYQGameGuide?.hide()
       setSaveState('saved')
       maybeCurriculumClear(snapshot)
       return
