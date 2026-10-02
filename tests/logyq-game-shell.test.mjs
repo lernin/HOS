@@ -195,8 +195,8 @@ test('game interaction uses forgiving bank grab and return targets plus double-t
   const dock = read('../public/logyq/js/engine/14-word-dock.js')
   const preview = read('../public/logyq/js/preview.js')
   assert.match(dock, /const halo = 26/)
-  assert.match(preview, /const slack = directPuzzlePlay\\(doc\\) \\? 58 : 28/)
-  assert.match(preview, /if \\(directPuzzlePlay\\(doc\\)\\) \\{\\s*drag\\.bankArmed = true/s)
+  assert.match(preview, /const slack = directPuzzlePlay\(doc\) \\? 58 : 28/)
+  assert.match(preview, /if \(directPuzzlePlay\(doc\)\\) \{\s*drag\.bankArmed = true/s)
   assert.match(preview, /win\.__logyqGameReturnToBank\?\.\(uid\)/)
 })
 
