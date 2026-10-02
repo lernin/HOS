@@ -52,10 +52,11 @@
       return context.state === 'running'
     } catch (_error) { return false }
   }
-  function note(frequency, at, length, volume, type = 'sine') {
+  function note(frequency, at, length, volume, type = 'sine', endFrequency = null) {
     const voice = context.createOscillator(), envelope = context.createGain()
     voice.type = type
     voice.frequency.setValueAtTime(frequency, at)
+    if (Number.isFinite(endFrequency)) voice.frequency.exponentialRampToValueAtTime(endFrequency, at + length)
     envelope.gain.setValueAtTime(0.0001, at)
     envelope.gain.linearRampToValueAtTime(volume, at + 0.006)
     envelope.gain.exponentialRampToValueAtTime(0.0001, at + length)
@@ -64,8 +65,30 @@
     voice.onended = () => { voices.delete(voice); voice.disconnect(); envelope.disconnect() }
     voice.start(at); voice.stop(at + length + 0.01)
   }
-  function play(kind) {
-    if (!on() || context?.state !== 'running') return false
+  function clap(at, strength = 0.09) {
+    const length = 0.075
+    const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * length), context.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < data.length; i++) {
+      const t = i / data.length
+      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, 7)
+    }
+    const source = context.createBufferSource()
+    const band = context.createBiquadFilter()
+    const envelope = context.createGain()
+    source.buffer = buffer
+    band.type = 'bandpass'
+    band.frequency.value = 1500 + Math.random() * 900
+    band.Q.value = 0.7
+    envelope.gain.setValueAtTime(strength, at)
+    envelope.gain.exponentialRampToValueAtTime(0.0001, at + length)
+    source.connect(band); band.connect(envelope); envelope.connect(master)
+    voices.add(source)
+    source.onended = () => { voices.delete(source); source.disconnect(); band.disconnect(); envelope.disconnect() }
+    source.start(at); source.stop(at + length)
+  }
+  function perform(kind) {
+    if (!on() || !context || context.state !== 'running') return false
     try {
       const now = context.currentTime + 0.005
       if (kind === 'drop') {
@@ -73,15 +96,30 @@
         lastDrop = now
         note(620, now, 0.065, 0.04)
         note(180, now, 0.085, 0.025, 'triangle')
+      } else if (kind === 'celebrate') {
+        // Bright, childlike "yaaay" gesture plus a compact applause burst.
+        note(420, now, 0.42, 0.055, 'triangle', 760)
+        note(520, now + 0.03, 0.38, 0.045, 'sine', 920)
+        note(660, now + 0.08, 0.34, 0.035, 'triangle', 1040)
+        ;[0.02,0.08,0.14,0.20,0.28,0.36,0.45,0.56].forEach((offset, i) =>
+          clap(now + offset, 0.055 + (i % 3) * 0.012))
+        ;[783.99, 987.77, 1174.66].forEach((frequency, i) =>
+          note(frequency, now + 0.14 + i * 0.09, 0.34, 0.04))
       } else {
         [523.25, 659.25, 783.99].forEach((frequency, i) => note(frequency, now + i * 0.12, 0.42, 0.06))
       }
       return true
     } catch (_error) { return false }
   }
+  function play(kind) {
+    if (!on() || !Audio) return false
+    if (context?.state === 'running') return perform(kind)
+    unlock().then((ready) => { if (ready) perform(kind) }).catch(() => {})
+    return true
+  }
   window.LOGYQGameSound = Object.freeze({
     supported:!!Audio, enabled:on, volume:() => volume, setVolume, setEnabled, unlock, stop,
-    drop:() => play('drop'), complete:() => play('complete'),
+    drop:() => play('drop'), complete:() => play('complete'), celebrate:() => play('celebrate'),
   })
 
   let musicVolume = DEFAULT_MUSIC_VOLUME
