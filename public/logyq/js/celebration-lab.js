@@ -95,7 +95,7 @@
       #logyq-celebration-lab[hidden]{display:none!important}.logyq-celebration-card{box-sizing:border-box;width:min(680px,100%);max-height:min(820px,calc(100vh - 32px));overflow:auto;padding:18px;border-radius:24px;background:#fff;color:#0f172a;box-shadow:0 24px 70px rgba(15,23,42,.3);font:14px/1.35 system-ui}
       .logyq-celebration-card header{display:flex;align-items:center;justify-content:space-between}.logyq-celebration-card h2{margin:0;font-size:23px}.logyq-celebration-card header button{width:42px;height:42px;border:0;border-radius:12px;background:#f1f5f9;font-size:26px}.logyq-celebration-note{color:#64748b}
       .logyq-celebration-upload{display:grid;gap:10px;padding:14px;border-radius:17px;background:#f8fafc}.logyq-celebration-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.logyq-celebration-grid label,.logyq-celebration-mode{display:grid;gap:5px;font-weight:700}.logyq-celebration-card select,.logyq-celebration-card input[type=file]{min-height:42px;border:1px solid #cbd5e1;border-radius:11px;background:#fff;padding:8px}.logyq-celebration-upload>button{min-height:46px;border:0;border-radius:13px;background:#0f172a;color:#fff;font-weight:800}
-      .logyq-celebration-mode{margin:14px 0}.logyq-celebration-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:11px 0;border-top:1px solid #e2e8f0}.logyq-celebration-row strong{display:block;overflow:hidden;text-overflow:ellipsis}.logyq-celebration-tags{font-size:12px;color:#64748b}.logyq-celebration-actions{display:flex;gap:6px;align-items:center}.logyq-celebration-actions button{min-height:38px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;padding:0 11px;font-weight:700}.logyq-celebration-actions button[data-delete]{color:#991b1b}
+      .logyq-celebration-mode{margin:14px 0}.logyq-celebration-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:11px 0;border-top:1px solid #e2e8f0}.logyq-celebration-row strong{display:block;overflow:hidden;text-overflow:ellipsis}.logyq-celebration-tags{font-size:12px;color:#64748b}.logyq-celebration-edit{display:flex;gap:5px;margin-top:7px;flex-wrap:wrap}.logyq-celebration-edit select{min-height:34px;padding:4px 6px;font-size:12px}.logyq-celebration-actions{display:flex;gap:6px;align-items:center}.logyq-celebration-actions button{min-height:38px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;padding:0 11px;font-weight:700}.logyq-celebration-actions button[data-delete]{color:#991b1b}
       @media(max-width:520px){.logyq-celebration-grid{grid-template-columns:1fr}.logyq-celebration-row{grid-template-columns:1fr}.logyq-celebration-actions{flex-wrap:wrap}}
     `
     document.head.appendChild(style)
@@ -120,10 +120,14 @@
     list.innerHTML=catalog.length?'':'<p>No recordings yet. Upload a few above.</p>'
     for(const s of catalog){
       const row=document.createElement('div');row.className='logyq-celebration-row'
-      row.innerHTML=`<div><strong></strong><span class="logyq-celebration-tags"></span></div><div class="logyq-celebration-actions"><button type="button" data-play>▶ Play</button><button type="button" data-default>Use this</button><button type="button" data-delete>Delete</button></div>`
+      row.innerHTML=`<div><strong></strong><span class="logyq-celebration-tags"></span><div class="logyq-celebration-edit"><select data-category><option value="yay">Yay</option><option value="applause">Applause</option><option value="big_cheer">Big cheer</option><option value="warm">Warm</option><option value="funny">Funny</option></select><select data-difficulty><option value="any">Any level</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="vicious">Vicious</option></select><select data-intensity><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div></div><div class="logyq-celebration-actions"><button type="button" data-play>▶ Play</button><button type="button" data-save>Save</button><button type="button" data-default>Use this</button><button type="button" data-delete>Delete</button></div>`
       row.querySelector('strong').textContent=s.name
       row.querySelector('.logyq-celebration-tags').textContent=`${s.category.replace('_',' ')} · intensity ${s.intensity} · ${s.difficulty}`
+      row.querySelector('[data-category]').value=s.category
+      row.querySelector('[data-difficulty]').value=s.difficulty
+      row.querySelector('[data-intensity]').value=String(s.intensity)
       row.querySelector('[data-play]').onclick=()=>play(s)
+      row.querySelector('[data-save]').onclick=()=>saveMeta(s,row)
       row.querySelector('[data-default]').onclick=()=>setMode('id:'+s.id)
       row.querySelector('[data-delete]').onclick=()=>remove(s)
       list.appendChild(row)
@@ -155,6 +159,14 @@
       done++
     }
     status.textContent=`Uploaded ${done} file${done===1?'':'s'}.`;input.value='';loaded=false;await load(true)
+  }
+  async function saveMeta(sound,row){
+    const p=pin();if(!p)return
+    const body={id:sound.id,category:row.querySelector('[data-category]').value,difficulty:row.querySelector('[data-difficulty]').value,intensity:Number(row.querySelector('[data-intensity]').value)}
+    const res=await fetch(API,{method:'PATCH',headers:{'content-type':'application/json','x-review-pin':p},body:JSON.stringify(body)})
+    if(res.status===401){try{localStorage.removeItem(PIN_KEY)}catch{};alert('Wrong Lab PIN.');return}
+    if(!res.ok){alert('Save failed.');return}
+    loaded=false;await load(true)
   }
   async function remove(sound){
     if(!confirm('Delete “'+sound.name+'”?'))return
