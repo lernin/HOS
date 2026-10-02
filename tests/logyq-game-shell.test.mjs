@@ -317,3 +317,58 @@ test('Curriculum first-contact guide disappears after the child moves a piece', 
   const persistence = read('../public/logyq/js/preview/06-persistence.js')
   assert.match(persistence, /if \(app\.curriculum\) \{\s*window\.LOGYQGameGuide\?\.hide\(\)/s)
 })
+
+
+test('Curriculum opens with four explicit first-contact teaching moves', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const start = source.indexOf('// CURRICULUM_PURE_START')
+  const end = source.indexOf('// CURRICULUM_PURE_END')
+  const api = new Function(source.slice(start, end) + '; return { curriculumPack };')()
+  const levels = api.curriculumPack().slice(0, 4)
+  assert.deepEqual(levels.map(level => level.id), ['fruit', 'fruit-banana', 'food-above-fruit', 'fruit-siblings'])
+  assert.deepEqual(levels.map(level => level.guide), ['below', 'below', 'above', 'sibling'])
+  assert.deepEqual(levels[0].start, { name: 'fruit' })
+  assert.deepEqual(levels[0].bank, ['apple'])
+  assert.deepEqual(levels[1].start, { name: 'fruit' })
+  assert.deepEqual(levels[1].bank, ['banana'])
+  assert.deepEqual(levels[2].start, { name: 'fruit' })
+  assert.deepEqual(levels[2].bank, ['food'])
+  assert.deepEqual(levels[3].start, { name: 'fruit', children: [{ name: 'apple' }] })
+  assert.deepEqual(levels[3].bank, ['banana'])
+})
+
+test('Curriculum seed uses each lesson start tree and explicit Word Bank', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /const root = structuredClone\(level\.start \|\| \{ name: String\(level\.tree\.name/)
+  assert.match(source, /state\.wordBank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /function showCurriculumGuide\(level\)/)
+  assert.match(source, /guide: level\.guide/)
+})
+
+test('sibling guide can target a named child in Curriculum', () => {
+  const guide = read('../public/logyq/js/game-guide.js')
+  assert.match(guide, /function sameNode\(node, ref\)/)
+  assert.match(guide, /const child = nodes\.find\(node => sameNode\(node, level\.tree\.children\[0\]\)\)/)
+})
+
+test('Curriculum auto-fits after every structural change', () => {
+  const persistence = read('../public/logyq/js/preview/06-persistence.js')
+  assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*settleCurriculumTree\(\)/)
+})
+
+test('Curriculum completion uses a Next button instead of Check', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.doesNotMatch(ui, /id="logyq-curriculum-check"/)
+  assert.match(ui, /id="logyq-curriculum-next" hidden>Next<\/button>/)
+  assert.match(source, /nextButton\.hidden = false/)
+  assert.match(source, /document\.getElementById\('logyq-curriculum-next'\)\?\.addEventListener\('click'/)
+})
+
+test('Curriculum Word Bank is bare with words and a compact square when empty', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*background:transparent[^}]*border:0[^}]*box-shadow:none/s)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty[^\{]*\{[^}]*display:flex!important[^}]*width:64px[^}]*min-width:64px[^}]*height:64px/s)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:''/)
+  assert.match(styles, /body\.logyq-curriculum:not\(\.logyq-home\) #logyq-map-title\{display:none!important\}/)
+})
