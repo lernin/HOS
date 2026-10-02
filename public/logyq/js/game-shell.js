@@ -190,5 +190,102 @@
     })
   }
 
+
+  function installCurriculumShell() {
+    const bar = document.getElementById('logyq-curriculum-bar')
+    if (!bar || document.getElementById('logyq-curriculum-shell-panel')) return
+
+    const legacyStatus = document.getElementById('logyq-curriculum-status')
+    const legacyNext = document.getElementById('logyq-curriculum-next')
+    const legacyLevels = document.getElementById('logyq-curriculum-levels')
+    if (!legacyStatus || !legacyNext || !legacyLevels) return
+
+    const button = (id, label, ariaLabel) => {
+      const element = document.createElement('button')
+      element.type = 'button'
+      element.id = id
+      element.textContent = label
+      element.setAttribute('aria-label', ariaLabel)
+      return element
+    }
+
+    const back = button('logyq-curriculum-back', 'Back', 'Back to curriculum levels')
+    const title = document.createElement('strong')
+    title.id = 'logyq-curriculum-lesson'
+    title.textContent = 'Lesson'
+    const pause = button('logyq-curriculum-pause', '⚙', 'Curriculum settings')
+    pause.setAttribute('aria-expanded', 'false')
+    bar.replaceChildren(back, title, pause)
+
+    const hiddenControls = document.createElement('div')
+    hiddenControls.id = 'logyq-curriculum-legacy-controls'
+    hiddenControls.hidden = true
+    hiddenControls.append(legacyLevels)
+    bar.after(legacyStatus, legacyNext, hiddenControls)
+
+    const panel = document.createElement('div')
+    panel.id = 'logyq-curriculum-shell-panel'
+    panel.hidden = true
+    panel.setAttribute('aria-hidden', 'true')
+    panel.innerHTML = `
+      <section class="logyq-game-pause-card" role="dialog" aria-modal="true" aria-labelledby="logyq-curriculum-shell-title">
+        <h2 id="logyq-curriculum-shell-title">Curriculum</h2>
+        <button type="button" id="logyq-curriculum-resume">Close</button>
+        <button type="button" id="logyq-curriculum-shell-levels">Levels</button>
+      </section>`
+    document.body.appendChild(panel)
+
+    const style = document.createElement('style')
+    style.id = 'logyq-curriculum-shell-style'
+    style.textContent = `
+      body.logyq-curriculum #logiq-mobile-header,body.logyq-curriculum>header,body.logyq-curriculum #logyq-map-title,body.logyq-curriculum #logiq-mobile-panel,body.logyq-curriculum #logyq-paint-strip,body.logyq-curriculum #logyq-warehouse,body.logyq-curriculum #logyq-bank-trash,body.logyq-curriculum #trash{display:none!important}
+      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:86px minmax(0,1fr) 48px;align-items:center;gap:6px;border:1px solid rgba(226,232,240,.92);border-radius:17px;background:rgba(255,255,255,.94);box-shadow:0 6px 22px rgba(15,23,42,.12);backdrop-filter:blur(12px)}
+      body.logyq-curriculum #logyq-curriculum-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#334155;font:650 14px/1 system-ui;touch-action:manipulation}
+      body.logyq-curriculum #logyq-curriculum-back{text-align:left;padding:0 10px}
+      body.logyq-curriculum #logyq-curriculum-pause{justify-self:end;width:42px;padding:0;font-size:18px}
+      body.logyq-curriculum #logyq-curriculum-lesson{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      body.logyq-curriculum #logyq-curriculum-status{position:fixed;z-index:72;top:calc(max(10px,env(safe-area-inset-top)) + 54px);left:18px;right:18px;margin:0;text-align:center;pointer-events:none;color:#64748b;font:600 12px/1.25 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      body.logyq-curriculum #logyq-curriculum-next{position:fixed;z-index:85;left:50%;transform:translateX(-50%);bottom:calc(32px + env(safe-area-inset-bottom));min-width:190px;min-height:56px;padding:0 30px;border:0;border-radius:18px;background:#0f172a;color:white;font:750 18px/1 system-ui;box-shadow:0 10px 30px rgba(15,23,42,.28);touch-action:manipulation}
+      body.logyq-curriculum #logyq-curriculum-next[hidden]{display:none!important}
+      #logyq-curriculum-shell-panel{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:22px;background:rgba(15,23,42,.28);backdrop-filter:blur(10px)}
+      #logyq-curriculum-shell-panel[hidden]{display:none!important}
+      body.logyq-curriculum.logyq-curriculum-paused svg#canvas,body.logyq-curriculum.logyq-curriculum-paused #Dock{pointer-events:none}
+    `
+    document.head.appendChild(style)
+
+    let focusReturn = null
+    const closePause = () => {
+      if (panel.hidden) return
+      panel.hidden = true
+      panel.setAttribute('aria-hidden', 'true')
+      pause.setAttribute('aria-expanded', 'false')
+      document.body.classList.remove('logyq-curriculum-paused')
+      focusReturn?.focus?.()
+      focusReturn = null
+    }
+    const openPause = () => {
+      if (!document.body.classList.contains('logyq-curriculum')) return
+      focusReturn = document.activeElement
+      panel.hidden = false
+      panel.setAttribute('aria-hidden', 'false')
+      pause.setAttribute('aria-expanded', 'true')
+      document.body.classList.add('logyq-curriculum-paused')
+      document.getElementById('logyq-curriculum-resume')?.focus()
+    }
+    const openLevels = () => {
+      closePause()
+      legacyLevels.click()
+    }
+
+    back.addEventListener('click', openLevels)
+    pause.addEventListener('click', openPause)
+    document.getElementById('logyq-curriculum-resume')?.addEventListener('click', closePause)
+    document.getElementById('logyq-curriculum-shell-levels')?.addEventListener('click', openLevels)
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !panel.hidden) { event.preventDefault(); closePause() }
+    })
+  }
+
   installGameShell()
+  installCurriculumShell()
 })()
