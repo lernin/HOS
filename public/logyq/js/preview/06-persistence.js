@@ -55,8 +55,10 @@
       return
     }
     if (app.curriculum) {
+      window.LOGYQGameGuide?.hide()
       setSaveState('saved')
       maybeCurriculumClear(snapshot)
+      settleCurriculumTree()
       return
     }
     if (app.applyingRemote) return

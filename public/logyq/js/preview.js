@@ -376,15 +376,18 @@
       .logyq-level.is-locked button{color:#94a3b8;cursor:not-allowed;box-shadow:none}
       .logyq-level.is-locked .logyq-level-num{background:#e2e8f0;color:#64748b}
       .logyq-level-lock{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
-      #logyq-curriculum-bar{position:fixed;z-index:42;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:14px;background:rgba(255,255,255,.96);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+      #logyq-curriculum-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;height:32px;box-sizing:border-box;display:none;align-items:center;gap:6px;padding:0 6px;border:1px solid #cbd5e1;border-radius:10px;background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.08);overflow:hidden}
       body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{display:flex}
-      #logyq-curriculum-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
+      #logyq-curriculum-status{margin:0;flex:1 1 auto;min-width:3.4em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650;line-height:1.1;color:#334155}
       #logyq-curriculum-status[data-tone="clear"]{color:#14532d}
       #logyq-curriculum-status[data-tone="wait"]{color:#64748b}
-      #logyq-curriculum-check,#logyq-curriculum-levels,#logyq-curriculum-mix{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
-      #logyq-curriculum-levels,#logyq-curriculum-mix{background:#fff;color:#14532d;border:1px solid #bbf7d0}
-      body.logyq-curriculum-gate:not(.logyq-curriculum-shuffling) #logyq-curriculum-mix,
-      body.logyq-curriculum-gate:not(.logyq-curriculum-shuffling) #logyq-curriculum-check{display:none}
+      #logyq-curriculum-next,#logyq-curriculum-levels{flex:none;border:1px solid #bbf7d0;border-radius:7px;background:#fff;color:#14532d;padding:3px 7px;font:750 12px/1 system-ui,sans-serif;cursor:pointer}
+      #logyq-curriculum-next{background:#16a34a;color:#fff;border-color:#16a34a}
+      #logyq-curriculum-next[hidden]{display:none!important}
+      body.logyq-curriculum:not(.logyq-home) #logyq-map-title{display:none!important}
+      @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+        body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{top:48px;left:8px;right:8px}
+      }
       #logyq-curriculum-gate{position:fixed;inset:0;z-index:41}
       #logyq-curriculum-gate[hidden]{display:none!important}
       body.logyq-home #logyq-curriculum-gate{display:none!important}
@@ -682,8 +685,11 @@
       body.logyq-game #logyq-bank-chips,body.logyq-curriculum-frozen #logyq-bank-chips{flex:0 1 auto;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
       body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{flex:0 0 auto;width:auto;max-width:none;min-height:44px;padding:7px 2px;touch-action:none}
       body.logyq-game #Dock.is-empty,body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
-      body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty,body.logyq-curriculum-frozen.v2-branch-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
-      body.logyq-game #Dock.is-empty #logyq-bank-chips::before,body.logyq-curriculum-frozen #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
+      body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
+      body.logyq-game #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
+      body.logyq-curriculum-frozen #Dock:not(.is-empty){min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible}
+      body.logyq-curriculum-frozen #Dock.is-empty{display:flex!important;width:64px;min-width:64px;max-width:64px;height:64px;min-height:64px;max-height:64px;padding:0;border:2px dashed rgba(100,116,139,.55);border-radius:16px;background:rgba(255,255,255,.42);box-shadow:none}
+      body.logyq-curriculum-frozen #Dock.is-empty #logyq-bank-chips::before{content:''}
       @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{max-width:640px}}
       @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
       #logyq-drag-guide{position:fixed;inset:0;z-index:6;pointer-events:none}
@@ -789,7 +795,7 @@
       </div>
       <div id="logyq-curriculum-bar">
         <p id="logyq-curriculum-status" role="status"></p>
-        <button type="button" id="logyq-curriculum-check">Check</button>
+        <button type="button" id="logyq-curriculum-next" hidden>Next</button>
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
       <div id="logyq-game-bar">
@@ -4664,8 +4670,10 @@
       return
     }
     if (app.curriculum) {
+      window.LOGYQGameGuide?.hide()
       setSaveState('saved')
       maybeCurriculumClear(snapshot)
+      settleCurriculumTree()
       return
     }
     if (app.applyingRemote) return
@@ -5606,9 +5614,17 @@
     return children.length ? { name, children } : { name }
   }
 
+  // First four lessons teach child, child, parent-above, then sibling placement.
   function curriculumPack() {
     return [
-      { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')) },
+      { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple')),
+        start: curriculumNode('fruit'), bank: ['apple'], guide: 'below' },
+      { id: 'fruit-banana', title: 'Fruit + Banana', tree: curriculumNode('fruit', curriculumNode('banana')),
+        start: curriculumNode('fruit'), bank: ['banana'], guide: 'below' },
+      { id: 'food-above-fruit', title: 'Food above Fruit', tree: curriculumNode('food', curriculumNode('fruit')),
+        start: curriculumNode('fruit'), bank: ['food'], guide: 'above' },
+      { id: 'fruit-siblings', title: 'Fruit siblings', tree: curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
+        start: curriculumNode('fruit', curriculumNode('apple')), bank: ['banana'], guide: 'sibling' },
       { id: 'food', title: 'Food', tree: curriculumNode('food',
         curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
         curriculumNode('meat', curriculumNode('chicken'), curriculumNode('beef'))) },
@@ -5782,11 +5798,11 @@
     const core = bridge.core
     const state = core?.state
     if (!level?.tree || !state || !window.d3) return false
-    const root = { name: String(level.tree.name ?? '').trim() }
+    const root = structuredClone(level.start || { name: String(level.tree.name ?? '').trim() })
     core.utils.assignUids(root)
     state.root = window.d3.hierarchy(root)
     core.utils.assignIds(state.root)
-    state.wordBank = curriculumWords(level.tree).slice(1)
+    state.wordBank = Array.isArray(level.bank) ? level.bank.slice() : curriculumWords(level.tree).slice(1)
     state.selectedUid = null
     state.history = []
     state.redo = []
@@ -5827,6 +5843,21 @@
     return { tree: removed === nextTree ? null : nextTree, bank: nextBank }
   }
 
+  function showCurriculumGuide(level) {
+    if (!level?.guide || !Array.isArray(level.bank) || !level.bank.length) {
+      window.LOGYQGameGuide?.hide()
+      return
+    }
+    const key = level.bank[0]
+    const guideLevel = {
+      guide: level.guide,
+      tree: structuredClone(level.start || { name: String(level.tree?.name ?? '').trim() }),
+      bank: [key],
+      bankCards: { [key]: { name: key } },
+    }
+    window.LOGYQGameGuide?.show(guideLevel, bridge.core)
+  }
+
   function beginCurriculumLevel(level) {
     if (!level) return
     leaveGamePlay()
@@ -5849,6 +5880,8 @@
       delete status.dataset.tone
       status.textContent = level.title
     }
+    const nextButton = document.getElementById('logyq-curriculum-next')
+    if (nextButton) nextButton.hidden = true
     if (bridge.core?.state) bridge.core.state.curriculumCameraLock = true
     window.__logyqCurriculumReturnToBank = (uid) => {
       const engine = bridge.core
@@ -5879,6 +5912,7 @@
     }
     renderCurriculumChrome()
     seedCurriculumRoot(level)
+    showCurriculumGuide(level)
     setSaveState('saved')
   }
 
@@ -5898,7 +5932,17 @@
     const status = document.getElementById('logyq-curriculum-status')
     if (status) {
       status.dataset.tone = 'clear'
-      status.textContent = next ? `${level.title} cleared. ${next.title} is open.` : `${level.title} cleared.`
+      status.textContent = `${level.title} cleared.`
+    }
+    const nextButton = document.getElementById('logyq-curriculum-next')
+    if (nextButton) {
+      if (next) {
+        nextButton.hidden = false
+        nextButton.dataset.nextLevel = next.id
+      } else {
+        nextButton.hidden = true
+        nextButton.dataset.nextLevel = ''
+      }
     }
     return true
   }
@@ -5926,7 +5970,11 @@
       if (!level || !curriculumUnlocked(index, readCurriculumProgress(), pack)) return
       beginCurriculumLevel(level)
     })
-    document.getElementById('logyq-curriculum-check')?.addEventListener('click', () => checkCurriculum())
+    document.getElementById('logyq-curriculum-next')?.addEventListener('click', (event) => {
+      const id = event.currentTarget?.dataset?.nextLevel
+      const next = id ? curriculumLevel(id) : null
+      if (app.curriculum?.cleared && next) beginCurriculumLevel(next)
+    })
     document.getElementById('logyq-curriculum-levels')?.addEventListener('click', () => {
       openLibrary().then(() => setHomeTab('curriculum'))
     })
