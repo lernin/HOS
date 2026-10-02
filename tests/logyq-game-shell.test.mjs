@@ -288,7 +288,7 @@ test('curriculum has no Mix control or shuffle phase', () => {
 test('curriculum recenters after structural changes', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   assert.match(source, /function settleCurriculumTree\(/)
-  assert.match(source, /treeManager\?\.settleRootAnchored\?\.\(\{ force: true, duration \}\)/)
+  assert.match(source, /treeManager\?\.fitGameBounds\?\.\(curriculumBounds\(root\), \{ duration \}\)/)
   assert.match(source, /engine\.wordDock\.render\(\)\s*settleCurriculumTree\(\)/)
 })
 
@@ -391,9 +391,9 @@ test('Curriculum Word Bank can insert a new root above the current root', () => 
 test('Curriculum uses the same clean shell pattern as Game', () => {
   const shell = read('../public/logyq/js/game-shell.js')
   assert.match(shell, /function installCurriculumShell\(\)/)
-  assert.match(shell, /id = 'logyq-curriculum-back'/)
+  assert.match(shell, /button\('logyq-curriculum-back', 'Back'/)
   assert.match(shell, /id = 'logyq-curriculum-lesson'/)
-  assert.match(shell, /id = 'logyq-curriculum-pause'/)
+  assert.match(shell, /button\('logyq-curriculum-pause', '⚙'/)
   assert.match(shell, /body\.logyq-curriculum:not\(\.logyq-home\) #logyq-curriculum-bar/)
   assert.match(shell, /body\.logyq-curriculum #logyq-curriculum-next\{position:fixed/)
 })
