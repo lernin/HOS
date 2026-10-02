@@ -111,3 +111,13 @@ test('grand foyer grass pockets are framed as intentional gardens',()=>{
  assert.equal(env.includes('[-8.5,11,1.9,2.35]'),true)
  assert.equal(env.includes('[10.5,11.5,1.8,2.75]'),true)
 })
+
+
+test('garden courtyard paving avoids near-coplanar grout geometry',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const kit=readFileSync(new URL('../src/experiences/estate/kit.ts',import.meta.url),'utf8')
+ assert.equal(env.includes("f.name==='Garden courtyard'?'courtyardPaving'"),true)
+ assert.equal(env.includes("f.name!=='Garden courtyard'"),true)
+ assert.equal(kit.includes('courtyardPaving'),true)
+ assert.equal(kit.includes('vec2 grid=vec2(p.x/2.8,p.z/1.65)'),true)
+})
