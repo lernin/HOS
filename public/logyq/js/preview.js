@@ -360,6 +360,7 @@
       }
       body.logyq-game svg#canvas g.node rect:not(.grabzone),
       body.logyq-mobile-v162.logyq-game.v2-branch-drag svg#canvas g.node rect:not(.grabzone){fill:var(--logyq-piece-fill,#fff)!important;stroke:#fff!important}
+      body.logyq-curriculum svg#canvas g.node rect:not(.grabzone){stroke:#fff!important}
       body.logyq-game svg#canvas .caret-dot{fill:#22c55e!important;stroke:#fff;stroke-width:2;pointer-events:none}
 
       #logyq-curriculum .logiq-empty p{margin:0}
