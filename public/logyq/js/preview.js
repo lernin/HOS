@@ -7771,7 +7771,7 @@
       }
       document.body.insertBefore(svg, document.getElementById('canvas'))
       gameArtElement = svg
-      if (animate) window.LOGYQGameSound?.complete()
+      if (animate) window.LOGYQGameSound?.celebrate?.() || window.LOGYQGameSound?.complete?.()
       document.body.classList.add('logyq-game-completion')
     }, delay)
   }
@@ -8051,6 +8051,7 @@
 
   function openTrailLevel(level, opts) {
     if (!level) return
+    window.LOGYQGameSound?.unlock?.()
     trailReturnTop = document.getElementById('logyq-trail-world')?.scrollTop ?? null
     beginGameLevel(level, opts)
   }
