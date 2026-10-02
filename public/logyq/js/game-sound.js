@@ -4,6 +4,7 @@
   const KEY = 'logyq_game_sound_v1'
   const VOLUME_KEY = 'logyq_game_sfx_volume_v1'
   const MUSIC_VOLUME_KEY = 'logyq_game_music_volume_v1'
+  const MUSIC_ENABLED_KEY = 'logyq_game_music_enabled_v1'
   const MUSIC_SOURCE = 'https://opengameart.org/sites/default/files/my_street.ogg'
   const DEFAULT_VOLUME = 0.55
   const DEFAULT_MUSIC_VOLUME = 0.16
@@ -84,7 +85,10 @@
   })
 
   let musicVolume = DEFAULT_MUSIC_VOLUME
+  let musicEnabled = true
   try {
+    const savedMusicEnabled = localStorage.getItem(MUSIC_ENABLED_KEY)
+    if (savedMusicEnabled !== null) musicEnabled = savedMusicEnabled !== 'off'
     const savedMusicVolume = localStorage.getItem(MUSIC_VOLUME_KEY)
     if (savedMusicVolume !== null && Number.isFinite(Number(savedMusicVolume))) {
       musicVolume = Math.max(0, Math.min(1, Number(savedMusicVolume)))
@@ -104,7 +108,7 @@
   }
   function playMusic() {
     const player = getMusicPlayer()
-    if (!player || !musicActive || musicPaused || musicVolume <= 0) return false
+    if (!player || !musicActive || musicPaused || !musicEnabled || musicVolume <= 0) return false
     player.volume = musicVolume
     try {
       const result = player.play()
@@ -120,6 +124,13 @@
     if (musicVolume === 0) musicPlayer?.pause()
     else playMusic()
     return musicVolume
+  }
+  function setMusicEnabled(value) {
+    musicEnabled = !!value
+    try { localStorage.setItem(MUSIC_ENABLED_KEY, musicEnabled ? 'on' : 'off') } catch (_error) {}
+    if (!musicEnabled) musicPlayer?.pause()
+    else playMusic()
+    return musicEnabled
   }
   function enterMusic() {
     musicActive = true
@@ -143,6 +154,8 @@
     supported: typeof window.Audio === 'function',
     source: MUSIC_SOURCE,
     volume: () => musicVolume,
+    enabled: () => musicEnabled,
+    setEnabled: setMusicEnabled,
     setVolume: setMusicVolume,
     enter: enterMusic,
     pause: pauseMusic,
