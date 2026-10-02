@@ -146,3 +146,56 @@ test('fill lights use stable selection and eased movement instead of per-frame n
  assert.equal(scene.includes('l.position.lerp'),true)
  assert.equal(scene.includes('locations.sort'),false)
 })
+
+
+test('arrival-court barrier uses charcoal stone rather than black basalt',()=>{
+ const kit=readFileSync(new URL('../src/experiences/estate/kit.ts',import.meta.url),'utf8')
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ assert.equal(kit.includes("charcoalRock:'#5a6261'"),true)
+ assert.equal(env.includes("700+i,'charcoalRock'"),true)
+ assert.equal(env.includes("900+i,'charcoalRock'"),true)
+})
+
+test('roofed house perimeter has no accidental wall gaps',()=>{
+ const roofed=plan.floors.filter(f=>f.roof)
+ const shell=[...plan.walls,...plan.glass]
+ const intended=[
+  {axis:'z',at:-12,a:-7,b:9,label:'great-room ocean opening'},
+  {axis:'x',at:-6,a:15,b:20,label:'foyer courtyard opening'},
+  {axis:'x',at:8,a:10,b:14,label:'foyer east garden opening'},
+  {axis:'z',at:24,a:-1.2,b:3.2,label:'main entrance'},
+  {axis:'x',at:-11,a:8,b:14,label:'kitchen garden opening'},
+  {axis:'x',at:-23,a:14,b:39,label:'west gallery courtyard opening'},
+  {axis:'z',at:39,a:-26,b:-23,label:'west garden path opening'},
+  {axis:'x',at:13,a:8,b:15,label:'east foyer garden opening'},
+  {axis:'z',at:-12,a:13,b:24,label:'east gallery terrace opening'},
+  {axis:'x',at:20,a:28,b:40,label:'arrival overlook with railing'},
+  {axis:'z',at:40,a:20,b:24,label:'east gallery outdoor end'},
+  {axis:'x',at:39,a:-5,b:-2,label:'primary terrace door'},
+  {axis:'z',at:-12,a:29,b:33,label:'primary ocean door'},
+  {axis:'x',at:24,a:40,b:49,label:'open-sided garden gallery'},
+  {axis:'z',at:49,a:24,b:27,label:'garden gallery garden end'},
+  {axis:'z',at:51,a:28,b:39,label:'garage door'},
+ ]
+ const insideRoofed=(x,z)=>roofed.some(r=>x>r.x1+.001&&x<r.x2-.001&&z>r.z1+.001&&z<r.z2-.001)
+ const covered=(axis,at,t)=>shell.some(w=>axis==='x'
+   ?Math.abs((w.x1+w.x2)/2-at)<.22&&t>=w.z1-.06&&t<=w.z2+.06
+   :Math.abs((w.z1+w.z2)/2-at)<.22&&t>=w.x1-.06&&t<=w.x2+.06)
+ const allowed=(axis,at,t)=>intended.some(o=>o.axis===axis&&Math.abs(o.at-at)<.01&&t>=o.a-.06&&t<=o.b+.06)
+ const misses=[]
+ for(const r of roofed){
+  const edges=[
+   {axis:'x',at:r.x1,a:r.z1,b:r.z2,ox:-.06,oz:0,room:r.name,side:'west'},
+   {axis:'x',at:r.x2,a:r.z1,b:r.z2,ox:.06,oz:0,room:r.name,side:'east'},
+   {axis:'z',at:r.z1,a:r.x1,b:r.x2,ox:0,oz:-.06,room:r.name,side:'south'},
+   {axis:'z',at:r.z2,a:r.x1,b:r.x2,ox:0,oz:.06,room:r.name,side:'north'},
+  ]
+  for(const e of edges)for(let t=e.a+.125;t<e.b;t+=.25){
+   const x=e.axis==='x'?e.at+e.ox:t+e.ox,z=e.axis==='z'?e.at+e.oz:t+e.oz
+   if(insideRoofed(x,z))continue
+   if(!covered(e.axis,e.at,t)&&!allowed(e.axis,e.at,t))misses.push(`${e.room} ${e.side} @ ${t.toFixed(2)}`)
+  }
+ }
+ assert.deepEqual(misses,[])
+ assert.equal(covered('x',8,26),true,'Library west wall above the entry stair is closed')
+})
