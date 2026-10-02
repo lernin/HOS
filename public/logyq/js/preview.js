@@ -7926,6 +7926,7 @@
     const upcoming = chooseNext(progress, level.id).level
     gameStatus(solvedCount >= gameLevels.length ? 'All ' + gameLevels.length + ' levels cleared.' : 'It fits!', true)
     document.getElementById('logyq-game-next').hidden = !upcoming
+    if (upcoming) scheduleGameCameraFit(40)
     scheduleGameCompletionArt()
     return true
   }
