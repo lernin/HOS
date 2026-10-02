@@ -6550,6 +6550,12 @@ centerOnSelected(opts = {}) {
       if (bar.height < frame.fullH * 0.45 && bar.bottom <= midY) top = Math.max(top, bar.bottom + gap)
       else if (bar.height < frame.fullH * 0.45 && bar.top >= midY) bottom = Math.min(bottom, bar.top - gap)
     }
+    const next = shownRect('logyq-game-next')
+    if (next && next.height < frame.fullH * 0.45) {
+      const midY = (top + bottom) / 2
+      if (next.bottom <= midY) top = Math.max(top, next.bottom + gap)
+      else if (next.top >= midY) bottom = Math.min(bottom, next.top - gap)
+    }
     const cluster = shownRect('logyq-corner-cluster')
     if (cluster && cluster.left > frame.fullW * 0.55 && cluster.width < frame.fullW * 0.4 && cluster.height > 40) {
       right = Math.min(right, cluster.left - gap)
