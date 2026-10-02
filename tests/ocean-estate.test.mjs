@@ -129,12 +129,14 @@ test('arrival court walkability reaches the visible round edge',()=>{
  assert.equal(plan.floorAt({x:19.8,z:41}),4.8,'east side of rendered circle is navigable')
 })
 
-test('entry portal is grounded and round court edge has a natural boulder cue',()=>{
+test('entry portal is grounded and round court edge has a continuous natural boulder barrier',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  assert.equal(env.includes('Massive stair-side abutments'),true)
  assert.equal(env.includes('supportBase=FLOOR-1.22'),true)
- assert.equal(env.includes('Natural boulder line marks the round court edge'),true)
- assert.equal(env.includes('19.42+wobble'),true)
+ assert.equal(env.includes('Dense natural boulder band marks the round court edge'),true)
+ assert.equal(env.includes('i<92'),true)
+ assert.equal(env.includes('19.46+wobble'),true)
+ assert.equal(env.includes('if(i%4===0)'),true)
 })
 
 test('fill lights use stable selection and eased movement instead of per-frame nearest swapping',()=>{
