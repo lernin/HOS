@@ -2370,7 +2370,7 @@ test('curriculum pack matches parent structure and ignores sibling order', () =>
   assert.match(source, /function seedCurriculumRoot/)
   assert.match(source, /state\.wordBank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
   assert.match(source, /function checkCurriculum/)
-  assert.match(source, /settleRootAnchored/)
+  assert.match(source, /fitGameBounds/)
   assert.match(source, /curriculumCameraLock/)
 })
 
