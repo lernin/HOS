@@ -150,6 +150,7 @@ test('game music is a quiet persistent loop that starts on entry and stops on ex
   const music = window.LOGYQGameMusic
   assert.equal(music.volume(), 0.16)
   assert.equal(music.source, 'https://opengameart.org/sites/default/files/my_street.ogg')
+  assert.equal(music.enabled(), true)
   music.enter()
   assert.equal(player.loop, true)
   assert.equal(player.volume, 0.16)
@@ -161,6 +162,12 @@ test('game music is a quiet persistent loop that starts on entry and stops on ex
   music.setVolume(0.23)
   assert.equal(player.volume, 0.23)
   assert.equal(values.get('logyq_game_music_volume_v1'), '0.23')
+  music.setEnabled(false)
+  assert.equal(music.enabled(), false)
+  assert.equal(values.get('logyq_game_music_enabled_v1'), 'off')
+  assert.equal(calls.at(-1), 'pause')
+  music.setEnabled(true)
+  assert.equal(calls.at(-1), 'play')
   music.leave()
   assert.equal(calls.at(-1), 'pause')
 })
@@ -172,4 +179,23 @@ test('solved game centering reserves the visible Next button safe area', () => {
   assert.match(engine, /shownRect\('logyq-game-next'\)/)
   assert.match(engine, /bottom = Math\.min\(bottom, next\.top - gap\)/)
   assert.match(preview, /if \(upcoming\) scheduleGameCameraFit\(40\)/)
+})
+
+
+test('game settings use a gear and expose explicit music on-off control', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /'⚙', 'Game settings'/)
+  assert.match(shell, /logyq-game-music-toggle/)
+  assert.match(shell, /Music: ' \+ \(enabled \? 'On' : 'Off'\)/)
+  assert.match(shell, /music\.setEnabled/)
+  assert.doesNotMatch(shell, /const openPause = \(\) => \{[^}]*music\?\.pause\(\)/s)
+})
+
+test('game interaction uses forgiving bank grab and return targets plus double-tap subtree return', () => {
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  const preview = read('../public/logyq/js/preview.js')
+  assert.match(dock, /const halo = 26/)
+  assert.match(preview, /const slack = gamePlay\(doc\) \? 58 : 28/)
+  assert.match(preview, /if \(gamePlay\(doc\)\) \{\s*drag\.bankArmed = true/s)
+  assert.match(preview, /win\.__logyqGameReturnToBank\?\.\(uid\)/)
 })
