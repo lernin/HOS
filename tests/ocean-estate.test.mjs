@@ -199,3 +199,10 @@ test('roofed house perimeter has no accidental wall gaps',()=>{
  assert.deepEqual(misses,[])
  assert.equal(covered('x',8,26),true,'Library west wall above the entry stair is closed')
 })
+
+
+test('repaired Library wall is visually grounded to the lower arrival court',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ assert.equal(env.includes('Library stair-side foundation'),true)
+ assert.equal(env.includes("k.box(8,FLOOR-.60,26,.50,1.20,4,'travertine'"),true)
+})
