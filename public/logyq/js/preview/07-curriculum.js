@@ -7,7 +7,14 @@
 
   function curriculumPack() {
     return [
-      { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple')) },
+      { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple')),
+        start: curriculumNode('fruit'), bank: ['apple'], guide: 'below' },
+      { id: 'fruit-banana', title: 'Fruit + Banana', tree: curriculumNode('fruit', curriculumNode('banana')),
+        start: curriculumNode('fruit'), bank: ['banana'], guide: 'below' },
+      { id: 'food-above-fruit', title: 'Food above Fruit', tree: curriculumNode('food', curriculumNode('fruit')),
+        start: curriculumNode('fruit'), bank: ['food'], guide: 'above' },
+      { id: 'fruit-siblings', title: 'Fruit siblings', tree: curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
+        start: curriculumNode('fruit', curriculumNode('apple')), bank: ['banana'], guide: 'sibling' },
       { id: 'food', title: 'Food', tree: curriculumNode('food',
         curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
         curriculumNode('meat', curriculumNode('chicken'), curriculumNode('beef'))) },
@@ -181,11 +188,11 @@
     const core = bridge.core
     const state = core?.state
     if (!level?.tree || !state || !window.d3) return false
-    const root = { name: String(level.tree.name ?? '').trim() }
+    const root = structuredClone(level.start || { name: String(level.tree.name ?? '').trim() })
     core.utils.assignUids(root)
     state.root = window.d3.hierarchy(root)
     core.utils.assignIds(state.root)
-    state.wordBank = curriculumWords(level.tree).slice(1)
+    state.wordBank = Array.isArray(level.bank) ? level.bank.slice() : curriculumWords(level.tree).slice(1)
     state.selectedUid = null
     state.history = []
     state.redo = []
@@ -226,13 +233,17 @@
     return { tree: removed === nextTree ? null : nextTree, bank: nextBank }
   }
 
-  function showCurriculumFirstGuide(level) {
-    if (level?.id !== 'fruit') return
+  function showCurriculumGuide(level) {
+    if (!level?.guide || !Array.isArray(level.bank) || !level.bank.length) {
+      window.LOGYQGameGuide?.hide()
+      return
+    }
+    const key = level.bank[0]
     const guideLevel = {
-      guide: 'below',
-      tree: { name: 'fruit' },
-      bank: ['apple'],
-      bankCards: { apple: { name: 'apple' } },
+      guide: level.guide,
+      tree: structuredClone(level.start || { name: String(level.tree?.name ?? '').trim() }),
+      bank: [key],
+      bankCards: { [key]: { name: key } },
     }
     window.LOGYQGameGuide?.show(guideLevel, bridge.core)
   }
@@ -259,6 +270,8 @@
       delete status.dataset.tone
       status.textContent = level.title
     }
+    const nextButton = document.getElementById('logyq-curriculum-next')
+    if (nextButton) nextButton.hidden = true
     if (bridge.core?.state) bridge.core.state.curriculumCameraLock = true
     window.__logyqCurriculumReturnToBank = (uid) => {
       const engine = bridge.core
@@ -289,7 +302,7 @@
     }
     renderCurriculumChrome()
     seedCurriculumRoot(level)
-    showCurriculumFirstGuide(level)
+    showCurriculumGuide(level)
     setSaveState('saved')
   }
 
@@ -309,7 +322,12 @@
     const status = document.getElementById('logyq-curriculum-status')
     if (status) {
       status.dataset.tone = 'clear'
-      status.textContent = next ? `${level.title} cleared. ${next.title} is open.` : `${level.title} cleared.`
+      status.textContent = `${level.title} cleared.`
+    }
+    const nextButton = document.getElementById('logyq-curriculum-next')
+    if (nextButton) {
+      nextButton.hidden = !next
+      nextButton.dataset.nextLevel = next?.id || ''
     }
     return true
   }
@@ -337,7 +355,11 @@
       if (!level || !curriculumUnlocked(index, readCurriculumProgress(), pack)) return
       beginCurriculumLevel(level)
     })
-    document.getElementById('logyq-curriculum-check')?.addEventListener('click', () => checkCurriculum())
+    document.getElementById('logyq-curriculum-next')?.addEventListener('click', (event) => {
+      const id = event.currentTarget?.dataset?.nextLevel
+      const next = id ? curriculumLevel(id) : null
+      if (app.curriculum?.cleared && next) beginCurriculumLevel(next)
+    })
     document.getElementById('logyq-curriculum-levels')?.addEventListener('click', () => {
       openLibrary().then(() => setHomeTab('curriculum'))
     })
