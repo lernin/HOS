@@ -311,3 +311,9 @@ test('first-contact below guide uses a straight upward path', () => {
   assert.match(guide, /node\.data\.gameId === level\.tree\.gameId \|\| node\.data\.name === level\.tree\.name/)
   assert.match(guide, /card\?\.paint/)
 })
+
+
+test('Curriculum first-contact guide disappears after the child moves a piece', () => {
+  const persistence = read('../public/logyq/js/preview/06-persistence.js')
+  assert.match(persistence, /if \(app\.curriculum\) \{\s*window\.LOGYQGameGuide\?\.hide\(\)/s)
+})
