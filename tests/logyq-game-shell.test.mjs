@@ -149,7 +149,7 @@ test('game music is a quiet persistent loop that starts on entry and stops on ex
 
   const music = window.LOGYQGameMusic
   assert.equal(music.volume(), 0.16)
-  assert.equal(music.source, 'https://opengameart.org/sites/default/files/my_street.ogg')
+  assert.equal(music.source, '/logyq/audio/my_street.ogg')
   assert.equal(music.enabled(), true)
   music.enter()
   assert.equal(player.loop, true)

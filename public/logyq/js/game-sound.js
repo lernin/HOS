@@ -5,7 +5,7 @@
   const VOLUME_KEY = 'logyq_game_sfx_volume_v1'
   const MUSIC_VOLUME_KEY = 'logyq_game_music_volume_v1'
   const MUSIC_ENABLED_KEY = 'logyq_game_music_enabled_v1'
-  const MUSIC_SOURCE = 'https://opengameart.org/sites/default/files/my_street.ogg'
+  const MUSIC_SOURCE = '/logyq/audio/my_street.ogg'
   const DEFAULT_VOLUME = 0.55
   const DEFAULT_MUSIC_VOLUME = 0.16
   let volume = DEFAULT_VOLUME, context = null, master = null, lastDrop = -Infinity
