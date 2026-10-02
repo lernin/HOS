@@ -53,6 +53,14 @@ export function architecture(k:EstateKit){
   for(const [a,b] of [[v(-23,FLOOR,-24),v(-15,FLOOR,-24)],[v(16,FLOOR,-24),v(27,FLOOR,-24)],[v(44,FLOOR,-14),v(44,FLOOR,14)],[v(27,FLOOR,-23),v(40,FLOOR,-23)]]){
     const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.65,0,.035,1.24,d,'glass',g);k.box(0,1.28,0,.045,.04,d,'bronze',g);for(let i=0;i<=d/2;i++)k.box(0,.62,-d/2+i*2,.035,1.24,.035,'bronze',g)
   }
+  // Grand foyer garden pockets: low limestone curbs and bronze rails mark the two non-walkable interior gardens.
+  const foyerGardenRail=(a:T.Vector3,b:T.Vector3)=>{const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.07,0,.18,.14,d,'limestone',g,.035);k.box(0,.78,0,.042,.045,d,'bronze',g);for(let i=0;i<=Math.ceil(d/1.45);i++)k.box(0,.42,-d/2+Math.min(d,i*1.45),.042,.82,.042,'bronze',g)}
+  for(const [a,b] of [
+    [v(-10.92,FLOOR,8.35),v(-10.92,FLOOR,13.65)],
+    [v(-10.72,FLOOR,13.92),v(-6.28,FLOOR,13.92)],
+    [v(8.02,FLOOR,10.18),v(8.02,FLOOR,13.82)],
+    [v(13.02,FLOOR,8.35),v(13.02,FLOOR,14.65)]
+  ])foyerGardenRail(a,b)
   // Pergola over outdoor dining, secondary circulation remains open.
   for(const x of [17,25])for(const z of [-21.6,-13.2])k.box(x,FLOOR+1.7,z,.17,3.4,.17,'bronze')
   for(let i=0;i<20;i++)k.box(17+i*.42,FLOOR+3.45,-17.4,.13,.2,9.3,'oak')
@@ -97,6 +105,11 @@ export function landscape(k:EstateKit){
     }for(let i=0;i<5;i++){const a=i*1.256;k.beam([v(0,.4,0),v(Math.cos(a)*.45,.12,Math.sin(a)*.45),v(Math.cos(a)*.9,.01,Math.sin(a)*.9)],.1,'bark',g)}
   }
   function grasses(x:number,y:number,z:number,s=1){const g=k.group(x,y,z,rand()*6.28);g.scale.setScalar(s);for(let i=0;i<9;i++){const a=i*2.4,h=.45+rand()*.55,dx=Math.cos(a)*.4,dz=Math.sin(a)*.4;const p=[0,0,0,dx*.3-.03,h*.55,dz*.3,dx,h,dz,dx*.3+.03,h*.5,dz*.3];const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(p,3));geom.setIndex([0,1,2,0,2,3,2,1,0,3,2,0]);geom.computeVertexNormals();k.mesh(geom,i%2?'leaf':'leafLight',0,0,0,g)}}
+  // Foyer garden planting: deliberate ornamental beds replace the ambiguous grassy voids beside the Grand Foyer.
+  for(const [cx,cz,rx,rz] of [[-8.5,11,1.9,2.35],[10.5,11.5,1.8,2.75]]){
+    b(cx,FLOOR-.16,cz,rx*2+.42,.18,rz*2+.42,'soil',k.root,.12)
+    for(let i=0;i<24;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand())*.88,x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r;grasses(x,FLOOR-.04,z,.38+rand()*.42);if(i%3===0){k.cylinder(x,FLOOR+.18,z,.015,.44,'leafDark',k.root,.012,6);k.ellipsoid(x,FLOOR+.43,z,.105,.07,.105,i%2?'pink':'white',k.root,8);k.ellipsoid(x,FLOOR+.45,z,.035,.025,.035,'gold',k.root,8)}}
+  }
   tree(-17.6,FLOOR+.37,20.8,1.05,4);tree(-29,5.2,30,1.1,3);tree(46,4,-7,1.25,1);tree(-30,5.1,-25,1.5,8);tree(18,4.7,43,1.2,9)
   for(const [x,z,s] of [[-8,28,4.2],[10,28,4.7],[-21,-21,4],[25,-22,4.8],[-34,41,4.5],[44,21,4.2]])palm(x,Math.min(FLOOR,terrainHeight(x,z,.65)),z,s,x)
   for(let i=0;i<42;i++){const a=i/42*Math.PI*2,r=.75+rand()*.06,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,2)||(x>42&&z<-12)||(Math.abs(x)<21&&z<-25))continue;if(i%4===0)tree(x,terrainHeight(x,z,r),z,.75+rand()*.45,i);else palm(x,terrainHeight(x,z,r),z,3.5+rand()*2,i)}
