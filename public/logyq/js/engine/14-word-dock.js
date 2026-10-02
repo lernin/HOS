@@ -15,6 +15,12 @@
     }
   }
 
+  function directPuzzleShelf(){
+    const body = typeof document !== 'undefined' ? document.body : null
+    return !!body?.classList?.contains('logyq-game') ||
+      !!body?.classList?.contains('logyq-curriculum-frozen')
+  }
+
   // Portrait shelf pans on x. Landscape shelf pans on y. Desktop keeps the old down-delete.
   function shelfScrollAxis(){
     if (!phoneShelf()) return null
@@ -357,7 +363,7 @@ chip.addEventListener('dragend', () => endChipDragVisuals());
 
       chip.addEventListener("contextmenu", (e) => {e.preventDefault();
         e.stopPropagation();
-        if (document.body.classList.contains('logyq-game')) return;
+        if (directPuzzleShelf()) return;
         const sel = Array.from((state.selectedUids || new Set()).values());
 if (!state.root || sel.length !== 1) {logyq.selection.showToast(sel.length === 0 ? "Select a node first" : "Select just one node");
   return;}
@@ -381,7 +387,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
       strip.appendChild(chip);
     });
     list.appendChild(strip);
-    if (chipNamesInBank().length && !document.body?.classList?.contains('logyq-game')) {
+    if (chipNamesInBank().length && !directPuzzleShelf()) {
       const allButton = document.createElement('button');
       allButton.type = 'button';
       allButton.id = 'logyq-bank-all';
@@ -600,7 +606,7 @@ function bindChipPointerPlace() {
   }
 
   const gameThumbPoint = (gesture, x, y) => {
-    if (!document.body.classList.contains('logyq-game') ||
+    if (!directPuzzleShelf() ||
         !(window.matchMedia?.('(pointer: coarse)').matches || document.body.classList.contains('logyq-mobile-v162'))) return { x, y }
     const gain = window.LOGYQGameThumbGain?.value?.() ?? 2.4
     return {
@@ -631,9 +637,9 @@ function bindChipPointerPlace() {
         return chip
       }
     }
-    // Game pieces are intentionally forgiving: the visible card is smaller
-    // than a child's finger target. Pick the nearest card within a generous halo.
-    if (!document.body.classList.contains('logyq-game')) return null
+    // Direct puzzle pieces are intentionally forgiving: the visible card is
+    // smaller than a child's finger target. Pick the nearest card in a halo.
+    if (!directPuzzleShelf()) return null
     const halo = 26
     let best = null
     let bestDistance = Infinity
@@ -729,7 +735,7 @@ function bindChipPointerPlace() {
     if (!session.dragging && !session.deleting && !session.panning) {
       // Claim the gesture while the finger is still on the chip. Waiting
       // until it has left the dock lets the browser cancel the pointer first.
-      if (document.body.classList.contains('logyq-game')) {
+      if (directPuzzleShelf()) {
         if (Math.hypot(dx, dy) < 6) return
         beginLift([session.word])
         try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
@@ -825,7 +831,7 @@ function bindChipPointerPlace() {
     }
     event.preventDefault()
     event.stopPropagation()
-    const corner = commit && !document.body?.classList?.contains('logyq-game')
+    const corner = commit && !directPuzzleShelf()
       ? cornerUnderFinger(event.clientX, event.clientY)
       : null
     if (corner === 'trash') {
