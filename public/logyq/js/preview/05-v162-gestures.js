@@ -816,8 +816,9 @@
     const hold = { pointerId: event.pointerId, ...pointer, timer: 0 }
     state.hold = hold
     win.__logyqHoldArming = true
-    // Game has no pan, so a few pixels of movement starts the drag at once.
-    if (gamePlay(doc)) return
+    // Direct puzzle modes have no card-pan/select arbitration, so a few pixels
+    // of movement starts the drag at once.
+    if (directPuzzlePlay(doc)) return
     hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     beginCardRace(doc, win, state, event)
   }
@@ -828,7 +829,7 @@
     pointer.lastX = event.clientX
     pointer.lastY = event.clientY
 
-    if (gamePlay(doc) && state.hold?.pointerId === event.pointerId) {
+    if (directPuzzlePlay(doc) && state.hold?.pointerId === event.pointerId) {
       state.hold.lastX = event.clientX
       state.hold.lastY = event.clientY
       if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) >= v162Constants().GAME_DRAG_PX) {
@@ -915,7 +916,7 @@
 
       cleanupDrag(doc, win, state, drag)
       dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
-      if (armedBank && gamePlay(doc)) win.__logyqGameReturnToBank?.(drag.uid)
+      if (armedBank && directPuzzlePlay(doc)) returnDirectPuzzleToBank(doc, win, drag.uid)
       else if (armedBank) sendDragToWordBank(doc, drag)
     } finally {
       win.__logyqHoldDragCommit = false
@@ -1385,7 +1386,7 @@
       return
     }
     drag.bankChip = hitBankChip(doc, drag.lastX, drag.lastY)
-    if (gamePlay(doc)) {
+    if (directPuzzlePlay(doc)) {
       drag.bankArmed = true
       drag.bankSince = now
       return
@@ -1401,9 +1402,9 @@
     if (rect.width < 8 || rect.height < 8) return 'none'
     const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
     if (inside || hitBankChip(doc, x, y)) return 'bank'
-    const slack = gamePlay(doc) ? 58 : 28
+    const slack = directPuzzlePlay(doc) ? 58 : 28
     if (x >= rect.left - slack && x <= rect.right + slack && y >= rect.top - slack && y <= rect.bottom + slack) {
-      return gamePlay(doc) ? 'bank' : 'near'
+      return directPuzzlePlay(doc) ? 'bank' : 'near'
     }
     return 'none'
   }
@@ -1494,7 +1495,7 @@
   }
 
   function resolveCardRace(doc, win, state, event) {
-    if (gamePlay(doc)) return
+    if (directPuzzlePlay(doc)) return
     const race = state.race
     if (!race || race.mode === 'drag') return
     const now = win.performance.now()
@@ -1630,6 +1631,21 @@
     return !!doc?.body?.classList?.contains('logyq-game')
   }
 
+  function directPuzzlePlay(doc) {
+    const body = doc?.body
+    return !!body?.classList?.contains('logyq-game') ||
+      !!body?.classList?.contains('logyq-curriculum-frozen')
+  }
+
+  function returnDirectPuzzleToBank(doc, win, uid) {
+    if (!uid) return false
+    if (gamePlay(doc)) return !!win.__logyqGameReturnToBank?.(uid)
+    if (doc?.body?.classList?.contains('logyq-curriculum-frozen')) {
+      return !!win.__logyqCurriculumReturnToBank?.(uid)
+    }
+    return false
+  }
+
   // After the Start settle, and during the haze gate, the board stays put.
   // Drag reparent does not use these pan/zoom paths.
   function curriculumViewLocked(doc) {
@@ -1713,17 +1729,16 @@
       return
     }
 
-    // In Game, a double-tap is the fast "put this branch back" gesture.
-    // The existing game return helper already restores the touched card and
-    // every descendant to the bank, so this stays consistent with drag-return.
-    if (gamePlay(doc)) {
+    // In direct puzzle modes, a double-tap is the fast "put this branch back"
+    // gesture. Game and Curriculum each restore the touched card plus descendants.
+    if (directPuzzlePlay(doc)) {
       const uid = candidate.uid || uidFromTouchedNode(event) || hitEditUid(doc, event.clientX, event.clientY, event)
       const now = win.performance.now()
       if (uid && state.lastTap?.uid === uid && now - state.lastTap.time <= v162Constants().DOUBLE_TAP_MS) {
         state.lastTap = null
         clearCardMic(state.mic)
         smiteSetArm(doc, null)
-        win.__logyqGameReturnToBank?.(uid)
+        returnDirectPuzzleToBank(doc, win, uid)
         win.navigator.vibrate?.(12)
         return
       }
