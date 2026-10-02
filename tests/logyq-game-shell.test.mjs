@@ -290,3 +290,24 @@ test('curriculum recenters after structural changes', () => {
   assert.match(source, /treeManager\?\.settleRootAnchored\?\.\(\{ force: true, duration \}\)/)
   assert.match(source, /engine\.wordDock\.render\(\)\s*settleCurriculumTree\(\)/)
 })
+
+
+test('first Curriculum lesson is Fruit plus one Apple move', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const start = source.indexOf('// CURRICULUM_PURE_START')
+  const end = source.indexOf('// CURRICULUM_PURE_END')
+  const api = new Function(source.slice(start, end) + '; return { curriculumPack };')()
+  const first = api.curriculumPack()[0]
+  assert.equal(first.title, 'Fruit')
+  assert.deepEqual(first.tree, { name: 'fruit', children: [{ name: 'apple' }] })
+  assert.match(source, /function showCurriculumFirstGuide\(level\)/)
+  assert.match(source, /guide: 'below'/)
+  assert.match(source, /window\.LOGYQGameGuide\?\.show\(guideLevel, bridge\.core\)/)
+})
+
+test('first-contact below guide uses a straight upward path', () => {
+  const guide = read('../public/logyq/js/game-guide.js')
+  assert.match(guide, /level\.guide === 'below'\s*\? `M\$\{sx\},\$\{sy\} L\$\{x\},\$\{endY\}`/)
+  assert.match(guide, /node\.data\.gameId === level\.tree\.gameId \|\| node\.data\.name === level\.tree\.name/)
+  assert.match(guide, /card\?\.paint/)
+})
