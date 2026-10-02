@@ -322,10 +322,24 @@
       #logyq-game-levels{display:none}
       #logiq-library[data-shelf="game"] #logyq-game-levels{display:block}
       #logyq-game-levels{overflow:auto;-webkit-overflow-scrolling:touch}
+      .logyq-game-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 10px}
+      .logyq-game-filter{display:grid;gap:4px;color:#64748b;font:750 11px/1.2 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em}
+      .logyq-game-filter select{width:100%;min-width:0;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;padding:9px 10px;font:700 14px/1.2 system-ui,sans-serif;text-transform:none;letter-spacing:0}
+      #logyq-game-filter-count{margin:0 0 6px;color:#64748b;font:650 12px/1.3 system-ui,sans-serif}
       #logyq-game-path{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
       #logyq-game-path .logyq-tier-head{margin:12px 0 0;padding:2px 2px 0;color:#64748b;font:800 12px/1.2 system-ui,sans-serif;letter-spacing:.04em}
-      #logyq-game-path button{width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
+      #logyq-game-path button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:12px 14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
       #logyq-game-path button.is-cleared{border-color:#86efac;background:#f0fdf4}
+      #logyq-game-path .logyq-game-level-copy{min-width:0;flex:1}
+      #logyq-game-path .logyq-game-level-title{font-weight:800;color:#1e293b}
+      #logyq-game-path .logyq-game-level-hint{font-size:12px;font-weight:500;color:#64748b;margin-top:3px}
+      #logyq-game-path .logyq-game-level-meta{display:flex;flex:none;align-items:flex-end;gap:4px;flex-direction:column;margin:0}
+      #logyq-game-path .logyq-piece-count{font-size:11px;font-weight:700;color:#64748b;margin:0}
+      #logyq-game-path .logyq-difficulty-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:850;line-height:1;white-space:nowrap;margin:0;background:#f1f5f9;color:#334155}
+      #logyq-game-path .logyq-difficulty-badge[data-band="easy"]{background:#dcfce7;color:#166534}
+      #logyq-game-path .logyq-difficulty-badge[data-band="medium"]{background:#fef9c3;color:#854d0e}
+      #logyq-game-path .logyq-difficulty-badge[data-band="hard"]{background:#ffedd5;color:#9a3412}
+      #logyq-game-path .logyq-difficulty-badge[data-band="vicious"]{background:#fee2e2;color:#991b1b}
       body.logyq-game .logyq-shape-chip{position:relative;box-sizing:border-box;width:auto;max-width:none;padding:2px;background:transparent;border:0;min-height:0}
       body.logyq-game .logyq-shape-key{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
       body.logyq-game .logyq-shape-chip svg{display:block;height:30px;width:auto}
@@ -786,6 +800,21 @@
                 <div id="logyq-trail-drawer" hidden>
                   <div class="logyq-trail-drawer-head"><strong>Choose a puzzle</strong><button type="button" id="logyq-trail-close-levels">Close</button></div>
                   <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
+                  <div class="logyq-game-filters" aria-label="Level filters">
+                    <label class="logyq-game-filter">Pieces
+                      <select id="logyq-game-piece-filter" aria-label="Filter by piece count"><option value="all">All pieces</option></select>
+                    </label>
+                    <label class="logyq-game-filter">Difficulty
+                      <select id="logyq-game-difficulty-filter" aria-label="Filter by difficulty">
+                        <option value="all">All difficulties</option>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                        <option value="vicious">Vicious</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p id="logyq-game-filter-count" aria-live="polite"></p>
                   <ol id="logyq-game-path"></ol>
                 </div>
               </div>
@@ -7369,23 +7398,191 @@
     }
   }
 
+  const GAME_DIFFICULTY_BANDS = [
+    { id: 'easy', label: 'Easy', max: 3 },
+    { id: 'medium', label: 'Medium', max: 7 },
+    { id: 'hard', label: 'Hard', max: 12 },
+    { id: 'vicious', label: 'Vicious', max: Infinity },
+  ]
+  let gamePieceFilter = 'all'
+  let gameDifficultyFilter = 'all'
+
+  function gameDifficultyBand(score) {
+    return GAME_DIFFICULTY_BANDS.find((band) => score <= band.max) || GAME_DIFFICULTY_BANDS.at(-1)
+  }
+
+  function gameLevelNodes(tree) {
+    return tree ? [tree, ...(tree.children || []).flatMap(gameLevelNodes)] : []
+  }
+
+  function gameLevelPieceCount(level) {
+    return Array.isArray(level?.ids) ? level.ids.length : gameLevelNodes(solutionOf(level)).length
+  }
+
+  function gameDifficultyProfile(level) {
+    if (level._difficultyV2) return level._difficultyV2
+    const initial = structuredClone(level.tree)
+    const solution = solutionOf(level)
+    const solutionIds = new Set(level.ids || [])
+    const allCards = new Map()
+    for (const node of gameLevelNodes(level.tree)) allCards.set(node.gameId, { ...node, children: [] })
+    for (const card of Object.values(level.bankCards || {})) allCards.set(card.gameId, { ...card, children: [] })
+    const pool = [...allCards.values()]
+    const memo = new Map()
+    const treeKey = (tree) => tree.gameId + '(' + (tree.children || []).map(treeKey).join(',') + ')'
+    const cloneTree = (tree) => ({ ...tree, children: (tree.children || []).map(cloneTree) })
+    const currentNodes = (tree) => [tree, ...(tree.children || []).flatMap(currentNodes)]
+    const addTree = (tree, card, drop) => {
+      const copy = cloneTree(tree)
+      const fresh = cloneTree(card)
+      if (drop.type === 'rootAbove') {
+        fresh.children = [copy]
+        return fresh
+      }
+      const target = currentNodes(copy).find((node) => node.gameId === drop.parentUid)
+      if (!target) return null
+      target.children ||= []
+      let index = target.children.length
+      if (drop.nextUid) {
+        const next = target.children.findIndex((node) => node.gameId === drop.nextUid)
+        if (next >= 0) index = next
+      } else if (drop.prevUid) {
+        const prev = target.children.findIndex((node) => node.gameId === drop.prevUid)
+        if (prev >= 0) index = prev + 1
+      }
+      target.children.splice(index, 0, fresh)
+      return copy
+    }
+    const visit = (tree) => {
+      const key = treeKey(tree)
+      if (memo.has(key)) return memo.get(key)
+      const used = new Set(currentNodes(tree).map((node) => node.gameId))
+      const entry = {
+        children: [],
+        complete: false,
+        win: gameGrammar.complete(tree, [...solutionIds]),
+        longestDead: 0,
+      }
+      memo.set(key, entry)
+      if (entry.win) {
+        entry.complete = true
+        return entry
+      }
+      const next = new Map()
+      for (const card of pool) {
+        if (used.has(card.gameId)) continue
+        const drops = [{ type: 'rootAbove' }]
+        for (const parent of currentNodes(tree)) {
+          const children = parent.children || []
+          for (let i = 0; i <= children.length; i++) {
+            const drop = { type: 'gap', parentUid: parent.gameId }
+            if (children[i - 1]) drop.prevUid = children[i - 1].gameId
+            if (children[i]) drop.nextUid = children[i].gameId
+            drops.push(drop)
+          }
+        }
+        for (const drop of drops) {
+          if (!gameGrammar.canAdd(tree, card, drop)) continue
+          const nextTree = addTree(tree, card, drop)
+          if (nextTree) next.set(treeKey(nextTree), nextTree)
+        }
+      }
+      for (const child of next.values()) entry.children.push(visit(child))
+      entry.complete = entry.children.some((child) => child.complete)
+      if (!entry.complete) {
+        entry.longestDead = entry.children.length
+          ? 1 + Math.max(...entry.children.map((child) => child.longestDead))
+          : 0
+      }
+      return entry
+    }
+    visit(initial)
+    let misleading = 0
+    let maxChoices = 0
+    let falsePathDepth = 0
+    let legalAdditions = 0
+    let deadEnds = 0
+    for (const entry of memo.values()) {
+      maxChoices = Math.max(maxChoices, entry.children.length)
+      legalAdditions += entry.children.length
+      if (!entry.children.length && !entry.win) deadEnds += 1
+      for (const child of entry.children) {
+        if (!child.complete) {
+          misleading += 1
+          falsePathDepth = Math.max(falsePathDepth, 1 + child.longestDead)
+        }
+      }
+    }
+    const branchExcess = solution
+      ? gameLevelNodes(solution).reduce((sum, node) => sum + Math.max(0, (node.children || []).length - 1), 0)
+      : 0
+    const reasoning = branchExcess +
+      Math.log2(1 + misleading) +
+      0.5 * Math.log2(1 + maxChoices) +
+      falsePathDepth
+    const band = gameDifficultyBand(reasoning)
+    level._difficultyV2 = {
+      version: 'logyq-difficulty-v2-standard-anchor',
+      reasoning: +reasoning.toFixed(2),
+      band: band.id,
+      bandLabel: band.label,
+      pieces: gameLevelPieceCount(level),
+      reachableStates: memo.size,
+      legalAdditions,
+      misleadingAdditions: misleading,
+      maxAvailableAdditions: maxChoices,
+      falsePathDepth,
+      deadEnds,
+    }
+    return level._difficultyV2
+  }
+
+  function populateGamePieceFilter() {
+    const select = document.getElementById('logyq-game-piece-filter')
+    if (!select || select.dataset.ready === '1') return
+    const counts = [...new Set(gameLevels.map(gameLevelPieceCount))].sort((a, b) => a - b)
+    for (const count of counts) {
+      const option = document.createElement('option')
+      option.value = String(count)
+      option.textContent = count + (count === 1 ? ' piece' : ' pieces')
+      select.appendChild(option)
+    }
+    select.dataset.ready = '1'
+  }
+
   function renderGamePath() {
     const path = document.getElementById('logyq-game-path')
     if (!path) return
+    populateGamePieceFilter()
     const progress = gameProgress()
+    const filtered = gameLevels.filter((level) => {
+      const profile = gameDifficultyProfile(level)
+      return (gamePieceFilter === 'all' || String(profile.pieces) === gamePieceFilter) &&
+        (gameDifficultyFilter === 'all' || profile.band === gameDifficultyFilter)
+    })
     let html = ''
-    let seen = 0
-    for (const level of gameLevels) {
+    let seen = null
+    for (const level of filtered) {
       if (level.tier !== seen) {
         seen = level.tier
         html += '<li class="logyq-tier-head">Tier ' + level.tier + '</li>'
       }
       const done = !!progress[level.id]
+      const profile = gameDifficultyProfile(level)
       html += '<li><button type="button" data-game-level="' + level.id + '"' +
         (done ? ' class="is-cleared"' : '') + '>' +
-        level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
+        '<span class="logyq-game-level-copy"><span class="logyq-game-level-title">' +
+        level.title + (done ? ' ✓' : '') + '</span>' +
+        (level.hint ? '<span class="logyq-game-level-hint">' + level.hint + '</span>' : '') +
+        '</span><span class="logyq-game-level-meta">' +
+        '<span class="logyq-piece-count">' + profile.pieces + ' pieces</span>' +
+        '<span class="logyq-difficulty-badge" data-band="' + profile.band + '">' +
+        profile.bandLabel + ' ' + profile.reasoning.toFixed(1) + '</span></span></button></li>'
     }
+    if (!filtered.length) html = '<li class="logiq-empty"><p>No levels match these filters.</p></li>'
     path.innerHTML = html
+    const count = document.getElementById('logyq-game-filter-count')
+    if (count) count.textContent = filtered.length + ' of ' + gameLevels.length + ' levels'
     renderGameTrail(progress)
   }
 
@@ -7886,6 +8083,15 @@
     try { localStorage.removeItem(GAME_KEY) } catch (_error) {}
     trailReturnTop = 0
     setTrailDrawer(false)
+    renderGamePath()
+  })
+
+  document.getElementById('logyq-game-piece-filter')?.addEventListener('change', (event) => {
+    gamePieceFilter = event.target.value || 'all'
+    renderGamePath()
+  })
+  document.getElementById('logyq-game-difficulty-filter')?.addEventListener('change', (event) => {
+    gameDifficultyFilter = event.target.value || 'all'
     renderGamePath()
   })
 
