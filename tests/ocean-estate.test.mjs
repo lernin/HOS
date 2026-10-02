@@ -23,6 +23,41 @@ test('entrance elevation changes continuously and tap targets do not snap throug
  assert.equal(navigator.path(plan.spawn,{x:1,z:41}),null)
  const garden={x:-10,z:32.7};const stopped=nav.moveSafely(garden,0,2);assert.ok(stopped.z<=33,'no drop from the raised garden into the arrival court')
 })
+function rayFromEye(from,to){
+ const y0=(plan.floorAt(from)??plan.FLOOR)+plan.EYE,y1=plan.floorAt(to)
+ assert.equal(y1===null,false,'aim has a floor')
+ return plan.resolveFloorRay({x:from.x,y:y0,z:from.z},{x:to.x-from.x,y:y1-y0,z:to.z-from.z})
+}
+test('court and mid-step taps resolve onto the arrival ramp',()=>{
+ const midAim={x:1,z:27.5},mid=rayFromEye({x:1,z:38},midAim)
+ assert.ok(mid,'mid-step tap hits a floor')
+ assert.ok(mid.z>24&&mid.z<31,`mid tap stays on the steps, got ${mid.z}`)
+ assert.ok(Math.abs(mid.z-midAim.z)<1.1,`mid tap tracks the step, got z=${mid.z}`)
+ assert.ok(Math.abs(plan.floorAt(mid)-plan.floorAt(midAim))<0.25)
+ assert.ok(plan.floorAt(mid)>4.9&&plan.floorAt(mid)<5.8,'mid tap is a climbable step height')
+ const court={x:1,z:36};assert.ok(navigator.path(court,mid),'path from the court climbs onto the step')
+ assert.ok(plan.floorAt(mid)>plan.floorAt(court)+.35,'resolved step is above the court')
+ const lowAim={x:1,z:30},low=rayFromEye({x:1,z:36},lowAim)
+ assert.ok(low&&low.z>28.4&&low.z<31&&Math.abs(low.z-lowAim.z)<1,`low step tap got ${JSON.stringify(low)}`)
+ assert.ok(plan.floorAt(low)<5.2&&plan.floorAt(low)>4.8)
+ const lookedDown=rayFromEye({x:1,z:18},{x:1,z:28})
+ assert.ok(lookedDown&&Math.abs(lookedDown.z-28)<1.2,`foyer view of the ramp got ${JSON.stringify(lookedDown)}`)
+ const back=rayFromEye({x:1,z:29},{x:4,z:42})
+ assert.ok(back&&Math.hypot(back.x-4,back.z-42)<1.2&&plan.floorAt(back)===4.8,'looking downhill still hits the court')
+ const terrace=rayFromEye({x:0,z:-8},{x:3,z:-22})
+ assert.ok(terrace&&Math.hypot(terrace.x-3,terrace.z+22)<1,'flat floors still pick the aimed terrace')
+})
+test('wanted rooms stay connected and ocean, cliffs, and blank garden patches stay closed',()=>{
+ const stops=[{name:'court',x:2,z:36},{name:'steps',x:1,z:27},{name:'foyer',x:1,z:16},{name:'great room',x:7,z:3},{name:'terrace',x:2,z:-18},{name:'lookout',x:32,z:-16},{name:'sunrise',x:41.5,z:0}]
+ for(let i=0;i<stops.length;i++)for(let j=i+1;j<stops.length;j++){
+  assert.ok(nav.walkable(stops[i])&&nav.walkable(stops[j]),stops[i].name+'/'+stops[j].name)
+  assert.ok(navigator.path(stops[i],stops[j]),stops[i].name+' → '+stops[j].name)
+  assert.ok(navigator.path(stops[j],stops[i]),stops[j].name+' → '+stops[i].name)
+ }
+ const gallery={x:22,z:34};assert.ok(nav.walkable(gallery)&&navigator.path(plan.spawn,gallery),'gallery past the court lip')
+ const lip=nav.moveSafely(gallery,-4,0);assert.ok(lip.x>20,'gallery railing blocks the drop into the court')
+ for(const p of [{x:0,z:-40},{x:-20,z:-30},{x:48,z:0},{x:33,z:-26},{x:-21,z:40},{x:23,z:48},{x:10,z:12},{x:-9,z:10}])assert.equal(nav.walkable(p),false,'no-go '+JSON.stringify(p))
+})
 test('material picker uses the active HOS catalog for every editable surface',()=>{
  const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
  const catalog=readFileSync(new URL('../src/experiences/estate/catalog.ts',import.meta.url),'utf8')

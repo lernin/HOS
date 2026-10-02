@@ -130,6 +130,11 @@ export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
   {x1:10,x2:19,z1:26.9,z2:27.8}, // library shelves
   {x1:-3,x2:5,z1:37,z2:45}, // arrival fountain
   {x1:-1.4,x2:-.1,z1:22.05,z2:24.12},{x1:2.1,x2:3.4,z1:22.05,z2:24.12}, // open pivot-door leaves
+  {x1:-22,x2:-6.4,z1:32.72,z2:33.08}, // raised garden lip; court is a storey below
+  {x1:19.78,x2:20.16,z1:31.05,z2:40}, // east gallery lip along the court
+  {x1:-23.2,x2:-15.05,z1:-24.2,z2:-23.82},{x1:16.05,x2:27.15,z1:-24.2,z2:-23.82}, // ocean rails, pool walks stay open
+  {x1:43.72,x2:44.15,z1:-14.1,z2:14.1}, // sunrise cliff
+  {x1:27.2,x2:40.05,z1:-23.25,z2:-22.88}, // lookout ocean edge
 ]
 export const destinations=[
   {name:'Entrance',x:1,z:27,yaw:0},{name:'Great room',x:7,z:3,yaw:.7},
@@ -139,11 +144,43 @@ export const destinations=[
   {name:'Guest suites',x:25.5,z:29.5,yaw:-1.4},{name:'Ocean lookout',x:30,z:-15,yaw:0},
 ]
 export function contains(r:Rect,p:Point,pad=0){return p.x>=r.x1-pad&&p.x<=r.x2+pad&&p.z>=r.z1-pad&&p.z<=r.z2+pad}
+function onCourt(p:Point){return Math.hypot(p.x-1,p.z-41)<=19}
 export function floorAt(p:Point):number|null {
   const f=floors.find(r=>contains(r,p))
   if(!f)return null
-  if(f.name==='Arrival court'&&Math.hypot(p.x-1,p.z-41)>19)return null
+  if(f.name==='Arrival court'&&!onCourt(p))return null
   if(f.name==='Arrival steps')return FLOOR-Math.max(0,Math.min(1,(p.z-24)/7))*1.2
   return f.level??FLOOR
+}
+// First surface along the ray, using each floor's own height. A single y=FLOOR
+// plane snaps court taps through the ramp into the foyer.
+export function resolveFloorRay(origin:{x:number;y:number;z:number},direction:{x:number;y:number;z:number}):Point|null {
+  const len=Math.hypot(direction.x,direction.y,direction.z)
+  if(len<1e-8)return null
+  const dx=direction.x/len,dy=direction.y/len,dz=direction.z/len
+  let bestT=Infinity,best:Point|null=null
+  const take=(t:number)=>{
+    if(!(t>0.04)||t>=bestT)return
+    const p={x:origin.x+dx*t,z:origin.z+dz*t},h=floorAt(p)
+    if(h===null||Math.abs(origin.y+dy*t-h)>0.12)return
+    const tb=t-0.03
+    if(tb>0){const back={x:origin.x+dx*tb,z:origin.z+dz*tb},hb=floorAt(back);if(hb!==null&&origin.y+dy*tb<hb-0.03)return}
+    bestT=t;best=p
+  }
+  for(const f of floors){
+    if(f.name==='Arrival steps'){
+      const slope=1.2/7,denom=dy+dz*slope
+      if(Math.abs(denom)<1e-6)continue
+      const t=(FLOOR-(origin.z-24)*slope-origin.y)/denom,p={x:origin.x+dx*t,z:origin.z+dz*t}
+      if(contains(f,p))take(t)
+      continue
+    }
+    const h=f.level??FLOOR
+    if(Math.abs(dy)<1e-6)continue
+    const t=(h-origin.y)/dy,p={x:origin.x+dx*t,z:origin.z+dz*t}
+    if(!contains(f,p)||(f.name==='Arrival court'&&!onCourt(p)))continue
+    take(t)
+  }
+  return best
 }
 export function locationAt(p:Point){return floors.find(r=>contains(r,p))?.name||'Ocean Estate'}

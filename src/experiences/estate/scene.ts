@@ -5,7 +5,7 @@ import { architecture, landscape, waters, atmosphere, contactShadows, type Light
 import { furnish } from './furniture'
 import { decorateArt, type EstateArtChoice, type EstateArtDisplay } from './art'
 import { createNavigator, moveSafely, walkable } from './navigation'
-import { destinations, EYE, FLOOR, floorAt, locationAt, spawn, type Point } from './plan'
+import { destinations, EYE, FLOOR, floorAt, locationAt, resolveFloorRay, spawn, type Point } from './plan'
 import { createEstateEditor, type EditableRoomId, type EditableSurface, type EditorMaterial } from './editor'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;fast:boolean}
 export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean}
@@ -43,7 +43,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
   const sun=new T.DirectionalLight('#ffe0ad',3.1);sun.position.set(-45,38,-60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-60,right:60,top:60,bottom:-60,near:1,far:180});sun.shadow.bias=-.00015;sun.shadow.normalBias=.045;scene.add(sun,sun.target)
   const fills=Array.from({length:3},()=>{const l=new T.PointLight('#ffd395',12,18,2);scene.add(l);return l})
   const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,artInstallation:ReturnType<typeof decorateArt>|undefined,editor:ReturnType<typeof createEstateEditor>|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
-  const raycaster=new T.Raycaster(),plane=new T.Plane(new T.Vector3(0,1,0),-FLOOR),hit=new T.Vector3()
+  const raycaster=new T.Raycaster(),hit=new T.Vector3()
   const marker=new T.Mesh(new T.RingGeometry(.17,.24,36),new T.MeshBasicMaterial({color:'#e7d3a6',side:T.DoubleSide,transparent:true,opacity:.85,depthWrite:false}));marker.rotation.x=-Math.PI/2;marker.visible=false;scene.add(marker)
   let artInspect:ArtInspect|null=null,artExitResolve:(()=>void)|undefined
   function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();artExitResolve?.();editor?.dispose();artInstallation?.dispose();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
@@ -81,16 +81,8 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       return display.art
     }
     function floorPointFromRay():Point|null{
-      if(!raycaster.ray.intersectPlane(plane,hit))return null
-      let p={x:hit.x,z:hit.z}
-      for(let i=0;i<6;i++){
-        const y=floorAt(p);if(y===null)return null
-        if(!raycaster.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-y),hit))return null
-        const next={x:hit.x,z:hit.z}
-        if(Math.hypot(next.x-p.x,next.z-p.z)<.001){p=next;break}
-        p=next
-      }
-      return floorAt(p)===null?null:p
+      const origin=raycaster.ray.origin,dir=raycaster.ray.direction
+      return resolveFloorRay({x:origin.x,y:origin.y,z:origin.z},{x:dir.x,y:dir.y,z:dir.z})
     }
     function pick(clientX:number,clientY:number):EstatePick|null{
       if(input.paused||artInspect)return null
