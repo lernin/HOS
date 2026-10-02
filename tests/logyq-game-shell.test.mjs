@@ -265,3 +265,28 @@ test('curriculum double-tap return detaches the whole branch into the Word Bank'
   assert.equal(fn(tree, [], 'missing'), null)
   assert.match(source, /window\.__logyqCurriculumReturnToBank = \(uid\) =>/)
 })
+
+
+test('curriculum starts from the root with all other words in the Word Bank', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /function seedCurriculumRoot\(level\)/)
+  assert.match(source, /const root = \{ name: String\(level\.tree\.name/)
+  assert.match(source, /state\.wordBank = curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.doesNotMatch(source, /function spinCurriculum\(/)
+  assert.doesNotMatch(source, /function playCurriculumVegas\(/)
+})
+
+test('curriculum has no Mix control or shuffle phase', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.doesNotMatch(ui, /id="logyq-curriculum-mix"/)
+  assert.doesNotMatch(source, /logyq-curriculum-shuffling/)
+  assert.doesNotMatch(source, /__logyqCurriculumMix/)
+})
+
+test('curriculum recenters after structural changes', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /function settleCurriculumTree\(/)
+  assert.match(source, /treeManager\?\.settleRootAnchored\?\.\(\{ force: true, duration \}\)/)
+  assert.match(source, /engine\.wordDock\.render\(\)\s*settleCurriculumTree\(\)/)
+})
