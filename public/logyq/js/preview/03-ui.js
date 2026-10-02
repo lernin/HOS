@@ -90,7 +90,6 @@
       </div>
       <div id="logyq-curriculum-bar">
         <p id="logyq-curriculum-status" role="status"></p>
-        <button type="button" id="logyq-curriculum-mix">Mix</button>
         <button type="button" id="logyq-curriculum-check">Check</button>
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
