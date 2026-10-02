@@ -229,3 +229,30 @@ test('curriculum suppresses editor selection decoration', () => {
   assert.match(selection, /const puzzle = typeof curriculumPlayLocked === 'function' && curriculumPlayLocked\(\)/)
   assert.match(selection, /!phone && !puzzle/)
 })
+
+
+test('curriculum double-tap return detaches the whole branch into the Word Bank', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const start = source.indexOf('  function returnCurriculumBranch(')
+  const end = source.indexOf('  function beginCurriculumLevel(', start)
+  assert.ok(start >= 0 && end > start)
+  const fn = new Function(source.slice(start, end) + '; return returnCurriculumBranch;')()
+  const tree = {
+    name: 'food', _uid: 'r', children: [
+      { name: 'fruit', _uid: 'f', children: [
+        { name: 'apple', _uid: 'a' },
+        { name: 'banana', _uid: 'b' },
+      ] },
+      { name: 'meat', _uid: 'm' },
+    ],
+  }
+  const branch = fn(tree, ['spare'], 'f')
+  assert.equal(branch.tree.children.length, 1)
+  assert.equal(branch.tree.children[0].name, 'meat')
+  assert.deepEqual(branch.bank, ['spare', 'fruit', 'apple', 'banana'])
+  const root = fn(tree, [], 'r')
+  assert.equal(root.tree, null)
+  assert.deepEqual(root.bank, ['food', 'fruit', 'apple', 'banana', 'meat'])
+  assert.equal(fn(tree, [], 'missing'), null)
+  assert.match(source, /window\.__logyqCurriculumReturnToBank = \(uid\) =>/)
+})
