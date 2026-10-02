@@ -6,7 +6,7 @@
   const MUSIC_VOLUME_KEY = 'logyq_game_music_volume_v1'
   const MUSIC_ENABLED_KEY = 'logyq_game_music_enabled_v1'
   const MUSIC_SOURCE = '/logyq/audio/my_street.ogg'
-  const DEFAULT_VOLUME = 0.55
+  const DEFAULT_VOLUME = 0.72
   const DEFAULT_MUSIC_VOLUME = 0.16
   let volume = DEFAULT_VOLUME, context = null, master = null, lastDrop = -Infinity
   const voices = new Set()
@@ -94,17 +94,17 @@
       if (kind === 'drop') {
         if (now - lastDrop < 0.08) return false
         lastDrop = now
-        note(620, now, 0.065, 0.04)
-        note(180, now, 0.085, 0.025, 'triangle')
+        note(680, now, 0.075, 0.11)
+        note(190, now, 0.095, 0.07, 'triangle')
       } else if (kind === 'celebrate') {
         // Bright, childlike "yaaay" gesture plus a compact applause burst.
-        note(420, now, 0.42, 0.055, 'triangle', 760)
-        note(520, now + 0.03, 0.38, 0.045, 'sine', 920)
-        note(660, now + 0.08, 0.34, 0.035, 'triangle', 1040)
-        ;[0.02,0.08,0.14,0.20,0.28,0.36,0.45,0.56].forEach((offset, i) =>
-          clap(now + offset, 0.055 + (i % 3) * 0.012))
+        note(420, now, 0.48, 0.14, 'triangle', 820)
+        note(520, now + 0.03, 0.44, 0.12, 'sine', 980)
+        note(660, now + 0.08, 0.40, 0.10, 'triangle', 1120)
+        ;[0.02,0.08,0.14,0.20,0.28,0.36,0.45,0.56,0.68].forEach((offset, i) =>
+          clap(now + offset, 0.13 + (i % 3) * 0.025))
         ;[783.99, 987.77, 1174.66].forEach((frequency, i) =>
-          note(frequency, now + 0.14 + i * 0.09, 0.34, 0.04))
+          note(frequency, now + 0.14 + i * 0.09, 0.42, 0.10))
       } else {
         [523.25, 659.25, 783.99].forEach((frequency, i) => note(frequency, now + i * 0.12, 0.42, 0.06))
       }
@@ -119,7 +119,7 @@
   }
   window.LOGYQGameSound = Object.freeze({
     supported:!!Audio, enabled:on, volume:() => volume, setVolume, setEnabled, unlock, stop,
-    drop:() => play('drop'), complete:() => play('complete'), celebrate:() => play('celebrate'),
+    drop:() => play('drop'), complete:() => play('complete'), celebrate:() => play('celebrate'), test:() => play('drop'),
   })
 
   let musicVolume = DEFAULT_MUSIC_VOLUME

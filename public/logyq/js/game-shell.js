@@ -53,7 +53,8 @@
         <label class="logyq-game-volume">Music volume
           <input id="logyq-game-music-volume" type="range" min="0" max="100" step="1" aria-label="Music volume">
         </label>
-        <label class="logyq-game-volume">Sound effects
+        <button type="button" id="logyq-game-sfx-toggle" aria-pressed="true">Sound effects: On</button>
+        <label class="logyq-game-volume">Sound volume
           <input id="logyq-game-sfx-volume" type="range" min="0" max="100" step="1" aria-label="Sound effects volume">
         </label>
         <div class="logyq-game-thumb-gain">
@@ -104,6 +105,7 @@
     syncTitle()
 
     const sound = window.LOGYQGameSound
+    const soundToggle = document.getElementById('logyq-game-sfx-toggle')
     const volume = document.getElementById('logyq-game-sfx-volume')
     const music = window.LOGYQGameMusic
     const musicToggle = document.getElementById('logyq-game-music-toggle')
@@ -121,16 +123,40 @@
     thumbGainDown?.addEventListener('click', () => { thumbGain?.step(-1); syncThumbGain() })
     thumbGainUp?.addEventListener('click', () => { thumbGain?.step(1); syncThumbGain() })
     syncThumbGain()
-    const syncSoundControls = () => document.querySelectorAll('[data-game-sound]').forEach((control) => {
-      control.disabled = !sound?.supported
-      control.textContent = sound?.supported ? 'Sound: ' + (sound.enabled() ? 'On' : 'Off') : 'Sound unavailable'
-      control.setAttribute('aria-pressed', String(!!sound?.enabled()))
-    })
+    const syncSoundControls = () => {
+      document.querySelectorAll('[data-game-sound]').forEach((control) => {
+        control.disabled = !sound?.supported
+        control.textContent = sound?.supported ? 'Sound: ' + (sound.enabled() ? 'On' : 'Off') : 'Sound unavailable'
+        control.setAttribute('aria-pressed', String(!!sound?.enabled()))
+      })
+      if (soundToggle) {
+        soundToggle.disabled = !sound?.supported
+        soundToggle.textContent = sound?.supported ? 'Sound effects: ' + (sound.enabled() ? 'On' : 'Off') : 'Sound unavailable'
+        soundToggle.setAttribute('aria-pressed', String(!!sound?.enabled()))
+      }
+      if (volume) {
+        volume.disabled = !sound?.supported || !sound.enabled()
+        volume.value = String(Math.round((sound?.volume?.() ?? 0) * 100))
+      }
+    }
     if (sound && volume) {
-      volume.value = String(Math.round((sound.volume?.() ?? (sound.enabled() ? 0.55 : 0)) * 100))
-      volume.disabled = !sound.supported
-      volume.addEventListener('input', () => sound.setVolume?.(Number(volume.value) / 100))
+      soundToggle?.addEventListener('click', async () => {
+        sound.setEnabled?.(!sound.enabled())
+        if (sound.enabled()) {
+          await sound.unlock?.()
+          sound.test?.()
+        }
+        syncSoundControls()
+      })
+      volume.addEventListener('input', async () => {
+        sound.setVolume?.(Number(volume.value) / 100)
+        if (sound.enabled()) {
+          await sound.unlock?.()
+          sound.test?.()
+        }
+      })
       window.addEventListener('logyq-game-soundchange', syncSoundControls)
+      syncSoundControls()
     }
     const syncMusic = () => {
       const enabled = !!music?.enabled?.()
