@@ -164,3 +164,12 @@ test('game music is a quiet persistent loop that starts on entry and stops on ex
   music.leave()
   assert.equal(calls.at(-1), 'pause')
 })
+
+
+test('solved game centering reserves the visible Next button safe area', () => {
+  const engine = read('../public/logyq/js/engine/16-tree-manager.js')
+  const preview = read('../public/logyq/js/preview.js')
+  assert.match(engine, /shownRect\('logyq-game-next'\)/)
+  assert.match(engine, /bottom = Math\.min\(bottom, next\.top - gap\)/)
+  assert.match(preview, /if \(upcoming\) scheduleGameCameraFit\(40\)/)
+})
