@@ -226,8 +226,10 @@ test('curriculum uses the same direct puzzle gesture path as Game', () => {
 
 test('curriculum suppresses editor selection decoration', () => {
   const selection = read('../public/logyq/js/engine/10-selection.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
   assert.match(selection, /const puzzle = typeof curriculumPlayLocked === 'function' && curriculumPlayLocked\(\)/)
   assert.match(selection, /!phone && !puzzle/)
+  assert.match(styles, /body\.logyq-curriculum svg#canvas g\.node rect:not\(\.grabzone\)[^{]*\{[^}]*stroke:#fff!important/s)
 })
 
 
