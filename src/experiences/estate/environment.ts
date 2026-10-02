@@ -4,8 +4,8 @@ import { type EstateKit, random, v } from './kit'
 export function architecture(k:EstateKit){
   for(const f of floors){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
-    if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else k.box(x,y-.2,z,w,.4,d,f.material==='oak'?'oakFloor':f.material)
-    if(f.material==='limestone'||f.material==='travertine'){
+    if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else k.box(x,y-.2,z,w,.4,d,f.name==='Garden courtyard'?'courtyardPaving':f.material==='oak'?'oakFloor':f.material)
+    if((f.material==='limestone'||f.material==='travertine')&&f.name!=='Garden courtyard'){
       for(let a=f.x1+2.8;a<f.x2;a+=2.8)k.box(a,y+.004,z,.011,.005,d,'rug')
       for(let a=f.z1+1.65;a<f.z2;a+=1.65)k.box(x,y+.005,a,w,.005,.01,'rug')
     }
