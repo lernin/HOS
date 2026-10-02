@@ -326,8 +326,13 @@
     }
     const nextButton = document.getElementById('logyq-curriculum-next')
     if (nextButton) {
-      nextButton.hidden = !next
-      nextButton.dataset.nextLevel = next?.id || ''
+      if (next) {
+        nextButton.hidden = false
+        nextButton.dataset.nextLevel = next.id
+      } else {
+        nextButton.hidden = true
+        nextButton.dataset.nextLevel = ''
+      }
     }
     return true
   }
