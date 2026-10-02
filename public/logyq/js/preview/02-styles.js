@@ -90,15 +90,18 @@
       .logyq-level.is-locked button{color:#94a3b8;cursor:not-allowed;box-shadow:none}
       .logyq-level.is-locked .logyq-level-num{background:#e2e8f0;color:#64748b}
       .logyq-level-lock{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8}
-      #logyq-curriculum-bar{position:fixed;z-index:42;top:74px;left:12px;right:12px;display:none;align-items:center;gap:8px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:14px;background:rgba(255,255,255,.96);box-shadow:0 8px 24px rgba(15,23,42,.08)}
+      #logyq-curriculum-bar{position:fixed;z-index:43;top:74px;left:12px;right:12px;height:32px;box-sizing:border-box;display:none;align-items:center;gap:6px;padding:0 6px;border:1px solid #cbd5e1;border-radius:10px;background:rgba(255,255,255,.97);box-shadow:0 4px 16px rgba(15,23,42,.08);overflow:hidden}
       body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{display:flex}
-      #logyq-curriculum-status{margin:0;flex:1;min-width:0;font-size:13px;font-weight:650;color:#334155}
+      #logyq-curriculum-status{margin:0;flex:1 1 auto;min-width:3.4em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650;line-height:1.1;color:#334155}
       #logyq-curriculum-status[data-tone="clear"]{color:#14532d}
       #logyq-curriculum-status[data-tone="wait"]{color:#64748b}
-      #logyq-curriculum-next,#logyq-curriculum-levels{border:0;border-radius:10px;background:#16a34a;color:#fff;padding:8px 12px;font-weight:750;cursor:pointer}
-      #logyq-curriculum-levels{background:#fff;color:#14532d;border:1px solid #bbf7d0}
+      #logyq-curriculum-next,#logyq-curriculum-levels{flex:none;border:1px solid #bbf7d0;border-radius:7px;background:#fff;color:#14532d;padding:3px 7px;font:750 12px/1 system-ui,sans-serif;cursor:pointer}
+      #logyq-curriculum-next{background:#16a34a;color:#fff;border-color:#16a34a}
       #logyq-curriculum-next[hidden]{display:none!important}
       body.logyq-curriculum:not(.logyq-home) #logyq-map-title{display:none!important}
+      @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
+        body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{top:48px;left:8px;right:8px}
+      }
       #logyq-curriculum-gate{position:fixed;inset:0;z-index:41}
       #logyq-curriculum-gate[hidden]{display:none!important}
       body.logyq-home #logyq-curriculum-gate{display:none!important}
