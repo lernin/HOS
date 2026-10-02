@@ -34,7 +34,7 @@ export const floors: Floor[] = [
   { name: 'Garden gallery', x1: 24, x2: 27, z1: 31, z2: 49, material: 'limestone', roof: 3.3 },
   { name: 'Garage', x1: 27, x2: 40, z1: 40, z2: 51, material: 'concrete', roof: 3.3 },
   { name: 'Arrival steps', x1: -5, x2: 7, z1: 24, z2: 31, material: 'travertine' },
-  { name: 'Arrival court', x1: -22, x2: 25, z1: 31, z2: 50, material: 'basalt', level: 4.8 },
+  { name: 'Arrival court', x1: -18, x2: 20, z1: 22, z2: 60, material: 'basalt', level: 4.8 },
   { name: 'Garden path', x1: -31, x2: -22, z1: 33, z2: 43, material: 'travertine' },
 ]
 export const walls: Wall[] = []
