@@ -1057,7 +1057,7 @@
     beginGameLevel(choice.level, { levelUp: choice.leveledUp })
   })
   document.getElementById('logyq-game-levels-button')?.addEventListener('click', () => {
-    openLibrary().then(() => setHomeTab('game'))
+    openLibrary()
   })
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('pointerdown', event => {

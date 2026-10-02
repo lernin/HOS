@@ -347,6 +347,26 @@ test('opening a distant map star restores the same scroll position on return', (
   assert.equal(viewport.scrollTop, 1400)
 })
 
+test('Back to levels does not render the map twice and lose its return position', async () => {
+  const { sandbox, elements, listeners } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  sandbox.preview.game.render()
+  const viewport = elements['logyq-trail-world']
+  viewport.clientHeight = 600
+  viewport.scrollTop = 1400
+  const star = { dataset: { trailLevel: levels[9].id } }
+  listeners['logyq-trail-stars:click'][0]({ target: { closest: () => star } })
+  viewport.scrollTop = 0
+  sandbox.openLibrary = () => {
+    sandbox.preview.game.render()
+    return Promise.resolve()
+  }
+  sandbox.setHomeTab = () => sandbox.preview.game.render()
+  listeners['logyq-game-levels-button:click'][0]()
+  await Promise.resolve()
+  assert.equal(viewport.scrollTop, 1400)
+})
+
 test('every game level is selectable without clearing an earlier one', () => {
   const { sandbox, elements, listeners } = loadGameFragment()
   const levels = sandbox.preview.game.levels
