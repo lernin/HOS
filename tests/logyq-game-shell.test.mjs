@@ -372,3 +372,10 @@ test('Curriculum Word Bank is bare with words and a compact square when empty', 
   assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:''/)
   assert.match(styles, /body\.logyq-curriculum:not\(\.logyq-home\) #logyq-map-title\{display:none!important\}/)
 })
+
+
+test('Curriculum header uses the same compact phone geometry as Game', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /#logyq-curriculum-bar\{[^}]*height:32px[^}]*padding:0 6px[^}]*border-radius:10px/s)
+  assert.match(styles, /body\.logyq-curriculum:not\(\.logyq-home\) #logyq-curriculum-bar\{top:48px;left:8px;right:8px\}/)
+})
