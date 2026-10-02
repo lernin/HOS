@@ -206,3 +206,26 @@ test('forest trail puzzle entry starts music on the user gesture', () => {
   assert.match(shell, /\[data-game-level\], \[data-trail-level\], #logyq-trail-continue/)
   assert.match(shell, /music\?\.enter\(\)/)
 })
+
+
+test('curriculum uses the same direct puzzle gesture path as Game', () => {
+  const gestures = read('../public/logyq/js/preview/05-v162-gestures.js')
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  assert.match(gestures, /function directPuzzlePlay\(doc\)/)
+  assert.match(gestures, /logyq-curriculum-frozen/)
+  assert.match(gestures, /if \(directPuzzlePlay\(doc\)\) return/)
+  assert.match(gestures, /if \(directPuzzlePlay\(doc\) && state\.hold\?\.pointerId/)
+  assert.match(gestures, /if \(directPuzzlePlay\(doc\)\) \{\s*drag\.bankArmed = true/s)
+  assert.match(gestures, /const slack = directPuzzlePlay\(doc\) \? 58 : 28/)
+  assert.match(gestures, /returnDirectPuzzleToBank\(doc, win, uid\)/)
+  assert.match(dock, /function directPuzzleShelf\(\)/)
+  assert.match(dock, /logyq-curriculum-frozen/)
+  assert.match(dock, /if \(directPuzzleShelf\(\)\) \{\s*if \(Math\.hypot\(dx, dy\) < 6\) return/s)
+  assert.match(dock, /if \(!directPuzzleShelf\(\)\) return null/)
+})
+
+test('curriculum suppresses editor selection decoration', () => {
+  const selection = read('../public/logyq/js/engine/10-selection.js')
+  assert.match(selection, /const puzzle = typeof curriculumPlayLocked === 'function' && curriculumPlayLocked\(\)/)
+  assert.match(selection, /!phone && !puzzle/)
+})
