@@ -379,3 +379,9 @@ test('Curriculum header uses the same compact phone geometry as Game', () => {
   assert.match(styles, /#logyq-curriculum-bar\{[^}]*height:32px[^}]*padding:0 6px[^}]*border-radius:10px/s)
   assert.match(styles, /body\.logyq-curriculum:not\(\.logyq-home\) #logyq-curriculum-bar\{top:48px;left:8px;right:8px\}/)
 })
+
+
+test('Curriculum Word Bank can insert a new root above the current root', () => {
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  assert.match(dock, /drop\.type === 'rootAbove'[\s\S]*state\.chipDrag\.drop = directPuzzleShelf\(\) \? \{ type: 'rootAbove' \} : null/)
+})
