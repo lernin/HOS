@@ -35,3 +35,7 @@ body.logyq-home #logiq-library[data-shelf="game"] .logiq-library-body{display:fl
 @media (max-width:700px){#logyq-game-trail{width:100%;min-height:0}.logyq-trail-heading{padding-top:18px}}
 @media (orientation:landscape) and (max-height:600px){#logyq-game-trail{min-height:0}.logyq-trail-heading #logyq-trail-home{font-size:30px}.logyq-trail-actions{left:auto;width:min(260px,40%);padding:18px 8px 8px;background:rgba(14,57,35,.78);border-radius:18px 0 0 0}#logyq-trail-caption{font-size:12px}#logyq-trail-continue{min-height:44px;font-size:17px}}
 @media (prefers-reduced-motion:reduce){.logyq-trail-star.is-current{animation:none}}
+
+/* Testing controls live in the in-game gear menu; keep DOM hooks hidden on forest. */
+#logyq-game-trail>.logyq-trail-actions #logyq-trail-all-levels,
+#logyq-game-trail>.logyq-trail-actions #logyq-trail-reset-progress{display:none!important}
