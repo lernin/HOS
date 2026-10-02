@@ -980,7 +980,7 @@ state.chipDrag.drop = {
 } else if (drop.type === 'rootAbove') {
   // Normal maps keep the historical behavior. LOGYQ Game explicitly allows
   // a loose puzzle card to become the new root when its physical edge fits.
-  state.chipDrag.drop = window.__logyqGameBankNode ? { type: 'rootAbove' } : null
+  state.chipDrag.drop = directPuzzleShelf() ? { type: 'rootAbove' } : null
   if (state.chipDrag.drop) {
     const [x, y] = logyq.selection.caretXYFromHit(drop._hit);
     elements.caretDot.attr('cx', x).attr('cy', y).style('opacity', 1);
