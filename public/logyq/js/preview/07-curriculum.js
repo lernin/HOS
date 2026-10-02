@@ -176,6 +176,7 @@
 
   function leaveCurriculumPlay() {
     cancelCurriculumVegas()
+    delete window.__logyqCurriculumReturnToBank
     const state = bridge.core?.state
     if (state) state.curriculumCameraLock = false
     if (!app.curriculum) {
@@ -417,6 +418,33 @@
     return playCurriculumVegas(session)
   }
 
+  function returnCurriculumBranch(tree, bank, uid) {
+    if (!tree || !uid) return null
+    const nextTree = structuredClone(tree)
+    let removed = null
+    if (nextTree._uid === uid) removed = nextTree
+    else {
+      const detach = node => {
+        const index = (node.children || []).findIndex(child => child?._uid === uid)
+        if (index >= 0) {
+          removed = node.children.splice(index, 1)[0]
+          return true
+        }
+        return (node.children || []).some(detach)
+      }
+      detach(nextTree)
+    }
+    if (!removed) return null
+    const nextBank = Array.isArray(bank) ? bank.slice() : []
+    const restore = node => {
+      const name = String(node?.name ?? '').trim()
+      if (name) nextBank.push(name)
+      ;(node.children || []).forEach(restore)
+    }
+    restore(removed)
+    return { tree: removed === nextTree ? null : nextTree, bank: nextBank }
+  }
+
   function beginCurriculumLevel(level) {
     if (!level) return
     leaveGamePlay()
@@ -441,6 +469,32 @@
       status.textContent = level.title
     }
     if (bridge.core?.state) bridge.core.state.curriculumCameraLock = true
+    window.__logyqCurriculumReturnToBank = (uid) => {
+      const engine = bridge.core
+      const session = app.curriculum
+      if (!engine?.state || !session || session.id !== level.id || session.phase !== 'play') return false
+      const result = returnCurriculumBranch(engine.state.root?.data, engine.state.wordBank || [], uid)
+      if (!result) return false
+      engine.state.wordBank = result.bank
+      engine.state.root = result.tree ? d3.hierarchy(result.tree) : null
+      try { engine.selection?.clearGroup?.() } catch (_error) {}
+      try { engine.selection?.clearSelection?.() } catch (_error) {}
+      if (engine.state.root) {
+        engine.utils.assignIds(engine.state.root)
+        engine.treeManager.layoutAndRender(false)
+      } else {
+        engine.state.lastNodes = []
+        engine.treeManager.renderEmpty()
+      }
+      engine.wordDock.render()
+      const status = document.getElementById('logyq-curriculum-status')
+      if (status && !session.cleared) {
+        delete status.dataset.tone
+        status.textContent = 'Piece back in the Word Bank. Keep arranging!'
+      }
+      bridge.notifyChange?.()
+      return true
+    }
     renderCurriculumChrome()
     quietCurriculumBoard(level)
     setSaveState('saved')
@@ -514,6 +568,7 @@
       check: checkCurriculum,
       mix: mixCurriculum,
       answerTree: curriculumAnswerTree,
+      returnBranch: returnCurriculumBranch,
     }
     window.__logyqCurriculumMix = mixCurriculum
   }
