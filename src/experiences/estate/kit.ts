@@ -4,7 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { random, pebbleGeometry } from '../village/kit'
 export { random }
 export const v=(x:number,y:number,z:number)=>new T.Vector3(x,y,z)
-const colors:Record<string,string>={limestone:'#d8cbb7',travertine:'#c9b69a',marble:'#e7e2d5',plaster:'#dfd9ca',oak:'#a58a63',oakFloor:'#a99a7e',walnut:'#644b36',bronze:'#5b4b37',basalt:'#3a4242',concrete:'#959488',linen:'#e5ddca',sage:'#8c9b86',clay:'#b19b86',indigo:'#465762',rug:'#b6a991',glass:'#c7e0dc',leaf:'#517352',leafLight:'#80935a',leafDark:'#314e43',bark:'#777365',soil:'#4c5140',white:'#f0ede3',black:'#222a29',gold:'#b29863',glow:'#ffe2af',ceramic:'#bba587',roof:'#72786c',waterTile:'#377e7f',pink:'#c79781'}
+const colors:Record<string,string>={limestone:'#d8cbb7',travertine:'#c9b69a',marble:'#e7e2d5',plaster:'#dfd9ca',oak:'#a58a63',oakFloor:'#a99a7e',walnut:'#644b36',bronze:'#5b4b37',basalt:'#3a4242',concrete:'#959488',linen:'#e5ddca',sage:'#8c9b86',clay:'#b19b86',indigo:'#465762',rug:'#b6a991',glass:'#c7e0dc',leaf:'#517352',leafLight:'#80935a',leafDark:'#314e43',bark:'#777365',soil:'#4c5140',white:'#f0ede3',black:'#222a29',gold:'#b29863',glow:'#ffe2af',ceramic:'#bba587',roof:'#72786c',waterTile:'#377e7f',pink:'#c79781',courtyardPaving:'#c9b69a'}
 const noiseGLSL=`
 float estateHash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float estateNoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(estateHash(i),estateHash(i+vec3(1,0,0)),f.x),mix(estateHash(i+vec3(0,1,0)),estateHash(i+vec3(1,1,0)),f.x),f.y),mix(mix(estateHash(i+vec3(0,0,1)),estateHash(i+vec3(1,0,1)),f.x),mix(estateHash(i+vec3(0,1,1)),estateHash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -26,6 +26,7 @@ export function createEstateKit(scene:T.Scene){
           :wood?`float grain=sin(p.${name==='oak'?'x':'z'}*135.+estateNoise(p*vec3(.5,1.8,.5))*18.);float detail=grain*.09+estateNoise(p*vec3(9.,.18,9.))*.25-.125;`
           :fabric?'float detail=sin(p.x*240.)*sin(p.z*240.)*.22+estateNoise(p*85.)-.5;'
           :name==='marble'?'float vein=abs(sin(p.x*.65+p.z*.8+p.y*.72+estateNoise(p*.8)*3.5+estateNoise(p*2.1)*.55));float detail=-(1.-smoothstep(.02,.13,vein))*.46+estateNoise(p*1.3)*.13-.03;'
+          :name==='courtyardPaving'?`vec2 grid=vec2(p.x/2.8,p.z/1.65);vec2 edge=min(fract(grid),1.-fract(grid));vec2 aa=max(fwidth(grid),vec2(.0008));float joint=1.-min(smoothstep(.004,.018+aa.x,edge.x),smoothstep(.004,.018+aa.y,edge.y));float detail=sin((p.y+p.z*.035)*22.+estateNoise(p*1.8)*9.)*.13+estateNoise(p*3.)*.6-.3-joint*.8;`
           :name==='travertine'?'float detail=sin((p.y+p.z*.035)*22.+estateNoise(p*1.8)*9.)*.13+estateNoise(p*3.)*.6-.3;'
           :'float detail=estateNoise(p*.7)*.65+estateNoise(p*12.)*.2-.425;'
         s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>\nvec3 p=estateP;${pattern}\ndiffuseColor.rgb*=1.+detail*${name==='marble'?'.65':name==='oakFloor'?'.4':wood?'.22':fabric?'.10':'.20'};`)
