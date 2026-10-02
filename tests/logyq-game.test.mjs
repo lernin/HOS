@@ -102,7 +102,7 @@ test('game drags start after a few pixels and return to the bank without trashin
   assert.match(gestures, /GAME_DRAG_PX\)/)
   assert.match(gestures, /armedBank && gamePlay\(doc\)/)
   assert.match(gestures, /__logyqGameReturnToBank/)
-  assert.match(gestures, /In Game, a double-tap is the fast/)
+  assert.match(gestures, /In direct puzzle modes, a double-tap/)
   assert.match(gestures, /logyq-game'\)\)/)
   assert.match(dock, /logyq-game'\)\) \{\s*if \(Math\.hypot\(dx, dy\) < 6\) return\s*beginLift\(\[session\.word\]\)/)
   assert.match(dock, /logyq-game'\)\) return/)
