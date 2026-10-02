@@ -51,6 +51,8 @@ partition('z',8,-11,13,[[-4,5]],5.5)
 partition('z',24,-6,8,[[-1.2,3.2]],4.5,'travertine')
 partition('x',-6,8,24,[[15,20]],4.5)
 partition('x',8,8,24,[[10,14],[19,23]],4.5)
+// Close the Library's exposed west edge above the arrival stair. This was an unintended exterior hole.
+wall(7.82,8.18,24,28,3.6,'plaster')
 partition('x',-23,-17,14,[[-9,-5],[4,8]],3.8,'walnut')
 partition('z',14,-23,-6,[[-10,-6.3]],3.6)
 partition('z',2,-23,-11,[[-19,-12]],3.6)
