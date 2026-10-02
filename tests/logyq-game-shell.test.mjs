@@ -267,11 +267,11 @@ test('curriculum double-tap return detaches the whole branch into the Word Bank'
 })
 
 
-test('curriculum starts from the root with all other words in the Word Bank', () => {
+test('curriculum seeds each lesson from its explicit start when provided', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   assert.match(source, /function seedCurriculumRoot\(level\)/)
-  assert.match(source, /const root = \{ name: String\(level\.tree\.name/)
-  assert.match(source, /state\.wordBank = curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /const root = structuredClone\(level\.start \|\| \{ name: String\(level\.tree\.name/)
+  assert.match(source, /state\.wordBank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
   assert.doesNotMatch(source, /function spinCurriculum\(/)
   assert.doesNotMatch(source, /function playCurriculumVegas\(/)
 })
@@ -300,8 +300,8 @@ test('first Curriculum lesson is Fruit plus one Apple move', () => {
   const first = api.curriculumPack()[0]
   assert.equal(first.title, 'Fruit')
   assert.deepEqual(first.tree, { name: 'fruit', children: [{ name: 'apple' }] })
-  assert.match(source, /function showCurriculumFirstGuide\(level\)/)
-  assert.match(source, /guide: 'below'/)
+  assert.match(source, /function showCurriculumGuide\(level\)/)
+  assert.match(source, /guide: level\.guide/)
   assert.match(source, /window\.LOGYQGameGuide\?\.show\(guideLevel, bridge\.core\)/)
 })
 
