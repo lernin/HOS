@@ -5,6 +5,7 @@
     return children.length ? { name, children } : { name }
   }
 
+  // First four lessons teach child, child, parent-above, then sibling placement.
   function curriculumPack() {
     return [
       { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple')),
