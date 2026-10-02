@@ -1385,6 +1385,11 @@
       return
     }
     drag.bankChip = hitBankChip(doc, drag.lastX, drag.lastY)
+    if (gamePlay(doc)) {
+      drag.bankArmed = true
+      drag.bankSince = now
+      return
+    }
     if (!drag.bankSince) drag.bankSince = now
     drag.bankArmed = (now - drag.bankSince) >= v162Constants().BANK_DWELL_MS
   }
@@ -1396,8 +1401,10 @@
     if (rect.width < 8 || rect.height < 8) return 'none'
     const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
     if (inside || hitBankChip(doc, x, y)) return 'bank'
-    const slack = 28
-    if (x >= rect.left - slack && x <= rect.right + slack && y >= rect.top - slack && y <= rect.bottom + slack) return 'near'
+    const slack = gamePlay(doc) ? 58 : 28
+    if (x >= rect.left - slack && x <= rect.right + slack && y >= rect.top - slack && y <= rect.bottom + slack) {
+      return gamePlay(doc) ? 'bank' : 'near'
+    }
     return 'none'
   }
 
@@ -1706,9 +1713,21 @@
       return
     }
 
-    // Game taps do not nominate, edit, or create. Fitting is drag-only.
+    // In Game, a double-tap is the fast "put this branch back" gesture.
+    // The existing game return helper already restores the touched card and
+    // every descendant to the bank, so this stays consistent with drag-return.
     if (gamePlay(doc)) {
-      state.lastTap = null
+      const uid = candidate.uid || uidFromTouchedNode(event) || hitEditUid(doc, event.clientX, event.clientY, event)
+      const now = win.performance.now()
+      if (uid && state.lastTap?.uid === uid && now - state.lastTap.time <= v162Constants().DOUBLE_TAP_MS) {
+        state.lastTap = null
+        clearCardMic(state.mic)
+        smiteSetArm(doc, null)
+        win.__logyqGameReturnToBank?.(uid)
+        win.navigator.vibrate?.(12)
+        return
+      }
+      state.lastTap = uid ? { uid, time: now } : null
       clearCardMic(state.mic)
       smiteSetArm(doc, null)
       return
