@@ -448,6 +448,7 @@
     }
   }
 
+  let trailReturnTop = null
   function trailWindow(progress) {
     const choice = chooseNext(progress, null)
     const current = choice.level || gameLevels[0]
@@ -517,7 +518,13 @@
     }))
     if (viewport) {
       const currentIndex = Math.max(0, gameLevels.indexOf(current))
-      viewport.scrollTop = Math.max(0, trailPoint(currentIndex).y - viewport.clientHeight * .42)
+      const returnTop = trailReturnTop
+      trailReturnTop = null
+      const centerCurrent = () => {
+        viewport.scrollTop = returnTop ?? Math.max(0, trailPoint(currentIndex).y - viewport.clientHeight * .42)
+      }
+      centerCurrent()
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(centerCurrent)
     }
   }
 
@@ -1004,7 +1011,9 @@
   }
 
   function openTrailLevel(level, opts) {
-    if (level) beginGameLevel(level, opts)
+    if (!level) return
+    trailReturnTop = document.getElementById('logyq-trail-world')?.scrollTop ?? null
+    beginGameLevel(level, opts)
   }
 
   const trailDrawer = document.getElementById('logyq-trail-drawer')

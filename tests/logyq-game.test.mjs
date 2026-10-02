@@ -318,6 +318,35 @@ test('forest map lays every puzzle on one scrollable route and centers the next 
   assert.ok(elements['logyq-trail-world'].scrollTop > 1000)
 })
 
+test('forest map centers progress after the home dialog becomes visible', () => {
+  const { sandbox, elements, store } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  store.logyq_game_progress_v2 = JSON.stringify({ _adaptive: { clean: 0, tier: 4, played: {} } })
+  let frame
+  sandbox.requestAnimationFrame = callback => { frame = callback }
+  sandbox.preview.game.render()
+  assert.equal(typeof frame, 'function')
+  elements['logyq-trail-world'].clientHeight = 600
+  frame()
+  assert.ok(elements['logyq-trail-world'].scrollTop > 1000)
+  assert.equal(elements['logyq-trail-stars'].children.length, levels.length)
+})
+
+test('opening a distant map star restores the same scroll position on return', () => {
+  const { sandbox, elements, listeners } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  sandbox.preview.game.render()
+  const viewport = elements['logyq-trail-world']
+  viewport.clientHeight = 600
+  viewport.scrollTop = 1400
+  const star = { dataset: { trailLevel: levels[9].id } }
+  listeners['logyq-trail-stars:click'][0]({ target: { closest: () => star } })
+  assert.equal(sandbox.app.game.id, levels[9].id)
+  viewport.scrollTop = 0
+  sandbox.preview.game.render()
+  assert.equal(viewport.scrollTop, 1400)
+})
+
 test('every game level is selectable without clearing an earlier one', () => {
   const { sandbox, elements, listeners } = loadGameFragment()
   const levels = sandbox.preview.game.levels
