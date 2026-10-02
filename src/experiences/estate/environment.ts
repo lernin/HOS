@@ -83,7 +83,7 @@ export function landscape(k:EstateKit){
   for(let j=0;j<=rings;j++)for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2,r=j/rings,edge=1+.04*Math.sin(a*7)+.025*Math.sin(a*13),x=Math.cos(a)*58*r*edge,z=coastZ(a,r)*edge;verts.push(x,terrainHeight(x,z,r),z)}
   for(let j=0;j<rings;j++)for(let i=0;i<segments;i++){const a=j*(segments+1)+i,c=a+segments+1;ids.push(a,a+1,c,a+1,c+1,c)}
   const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setIndex(ids);geo.computeVertexNormals();k.mesh(geo,'soil')
-  function rock(x:number,y:number,z:number,sx:number,sy:number,sz:number,seed:number){const g=k.rockGeometry(seed),p=g.attributes.position;for(let i=0;i<p.count;i++){const yy=p.getY(i);p.setY(i,Math.round(yy*7)/7*.5+yy*.5)}g.computeVertexNormals();const m=k.mesh(g,seed%3===0?'basalt':'concrete',x,y,z);m.scale.set(sx,sy,sz);m.rotation.set(.1,seed,seed*.04)}
+  function rock(x:number,y:number,z:number,sx:number,sy:number,sz:number,seed:number,mat?:string){const g=k.rockGeometry(seed),p=g.attributes.position;for(let i=0;i<p.count;i++){const yy=p.getY(i);p.setY(i,Math.round(yy*7)/7*.5+yy*.5)}g.computeVertexNormals();const m=k.mesh(g,mat??(seed%3===0?'basalt':'concrete'),x,y,z);m.scale.set(sx,sy,sz);m.rotation.set(.1,seed,seed*.04)}
   for(let i=0;i<150;i++){const a=i/150*Math.PI*2,r=.9+rand()*.09,x=Math.cos(a)*58*r,z=coastZ(a,r);rock(x,(Math.abs(x)<22&&z<0?-3.8:-.8)+rand(),z,2+rand()*3,1.5+rand()*3,2+rand()*3,i+24)}
   // Courtyard garden, raised beds and water rill.
   b(-16,FLOOR+.17,22.5,8,.34,9,'travertine',k.root,.12);b(-16,FLOOR+.35,22.5,7.65,.03,8.65,'soil')
@@ -100,10 +100,10 @@ export function landscape(k:EstateKit){
     if(Math.abs(Math.atan2(Math.sin(a+Math.PI/2),Math.cos(a+Math.PI/2)))<.44)continue
     const wobble=.18*Math.sin(i*2.37)+.07*Math.sin(i*.83),r=19.46+wobble
     const x=1+Math.cos(a)*r,z=41+Math.sin(a)*r
-    rock(x,4.48+((i%5)-2)*.025,z,.72+(i%5)*.095,.46+(i%4)*.07,.68+((i+2)%5)*.085,700+i)
+    rock(x,4.48+((i%5)-2)*.025,z,.72+(i%5)*.095,.46+(i%4)*.07,.68+((i+2)%5)*.085,700+i,'charcoalRock')
     if(i%4===0){
       const aa=a+Math.PI/92,rr=19.72+.1*Math.sin(i*1.71)
-      rock(1+Math.cos(aa)*rr,4.43,41+Math.sin(aa)*rr,.48+(i%3)*.08,.34+(i%2)*.06,.46+((i+1)%3)*.08,900+i)
+      rock(1+Math.cos(aa)*rr,4.43,41+Math.sin(aa)*rr,.48+(i%3)*.08,.34+(i%2)*.06,.46+((i+1)%3)*.08,900+i,'charcoalRock')
     }
   }
   function frond(g:T.Group,angle:number,length:number){const points=[v(0,0,0),v(Math.cos(angle)*length*.4,length*.28,Math.sin(angle)*length*.4),v(Math.cos(angle)*length,length*.03,Math.sin(angle)*length)];k.beam(points,.027,'leafLight',g,5)
