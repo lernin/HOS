@@ -788,7 +788,7 @@
                   </div>
                 </div>
                 <div class="logyq-trail-heading">
-                  <h3>LOGYQ</h3>
+                  <button type="button" id="logyq-trail-home" aria-label="Back to LOGYQ menu">LOGYQ</button>
                   <span id="logyq-trail-leaves" aria-label="0 puzzles solved">🍃 0</span>
                 </div>
                 <div class="logyq-trail-actions">
@@ -8058,6 +8058,12 @@
 
   const trailDrawer = document.getElementById('logyq-trail-drawer')
   const allLevels = document.getElementById('logyq-trail-all-levels')
+  document.getElementById('logyq-trail-home')?.addEventListener('click', () => {
+    setTrailDrawer(false)
+    setHomeTab('maps')
+    renderLibrary()
+    if (app.libraryStatus !== 'live') refreshLibrary()
+  })
   function setTrailDrawer(open) {
     if (!trailDrawer || !allLevels) return
     trailDrawer.hidden = !open
