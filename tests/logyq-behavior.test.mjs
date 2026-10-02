@@ -2331,8 +2331,8 @@ test('curriculum pack matches parent structure and ignores sibling order', () =>
   assert.ok(start >= 0 && end > start)
   const api = new Function(`${source.slice(start, end)}; return { curriculumPack, curriculumWords, curriculumMatches, curriculumUnlocked, curriculumStructureKey, curriculumAnswerTree };`)()
   const pack = api.curriculumPack()
-  assert.deepEqual(pack.map((level) => level.title), ['Fruit', 'Food', 'Places', 'Body', 'Body deep', 'Animals', 'School', 'Home'])
-  assert.equal(pack.length, 8)
+  assert.deepEqual(pack.map((level) => level.title), ['Fruit', 'Fruit + Banana', 'Food above Fruit', 'Fruit siblings', 'Food', 'Places', 'Body', 'Body deep', 'Animals', 'School', 'Home'])
+  assert.equal(pack.length, 11)
   const titles = JSON.stringify(pack)
   assert.equal(titles.includes('lunch'), false)
   assert.equal(titles.includes('recess'), false)
@@ -2343,7 +2343,7 @@ test('curriculum pack matches parent structure and ignores sibling order', () =>
   assert.equal(api.curriculumMatches(fruit, swapped), true)
   assert.equal(api.curriculumMatches(fruit, { name: 'fruit', children: [{ name: 'apple', children: [{ name: 'banana' }] }] }), false)
   assert.equal(api.curriculumMatches(fruit, { name: 'fruit' }), false)
-  const food = pack[1].tree
+  const food = pack[4].tree
   const foodSwapped = {
     name: 'food',
     children: [
@@ -2353,11 +2353,12 @@ test('curriculum pack matches parent structure and ignores sibling order', () =>
   }
   assert.equal(api.curriculumMatches(food, foodSwapped), true)
   assert.equal(api.curriculumMatches(food, { name: 'food', children: foodSwapped.children.slice(0, 1) }), false)
-  assert.equal(api.curriculumStructureKey(pack[2].tree).startsWith('Earth['), true)
+  assert.equal(api.curriculumStructureKey(pack[5].tree).startsWith('Earth['), true)
   assert.equal(api.curriculumUnlocked(0, { levels: {} }, pack), true)
   assert.equal(api.curriculumUnlocked(1, { levels: {} }, pack), false)
   assert.equal(api.curriculumUnlocked(1, { levels: { fruit: { clearedAt: '2026-09-23T00:00:00.000Z', ms: 1200 } } }, pack), true)
   assert.equal(api.curriculumUnlocked(2, { levels: { fruit: { clearedAt: '2026-09-23T00:00:00.000Z', ms: 10 } } }, pack), false)
+  assert.equal(api.curriculumUnlocked(2, { levels: { 'fruit-banana': { clearedAt: '2026-09-23T00:00:00.000Z', ms: 10 } } }, pack), true)
   const loose = { curriculumPile: true, name: '', children: [{ name: 'apple' }, { name: 'fruit' }, { name: 'banana' }] }
   assert.equal(api.curriculumAnswerTree(loose), null)
   const solved = { curriculumPile: true, name: '', children: [{ name: 'fruit', children: [{ name: 'apple' }] }] }
@@ -2366,7 +2367,7 @@ test('curriculum pack matches parent structure and ignores sibling order', () =>
   assert.match(source, /logyq_curriculum_progress_v1/)
   assert.doesNotMatch(source, /randomizeTree|function mixCurriculum|CURRICULUM_VEGAS/)
   assert.match(source, /function seedCurriculumRoot/)
-  assert.match(source, /state\.wordBank = curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /state\.wordBank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
   assert.match(source, /function checkCurriculum/)
   assert.match(source, /settleRootAnchored/)
   assert.match(source, /curriculumCameraLock/)
