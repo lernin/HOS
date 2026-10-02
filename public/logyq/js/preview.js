@@ -7771,7 +7771,11 @@
       }
       document.body.insertBefore(svg, document.getElementById('canvas'))
       gameArtElement = svg
-      if (animate) window.LOGYQGameSound?.celebrate?.() || window.LOGYQGameSound?.complete?.()
+      if (animate) {
+        const profile = gameDifficultyProfile(levelForGuide())
+        window.LOGYQGameSound?.celebrate?.({ difficulty: profile?.band || 'any', reasoning: profile?.reasoning, pieces: profile?.pieces }) ||
+          window.LOGYQGameSound?.complete?.()
+      }
       document.body.classList.add('logyq-game-completion')
     }, delay)
   }

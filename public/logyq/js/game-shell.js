@@ -49,6 +49,7 @@
         <button type="button" id="logyq-game-resume">Close</button>
         <button type="button" id="logyq-game-pause-levels">All levels</button>
         <button type="button" id="logyq-game-pause-reset">Reset progress</button>
+        <button type="button" id="logyq-game-celebration-lab">Celebration Lab</button>
         <button type="button" id="logyq-game-music-toggle" aria-pressed="true">Music: On</button>
         <label class="logyq-game-volume">Music volume
           <input id="logyq-game-music-volume" type="range" min="0" max="100" step="1" aria-label="Music volume">
@@ -217,6 +218,10 @@
     document.getElementById('logyq-game-resume').addEventListener('click', closePause)
     document.getElementById('logyq-game-pause-levels').addEventListener('click', openAllLevels)
     document.getElementById('logyq-game-pause-reset').addEventListener('click', resetProgress)
+    document.getElementById('logyq-game-celebration-lab').addEventListener('click', () => {
+      closePause()
+      window.LOGYQCelebrations?.open?.()
+    })
     legacyNext.addEventListener('click', () => music?.resume())
     document.addEventListener('pointerdown', (event) => {
       if (event.target?.closest?.('[data-game-level], [data-trail-level], #logyq-trail-continue')) music?.enter()
