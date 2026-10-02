@@ -24,6 +24,7 @@ body.logyq-home #logiq-library[data-shelf="game"] .logiq-library-body{display:fl
 #logyq-trail-caption{margin:0;color:#fff8de;font:800 16px/1.2 system-ui;text-shadow:0 2px 8px #20422f}
 #logyq-trail-continue{width:min(330px,100%);min-height:56px;border:2px solid #fff0bd;border-radius:18px;background:linear-gradient(#efa946,#c4772b);color:#fff9df;box-shadow:0 5px 0 #8a4e24,0 11px 25px rgba(23,46,24,.38);font:900 21px/1 system-ui;cursor:pointer;touch-action:manipulation}
 #logyq-trail-all-levels{min-height:38px;padding:0 20px;border:1px solid rgba(255,255,255,.8);border-radius:999px;background:rgba(20,67,45,.8);color:#fff;font:750 14px/1 system-ui;cursor:pointer;touch-action:manipulation}
+#logyq-trail-reset-progress{min-height:34px;padding:0 16px;border:1px solid rgba(255,255,255,.58);border-radius:999px;background:rgba(36,67,48,.58);color:#f7f4e9;font:700 12px/1 system-ui;cursor:pointer;touch-action:manipulation}
 #logyq-trail-drawer{position:absolute;z-index:5;inset:0;box-sizing:border-box;overflow:auto;padding:18px 20px 32px;background:#f7f4e9;color:#274733}
 #logyq-trail-drawer[hidden]{display:none}
 .logyq-trail-drawer-head{position:sticky;top:-18px;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;background:#f7f4e9;font:850 20px/1.2 system-ui}
