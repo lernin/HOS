@@ -1,0 +1,19 @@
+name: Verify Curriculum shell fit
+on:
+  push:
+    branches: [fix/logyq-curriculum-shell-fit-20261002]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/logyq-curriculum-shell-fit-20261002
+          fetch-depth: 0
+      - run: npm ci
+      - run: node --test tests/logyq-game-shell.test.mjs
+      - run: npm run test:logiq
+      - run: npm run test:logyq
+      - run: npm run build
