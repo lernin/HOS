@@ -199,3 +199,10 @@ test('game interaction uses forgiving bank grab and return targets plus double-t
   assert.match(preview, /if \(gamePlay\(doc\)\) \{\s*drag\.bankArmed = true/s)
   assert.match(preview, /win\.__logyqGameReturnToBank\?\.\(uid\)/)
 })
+
+
+test('forest trail puzzle entry starts music on the user gesture', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /\[data-game-level\], \[data-trail-level\], #logyq-trail-continue/)
+  assert.match(shell, /music\?\.enter\(\)/)
+})
