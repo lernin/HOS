@@ -1,0 +1,21 @@
+name: Verify LOGYQ curriculum direct puzzle
+
+on:
+  push:
+    branches:
+      - feat/logyq-curriculum-direct-puzzle-20261002
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/logyq-curriculum-direct-puzzle-20261002
+          fetch-depth: 0
+      - run: npm ci
+      - run: node --test tests/logyq-game-shell.test.mjs
