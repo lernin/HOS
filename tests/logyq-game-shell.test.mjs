@@ -224,6 +224,13 @@ test('curriculum uses the same direct puzzle gesture path as Game', () => {
   assert.match(dock, /if \(!directPuzzleShelf\(\)\) return null/)
 })
 
+test('curriculum play exposes the same floating return tray as Game', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock/)
+  assert.match(styles, /body\.logyq-curriculum-frozen\.v2-branch-drag #Dock\.is-empty/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:'Return piece here'/)
+})
+
 test('curriculum suppresses editor selection decoration', () => {
   const selection = read('../public/logyq/js/engine/10-selection.js')
   const styles = read('../public/logyq/js/preview/02-styles.js')
