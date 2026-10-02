@@ -1,0 +1,37 @@
+/* The game tab is an illustrated trail; the editor and curriculum tabs keep their own layout. */
+body.logyq-home #logiq-library[data-shelf="game"] .logiq-modal{display:flex;flex-direction:column}
+body.logyq-home #logiq-library[data-shelf="game"] .logiq-library-body{display:flex;flex:1;min-height:0;padding:0}
+#logiq-library[data-shelf="game"] #logyq-game-levels{position:relative;flex:1;min-height:0;max-height:none;overflow:hidden}
+#logyq-game-trail{position:relative;isolation:isolate;width:min(100%,560px);height:100%;min-height:440px;margin:auto;overflow:hidden;background:#b9dfbf;color:#fff;font-family:system-ui,sans-serif}
+#logyq-trail-world{position:absolute;inset:0;background:#b9dfbf url('/logyq/images/forest-trail-bg.webp') center / cover no-repeat;transform:scale(1);transition:transform 760ms cubic-bezier(.18,.8,.23,1),filter 760ms ease;will-change:transform}
+#logyq-game-trail.is-gliding #logyq-trail-world{transform:scale(1.3) translate3d(0,8%,0);filter:brightness(1.1)}
+#logyq-game-trail::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(13,53,49,.20),transparent 27%,transparent 64%,rgba(12,41,28,.62) 100%)}
+.logyq-trail-heading{position:absolute;z-index:2;top:clamp(14px,3.5vh,32px);left:18px;right:18px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;pointer-events:none}
+.logyq-trail-heading h3{margin:0;color:#fff8df;font:950 clamp(31px,8.5vw,46px)/1 system-ui,sans-serif;letter-spacing:.06em;text-shadow:0 3px 0 #7b4a20,0 6px 14px rgba(28,55,32,.55)}
+#logyq-trail-leaves{display:inline-flex;align-items:center;gap:5px;min-height:36px;padding:0 12px;border:1px solid rgba(255,255,255,.8);border-radius:999px;background:rgba(19,76,50,.82);box-shadow:0 4px 15px rgba(14,49,29,.25);font:800 16px/1 system-ui;white-space:nowrap}
+#logyq-trail-stars{position:absolute;inset:0}
+.logyq-trail-star{position:absolute;display:grid;place-items:center;width:clamp(56px,16vw,74px);height:clamp(56px,16vw,74px);padding:0;border:3px solid #fff4ca;border-radius:50%;background:radial-gradient(circle at 37% 27%,#fff8ce,#d9a761 70%,#ae6938);color:#fff9df;box-shadow:0 5px 0 #8b5b36,0 9px 22px rgba(45,60,21,.38);transform:translate(-50%,-50%);cursor:pointer;touch-action:manipulation;text-shadow:0 2px 3px rgba(100,67,27,.7)}
+.logyq-trail-star .star-icon{font:900 30px/1 system-ui;transform:translateY(-5px)}
+.logyq-trail-star .star-number{position:absolute;bottom:5px;left:0;right:0;font:900 12px/1 system-ui}
+.logyq-trail-star[data-slot="0"]{left:51%;top:76%}
+.logyq-trail-star[data-slot="1"]{left:59%;top:60%}
+.logyq-trail-star[data-slot="2"]{left:73%;top:43%}
+.logyq-trail-star.is-cleared{background:radial-gradient(circle at 37% 27%,#faffc7,#a4d065 68%,#5e9a42);border-color:#eaffbe;box-shadow:0 5px 0 #497b33,0 0 22px rgba(203,255,143,.7)}
+.logyq-trail-star.is-current{border-color:#fff;box-shadow:0 5px 0 #9d602e,0 0 0 7px rgba(255,237,138,.45),0 0 28px #fff2aa;animation:logyq-trail-pulse 1.9s ease-in-out infinite}
+.logyq-trail-star:hover{filter:brightness(1.12)}
+.logyq-trail-star:focus-visible,#logyq-game-trail button:focus-visible{outline:4px solid #fff;outline-offset:4px}
+@keyframes logyq-trail-pulse{50%{box-shadow:0 5px 0 #9d602e,0 0 0 11px rgba(255,237,138,.22),0 0 34px #fff2aa}}
+.logyq-trail-actions{position:absolute;z-index:2;bottom:calc(15px + env(safe-area-inset-bottom));left:50%;width:min(330px,calc(100% - 36px));display:grid;gap:8px;text-align:center;transform:translateX(-50%)}
+#logyq-trail-caption{margin:0;color:#fff8de;font:800 16px/1.2 system-ui;text-shadow:0 2px 8px #20422f}
+#logyq-trail-continue{min-height:58px;border:2px solid #fff0bd;border-radius:18px;background:linear-gradient(#efa946,#c4772b);color:#fff9df;box-shadow:0 5px 0 #8a4e24,0 11px 25px rgba(23,46,24,.38);font:900 21px/1 system-ui;cursor:pointer;touch-action:manipulation}
+#logyq-trail-all-levels{justify-self:center;min-height:38px;padding:0 20px;border:1px solid rgba(255,255,255,.8);border-radius:999px;background:rgba(20,67,45,.8);color:#fff;font:750 14px/1 system-ui;cursor:pointer;touch-action:manipulation}
+#logyq-game-trail.is-gliding button{pointer-events:none}
+#logyq-trail-drawer{position:absolute;z-index:5;inset:0;box-sizing:border-box;overflow:auto;padding:18px 20px 32px;background:#f7f4e9;color:#274733}
+#logyq-trail-drawer[hidden]{display:none}
+.logyq-trail-drawer-head{position:sticky;top:-18px;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;background:#f7f4e9;font:850 20px/1.2 system-ui}
+#logyq-trail-close-levels{min-height:40px;padding:0 16px;border:1px solid #a7bf9b;border-radius:12px;background:#fff;color:#274733;font:750 14px/1 system-ui;cursor:pointer}
+#logyq-trail-drawer .logyq-level-intro{color:#40634e}
+#logyq-trail-drawer #logyq-game-path{margin:0}
+@media (max-width:700px){#logyq-game-trail{width:100%;min-height:0}.logyq-trail-heading{top:18px}}
+@media (orientation:landscape) and (max-height:600px){#logyq-game-trail{min-height:0}.logyq-trail-heading h3{font-size:30px}.logyq-trail-actions{bottom:8px;width:min(260px,40%)}#logyq-trail-caption{font-size:12px}#logyq-trail-continue{min-height:44px;font-size:17px}.logyq-trail-star[data-slot="0"]{left:42%;top:68%}.logyq-trail-star[data-slot="1"]{left:55%;top:47%}.logyq-trail-star[data-slot="2"]{left:69%;top:31%}}
+@media (prefers-reduced-motion:reduce){#logyq-trail-world{transition:none}.logyq-trail-star.is-current{animation:none}}

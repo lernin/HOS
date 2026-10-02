@@ -759,8 +759,25 @@
               <ol id="logyq-level-path"></ol>
             </div>
             <div id="logyq-game-levels" role="tabpanel" aria-labelledby="logyq-tab-game" hidden>
-              <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
-              <ol id="logyq-game-path"></ol>
+              <div id="logyq-game-trail" aria-label="Forest puzzle trail">
+                <div id="logyq-trail-world">
+                  <div id="logyq-trail-stars" aria-label="Nearby puzzles"></div>
+                </div>
+                <div class="logyq-trail-heading">
+                  <h3>LOGYQ</h3>
+                  <span id="logyq-trail-leaves" aria-label="0 puzzles solved">🍃 0</span>
+                </div>
+                <div class="logyq-trail-actions">
+                  <p id="logyq-trail-caption">Your next puzzle is waiting</p>
+                  <button type="button" id="logyq-trail-continue">Continue</button>
+                  <button type="button" id="logyq-trail-all-levels" aria-controls="logyq-trail-drawer" aria-expanded="false">All levels</button>
+                </div>
+                <div id="logyq-trail-drawer" hidden>
+                  <div class="logyq-trail-drawer-head"><strong>Choose a puzzle</strong><button type="button" id="logyq-trail-close-levels">Close</button></div>
+                  <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
+                  <ol id="logyq-game-path"></ol>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -4787,10 +4804,10 @@
     resolve(value || null)
   }
 
-  function showLibrary() {
+  function showLibrary(shelf = 'maps') {
     document.body.classList.add('logyq-home')
     document.body.classList.toggle('logyq-map-open', !!app.hasOpenMap)
-    setHomeTab('maps')
+    setHomeTab(shelf)
     ui.library.classList.add('is-open')
     ui.library.setAttribute('aria-hidden', 'false')
   }
@@ -5538,7 +5555,7 @@
     if (recovered) localStorage.removeItem(PENDING_KEY)
     app.hasOpenMap = false
     document.body.classList.remove('logyq-map-open')
-    showLibrary()
+    showLibrary('game')
     app.libraryStatus = 'loading'
     ui.mapList.innerHTML = '<div class="logiq-empty">Loading maps…</div>'
     await refreshLibrary()
@@ -7360,6 +7377,50 @@
     }
   }
 
+  function trailWindow(progress) {
+    const choice = chooseNext(progress, null)
+    const current = choice.level || gameLevels[0]
+    const group = gameLevels.filter((level) => level.tier === current.tier)
+    const index = group.findIndex((level) => level.id === current.id)
+    const start = Math.max(0, Math.min(index - 1, group.length - 3))
+    return { current, levels: group.slice(start, start + 3), choice }
+  }
+
+  function renderGameTrail(progress) {
+    const stars = document.getElementById('logyq-trail-stars')
+    if (!stars) return
+    const { current, levels } = trailWindow(progress)
+    const solved = gameLevels.filter((level) => progress[level.id]).length
+    const leaves = document.getElementById('logyq-trail-leaves')
+    if (leaves) {
+      leaves.textContent = '🍃 ' + solved
+      leaves.setAttribute('aria-label', solved + ' puzzles solved')
+    }
+    const caption = document.getElementById('logyq-trail-caption')
+    if (caption) caption.textContent = 'Next: Puzzle ' + (gameLevels.indexOf(current) + 1)
+    stars.replaceChildren(...levels.map((level, slot) => {
+      const number = gameLevels.indexOf(level) + 1
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'logyq-trail-star' + (progress[level.id] ? ' is-cleared' : '') +
+        (level.id === current.id ? ' is-current' : '')
+      button.dataset.trailLevel = level.id
+      button.dataset.slot = String(slot)
+      button.setAttribute('aria-label', 'Puzzle ' + number + (progress[level.id] ? ', completed' : ', ready'))
+      if (level.id === current.id) button.setAttribute('aria-current', 'step')
+      const icon = document.createElement('span')
+      icon.className = 'star-icon'
+      icon.setAttribute('aria-hidden', 'true')
+      icon.textContent = '★'
+      const label = document.createElement('span')
+      label.className = 'star-number'
+      label.setAttribute('aria-hidden', 'true')
+      label.textContent = String(number)
+      button.append(icon, label)
+      return button
+    }))
+  }
+
   function renderGamePath() {
     const path = document.getElementById('logyq-game-path')
     if (!path) return
@@ -7377,6 +7438,7 @@
         level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
     }
     path.innerHTML = html
+    renderGameTrail(progress)
   }
 
   function ensureGamePaint() {
@@ -7841,11 +7903,60 @@
     gameStatus('Not yet. Only the physical color contacts count.')
   }
 
+  let trailOpening = false
+  function openTrailLevel(level, opts) {
+    if (!level || trailOpening) return
+    const trail = document.getElementById('logyq-game-trail')
+    const world = document.getElementById('logyq-trail-world')
+    const star = Array.from(document.getElementById('logyq-trail-stars')?.children || [])
+      .find((element) => element.dataset.trailLevel === level.id)
+    if (star && trail && world) {
+      const box = trail.getBoundingClientRect()
+      const point = star.getBoundingClientRect()
+      world.style.transformOrigin = (((point.left + point.width / 2 - box.left) / box.width) * 100) + '% ' +
+        (((point.top + point.height / 2 - box.top) / box.height) * 100) + '%'
+    }
+    trailOpening = true
+    trail?.classList.add('is-gliding')
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    setTimeout(() => {
+      trailOpening = false
+      trail?.classList.remove('is-gliding')
+      if (document.getElementById('logiq-library')?.dataset.shelf !== 'game' ||
+          !document.body.classList.contains('logyq-home')) return
+      beginGameLevel(level, opts)
+    }, reduced ? 0 : 760)
+  }
+
+  const trailDrawer = document.getElementById('logyq-trail-drawer')
+  const allLevels = document.getElementById('logyq-trail-all-levels')
+  function setTrailDrawer(open) {
+    if (!trailDrawer || !allLevels) return
+    trailDrawer.hidden = !open
+    allLevels.setAttribute('aria-expanded', String(open))
+    if (open) document.getElementById('logyq-trail-close-levels')?.focus()
+    else allLevels.focus()
+  }
+  document.getElementById('logyq-trail-stars')?.addEventListener('click', (event) => {
+    const star = event.target.closest('[data-trail-level]')
+    const level = gameLevels.find((item) => item.id === star?.dataset.trailLevel)
+    if (!level) return
+    const choice = trailWindow(gameProgress()).choice
+    openTrailLevel(level, { levelUp: choice.leveledUp && choice.level?.id === level.id })
+  })
+  document.getElementById('logyq-trail-continue')?.addEventListener('click', () => {
+    const choice = trailWindow(gameProgress()).choice
+    openTrailLevel(choice.level, { levelUp: choice.leveledUp })
+  })
+  allLevels?.addEventListener('click', () => setTrailDrawer(true))
+  document.getElementById('logyq-trail-close-levels')?.addEventListener('click', () => setTrailDrawer(false))
+
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-game-level]')
     if (!button) return
     const index = gameLevels.findIndex((level) => level.id === button.dataset.gameLevel)
     if (index < 0) return
+    setTrailDrawer(false)
     beginGameLevel(gameLevels[index])
   })
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
@@ -7884,7 +7995,7 @@
   }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
-    recordSolve, chooseNext, presentSolved, layoutBudget: GAME_LAYOUT,
+    recordSolve, chooseNext, trailWindow, presentSolved, layoutBudget: GAME_LAYOUT,
     challengeLayoutBudget: CHALLENGE_LAYOUT, measureSolved: layoutSolvedTree, returnBranch: returnGameBranch,
   }
   // FOLDER_PURE_START

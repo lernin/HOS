@@ -235,8 +235,14 @@ function loadGameFragment() {
       innerHTML: '',
       textContent: '',
       dataset: {},
+      children: [],
+      attributes: {},
       listeners: {},
       addEventListener(type, fn) { (listeners[id + ':' + type] ||= []).push(fn) },
+      setAttribute(name, value) { this.attributes[name] = String(value) },
+      append(...nodes) { this.children.push(...nodes) },
+      replaceChildren(...nodes) { this.children = nodes },
+      focus() {},
       querySelector() { return null },
       insertBefore() {},
       firstChild: null,
@@ -254,6 +260,7 @@ function loadGameFragment() {
         },
       },
       getElementById(id) { return elements[id] ||= el(id) },
+      createElement(tag) { return el(tag) },
       createElementNS() {
         return { setAttribute() {}, appendChild() {}, querySelector() { return null } }
       },
@@ -283,6 +290,24 @@ function loadGameFragment() {
   runInNewContext(readFileSync(new URL('preview/10-game.js', root), 'utf8'), sandbox)
   return { sandbox, elements, listeners, store }
 }
+
+test('forest trail shows the next puzzle with nearby solved stars across tiers', () => {
+  const { sandbox } = loadGameFragment()
+  const game = sandbox.preview.game
+  const first = game.trailWindow({})
+  assert.equal(first.current.id, game.levels[0].id)
+  assert.deepEqual(Array.from(first.levels, level => level.id), Array.from(game.levels.slice(0, 3), level => level.id))
+
+  const progress = game.recordSolve({}, game.levels[0].id, 0)
+  const second = game.trailWindow(progress)
+  assert.equal(second.current.id, game.levels[1].id)
+  assert.equal(second.levels[0].id, game.levels[0].id)
+
+  const later = game.trailWindow({ ...progress, _adaptive: { clean: 0, tier: 4, played: {} } })
+  assert.equal(later.current.tier, 4)
+  assert.equal(later.levels.length, 3)
+  assert.ok(later.levels.some(level => level.id === later.current.id))
+})
 
 test('every game level is selectable without clearing an earlier one', () => {
   const { sandbox, elements, listeners } = loadGameFragment()
