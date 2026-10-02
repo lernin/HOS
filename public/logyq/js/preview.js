@@ -7991,6 +7991,14 @@
   })
   allLevels?.addEventListener('click', () => setTrailDrawer(true))
   document.getElementById('logyq-trail-close-levels')?.addEventListener('click', () => setTrailDrawer(false))
+  document.getElementById('logyq-trail-reset-progress')?.addEventListener('click', () => {
+    const confirmed = window.confirm?.('Reset all game progress and start again from Puzzle 1?')
+    if (!confirmed) return
+    try { localStorage.removeItem(GAME_KEY) } catch (_error) {}
+    trailReturnTop = 0
+    setTrailDrawer(false)
+    renderGamePath()
+  })
 
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-game-level]')
