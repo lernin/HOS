@@ -28,6 +28,9 @@ export function architecture(k:EstateKit){
   k.box(-10.54,FLOOR+.75,0,.045,.6,2.4,'black')
   for(let i=0;i<11;i++)k.ellipsoid(-10.49,FLOOR+.58+.03*(i%3),-.95+i*.18,.02,.09,.06,'glow',k.root,8)
   for(const x of [-1.3,3.3]){const g=k.group(x,FLOOR,24,x<0?1.05:-1.05);k.box(x<0?1.04:-1.04,1.8,0,2.04,3.6,.13,'walnut',g,.035);k.box(x<0?1.8:-1.8,1.7,-.1,.03,1.1,.04,'bronze',g)}
+  // Library stair-side foundation: the repaired exterior wall continues visibly down to the lower arrival court.
+  k.box(8,FLOOR-.60,26,.50,1.20,4,'travertine',k.root,.045)
+  k.box(7.98,FLOOR-.03,26,.58,.16,4.08,'limestone',k.root,.035)
   // Covered arrival portal: Design Lab study 4, Fluted Stone, scaled to the real stair approach.
   k.box(1,FLOOR+4,26.6,13,.28,6,'travertine')
   const arrivalGround=FLOOR-10*1.2/14,arrivalRoofBottom=FLOOR+4-.14
