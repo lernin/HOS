@@ -3,12 +3,17 @@
   'use strict'
   const ns = 'http://www.w3.org/2000/svg'
   let active = null, frame = null, until = 0
+  function sameNode(node, ref) {
+    if (!node || !ref) return false
+    if (ref.gameId != null && node.data.gameId === ref.gameId) return true
+    return String(ref.name ?? '') !== '' && node.data.name === ref.name
+  }
   function target(level, nodes) {
     if (!level?.guide) return null
-    const anchor = nodes.find(node => node.data.gameId === level.tree.gameId || node.data.name === level.tree.name)
+    const anchor = nodes.find(node => sameNode(node, level.tree))
     if (!anchor) return null
     if (level.guide === 'sibling') {
-      const child = nodes.find(node => node.data.gameId === level.tree.children[0]?.gameId)
+      const child = nodes.find(node => sameNode(node, level.tree.children[0]))
       return child ? {x:child.x + 144, y:child.y} : null
     }
     return {x:anchor.x, y:anchor.y + (level.guide === 'above' ? -141 : 141)}
