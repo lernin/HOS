@@ -84,3 +84,20 @@ test('touch navigation is adaptive: left moves, right looks, and two thumbs sepa
  assert.match(ui,/!t\.dragged&&!t\.hadMulti&&touchPointers\.current\.size===0\)handleWorldTap/)
  assert.doesNotMatch(ui,/worldPinchStart|pinchReverse/)
 })
+
+
+test('walking HUD is quiet and secondary controls live in the menu',()=>{
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ assert.doesNotMatch(ui,/className="oe-controls"/)
+ assert.doesNotMatch(ui,/className="oe-hint"/)
+ assert.match(ui,/className="oe-menu-places"/)
+ assert.match(ui,/className="oe-menu-sound"/)
+ assert.match(ui,/oe-location-fade/)
+})
+
+test('closed arrival garden pockets read as intentional planted areas',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ assert.match(env,/Arrival garden pockets/)
+ assert.match(env,/gardenPocketRail/)
+ assert.match(env,/ellipsoid\([^\n]*'pink'/)
+})
