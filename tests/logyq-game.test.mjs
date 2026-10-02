@@ -328,9 +328,10 @@ test('Reset progress clears only game progress and returns the trail to Puzzle 1
   })
   store.keep_me = 'untouched'
   sandbox.window.confirm = () => true
-  elements['logyq-trail-world'].clientHeight = 600
+  const viewport = sandbox.document.getElementById('logyq-trail-world')
+  viewport.clientHeight = 600
   sandbox.preview.game.render()
-  assert.ok(elements['logyq-trail-world'].scrollTop > 0)
+  assert.ok(viewport.scrollTop > 0)
 
   listeners['logyq-trail-reset-progress:click'][0]()
 
@@ -338,7 +339,7 @@ test('Reset progress clears only game progress and returns the trail to Puzzle 1
   assert.equal(store.keep_me, 'untouched')
   assert.equal(elements['logyq-trail-leaves'].textContent, '🍃 0')
   assert.equal(elements['logyq-trail-caption'].textContent, 'Next: Puzzle 1')
-  assert.equal(elements['logyq-trail-world'].scrollTop, 0)
+  assert.equal(viewport.scrollTop, 0)
 
   store.logyq_game_progress_v2 = JSON.stringify({ [levels[0].id]: Date.now() })
   sandbox.window.confirm = () => false
