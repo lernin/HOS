@@ -195,8 +195,8 @@ test('game interaction uses forgiving bank grab and return targets plus double-t
   const dock = read('../public/logyq/js/engine/14-word-dock.js')
   const preview = read('../public/logyq/js/preview.js')
   assert.match(dock, /const halo = 26/)
-  assert.match(preview, /const slack = gamePlay\(doc\) \? 58 : 28/)
-  assert.match(preview, /if \(gamePlay\(doc\)\) \{\s*drag\.bankArmed = true/s)
+  assert.match(preview, /const slack = directPuzzlePlay\(doc\) \? 58 : 28/)
+  assert.match(preview, /if \(directPuzzlePlay\(doc\)\) \{\s*drag\.bankArmed = true/s)
   assert.match(preview, /win\.__logyqGameReturnToBank\?\.\(uid\)/)
 })
 
@@ -205,4 +205,88 @@ test('forest trail puzzle entry starts music on the user gesture', () => {
   const shell = read('../public/logyq/js/game-shell.js')
   assert.match(shell, /\[data-game-level\], \[data-trail-level\], #logyq-trail-continue/)
   assert.match(shell, /music\?\.enter\(\)/)
+})
+
+
+test('curriculum uses the same direct puzzle gesture path as Game', () => {
+  const gestures = read('../public/logyq/js/preview/05-v162-gestures.js')
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  assert.match(gestures, /function directPuzzlePlay\(doc\)/)
+  assert.match(gestures, /logyq-curriculum-frozen/)
+  assert.match(gestures, /if \(directPuzzlePlay\(doc\)\) return/)
+  assert.match(gestures, /if \(directPuzzlePlay\(doc\) && state\.hold\?\.pointerId/)
+  assert.match(gestures, /if \(directPuzzlePlay\(doc\)\) \{\s*drag\.bankArmed = true/s)
+  assert.match(gestures, /const slack = directPuzzlePlay\(doc\) \? 58 : 28/)
+  assert.match(gestures, /returnDirectPuzzleToBank\(doc, win, uid\)/)
+  assert.match(dock, /function directPuzzleShelf\(\)/)
+  assert.match(dock, /logyq-curriculum-frozen/)
+  assert.match(dock, /if \(directPuzzleShelf\(\)\) \{\s*if \(Math\.hypot\(dx, dy\) < 6\) return/s)
+  assert.match(dock, /if \(!directPuzzleShelf\(\)\) return null/)
+})
+
+test('curriculum play exposes the same floating return tray as Game', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock/)
+  assert.match(styles, /body\.logyq-curriculum-frozen\.v2-branch-drag #Dock\.is-empty/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:'Return piece here'/)
+})
+
+test('curriculum suppresses editor selection decoration', () => {
+  const selection = read('../public/logyq/js/engine/10-selection.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(selection, /const puzzle = typeof curriculumPlayLocked === 'function' && curriculumPlayLocked\(\)/)
+  assert.match(selection, /!phone && !puzzle/)
+  assert.match(styles, /body\.logyq-curriculum svg#canvas g\.node rect:not\(\.grabzone\)[^{]*\{[^}]*stroke:#fff!important/s)
+})
+
+
+test('curriculum double-tap return detaches the whole branch into the Word Bank', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const start = source.indexOf('  function returnCurriculumBranch(')
+  const end = source.indexOf('  function beginCurriculumLevel(', start)
+  assert.ok(start >= 0 && end > start)
+  const fn = new Function(source.slice(start, end) + '; return returnCurriculumBranch;')()
+  const tree = {
+    name: 'food', _uid: 'r', children: [
+      { name: 'fruit', _uid: 'f', children: [
+        { name: 'apple', _uid: 'a' },
+        { name: 'banana', _uid: 'b' },
+      ] },
+      { name: 'meat', _uid: 'm' },
+    ],
+  }
+  const branch = fn(tree, ['spare'], 'f')
+  assert.equal(branch.tree.children.length, 1)
+  assert.equal(branch.tree.children[0].name, 'meat')
+  assert.deepEqual(branch.bank, ['spare', 'fruit', 'apple', 'banana'])
+  const root = fn(tree, [], 'r')
+  assert.equal(root.tree, null)
+  assert.deepEqual(root.bank, ['food', 'fruit', 'apple', 'banana', 'meat'])
+  assert.equal(fn(tree, [], 'missing'), null)
+  assert.match(source, /window\.__logyqCurriculumReturnToBank = \(uid\) =>/)
+})
+
+
+test('curriculum starts from the root with all other words in the Word Bank', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /function seedCurriculumRoot\(level\)/)
+  assert.match(source, /const root = \{ name: String\(level\.tree\.name/)
+  assert.match(source, /state\.wordBank = curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.doesNotMatch(source, /function spinCurriculum\(/)
+  assert.doesNotMatch(source, /function playCurriculumVegas\(/)
+})
+
+test('curriculum has no Mix control or shuffle phase', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.doesNotMatch(ui, /id="logyq-curriculum-mix"/)
+  assert.doesNotMatch(source, /logyq-curriculum-shuffling/)
+  assert.doesNotMatch(source, /__logyqCurriculumMix/)
+})
+
+test('curriculum recenters after structural changes', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /function settleCurriculumTree\(/)
+  assert.match(source, /treeManager\?\.settleRootAnchored\?\.\(\{ force: true, duration \}\)/)
+  assert.match(source, /engine\.wordDock\.render\(\)\s*settleCurriculumTree\(\)/)
 })

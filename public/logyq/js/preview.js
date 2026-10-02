@@ -360,6 +360,7 @@
       }
       body.logyq-game svg#canvas g.node rect:not(.grabzone),
       body.logyq-mobile-v162.logyq-game.v2-branch-drag svg#canvas g.node rect:not(.grabzone){fill:var(--logyq-piece-fill,#fff)!important;stroke:#fff!important}
+      body.logyq-curriculum svg#canvas g.node rect:not(.grabzone){stroke:#fff!important}
       body.logyq-game svg#canvas .caret-dot{fill:#22c55e!important;stroke:#fff;stroke-width:2;pointer-events:none}
 
       #logyq-curriculum .logiq-empty p{margin:0}
@@ -595,8 +596,8 @@
       body.logyq-game #logiq-mobile-panel [data-tool="paint"],
       body.logyq-game #logiq-mobile-panel [data-tool="dock"],
       body.logyq-game #logiq-mobile-panel [data-tool="mix"],
-      body.logyq-curriculum #Dock,
-      body.logyq-curriculum #Dock.dock-left,
+      body.logyq-curriculum:not(.logyq-curriculum-frozen) #Dock,
+      body.logyq-curriculum:not(.logyq-curriculum-frozen) #Dock.dock-left,
       body.logyq-curriculum #logyq-warehouse,
       body.logyq-curriculum #logyq-bank-trash,
       body.logyq-curriculum #logyq-warehouse-sheet,
@@ -676,14 +677,14 @@
       @media (min-width:701px){
         body.logyq-thekonym #logyq-thekonym-ask{top:12px;right:12px}
       }
-      /* Game pieces float clear of Android/browser edge gestures. */
-      body.logyq-game #Dock,body.logyq-game #Dock.dock-left{position:fixed;box-sizing:border-box;left:50%;right:auto;transform:translateX(-50%);top:auto;bottom:calc(32px + env(safe-area-inset-bottom));width:max-content;min-width:96px;max-width:calc(100vw - 48px);height:auto;min-height:64px;max-height:140px;padding:10px 12px;display:flex;flex-direction:row;align-items:center;justify-content:center;border:1px solid rgba(226,232,240,.9);border-radius:20px;background:rgba(255,255,255,.94);box-shadow:0 5px 20px rgba(15,23,42,.12);touch-action:none;overflow:hidden}
-      body.logyq-game #logyq-bank-chips{flex:0 1 auto;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
+      /* Direct-puzzle trays float clear of Android/browser edge gestures. */
+      body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{position:fixed;box-sizing:border-box;left:50%;right:auto;transform:translateX(-50%);top:auto;bottom:calc(32px + env(safe-area-inset-bottom));width:max-content;min-width:96px;max-width:calc(100vw - 48px);height:auto;min-height:64px;max-height:140px;padding:10px 12px;display:flex;flex-direction:row;align-items:center;justify-content:center;border:1px solid rgba(226,232,240,.9);border-radius:20px;background:rgba(255,255,255,.94);box-shadow:0 5px 20px rgba(15,23,42,.12);touch-action:none;overflow:hidden}
+      body.logyq-game #logyq-bank-chips,body.logyq-curriculum-frozen #logyq-bank-chips{flex:0 1 auto;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
       body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{flex:0 0 auto;width:auto;max-width:none;min-height:44px;padding:7px 2px;touch-action:none}
-      body.logyq-game #Dock.is-empty{display:none!important}
-      body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
-      body.logyq-game #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
-      @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left{max-width:640px}}
+      body.logyq-game #Dock.is-empty,body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
+      body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty,body.logyq-curriculum-frozen.v2-branch-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
+      body.logyq-game #Dock.is-empty #logyq-bank-chips::before,body.logyq-curriculum-frozen #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
+      @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{max-width:640px}}
       @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
       #logyq-drag-guide{position:fixed;inset:0;z-index:6;pointer-events:none}
       #logyq-guide-arrow{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
@@ -788,7 +789,6 @@
       </div>
       <div id="logyq-curriculum-bar">
         <p id="logyq-curriculum-status" role="status"></p>
-        <button type="button" id="logyq-curriculum-mix">Mix</button>
         <button type="button" id="logyq-curriculum-check">Check</button>
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
@@ -1982,8 +1982,9 @@
     const hold = { pointerId: event.pointerId, ...pointer, timer: 0 }
     state.hold = hold
     win.__logyqHoldArming = true
-    // Game has no pan, so a few pixels of movement starts the drag at once.
-    if (gamePlay(doc)) return
+    // Direct puzzle modes have no card-pan/select arbitration, so a few pixels
+    // of movement starts the drag at once.
+    if (directPuzzlePlay(doc)) return
     hold.timer = win.setTimeout(() => latchHold(doc, win, state, hold), v162Constants().HOLD_MS)
     beginCardRace(doc, win, state, event)
   }
@@ -1994,7 +1995,7 @@
     pointer.lastX = event.clientX
     pointer.lastY = event.clientY
 
-    if (gamePlay(doc) && state.hold?.pointerId === event.pointerId) {
+    if (directPuzzlePlay(doc) && state.hold?.pointerId === event.pointerId) {
       state.hold.lastX = event.clientX
       state.hold.lastY = event.clientY
       if (Math.hypot(event.clientX - state.hold.x, event.clientY - state.hold.y) >= v162Constants().GAME_DRAG_PX) {
@@ -2081,7 +2082,7 @@
 
       cleanupDrag(doc, win, state, drag)
       dispatchPointerCancel(canvas, win, event.pointerId, event.clientX, event.clientY)
-      if (armedBank && gamePlay(doc)) win.__logyqGameReturnToBank?.(drag.uid)
+      if (armedBank && directPuzzlePlay(doc)) returnDirectPuzzleToBank(doc, win, drag.uid)
       else if (armedBank) sendDragToWordBank(doc, drag)
     } finally {
       win.__logyqHoldDragCommit = false
@@ -2551,7 +2552,7 @@
       return
     }
     drag.bankChip = hitBankChip(doc, drag.lastX, drag.lastY)
-    if (gamePlay(doc)) {
+    if (directPuzzlePlay(doc)) {
       drag.bankArmed = true
       drag.bankSince = now
       return
@@ -2567,9 +2568,9 @@
     if (rect.width < 8 || rect.height < 8) return 'none'
     const inside = x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
     if (inside || hitBankChip(doc, x, y)) return 'bank'
-    const slack = gamePlay(doc) ? 58 : 28
+    const slack = directPuzzlePlay(doc) ? 58 : 28
     if (x >= rect.left - slack && x <= rect.right + slack && y >= rect.top - slack && y <= rect.bottom + slack) {
-      return gamePlay(doc) ? 'bank' : 'near'
+      return directPuzzlePlay(doc) ? 'bank' : 'near'
     }
     return 'none'
   }
@@ -2660,7 +2661,7 @@
   }
 
   function resolveCardRace(doc, win, state, event) {
-    if (gamePlay(doc)) return
+    if (directPuzzlePlay(doc)) return
     const race = state.race
     if (!race || race.mode === 'drag') return
     const now = win.performance.now()
@@ -2796,6 +2797,21 @@
     return !!doc?.body?.classList?.contains('logyq-game')
   }
 
+  function directPuzzlePlay(doc) {
+    const body = doc?.body
+    return !!body?.classList?.contains('logyq-game') ||
+      !!body?.classList?.contains('logyq-curriculum-frozen')
+  }
+
+  function returnDirectPuzzleToBank(doc, win, uid) {
+    if (!uid) return false
+    if (gamePlay(doc)) return !!win.__logyqGameReturnToBank?.(uid)
+    if (doc?.body?.classList?.contains('logyq-curriculum-frozen')) {
+      return !!win.__logyqCurriculumReturnToBank?.(uid)
+    }
+    return false
+  }
+
   // After the Start settle, and during the haze gate, the board stays put.
   // Drag reparent does not use these pan/zoom paths.
   function curriculumViewLocked(doc) {
@@ -2879,17 +2895,16 @@
       return
     }
 
-    // In Game, a double-tap is the fast "put this branch back" gesture.
-    // The existing game return helper already restores the touched card and
-    // every descendant to the bank, so this stays consistent with drag-return.
-    if (gamePlay(doc)) {
+    // In direct puzzle modes, a double-tap is the fast "put this branch back"
+    // gesture. Game and Curriculum each restore the touched card plus descendants.
+    if (directPuzzlePlay(doc)) {
       const uid = candidate.uid || uidFromTouchedNode(event) || hitEditUid(doc, event.clientX, event.clientY, event)
       const now = win.performance.now()
       if (uid && state.lastTap?.uid === uid && now - state.lastTap.time <= v162Constants().DOUBLE_TAP_MS) {
         state.lastTap = null
         clearCardMic(state.mic)
         smiteSetArm(doc, null)
-        win.__logyqGameReturnToBank?.(uid)
+        returnDirectPuzzleToBank(doc, win, uid)
         win.navigator.vibrate?.(12)
         return
       }
@@ -5673,48 +5688,6 @@
     return curriculumPack().find((level) => level.id === id) || null
   }
 
-  // Slot-machine tumble, stretched. Each beat is the same Mix. Gaps start
-  // short and keep growing. Every glide except the last outlasts the wait
-  // before the next Mix, so the cards are still moving when the tree
-  // changes and do not sit still between beats. The last glide starts at
-  // that same speed and eases to a stop, then the root-anchored camera
-  // ease. Shuffle ~7.2s plus a 0.9s settle.
-  function curriculumVegasEase(kind) {
-    if (kind === 'out') return (t) => t * (1 + t - t * t)
-    return typeof window.d3?.easeLinear === 'function' ? window.d3.easeLinear : null
-  }
-
-  const CURRICULUM_VEGAS_BEATS = [
-    { at: 0, motion: 140, ease: 'linear' },
-    { at: 90, motion: 170, ease: 'linear' },
-    { at: 200, motion: 190, ease: 'linear' },
-    { at: 320, motion: 220, ease: 'linear' },
-    { at: 460, motion: 260, ease: 'linear' },
-    { at: 630, motion: 300, ease: 'linear' },
-    { at: 820, motion: 340, ease: 'linear' },
-    { at: 1040, motion: 400, ease: 'linear' },
-    { at: 1300, motion: 470, ease: 'linear' },
-    { at: 1600, motion: 540, ease: 'linear' },
-    { at: 1950, motion: 620, ease: 'linear' },
-    { at: 2350, motion: 710, ease: 'linear' },
-    { at: 2810, motion: 820, ease: 'linear' },
-    { at: 3340, motion: 960, ease: 'linear' },
-    { at: 3960, motion: 1120, ease: 'linear' },
-    { at: 4680, motion: 1300, ease: 'linear' },
-    { at: 5520, motion: 1540, ease: 'out' },
-  ]
-  const CURRICULUM_VEGAS_SETTLE_AT = 7200
-  const CURRICULUM_VEGAS_SETTLE_MS = 900
-  const CURRICULUM_HAZE_FADE_MS = 250
-
-  const curriculumVegas = { token: 0, timers: [] }
-
-  function cancelCurriculumVegas() {
-    curriculumVegas.token += 1
-    curriculumVegas.timers.forEach((id) => clearTimeout(id))
-    curriculumVegas.timers = []
-  }
-
   // Haze is only the pre-Start gate. Start fades it off as the tumble
   // begins, then the layer leaves the stack so nothing sits on the cards.
   function showCurriculumHaze(gate) {
@@ -5740,28 +5713,26 @@
     const playing = !!app.curriculum
     const phase = app.curriculum?.phase || ''
     document.body.classList.toggle('logyq-curriculum', playing)
-    document.body.classList.toggle('logyq-curriculum-gate', playing && phase !== 'play')
-    document.body.classList.toggle('logyq-curriculum-shuffling', playing && phase === 'shuffle')
-    document.body.classList.toggle('logyq-curriculum-frozen', playing && phase === 'play')
+    document.body.classList.toggle('logyq-curriculum-gate', false)
+    document.body.classList.toggle('logyq-curriculum-frozen', playing)
     if (playing) document.body.dataset.curriculumPhase = phase
     else delete document.body.dataset.curriculumPhase
     const gate = document.getElementById('logyq-curriculum-gate')
     if (gate) {
-      if (playing && phase === 'gate') showCurriculumHaze(gate)
-      else if (!playing) {
+      if (!playing) {
         gate._hazeToken = (gate._hazeToken || 0) + 1
         gate.classList.remove('is-clearing')
         gate.hidden = true
-      } else fadeCurriculumHaze(gate)
+      } else gate.hidden = true
     }
     const start = document.getElementById('logyq-curriculum-start')
-    if (start) start.hidden = phase !== 'gate'
+    if (start) start.hidden = true
     const status = document.getElementById('logyq-curriculum-status')
     if (status && playing && !status.dataset.tone) status.textContent = app.curriculum.title || ''
   }
 
   function leaveCurriculumPlay() {
-    cancelCurriculumVegas()
+    delete window.__logyqCurriculumReturnToBank
     const state = bridge.core?.state
     if (state) state.curriculumCameraLock = false
     if (!app.curriculum) {
@@ -5797,223 +5768,75 @@
     }).join('')
   }
 
-  function curriculumCardPool(live, answer) {
-    const expected = curriculumWords(answer)
-    const found = []
-    const walk = (node) => {
-      if (!node || typeof node !== 'object') return
-      if (!node.curriculumPile) {
-        const name = String(node.name ?? '').trim()
-        if (name) found.push({ name, _uid: node._uid })
-      }
-      for (const child of node.children || []) walk(child)
-    }
-    walk(live)
-    const names = found.map((card) => card.name).sort()
-    const want = expected.slice().sort()
-    const same = names.length === want.length && names.every((name, index) => name === want[index])
-    if (!same) return expected.map((name) => ({ name }))
-    return found
+  function settleCurriculumTree(duration = 260) {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        try {
+          bridge.core?.treeManager?.settleRootAnchored?.({ force: true, duration })
+        } catch (_error) {}
+      })
+    })
   }
 
-  function curriculumCameraSnap() {
-    const svg = document.getElementById('canvas')
-    const zoom = window.d3?.zoomTransform
-    if (!svg || typeof zoom !== 'function') return null
-    const t = zoom(svg)
-    return { x: t.x, y: t.y, k: t.k }
-  }
-
-  function restoreCurriculumCamera(snap) {
-    const core = bridge.core
-    const svg = document.getElementById('canvas')
-    if (!snap || !svg || !core?.state?.zoom || !window.d3) return
-    const target = window.d3.zoomIdentity.translate(snap.x, snap.y).scale(snap.k)
-    window.d3.select(svg).interrupt().call(core.state.zoom.transform, target)
-  }
-
-  // One Mix. Seeds the level words, then calls randomizeTree. The curriculum
-  // class is lifted for that call because Mix refuses it. Camera fit stays
-  // off while curriculumCameraLock is set.
-  function spinCurriculum(level, { motion = 260, avoidAnswer = true, ease = 'linear' } = {}) {
+  function seedCurriculumRoot(level) {
     const core = bridge.core
     const state = core?.state
-    const utils = core?.utils
-    const mix = core?.mix?.randomizeTree
-    if (!level || !state || !utils || !window.d3 || typeof mix !== 'function') return false
-    const cards = curriculumCardPool(state.root?.data, level.tree)
-    if (!cards.length) return false
-    const previous = curriculumStructureKey(curriculumAnswerTree(state.root?.data) || {})
-    const seed = {
-      name: cards[0].name,
-      children: cards.slice(1).map((card) => {
-        const node = { name: card.name }
-        if (card._uid != null && String(card._uid) !== '') node._uid = card._uid
-        return node
-      }),
-    }
-    if (cards[0]._uid != null && String(cards[0]._uid) !== '') seed._uid = cards[0]._uid
-    utils.assignUids(seed)
-    try { core.editing?.closeNodeEditor?.(false, false) } catch (_error) {}
-    state.wordBank = []
+    if (!level?.tree || !state || !window.d3) return false
+    const root = { name: String(level.tree.name ?? '').trim() }
+    core.utils.assignUids(root)
+    state.root = window.d3.hierarchy(root)
+    core.utils.assignIds(state.root)
+    state.wordBank = curriculumWords(level.tree).slice(1)
     state.selectedUid = null
+    state.history = []
+    state.redo = []
+    state.repositionMode = null
+    state.curriculumCameraLock = true
     try { core.selection?.clearGroup?.() } catch (_error) {}
     try { core.selection?.clearSelection?.() } catch (_error) {}
-    state.root = window.d3.hierarchy(seed)
-    utils.assignIds(state.root)
-    const before = curriculumStructureKey(state.root.data)
-    const prevMotion = state.layoutMotionMs
-    const prevEase = state.layoutMotionEase
-    state.layoutMotionMs = motion
-    // Linear keeps a steady drift that the next Mix can catch mid-glide.
-    // The closing beat uses an ease that starts at that same speed and
-    // arrives with none left, so the handoff into the camera settle is soft.
-    state.layoutMotionEase = motion > 0 ? curriculumVegasEase(ease) : null
-    state.curriculumCameraLock = true
-    const locked = document.body.classList.contains('logyq-curriculum')
-    const runMix = () => {
-      if (locked) document.body.classList.remove('logyq-curriculum')
-      try { mix(false) } finally {
-        if (locked) document.body.classList.add('logyq-curriculum')
-      }
-    }
-    try {
-      runMix()
-      if (avoidAnswer) {
-        const live = () => curriculumAnswerTree(state.root?.data)
-        const solved = () => {
-          const tree = live()
-          return !!(tree && curriculumMatches(level.tree, tree))
-        }
-        let tries = 0
-        while (tries < 6) {
-          const key = curriculumStructureKey(state.root?.data)
-          const sameBoard = key === before || (previous && key === previous)
-          if (!solved() && !sameBoard) break
-          runMix()
-          tries += 1
-        }
-      }
-    } finally {
-      state.layoutMotionMs = prevMotion
-      state.layoutMotionEase = prevEase
-    }
-    state.wordBank = []
-    try { core.wordDock?.render?.() } catch (_error) {}
+    core.treeManager.layoutAndRender(false)
+    core.wordDock.render()
+    settleCurriculumTree(0)
     return true
   }
 
-  function quietCurriculumBoard(level) {
-    const ok = spinCurriculum(level, { motion: 0, avoidAnswer: true })
-    const state = bridge.core?.state
-    if (state) {
-      state.history = []
-      state.redo = []
-      state.repositionMode = null
-      state.curriculumCameraLock = true
-    }
-    const undo = document.getElementById('undoBtn')
-    if (undo) undo.disabled = true
-    const settle = () => {
-      if (app.curriculum?.phase !== 'gate') return
-      try { bridge.core?.treeManager?.settleRootAnchored?.({ force: true, duration: 0 }) } catch (_error) {}
-    }
-    settle()
-    requestAnimationFrame(settle)
-    return ok
-  }
-
-  function releaseCurriculumPlay(session) {
-    if (app.curriculum !== session || session.phase === 'play' && session.released) return
-    session.phase = 'play'
-    session.released = true
-    session.startedAt = Date.now()
-    const state = bridge.core?.state
-    if (state) {
-      state.repositionMode = null
-      state.history = []
-      state.redo = []
-      state.wordBank = []
-      state.curriculumCameraLock = true
-    }
-    const undo = document.getElementById('undoBtn')
-    if (undo) undo.disabled = true
-    const status = document.getElementById('logyq-curriculum-status')
-    if (status && status.dataset.tone === 'wait') {
-      delete status.dataset.tone
-      status.textContent = session.title || ''
-    }
-    renderCurriculumChrome()
-  }
-
-  function playCurriculumVegas(session) {
-    const level = curriculumLevel(session.id)
-    if (!level) return false
-    cancelCurriculumVegas()
-    const token = curriculumVegas.token
-    session.phase = 'shuffle'
-    renderCurriculumChrome()
-    const snap = curriculumCameraSnap()
-    const alive = () => app.curriculum === session && curriculumVegas.token === token
-    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
-    const finish = () => {
-      if (!alive()) return
-      const state = bridge.core?.state
-      if (state) state.repositionMode = null
-      const duration = reduced ? 0 : CURRICULUM_VEGAS_SETTLE_MS
-      try {
-        bridge.core?.treeManager?.settleRootAnchored?.({ force: false, duration })
-      } catch (_error) {}
-      const open = window.setTimeout(() => {
-        if (!alive()) return
-        releaseCurriculumPlay(session)
-      }, duration)
-      curriculumVegas.timers.push(open)
-    }
-    if (reduced) {
-      const ok = spinCurriculum(level, { motion: 0, avoidAnswer: true })
-      restoreCurriculumCamera(snap)
-      finish()
-      return ok
-    }
-    const beats = CURRICULUM_VEGAS_BEATS
-    beats.forEach((beat) => {
-      const run = () => {
-        if (!alive()) return
-        spinCurriculum(level, { motion: beat.motion, avoidAnswer: true, ease: beat.ease })
-        restoreCurriculumCamera(snap)
+  function returnCurriculumBranch(tree, bank, uid) {
+    if (!tree || !uid) return null
+    const nextTree = structuredClone(tree)
+    let removed = null
+    if (nextTree._uid === uid) removed = nextTree
+    else {
+      const detach = node => {
+        const index = (node.children || []).findIndex(child => child?._uid === uid)
+        if (index >= 0) {
+          removed = node.children.splice(index, 1)[0]
+          return true
+        }
+        return (node.children || []).some(detach)
       }
-      if (beat.at === 0) {
-        run()
-        return
-      }
-      curriculumVegas.timers.push(window.setTimeout(run, beat.at))
-    })
-    const settleId = window.setTimeout(() => {
-      if (!alive()) return
-      finish()
-    }, CURRICULUM_VEGAS_SETTLE_AT)
-    curriculumVegas.timers.push(settleId)
-    return true
-  }
-
-  function mixCurriculum() {
-    const session = app.curriculum
-    if (!session || session.cleared || session.phase === 'shuffle') return false
-    return playCurriculumVegas(session)
+      detach(nextTree)
+    }
+    if (!removed) return null
+    const nextBank = Array.isArray(bank) ? bank.slice() : []
+    const restore = node => {
+      const name = String(node?.name ?? '').trim()
+      if (name) nextBank.push(name)
+      ;(node.children || []).forEach(restore)
+    }
+    restore(removed)
+    return { tree: removed === nextTree ? null : nextTree, bank: nextBank }
   }
 
   function beginCurriculumLevel(level) {
     if (!level) return
     leaveGamePlay()
-    cancelCurriculumVegas()
     app.curriculum = {
       id: level.id,
       title: level.title,
-      startedAt: 0,
+      startedAt: Date.now(),
       cleared: false,
-      phase: 'gate',
-      released: false,
+      phase: 'play',
+      released: true,
     }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
@@ -6027,8 +5850,35 @@
       status.textContent = level.title
     }
     if (bridge.core?.state) bridge.core.state.curriculumCameraLock = true
+    window.__logyqCurriculumReturnToBank = (uid) => {
+      const engine = bridge.core
+      const session = app.curriculum
+      if (!engine?.state || !session || session.id !== level.id || session.phase !== 'play') return false
+      const result = returnCurriculumBranch(engine.state.root?.data, engine.state.wordBank || [], uid)
+      if (!result) return false
+      engine.state.wordBank = result.bank
+      engine.state.root = result.tree ? d3.hierarchy(result.tree) : null
+      try { engine.selection?.clearGroup?.() } catch (_error) {}
+      try { engine.selection?.clearSelection?.() } catch (_error) {}
+      if (engine.state.root) {
+        engine.utils.assignIds(engine.state.root)
+        engine.treeManager.layoutAndRender(false)
+      } else {
+        engine.state.lastNodes = []
+        engine.treeManager.renderEmpty()
+      }
+      engine.wordDock.render()
+      settleCurriculumTree()
+      const status = document.getElementById('logyq-curriculum-status')
+      if (status && !session.cleared) {
+        delete status.dataset.tone
+        status.textContent = 'Piece back in the Word Bank. Keep arranging!'
+      }
+      bridge.notifyChange?.()
+      return true
+    }
     renderCurriculumChrome()
-    quietCurriculumBoard(level)
+    seedCurriculumRoot(level)
     setSaveState('saved')
   }
 
@@ -6077,14 +5927,6 @@
       beginCurriculumLevel(level)
     })
     document.getElementById('logyq-curriculum-check')?.addEventListener('click', () => checkCurriculum())
-    document.getElementById('logyq-curriculum-mix')?.addEventListener('click', () => mixCurriculum())
-    document.getElementById('logyq-curriculum-start')?.addEventListener('click', () => mixCurriculum())
-    document.getElementById('mixBtn')?.addEventListener('pointerdown', (event) => {
-      if (!document.body.classList.contains('logyq-curriculum')) return
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      mixCurriculum()
-    }, true)
     document.getElementById('logyq-curriculum-levels')?.addEventListener('click', () => {
       openLibrary().then(() => setHomeTab('curriculum'))
     })
@@ -6098,10 +5940,9 @@
       read: readCurriculumProgress,
       begin: beginCurriculumLevel,
       check: checkCurriculum,
-      mix: mixCurriculum,
       answerTree: curriculumAnswerTree,
+      returnBranch: returnCurriculumBranch,
     }
-    window.__logyqCurriculumMix = mixCurriculum
   }
 
   bindCurriculum()

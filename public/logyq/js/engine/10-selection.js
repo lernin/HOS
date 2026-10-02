@@ -15,24 +15,25 @@ function applySelectionStyles(){
   const hasGroup = !!(state.selectedUids && state.selectedUids.size > 0);
   const vFocus = !!(state.vHold && !hasGroup && state.selectedUid);
   const phone = !!logyq.camera?.phoneNoFollowCamera?.();
+  const puzzle = typeof curriculumPlayLocked === 'function' && curriculumPlayLocked();
 
   elements.gNodes.selectAll("g.node")
     .classed("is-outlined", n =>
-      !phone && (
+      !phone && !puzzle && (
         (!hasGroup && state.selectedUid === n.data._uid) ||
         (hasGroup && state.selectedUids.has(n.data._uid))
       )
     )
     // Selected fill if a group exists (your old behavior) OR while V-hold focus-only.
     .classed("is-filled", n =>
-      !phone && (
+      !phone && !puzzle && (
         (hasGroup && state.selectedUid === n.data._uid) ||
         (vFocus && state.selectedUid === n.data._uid)
       )
     )
     // This class triggers marching-ants via the CSS above (only during V-hold focus-only).
     .classed("is-focus-vhold", n =>
-      !phone && vFocus && state.selectedUid === n.data._uid
+      !phone && !puzzle && vFocus && state.selectedUid === n.data._uid
     );
 }
 

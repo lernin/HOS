@@ -74,6 +74,7 @@
       }
       body.logyq-game svg#canvas g.node rect:not(.grabzone),
       body.logyq-mobile-v162.logyq-game.v2-branch-drag svg#canvas g.node rect:not(.grabzone){fill:var(--logyq-piece-fill,#fff)!important;stroke:#fff!important}
+      body.logyq-curriculum svg#canvas g.node rect:not(.grabzone){stroke:#fff!important}
       body.logyq-game svg#canvas .caret-dot{fill:#22c55e!important;stroke:#fff;stroke-width:2;pointer-events:none}
 
       #logyq-curriculum .logiq-empty p{margin:0}
@@ -309,8 +310,8 @@
       body.logyq-game #logiq-mobile-panel [data-tool="paint"],
       body.logyq-game #logiq-mobile-panel [data-tool="dock"],
       body.logyq-game #logiq-mobile-panel [data-tool="mix"],
-      body.logyq-curriculum #Dock,
-      body.logyq-curriculum #Dock.dock-left,
+      body.logyq-curriculum:not(.logyq-curriculum-frozen) #Dock,
+      body.logyq-curriculum:not(.logyq-curriculum-frozen) #Dock.dock-left,
       body.logyq-curriculum #logyq-warehouse,
       body.logyq-curriculum #logyq-bank-trash,
       body.logyq-curriculum #logyq-warehouse-sheet,
@@ -390,14 +391,14 @@
       @media (min-width:701px){
         body.logyq-thekonym #logyq-thekonym-ask{top:12px;right:12px}
       }
-      /* Game pieces float clear of Android/browser edge gestures. */
-      body.logyq-game #Dock,body.logyq-game #Dock.dock-left{position:fixed;box-sizing:border-box;left:50%;right:auto;transform:translateX(-50%);top:auto;bottom:calc(32px + env(safe-area-inset-bottom));width:max-content;min-width:96px;max-width:calc(100vw - 48px);height:auto;min-height:64px;max-height:140px;padding:10px 12px;display:flex;flex-direction:row;align-items:center;justify-content:center;border:1px solid rgba(226,232,240,.9);border-radius:20px;background:rgba(255,255,255,.94);box-shadow:0 5px 20px rgba(15,23,42,.12);touch-action:none;overflow:hidden}
-      body.logyq-game #logyq-bank-chips{flex:0 1 auto;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
+      /* Direct-puzzle trays float clear of Android/browser edge gestures. */
+      body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{position:fixed;box-sizing:border-box;left:50%;right:auto;transform:translateX(-50%);top:auto;bottom:calc(32px + env(safe-area-inset-bottom));width:max-content;min-width:96px;max-width:calc(100vw - 48px);height:auto;min-height:64px;max-height:140px;padding:10px 12px;display:flex;flex-direction:row;align-items:center;justify-content:center;border:1px solid rgba(226,232,240,.9);border-radius:20px;background:rgba(255,255,255,.94);box-shadow:0 5px 20px rgba(15,23,42,.12);touch-action:none;overflow:hidden}
+      body.logyq-game #logyq-bank-chips,body.logyq-curriculum-frozen #logyq-bank-chips{flex:0 1 auto;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
       body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{flex:0 0 auto;width:auto;max-width:none;min-height:44px;padding:7px 2px;touch-action:none}
-      body.logyq-game #Dock.is-empty{display:none!important}
-      body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
-      body.logyq-game #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
-      @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left{max-width:640px}}
+      body.logyq-game #Dock.is-empty,body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
+      body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty,body.logyq-curriculum-frozen.v2-branch-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
+      body.logyq-game #Dock.is-empty #logyq-bank-chips::before,body.logyq-curriculum-frozen #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
+      @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{max-width:640px}}
       @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
       #logyq-drag-guide{position:fixed;inset:0;z-index:6;pointer-events:none}
       #logyq-guide-arrow{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
