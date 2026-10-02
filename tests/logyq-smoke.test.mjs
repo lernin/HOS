@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 import { chromium } from 'playwright'
 
@@ -98,6 +100,11 @@ async function newContext(options = {}) {
 
 async function waitForBoot(page) {
   await page.waitForFunction(() => window.LOGYQPreview?.app?.booted === true, null, { timeout: 10_000 })
+  // Most smoke cases exercise the editor and map library. The product opens
+  // on Game now, so put these legacy cases on their intended shelf first.
+  await page.evaluate(() => {
+    if (document.body.classList.contains('logyq-home')) document.getElementById('logyq-tab-maps')?.click()
+  })
 }
 
 async function waitForTree(page) {
@@ -7887,7 +7894,7 @@ test('completion colors expand into a background and reset without changing the 
   assert.equal(await page.locator('#Dock').evaluate(el=>+getComputedStyle(el).opacity),0)
   assert.equal(await page.locator('#logyq-game-next').isVisible(),true)
   assert.equal(await page.evaluate(()=>JSON.stringify(window.LOGYQBridge.snapshot().tree)),before)
-  await page.screenshot({path:'/workspace/scratch/ae226cb204ec/logyq-completion-phone.png'})
+  await page.screenshot({path:join(tmpdir(),'logyq-completion-phone.png')})
   await page.locator('svg#canvas').tap({position:{x:200,y:300}})
   await page.waitForTimeout(350)
   assert.equal(await page.locator('#logyq-completion-art').count(),0)
@@ -7904,7 +7911,7 @@ test('completion colors expand into a background and reset without changing the 
   assert.equal(await page.locator('svg#canvas g.nodes').evaluate(el=>getComputedStyle(el).transitionDuration),'0s')
   await page.setViewportSize({width:844,height:390})
   await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.getAttribute('viewBox')==='0 0 844 390',null,{timeout:2000})
-  await page.screenshot({path:'/workspace/scratch/ae226cb204ec/logyq-completion-landscape.png'})
+  await page.screenshot({path:join(tmpdir(),'logyq-completion-landscape.png')})
   await context.close()
 })
 
@@ -7973,7 +7980,7 @@ test('clean completion joins render the reported chain and fork examples',async(
     await page.locator('#logyq-game-check').click()
     await page.waitForFunction(()=>document.getElementById('logyq-completion-art')?.dataset.phase==='complete')
     assert.ok(await page.locator('#logyq-completion-art path').count()>0)
-    await page.screenshot({path:`/workspace/scratch/ae226cb204ec/logyq-clean-${index+1}.png`})
+    await page.screenshot({path:join(tmpdir(),`logyq-clean-${index+1}.png`)})
   }
   await context.close()
 })
@@ -7996,7 +8003,7 @@ test('game tray leaves gesture margins and first concepts show drag destinations
     assert.ok(target.x>=15&&target.x+target.width<=375&&target.y>=90&&target.y+target.height<tray.y)
     const chip=await page.locator('#Dock .chip').first().boundingBox()
     assert.ok(Math.abs(chip.x+chip.width/2-195)<2,'single loose piece is centered')
-    await page.screenshot({path:`/workspace/scratch/ae226cb204ec/logyq-guide-${kind}.png`})
+    await page.screenshot({path:join(tmpdir(),`logyq-guide-${kind}.png`)})
     const cdp=await context.newCDPSession(page)
     const from={x:chip.x+chip.width/2,y:chip.y+chip.height/2}
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...from,id:1}]})
