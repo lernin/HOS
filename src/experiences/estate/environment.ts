@@ -33,6 +33,10 @@ export function architecture(k:EstateKit){
   const arrivalGround=FLOOR-10*1.2/14,arrivalRoofBottom=FLOOR+4-.14
   const foundationH=.28,plinthH=.18,capH=.14,shaftBottom=arrivalGround+foundationH+plinthH,shaftTop=arrivalRoofBottom-capH,pillarH=shaftTop-shaftBottom,shaftY=shaftBottom+pillarH/2
   for(const x of [-5,7]){
+    // Massive stair-side abutments visually carry the portal columns down to the court level.
+    const supportBase=FLOOR-1.22,supportTop=arrivalGround+.34
+    k.box(x,(supportBase+supportTop)/2,29.2,1.72,supportTop-supportBase,1.52,'travertine',k.root,.11)
+    k.box(x,arrivalGround-.02,29.2,1.42,.32,1.28,'limestone',k.root,.075)
     // Two-stage stone foundation lands visibly on the stair paving.
     k.box(x,arrivalGround+foundationH/2,29.2,1.06,foundationH,.92,'travertine',k.root,.07)
     k.box(x,arrivalGround+foundationH+plinthH/2,29.2,.90,plinthH,.80,'limestone',k.root,.045)
@@ -90,6 +94,8 @@ export function landscape(k:EstateKit){
   k.lathe([[1.1,0],[1.2,.2],[.6,1],[.45,1.4],[1.1,1.6],[1.15,1.8]],'travertine',1,5.18,41)
   // Arrival court is encircled by planted edges, not an exposed square plane.
   for(let i=0;i<48;i++){const a=i/48*Math.PI*2;k.cylinder(1+Math.cos(a)*4.4,5,41+Math.sin(a)*4.4,.18,.18,'leafDark',k.root,.24,6)}
+  // Natural boulder line marks the round court edge while leaving the stair approach open.
+  for(let i=0;i<34;i++){const a=i/34*Math.PI*2;if(Math.abs(Math.atan2(Math.sin(a+Math.PI/2),Math.cos(a+Math.PI/2)))<.42)continue;const wobble=.15*Math.sin(i*2.37),r=19.42+wobble,x=1+Math.cos(a)*r,z=41+Math.sin(a)*r;rock(x,4.62,z,.48+(i%4)*.11,.32+(i%3)*.08,.44+((i+2)%4)*.1,500+i)}
   function frond(g:T.Group,angle:number,length:number){const points=[v(0,0,0),v(Math.cos(angle)*length*.4,length*.28,Math.sin(angle)*length*.4),v(Math.cos(angle)*length,length*.03,Math.sin(angle)*length)];k.beam(points,.027,'leafLight',g,5)
     for(let i=1;i<=10;i++){const t=i/11,cx=Math.cos(angle)*length*t,cz=Math.sin(angle)*length*t,cy=Math.sin(t*Math.PI)*length*.25;for(const s of [-1,1]){
       const l=length*.34*Math.sin(t*Math.PI),dx=Math.cos(angle+s*.85)*l,dz=Math.sin(angle+s*.85)*l
