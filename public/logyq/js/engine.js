@@ -5128,14 +5128,31 @@ function bindChipPointerPlace() {
   }
 
   const chipUnderPoint = (x, y) => {
-    if (typeof document.elementsFromPoint !== 'function') return null
-    const stack = document.elementsFromPoint(x, y) || []
-    for (const el of stack) {
-      const chip = el?.closest?.('.chip')
-      if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') continue
-      return chip
+    if (typeof document.elementsFromPoint === 'function') {
+      const stack = document.elementsFromPoint(x, y) || []
+      for (const el of stack) {
+        const chip = el?.closest?.('.chip')
+        if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') continue
+        return chip
+      }
     }
-    return null
+    // Game pieces are intentionally forgiving: the visible card is smaller
+    // than a child's finger target. Pick the nearest card within a generous halo.
+    if (!document.body.classList.contains('logyq-game')) return null
+    const halo = 26
+    let best = null
+    let bestDistance = Infinity
+    for (const chip of dock.querySelectorAll('.chip')) {
+      if (chip.id === 'logyq-bank-all') continue
+      const rect = chip.getBoundingClientRect?.()
+      if (!rect || rect.width < 1 || rect.height < 1) continue
+      const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0
+      const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0
+      if (dx > halo || dy > halo) continue
+      const distance = Math.hypot(dx, dy)
+      if (distance < bestDistance) { best = chip; bestDistance = distance }
+    }
+    return best
   }
 
   dock.addEventListener('pointerdown', (event) => {
@@ -5143,8 +5160,6 @@ function bindChipPointerPlace() {
     const direct = event.target?.closest?.('.chip')
     const chip = chipUnderPoint(event.clientX, event.clientY) || direct
     if (!chip || !dock.contains(chip) || chip.id === 'logyq-bank-all') return
-    const rect = chip.getBoundingClientRect?.()
-    if (rect && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom)) return
     const word = chip.textContent.trim()
     if (!word) return
     session = { pointerId: event.pointerId, word, x: event.clientX, y: event.clientY, dragging: false, chip }
@@ -6549,6 +6564,12 @@ centerOnSelected(opts = {}) {
       const midY = (top + bottom) / 2
       if (bar.height < frame.fullH * 0.45 && bar.bottom <= midY) top = Math.max(top, bar.bottom + gap)
       else if (bar.height < frame.fullH * 0.45 && bar.top >= midY) bottom = Math.min(bottom, bar.top - gap)
+    }
+    const next = shownRect('logyq-game-next')
+    if (next && next.height < frame.fullH * 0.45) {
+      const midY = (top + bottom) / 2
+      if (next.bottom <= midY) top = Math.max(top, next.bottom + gap)
+      else if (next.top >= midY) bottom = Math.min(bottom, next.top - gap)
     }
     const cluster = shownRect('logyq-corner-cluster')
     if (cluster && cluster.left > frame.fullW * 0.55 && cluster.width < frame.fullW * 0.4 && cluster.height > 40) {

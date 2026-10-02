@@ -27,7 +27,7 @@
     const title = document.createElement('strong')
     title.id = 'logyq-game-puzzle'
     title.textContent = 'Puzzle'
-    const pause = button('logyq-game-pause', 'Ⅱ', 'Pause and settings')
+    const pause = button('logyq-game-pause', '⚙', 'Game settings')
     pause.setAttribute('aria-expanded', 'false')
     bar.replaceChildren(back, title, pause)
 
@@ -45,10 +45,11 @@
     panel.setAttribute('aria-hidden', 'true')
     panel.innerHTML = `
       <section class="logyq-game-pause-card" role="dialog" aria-modal="true" aria-labelledby="logyq-game-pause-title">
-        <h2 id="logyq-game-pause-title">Paused</h2>
-        <button type="button" id="logyq-game-resume">Resume</button>
+        <h2 id="logyq-game-pause-title">Settings</h2>
+        <button type="button" id="logyq-game-resume">Close</button>
         <button type="button" id="logyq-game-pause-levels">Levels</button>
-        <label class="logyq-game-volume">Music
+        <button type="button" id="logyq-game-music-toggle" aria-pressed="true">Music: On</button>
+        <label class="logyq-game-volume">Music volume
           <input id="logyq-game-music-volume" type="range" min="0" max="100" step="1" aria-label="Music volume">
         </label>
         <label class="logyq-game-volume">Sound effects
@@ -104,6 +105,7 @@
     const sound = window.LOGYQGameSound
     const volume = document.getElementById('logyq-game-sfx-volume')
     const music = window.LOGYQGameMusic
+    const musicToggle = document.getElementById('logyq-game-music-toggle')
     const musicVolume = document.getElementById('logyq-game-music-volume')
     const thumbGain = window.LOGYQGameThumbGain
     const thumbGainDown = document.getElementById('logyq-game-thumb-gain-down')
@@ -129,10 +131,25 @@
       volume.addEventListener('input', () => sound.setVolume?.(Number(volume.value) / 100))
       window.addEventListener('logyq-game-soundchange', syncSoundControls)
     }
+    const syncMusic = () => {
+      const enabled = !!music?.enabled?.()
+      if (musicToggle) {
+        musicToggle.disabled = !music?.supported
+        musicToggle.textContent = 'Music: ' + (enabled ? 'On' : 'Off')
+        musicToggle.setAttribute('aria-pressed', String(enabled))
+      }
+      if (musicVolume) {
+        musicVolume.disabled = !music?.supported || !enabled
+        musicVolume.value = String(Math.round((music?.volume?.() ?? 0) * 100))
+      }
+    }
     if (music && musicVolume) {
-      musicVolume.value = String(Math.round(music.volume() * 100))
-      musicVolume.disabled = !music.supported
       musicVolume.addEventListener('input', () => music.setVolume(Number(musicVolume.value) / 100))
+      musicToggle?.addEventListener('click', () => {
+        music.setEnabled?.(!music.enabled?.())
+        syncMusic()
+      })
+      syncMusic()
     }
 
     let focusReturn = null
@@ -147,7 +164,6 @@
     }
     const openPause = () => {
       if (!document.body.classList.contains('logyq-game')) return
-      music?.pause()
       focusReturn = document.activeElement
       panel.hidden = false
       panel.setAttribute('aria-hidden', 'false')
@@ -163,10 +179,7 @@
 
     back.addEventListener('click', openLevels)
     pause.addEventListener('click', openPause)
-    document.getElementById('logyq-game-resume').addEventListener('click', () => {
-      closePause()
-      music?.resume()
-    })
+    document.getElementById('logyq-game-resume').addEventListener('click', closePause)
     document.getElementById('logyq-game-pause-levels').addEventListener('click', openLevels)
     legacyNext.addEventListener('click', () => music?.resume())
     document.addEventListener('pointerdown', (event) => {
