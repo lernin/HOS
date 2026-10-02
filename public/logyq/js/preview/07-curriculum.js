@@ -7,7 +7,7 @@
 
   function curriculumPack() {
     return [
-      { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')) },
+      { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple')) },
       { id: 'food', title: 'Food', tree: curriculumNode('food',
         curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
         curriculumNode('meat', curriculumNode('chicken'), curriculumNode('beef'))) },
@@ -226,6 +226,17 @@
     return { tree: removed === nextTree ? null : nextTree, bank: nextBank }
   }
 
+  function showCurriculumFirstGuide(level) {
+    if (level?.id !== 'fruit') return
+    const guideLevel = {
+      guide: 'below',
+      tree: { name: 'fruit' },
+      bank: ['apple'],
+      bankCards: { apple: { name: 'apple' } },
+    }
+    window.LOGYQGameGuide?.show(guideLevel, bridge.core)
+  }
+
   function beginCurriculumLevel(level) {
     if (!level) return
     leaveGamePlay()
@@ -278,6 +289,7 @@
     }
     renderCurriculumChrome()
     seedCurriculumRoot(level)
+    showCurriculumFirstGuide(level)
     setSaveState('saved')
   }
 
