@@ -8060,6 +8060,7 @@
   const allLevels = document.getElementById('logyq-trail-all-levels')
   document.getElementById('logyq-trail-home')?.addEventListener('click', () => {
     setTrailDrawer(false)
+    if (app.game) leaveGamePlay()
     setHomeTab('maps')
     renderLibrary()
     if (app.libraryStatus !== 'live') refreshLibrary()
