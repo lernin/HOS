@@ -774,6 +774,7 @@
                   <p id="logyq-trail-caption">Your next puzzle is waiting</p>
                   <button type="button" id="logyq-trail-continue">Continue</button>
                   <button type="button" id="logyq-trail-all-levels" aria-controls="logyq-trail-drawer" aria-expanded="false">All levels</button>
+                  <button type="button" id="logyq-trail-reset-progress">Reset progress</button>
                 </div>
                 <div id="logyq-trail-drawer" hidden>
                   <div class="logyq-trail-drawer-head"><strong>Choose a puzzle</strong><button type="button" id="logyq-trail-close-levels">Close</button></div>
@@ -7990,6 +7991,14 @@
   })
   allLevels?.addEventListener('click', () => setTrailDrawer(true))
   document.getElementById('logyq-trail-close-levels')?.addEventListener('click', () => setTrailDrawer(false))
+  document.getElementById('logyq-trail-reset-progress')?.addEventListener('click', () => {
+    const confirmed = window.confirm?.('Reset all game progress and start again from Puzzle 1?')
+    if (!confirmed) return
+    try { localStorage.removeItem(GAME_KEY) } catch (_error) {}
+    trailReturnTop = 0
+    setTrailDrawer(false)
+    renderGamePath()
+  })
 
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-game-level]')

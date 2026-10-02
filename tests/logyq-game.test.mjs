@@ -272,6 +272,7 @@ function loadGameFragment() {
     localStorage: {
       setItem(key, value) { store[key] = value },
       getItem(key) { return store[key] ?? null },
+      removeItem(key) { delete store[key] },
     },
     structuredClone: globalThis.structuredClone,
     d3,
@@ -316,6 +317,34 @@ test('forest map lays every puzzle on one scrollable route and centers the next 
   store.logyq_game_progress_v2 = JSON.stringify({ ...progress, _adaptive: { clean: 0, tier: 4, played: {} } })
   game.render()
   assert.ok(elements['logyq-trail-world'].scrollTop > 1000)
+})
+
+test('Reset progress clears only game progress and returns the trail to Puzzle 1', () => {
+  const { sandbox, elements, listeners, store } = loadGameFragment()
+  const levels = sandbox.preview.game.levels
+  store.logyq_game_progress_v2 = JSON.stringify({
+    [levels[0].id]: Date.now(),
+    _adaptive: { clean: 2, tier: 4, played: { [levels[0].id]: Date.now() } },
+  })
+  store.keep_me = 'untouched'
+  sandbox.window.confirm = () => true
+  const viewport = sandbox.document.getElementById('logyq-trail-world')
+  viewport.clientHeight = 600
+  sandbox.preview.game.render()
+  assert.ok(viewport.scrollTop > 0)
+
+  listeners['logyq-trail-reset-progress:click'][0]()
+
+  assert.equal(store.logyq_game_progress_v2, undefined)
+  assert.equal(store.keep_me, 'untouched')
+  assert.equal(elements['logyq-trail-leaves'].textContent, '🍃 0')
+  assert.equal(elements['logyq-trail-caption'].textContent, 'Next: Puzzle 1')
+  assert.equal(viewport.scrollTop, 0)
+
+  store.logyq_game_progress_v2 = JSON.stringify({ [levels[0].id]: Date.now() })
+  sandbox.window.confirm = () => false
+  listeners['logyq-trail-reset-progress:click'][0]()
+  assert.notEqual(store.logyq_game_progress_v2, undefined)
 })
 
 test('forest map centers progress after the home dialog becomes visible', () => {
