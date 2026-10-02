@@ -774,6 +774,7 @@
                   <p id="logyq-trail-caption">Your next puzzle is waiting</p>
                   <button type="button" id="logyq-trail-continue">Continue</button>
                   <button type="button" id="logyq-trail-all-levels" aria-controls="logyq-trail-drawer" aria-expanded="false">All levels</button>
+                  <button type="button" id="logyq-trail-reset-progress">Reset progress</button>
                 </div>
                 <div id="logyq-trail-drawer" hidden>
                   <div class="logyq-trail-drawer-head"><strong>Choose a puzzle</strong><button type="button" id="logyq-trail-close-levels">Close</button></div>
