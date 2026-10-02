@@ -1,0 +1,67 @@
+name: Vercel prebuilt preview
+
+on:
+  push:
+    branches:
+      - 'fix/logyq-curriculum-shell-fit-20261002'
+
+permissions:
+  contents: read
+
+env:
+  VERCEL_ORG_ID: team_b6jnWQ9J59MBcsgJj6f7cb8p
+  VERCEL_PROJECT_ID: prj_bFnVLCQ2ebvNRRJpVB56fRywPXSv
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify
+        run: |
+          npm run test:logiq
+          npm run test:logyq
+
+      - name: Check Vercel token
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::GitHub repository secret VERCEL_TOKEN is not configured."
+            exit 1
+          fi
+
+      - name: Pull Vercel preview environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@latest pull --yes --environment=preview --token="$VERCEL_TOKEN"
+
+      - name: Build locally on GitHub
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx --yes vercel@latest build --token="$VERCEL_TOKEN"
+
+      - name: Deploy prebuilt preview
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          url="$(npx --yes vercel@latest deploy --prebuilt --token="$VERCEL_TOKEN")"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "### Vercel preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "$url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show deployment URL
+        run: echo "${{ steps.deploy.outputs.url }}"
