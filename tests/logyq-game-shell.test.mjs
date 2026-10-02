@@ -224,11 +224,11 @@ test('curriculum uses the same direct puzzle gesture path as Game', () => {
   assert.match(dock, /if \(!directPuzzleShelf\(\)\) return null/)
 })
 
-test('curriculum play exposes the same floating return tray as Game', () => {
+test('curriculum play keeps a compact empty return target', () => {
   const styles = read('../public/logyq/js/preview/02-styles.js')
   assert.match(styles, /body\.logyq-curriculum-frozen #Dock/)
-  assert.match(styles, /body\.logyq-curriculum-frozen\.v2-branch-drag #Dock\.is-empty/)
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:'Return piece here'/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty[^\{]*\{[^}]*display:flex!important[^}]*width:64px/s)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:''/)
 })
 
 test('curriculum suppresses editor selection decoration', () => {
@@ -308,7 +308,7 @@ test('first Curriculum lesson is Fruit plus one Apple move', () => {
 test('first-contact below guide uses a straight upward path', () => {
   const guide = read('../public/logyq/js/game-guide.js')
   assert.match(guide, /level\.guide === 'below'\s*\? `M\$\{sx\},\$\{sy\} L\$\{x\},\$\{endY\}`/)
-  assert.match(guide, /node\.data\.gameId === level\.tree\.gameId \|\| node\.data\.name === level\.tree\.name/)
+  assert.match(guide, /const anchor = nodes\.find\(node => sameNode\(node, level\.tree\)\)/)
   assert.match(guide, /card\?\.paint/)
 })
 
