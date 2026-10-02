@@ -121,3 +121,26 @@ test('garden courtyard paving avoids near-coplanar grout geometry',()=>{
  assert.equal(kit.includes('courtyardPaving'),true)
  assert.equal(kit.includes('vec2 grid=vec2(p.x/2.8,p.z/1.65)'),true)
 })
+
+
+test('arrival court walkability reaches the visible round edge',()=>{
+ assert.equal(nav.walkable({x:1,z:59.88}),true,'visitor can approach the north edge of the round court')
+ assert.equal(nav.walkable({x:1,z:60.08}),false,'visitor still cannot step beyond the round court')
+ assert.equal(plan.floorAt({x:19.8,z:41}),4.8,'east side of rendered circle is navigable')
+})
+
+test('entry portal is grounded and round court edge has a natural boulder cue',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ assert.equal(env.includes('Massive stair-side abutments'),true)
+ assert.equal(env.includes('supportBase=FLOOR-1.22'),true)
+ assert.equal(env.includes('Natural boulder line marks the round court edge'),true)
+ assert.equal(env.includes('19.42+wobble'),true)
+})
+
+test('fill lights use stable selection and eased movement instead of per-frame nearest swapping',()=>{
+ const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
+ assert.equal(scene.includes('fillSelectionOrigin'),true)
+ assert.equal(scene.includes('>4){'),true)
+ assert.equal(scene.includes('l.position.lerp'),true)
+ assert.equal(scene.includes('locations.sort'),false)
+})
