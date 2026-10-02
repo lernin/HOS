@@ -62,8 +62,11 @@
             </div>
             <div id="logyq-game-levels" role="tabpanel" aria-labelledby="logyq-tab-game" hidden>
               <div id="logyq-game-trail" aria-label="Forest puzzle trail">
-                <div id="logyq-trail-world">
-                  <div id="logyq-trail-stars" aria-label="Nearby puzzles"></div>
+                <div id="logyq-trail-world" tabindex="0" role="region" aria-label="Scrollable forest level map">
+                  <div id="logyq-trail-map">
+                    <svg id="logyq-trail-path" aria-hidden="true" preserveAspectRatio="none"></svg>
+                    <div id="logyq-trail-stars" aria-label="Puzzle levels"></div>
+                  </div>
                 </div>
                 <div class="logyq-trail-heading">
                   <h3>LOGYQ</h3>

@@ -291,12 +291,18 @@ function loadGameFragment() {
   return { sandbox, elements, listeners, store }
 }
 
-test('forest trail shows the next puzzle with nearby solved stars across tiers', () => {
-  const { sandbox } = loadGameFragment()
+test('forest map lays every puzzle on one scrollable route and centers the next puzzle', () => {
+  const { sandbox, elements, store } = loadGameFragment()
   const game = sandbox.preview.game
   const first = game.trailWindow({})
   assert.equal(first.current.id, game.levels[0].id)
-  assert.deepEqual(Array.from(first.levels, level => level.id), Array.from(game.levels.slice(0, 3), level => level.id))
+  assert.equal(first.levels.length, 159)
+  sandbox.document.getElementById('logyq-trail-world').clientHeight = 600
+  game.render()
+  assert.equal(elements['logyq-trail-stars'].children.length, 159)
+  assert.ok(Number.parseFloat(elements['logyq-trail-stars'].children[3].style.top) >
+    Number.parseFloat(elements['logyq-trail-stars'].children[2].style.top))
+  assert.match(elements['logyq-trail-path'].innerHTML, /<path/)
 
   const progress = game.recordSolve({}, game.levels[0].id, 0)
   const second = game.trailWindow(progress)
@@ -305,8 +311,11 @@ test('forest trail shows the next puzzle with nearby solved stars across tiers',
 
   const later = game.trailWindow({ ...progress, _adaptive: { clean: 0, tier: 4, played: {} } })
   assert.equal(later.current.tier, 4)
-  assert.equal(later.levels.length, 3)
+  assert.equal(later.levels.length, 159)
   assert.ok(later.levels.some(level => level.id === later.current.id))
+  store.logyq_game_progress_v2 = JSON.stringify({ ...progress, _adaptive: { clean: 0, tier: 4, played: {} } })
+  game.render()
+  assert.ok(elements['logyq-trail-world'].scrollTop > 1000)
 })
 
 test('every game level is selectable without clearing an earlier one', () => {
