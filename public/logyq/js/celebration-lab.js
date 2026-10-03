@@ -26,6 +26,26 @@
   function stop(){
     if(currentAudio){ try{currentAudio.pause();currentAudio.currentTime=0}catch{} currentAudio=null }
   }
+  function fadeOut(ms=250){
+    const audio=currentAudio
+    if(!audio)return false
+    const duration=Math.max(80,Math.min(800,Number(ms)||250))
+    const start=performance.now()
+    const initial=Number.isFinite(audio.volume)?audio.volume:0.9
+    const tick=(now)=>{
+      if(currentAudio!==audio)return
+      const t=Math.min(1,(now-start)/duration)
+      try{audio.volume=Math.max(0,initial*(1-t))}catch{}
+      if(t>=1){
+        try{audio.pause();audio.currentTime=0;audio.volume=initial}catch{}
+        if(currentAudio===audio)currentAudio=null
+        return
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+    return true
+  }
   function play(sound){
     if(!sound)return false
     stop()
@@ -211,5 +231,5 @@
   function close(){stop();const el=document.getElementById('logyq-celebration-lab');if(el)el.hidden=true}
   ensureUi()
   load()
-  window.LOGYQCelebrations=Object.freeze({open,close,load,play,playAuto,stop,mode,setMode})
+  window.LOGYQCelebrations=Object.freeze({open,close,load,play,playAuto,stop,fadeOut,mode,setMode})
 })()
