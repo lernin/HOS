@@ -896,7 +896,9 @@
         played: { ...state.played, [level.id]: Date.now() },
       },
     })
-    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide,
+    const levelNumber = Math.max(1, GAME_LEVELS.findIndex(item => item.id === level.id) + 1)
+    window.LOGYQGameThumbGain?.setLevel?.(levelNumber)
+    app.game = { id: level.id, levelNumber, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide,
       bankCards: { ...level.bankCards } }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
