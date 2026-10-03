@@ -33,7 +33,6 @@ const categoryMeta:Record<Category,{label:string;color:string}>={
 const floorColor:Record<string,string>={
   limestone:'#efe7d7',travertine:'#e6dccb',oak:'#d5c2a0',walnut:'#a98b68',concrete:'#d5d3cc',basalt:'#6d7473',
 }
-const planPoint=(x:number,z:number):Pt=>({x,y:-z})
 const pointsString=(pts:Pt[])=>pts.map(q=>`${q.x},${q.y}`).join(' ')
 
 function readMarks():Mark[]{
