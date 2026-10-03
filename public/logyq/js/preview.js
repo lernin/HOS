@@ -8206,13 +8206,22 @@
     window.LOGYQGameGuide?.hide()
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
-    const origin = app.game?.origin || (app.curriculum ? {
+    const previousGame = app.game
+    const origin = previousGame?.origin || (app.curriculum ? {
       current: { id: null, name: DEFAULT_NAME }, hasOpenMap: false,
       lastSnapshot: '', snapshot: { tree: null, wordBank: [] },
     } : {
       current: { ...app.current }, hasOpenMap: app.hasOpenMap,
       lastSnapshot: app.lastSnapshot, snapshot: bridge.snapshot(),
     })
+    if (previousGame && !previousGame.cleared && !previousGame.telemetryRecorded) {
+      const previousLevel = gameLevels.find(item => item.id === previousGame.id)
+      if (previousLevel && ((previousGame.actualMoves || 0) > 0 || (previousGame.hintsUsed || 0) > 0 ||
+          Date.now() - (previousGame.startedAt || Date.now()) > 5000)) {
+        previousGame.telemetryRecorded = true
+        window.LOGYQLearner?.recordGame?.(gameAttemptPayload(previousGame, previousLevel, false)).catch?.(() => {})
+      }
+    }
     leaveCurriculumPlay()
     const progress = gameProgress()
     const state = adaptiveState(progress)
