@@ -75,7 +75,6 @@ const zs=[...new Set([
 ])].sort((a,b)=>a-b)
 
 const covers=(x:number,z:number)=>mainFloors.some(f=>x>f.x1+1e-6&&x<f.x2-1e-6&&z>f.z1+1e-6&&z<f.z2-1e-6)
-const overlap=(a1:number,a2:number,b1:number,b2:number)=>Math.max(a1,b1)<Math.min(a2,b2)-1e-5
 const nearRect=(p:{x:number;z:number},r:Rect,pad=.24)=>p.x>=r.x1-pad&&p.x<=r.x2+pad&&p.z>=r.z1-pad&&p.z<=r.z2+pad
 const parallel=(a:EstateRailPoint,b:EstateRailPoint,c:EstateRailPoint,d:EstateRailPoint)=>{
   const ax=b[0]-a[0],az=b[1]-a[1],bx=d[0]-c[0],bz=d[1]-c[1]
