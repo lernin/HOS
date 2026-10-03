@@ -50,3 +50,6 @@ Review the corrected render artifacts and complete the automated phone UI gate, 
 - Bird's-eye geometry is sourced from the live Ocean Estate plan data; railing paths are shared with the 3D scene through `estate/railings.ts`.
 - Markup tools: pan, freehand draw, arrow, area, and A1-style notes, with Deck/Railing/Wall/Remove categories.
 - Markups autosave locally on the current device and can be exported as a clean PNG or copied as a coordinate change brief for implementation.
+
+### Planner preview verification
+The ready preview branch includes the direct Vercel SPA rewrite for `/ocean-estate-plan` and the shared railing geometry used by both 2D and 3D views.
