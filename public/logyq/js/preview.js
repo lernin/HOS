@@ -7467,6 +7467,41 @@
   })
 
   const GIANT_COLORS = 'ABCDEFGHIJKLMNOPQRSTU'.split('')
+  // Four visible forks in each portrait tree. Every card has a distinct
+  // bottom contact, so only its intended children can sit beneath it.
+  // A fork seats DL on the left and DR on the right; swapping them fails
+  // the sibling contact. The full physical solver checks the inventories.
+  const BRANCHING_GIANT_PLANS = [
+    { spine: 6, branches: [[0, 2, 'right'], [1, 4, 'left'], [2, 1, 'left'], [3, 2, 'left']] },
+    { spine: 6, branches: [[0, 2, 'right'], [1, 2, 'left'], [3, 3, 'right'], [4, 2, 'left']] },
+    { spine: 5, branches: [[0, 2, 'left'], [1, 1, 'right'], [2, 4, 'right'], [3, 3, 'left']] },
+  ]
+  function branchingGiantTree(variant) {
+    const plan = BRANCHING_GIANT_PLANS[variant - 1]
+    const spine = Array.from({ length: plan.spine }, () => ({ children: [] }))
+    for (let i = 0; i < spine.length - 1; i++) spine[i].children = [spine[i + 1]]
+    for (const [index, length, side] of plan.branches) {
+      let branch = { children: [] }
+      let end = branch
+      for (let i = 1; i < length; i++) {
+        end.children = [{ children: [] }]
+        end = end.children[0]
+      }
+      if (side === 'left') spine[index].children.unshift(branch)
+      else spine[index].children.push(branch)
+    }
+    let next = 0
+    function paint(node, top, shape) {
+      const id = next++
+      const bottom = GIANT_COLORS[id + 1]
+      return {
+        name: '', gameId: 'g' + id, paint: shape + ':' + top + ':' + bottom,
+        children: node.children.map((child, index) =>
+          paint(child, bottom, node.children.length === 2 ? (index ? 'DR' : 'DL') : 'L')),
+      }
+    }
+    return paint(spine[0], GIANT_COLORS[0], 'L')
+  }
   function confidenceGiantTree(pieceCount, variant) {
     const diagonalIndex = variant === 1 ? -1 : variant === 2
       ? Math.floor(pieceCount / 3) : Math.floor(2 * pieceCount / 3)
@@ -7484,7 +7519,7 @@
   }
   ;[[15,1],[15,2],[15,3],[20,1],[20,2],[20,3]].forEach(([pieces, variant], index) => {
     const number = 165 + index
-    const tree = confidenceGiantTree(pieces, variant)
+    const tree = pieces === 15 ? branchingGiantTree(variant) : confidenceGiantTree(pieces, variant)
     addOpenLevel('confidence-' + pieces + '-' + variant,
       number + ' · ' + pieces + ' Pieces · Easy Giant',
       tree, tree.gameId, { tier: 12 })
