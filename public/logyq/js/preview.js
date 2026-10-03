@@ -5784,6 +5784,19 @@
       renderCurriculumChrome()
       return
     }
+    const session = app.curriculum
+    if (!session.cleared && !session.telemetryRecorded && Date.now() - (session.startedAt || Date.now()) > 5000) {
+      session.telemetryRecorded = true
+      window.LOGYQLearner?.recordCurriculum?.({
+        item_id: session.id,
+        stage: session.stage || 1,
+        actual_moves: session.actualMoves || 0,
+        returned_pieces: session.returnedPieces || 0,
+        hints_used: session.hintsUsed || 0,
+        elapsed_ms: Math.max(0, Date.now() - (session.startedAt || Date.now())),
+        solved: false,
+      }).catch?.(() => {})
+    }
     app.curriculum = null
     const status = document.getElementById('logyq-curriculum-status')
     if (status) {
@@ -5869,7 +5882,8 @@
       ;(node.children || []).forEach(restore)
     }
     restore(removed)
-    return { tree: removed === nextTree ? null : nextTree, bank: nextBank }
+    const count = (node) => node ? 1 + (node.children || []).reduce((sum, child) => sum + count(child), 0) : 0
+    return { tree: removed === nextTree ? null : nextTree, bank: nextBank, removedCount: count(removed) }
   }
 
   function showCurriculumGuide(level) {
@@ -5890,13 +5904,21 @@
   function beginCurriculumLevel(level) {
     if (!level) return
     leaveGamePlay()
+    const stage = Math.max(1, curriculumPack().findIndex(item => item.id === level.id) + 1)
     app.curriculum = {
       id: level.id,
       title: level.title,
+      stage,
       startedAt: Date.now(),
       cleared: false,
       phase: 'play',
       released: true,
+      actualMoves: 0,
+      returnedPieces: 0,
+      hintsUsed: 0,
+      telemetryRecorded: false,
+      lastTreeKey: null,
+      nextChangeCost: 1,
     }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
@@ -5918,6 +5940,8 @@
       if (!engine?.state || !session || session.id !== level.id || session.phase !== 'play') return false
       const result = returnCurriculumBranch(engine.state.root?.data, engine.state.wordBank || [], uid)
       if (!result) return false
+      session.returnedPieces = (session.returnedPieces || 0) + (result.removedCount || 1)
+      session.nextChangeCost = result.removedCount || 1
       engine.state.wordBank = result.bank
       engine.state.root = result.tree ? d3.hierarchy(result.tree) : null
       try { engine.selection?.clearGroup?.() } catch (_error) {}
@@ -5952,8 +5976,18 @@
     const live = curriculumAnswerTree(snapshot?.tree)
     if (!level || !live || !curriculumMatches(level.tree, live)) return false
     session.cleared = true
+    session.telemetryRecorded = true
     const progress = readCurriculumProgress()
     const ms = Math.max(0, Date.now() - (session.startedAt || Date.now()))
+    window.LOGYQLearner?.recordCurriculum?.({
+      item_id: level.id,
+      stage: session.stage || 1,
+      actual_moves: session.actualMoves || 0,
+      returned_pieces: session.returnedPieces || 0,
+      hints_used: session.hintsUsed || 0,
+      elapsed_ms: ms,
+      solved: true,
+    }).catch?.(() => {})
     progress.levels[level.id] = { clearedAt: new Date().toISOString(), ms }
     writeCurriculumProgress(progress)
     const pack = curriculumPack()
@@ -6021,6 +6055,20 @@
       returnBranch: returnCurriculumBranch,
     }
   }
+
+  bridge.subscribe((snapshot) => {
+    const session = app.curriculum
+    if (!session || session.cleared || session.phase !== 'play') return
+    const key = JSON.stringify(snapshot?.tree || null)
+    if (session.lastTreeKey == null) {
+      session.lastTreeKey = key
+      return
+    }
+    if (key === session.lastTreeKey) return
+    session.lastTreeKey = key
+    session.actualMoves = (session.actualMoves || 0) + Math.max(1, session.nextChangeCost || 1)
+    session.nextChangeCost = 1
+  })
 
   bindCurriculum()
   const THEKONYM_KEY = 'logyq_thekonym_mode_v1'
