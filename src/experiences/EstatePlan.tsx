@@ -335,8 +335,12 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     </section>
 
     {!clean&&<aside className="ep-layer-panel">
+      <button className={`ep-audit-toggle${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>
+        <span>Edge audit</span><b>{auditCount}</b>
+      </button>
       <strong>Layers</strong>
       {Object.entries(layers).map(([key,value])=><label key={key}><input type="checkbox" checked={value} onChange={()=>setLayers(x=>({...x,[key]:!x[key as keyof typeof x]}))}/>{key}</label>)}
+      <div className="ep-mini-legend"><i className="deck"/>patio/deck <i className="open"/>open edge <i className="rail"/>railing</div>
     </aside>}
 
     {!clean&&<footer className="ep-tools">
@@ -347,13 +351,19 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         {(Object.keys(categoryMeta) as Category[]).map(k=><option key={k} value={k}>{categoryMeta[k].label}</option>)}
       </select>
       <div className="ep-history"><button onClick={undo} disabled={!marks.length} aria-label="Undo">↶</button><button onClick={redoOne} disabled={!redo.length} aria-label="Redo">↷</button></div>
-      <button className="ep-more" onClick={()=>setNotesOpen(true)}>Marks {marks.length}</button>
+      <button className={`ep-more${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>Audit {auditCount}</button>
+            <button className="ep-more" onClick={()=>setNotesOpen(true)}>Marks {marks.length}</button>
       <button className="ep-more" onClick={()=>setClean(true)}>Clean</button>
       <button className="ep-more" onClick={exportPng}>Export</button>
     </footer>}
 
-    {!clean&&marks.length===0&&<div className="ep-hint">Use <strong>Area</strong> for deck extensions, <strong>Arrow</strong> for railings, and <strong>Note</strong> for callouts. Your marks save automatically on this device.</div>}
-    {!clean&&status&&<div className="ep-status">{status}</div>}
+    {!clean&&marks.length===0&&!selectedRailData&&<div className="ep-hint">Tap <strong>Audit</strong> to see open edges and railing IDs. Use <strong>Area</strong> for deck extensions and <strong>Arrow</strong> for new railings.</div>}
+    {!clean&&selectedRailData&&<div className="ep-selection-card">
+      <b>{selectedRailData.code}</b>
+      <span><strong>{selectedRailData.label}</strong><small>{selectedRailData.family==='guard'?'Full-height guard rail':'Low garden rail'}{selectedRailData.audit==='review'?' · review candidate':''}</small></span>
+      <button onClick={()=>setSelectedRail(null)} aria-label="Clear railing selection">×</button>
+    </div>}
+        {!clean&&status&&<div className="ep-status">{status}</div>}
 
     {noteDraft&&<div className="ep-modal" onClick={()=>setNoteDraft(null)}><section onClick={e=>e.stopPropagation()}><small>{nextId} · {categoryMeta[category].label}</small><h2>Add a note</h2><textarea autoFocus value={noteDraft.text} onChange={e=>setNoteDraft({...noteDraft,text:e.target.value})} placeholder="e.g. Extend the deck to this line"/><div><button onClick={()=>setNoteDraft(null)}>Cancel</button><button className="primary" onClick={addNote}>Add {nextId}</button></div></section></div>}
 
