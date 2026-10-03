@@ -26,6 +26,26 @@
   function stop(){
     if(currentAudio){ try{currentAudio.pause();currentAudio.currentTime=0}catch{} currentAudio=null }
   }
+  function fadeOut(ms=250){
+    const audio=currentAudio
+    if(!audio)return false
+    const duration=Math.max(80,Math.min(800,Number(ms)||250))
+    const start=performance.now()
+    const initial=Number.isFinite(audio.volume)?audio.volume:0.9
+    const tick=(now)=>{
+      if(currentAudio!==audio)return
+      const t=Math.min(1,(now-start)/duration)
+      try{audio.volume=Math.max(0,initial*(1-t))}catch{}
+      if(t>=1){
+        try{audio.pause();audio.currentTime=0;audio.volume=initial}catch{}
+        if(currentAudio===audio)currentAudio=null
+        return
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+    return true
+  }
   function play(sound){
     if(!sound)return false
     stop()
@@ -39,21 +59,32 @@
   function chooseAuto(context={}){
     if(!catalog.length)return null
     const difficulty=String(context.difficulty||'any')
-    const desired={easy:1,medium:2,hard:4,vicious:5}[difficulty]||2
-    let pool=catalog.filter(s=>s.difficulty==='any'||s.difficulty===difficulty)
+    const achievement=String(context.achievement||'solve')
+    const achievementIntensity={promotion:5,perfect:5,efficient:4,persistence:4}[achievement]
+    const desired=achievementIntensity||({easy:1,medium:2,hard:4,vicious:5}[difficulty]||2)
+    let pool=(achievement==='promotion'||achievement==='perfect')
+      ? [...catalog]
+      : catalog.filter(s=>s.difficulty==='any'||s.difficulty===difficulty)
     if(!pool.length)pool=[...catalog]
-    // Weighted shuffle: tags/intensity influence the odds, but do not force one "best" clip.
+    // Weighted shuffle: personal achievement is the strongest signal, while
+    // puzzle difficulty and the user's intensity tags still shape the odds.
     const weighted=pool.map(s=>{
       const intensityGap=Math.abs(Number(s.intensity||2)-desired)
       const exact=s.difficulty===difficulty
       const any=s.difficulty==='any'
       const recentIndex=recentIds.indexOf(s.id)
       let weight=1/(1+intensityGap*0.7)
-      if(exact)weight*=2.2
+      if(exact)weight*=2.0
       else if(any)weight*=1.15
-      if(difficulty==='easy'&&['yay','warm'].includes(s.category))weight*=1.6
-      if(difficulty==='hard'&&['applause','big_cheer'].includes(s.category))weight*=1.5
-      if(difficulty==='vicious'&&['big_cheer','applause'].includes(s.category))weight*=1.9
+      if(achievement==='promotion'&&['big_cheer','applause'].includes(s.category))weight*=3.2
+      else if(achievement==='perfect'&&['big_cheer','applause'].includes(s.category))weight*=2.7
+      else if(achievement==='efficient'&&['applause','yay'].includes(s.category))weight*=1.9
+      else if(achievement==='persistence'&&['warm','applause','big_cheer'].includes(s.category))weight*=2.2
+      else {
+        if(difficulty==='easy'&&['yay','warm'].includes(s.category))weight*=1.6
+        if(difficulty==='hard'&&['applause','big_cheer'].includes(s.category))weight*=1.5
+        if(difficulty==='vicious'&&['big_cheer','applause'].includes(s.category))weight*=1.9
+      }
       if(recentIndex===0)weight*=0.03
       else if(recentIndex===1)weight*=0.16
       else if(recentIndex===2)weight*=0.45
@@ -200,5 +231,5 @@
   function close(){stop();const el=document.getElementById('logyq-celebration-lab');if(el)el.hidden=true}
   ensureUi()
   load()
-  window.LOGYQCelebrations=Object.freeze({open,close,load,play,playAuto,stop,mode,setMode})
+  window.LOGYQCelebrations=Object.freeze({open,close,load,play,playAuto,stop,fadeOut,mode,setMode})
 })()

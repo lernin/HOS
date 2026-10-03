@@ -27,9 +27,13 @@
     const title = document.createElement('strong')
     title.id = 'logyq-game-puzzle'
     title.textContent = 'Puzzle'
+    const hint = button('logyq-game-hint', '?', 'Hint')
     const pause = button('logyq-game-pause', '⚙', 'Game settings')
     pause.setAttribute('aria-expanded', 'false')
-    bar.replaceChildren(back, title, pause)
+    const actions = document.createElement('div')
+    actions.id = 'logyq-game-actions'
+    actions.append(hint, pause)
+    bar.replaceChildren(back, title, actions)
 
     const hiddenControls = document.createElement('div')
     hiddenControls.id = 'logyq-game-legacy-controls'
@@ -50,6 +54,7 @@
         <button type="button" id="logyq-game-pause-levels">All levels</button>
         <button type="button" id="logyq-game-pause-reset">Reset progress</button>
         <button type="button" id="logyq-game-celebration-lab">Celebration Lab</button>
+        <button type="button" id="logyq-game-test-learner">Test learner</button>
         <button type="button" id="logyq-game-music-toggle" aria-pressed="true">Music: On</button>
         <label class="logyq-game-volume">Music volume
           <input id="logyq-game-music-volume" type="range" min="0" max="100" step="1" aria-label="Music volume">
@@ -75,11 +80,19 @@
     style.id = 'logyq-game-shell-style'
     style.textContent = `
       body.logyq-game #logiq-mobile-header,body.logyq-game>header,body.logyq-game #logyq-map-title,body.logyq-game #logiq-mobile-panel,body.logyq-game #logyq-paint-strip,body.logyq-game #logyq-warehouse,body.logyq-game #logyq-bank-trash,body.logyq-game #trash{display:none!important}
-      body.logyq-game:not(.logyq-home) #logyq-game-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;border:1px solid rgba(226,232,240,.92);border-radius:17px;background:rgba(255,255,255,.96);color:#0f172a;box-shadow:0 6px 22px rgba(15,23,42,.12);backdrop-filter:blur(12px)}
+      body.logyq-game:not(.logyq-home) #logyq-game-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,232,240,.92);border-radius:17px;background:rgba(255,255,255,.96);color:#0f172a;box-shadow:0 6px 22px rgba(15,23,42,.12);backdrop-filter:blur(12px)}
       body.logyq-game #logyq-game-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#0f172a;font:650 14px/1 system-ui;touch-action:manipulation}
       body.logyq-game #logyq-game-back{justify-self:start;text-align:left;padding:0 10px}
-      body.logyq-game #logyq-game-pause{justify-self:end;width:42px;padding:0;font-size:18px}
+      body.logyq-game #logyq-game-actions{justify-self:end;display:flex;align-items:center;gap:2px}
+      body.logyq-game #logyq-game-hint,body.logyq-game #logyq-game-pause{width:42px;padding:0;font-size:18px}
+      body.logyq-game #logyq-game-hint{font-weight:850;font-size:19px}
       body.logyq-game #logyq-game-puzzle{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      body.logyq-game #Dock .chip.logyq-hint-piece{box-shadow:0 0 0 4px rgba(15,23,42,.22),0 0 0 8px rgba(255,255,255,.85);animation:logyq-hint-pulse 900ms ease-in-out infinite}
+      #logyq-game-hint-overlay{position:fixed;inset:0;z-index:78;pointer-events:none}
+      #logyq-game-hint-overlay svg{width:100%;height:100%;overflow:visible}
+      #logyq-game-hint-overlay .logyq-hint-target{fill:rgba(255,255,255,.2);stroke:#0f172a;stroke-width:4;stroke-dasharray:8 7;animation:logyq-hint-pulse 900ms ease-in-out infinite}
+      #logyq-game-hint-overlay .logyq-hint-arrow{fill:none;stroke:#0f172a;stroke-width:4;stroke-linecap:round;stroke-dasharray:9 8}
+      @keyframes logyq-hint-pulse{50%{opacity:.42}}
       body.logyq-game #logyq-game-status{display:none!important}
       body.logyq-game #Dock .chip{position:relative}
       body.logyq-game #Dock .chip::before{content:"";position:absolute;inset:-14px}
@@ -127,7 +140,7 @@
       const value = thumbGain?.value?.() ?? 1
       const automatic = thumbGain?.automatic?.() !== false
       if (thumbGainValue) thumbGainValue.textContent = value.toFixed(1) + '×'
-      if (thumbGainMode) thumbGainMode.textContent = automatic ? 'Automatic · grows 0.2× per level' : 'Manual · automatic growth paused'
+      if (thumbGainMode) thumbGainMode.textContent = automatic ? 'Automatic · grows 0.2× per completed puzzle' : 'Manual · automatic growth paused'
       if (thumbGainAuto) thumbGainAuto.hidden = automatic
       if (thumbGainDown) thumbGainDown.disabled = value <= (thumbGain?.min ?? 1)
       if (thumbGainUp) thumbGainUp.disabled = value >= (thumbGain?.max ?? 5)
@@ -223,10 +236,15 @@
     }
     const resetProgress = () => {
       closePause()
+      if (window.LOGYQLearner?.current?.()?.id) {
+        window.LOGYQLearner.resetCurrent?.().catch?.((error) => alert(error?.message || 'Reset failed'))
+        return
+      }
       document.getElementById('logyq-trail-reset-progress')?.click()
     }
 
     back.addEventListener('click', openLevels)
+    hint.addEventListener('click', () => window.LOGYQGameHint?.request?.())
     pause.addEventListener('click', openPause)
     document.getElementById('logyq-game-resume').addEventListener('click', closePause)
     document.getElementById('logyq-game-pause-levels').addEventListener('click', openAllLevels)
@@ -234,6 +252,10 @@
     document.getElementById('logyq-game-celebration-lab').addEventListener('click', () => {
       closePause()
       window.LOGYQCelebrations?.open?.()
+    })
+    document.getElementById('logyq-game-test-learner').addEventListener('click', () => {
+      closePause()
+      window.LOGYQLearner?.open?.()
     })
     legacyNext.addEventListener('click', () => music?.resume())
     document.addEventListener('pointerdown', (event) => {

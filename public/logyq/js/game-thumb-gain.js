@@ -4,6 +4,7 @@
 
   const KEY = 'logyq_game_thumb_gain_v1'
   const MODE_KEY = 'logyq_game_thumb_gain_mode_v1'
+  const EXPERIENCE_KEY = 'logyq_game_thumb_gain_experience_v1'
   const MIN = 1
   const MAX = 5
   const STEP = 0.2
@@ -14,17 +15,25 @@
     const index = Math.max(0, Math.min(STEPS, Math.round((value - MIN) / STEP)))
     return Number((MIN + index * STEP).toFixed(1))
   }
-  const autoValue = (levelNumber) => normalize(MIN + Math.max(0, (Number(levelNumber) || 1) - 1) * STEP) ?? MIN
+  const autoValue = (experienceSteps) => normalize(MIN + Math.max(0, Number(experienceSteps) || 0) * STEP) ?? MIN
   const readMode = () => {
     try { return localStorage.getItem(MODE_KEY) === 'manual' ? 'manual' : 'auto' } catch (_error) { return 'auto' }
   }
   const readManual = () => {
     try { return normalize(localStorage.getItem(KEY)) ?? MIN } catch (_error) { return MIN }
   }
+  const readExperience = () => {
+    try {
+      const value = Number(localStorage.getItem(EXPERIENCE_KEY) || 0)
+      return Number.isFinite(value) ? Math.max(0, Math.min(STEPS, Math.floor(value))) : 0
+    } catch (_error) { return 0 }
+  }
   let mode = readMode()
-  let gain = mode === 'manual' ? readManual() : MIN
-  let level = 1
-  const announce = () => window.dispatchEvent(new CustomEvent('logyq-game-thumb-gainchange', { detail: { value: gain, mode, level } }))
+  let experience = readExperience()
+  let gain = mode === 'manual' ? readManual() : autoValue(experience)
+  const announce = () => window.dispatchEvent(new CustomEvent('logyq-game-thumb-gainchange', {
+    detail: { value: gain, mode, experience }
+  }))
   const saveManual = () => {
     try {
       localStorage.setItem(KEY, gain.toFixed(1))
@@ -38,15 +47,17 @@
     announce()
     return gain
   }
-  const setLevel = (levelNumber) => {
-    level = Math.max(1, Math.round(Number(levelNumber) || 1))
-    if (mode === 'auto') gain = autoValue(level)
+  const advance = () => {
+    if (mode !== 'auto') return gain
+    experience = Math.min(STEPS, experience + 1)
+    gain = autoValue(experience)
+    try { localStorage.setItem(EXPERIENCE_KEY, String(experience)) } catch (_error) {}
     announce()
     return gain
   }
   const resetAutomatic = () => {
     mode = 'auto'
-    gain = autoValue(level)
+    gain = autoValue(experience)
     try {
       localStorage.setItem(MODE_KEY, 'auto')
       localStorage.removeItem(KEY)
@@ -57,11 +68,11 @@
   window.LOGYQGameThumbGain = Object.freeze({
     value: () => gain,
     mode: () => mode,
-    level: () => level,
+    experience: () => experience,
     automatic: () => mode === 'auto',
     automaticValue: autoValue,
     set: setManual,
-    setLevel,
+    advance,
     resetAutomatic,
     step(direction) {
       const sign = Number(direction)
