@@ -17,7 +17,7 @@ async function dragLook(p,gesture,dx){
 try{
  await page.goto('http://127.0.0.1:4173/tests/ocean-estate-visual.html',{waitUntil:'load'});await page.waitForSelector('body.ready',{timeout:120000})
  const diagnostics=await page.evaluate(()=>window.estateQA.diagnostics());console.log('Render budget',diagnostics)
- for(const view of ['arrival','oceanRail','oceanRailCorner','oceanRailReturn','entryRight','great','ocean','courtyard','kitchen','suite','bath','exterior','aerial']){await page.evaluate(name=>window.estateQA.view(name),view);await page.waitForTimeout(180);await page.screenshot({path:`${output}/${view}.png`,timeout:120000})}
+ for(const view of ['arrival','oceanRail','oceanRailCorner','oceanRailReturn','sunriseRail','courtyardRail','eastGalleryRail','foyerRail','arrivalGardenRail','entryRight','great','ocean','courtyard','kitchen','suite','bath','exterior','aerial']){await page.evaluate(name=>window.estateQA.view(name),view);await page.waitForTimeout(180);await page.screenshot({path:`${output}/${view}.png`,timeout:120000})}
  await page.evaluate(()=>{window.estateQA.preset('evening');window.estateQA.view('great')});await page.waitForTimeout(180);await page.screenshot({path:`${output}/evening.png`,timeout:120000})
  await page.setViewportSize({width:915,height:412});await page.evaluate(()=>{window.estateQA.preset('golden');window.estateQA.view('great')});await page.waitForTimeout(180);await page.screenshot({path:`${output}/phone-landscape-great.png`,timeout:120000})
 
