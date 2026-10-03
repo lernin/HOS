@@ -75,12 +75,14 @@
     style.id = 'logyq-game-shell-style'
     style.textContent = `
       body.logyq-game #logiq-mobile-header,body.logyq-game>header,body.logyq-game #logyq-map-title,body.logyq-game #logiq-mobile-panel,body.logyq-game #logyq-paint-strip,body.logyq-game #logyq-warehouse,body.logyq-game #logyq-bank-trash,body.logyq-game #trash{display:none!important}
-      body.logyq-game:not(.logyq-home) #logyq-game-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:86px minmax(0,1fr) 48px;align-items:center;gap:6px;border:1px solid rgba(226,232,240,.92);border-radius:17px;background:rgba(255,255,255,.94);box-shadow:0 6px 22px rgba(15,23,42,.12);backdrop-filter:blur(12px)}
-      body.logyq-game #logyq-game-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#334155;font:650 14px/1 system-ui;touch-action:manipulation}
-      body.logyq-game #logyq-game-back{text-align:left;padding:0 10px}
+      body.logyq-game:not(.logyq-home) #logyq-game-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:6px;border:1px solid rgba(226,232,240,.92);border-radius:17px;background:rgba(255,255,255,.96);color:#0f172a;box-shadow:0 6px 22px rgba(15,23,42,.12);backdrop-filter:blur(12px)}
+      body.logyq-game #logyq-game-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#0f172a;font:650 14px/1 system-ui;touch-action:manipulation}
+      body.logyq-game #logyq-game-back{justify-self:start;text-align:left;padding:0 10px}
       body.logyq-game #logyq-game-pause{justify-self:end;width:42px;padding:0;font-size:18px}
       body.logyq-game #logyq-game-puzzle{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      body.logyq-game #logyq-game-status{position:fixed;z-index:72;top:calc(max(10px,env(safe-area-inset-top)) + 54px);left:18px;right:18px;margin:0;text-align:center;pointer-events:none;color:#64748b;font:600 12px/1.25 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      body.logyq-game #logyq-game-status{display:none!important}
+      body.logyq-game #Dock .chip{position:relative}
+      body.logyq-game #Dock .chip::before{content:"";position:absolute;inset:-14px;z-index:-1}
       body.logyq-game #logyq-game-next{position:fixed;z-index:85;left:50%;transform:translateX(-50%);bottom:calc(32px + env(safe-area-inset-bottom));min-width:190px;min-height:56px;padding:0 30px;border:0;border-radius:18px;background:#0f172a;color:white;font:750 18px/1 system-ui;box-shadow:0 10px 30px rgba(15,23,42,.28);touch-action:manipulation}
       body.logyq-game #logyq-game-next[hidden]{display:none!important}
       #logyq-game-pause-panel{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:22px;background:rgba(15,23,42,.28);backdrop-filter:blur(10px)}
