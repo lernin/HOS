@@ -208,15 +208,16 @@ test('repaired Library wall is visually grounded to the lower arrival court',()=
 })
 
 
-test('ocean-edge reference railing has connected posts and a broad forearm-rest cap',()=>{
+test('ocean-edge reference railing follows slab corners and returns cleanly',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
- assert.equal(env.includes('const oceanReferenceRail='),true)
- assert.equal(env.includes('capH=.09,capW=.16,post=.055'),true)
- assert.equal(env.includes('postTop=capY-capH/2'),true)
- assert.equal(env.includes('postH=postTop-.06'),true)
- assert.equal(env.includes("k.box(0,capY,0,capW,capH,d,'bronze'"),true)
- assert.equal(env.includes('const endInset=post,postRun=Math.max(.01,d-endInset*2)'),true)
- assert.equal(env.includes("k.box(0,.61,0,.04,1.08,postRun,'glass'"),true)
- assert.equal(env.includes('const z=-postRun/2+postRun*i/bays'),true)
- assert.equal(env.includes("for(const [a,b] of [[v(-23,FLOOR,-24),v(-15,FLOOR,-24)],[v(16,FLOOR,-24),v(27,FLOOR,-24)]])oceanReferenceRail(a,b)"),true)
+ const planText=readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8')
+ assert.equal(env.includes('const oceanReferencePath='),true)
+ assert.equal(env.includes('capH=.09,capW=.16,post=.065'),true)
+ assert.equal(env.includes('placePost(firstPost)'),true)
+ assert.equal(env.includes('for(const p of cornerPosts)placePost(p)'),true)
+ assert.equal(env.includes("oceanReferencePath([v(-22.88,FLOOR,-17.08),v(-22.88,FLOOR,-23.88),v(-14.88,FLOOR,-23.88),v(-14.88,FLOOR,-35.88)])"),true)
+ assert.equal(env.includes("oceanReferencePath([v(15.88,FLOOR,-35.88),v(15.88,FLOOR,-23.88),v(26.88,FLOOR,-23.88),v(26.88,FLOOR,-22.88),v(39.88,FLOOR,-22.88)])"),true)
+ assert.equal(planText.includes('west ocean railing returns'),true)
+ assert.equal(planText.includes('lookout ocean edge, joined to the terrace corner'),true)
 })
+
