@@ -4,8 +4,8 @@ import { type EstateKit, random, v } from './kit'
 export function architecture(k:EstateKit){
   for(const f of floors){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
-    if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else k.box(x,y-.2,z,w,.4,d,f.material==='oak'?'oakFloor':f.material)
-    if(f.material==='limestone'||f.material==='travertine'){
+    if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else k.box(x,y-.2,z,w,.4,d,f.name==='Garden courtyard'?'courtyardPaving':f.material==='oak'?'oakFloor':f.material)
+    if((f.material==='limestone'||f.material==='travertine')&&f.name!=='Garden courtyard'){
       for(let a=f.x1+2.8;a<f.x2;a+=2.8)k.box(a,y+.004,z,.011,.005,d,'rug')
       for(let a=f.z1+1.65;a<f.z2;a+=1.65)k.box(x,y+.005,a,w,.005,.01,'rug')
     }
@@ -28,11 +28,18 @@ export function architecture(k:EstateKit){
   k.box(-10.54,FLOOR+.75,0,.045,.6,2.4,'black')
   for(let i=0;i<11;i++)k.ellipsoid(-10.49,FLOOR+.58+.03*(i%3),-.95+i*.18,.02,.09,.06,'glow',k.root,8)
   for(const x of [-1.3,3.3]){const g=k.group(x,FLOOR,24,x<0?1.05:-1.05);k.box(x<0?1.04:-1.04,1.8,0,2.04,3.6,.13,'walnut',g,.035);k.box(x<0?1.8:-1.8,1.7,-.1,.03,1.1,.04,'bronze',g)}
+  // Library stair-side foundation: the repaired exterior wall continues visibly down to the lower arrival court.
+  k.box(8,FLOOR-.60,26,.50,1.20,4,'travertine',k.root,.045)
+  k.box(7.98,FLOOR-.03,26,.58,.16,4.08,'limestone',k.root,.035)
   // Covered arrival portal: Design Lab study 4, Fluted Stone, scaled to the real stair approach.
   k.box(1,FLOOR+4,26.6,13,.28,6,'travertine')
   const arrivalGround=FLOOR-10*1.2/14,arrivalRoofBottom=FLOOR+4-.14
   const foundationH=.28,plinthH=.18,capH=.14,shaftBottom=arrivalGround+foundationH+plinthH,shaftTop=arrivalRoofBottom-capH,pillarH=shaftTop-shaftBottom,shaftY=shaftBottom+pillarH/2
   for(const x of [-5,7]){
+    // Massive stair-side abutments visually carry the portal columns down to the court level.
+    const supportBase=FLOOR-1.22,supportTop=arrivalGround+.34
+    k.box(x,(supportBase+supportTop)/2,29.2,1.72,supportTop-supportBase,1.52,'travertine',k.root,.11)
+    k.box(x,arrivalGround-.02,29.2,1.42,.32,1.28,'limestone',k.root,.075)
     // Two-stage stone foundation lands visibly on the stair paving.
     k.box(x,arrivalGround+foundationH/2,29.2,1.06,foundationH,.92,'travertine',k.root,.07)
     k.box(x,arrivalGround+foundationH+plinthH/2,29.2,.90,plinthH,.80,'limestone',k.root,.045)
@@ -49,18 +56,57 @@ export function architecture(k:EstateKit){
   k.box(.5,FLOOR-1.54,-36.1,23.4,2.8,.25,'travertine')
   k.box(.5,FLOOR-1.5,-30.2,23,0.2,12,'waterTile')
   for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
-  // Railings sit at the walkable perimeter, never across a route.
-  for(const [a,b] of [[v(-23,FLOOR,-24),v(-15,FLOOR,-24)],[v(16,FLOOR,-24),v(27,FLOOR,-24)],[v(44,FLOOR,-14),v(44,FLOOR,14)],[v(27,FLOOR,-23),v(40,FLOOR,-23)]]){
-    const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.65,0,.035,1.24,d,'glass',g);k.box(0,1.28,0,.045,.04,d,'bronze',g);for(let i=0;i<=d/2;i++)k.box(0,.62,-d/2+i*2,.035,1.24,.035,'bronze',g)
+  // Unified Estate railing system.
+  // Base-plate policy: the outside edge of every pedestal sits half a pedestal width in from the walking-surface edge.
+  const RAIL_BASE=.115,RAIL_EDGE_GAP=RAIL_BASE/2,RAIL_EDGE_INSET=RAIL_BASE/2+RAIL_EDGE_GAP,RAIL_POST=.065,RAIL_CAP_OVERHANG=RAIL_POST,RAIL_END_GAP=RAIL_EDGE_INSET-RAIL_CAP_OVERHANG
+  const estateRailPath=(points:T.Vector3[],opts:{height?:number;glass?:boolean;curb?:boolean}={})=>{
+    const height=opts.height??1.235,capH=.09,capW=.16,post=RAIL_POST,base=RAIL_BASE,glass=opts.glass!==false,curb=opts.curb===true
+    const floorLift=curb ? .14 : 0,capY=floorLift+height,postTop=capY-capH/2,postH=postTop-(floorLift+.055)
+    const placePost=(p:T.Vector3)=>{
+      k.box(p.x,FLOOR+floorLift+.055+postH/2,p.z,post,postH,post,'bronze',k.root,.012)
+      k.box(p.x,FLOOR+floorLift+.018,p.z,base,.036,base,'bronze',k.root,.012)
+    }
+    const terminal=(from:T.Vector3,to:T.Vector3)=>{const dir=to.clone().sub(from).normalize();return from.clone().addScaledVector(dir,RAIL_CAP_OVERHANG)}
+    const firstPost=terminal(points[0],points[1]),lastPost=terminal(points[points.length-1],points[points.length-2]),cornerPosts=points.slice(1,-1)
+    placePost(firstPost);for(const p of cornerPosts)placePost(p);placePost(lastPost)
+    for(let s=0;s<points.length-1;s++){
+      const a=points[s],b=points[s+1],mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR+floorLift,mid.z,Math.atan2(b.x-a.x,b.z-a.z))
+      if(curb)k.box(0,.07-floorLift,0,.18,.14,d,'limestone',g,.035)
+      k.box(0,height,0,capW,capH,d,'bronze',g,.018)
+      const start=s===0?firstPost:a,end=s===points.length-2?lastPost:b,run=start.distanceTo(end),bays=Math.max(1,Math.ceil(run/1.8))
+      if(glass){
+        const gm=start.clone().lerp(end,.5),gd=start.distanceTo(end),gg=k.group(gm.x,FLOOR+floorLift,gm.z,Math.atan2(end.x-start.x,end.z-start.z))
+        const glassH=Math.max(.2,height-.155)
+        k.box(0,.055+glassH/2,0,.04,glassH,Math.max(.01,gd-post*.7),'glass',gg)
+      }
+      for(let i=1;i<bays;i++){const p=start.clone().lerp(end,i/bays);placePost(p)}
+    }
   }
-  // Grand foyer garden pockets: low limestone curbs and bronze rails mark the two non-walkable interior gardens.
-  const foyerGardenRail=(a:T.Vector3,b:T.Vector3)=>{const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.07,0,.18,.14,d,'limestone',g,.035);k.box(0,.78,0,.042,.045,d,'bronze',g);for(let i=0;i<=Math.ceil(d/1.45);i++)k.box(0,.42,-d/2+Math.min(d,i*1.45),.042,.82,.042,'bronze',g)}
-  for(const [a,b] of [
-    [v(-10.92,FLOOR,8.35),v(-10.92,FLOOR,13.65)],
-    [v(-10.72,FLOOR,13.92),v(-6.28,FLOOR,13.92)],
-    [v(8.02,FLOOR,10.18),v(8.02,FLOOR,13.82)],
-    [v(13.02,FLOOR,8.35),v(13.02,FLOOR,14.65)]
-  ])foyerGardenRail(a,b)
+
+  // Full-height guard rails. Centerlines are one pedestal width in from exposed slab edges,
+  // which leaves exactly half a pedestal width between the pedestal's outside edge and the slab edge.
+  // West ocean terrace / pool-walk edge.
+  estateRailPath([v(-23+RAIL_EDGE_INSET,FLOOR,-17.08),v(-23+RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(-15+RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(-15+RAIL_EDGE_INSET,FLOOR,-36+RAIL_END_GAP)])
+  // East pool-walk / ocean terrace / lookout edge.
+  estateRailPath([v(16-RAIL_EDGE_INSET,FLOOR,-36+RAIL_END_GAP),v(16-RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(27-RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(27-RAIL_EDGE_INSET,FLOOR,-23+RAIL_EDGE_INSET),v(40-RAIL_END_GAP,FLOOR,-23+RAIL_EDGE_INSET)])
+  // Sunrise terrace cliff edge.
+  estateRailPath([v(44-RAIL_EDGE_INSET,FLOOR,-14+RAIL_END_GAP),v(44-RAIL_EDGE_INSET,FLOOR,14-RAIL_END_GAP)])
+  // Garden courtyard drop to the arrival court.
+  estateRailPath([v(-22,FLOOR,33-RAIL_EDGE_INSET),v(-6.5,FLOOR,33-RAIL_EDGE_INSET)])
+  // East gallery drop beside the arrival court.
+  estateRailPath([v(20+RAIL_EDGE_INSET,FLOOR,31.1),v(20+RAIL_EDGE_INSET,FLOOR,40-RAIL_END_GAP)])
+
+  // Low garden railings use the same bronze cap/post/base-plate language without glass.
+  // Arrival garden pockets: existing landscape edge line shifted one pedestal width onto the walking surface.
+  estateRailPath([v(-18.15+RAIL_EDGE_INSET,FLOOR,34.5),v(-18.15+RAIL_EDGE_INSET,FLOOR,47.2)],{height:.82,glass:false})
+  estateRailPath([v(20.15-RAIL_EDGE_INSET,FLOOR,40.2),v(20.15-RAIL_EDGE_INSET,FLOOR,48.4)],{height:.82,glass:false})
+
+  // Grand foyer garden pockets: same hardware and pedestal rule, scaled as a low garden guard over the stone curb.
+  estateRailPath([v(-10.92-RAIL_EDGE_INSET,FLOOR,8.35),v(-10.92-RAIL_EDGE_INSET,FLOOR,13.65)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(-10.72,FLOOR,13.92+RAIL_EDGE_INSET),v(-6.28,FLOOR,13.92+RAIL_EDGE_INSET)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(8.02-RAIL_EDGE_INSET,FLOOR,10.18),v(8.02-RAIL_EDGE_INSET,FLOOR,13.82)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(13.02+RAIL_EDGE_INSET,FLOOR,8.35),v(13.02+RAIL_EDGE_INSET,FLOOR,14.65)],{height:.82,glass:false,curb:true})
+
   // Pergola over outdoor dining, secondary circulation remains open.
   for(const x of [17,25])for(const z of [-21.6,-13.2])k.box(x,FLOOR+1.7,z,.17,3.4,.17,'bronze')
   for(let i=0;i<20;i++)k.box(17+i*.42,FLOOR+3.45,-17.4,.13,.2,9.3,'oak')
@@ -76,7 +122,7 @@ export function landscape(k:EstateKit){
   for(let j=0;j<=rings;j++)for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2,r=j/rings,edge=1+.04*Math.sin(a*7)+.025*Math.sin(a*13),x=Math.cos(a)*58*r*edge,z=coastZ(a,r)*edge;verts.push(x,terrainHeight(x,z,r),z)}
   for(let j=0;j<rings;j++)for(let i=0;i<segments;i++){const a=j*(segments+1)+i,c=a+segments+1;ids.push(a,a+1,c,a+1,c+1,c)}
   const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setIndex(ids);geo.computeVertexNormals();k.mesh(geo,'soil')
-  function rock(x:number,y:number,z:number,sx:number,sy:number,sz:number,seed:number){const g=k.rockGeometry(seed),p=g.attributes.position;for(let i=0;i<p.count;i++){const yy=p.getY(i);p.setY(i,Math.round(yy*7)/7*.5+yy*.5)}g.computeVertexNormals();const m=k.mesh(g,seed%3===0?'basalt':'concrete',x,y,z);m.scale.set(sx,sy,sz);m.rotation.set(.1,seed,seed*.04)}
+  function rock(x:number,y:number,z:number,sx:number,sy:number,sz:number,seed:number,mat?:string){const g=k.rockGeometry(seed),p=g.attributes.position;for(let i=0;i<p.count;i++){const yy=p.getY(i);p.setY(i,Math.round(yy*7)/7*.5+yy*.5)}g.computeVertexNormals();const m=k.mesh(g,mat??(seed%3===0?'basalt':'concrete'),x,y,z);m.scale.set(sx,sy,sz);m.rotation.set(.1,seed,seed*.04)}
   for(let i=0;i<150;i++){const a=i/150*Math.PI*2,r=.9+rand()*.09,x=Math.cos(a)*58*r,z=coastZ(a,r);rock(x,(Math.abs(x)<22&&z<0?-3.8:-.8)+rand(),z,2+rand()*3,1.5+rand()*3,2+rand()*3,i+24)}
   // Courtyard garden, raised beds and water rill.
   b(-16,FLOOR+.17,22.5,8,.34,9,'travertine',k.root,.12);b(-16,FLOOR+.35,22.5,7.65,.03,8.65,'soil')
@@ -87,6 +133,18 @@ export function landscape(k:EstateKit){
   k.lathe([[1.1,0],[1.2,.2],[.6,1],[.45,1.4],[1.1,1.6],[1.15,1.8]],'travertine',1,5.18,41)
   // Arrival court is encircled by planted edges, not an exposed square plane.
   for(let i=0;i<48;i++){const a=i/48*Math.PI*2;k.cylinder(1+Math.cos(a)*4.4,5,41+Math.sin(a)*4.4,.18,.18,'leafDark',k.root,.24,6)}
+  // Dense natural boulder band marks the round court edge while leaving the stair approach open.
+  for(let i=0;i<92;i++){
+    const a=i/92*Math.PI*2
+    if(Math.abs(Math.atan2(Math.sin(a+Math.PI/2),Math.cos(a+Math.PI/2)))<.44)continue
+    const wobble=.18*Math.sin(i*2.37)+.07*Math.sin(i*.83),r=19.46+wobble
+    const x=1+Math.cos(a)*r,z=41+Math.sin(a)*r
+    rock(x,4.48+((i%5)-2)*.025,z,.72+(i%5)*.095,.46+(i%4)*.07,.68+((i+2)%5)*.085,700+i,'charcoalRock')
+    if(i%4===0){
+      const aa=a+Math.PI/92,rr=19.72+.1*Math.sin(i*1.71)
+      rock(1+Math.cos(aa)*rr,4.43,41+Math.sin(aa)*rr,.48+(i%3)*.08,.34+(i%2)*.06,.46+((i+1)%3)*.08,900+i,'charcoalRock')
+    }
+  }
   function frond(g:T.Group,angle:number,length:number){const points=[v(0,0,0),v(Math.cos(angle)*length*.4,length*.28,Math.sin(angle)*length*.4),v(Math.cos(angle)*length,length*.03,Math.sin(angle)*length)];k.beam(points,.027,'leafLight',g,5)
     for(let i=1;i<=10;i++){const t=i/11,cx=Math.cos(angle)*length*t,cz=Math.sin(angle)*length*t,cy=Math.sin(t*Math.PI)*length*.25;for(const s of [-1,1]){
       const l=length*.34*Math.sin(t*Math.PI),dx=Math.cos(angle+s*.85)*l,dz=Math.sin(angle+s*.85)*l
@@ -110,6 +168,8 @@ export function landscape(k:EstateKit){
     b(cx,FLOOR-.16,cz,rx*2+.42,.18,rz*2+.42,'soil',k.root,.12)
     for(let i=0;i<24;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand())*.88,x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r;grasses(x,FLOOR-.04,z,.38+rand()*.42);if(i%3===0){k.cylinder(x,FLOOR+.18,z,.015,.44,'leafDark',k.root,.012,6);k.ellipsoid(x,FLOOR+.43,z,.105,.07,.105,i%2?'pink':'white',k.root,8);k.ellipsoid(x,FLOOR+.45,z,.035,.025,.035,'gold',k.root,8)}}
   }
+  // Arrival garden pockets replace ambiguous green dead zones with deliberate flowers and grasses.
+  for(const [cx,cz,rx,rz] of [[-21,40,3.1,4.8],[22.5,46.5,2.4,2.7]])for(let i=0;i<28;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r,y=terrainHeight(x,z,.68)+.05;grasses(x,y,z,.42+rand()*.38);if(i%2===0){k.cylinder(x,y+.22,z,.018,.42,'leafDark',k.root,.014,6);k.ellipsoid(x,y+.48,z,.12,.085,.12,'pink',k.root,8)}}
   tree(-17.6,FLOOR+.37,20.8,1.05,4);tree(-29,5.2,30,1.1,3);tree(46,4,-7,1.25,1);tree(-30,5.1,-25,1.5,8);tree(18,4.7,43,1.2,9)
   for(const [x,z,s] of [[-8,28,4.2],[10,28,4.7],[-21,-21,4],[25,-22,4.8],[-34,41,4.5],[44,21,4.2]])palm(x,Math.min(FLOOR,terrainHeight(x,z,.65)),z,s,x)
   for(let i=0;i<42;i++){const a=i/42*Math.PI*2,r=.75+rand()*.06,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,2)||(x>42&&z<-12)||(Math.abs(x)<21&&z<-25))continue;if(i%4===0)tree(x,terrainHeight(x,z,r),z,.75+rand()*.45,i);else palm(x,terrainHeight(x,z,r),z,3.5+rand()*2,i)}

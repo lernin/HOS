@@ -2,7 +2,7 @@ import { contains, floorAt, obstacles, type Point } from './plan'
 export const RADIUS=.31
 export const CELL=.4
 const MINX=-42,MINZ=-38,COLS=221,ROWS=226
-export function walkable(p:Point,r=RADIUS){return floorAt(p)!==null&&!obstacles.some(o=>contains(o,p,r))&&[[-r,0],[r,0],[0,-r],[0,r]].every(([x,z])=>floorAt({x:p.x+x,z:p.z+z})!==null)}
+export function walkable(p:Point,r=RADIUS){const y=floorAt(p);if(y===null||obstacles.some(o=>contains(o,p,r)))return false;const onRoundCourt=y===4.8&&Math.hypot(p.x-1,p.z-41)<=19;const edge=onRoundCourt?Math.min(r,.06):r;return [[-edge,0],[edge,0],[0,-edge],[0,edge]].every(([x,z])=>floorAt({x:p.x+x,z:p.z+z})!==null)}
 function safeGrade(a:Point,b:Point){const ya=floorAt(a),yb=floorAt(b);return ya!==null&&yb!==null&&Math.abs(yb-ya)<=Math.max(.045,Math.hypot(b.x-a.x,b.z-a.z)*.65)}
 export function clearLine(a:Point,b:Point){const n=Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/.12);let prev=a;for(let i=0;i<=n;i++){const t=i/Math.max(1,n),p={x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t};if(!walkable(p)||!safeGrade(prev,p))return false;prev=p}return true}
 export function moveSafely(p:Point,dx:number,dz:number):Point {
