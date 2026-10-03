@@ -381,6 +381,196 @@
       tree, anchor.gameId, { tier: index < 10 ? 11 : 12 })
   })
 
+
+  // Database finale: all five active 10-piece puzzles, followed by six
+  // confidence giants. The giant bags are exact forced chains: every
+  // vertical contact uses a distinct colour, and at most one card is diagonal,
+  // so no sibling seat can exist and the chain order is unique.
+  const DATABASE_N10_FINALES = [
+  [
+    "L:B:C",
+    [
+      "DL:C:B",
+      [
+        "DL:B:C",
+        [
+          "L:C:D"
+        ]
+      ],
+      [
+        "DR:B:A",
+        [
+          "DL:A:D"
+        ],
+        [
+          "W:A",
+          [
+            "L:A:D"
+          ]
+        ]
+      ]
+    ],
+    [
+      "DR:C:D"
+    ],
+    [
+      "DL:C:D"
+    ]
+  ],
+  [
+    "L:B:C",
+    [
+      "DL:C:B",
+      [
+        "DL:B:D",
+        [
+          "DL:D:C"
+        ]
+      ],
+      [
+        "DR:B:C"
+      ],
+      [
+        "DL:B:C"
+      ],
+      [
+        "DR:B:A",
+        [
+          "W:A",
+          [
+            "L:A:C"
+          ]
+        ],
+        [
+          "DR:A:C"
+        ]
+      ]
+    ]
+  ],
+  [
+    "L:B:C",
+    [
+      "DL:C:B",
+      [
+        "DL:B:D",
+        [
+          "DR:D:C"
+        ]
+      ],
+      [
+        "DR:B:C"
+      ],
+      [
+        "DL:B:C"
+      ],
+      [
+        "DR:B:A",
+        [
+          "W:A",
+          [
+            "L:A:C"
+          ]
+        ],
+        [
+          "DR:A:C"
+        ]
+      ]
+    ]
+  ],
+  [
+    "L:B:C",
+    [
+      "DL:C:B",
+      [
+        "DL:B:D",
+        [
+          "L:D:C"
+        ]
+      ],
+      [
+        "DR:B:C"
+      ],
+      [
+        "DL:B:C"
+      ],
+      [
+        "DR:B:A",
+        [
+          "W:A",
+          [
+            "L:A:C"
+          ]
+        ],
+        [
+          "DR:A:C"
+        ]
+      ]
+    ]
+  ],
+  [
+    "L:B:C",
+    [
+      "DL:C:B",
+      [
+        "DL:B:C",
+        [
+          "L:C:D"
+        ]
+      ],
+      [
+        "DR:B:A",
+        [
+          "W:A",
+          [
+            "L:A:D"
+          ]
+        ],
+        [
+          "DR:A:D"
+        ]
+      ]
+    ],
+    [
+      "DR:C:D"
+    ],
+    [
+      "DL:C:D"
+    ]
+  ]
+]
+  DATABASE_N10_FINALES.forEach((spec, index) => {
+    const number = 160 + index
+    const tree = challengeTree(spec)
+    const nodes = climbNodes(tree, [])
+    const anchor = nodes[(index * 3 + 2) % nodes.length]
+    addOpenLevel('db-n10-' + (index + 1), number + ' · 10 Pieces',
+      tree, anchor.gameId, { tier: 12 })
+  })
+
+  const GIANT_COLORS = 'ABCDEFGHIJKLMNOPQRSTU'.split('')
+  function confidenceGiantTree(pieceCount, variant) {
+    const diagonalIndex = variant === 1 ? -1 : variant === 2
+      ? Math.floor(pieceCount / 3) : Math.floor(2 * pieceCount / 3)
+    const diagonalShape = variant === 2 ? 'DL' : variant === 3 ? 'DR' : null
+    let tree = null
+    for (let i = pieceCount - 1; i >= 0; i--) {
+      const shape = i === diagonalIndex ? diagonalShape : 'L'
+      tree = {
+        name: '', gameId: 'g' + i,
+        paint: shape + ':' + GIANT_COLORS[i] + ':' + GIANT_COLORS[i + 1],
+        children: tree ? [tree] : [],
+      }
+    }
+    return tree
+  }
+  ;[[15,1],[15,2],[15,3],[20,1],[20,2],[20,3]].forEach(([pieces, variant], index) => {
+    const number = 165 + index
+    const tree = confidenceGiantTree(pieces, variant)
+    addOpenLevel('confidence-' + pieces + '-' + variant,
+      number + ' · ' + pieces + ' Pieces · Easy Giant',
+      tree, tree.gameId, { tier: 12 })
+  })
+
   const GAME_ADAPTIVE = '_adaptive'
 
   function gameProgress() {
