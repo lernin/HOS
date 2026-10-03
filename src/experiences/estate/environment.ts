@@ -56,45 +56,57 @@ export function architecture(k:EstateKit){
   k.box(.5,FLOOR-1.54,-36.1,23.4,2.8,.25,'travertine')
   k.box(.5,FLOOR-1.5,-30.2,23,0.2,12,'waterTile')
   for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
-  // Railings sit at the walkable perimeter, never across a route.
-  // Ocean prototype: a continuous architectural path follows the actual slab edge.
-  // The line itself is inset onto the walking surface so posts sit on stone, not over the drop.
-  const oceanReferencePath=(points:T.Vector3[])=>{
-    const capY=1.235,capH=.09,capW=.16,post=.065,postTop=capY-capH/2,postH=postTop-.055
-    const placePost=(p:T.Vector3)=>{k.box(p.x,FLOOR+.055+postH/2,p.z,post,postH,post,'bronze',k.root,.012);k.box(p.x,FLOOR+.018,p.z,.115,.036,.115,'bronze',k.root,.012)}
-    const terminal=(from:T.Vector3,to:T.Vector3)=>{const dir=to.clone().sub(from).normalize();return from.clone().addScaledVector(dir,post)}
-    const firstPost=terminal(points[0],points[1]),lastPost=terminal(points[points.length-1],points[points.length-2])
-    const cornerPosts=points.slice(1,-1)
+  // Unified Estate railing system.
+  // Base-plate policy: the outside edge of every pedestal sits half a pedestal width in from the walking-surface edge.
+  const RAIL_BASE=.115,RAIL_EDGE_GAP=RAIL_BASE/2,RAIL_EDGE_INSET=RAIL_BASE,RAIL_POST=.065,RAIL_CAP_OVERHANG=RAIL_POST
+  const estateRailPath=(points:T.Vector3[],opts:{height?:number;glass?:boolean;curb?:boolean}={})=>{
+    const height=opts.height??1.235,capH=.09,capW=.16,post=RAIL_POST,base=RAIL_BASE,glass=opts.glass!==false,curb=opts.curb===true
+    const floorLift=curb?.14:0,capY=floorLift+height,postTop=capY-capH/2,postH=postTop-(floorLift+.055)
+    const placePost=(p:T.Vector3)=>{
+      k.box(p.x,FLOOR+floorLift+.055+postH/2,p.z,post,postH,post,'bronze',k.root,.012)
+      k.box(p.x,FLOOR+floorLift+.018,p.z,base,.036,base,'bronze',k.root,.012)
+    }
+    const terminal=(from:T.Vector3,to:T.Vector3)=>{const dir=to.clone().sub(from).normalize();return from.clone().addScaledVector(dir,RAIL_CAP_OVERHANG)}
+    const firstPost=terminal(points[0],points[1]),lastPost=terminal(points[points.length-1],points[points.length-2]),cornerPosts=points.slice(1,-1)
     placePost(firstPost);for(const p of cornerPosts)placePost(p);placePost(lastPost)
     for(let s=0;s<points.length-1;s++){
-      const a=points[s],b=points[s+1],mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z))
-      // Broad cap runs continuously through corners; no floating or clipped terminal pieces.
-      k.box(0,capY,0,capW,capH,d,'bronze',g,.018)
-      const glassA=s===0?firstPost:a,glassB=s===points.length-2?lastPost:b,glassMid=glassA.clone().lerp(glassB,.5),glassD=glassA.distanceTo(glassB)
-      const gg=k.group(glassMid.x,FLOOR,glassMid.z,Math.atan2(glassB.x-glassA.x,glassB.z-glassA.z))
-      k.box(0,.61,0,.04,1.08,Math.max(.01,glassD-post*.7),'glass',gg)
+      const a=points[s],b=points[s+1],mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR+floorLift,mid.z,Math.atan2(b.x-a.x,b.z-a.z))
+      if(curb)k.box(0,.07-floorLift,0,.18,.14,d,'limestone',g,.035)
+      k.box(0,height,0,capW,capH,d,'bronze',g,.018)
       const start=s===0?firstPost:a,end=s===points.length-2?lastPost:b,run=start.distanceTo(end),bays=Math.max(1,Math.ceil(run/1.8))
+      if(glass){
+        const gm=start.clone().lerp(end,.5),gd=start.distanceTo(end),gg=k.group(gm.x,FLOOR+floorLift,gm.z,Math.atan2(end.x-start.x,end.z-start.z))
+        const glassH=Math.max(.2,height-.155)
+        k.box(0,.055+glassH/2,0,.04,glassH,Math.max(.01,gd-post*.7),'glass',gg)
+      }
       for(let i=1;i<bays;i++){const p=start.clone().lerp(end,i/bays);placePost(p)}
     }
   }
-  // West run: building wall -> terrace corner -> pool-walk edge.
-  oceanReferencePath([v(-22.93,FLOOR,-17.08),v(-22.93,FLOOR,-23.93),v(-14.93,FLOOR,-23.93),v(-14.93,FLOOR,-35.93)])
-  // East run: pool-walk edge -> terrace corner -> lookout corner -> lookout ocean edge.
-  oceanReferencePath([v(15.93,FLOOR,-35.93),v(15.93,FLOOR,-23.93),v(26.93,FLOOR,-23.93),v(26.93,FLOOR,-22.93),v(39.93,FLOOR,-22.93)])
-  for(const [a,b] of [[v(44,FLOOR,-14),v(44,FLOOR,14)],[v(-22,FLOOR,33),v(-6.5,FLOOR,33)],[v(20,FLOOR,31.1),v(20,FLOOR,40)]]){
-    const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.65,0,.035,1.24,d,'glass',g);k.box(0,1.28,0,.045,.04,d,'bronze',g);for(let i=0;i<=d/2;i++)k.box(0,.62,-d/2+i*2,.035,1.24,.035,'bronze',g)
-  }
-  // Arrival garden pockets: low open rails make the non-walkable planted edges legible without blocking the view.
-  const gardenPocketRail=(a:T.Vector3,b:T.Vector3)=>{const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.72,0,.055,.055,d,'bronze',g);for(let i=0;i<=Math.ceil(d/1.7);i++)k.box(0,.4,-d/2+Math.min(d,i*1.7),.055,.82,.055,'bronze',g)}
-  for(const [a,b] of [[v(-18.15,FLOOR,34.5),v(-18.15,FLOOR,47.2)],[v(20.15,FLOOR,40.2),v(20.15,FLOOR,48.4)]])gardenPocketRail(a,b)
-  // Grand foyer garden pockets: low limestone curbs and bronze rails mark the two non-walkable interior gardens.
-  const foyerGardenRail=(a:T.Vector3,b:T.Vector3)=>{const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.07,0,.18,.14,d,'limestone',g,.035);k.box(0,.78,0,.042,.045,d,'bronze',g);for(let i=0;i<=Math.ceil(d/1.45);i++)k.box(0,.42,-d/2+Math.min(d,i*1.45),.042,.82,.042,'bronze',g)}
-  for(const [a,b] of [
-    [v(-10.92,FLOOR,8.35),v(-10.92,FLOOR,13.65)],
-    [v(-10.72,FLOOR,13.92),v(-6.28,FLOOR,13.92)],
-    [v(8.02,FLOOR,10.18),v(8.02,FLOOR,13.82)],
-    [v(13.02,FLOOR,8.35),v(13.02,FLOOR,14.65)]
-  ])foyerGardenRail(a,b)
+
+  // Full-height guard rails. Centerlines are one pedestal width in from exposed slab edges,
+  // which leaves exactly half a pedestal width between the pedestal's outside edge and the slab edge.
+  // West ocean terrace / pool-walk edge.
+  estateRailPath([v(-22.885,FLOOR,-17.08),v(-22.885,FLOOR,-23.885),v(-14.885,FLOOR,-23.885),v(-14.885,FLOOR,-35.95)])
+  // East pool-walk / ocean terrace / lookout edge.
+  estateRailPath([v(15.885,FLOOR,-35.95),v(15.885,FLOOR,-23.885),v(26.885,FLOOR,-23.885),v(26.885,FLOOR,-22.885),v(39.95,FLOOR,-22.885)])
+  // Sunrise terrace cliff edge.
+  estateRailPath([v(43.885,FLOOR,-13.95),v(43.885,FLOOR,13.95)])
+  // Garden courtyard drop to the arrival court.
+  estateRailPath([v(-22,FLOOR,32.885),v(-6.5,FLOOR,32.885)])
+  // East gallery drop beside the arrival court.
+  estateRailPath([v(20.115,FLOOR,31.1),v(20.115,FLOOR,39.95)])
+
+  // Low garden railings use the same bronze cap/post/base-plate language without glass.
+  // Arrival garden pockets: existing landscape edge line shifted one pedestal width onto the walking surface.
+  estateRailPath([v(-18.035,FLOOR,34.5),v(-18.035,FLOOR,47.2)],{height:.82,glass:false})
+  estateRailPath([v(20.035,FLOOR,40.2),v(20.035,FLOOR,48.4)],{height:.82,glass:false})
+
+  // Grand foyer garden pockets: same hardware and pedestal rule, scaled as a low garden guard over the stone curb.
+  estateRailPath([v(-11.035,FLOOR,8.35),v(-11.035,FLOOR,13.65)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(-10.72,FLOOR,14.035),v(-6.28,FLOOR,14.035)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(7.905,FLOOR,10.18),v(7.905,FLOOR,13.82)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(13.135,FLOOR,8.35),v(13.135,FLOOR,14.65)],{height:.82,glass:false,curb:true})
+
   // Pergola over outdoor dining, secondary circulation remains open.
   for(const x of [17,25])for(const z of [-21.6,-13.2])k.box(x,FLOOR+1.7,z,.17,3.4,.17,'bronze')
   for(let i=0;i<20;i++)k.box(17+i*.42,FLOOR+3.45,-17.4,.13,.2,9.3,'oak')
