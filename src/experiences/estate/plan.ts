@@ -132,12 +132,12 @@ export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
   {x1:10,x2:19,z1:26.9,z2:27.8}, // library shelves
   {x1:-3,x2:5,z1:37,z2:45}, // arrival fountain
   {x1:-1.4,x2:-.1,z1:22.05,z2:24.12},{x1:2.1,x2:3.4,z1:22.05,z2:24.12}, // open pivot-door leaves
-  {x1:-22,x2:-6.4,z1:32.72,z2:33.08}, // raised garden lip; court is a storey below
-  {x1:19.78,x2:20.16,z1:31.05,z2:40}, // east gallery lip along the court
-  {x1:-23.13,x2:-22.73,z1:-24.13,z2:-17.0},{x1:-23.05,x2:-14.77,z1:-24.13,z2:-23.73},{x1:-15.13,x2:-14.73,z1:-36.05,z2:-23.75}, // west ocean railing returns
-  {x1:15.73,x2:16.13,z1:-36.05,z2:-23.75},{x1:15.75,x2:27.13,z1:-24.13,z2:-23.73},{x1:26.73,x2:27.13,z1:-24.13,z2:-22.73}, // east terrace/pool railing returns
-  {x1:26.75,x2:40.05,z1:-23.13,z2:-22.73}, // lookout ocean edge, joined to the terrace corner
-  {x1:43.72,x2:44.15,z1:-14.1,z2:14.1}, // sunrise cliff
+  {x1:-22,x2:-6.4,z1:32.685,z2:33.085}, // raised garden lip and unified rail; court is a storey below
+  {x1:19.915,x2:20.315,z1:31.05,z2:40}, // east gallery lip and unified rail along the court
+  {x1:-23.085,x2:-22.685,z1:-24.085,z2:-17.0},{x1:-23.0,x2:-14.685,z1:-24.085,z2:-23.685},{x1:-15.085,x2:-14.685,z1:-36.1,z2:-23.7}, // west ocean railing returns
+  {x1:15.685,x2:16.085,z1:-36.1,z2:-23.7},{x1:15.7,x2:27.085,z1:-24.085,z2:-23.685},{x1:26.685,x2:27.085,z1:-24.085,z2:-22.685}, // east terrace/pool railing returns
+  {x1:26.7,x2:40.1,z1:-23.085,z2:-22.685}, // lookout ocean edge, joined to the terrace corner
+  {x1:43.685,x2:44.085,z1:-14.05,z2:14.05}, // sunrise cliff
 ]
 export const destinations=[
   {name:'Entrance',x:1,z:27,yaw:0},{name:'Great room',x:7,z:3,yaw:.7},
