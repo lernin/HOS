@@ -563,7 +563,7 @@
     }
     return tree
   }
-  ;[[15,1],[15,2],[15,3],[20,1],[20,2],[20,3]].forEach(([pieces, variant], index) => {
+  ;[[15,1],[15,2],[15,3]].forEach(([pieces, variant], index) => {
     const number = 165 + index
     const tree = confidenceGiantTree(pieces, variant)
     addOpenLevel('confidence-' + pieces + '-' + variant,
