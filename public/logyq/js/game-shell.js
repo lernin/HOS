@@ -65,6 +65,8 @@
             <output id="logyq-game-thumb-gain-value" aria-live="polite">2.4×</output>
             <button type="button" id="logyq-game-thumb-gain-up" aria-label="Increase thumb movement">+</button>
           </div>
+          <small id="logyq-game-thumb-gain-mode">Automatic</small>
+          <button type="button" id="logyq-game-thumb-gain-auto" hidden>Reset to automatic</button>
         </div>
       </section>`
     document.body.appendChild(panel)
@@ -93,6 +95,8 @@
       .logyq-game-thumb-gain-controls{display:flex;align-items:center;justify-content:flex-end;gap:12px}
       .logyq-game-thumb-gain-controls button{width:38px;height:38px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;color:#0f172a;font:700 21px/1 system-ui;touch-action:manipulation}
       #logyq-game-thumb-gain-value{min-width:48px;text-align:center;color:#0f172a;font:750 16px/1 system-ui;font-variant-numeric:tabular-nums}
+      #logyq-game-thumb-gain-mode{grid-column:2;color:#64748b;font:600 12px/1.2 system-ui}
+      #logyq-game-thumb-gain-auto{grid-column:2;min-height:34px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;font:650 12px/1 system-ui}
       body.logyq-game.logyq-game-paused svg#canvas,body.logyq-game.logyq-game-paused #Dock{pointer-events:none}
       @media (orientation:landscape) and (max-height:600px){.logyq-game-pause-card{padding:14px;gap:8px}.logyq-game-pause-card>button{min-height:42px}}
     `
@@ -115,14 +119,21 @@
     const thumbGainDown = document.getElementById('logyq-game-thumb-gain-down')
     const thumbGainUp = document.getElementById('logyq-game-thumb-gain-up')
     const thumbGainValue = document.getElementById('logyq-game-thumb-gain-value')
+    const thumbGainMode = document.getElementById('logyq-game-thumb-gain-mode')
+    const thumbGainAuto = document.getElementById('logyq-game-thumb-gain-auto')
     const syncThumbGain = () => {
-      const value = thumbGain?.value?.() ?? 2.4
+      const value = thumbGain?.value?.() ?? 1
+      const automatic = thumbGain?.automatic?.() !== false
       if (thumbGainValue) thumbGainValue.textContent = value.toFixed(1) + '×'
+      if (thumbGainMode) thumbGainMode.textContent = automatic ? 'Automatic · grows 0.2× per level' : 'Manual · automatic growth paused'
+      if (thumbGainAuto) thumbGainAuto.hidden = automatic
       if (thumbGainDown) thumbGainDown.disabled = value <= (thumbGain?.min ?? 1)
-      if (thumbGainUp) thumbGainUp.disabled = value >= (thumbGain?.max ?? 6)
+      if (thumbGainUp) thumbGainUp.disabled = value >= (thumbGain?.max ?? 5)
     }
     thumbGainDown?.addEventListener('click', () => { thumbGain?.step(-1); syncThumbGain() })
     thumbGainUp?.addEventListener('click', () => { thumbGain?.step(1); syncThumbGain() })
+    thumbGainAuto?.addEventListener('click', () => { thumbGain?.resetAutomatic?.(); syncThumbGain() })
+    window.addEventListener('logyq-game-thumb-gainchange', syncThumbGain)
     syncThumbGain()
     const syncSoundControls = () => {
       document.querySelectorAll('[data-game-sound]').forEach((control) => {
