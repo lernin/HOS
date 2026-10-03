@@ -256,6 +256,9 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel}>
         <defs>
           <pattern id="ep-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M 5 0 L 0 0 0 5" fill="none" stroke="#d8d4c9" strokeWidth=".08"/></pattern>
+          <pattern id="ep-deck-hatch" width="1.2" height="1.2" patternUnits="userSpaceOnUse"><rect width="1.2" height="1.2" fill="#e5d7c2"/><path d="M0 1.2L1.2 0" stroke="#c9b89f" strokeWidth=".08" opacity=".75"/></pattern>
+          <pattern id="ep-covered-hatch" width="1.4" height="1.4" patternUnits="userSpaceOnUse"><rect width="1.4" height="1.4" fill="#ded6c5"/><path d="M0 .3H1.4M0 1H1.4" stroke="#bbb19f" strokeWidth=".08" opacity=".72"/></pattern>
+          <pattern id="ep-step-hatch" width=".8" height=".8" patternUnits="userSpaceOnUse"><rect width=".8" height=".8" fill="#d9cec0"/><path d="M0 .4H.8" stroke="#aa9a87" strokeWidth=".1"/></pattern>
           {(Object.keys(categoryMeta) as Category[]).map(k=><marker key={k} id={`ep-arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill={categoryMeta[k].color}/></marker>)}
         </defs>
         <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="#f7f3e8"/>
