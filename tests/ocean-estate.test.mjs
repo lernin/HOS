@@ -270,3 +270,8 @@ test('Estate Plan is a routed bird-eye markup workspace backed by live plan geom
  assert.equal(planner.includes('exportPng'),true)
  assert.equal(planner.includes("(['main','arrival','site'] as PlanView[])"),true)
 })
+
+test('Estate Plan has a direct Vercel SPA rewrite',()=>{
+ const vercel=readFileSync(new URL('../vercel.json',import.meta.url),'utf8')
+ assert.equal(vercel.includes('{ "source": "/ocean-estate-plan", "destination": "/" }'),true)
+})
