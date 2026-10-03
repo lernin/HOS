@@ -284,7 +284,13 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
 
           {layers.furniture&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
 
-          {layers.railings&&estateRailings.map(r=><polyline key={r.id} points={r.points.map(([x,z])=>`${x},${-z}`).join(' ')} fill="none" stroke={r.family==='garden'?'#7b5f48':'#593f2d'} strokeWidth={r.family==='garden'?.25:.34} strokeDasharray={r.family==='garden'?'.55 .22':undefined} strokeLinecap="round" strokeLinejoin="round"/>)}
+          {layers.railings&&estateRailings.map(r=>{
+            const selected=selectedRail===r.id,review=auditMode&&r.audit==='review',pts=r.points.map(([x,z])=>`${x},${-z}`).join(' ')
+            return <g key={r.id}>
+              <polyline points={pts} fill="none" stroke="transparent" strokeWidth="2.2" pointerEvents={tool==='pan'?'stroke':'none'} onPointerDown={e=>{e.stopPropagation();setSelectedRail(r.id)}}/>
+              <polyline points={pts} fill="none" stroke={selected?'#175f91':review?'#df7a19':r.family==='garden'?'#7b5f48':'#593f2d'} strokeWidth={selected?.58:review?.5:r.family==='garden'?.28:.36} strokeDasharray={r.family==='garden'?'.55 .22':undefined} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none"/>
+            </g>
+          })}
 
           {layers.markups&&marks.map(mark=>{
             const color=categoryMeta[mark.category].color
