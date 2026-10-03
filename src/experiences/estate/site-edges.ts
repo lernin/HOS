@@ -116,20 +116,30 @@ for(let ix=0;ix<xs.length-1;ix++)for(let iz=0;iz<zs.length-1;iz++){
   if(!cells.has(`${ix}:${iz+1}`))add([xs[ix],zs[iz+1]],[xs[ix+1],zs[iz+1]])
 }
 
-function canMerge(a:RawEdge,b:RawEdge){
-  if(a.kind!==b.kind)return false
-  const av=[a.b[0]-a.a[0],a.b[1]-a.a[1]],bv=[b.b[0]-b.a[0],b.b[1]-b.a[1]]
-  if(Math.abs(av[0]*bv[1]-av[1]*bv[0])>.001)return false
-  const touch=Math.hypot(a.b[0]-b.a[0],a.b[1]-b.a[1])<.001
-  const sameLine=Math.abs(av[0])>.001?Math.abs(a.a[1]-b.a[1])<.001:Math.abs(a.a[0]-b.a[0])<.001
-  return touch&&sameLine
+const groups=new Map<string,RawEdge[]>()
+for(const edge of raw){
+  const horizontal=Math.abs(edge.b[0]-edge.a[0])>=Math.abs(edge.b[1]-edge.a[1])
+  let a=edge.a,b=edge.b
+  if(horizontal&&a[0]>b[0]){const t=a;a=b;b=t}
+  if(!horizontal&&a[1]>b[1]){const t=a;a=b;b=t}
+  const line=horizontal?a[1]:a[0]
+  const key=`${edge.kind}:${horizontal?'h':'v'}:${line.toFixed(4)}`
+  const list=groups.get(key)??[]
+  list.push({a:[a[0],a[1]],b:[b[0],b[1]],kind:edge.kind})
+  groups.set(key,list)
 }
-const ordered=raw.sort((a,b)=>a.a[0]-b.a[0]||a.a[1]-b.a[1]||a.b[0]-b.b[0]||a.b[1]-b.b[1])
 const merged:RawEdge[]=[]
-for(const edge of ordered){
-  const last=merged[merged.length-1]
-  if(last&&canMerge(last,edge))last.b=edge.b
-  else merged.push({a:[edge.a[0],edge.a[1]],b:[edge.b[0],edge.b[1]],kind:edge.kind})
+for(const list of groups.values()){
+  const horizontal=Math.abs(list[0].b[0]-list[0].a[0])>=Math.abs(list[0].b[1]-list[0].a[1])
+  list.sort((a,b)=>(horizontal?a.a[0]-b.a[0]:a.a[1]-b.a[1]))
+  let current:RawEdge|null=null
+  for(const edge of list){
+    if(!current){current={a:[edge.a[0],edge.a[1]],b:[edge.b[0],edge.b[1]],kind:edge.kind};continue}
+    const currentEnd=horizontal?current.b[0]:current.b[1],nextStart=horizontal?edge.a[0]:edge.a[1]
+    if(nextStart<=currentEnd+.001)current.b=[edge.b[0],edge.b[1]]
+    else{merged.push(current);current={a:[edge.a[0],edge.a[1]],b:[edge.b[0],edge.b[1]],kind:edge.kind}}
+  }
+  if(current)merged.push(current)
 }
 const sorted=merged.sort((a,b)=>{
   const ay=Math.min(a.a[1],a.b[1]),by=Math.min(b.a[1],b.b[1])
