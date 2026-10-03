@@ -19,9 +19,9 @@ type Mark={
 
 const STORAGE='ocean-estate-plan-markups-v1'
 const DEFAULT_BOX:Record<PlanView,Box>={
-  main:{x:-44,y:-53,w:92,h:96},
-  arrival:{x:-28,y:-64,w:56,h:49},
-  site:{x:-66,y:-69,w:132,h:132},
+  main:{x:-48,y:-43,w:92,h:96},
+  arrival:{x:-28,y:15,w:56,h:49},
+  site:{x:-66,y:-63,w:132,h:132},
 }
 const categoryMeta:Record<Category,{label:string;color:string}>={
   general:{label:'General',color:'#d34f4f'},
@@ -34,6 +34,7 @@ const floorColor:Record<string,string>={
   limestone:'#efe7d7',travertine:'#e6dccb',oak:'#d5c2a0',walnut:'#a98b68',concrete:'#d5d3cc',basalt:'#6d7473',
 }
 const pointsString=(pts:Pt[])=>pts.map(q=>`${q.x},${q.y}`).join(' ')
+const rotate180=(p:Pt):Pt=>({x:-p.x,y:-p.y})
 
 function readMarks():Mark[]{
   try{
@@ -78,7 +79,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     return `A${max+1}`
   },[marks])
 
-  function toPlan(clientX:number,clientY:number):Pt{
+  function toView(clientX:number,clientY:number):Pt{
     const svg=svgRef.current
     if(!svg)return{x:0,y:0}
     const p=svg.createSVGPoint();p.x=clientX;p.y=clientY
@@ -86,6 +87,9 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     if(!matrix)return{x:0,y:0}
     const out=p.matrixTransform(matrix)
     return{x:out.x,y:out.y}
+  }
+  function toPlan(clientX:number,clientY:number):Pt{
+    return rotate180(toView(clientX,clientY))
   }
   function commit(mark:Omit<Mark,'id'>){
     setMarks(prev=>[...prev,{...mark,id:nextId}])
@@ -175,7 +179,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     const nw=Math.max(18,Math.min(180,box.w*factor)),nh=nw*(box.h/box.w)
     let cx=box.x+box.w/2,cy=box.y+box.h/2
     if(screen&&svg){
-      const p=toPlan(screen.x,screen.y);cx=p.x;cy=p.y
+      const p=toView(screen.x,screen.y);cx=p.x;cy=p.y
     }
     const rx=(cx-box.x)/box.w,ry=(cy-box.y)/box.h
     setBox({x:cx-rx*nw,y:cy-ry*nh,w:nw,h:nh})
@@ -233,43 +237,54 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         </defs>
         <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="#f7f3e8"/>
         <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="url(#ep-grid)"/>
-        {view==='site'&&<ellipse cx="0" cy="-7" rx="58" ry="61" fill="#e8ece1" stroke="#aeb6a7" strokeWidth=".35"/>}
-        <rect x="-70" y="12" width="140" height="65" fill="#dceff2" opacity={view==='arrival'?.18:.72}/>
-        <text x="0" y="34" textAnchor="middle" fontSize="2.3" letterSpacing=".35" fill="#6f9ea8" opacity=".72">OCEAN</text>
+        <g transform="rotate(180)">
+          {view==='site'&&<ellipse cx="0" cy="-7" rx="58" ry="61" fill="#e8ece1" stroke="#aeb6a7" strokeWidth=".35"/>}
+          <rect x="-70" y="12" width="140" height="65" fill="#dceff2" opacity={view==='arrival'?.18:.72}/>
 
-        {viewFloors.map((f,i)=>{
-          const lower=f.name==='Arrival court'||f.name==='Arrival steps'
-          const opacity=view==='site'?.9:view==='arrival'?(lower?1:.16):(lower?.13:1)
-          if(f.name==='Arrival court')return <circle key={`floor-${i}`} cx="1" cy="-41" r="19" fill={floorColor[f.material]||'#e8e1d3'} opacity={opacity} stroke="#918d85" strokeWidth=".18"/>
-          return <rect key={`floor-${i}`} x={f.x1} y={-f.z2} width={f.x2-f.x1} height={f.z2-f.z1} rx=".08" fill={floorColor[f.material]||'#e8e1d3'} opacity={opacity} stroke="#a59e91" strokeWidth=".14"/>
+          {viewFloors.map((f,i)=>{
+            const lower=f.name==='Arrival court'||f.name==='Arrival steps'
+            const opacity=view==='site'?.9:view==='arrival'?(lower?1:.16):(lower?.13:1)
+            if(f.name==='Arrival court')return <circle key={`floor-${i}`} cx="1" cy="-41" r="19" fill={floorColor[f.material]||'#e8e1d3'} opacity={opacity} stroke="#918d85" strokeWidth=".18"/>
+            return <rect key={`floor-${i}`} x={f.x1} y={-f.z2} width={f.x2-f.x1} height={f.z2-f.z1} rx=".08" fill={floorColor[f.material]||'#e8e1d3'} opacity={opacity} stroke="#a59e91" strokeWidth=".14"/>
+          })}
+          <rect x="-10.9" y="24.2" width="22.8" height="11.8" rx=".18" fill="#8fcfd2" stroke="#4f9ca4" strokeWidth=".22"/>
+          <rect x="-20" y="-27" width="8" height="9" rx=".3" fill="#aab69a" stroke="#75856c" strokeWidth=".18"/>
+          <circle cx="1" cy="-41" r="4" fill="#92c8cb" stroke="#6f8e89" strokeWidth=".18"/>
+          <circle cx="1" cy="-41" r="3.45" fill="#b9e0e1" opacity=".75"/>
+
+          {walls.map((w,i)=><rect key={`wall-${i}`} x={w.x1} y={-w.z2} width={Math.max(.12,w.x2-w.x1)} height={Math.max(.12,w.z2-w.z1)} fill="#403d38" opacity={view==='arrival'?.72:.9}/>)}
+          {glass.map((w,i)=><rect key={`glass-${i}`} x={w.x1} y={-w.z2} width={Math.max(.11,w.x2-w.x1)} height={Math.max(.11,w.z2-w.z1)} fill="#5aa4b0" opacity=".88"/>)}
+
+          {layers.furniture&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
+
+          {layers.railings&&estateRailings.map(r=><polyline key={r.id} points={r.points.map(([x,z])=>`${x},${-z}`).join(' ')} fill="none" stroke={r.family==='garden'?'#7b5f48':'#593f2d'} strokeWidth={r.family==='garden'?.25:.34} strokeDasharray={r.family==='garden'?'.55 .22':undefined} strokeLinecap="round" strokeLinejoin="round"/>)}
+
+          {layers.markups&&marks.map(mark=>{
+            const color=categoryMeta[mark.category].color
+            if(mark.tool==='area')return <polygon key={mark.id} points={pointsString(mark.points)} fill={color} fillOpacity=".17" stroke={color} strokeWidth=".38" strokeLinejoin="round"/>
+            if(mark.tool==='pen')return <polyline key={mark.id} points={pointsString(mark.points)} fill="none" stroke={color} strokeWidth=".5" strokeLinecap="round" strokeLinejoin="round"/>
+            if(mark.tool==='arrow'){const a=mark.points[0],b=mark.points[mark.points.length-1];return <line key={mark.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={color} strokeWidth=".5" strokeLinecap="round" markerEnd={`url(#ep-arrow-${mark.category})`}/>}
+            const p=mark.points[0]
+            return <circle key={mark.id} cx={p.x} cy={p.y} r=".88" fill={color}/>
+          })}
+          {draft.length>1&&(tool==='pen'?<polyline points={pointsString(draft)} fill="none" stroke={categoryMeta[category].color} strokeWidth=".5" strokeDasharray=".5 .24"/>:tool==='area'?<polygon points={pointsString(draft)} fill={categoryMeta[category].color} fillOpacity=".12" stroke={categoryMeta[category].color} strokeWidth=".35" strokeDasharray=".5 .24"/>:<line x1={draft[0].x} y1={draft[0].y} x2={draft[draft.length-1].x} y2={draft[draft.length-1].y} stroke={categoryMeta[category].color} strokeWidth=".5" strokeDasharray=".5 .24"/>)}
+        </g>
+
+        <text x="0" y="-34" textAnchor="middle" fontSize="2.3" letterSpacing=".35" fill="#6f9ea8" opacity=".72">OCEAN</text>
+        <text x="-.5" y="-30.5" textAnchor="middle" fontSize="1.15" fill="#326f78">Infinity pool</text>
+
+        {roomLabels.map((f,i)=>{
+          const w=f.x2-f.x1,d=f.z2-f.z1,p=rotate180({x:(f.x1+f.x2)/2,y:-(f.z1+f.z2)/2})
+          return <text key={`label-${i}`} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={labelSize(f.name,w,d)} fill="#48433b" opacity=".82">{f.name}</text>
         })}
-        <rect x="-10.9" y="24.2" width="22.8" height="11.8" rx=".18" fill="#8fcfd2" stroke="#4f9ca4" strokeWidth=".22"/>
-        <text x=".5" y="30.5" textAnchor="middle" fontSize="1.15" fill="#326f78">Infinity pool</text>
-        <rect x="-20" y="-27" width="8" height="9" rx=".3" fill="#aab69a" stroke="#75856c" strokeWidth=".18"/>
-        <circle cx="1" cy="-41" r="4" fill="#92c8cb" stroke="#6f8e89" strokeWidth=".18"/>
-        <circle cx="1" cy="-41" r="3.45" fill="#b9e0e1" opacity=".75"/>
 
-        {walls.map((w,i)=><rect key={`wall-${i}`} x={w.x1} y={-w.z2} width={Math.max(.12,w.x2-w.x1)} height={Math.max(.12,w.z2-w.z1)} fill="#403d38" opacity={view==='arrival'?.72:.9}/>)}
-        {glass.map((w,i)=><rect key={`glass-${i}`} x={w.x1} y={-w.z2} width={Math.max(.11,w.x2-w.x1)} height={Math.max(.11,w.z2-w.z1)} fill="#5aa4b0" opacity=".88"/>)}
-
-        {layers.furniture&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
-
-        {layers.railings&&estateRailings.map(r=><polyline key={r.id} points={r.points.map(([x,z])=>`${x},${-z}`).join(' ')} fill="none" stroke={r.family==='garden'?'#7b5f48':'#593f2d'} strokeWidth={r.family==='garden'?.25:.34} strokeDasharray={r.family==='garden'?'.55 .22':undefined} strokeLinecap="round" strokeLinejoin="round"/>)}
-
-        {roomLabels.map((f,i)=>{const w=f.x2-f.x1,d=f.z2-f.z1;return <text key={`label-${i}`} x={(f.x1+f.x2)/2} y={-(f.z1+f.z2)/2} textAnchor="middle" dominantBaseline="middle" fontSize={labelSize(f.name,w,d)} fill="#48433b" opacity=".82">{f.name}</text>})}
-
-        {layers.markups&&marks.map(mark=>{
-          const color=categoryMeta[mark.category].color
-          if(mark.tool==='area')return <polygon key={mark.id} points={pointsString(mark.points)} fill={color} fillOpacity=".17" stroke={color} strokeWidth=".38" strokeLinejoin="round"/>
-          if(mark.tool==='pen')return <polyline key={mark.id} points={pointsString(mark.points)} fill="none" stroke={color} strokeWidth=".5" strokeLinecap="round" strokeLinejoin="round"/>
-          if(mark.tool==='arrow'){const a=mark.points[0],b=mark.points[mark.points.length-1];return <line key={mark.id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={color} strokeWidth=".5" strokeLinecap="round" markerEnd={`url(#ep-arrow-${mark.category})`}/>}
-          const p=mark.points[0]
-          return <g key={mark.id}><circle cx={p.x} cy={p.y} r=".88" fill={color}/><text x={p.x} y={p.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize=".68" fontWeight="700" fill="white">{mark.id}</text>{mark.text&&<text x={p.x+1.2} y={p.y+.12} fontSize=".92" fontWeight="600" fill={color} paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".25">{mark.text}</text>}</g>
+        {layers.markups&&marks.filter(mark=>mark.tool==='note').map(mark=>{
+          const p=rotate180(mark.points[0]),color=categoryMeta[mark.category].color
+          return <g key={`note-label-${mark.id}`}><text x={p.x} y={p.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize=".68" fontWeight="700" fill="white">{mark.id}</text>{mark.text&&<text x={p.x+1.2} y={p.y+.12} fontSize=".92" fontWeight="600" fill={color} paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".25">{mark.text}</text>}</g>
         })}
-        {draft.length>1&&(tool==='pen'?<polyline points={pointsString(draft)} fill="none" stroke={categoryMeta[category].color} strokeWidth=".5" strokeDasharray=".5 .24"/>:tool==='area'?<polygon points={pointsString(draft)} fill={categoryMeta[category].color} fillOpacity=".12" stroke={categoryMeta[category].color} strokeWidth=".35" strokeDasharray=".5 .24"/>:<line x1={draft[0].x} y1={draft[0].y} x2={draft[draft.length-1].x} y2={draft[draft.length-1].y} stroke={categoryMeta[category].color} strokeWidth=".5" strokeDasharray=".5 .24"/>)}
 
         <g transform={`translate(${box.x+3} ${box.y+box.h-3})`}><line x1="0" y1="0" x2="10" y2="0" stroke="#4b4842" strokeWidth=".22"/><line x1="0" y1="-.45" x2="0" y2=".45" stroke="#4b4842" strokeWidth=".18"/><line x1="10" y1="-.45" x2="10" y2=".45" stroke="#4b4842" strokeWidth=".18"/><text x="5" y="-1" textAnchor="middle" fontSize=".9" fill="#4b4842">10 m</text></g>
-        <g transform={`translate(${box.x+box.w-4} ${box.y+4})`}><path d="M0 2 L0 -2 M0 -2 L-1 -0.5 M0 -2 L1 -0.5" fill="none" stroke="#4b4842" strokeWidth=".22"/><text x="0" y="3.4" textAnchor="middle" fontSize=".9" fill="#4b4842">N</text></g>
+        <g transform={`translate(${box.x+box.w-4} ${box.y+4})`}><path d="M0 -2 L0 2 M0 2 L-1 .5 M0 2 L1 .5" fill="none" stroke="#4b4842" strokeWidth=".22"/><text x="0" y="3.6" textAnchor="middle" fontSize=".9" fill="#4b4842">N</text></g>
       </svg>
 
       {!clean&&<div className="ep-zoom"><button onClick={()=>zoom(.82)}>＋</button><button onClick={()=>zoom(1.22)}>−</button><button onClick={()=>setBox(DEFAULT_BOX[view])}>Fit</button></div>}
