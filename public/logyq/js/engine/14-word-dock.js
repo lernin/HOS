@@ -21,6 +21,13 @@
       !!body?.classList?.contains('logyq-curriculum-frozen')
   }
 
+  function gameBankIntent(dx, dy) {
+    if (Math.hypot(dx, dy) < 10) return 'wait'
+    if (dy <= -10 && -dy > Math.abs(dx)) return 'lift'
+    if (Math.abs(dx) > Math.abs(dy)) return 'pan'
+    return 'ignore'
+  }
+
   // Portrait shelf pans on x. Landscape shelf pans on y. Desktop keeps the old down-delete.
   function shelfScrollAxis(){
     if (!phoneShelf()) return null
@@ -331,6 +338,8 @@
   function render(){
     const { state, elements, utils } = logyq
     const list = elements.Dock
+    const previousScroll = directPuzzleShelf()
+      ? (list.querySelector('#logyq-bank-chips')?.scrollLeft || 0) : 0
     list.innerHTML = ''
     // Word Bank bar: chips scroll in their own strip. All stays pinned outside it.
     const strip = document.createElement('div')
@@ -387,6 +396,7 @@ const target = utils.findByUid(state.root.data, sel[0]);
       strip.appendChild(chip);
     });
     list.appendChild(strip);
+    strip.scrollLeft = previousScroll
     if (chipNamesInBank().length && !directPuzzleShelf()) {
       const allButton = document.createElement('button');
       allButton.type = 'button';
@@ -736,8 +746,15 @@ function bindChipPointerPlace() {
       // Claim the gesture while the finger is still on the chip. Waiting
       // until it has left the dock lets the browser cancel the pointer first.
       if (directPuzzleShelf()) {
-        if (Math.hypot(dx, dy) < 6) return
-        beginLift([session.word])
+        if (document.body.classList.contains('logyq-game') && shelfScrollAxis() === 'x') {
+          const intent = gameBankIntent(dx, dy)
+          if (intent === 'wait') return
+          if (intent === 'lift') beginLift([session.word])
+          else session.panning = true // horizontal scroll or a harmless downward swipe
+        } else {
+          if (Math.hypot(dx, dy) < 6) return
+          beginLift([session.word])
+        }
         try { session.chip.setPointerCapture(event.pointerId) } catch (_error) {}
       } else if (!moved) return
       else {

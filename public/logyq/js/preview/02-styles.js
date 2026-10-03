@@ -398,6 +398,13 @@
       body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{position:fixed;box-sizing:border-box;left:50%;right:auto;transform:translateX(-50%);top:auto;bottom:calc(32px + env(safe-area-inset-bottom));width:max-content;min-width:96px;max-width:calc(100vw - 48px);height:auto;min-height:64px;max-height:140px;padding:10px 12px;display:flex;flex-direction:row;align-items:center;justify-content:center;border:1px solid rgba(226,232,240,.9);border-radius:20px;background:rgba(255,255,255,.94);box-shadow:0 5px 20px rgba(15,23,42,.12);touch-action:none;overflow:hidden}
       body.logyq-game #logyq-bank-chips,body.logyq-curriculum-frozen #logyq-bank-chips{flex:0 1 auto;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
       body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{flex:0 0 auto;width:auto;max-width:none;min-height:44px;padding:7px 2px;touch-action:none}
+      /* Game pieces are a two-row horizontal shelf, with the next column
+         clipped on the right to reveal that more pieces can be scrolled in. */
+      body.logyq-game #Dock,body.logyq-game #Dock.dock-left{left:16px;right:16px;transform:none;width:auto;min-width:0;max-width:none;height:96px;min-height:96px;max-height:96px;padding:0;justify-content:flex-start;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
+      body.logyq-game #logyq-bank-chips{flex:1 1 auto;width:100%;height:96px;min-width:0;display:grid;grid-auto-flow:column;grid-template-rows:repeat(2,44px);grid-auto-columns:clamp(64px,18vw,72px);gap:8px;align-content:center;justify-content:start;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:none}
+      body.logyq-game #logyq-bank-chips::-webkit-scrollbar{display:none}
+      body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{box-sizing:border-box;width:100%;height:44px;min-height:44px;max-width:none;padding:7px 0}
+      body.logyq-game #Dock .logyq-shape-chip svg{height:28px}
       body.logyq-game #Dock.is-empty,body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
       body.logyq-game #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
