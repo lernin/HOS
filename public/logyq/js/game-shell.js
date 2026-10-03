@@ -23,7 +23,7 @@
       return element
     }
 
-    const back = button('logyq-game-back', 'Back', 'Back to levels')
+    const back = button('logyq-game-back', 'Back', 'Back to Meadow')
     const title = document.createElement('strong')
     title.id = 'logyq-game-puzzle'
     title.textContent = 'Puzzle'
@@ -259,7 +259,7 @@
     })
     legacyNext.addEventListener('click', () => music?.resume())
     document.addEventListener('pointerdown', (event) => {
-      if (event.target?.closest?.('[data-game-level], [data-trail-level], #logyq-trail-continue')) music?.enter()
+      if (event.target?.closest?.('[data-game-level], [data-meadow-stage], [data-meadow-gate], #logyq-trail-continue')) music?.enter()
     }, true)
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !panel.hidden) { event.preventDefault(); closePause() }
