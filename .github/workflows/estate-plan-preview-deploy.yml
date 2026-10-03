@@ -1,0 +1,42 @@
+name: Estate Plan Preview Deploy
+
+on:
+  push:
+    branches:
+      - preview/ocean-estate-plan-20261004
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_b6jnWQ9J59MBcsgJj6f7cb8p
+      VERCEL_PROJECT_ID: prj_bFnVLCQ2ebvNRRJpVB56fRywPXSv
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify application build
+        run: npm run build
+      - name: Verify Vercel credential
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "VERCEL_TOKEN is not configured"
+            exit 1
+          fi
+      - name: Build preview with Vercel
+        run: |
+          npx --yes vercel@latest pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest build --token="$VERCEL_TOKEN"
+      - name: Deploy preview
+        run: |
+          npx --yes vercel@latest deploy --prebuilt --yes --token="$VERCEL_TOKEN" | tee /tmp/vercel-preview-url.txt
+          echo "Preview URL: $(tail -n 1 /tmp/vercel-preview-url.txt)"
