@@ -63,7 +63,7 @@ export function architecture(k:EstateKit){
     const capY=1.235,capH=.09,capW=.16,post=.065,postTop=capY-capH/2,postH=postTop-.055
     const placePost=(p:T.Vector3)=>{k.box(p.x,FLOOR+.055+postH/2,p.z,post,postH,post,'bronze',k.root,.012);k.box(p.x,FLOOR+.018,p.z,.115,.036,.115,'bronze',k.root,.012)}
     const terminal=(from:T.Vector3,to:T.Vector3)=>{const dir=to.clone().sub(from).normalize();return from.clone().addScaledVector(dir,post)}
-    const firstPost=terminal(points[0],points[1]),lastPost=terminal(points.at(-1)!,points.at(-2)!)
+    const firstPost=terminal(points[0],points[1]),lastPost=terminal(points[points.length-1],points[points.length-2])
     const cornerPosts=points.slice(1,-1)
     placePost(firstPost);for(const p of cornerPosts)placePost(p);placePost(lastPost)
     for(let s=0;s<points.length-1;s++){
