@@ -8446,6 +8446,7 @@
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
   document.getElementById('logyq-game-next')?.addEventListener('click', async () => {
     if (!app.game?.cleared) return
+    window.LOGYQCelebrations?.fadeOut?.(250)
     await Promise.resolve(app.game.telemetryPromise).catch(() => null)
     const progress = gameProgress()
     const choice = chooseNext(progress, app.game.id)
