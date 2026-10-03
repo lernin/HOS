@@ -44,3 +44,9 @@ Tap-to-walk samples each floor's own height along the view ray. Court and mid-st
 ## Next decisive step
 
 Review the corrected render artifacts and complete the automated phone UI gate, then open a separately authorized preview on Ashley's S23 Ultra. Walk entry → great room → pool → courtyard → kitchen → primary suite → entry, try drag/tap discrimination and Walk mode, pause/background/resume, and verify that speed, visibility and warmth feel comfortable. Keep any production merge/release separate from this acceptance.
+
+## Estate Plan workspace
+- Preview route: `/ocean-estate-plan`.
+- Bird's-eye geometry is sourced from the live Ocean Estate plan data; railing paths are shared with the 3D scene through `estate/railings.ts`.
+- Markup tools: pan, freehand draw, arrow, area, and A1-style notes, with Deck/Railing/Wall/Remove categories.
+- Markups autosave locally on the current device and can be exported as a clean PNG or copied as a coordinate change brief for implementation.
