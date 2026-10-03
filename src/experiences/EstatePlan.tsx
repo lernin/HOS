@@ -87,7 +87,9 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const [noteDraft,setNoteDraft]=useState<{point:Pt;text:string}|null>(null)
   const [notesOpen,setNotesOpen]=useState(false)
   const [clean,setClean]=useState(false)
-  const [layers,setLayers]=useState({labels:true,furniture:true,railings:true,markups:true})
+  const [auditMode,setAuditMode]=useState(false)
+  const [selectedRail,setSelectedRail]=useState<string|null>(null)
+  const [layers,setLayers]=useState({surfaces:true,edges:true,labels:true,furniture:true,railings:true,markups:true})
   const [status,setStatus]=useState('')
 
   useEffect(()=>{localStorage.setItem(STORAGE,JSON.stringify(marks))},[marks])
@@ -236,6 +238,8 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
 
   const viewFloors=floors
   const roomLabels=layers.labels?viewFloors.filter(f=>f.name!=='Arrival court'&&f.name!=='Arrival steps'):[]
+  const selectedRailData=estateRailings.find(r=>r.id===selectedRail)??null
+  const auditCount=auditOpenEdges.length+auditReviewRailings.length
 
   return <main className={`ep-root${clean?' ep-clean':''}`}>
     {!clean&&<header className="ep-top">
