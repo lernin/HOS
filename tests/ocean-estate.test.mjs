@@ -208,25 +208,36 @@ test('repaired Library wall is visually grounded to the lower arrival court',()=
 })
 
 
-test('ocean-edge reference railing follows slab corners and returns cleanly',()=>{
+test('all estate railings use one shared architectural system',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  const planText=readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8')
- assert.equal(env.includes('const oceanReferencePath='),true)
- assert.equal(env.includes('capH=.09,capW=.16,post=.065'),true)
+ assert.equal(env.includes('const estateRailPath='),true)
+ assert.equal(env.includes('const oceanReferencePath='),false)
+ assert.equal(env.includes('gardenPocketRail'),false)
+ assert.equal(env.includes('foyerGardenRail'),false)
+ assert.equal(env.includes('RAIL_BASE=.115'),true)
+ assert.equal(env.includes('RAIL_EDGE_GAP=RAIL_BASE/2'),true)
+ assert.equal(env.includes('RAIL_EDGE_INSET=RAIL_BASE'),true)
+ assert.equal(env.includes('RAIL_END_GAP=RAIL_EDGE_INSET-RAIL_CAP_OVERHANG'),true)
  assert.equal(env.includes('placePost(firstPost)'),true)
  assert.equal(env.includes('for(const p of cornerPosts)placePost(p)'),true)
- assert.equal(env.includes("oceanReferencePath([v(-22.93,FLOOR,-17.08),v(-22.93,FLOOR,-23.93),v(-14.93,FLOOR,-23.93),v(-14.93,FLOOR,-35.93)])"),true)
- assert.equal(env.includes("oceanReferencePath([v(15.93,FLOOR,-35.93),v(15.93,FLOOR,-23.93),v(26.93,FLOOR,-23.93),v(26.93,FLOOR,-22.93),v(39.93,FLOOR,-22.93)])"),true)
  assert.equal(planText.includes('west ocean railing returns'),true)
  assert.equal(planText.includes('lookout ocean edge, joined to the terrace corner'),true)
 })
 
-
-
-test('ocean railing sits close to but visibly inboard of slab edges',()=>{
+test('railing pedestal edge gap equals half the pedestal width',()=>{
+ const pedestal=.115,gap=pedestal/2,centerInset=pedestal
+ assert.equal(Number((centerInset-pedestal/2).toFixed(4)),Number(gap.toFixed(4)))
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
- assert.equal(env.includes('v(-22.93,FLOOR,-23.93)'),true)
- assert.equal(env.includes('v(-14.93,FLOOR,-35.93)'),true)
- assert.equal(env.includes('v(15.93,FLOOR,-35.93)'),true)
- assert.equal(env.includes('v(39.93,FLOOR,-22.93)'),true)
+ assert.equal(env.includes('v(-23+RAIL_EDGE_INSET,FLOOR,-17.08)'),true)
+ assert.equal(env.includes('v(44-RAIL_EDGE_INSET,FLOOR,-14+RAIL_END_GAP)'),true)
+ assert.equal(env.includes('v(-22,FLOOR,33-RAIL_EDGE_INSET)'),true)
+ assert.equal(env.includes('v(20+RAIL_EDGE_INSET,FLOOR,31.1)'),true)
+})
+
+test('low garden rails share the same posts caps and pedestals as guard rails',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ assert.equal(env.includes("{height:.82,glass:false}"),true)
+ assert.equal(env.includes("{height:.82,glass:false,curb:true}"),true)
+ assert.equal((env.match(/const estateRailPath=/g)||[]).length,1)
 })
