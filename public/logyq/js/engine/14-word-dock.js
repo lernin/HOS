@@ -22,10 +22,10 @@
   }
 
   function gameBankIntent(dx, dy) {
-    if (Math.hypot(dx, dy) < 10) return 'wait'
-    if (dy <= -10 && -dy > Math.abs(dx)) return 'lift'
-    if (Math.abs(dx) > Math.abs(dy)) return 'pan'
-    return 'ignore'
+    if (dy <= -28 && -dy >= 1.5 * Math.abs(dx)) return 'lift'
+    if (Math.abs(dx) >= 10 && Math.abs(dx) > Math.abs(dy) / 1.5) return 'pan'
+    if (dy >= 10 && dy >= Math.abs(dx)) return 'ignore'
+    return 'wait'
   }
 
   // Portrait shelf pans on x. Landscape shelf pans on y. Desktop keeps the old down-delete.
@@ -749,8 +749,12 @@ function bindChipPointerPlace() {
         if (document.body.classList.contains('logyq-game') && shelfScrollAxis() === 'x') {
           const intent = gameBankIntent(dx, dy)
           if (intent === 'wait') return
-          if (intent === 'lift') beginLift([session.word])
-          else session.panning = true // horizontal scroll or a harmless downward swipe
+          if (intent === 'pan' || intent === 'ignore') {
+            session.panning = true
+            session.nativePanning = true
+            return // Leave the horizontal gesture to the browser; never capture the chip.
+          }
+          beginLift([session.word])
         } else {
           if (Math.hypot(dx, dy) < 6) return
           beginLift([session.word])
@@ -778,6 +782,7 @@ function bindChipPointerPlace() {
       }
     }
     if (session.panning) {
+      if (session.nativePanning) return
       const axis = shelfScrollAxis()
       const prevX = session.lastX ?? session.x
       const prevY = session.lastY ?? session.y
