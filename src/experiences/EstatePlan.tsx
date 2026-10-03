@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
 import { floors, walls, glass, furnishings, footprint } from './estate/plan'
 import { estateRailings } from './estate/railings'
+import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces } from './estate/site-edges'
+import type { EstateSurfaceKind } from './estate/site-edges'
 import './estate/estate-plan.css'
 
 type PlanView='main'|'arrival'|'site'
@@ -32,6 +34,23 @@ const categoryMeta:Record<Category,{label:string;color:string}>={
 }
 const floorColor:Record<string,string>={
   limestone:'#efe7d7',travertine:'#e6dccb',oak:'#d5c2a0',walnut:'#a98b68',concrete:'#d5d3cc',basalt:'#6d7473',
+}
+const surfaceFill:Record<EstateSurfaceKind,string>={
+  interior:'#eee7d9',
+  deck:'url(#ep-deck-hatch)',
+  'covered-exterior':'url(#ep-covered-hatch)',
+  arrival:'#c9c5bc',
+  steps:'url(#ep-step-hatch)',
+  garden:'#cbd8bb',
+  water:'#99cfd4',
+}
+const edgeStroke={wall:'#45413a',glass:'#4b99a7',railing:'#6f5038',step:'#82735f',open:'#d04a53'} as const
+const railMid=(points:readonly (readonly [number,number])[])=>{
+  if(points.length<2)return{x:0,y:0}
+  let best=0,index=0
+  for(let i=0;i<points.length-1;i++){const d=Math.hypot(points[i+1][0]-points[i][0],points[i+1][1]-points[i][1]);if(d>best){best=d;index=i}}
+  const a=points[index],b=points[index+1]
+  return{x:(a[0]+b[0])/2,y:-(a[1]+b[1])/2}
 }
 const pointsString=(pts:Pt[])=>pts.map(q=>`${q.x},${q.y}`).join(' ')
 const rotate180=(p:Pt):Pt=>({x:-p.x,y:-p.y})
