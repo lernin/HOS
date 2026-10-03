@@ -32,9 +32,6 @@ const categoryMeta:Record<Category,{label:string;color:string}>={
   wall:{label:'Wall',color:'#7951a8'},
   remove:{label:'Remove',color:'#b62f46'},
 }
-const floorColor:Record<string,string>={
-  limestone:'#efe7d7',travertine:'#e6dccb',oak:'#d5c2a0',walnut:'#a98b68',concrete:'#d5d3cc',basalt:'#6d7473',
-}
 const surfaceFill:Record<EstateSurfaceKind,string>={
   interior:'#eee7d9',
   deck:'url(#ep-deck-hatch)',
