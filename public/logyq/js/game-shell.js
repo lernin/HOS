@@ -235,6 +235,10 @@
     }
     const resetProgress = () => {
       closePause()
+      if (window.LOGYQLearner?.current?.()?.id) {
+        window.LOGYQLearner.resetCurrent?.().catch?.((error) => alert(error?.message || 'Reset failed'))
+        return
+      }
       document.getElementById('logyq-trail-reset-progress')?.click()
     }
 
