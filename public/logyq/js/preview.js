@@ -7303,6 +7303,19 @@
   function chooseNext(progress, justSolvedId) {
     const state = adaptiveState(progress)
     const level = gameLevels.find((item) => item.id === justSolvedId)
+    const learner = window.LOGYQLearner?.current?.()
+    if (learner?.id) {
+      const baseTier = Math.max(1, Math.min(12, window.LOGYQLearner.gradeIndex?.() || 1))
+      const strong = Number(learner.recent_success_rate || 0) >= .8 && Number(learner.recent_efficiency || 0) >= .75
+      const plays = Object.keys(state.played || {}).length
+      const probe = strong && plays > 0 && plays % 4 === 3 && gameLevels.some(item => item.tier === baseTier + 1)
+      const targetTier = probe ? baseTier + 1 : baseTier
+      return {
+        level: pickInTier(targetTier, progress, state.played, justSolvedId),
+        leveledUp: !!level && targetTier > level.tier,
+        adaptive: { clean: 0, tier: targetTier, played: state.played },
+      }
+    }
     const tier = level ? level.tier : state.tier
     if (state.clean >= 3 && gameLevels.some((item) => item.tier === tier + 1)) {
       return {
@@ -7870,7 +7883,9 @@
     if (before !== null && before !== JSON.stringify(snapshot?.tree)) {
       window.LOGYQGameSound?.drop()
       window.LOGYQGameGuide?.hide()
-      app.game.guide = null
+      clearGameHintVisual()
+      if (app.game && !app.game.cleared) app.game.actualMoves = (app.game.actualMoves || 0) + 1
+      if (app.game) app.game.guide = null
     }
   }
   function setupGameSound() {
@@ -7978,8 +7993,15 @@
       gameArtElement = svg
       if (animate) {
         const profile = gameDifficultyProfile(levelForGuide())
-        window.LOGYQGameSound?.celebrate?.({ difficulty: profile?.band || 'any', reasoning: profile?.reasoning, pieces: profile?.pieces }) ||
-          window.LOGYQGameSound?.complete?.()
+        const play = (result) => window.LOGYQGameSound?.celebrate?.({
+          difficulty: profile?.band || 'any',
+          reasoning: profile?.reasoning,
+          pieces: profile?.pieces,
+          achievement: result?.achievement || 'solve',
+          efficiency: result?.attempt?.efficiency ?? null,
+          promoted: Number(result?.attempt?.grade_after || 0) > Number(result?.attempt?.grade_before || 0),
+        })
+        Promise.resolve(app.game?.telemetryPromise).then(play).catch(() => play(null))
       }
       document.body.classList.add('logyq-game-completion')
     }, delay)
@@ -8048,8 +8070,15 @@
   function leaveGamePlay() {
     const session = app.game
     if (!session) return
+    const level = gameLevels.find(item => item.id === session.id)
+    if (!session.cleared && !session.telemetryRecorded && level &&
+        ((session.actualMoves || 0) > 0 || (session.hintsUsed || 0) > 0 || Date.now() - (session.startedAt || Date.now()) > 5000)) {
+      session.telemetryRecorded = true
+      window.LOGYQLearner?.recordGame?.(gameAttemptPayload(session, level, false)).catch?.(() => {})
+    }
     clearGameCompletionArt()
     window.LOGYQGameGuide?.hide()
+    clearGameHintVisual()
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
     app.game = null
@@ -8075,6 +8104,7 @@
   function noteWrongDrop() {
     if (!app.game || app.game.cleared) return
     app.game.wrongDrops = (app.game.wrongDrops || 0) + 1
+    app.game.actualMoves = (app.game.actualMoves || 0) + 1
   }
 
   function showGameTier(level, levelUp) {
@@ -8114,7 +8144,12 @@
       ;(node.children || []).forEach(restore)
     }
     restore(removed)
-    return { tree: removed === nextTree ? null : nextTree, bank: nextBank, bankCards: nextCards }
+    return {
+      tree: removed === nextTree ? null : nextTree,
+      bank: nextBank,
+      bankCards: nextCards,
+      removedCount: gameTreeNodes(removed).length,
+    }
   }
 
   function beginGameLevel(level, opts) {
@@ -8143,8 +8178,25 @@
         played: { ...state.played, [level.id]: Date.now() },
       },
     })
-    app.game = { id: level.id, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide,
-      bankCards: { ...level.bankCards } }
+    const levelNumber = Math.max(1, gameLevels.findIndex(item => item.id === level.id) + 1)
+    window.LOGYQGameThumbGain?.setLevel?.(levelNumber)
+    app.game = {
+      id: level.id,
+      levelNumber,
+      origin,
+      cleared: false,
+      wrongDrops: 0,
+      actualMoves: 0,
+      returnedPieces: 0,
+      hintsUsed: 0,
+      hintStage: 0,
+      startedAt: Date.now(),
+      minimumMoves: gameMinimumMoves(level),
+      telemetryRecorded: false,
+      telemetryPromise: null,
+      guide: progress[level.id] ? null : level.guide,
+      bankCards: { ...level.bankCards },
+    }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
     app.lastSnapshot = 'game'
@@ -8155,8 +8207,10 @@
     window.__logyqGameDropAllowed = ({ tree, movingUid, drop, trash, multi }) => {
       if (!drop || trash || multi) return false
       const allowed = gameGrammar.canDrop(tree, movingUid, drop)
-      if (!allowed) gameStatus('Those colors do not match here. Try another position.')
-      else rememberGameDrop()
+      if (!allowed) {
+        noteWrongDrop()
+        gameStatus('Those colors do not match here. Try another position.')
+      } else rememberGameDrop()
       return allowed
     }
     window.__logyqGameBankNode = (word) => {
@@ -8168,8 +8222,10 @@
       const card = app.game?.bankCards?.[words[0]]
       const allowed = !!card && (drop.type === 'newRootAt' && !tree
         ? true : gameGrammar.canAdd(tree, card, drop))
-      if (!allowed) gameStatus('Those colors do not match here. Try another position.')
-      else rememberGameDrop()
+      if (!allowed) {
+        noteWrongDrop()
+        gameStatus('Those colors do not match here. Try another position.')
+      } else rememberGameDrop()
       return allowed
     }
     window.__logyqGameReturnToBank = (uid) => {
@@ -8179,6 +8235,9 @@
       const result = returnGameBranch(engine.state.root?.data, engine.state.wordBank || [], session.bankCards, uid, level.id)
       if (!result) return false
       session.bankCards = result.bankCards
+      session.returnedPieces = (session.returnedPieces || 0) + (result.removedCount || 1)
+      session.actualMoves = (session.actualMoves || 0) + (result.removedCount || 1)
+      clearGameHintVisual()
       engine.state.wordBank = result.bank
       engine.state.root = result.tree ? d3.hierarchy(result.tree) : null
       if (engine.state.root) {
@@ -8236,6 +8295,13 @@
     window.LOGYQGameGuide?.hide()
     session.guide = null
     session.cleared = true
+    session.telemetryRecorded = true
+    session.telemetryPromise = window.LOGYQLearner?.recordGame?.(gameAttemptPayload(session, level, true))
+      ?.then?.((result) => {
+        session.adaptiveResult = result
+        return result
+      })
+      ?.catch?.(() => null) || Promise.resolve(null)
     const progress = writeProgress(recordSolve(gameProgress(), level.id, session.wrongDrops || 0))
     const solvedCount = gameLevels.filter((item) => progress[item.id]).length
     const upcoming = chooseNext(progress, level.id).level
@@ -8321,8 +8387,9 @@
     beginGameLevel(gameLevels[index])
   })
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
-  document.getElementById('logyq-game-next')?.addEventListener('click', () => {
+  document.getElementById('logyq-game-next')?.addEventListener('click', async () => {
     if (!app.game?.cleared) return
+    await Promise.resolve(app.game.telemetryPromise).catch(() => null)
     const progress = gameProgress()
     const choice = chooseNext(progress, app.game.id)
     if (!choice.level) return
@@ -8356,7 +8423,8 @@
   }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
-    recordSolve, chooseNext, trailWindow, presentSolved, layoutBudget: GAME_LAYOUT,
+    recordSolve, chooseNext, trailWindow, presentSolved, minimumMoves: gameMinimumMoves, bestHint: gameBestHint,
+    layoutBudget: GAME_LAYOUT,
     challengeLayoutBudget: CHALLENGE_LAYOUT, measureSolved: layoutSolvedTree, returnBranch: returnGameBranch,
   }
   // FOLDER_PURE_START
