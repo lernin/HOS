@@ -78,9 +78,9 @@ export function architecture(k:EstateKit){
     }
   }
   // West run: building wall -> terrace corner -> pool-walk edge.
-  oceanReferencePath([v(-22.88,FLOOR,-17.08),v(-22.88,FLOOR,-23.88),v(-14.88,FLOOR,-23.88),v(-14.88,FLOOR,-35.88)])
+  oceanReferencePath([v(-22.93,FLOOR,-17.08),v(-22.93,FLOOR,-23.93),v(-14.93,FLOOR,-23.93),v(-14.93,FLOOR,-35.93)])
   // East run: pool-walk edge -> terrace corner -> lookout corner -> lookout ocean edge.
-  oceanReferencePath([v(15.88,FLOOR,-35.88),v(15.88,FLOOR,-23.88),v(26.88,FLOOR,-23.88),v(26.88,FLOOR,-22.88),v(39.88,FLOOR,-22.88)])
+  oceanReferencePath([v(15.93,FLOOR,-35.93),v(15.93,FLOOR,-23.93),v(26.93,FLOOR,-23.93),v(26.93,FLOOR,-22.93),v(39.93,FLOOR,-22.93)])
   for(const [a,b] of [[v(44,FLOOR,-14),v(44,FLOOR,14)],[v(-22,FLOOR,33),v(-6.5,FLOOR,33)],[v(20,FLOOR,31.1),v(20,FLOOR,40)]]){
     const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.65,0,.035,1.24,d,'glass',g);k.box(0,1.28,0,.045,.04,d,'bronze',g);for(let i=0;i<=d/2;i++)k.box(0,.62,-d/2+i*2,.035,1.24,.035,'bronze',g)
   }
