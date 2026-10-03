@@ -1,6 +1,7 @@
 import * as T from 'three'
 import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR } from './plan'
 import { type EstateKit, random, v } from './kit'
+import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
 export function architecture(k:EstateKit){
   for(const f of floors){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
@@ -56,9 +57,7 @@ export function architecture(k:EstateKit){
   k.box(.5,FLOOR-1.54,-36.1,23.4,2.8,.25,'travertine')
   k.box(.5,FLOOR-1.5,-30.2,23,0.2,12,'waterTile')
   for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
-  // Unified Estate railing system.
-  // Base-plate policy: the outside edge of every pedestal sits half a pedestal width in from the walking-surface edge.
-  const RAIL_BASE=.115,RAIL_EDGE_GAP=RAIL_BASE/2,RAIL_EDGE_INSET=RAIL_BASE/2+RAIL_EDGE_GAP,RAIL_POST=.065,RAIL_CAP_OVERHANG=RAIL_POST,RAIL_END_GAP=RAIL_EDGE_INSET-RAIL_CAP_OVERHANG
+  // Unified Estate railing system. Geometry is shared with Estate Plan so the 2D plan and 3D world stay aligned.
   const estateRailPath=(points:T.Vector3[],opts:{height?:number;glass?:boolean;curb?:boolean}={})=>{
     const height=opts.height??1.235,capH=.09,capW=.16,post=RAIL_POST,base=RAIL_BASE,glass=opts.glass!==false,curb=opts.curb===true
     const floorLift=curb ? .14 : 0,capY=floorLift+height,postTop=capY-capH/2,postH=postTop-(floorLift+.055)
@@ -82,30 +81,7 @@ export function architecture(k:EstateKit){
       for(let i=1;i<bays;i++){const p=start.clone().lerp(end,i/bays);placePost(p)}
     }
   }
-
-  // Full-height guard rails. Centerlines are one pedestal width in from exposed slab edges,
-  // which leaves exactly half a pedestal width between the pedestal's outside edge and the slab edge.
-  // West ocean terrace / pool-walk edge.
-  estateRailPath([v(-23+RAIL_EDGE_INSET,FLOOR,-17.08),v(-23+RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(-15+RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(-15+RAIL_EDGE_INSET,FLOOR,-36+RAIL_END_GAP)])
-  // East pool-walk / ocean terrace / lookout edge.
-  estateRailPath([v(16-RAIL_EDGE_INSET,FLOOR,-36+RAIL_END_GAP),v(16-RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(27-RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(27-RAIL_EDGE_INSET,FLOOR,-23+RAIL_EDGE_INSET),v(40-RAIL_END_GAP,FLOOR,-23+RAIL_EDGE_INSET)])
-  // Sunrise terrace cliff edge.
-  estateRailPath([v(44-RAIL_EDGE_INSET,FLOOR,-14+RAIL_END_GAP),v(44-RAIL_EDGE_INSET,FLOOR,14-RAIL_END_GAP)])
-  // Garden courtyard drop to the arrival court.
-  estateRailPath([v(-22,FLOOR,33-RAIL_EDGE_INSET),v(-6.5,FLOOR,33-RAIL_EDGE_INSET)])
-  // East gallery drop beside the arrival court.
-  estateRailPath([v(20+RAIL_EDGE_INSET,FLOOR,31.1),v(20+RAIL_EDGE_INSET,FLOOR,40-RAIL_END_GAP)])
-
-  // Low garden railings use the same bronze cap/post/base-plate language without glass.
-  // Arrival garden pockets: existing landscape edge line shifted one pedestal width onto the walking surface.
-  estateRailPath([v(-18.15+RAIL_EDGE_INSET,FLOOR,34.5),v(-18.15+RAIL_EDGE_INSET,FLOOR,47.2)],{height:.82,glass:false})
-  estateRailPath([v(20.15-RAIL_EDGE_INSET,FLOOR,40.2),v(20.15-RAIL_EDGE_INSET,FLOOR,48.4)],{height:.82,glass:false})
-
-  // Grand foyer garden pockets: same hardware and pedestal rule, scaled as a low garden guard over the stone curb.
-  estateRailPath([v(-10.92-RAIL_EDGE_INSET,FLOOR,8.35),v(-10.92-RAIL_EDGE_INSET,FLOOR,13.65)],{height:.82,glass:false,curb:true})
-  estateRailPath([v(-10.72,FLOOR,13.92+RAIL_EDGE_INSET),v(-6.28,FLOOR,13.92+RAIL_EDGE_INSET)],{height:.82,glass:false,curb:true})
-  estateRailPath([v(8.02-RAIL_EDGE_INSET,FLOOR,10.18),v(8.02-RAIL_EDGE_INSET,FLOOR,13.82)],{height:.82,glass:false,curb:true})
-  estateRailPath([v(13.02+RAIL_EDGE_INSET,FLOOR,8.35),v(13.02+RAIL_EDGE_INSET,FLOOR,14.65)],{height:.82,glass:false,curb:true})
+  for(const rail of estateRailings)estateRailPath(rail.points.map(([x,z])=>v(x,FLOOR,z)),rail)
 
   // Pergola over outdoor dining, secondary circulation remains open.
   for(const x of [17,25])for(const z of [-21.6,-13.2])k.box(x,FLOOR+1.7,z,.17,3.4,.17,'bronze')
