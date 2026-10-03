@@ -61,13 +61,15 @@ export function architecture(k:EstateKit){
   const oceanReferenceRail=(a:T.Vector3,b:T.Vector3)=>{
     const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z))
     const capY=1.235,capH=.09,capW=.16,post=.055,postTop=capY-capH/2,postH=postTop-.06
-    // Broad, flat forearm-rest cap. The post height terminates exactly at the cap underside.
+    const endInset=post,postRun=Math.max(.01,d-endInset*2)
+    // The cap owns the architectural end. Terminal posts sit one post-width inboard,
+    // leaving a small deliberate cap overhang instead of a post jammed onto the edge.
     k.box(0,capY,0,capW,capH,d,'bronze',g,.018)
-    // Glass is seated consistently below the cap and clears the slab by the same amount throughout.
-    k.box(0,.61,0,.04,1.08,Math.max(.01,d-.12),'glass',g)
-    const bays=Math.max(1,Math.ceil(d/1.85))
+    // Glass terminates on the terminal-post centerlines so the end condition stays crisp.
+    k.box(0,.61,0,.04,1.08,postRun,'glass',g)
+    const bays=Math.max(1,Math.ceil(postRun/1.85))
     for(let i=0;i<=bays;i++){
-      const z=-d/2+d*i/bays
+      const z=-postRun/2+postRun*i/bays
       k.box(0,.06+postH/2,z,post,postH,post,'bronze',g,.01)
     }
   }
