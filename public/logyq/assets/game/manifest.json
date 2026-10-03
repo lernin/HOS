@@ -1,0 +1,307 @@
+{
+  "backgrounds/meadow-map.webp": {
+    "width": 900,
+    "height": 1599,
+    "transparent": false
+  },
+  "puzzle/meadow-backdrop.webp": {
+    "width": 900,
+    "height": 1599,
+    "transparent": false
+  },
+  "nodes/stage-locked.webp": {
+    "width": 290,
+    "height": 237,
+    "transparent": true
+  },
+  "nodes/stage-open.webp": {
+    "width": 282,
+    "height": 234,
+    "transparent": true
+  },
+  "nodes/stage-current.webp": {
+    "width": 275,
+    "height": 240,
+    "transparent": true
+  },
+  "nodes/stage-one-star.webp": {
+    "width": 287,
+    "height": 237,
+    "transparent": true
+  },
+  "nodes/stage-three-star.webp": {
+    "width": 292,
+    "height": 240,
+    "transparent": true
+  },
+  "gates/gate-locked.webp": {
+    "width": 362,
+    "height": 327,
+    "transparent": true
+  },
+  "gates/gate-closed.webp": {
+    "width": 362,
+    "height": 326,
+    "transparent": true
+  },
+  "gates/gate-open.webp": {
+    "width": 400,
+    "height": 340,
+    "transparent": true
+  },
+  "gates/gate-complete.webp": {
+    "width": 383,
+    "height": 342,
+    "transparent": true
+  },
+  "ratings/star-empty.webp": {
+    "width": 109,
+    "height": 121,
+    "transparent": true
+  },
+  "ratings/star-filled.webp": {
+    "width": 116,
+    "height": 121,
+    "transparent": true
+  },
+  "ratings/star-glow.webp": {
+    "width": 126,
+    "height": 131,
+    "transparent": true
+  },
+  "ratings/rating-one.webp": {
+    "width": 206,
+    "height": 136,
+    "transparent": true
+  },
+  "ratings/rating-two.webp": {
+    "width": 216,
+    "height": 136,
+    "transparent": true
+  },
+  "ratings/rating-three.webp": {
+    "width": 234,
+    "height": 140,
+    "transparent": true
+  },
+  "effects/path-dots.webp": {
+    "width": 280,
+    "height": 145,
+    "transparent": true
+  },
+  "effects/current-ring.webp": {
+    "width": 232,
+    "height": 177,
+    "transparent": true
+  },
+  "effects/starburst.webp": {
+    "width": 177,
+    "height": 172,
+    "transparent": true
+  },
+  "effects/magic-trail.webp": {
+    "width": 280,
+    "height": 164,
+    "transparent": true
+  },
+  "effects/reward-glow.webp": {
+    "width": 222,
+    "height": 177,
+    "transparent": true
+  },
+  "effects/sparkles-small.webp": {
+    "width": 117,
+    "height": 142,
+    "transparent": true
+  },
+  "effects/sparkle-medium.webp": {
+    "width": 142,
+    "height": 142,
+    "transparent": true
+  },
+  "effects/sparkle-large.webp": {
+    "width": 167,
+    "height": 142,
+    "transparent": true
+  },
+  "props/title-meadow-trail.webp": {
+    "width": 380,
+    "height": 161,
+    "transparent": true
+  },
+  "props/sign-left.webp": {
+    "width": 157,
+    "height": 180,
+    "transparent": true
+  },
+  "props/fence.webp": {
+    "width": 222,
+    "height": 178,
+    "transparent": true
+  },
+  "props/sign-right.webp": {
+    "width": 156,
+    "height": 180,
+    "transparent": true
+  },
+  "props/rocks.webp": {
+    "width": 192,
+    "height": 180,
+    "transparent": true
+  },
+  "props/mushrooms.webp": {
+    "width": 163,
+    "height": 180,
+    "transparent": true
+  },
+  "props/shrub.webp": {
+    "width": 183,
+    "height": 180,
+    "transparent": true
+  },
+  "ui/logo-logyq.webp": {
+    "width": 520,
+    "height": 204,
+    "transparent": true
+  },
+  "ui/back.webp": {
+    "width": 190,
+    "height": 153,
+    "transparent": true
+  },
+  "ui/home.webp": {
+    "width": 190,
+    "height": 156,
+    "transparent": true
+  },
+  "ui/help.webp": {
+    "width": 185,
+    "height": 167,
+    "transparent": true
+  },
+  "ui/settings.webp": {
+    "width": 190,
+    "height": 152,
+    "transparent": true
+  },
+  "ui/play.webp": {
+    "width": 413,
+    "height": 140,
+    "transparent": true
+  },
+  "ui/continue.webp": {
+    "width": 406,
+    "height": 140,
+    "transparent": true
+  },
+  "ui/next.webp": {
+    "width": 400,
+    "height": 140,
+    "transparent": true
+  },
+  "ui/pause.webp": {
+    "width": 139,
+    "height": 150,
+    "transparent": true
+  },
+  "ui/close.webp": {
+    "width": 145,
+    "height": 150,
+    "transparent": true
+  },
+  "ui/restart.webp": {
+    "width": 150,
+    "height": 145,
+    "transparent": true
+  },
+  "ui/music.webp": {
+    "width": 150,
+    "height": 146,
+    "transparent": true
+  },
+  "ui/sound.webp": {
+    "width": 145,
+    "height": 150,
+    "transparent": true
+  },
+  "ui/info.webp": {
+    "width": 145,
+    "height": 150,
+    "transparent": true
+  },
+  "ui/mail.webp": {
+    "width": 150,
+    "height": 150,
+    "transparent": true
+  },
+  "ui/trophy.webp": {
+    "width": 150,
+    "height": 150,
+    "transparent": true
+  },
+  "ui/gift.webp": {
+    "width": 150,
+    "height": 132,
+    "transparent": true
+  },
+  "worlds/meadow.webp": {
+    "width": 171,
+    "height": 210,
+    "transparent": true
+  },
+  "worlds/creek.webp": {
+    "width": 181,
+    "height": 210,
+    "transparent": true
+  },
+  "worlds/forest.webp": {
+    "width": 179,
+    "height": 210,
+    "transparent": true
+  },
+  "worlds/hills.webp": {
+    "width": 180,
+    "height": 210,
+    "transparent": true
+  },
+  "worlds/mountain.webp": {
+    "width": 180,
+    "height": 210,
+    "transparent": true
+  },
+  "worlds/caves.webp": {
+    "width": 180,
+    "height": 210,
+    "transparent": true
+  },
+  "worlds/ruins.webp": {
+    "width": 185,
+    "height": 210,
+    "transparent": true
+  },
+  "worlds/summit.webp": {
+    "width": 190,
+    "height": 190,
+    "transparent": true
+  },
+  "worlds/progress-panel.webp": {
+    "width": 520,
+    "height": 117,
+    "transparent": true
+  },
+  "worlds/coins.webp": {
+    "width": 270,
+    "height": 119,
+    "transparent": true
+  },
+  "worlds/stars.webp": {
+    "width": 256,
+    "height": 120,
+    "transparent": true
+  },
+  "ui/bottom-nav.webp": {
+    "width": 760,
+    "height": 90,
+    "transparent": true
+  }
+}
