@@ -6541,7 +6541,8 @@ centerOnSelected(opts = {}) {
   // Fit the current assembled board inside the measured safe area.
   fitGameBounds(bounds, { duration = 0 } = {}){
     const { state, elements } = logyq
-    if (typeof gameCameraLocked === 'function' && !gameCameraLocked()) return
+    if (typeof gameCameraLocked === 'function' && typeof curriculumPlayLocked === 'function'
+        && !(gameCameraLocked() || curriculumPlayLocked())) return
     const frame = this.usableFrame()
     if (!frame || !bounds || !(bounds.width > 0) || !(bounds.height > 0)) return
     const svgBox = frame.svgNode.getBoundingClientRect()
@@ -6566,13 +6567,13 @@ centerOnSelected(opts = {}) {
     let right = frame.right
     let bottom = frame.bottom
     const gap = 8
-    const bar = shownRect('logyq-game-bar')
+    const bar = shownRect('logyq-game-bar') || shownRect('logyq-curriculum-bar')
     if (bar) {
       const midY = (top + bottom) / 2
       if (bar.height < frame.fullH * 0.45 && bar.bottom <= midY) top = Math.max(top, bar.bottom + gap)
       else if (bar.height < frame.fullH * 0.45 && bar.top >= midY) bottom = Math.min(bottom, bar.top - gap)
     }
-    const next = shownRect('logyq-game-next')
+    const next = shownRect('logyq-game-next') || shownRect('logyq-curriculum-next')
     if (next && next.height < frame.fullH * 0.45) {
       const midY = (top + bottom) / 2
       if (next.bottom <= midY) top = Math.max(top, next.bottom + gap)

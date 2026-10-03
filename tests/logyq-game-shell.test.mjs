@@ -288,7 +288,7 @@ test('curriculum has no Mix control or shuffle phase', () => {
 test('curriculum recenters after structural changes', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   assert.match(source, /function settleCurriculumTree\(/)
-  assert.match(source, /treeManager\?\.settleRootAnchored\?\.\(\{ force: true, duration \}\)/)
+  assert.match(source, /treeManager\?\.fitGameBounds\?\.\(curriculumBounds\(root\), \{ duration \}\)/)
   assert.match(source, /engine\.wordDock\.render\(\)\s*settleCurriculumTree\(\)/)
 })
 
@@ -385,4 +385,33 @@ test('Curriculum header uses the same compact phone geometry as Game', () => {
 test('Curriculum Word Bank can insert a new root above the current root', () => {
   const dock = read('../public/logyq/js/engine/14-word-dock.js')
   assert.match(dock, /drop\.type === 'rootAbove'[\s\S]*state\.chipDrag\.drop = directPuzzleShelf\(\) \? \{ type: 'rootAbove' \} : null/)
+})
+
+
+test('Curriculum uses the same clean shell pattern as Game', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /function installCurriculumShell\(\)/)
+  assert.match(shell, /button\('logyq-curriculum-back', 'Back'/)
+  assert.match(shell, /id = 'logyq-curriculum-lesson'/)
+  assert.match(shell, /button\('logyq-curriculum-pause', '⚙'/)
+  assert.match(shell, /body\.logyq-curriculum:not\(\.logyq-home\) #logyq-curriculum-bar/)
+  assert.match(shell, /body\.logyq-curriculum #logyq-curriculum-next\{position:fixed/)
+})
+
+test('Curriculum fit uses hierarchy bounds and the shared safe-frame fitter', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /function curriculumBounds\(root\)/)
+  assert.match(source, /node\.x - 70/)
+  assert.match(source, /node\.x \+ 70/)
+  assert.match(source, /node\.y - 31\.5/)
+  assert.match(source, /node\.y \+ 31\.5/)
+  assert.match(source, /treeManager\?\.fitGameBounds\?\.\(curriculumBounds\(root\), \{ duration \}\)/)
+  assert.doesNotMatch(source, /settleRootAnchored\?\.\(\{ force: true, duration \}\)/)
+})
+
+test('shared bounds fitter accounts for Curriculum shell and Next button', () => {
+  const manager = read('../public/logyq/js/engine/16-tree-manager.js')
+  assert.match(manager, /shownRect\('logyq-game-bar'\) \|\| shownRect\('logyq-curriculum-bar'\)/)
+  assert.match(manager, /shownRect\('logyq-game-next'\) \|\| shownRect\('logyq-curriculum-next'\)/)
+  assert.match(manager, /gameCameraLocked\(\) \|\| curriculumPlayLocked\(\)/)
 })
