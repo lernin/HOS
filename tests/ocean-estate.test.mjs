@@ -98,7 +98,8 @@ test('walking HUD is quiet and secondary controls live in the menu',()=>{
 test('closed arrival garden pockets read as intentional planted areas',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  assert.match(env,/Arrival garden pockets/)
- assert.match(env,/gardenPocketRail/)
+ assert.match(env,/estateRailPath\(\[v\(-18\.15\+RAIL_EDGE_INSET/)
+ assert.match(env,/estateRailPath\(\[v\(20\.15-RAIL_EDGE_INSET/)
  assert.match(env,/ellipsoid\([^\n]*'pink'/)
 })
 
@@ -106,7 +107,9 @@ test('closed arrival garden pockets read as intentional planted areas',()=>{
 test('grand foyer grass pockets are framed as intentional gardens',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  assert.equal(env.includes('Grand foyer garden pockets'),true)
- assert.equal(env.includes('foyerGardenRail'),true)
+ assert.equal(env.includes('estateRailPath([v(-10.92-RAIL_EDGE_INSET'),true)
+ assert.equal(env.includes('estateRailPath([v(8.02-RAIL_EDGE_INSET'),true)
+ assert.equal(env.includes('estateRailPath([v(13.02+RAIL_EDGE_INSET'),true)
  assert.equal(env.includes('Foyer garden planting'),true)
  assert.equal(env.includes('[-8.5,11,1.9,2.35]'),true)
  assert.equal(env.includes('[10.5,11.5,1.8,2.75]'),true)
