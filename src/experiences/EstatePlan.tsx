@@ -311,6 +311,16 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           return <text key={`label-${i}`} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={labelSize(f.name,w,d)} fill="#48433b" opacity=".82">{f.name}</text>
         })}
 
+        {layers.railings&&estateRailings.filter(r=>auditMode||selectedRail===r.id).map(r=>{
+          const m=rotate180(railMid(r.points)),selected=selectedRail===r.id
+          return <g key={`rail-label-${r.id}`} className="ep-rail-label"><circle cx={m.x} cy={m.y} r={selected?1.05:.86} fill={selected?'#175f91':r.audit==='review'?'#df7a19':'#5f4837'} stroke="#fffaf0" strokeWidth=".18"/><text x={m.x} y={m.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize={selected?.62:.54} fontWeight="800" fill="white">{r.code}</text></g>
+        })}
+
+        {auditMode&&layers.edges&&auditOpenEdges.map(e=>{
+          const p=rotate180({x:(e.a[0]+e.b[0])/2,y:-(e.a[1]+e.b[1])/2})
+          return <g key={`edge-label-${e.id}`}><rect x={p.x-.72} y={p.y-.42} width="1.44" height=".84" rx=".26" fill="#d62f45"/><text x={p.x} y={p.y+.03} textAnchor="middle" dominantBaseline="middle" fontSize=".48" fontWeight="800" fill="white">{e.code}</text></g>
+        })}
+
         {layers.markups&&marks.filter(mark=>mark.tool==='note').map(mark=>{
           const p=rotate180(mark.points[0]),color=categoryMeta[mark.category].color
           return <g key={`note-label-${mark.id}`}><text x={p.x} y={p.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize=".68" fontWeight="700" fill="white">{mark.id}</text>{mark.text&&<text x={p.x+1.2} y={p.y+.12} fontSize=".92" fontWeight="600" fill={color} paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".25">{mark.text}</text>}</g>
