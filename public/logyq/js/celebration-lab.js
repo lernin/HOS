@@ -8,7 +8,7 @@
   const CATALOG=BASE+'/rest/v1/logyq_celebration_sounds?select=*&active=eq.true&order=created_at.desc'
   const MODE_KEY='logyq_celebration_mode_v1'
   const PIN_KEY='logyq_lab_pin'
-  let catalog=[], loaded=false, currentAudio=null, lastId=null
+  let catalog=[], loaded=false, currentAudio=null, recentIds=[]
 
   const publicUrl=(path)=>BASE+'/storage/v1/object/public/'+BUCKET+'/'+encodeURIComponent(path).replace(/%2F/g,'/')
   const mode=()=>{ try{return localStorage.getItem(MODE_KEY)||'auto'}catch{return 'auto'} }
@@ -33,7 +33,6 @@
       currentAudio=new Audio(publicUrl(sound.storage_path))
       currentAudio.volume=0.9
       currentAudio.play().catch(()=>{})
-      lastId=sound.id
       return true
     }catch{return false}
   }
@@ -43,16 +42,31 @@
     const desired={easy:1,medium:2,hard:4,vicious:5}[difficulty]||2
     let pool=catalog.filter(s=>s.difficulty==='any'||s.difficulty===difficulty)
     if(!pool.length)pool=[...catalog]
-    const ranked=pool.map(s=>({s,score:
-      Math.abs(Number(s.intensity||2)-desired)*2+
-      (s.id===lastId?8:0)+
-      (difficulty==='vicious'&&s.category==='big_cheer'?-3:0)+
-      (difficulty==='hard'&&['applause','big_cheer'].includes(s.category)?-2:0)+
-      (difficulty==='easy'&&s.category==='yay'?-2:0)
-    })).sort((a,b)=>a.score-b.score)
-    const best=ranked[0]?.score
-    const top=ranked.filter(x=>x.score<=best+1.5)
-    return top[Math.floor(Math.random()*top.length)]?.s||ranked[0]?.s||null
+    // Weighted shuffle: tags/intensity influence the odds, but do not force one "best" clip.
+    const weighted=pool.map(s=>{
+      const intensityGap=Math.abs(Number(s.intensity||2)-desired)
+      const exact=s.difficulty===difficulty
+      const any=s.difficulty==='any'
+      const recentIndex=recentIds.indexOf(s.id)
+      let weight=1/(1+intensityGap*0.7)
+      if(exact)weight*=2.2
+      else if(any)weight*=1.15
+      if(difficulty==='easy'&&['yay','warm'].includes(s.category))weight*=1.6
+      if(difficulty==='hard'&&['applause','big_cheer'].includes(s.category))weight*=1.5
+      if(difficulty==='vicious'&&['big_cheer','applause'].includes(s.category))weight*=1.9
+      if(recentIndex===0)weight*=0.03
+      else if(recentIndex===1)weight*=0.16
+      else if(recentIndex===2)weight*=0.45
+      return {s,weight}
+    })
+    const total=weighted.reduce((sum,x)=>sum+x.weight,0)
+    let roll=Math.random()*total
+    let chosen=weighted[weighted.length-1]?.s||null
+    for(const item of weighted){roll-=item.weight;if(roll<=0){chosen=item.s;break}}
+    if(chosen){
+      recentIds=[chosen.id,...recentIds.filter(id=>id!==chosen.id)].slice(0,4)
+    }
+    return chosen
   }
   async function playAuto(context={}){
     const selected=mode()
