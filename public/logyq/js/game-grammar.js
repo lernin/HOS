@@ -11,10 +11,10 @@
   const GAME_COLORS = {
     A: '#60a5fa', B: '#fb923c', C: '#86efac', D: '#f0abfc',
     E: '#facc15', F: '#f87171', G: '#2dd4bf',
-    H: '#38bdf8', I: '#a78bfa', J: '#fb7185', K: '#34d399',
-    L: '#fbbf24', M: '#c084fc', N: '#22d3ee', O: '#f97316',
-    P: '#4ade80', Q: '#e879f9', R: '#14b8a6', S: '#fde047',
-    T: '#818cf8', U: '#f472b6',
+    H: '#1e3a8a', I: '#ec4899', J: '#166534', K: '#b45309',
+    L: '#4338ca', M: '#92400e', N: '#0e7490', O: '#be123c',
+    P: '#65a30d', Q: '#6b21a8', R: '#475569', S: '#111827',
+    T: '#fb7185', U: '#a16207',
   }
   const SHAPE_NAMES = { W: 'Whole', L: 'Layer Cake', DL: 'Diagonal Left', DR: 'Diagonal Right' }
   const SPLIT = {
