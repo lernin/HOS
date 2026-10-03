@@ -278,3 +278,43 @@ test('Estate Plan has a direct Vercel SPA rewrite',()=>{
  const vercel=readFileSync(new URL('../vercel.json',import.meta.url),'utf8')
  assert.equal(vercel.includes('{ "source": "/ocean-estate-plan", "destination": "/" }'),true)
 })
+
+
+test('Estate Plan distinguishes exterior surfaces and exposed edge conditions',()=>{
+ const site=readFileSync(new URL('../src/experiences/estate/site-edges.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(site.includes("export type EstateSurfaceKind"),true)
+ assert.equal(site.includes("'deck'"),true)
+ assert.equal(site.includes("'covered-exterior'"),true)
+ assert.equal(site.includes("'garden'"),true)
+ assert.equal(site.includes("'water'"),true)
+ assert.equal(site.includes("export const estateEdges"),true)
+ assert.equal(site.includes("e.kind==='open'?'review':'covered'"),true)
+ assert.equal(planner.includes("surfaceFill"),true)
+ assert.equal(planner.includes("ep-deck-hatch"),true)
+ assert.equal(planner.includes("auditOpenEdges"),true)
+ assert.equal(planner.includes("Edge audit"),true)
+})
+
+test('every estate railing has a stable selectable R-code',()=>{
+ const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ for(let i=1;i<=11;i++)assert.equal(rails.includes(`code:'R${i}'`),true,`R${i} exists`)
+ assert.equal(rails.includes("audit?: 'review'"),true)
+ assert.equal(rails.includes("id:'arrival-garden-west'"),true)
+ assert.equal(rails.includes("id:'arrival-garden-east'"),true)
+ assert.equal((rails.match(/audit:'review'/g)||[]).length,2)
+ assert.equal(planner.includes('setSelectedRail(r.id)'),true)
+ assert.equal(planner.includes('selectedRailData.code'),true)
+ assert.equal(planner.includes("strokeWidth=\"2.2\""),true)
+})
+
+test('site audit uses live estate plan walls glass floors and shared railing geometry',()=>{
+ const site=readFileSync(new URL('../src/experiences/estate/site-edges.ts',import.meta.url),'utf8')
+ assert.equal(site.includes("import { FLOOR, floors, glass, walls } from './plan'"),true)
+ assert.equal(site.includes("import { estateRailings } from './railings'"),true)
+ assert.equal(site.includes("const mainFloors=floors.filter"),true)
+ assert.equal(site.includes("if(glass.some"),true)
+ assert.equal(site.includes("if(walls.some"),true)
+ assert.equal(site.includes("if(railNear(a,b))return'railing'"),true)
+})
