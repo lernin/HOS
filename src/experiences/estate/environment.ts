@@ -58,7 +58,7 @@ export function architecture(k:EstateKit){
   for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
   // Unified Estate railing system.
   // Base-plate policy: the outside edge of every pedestal sits half a pedestal width in from the walking-surface edge.
-  const RAIL_BASE=.115,RAIL_EDGE_GAP=RAIL_BASE/2,RAIL_EDGE_INSET=RAIL_BASE,RAIL_POST=.065,RAIL_CAP_OVERHANG=RAIL_POST
+  const RAIL_BASE=.115,RAIL_EDGE_GAP=RAIL_BASE/2,RAIL_EDGE_INSET=RAIL_BASE,RAIL_POST=.065,RAIL_CAP_OVERHANG=RAIL_POST,RAIL_END_GAP=RAIL_EDGE_INSET-RAIL_CAP_OVERHANG
   const estateRailPath=(points:T.Vector3[],opts:{height?:number;glass?:boolean;curb?:boolean}={})=>{
     const height=opts.height??1.235,capH=.09,capW=.16,post=RAIL_POST,base=RAIL_BASE,glass=opts.glass!==false,curb=opts.curb===true
     const floorLift=curb ? .14 : 0,capY=floorLift+height,postTop=capY-capH/2,postH=postTop-(floorLift+.055)
@@ -86,26 +86,26 @@ export function architecture(k:EstateKit){
   // Full-height guard rails. Centerlines are one pedestal width in from exposed slab edges,
   // which leaves exactly half a pedestal width between the pedestal's outside edge and the slab edge.
   // West ocean terrace / pool-walk edge.
-  estateRailPath([v(-22.885,FLOOR,-17.08),v(-22.885,FLOOR,-23.885),v(-14.885,FLOOR,-23.885),v(-14.885,FLOOR,-35.95)])
+  estateRailPath([v(-23+RAIL_EDGE_INSET,FLOOR,-17.08),v(-23+RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(-15+RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(-15+RAIL_EDGE_INSET,FLOOR,-36+RAIL_END_GAP)])
   // East pool-walk / ocean terrace / lookout edge.
-  estateRailPath([v(15.885,FLOOR,-35.95),v(15.885,FLOOR,-23.885),v(26.885,FLOOR,-23.885),v(26.885,FLOOR,-22.885),v(39.95,FLOOR,-22.885)])
+  estateRailPath([v(16-RAIL_EDGE_INSET,FLOOR,-36+RAIL_END_GAP),v(16-RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(27-RAIL_EDGE_INSET,FLOOR,-24+RAIL_EDGE_INSET),v(27-RAIL_EDGE_INSET,FLOOR,-23+RAIL_EDGE_INSET),v(40-RAIL_END_GAP,FLOOR,-23+RAIL_EDGE_INSET)])
   // Sunrise terrace cliff edge.
-  estateRailPath([v(43.885,FLOOR,-13.95),v(43.885,FLOOR,13.95)])
+  estateRailPath([v(44-RAIL_EDGE_INSET,FLOOR,-14+RAIL_END_GAP),v(44-RAIL_EDGE_INSET,FLOOR,14-RAIL_END_GAP)])
   // Garden courtyard drop to the arrival court.
-  estateRailPath([v(-22,FLOOR,32.885),v(-6.5,FLOOR,32.885)])
+  estateRailPath([v(-22,FLOOR,33-RAIL_EDGE_INSET),v(-6.5,FLOOR,33-RAIL_EDGE_INSET)])
   // East gallery drop beside the arrival court.
-  estateRailPath([v(20.115,FLOOR,31.1),v(20.115,FLOOR,39.95)])
+  estateRailPath([v(20+RAIL_EDGE_INSET,FLOOR,31.1),v(20+RAIL_EDGE_INSET,FLOOR,40-RAIL_END_GAP)])
 
   // Low garden railings use the same bronze cap/post/base-plate language without glass.
   // Arrival garden pockets: existing landscape edge line shifted one pedestal width onto the walking surface.
-  estateRailPath([v(-18.035,FLOOR,34.5),v(-18.035,FLOOR,47.2)],{height:.82,glass:false})
-  estateRailPath([v(20.035,FLOOR,40.2),v(20.035,FLOOR,48.4)],{height:.82,glass:false})
+  estateRailPath([v(-18.15+RAIL_EDGE_INSET,FLOOR,34.5),v(-18.15+RAIL_EDGE_INSET,FLOOR,47.2)],{height:.82,glass:false})
+  estateRailPath([v(20.15-RAIL_EDGE_INSET,FLOOR,40.2),v(20.15-RAIL_EDGE_INSET,FLOOR,48.4)],{height:.82,glass:false})
 
   // Grand foyer garden pockets: same hardware and pedestal rule, scaled as a low garden guard over the stone curb.
-  estateRailPath([v(-11.035,FLOOR,8.35),v(-11.035,FLOOR,13.65)],{height:.82,glass:false,curb:true})
-  estateRailPath([v(-10.72,FLOOR,14.035),v(-6.28,FLOOR,14.035)],{height:.82,glass:false,curb:true})
-  estateRailPath([v(7.905,FLOOR,10.18),v(7.905,FLOOR,13.82)],{height:.82,glass:false,curb:true})
-  estateRailPath([v(13.135,FLOOR,8.35),v(13.135,FLOOR,14.65)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(-10.92-RAIL_EDGE_INSET,FLOOR,8.35),v(-10.92-RAIL_EDGE_INSET,FLOOR,13.65)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(-10.72,FLOOR,13.92+RAIL_EDGE_INSET),v(-6.28,FLOOR,13.92+RAIL_EDGE_INSET)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(8.02-RAIL_EDGE_INSET,FLOOR,10.18),v(8.02-RAIL_EDGE_INSET,FLOOR,13.82)],{height:.82,glass:false,curb:true})
+  estateRailPath([v(13.02+RAIL_EDGE_INSET,FLOOR,8.35),v(13.02+RAIL_EDGE_INSET,FLOOR,14.65)],{height:.82,glass:false,curb:true})
 
   // Pergola over outdoor dining, secondary circulation remains open.
   for(const x of [17,25])for(const z of [-21.6,-13.2])k.box(x,FLOOR+1.7,z,.17,3.4,.17,'bronze')
