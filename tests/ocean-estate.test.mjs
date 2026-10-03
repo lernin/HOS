@@ -215,9 +215,18 @@ test('ocean-edge reference railing follows slab corners and returns cleanly',()=
  assert.equal(env.includes('capH=.09,capW=.16,post=.065'),true)
  assert.equal(env.includes('placePost(firstPost)'),true)
  assert.equal(env.includes('for(const p of cornerPosts)placePost(p)'),true)
- assert.equal(env.includes("oceanReferencePath([v(-22.88,FLOOR,-17.08),v(-22.88,FLOOR,-23.88),v(-14.88,FLOOR,-23.88),v(-14.88,FLOOR,-35.88)])"),true)
- assert.equal(env.includes("oceanReferencePath([v(15.88,FLOOR,-35.88),v(15.88,FLOOR,-23.88),v(26.88,FLOOR,-23.88),v(26.88,FLOOR,-22.88),v(39.88,FLOOR,-22.88)])"),true)
+ assert.equal(env.includes("oceanReferencePath([v(-22.93,FLOOR,-17.08),v(-22.93,FLOOR,-23.93),v(-14.93,FLOOR,-23.93),v(-14.93,FLOOR,-35.93)])"),true)
+ assert.equal(env.includes("oceanReferencePath([v(15.93,FLOOR,-35.93),v(15.93,FLOOR,-23.93),v(26.93,FLOOR,-23.93),v(26.93,FLOOR,-22.93),v(39.93,FLOOR,-22.93)])"),true)
  assert.equal(planText.includes('west ocean railing returns'),true)
  assert.equal(planText.includes('lookout ocean edge, joined to the terrace corner'),true)
 })
 
+
+
+test('ocean railing sits close to but visibly inboard of slab edges',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ assert.equal(env.includes('v(-22.93,FLOOR,-23.93)'),true)
+ assert.equal(env.includes('v(-14.93,FLOOR,-35.93)'),true)
+ assert.equal(env.includes('v(15.93,FLOOR,-35.93)'),true)
+ assert.equal(env.includes('v(39.93,FLOOR,-22.93)'),true)
+})
