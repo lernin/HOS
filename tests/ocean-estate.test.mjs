@@ -217,7 +217,7 @@ test('all estate railings use one shared architectural system',()=>{
  assert.equal(env.includes('foyerGardenRail'),false)
  assert.equal(env.includes('RAIL_BASE=.115'),true)
  assert.equal(env.includes('RAIL_EDGE_GAP=RAIL_BASE/2'),true)
- assert.equal(env.includes('RAIL_EDGE_INSET=RAIL_BASE'),true)
+ assert.equal(env.includes('RAIL_EDGE_INSET=RAIL_BASE/2+RAIL_EDGE_GAP'),true)
  assert.equal(env.includes('RAIL_END_GAP=RAIL_EDGE_INSET-RAIL_CAP_OVERHANG'),true)
  assert.equal(env.includes('placePost(firstPost)'),true)
  assert.equal(env.includes('for(const p of cornerPosts)placePost(p)'),true)
