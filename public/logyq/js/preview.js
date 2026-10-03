@@ -698,6 +698,13 @@
       body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{position:fixed;box-sizing:border-box;left:50%;right:auto;transform:translateX(-50%);top:auto;bottom:calc(32px + env(safe-area-inset-bottom));width:max-content;min-width:96px;max-width:calc(100vw - 48px);height:auto;min-height:64px;max-height:140px;padding:10px 12px;display:flex;flex-direction:row;align-items:center;justify-content:center;border:1px solid rgba(226,232,240,.9);border-radius:20px;background:rgba(255,255,255,.94);box-shadow:0 5px 20px rgba(15,23,42,.12);touch-action:none;overflow:hidden}
       body.logyq-game #logyq-bank-chips,body.logyq-curriculum-frozen #logyq-bank-chips{flex:0 1 auto;display:flex;flex-flow:row wrap;justify-content:center;align-items:center;gap:8px;overflow:visible}
       body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{flex:0 0 auto;width:auto;max-width:none;min-height:44px;padding:7px 2px;touch-action:none}
+      /* Game pieces are a two-row horizontal shelf, with the next column
+         clipped on the right to reveal that more pieces can be scrolled in. */
+      body.logyq-game #Dock,body.logyq-game #Dock.dock-left{left:16px;right:16px;transform:none;width:auto;min-width:0;max-width:none;height:96px;min-height:96px;max-height:96px;padding:0;justify-content:flex-start;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible;touch-action:pan-x}
+      body.logyq-game #logyq-bank-chips{flex:1 1 auto;width:100%;height:96px;min-width:0;display:grid;grid-auto-flow:column;grid-template-rows:repeat(2,44px);grid-auto-columns:clamp(64px,18vw,72px);gap:8px;align-content:center;justify-content:start;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;touch-action:pan-x}
+      body.logyq-game #logyq-bank-chips::-webkit-scrollbar{display:none}
+      body.logyq-game #Dock .chip.logyq-shape-chip,body.logyq-game #Dock.dock-left .chip.logyq-shape-chip{box-sizing:border-box;width:100%;height:44px;min-height:44px;max-width:none;padding:7px 0;touch-action:pan-x}
+      body.logyq-game #Dock .logyq-shape-chip svg{height:28px}
       body.logyq-game #Dock.is-empty,body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
       body.logyq-game #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
@@ -7467,6 +7474,41 @@
   })
 
   const GIANT_COLORS = 'ABCDEFGHIJKLMNOPQRSTU'.split('')
+  // Four visible forks in each portrait tree. Every card has a distinct
+  // bottom contact, so only its intended children can sit beneath it.
+  // A fork seats DL on the left and DR on the right; swapping them fails
+  // the sibling contact. The full physical solver checks the inventories.
+  const BRANCHING_GIANT_PLANS = [
+    { spine: 6, branches: [[0, 2, 'right'], [1, 4, 'left'], [2, 1, 'left'], [3, 2, 'left']] },
+    { spine: 6, branches: [[0, 2, 'right'], [1, 2, 'left'], [3, 3, 'right'], [4, 2, 'left']] },
+    { spine: 5, branches: [[0, 2, 'left'], [1, 1, 'right'], [2, 4, 'right'], [3, 3, 'left']] },
+  ]
+  function branchingGiantTree(variant) {
+    const plan = BRANCHING_GIANT_PLANS[variant - 1]
+    const spine = Array.from({ length: plan.spine }, () => ({ children: [] }))
+    for (let i = 0; i < spine.length - 1; i++) spine[i].children = [spine[i + 1]]
+    for (const [index, length, side] of plan.branches) {
+      let branch = { children: [] }
+      let end = branch
+      for (let i = 1; i < length; i++) {
+        end.children = [{ children: [] }]
+        end = end.children[0]
+      }
+      if (side === 'left') spine[index].children.unshift(branch)
+      else spine[index].children.push(branch)
+    }
+    let next = 0
+    function paint(node, top, shape) {
+      const id = next++
+      const bottom = GIANT_COLORS[id + 1]
+      return {
+        name: '', gameId: 'g' + id, paint: shape + ':' + top + ':' + bottom,
+        children: node.children.map((child, index) =>
+          paint(child, bottom, node.children.length === 2 ? (index ? 'DR' : 'DL') : 'L')),
+      }
+    }
+    return paint(spine[0], GIANT_COLORS[0], 'L')
+  }
   function confidenceGiantTree(pieceCount, variant) {
     const diagonalIndex = variant === 1 ? -1 : variant === 2
       ? Math.floor(pieceCount / 3) : Math.floor(2 * pieceCount / 3)
@@ -7484,7 +7526,7 @@
   }
   ;[[15,1],[15,2],[15,3],[20,1],[20,2],[20,3]].forEach(([pieces, variant], index) => {
     const number = 165 + index
-    const tree = confidenceGiantTree(pieces, variant)
+    const tree = pieces === 15 ? branchingGiantTree(variant) : confidenceGiantTree(pieces, variant)
     addOpenLevel('confidence-' + pieces + '-' + variant,
       number + ' · ' + pieces + ' Pieces · Easy Giant',
       tree, tree.gameId, { tier: 12 })
