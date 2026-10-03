@@ -140,7 +140,7 @@
       const value = thumbGain?.value?.() ?? 1
       const automatic = thumbGain?.automatic?.() !== false
       if (thumbGainValue) thumbGainValue.textContent = value.toFixed(1) + '×'
-      if (thumbGainMode) thumbGainMode.textContent = automatic ? 'Automatic · grows 0.2× per level' : 'Manual · automatic growth paused'
+      if (thumbGainMode) thumbGainMode.textContent = automatic ? 'Automatic · grows 0.2× per completed puzzle' : 'Manual · automatic growth paused'
       if (thumbGainAuto) thumbGainAuto.hidden = automatic
       if (thumbGainDown) thumbGainDown.disabled = value <= (thumbGain?.min ?? 1)
       if (thumbGainUp) thumbGainUp.disabled = value >= (thumbGain?.max ?? 5)
