@@ -97,23 +97,26 @@ test('walking HUD is quiet and secondary controls live in the menu',()=>{
 
 test('closed arrival garden pockets read as intentional planted areas',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
  assert.match(env,/Arrival garden pockets/)
- assert.match(env,/estateRailPath\(\[v\(-18\.15\+RAIL_EDGE_INSET/)
- assert.match(env,/estateRailPath\(\[v\(20\.15-RAIL_EDGE_INSET/)
+ assert.match(rails,/id:'arrival-garden-west'/)
+ assert.match(rails,/id:'arrival-garden-east'/)
  assert.match(env,/ellipsoid\([^\n]*'pink'/)
 })
 
 
+
 test('grand foyer grass pockets are framed as intentional gardens',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
- assert.equal(env.includes('Grand foyer garden pockets'),true)
- assert.equal(env.includes('estateRailPath([v(-10.92-RAIL_EDGE_INSET'),true)
- assert.equal(env.includes('estateRailPath([v(8.02-RAIL_EDGE_INSET'),true)
- assert.equal(env.includes('estateRailPath([v(13.02+RAIL_EDGE_INSET'),true)
+ const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
+ assert.equal(rails.includes("id:'foyer-garden-west-a'"),true)
+ assert.equal(rails.includes("id:'foyer-garden-east-a'"),true)
+ assert.equal(rails.includes("curb:true"),true)
  assert.equal(env.includes('Foyer garden planting'),true)
  assert.equal(env.includes('[-8.5,11,1.9,2.35]'),true)
  assert.equal(env.includes('[10.5,11.5,1.8,2.75]'),true)
 })
+
 
 
 test('garden courtyard paving avoids near-coplanar grout geometry',()=>{
@@ -213,34 +216,57 @@ test('repaired Library wall is visually grounded to the lower arrival court',()=
 
 test('all estate railings use one shared architectural system',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
  const planText=readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8')
- assert.equal(env.includes('const estateRailPath='),true)
+ assert.equal(env.includes("from './railings'"),true)
+ assert.equal(env.includes('for(const rail of estateRailings)'),true)
  assert.equal(env.includes('const oceanReferencePath='),false)
  assert.equal(env.includes('gardenPocketRail'),false)
  assert.equal(env.includes('foyerGardenRail'),false)
- assert.equal(env.includes('RAIL_BASE=.115'),true)
- assert.equal(env.includes('RAIL_EDGE_GAP=RAIL_BASE/2'),true)
- assert.equal(env.includes('RAIL_EDGE_INSET=RAIL_BASE/2+RAIL_EDGE_GAP'),true)
- assert.equal(env.includes('RAIL_END_GAP=RAIL_EDGE_INSET-RAIL_CAP_OVERHANG'),true)
+ assert.equal(rails.includes('RAIL_BASE = .115'),true)
+ assert.equal(rails.includes('RAIL_EDGE_GAP = RAIL_BASE / 2'),true)
+ assert.equal(rails.includes('RAIL_EDGE_INSET = RAIL_BASE / 2 + RAIL_EDGE_GAP'),true)
+ assert.equal(rails.includes('RAIL_END_GAP = RAIL_EDGE_INSET - RAIL_CAP_OVERHANG'),true)
  assert.equal(env.includes('placePost(firstPost)'),true)
  assert.equal(env.includes('for(const p of cornerPosts)placePost(p)'),true)
  assert.equal(planText.includes('west ocean railing returns'),true)
  assert.equal(planText.includes('lookout ocean edge, joined to the terrace corner'),true)
 })
 
+
 test('railing pedestal edge gap equals half the pedestal width',()=>{
  const pedestal=.115,gap=pedestal/2,centerInset=pedestal
  assert.equal(Number((centerInset-pedestal/2).toFixed(4)),Number(gap.toFixed(4)))
- const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
- assert.equal(env.includes('v(-23+RAIL_EDGE_INSET,FLOOR,-17.08)'),true)
- assert.equal(env.includes('v(44-RAIL_EDGE_INSET,FLOOR,-14+RAIL_END_GAP)'),true)
- assert.equal(env.includes('v(-22,FLOOR,33-RAIL_EDGE_INSET)'),true)
- assert.equal(env.includes('v(20+RAIL_EDGE_INSET,FLOOR,31.1)'),true)
+ const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
+ assert.equal(rails.includes('p(-23+RAIL_EDGE_INSET,-17.08)'),true)
+ assert.equal(rails.includes('p(44-RAIL_EDGE_INSET,-14+RAIL_END_GAP)'),true)
+ assert.equal(rails.includes('p(-22,33-RAIL_EDGE_INSET)'),true)
+ assert.equal(rails.includes('p(20+RAIL_EDGE_INSET,31.1)'),true)
 })
+
 
 test('low garden rails share the same posts caps and pedestals as guard rails',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
- assert.equal(env.includes("{height:.82,glass:false}"),true)
- assert.equal(env.includes("{height:.82,glass:false,curb:true}"),true)
+ const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
+ assert.equal(rails.includes("family:'garden'"),true)
+ assert.equal(rails.includes('height:.82'),true)
+ assert.equal(rails.includes('glass:false'),true)
  assert.equal((env.match(/const estateRailPath=/g)||[]).length,1)
+})
+
+
+test('Estate Plan is a routed bird-eye markup workspace backed by live plan geometry',()=>{
+ const main=readFileSync(new URL('../src/main.tsx',import.meta.url),'utf8')
+ const estate=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(main.includes("'ocean-estate-plan'"),true)
+ assert.equal(main.includes("import('./experiences/EstatePlan')"),true)
+ assert.equal(estate.includes('Open Estate Plan'),true)
+ assert.equal(planner.includes("from './estate/plan'"),true)
+ assert.equal(planner.includes("from './estate/railings'"),true)
+ assert.equal(planner.includes("type Tool='pan'|'pen'|'arrow'|'area'|'note'"),true)
+ assert.equal(planner.includes("const STORAGE='ocean-estate-plan-markups-v1'"),true)
+ assert.equal(planner.includes('Copy change brief'),true)
+ assert.equal(planner.includes('exportPng'),true)
+ assert.equal(planner.includes("(['main','arrival','site'] as PlanView[])"),true)
 })
