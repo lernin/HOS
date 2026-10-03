@@ -96,10 +96,6 @@
         lastDrop = now
         note(680, now, 0.075, 0.11)
         note(190, now, 0.095, 0.07, 'triangle')
-      } else if (kind === 'celebrate') {
-        // No fake applause. If no uploaded recording exists, use a small success chime only.
-        ;[659.25, 783.99, 987.77].forEach((frequency, i) =>
-          note(frequency, now + i * 0.10, 0.30, 0.07))
       } else {
         [523.25, 659.25, 783.99].forEach((frequency, i) => note(frequency, now + i * 0.12, 0.42, 0.06))
       }
@@ -118,10 +114,10 @@
     celebrate:(context={}) => {
       const library = window.LOGYQCelebrations
       if (library?.playAuto) {
-        Promise.resolve(library.playAuto(context)).then((played) => { if (!played) play('celebrate') }).catch(() => play('celebrate'))
+        Promise.resolve(library.playAuto(context)).catch(() => {})
         return true
       }
-      return play('celebrate')
+      return false
     },
     test:() => play('drop'),
   })
