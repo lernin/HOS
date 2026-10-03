@@ -57,7 +57,22 @@ export function architecture(k:EstateKit){
   k.box(.5,FLOOR-1.5,-30.2,23,0.2,12,'waterTile')
   for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
   // Railings sit at the walkable perimeter, never across a route.
-  for(const [a,b] of [[v(-23,FLOOR,-24),v(-15,FLOOR,-24)],[v(16,FLOOR,-24),v(27,FLOOR,-24)],[v(44,FLOOR,-14),v(44,FLOOR,14)],[v(27,FLOOR,-23),v(40,FLOOR,-23)],[v(-22,FLOOR,33),v(-6.5,FLOOR,33)],[v(20,FLOOR,31.1),v(20,FLOOR,40)]]){
+  // The far-ocean pair is the reference prototype for the eventual house-wide railing system.
+  const oceanReferenceRail=(a:T.Vector3,b:T.Vector3)=>{
+    const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z))
+    const capY=1.235,capH=.09,capW=.16,post=.055,postTop=capY-capH/2,postH=postTop-.06
+    // Broad, flat forearm-rest cap. The post height terminates exactly at the cap underside.
+    k.box(0,capY,0,capW,capH,d,'bronze',g,.018)
+    // Glass is seated consistently below the cap and clears the slab by the same amount throughout.
+    k.box(0,.61,0,.04,1.08,Math.max(.01,d-.12),'glass',g)
+    const bays=Math.max(1,Math.ceil(d/1.85))
+    for(let i=0;i<=bays;i++){
+      const z=-d/2+d*i/bays
+      k.box(0,.06+postH/2,z,post,postH,post,'bronze',g,.01)
+    }
+  }
+  for(const [a,b] of [[v(-23,FLOOR,-24),v(-15,FLOOR,-24)],[v(16,FLOOR,-24),v(27,FLOOR,-24)]])oceanReferenceRail(a,b)
+  for(const [a,b] of [[v(44,FLOOR,-14),v(44,FLOOR,14)],[v(27,FLOOR,-23),v(40,FLOOR,-23)],[v(-22,FLOOR,33),v(-6.5,FLOOR,33)],[v(20,FLOOR,31.1),v(20,FLOOR,40)]]){
     const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.65,0,.035,1.24,d,'glass',g);k.box(0,1.28,0,.045,.04,d,'bronze',g);for(let i=0;i<=d/2;i++)k.box(0,.62,-d/2+i*2,.035,1.24,.035,'bronze',g)
   }
   // Arrival garden pockets: low open rails make the non-walkable planted edges legible without blocking the view.
