@@ -7419,6 +7419,211 @@
     return Array.isArray(level?.ids) ? level.ids.length : gameLevelNodes(solutionOf(level)).length
   }
 
+  function gameCloneTree(tree) {
+    return tree ? { ...tree, children: (tree.children || []).map(gameCloneTree) } : null
+  }
+
+  function gameTreeStateKey(tree) {
+    return tree ? tree.gameId + '(' + (tree.children || []).map(gameTreeStateKey).join(',') + ')' : '∅'
+  }
+
+  function gameTreeNodes(tree) {
+    return tree ? [tree, ...(tree.children || []).flatMap(gameTreeNodes)] : []
+  }
+
+  function gameTargetCards(level) {
+    const cards = new Map()
+    for (const node of gameLevelNodes(solutionOf(level))) {
+      if (node?.gameId && level.ids?.includes(node.gameId)) cards.set(node.gameId, { ...node, children: [] })
+    }
+    for (const card of Object.values(level.bankCards || {})) {
+      if (card?.gameId && level.ids?.includes(card.gameId)) cards.set(card.gameId, { ...card, children: [] })
+    }
+    return cards
+  }
+
+  function gameCandidateDrops(tree) {
+    if (!tree) return [{ type: 'newRootAt' }]
+    const drops = [{ type: 'rootAbove' }]
+    for (const parent of gameTreeNodes(tree)) {
+      const children = parent.children || []
+      for (let i = 0; i <= children.length; i++) {
+        const drop = { type: 'gap', parentUid: parent.gameId }
+        if (children[i - 1]) drop.prevUid = children[i - 1].gameId
+        if (children[i]) drop.nextUid = children[i].gameId
+        drops.push(drop)
+      }
+    }
+    return drops
+  }
+
+  function gameAddCard(tree, card, drop) {
+    const fresh = gameCloneTree(card)
+    if (!tree || drop.type === 'newRootAt') return fresh
+    const copy = gameCloneTree(tree)
+    if (drop.type === 'rootAbove') {
+      fresh.children = [copy]
+      return fresh
+    }
+    const parent = gameTreeNodes(copy).find(node => node.gameId === drop.parentUid)
+    if (!parent) return null
+    parent.children ||= []
+    let index = parent.children.length
+    if (drop.nextUid) {
+      const next = parent.children.findIndex(node => node.gameId === drop.nextUid)
+      if (next >= 0) index = next
+    } else if (drop.prevUid) {
+      const prev = parent.children.findIndex(node => node.gameId === drop.prevUid)
+      if (prev >= 0) index = prev + 1
+    }
+    parent.children.splice(index, 0, fresh)
+    return copy
+  }
+
+  function gameShortestMoves(level, startTree) {
+    if (!level) return null
+    const targetIds = new Set(level.ids || [])
+    const cards = gameTargetCards(level)
+    const start = gameCloneTree(startTree)
+    const queue = [{ tree: start, depth: 0 }]
+    const seen = new Set()
+    for (let cursor = 0; cursor < queue.length && cursor < 12000; cursor++) {
+      const { tree, depth } = queue[cursor]
+      const key = gameTreeStateKey(tree)
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (tree && gameGrammar.complete(tree, [...targetIds])) return depth
+      const used = new Set(gameTreeNodes(tree).map(node => node.gameId))
+      for (const [id, card] of cards) {
+        if (used.has(id)) continue
+        for (const drop of gameCandidateDrops(tree)) {
+          if (tree && !gameGrammar.canAdd(tree, card, drop)) continue
+          const next = gameAddCard(tree, card, drop)
+          if (next) queue.push({ tree: next, depth: depth + 1 })
+        }
+      }
+    }
+    return null
+  }
+
+  function gameMinimumMoves(level) {
+    if (Number.isInteger(level?._minimumMoves)) return level._minimumMoves
+    const exact = gameShortestMoves(level, level?.tree)
+    const fallback = Math.max(0, (level?.ids?.length || 0) - gameTreeNodes(level?.tree).length)
+    level._minimumMoves = Number.isInteger(exact) ? exact : fallback
+    return level._minimumMoves
+  }
+
+  function gameBestHint(level, tree, bankWords) {
+    if (!level) return null
+    const cards = gameTargetCards(level)
+    const words = Array.isArray(bankWords) ? bankWords : []
+    let best = null
+    for (const word of words) {
+      const card = level.bankCards?.[word]
+      if (!card || !cards.has(card.gameId)) continue
+      for (const drop of gameCandidateDrops(tree)) {
+        if (tree && !gameGrammar.canAdd(tree, card, drop)) continue
+        const next = gameAddCard(tree, card, drop)
+        if (!next) continue
+        const remaining = gameShortestMoves(level, next)
+        if (remaining == null) continue
+        if (!best || remaining < best.remaining) best = { word, card, drop, remaining }
+      }
+    }
+    return best
+  }
+
+  let gameHintOverlay = null
+  function clearGameHintVisual() {
+    document.querySelectorAll('#Dock .chip.logyq-hint-piece').forEach(el => el.classList.remove('logyq-hint-piece'))
+    gameHintOverlay?.remove()
+    gameHintOverlay = null
+  }
+
+  function gameHintTargetScreen(hint) {
+    const svg = document.getElementById('canvas')
+    const root = bridge.core?.state?.root
+    if (!svg || !window.d3) return null
+    const rect = svg.getBoundingClientRect()
+    const transform = window.d3.zoomTransform(svg)
+    let point = null
+    if (!root || hint.drop.type === 'newRootAt') {
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height * 0.48 }
+    }
+    if (hint.drop.type === 'rootAbove') {
+      point = { x: root.x, y: root.y - GAME_LAYOUT.nodeHeight }
+    } else {
+      const nodes = root.descendants()
+      const parent = nodes.find(node => node.data?.gameId === hint.drop.parentUid)
+      if (!parent) return null
+      const prev = hint.drop.prevUid && nodes.find(node => node.data?.gameId === hint.drop.prevUid)
+      const next = hint.drop.nextUid && nodes.find(node => node.data?.gameId === hint.drop.nextUid)
+      const x = prev && next ? (prev.x + next.x) / 2
+        : prev ? prev.x + GAME_LAYOUT.nodeWidth * .9
+        : next ? next.x - GAME_LAYOUT.nodeWidth * .9
+        : parent.x
+      point = { x, y: parent.y + GAME_LAYOUT.nodeHeight }
+    }
+    return { x: rect.left + transform.applyX(point.x), y: rect.top + transform.applyY(point.y) }
+  }
+
+  function requestGameHint() {
+    const session = app.game
+    const level = levelForGuide()
+    if (!session || !level || session.cleared) return false
+    const hint = gameBestHint(level, bridge.snapshot()?.tree, bridge.core?.state?.wordBank || [])
+    if (!hint) return false
+    session.hintStage = Math.min(3, (session.hintStage || 0) + 1)
+    session.hintsUsed = Math.max(session.hintsUsed || 0, session.hintStage)
+    clearGameHintVisual()
+    const chip = [...document.querySelectorAll('#Dock .chip')].find(el => el.textContent.trim() === hint.word)
+    chip?.classList.add('logyq-hint-piece')
+    if (session.hintStage >= 2) {
+      const target = gameHintTargetScreen(hint)
+      if (target) {
+        const overlay = document.createElement('div')
+        overlay.id = 'logyq-game-hint-overlay'
+        overlay.innerHTML = '<svg aria-hidden="true"><defs><marker id="logyq-hint-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><polygon points="0,0 10,5 0,10" fill="#0f172a"/></marker></defs><circle class="logyq-hint-target" r="28"></circle><path class="logyq-hint-arrow" marker-end="url(#logyq-hint-head)"></path></svg>'
+        document.body.appendChild(overlay)
+        gameHintOverlay = overlay
+        const targetCircle = overlay.querySelector('.logyq-hint-target')
+        targetCircle.setAttribute('cx', target.x)
+        targetCircle.setAttribute('cy', target.y)
+        const arrow = overlay.querySelector('.logyq-hint-arrow')
+        if (session.hintStage >= 3 && chip) {
+          const source = chip.getBoundingClientRect()
+          const sx = source.left + source.width / 2
+          const sy = source.top
+          const bendY = Math.min(sy - 50, target.y + 80)
+          arrow.setAttribute('d', `M${sx},${sy} C${sx},${bendY} ${target.x},${bendY} ${target.x},${target.y + 30}`)
+        } else {
+          arrow.setAttribute('d', '')
+        }
+      }
+    }
+    return true
+  }
+
+  function gameAttemptPayload(session, level, solved) {
+    const profile = gameDifficultyProfile(level)
+    return {
+      item_id: level.id,
+      puzzle_tier: level.tier,
+      puzzle_difficulty: profile?.reasoning ?? null,
+      minimum_moves: session.minimumMoves ?? gameMinimumMoves(level),
+      actual_moves: session.actualMoves || 0,
+      wrong_drops: session.wrongDrops || 0,
+      returned_pieces: session.returnedPieces || 0,
+      hints_used: session.hintsUsed || 0,
+      elapsed_ms: Math.max(0, Date.now() - (session.startedAt || Date.now())),
+      solved: !!solved,
+      metadata: { piece_count: profile?.pieces || gameLevelPieceCount(level) },
+    }
+  }
+
+  window.LOGYQGameHint = Object.freeze({ request: requestGameHint, hide: clearGameHintVisual })
+
   function gameDifficultyProfile(level) {
     if (level._difficultyV2) return level._difficultyV2
     const initial = structuredClone(level.tree)
