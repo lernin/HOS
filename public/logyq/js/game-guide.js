@@ -51,7 +51,6 @@
       ? `M${sx},${sy} L${x},${endY}`
       : `M${sx},${sy} C${bend},${sy-70} ${bend},${endY+60} ${x},${endY}`
     element.querySelectorAll('#logyq-guide-arrow path').forEach(path => path.setAttribute('d',d))
-    element.querySelector('#logyq-guide-instruction').style.top = (dock.top-34)+'px'
   }
   function tick() {
     frame = null
@@ -70,10 +69,6 @@
     const element = document.createElement('div')
     element.id = 'logyq-drag-guide'
     element.dataset.kind = level.guide
-    const instructions = {below:'Drag this piece into the space below.',above:'Drag this piece into the space above.',sibling:'Drag this piece beside the other child.'}
-    const label = document.createElement('p')
-    label.id = 'logyq-guide-instruction'; label.textContent = instructions[level.guide]
-    label.setAttribute('role','status')
     const ghost = document.createElement('div'); ghost.id = 'logyq-guide-target'; ghost.setAttribute('aria-hidden','true')
     const face = svg('svg',{viewBox:'0 0 140 63'},ghost)
     const card = level.bankCards[level.bank[0]], grammar = window.LOGYQGameGrammar
@@ -95,7 +90,7 @@
     svg('polygon',{points:'0,0 10,5 0,10',fill:'#334155'},marker)
     svg('path',{fill:'none',stroke:'white','stroke-width':6,opacity:.85},arrow)
     svg('path',{class:'guide-flow',fill:'none',stroke:'#334155','stroke-width':2.5,'marker-end':'url(#logyq-guide-head)'},arrow)
-    element.append(arrow,ghost,label); document.body.appendChild(element)
+    element.append(arrow,ghost); document.body.appendChild(element)
     active = {level,core,element}; refresh()
   }
   window.LOGYQGameGuide = Object.freeze({show,hide,refresh,target})
