@@ -57,24 +57,31 @@ export function architecture(k:EstateKit){
   k.box(.5,FLOOR-1.5,-30.2,23,0.2,12,'waterTile')
   for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
   // Railings sit at the walkable perimeter, never across a route.
-  // The far-ocean pair is the reference prototype for the eventual house-wide railing system.
-  const oceanReferenceRail=(a:T.Vector3,b:T.Vector3)=>{
-    const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z))
-    const capY=1.235,capH=.09,capW=.16,post=.055,postTop=capY-capH/2,postH=postTop-.06
-    const endInset=post,postRun=Math.max(.01,d-endInset*2)
-    // The cap owns the architectural end. Terminal posts sit one post-width inboard,
-    // leaving a small deliberate cap overhang instead of a post jammed onto the edge.
-    k.box(0,capY,0,capW,capH,d,'bronze',g,.018)
-    // Glass terminates on the terminal-post centerlines so the end condition stays crisp.
-    k.box(0,.61,0,.04,1.08,postRun,'glass',g)
-    const bays=Math.max(1,Math.ceil(postRun/1.85))
-    for(let i=0;i<=bays;i++){
-      const z=-postRun/2+postRun*i/bays
-      k.box(0,.06+postH/2,z,post,postH,post,'bronze',g,.01)
+  // Ocean prototype: a continuous architectural path follows the actual slab edge.
+  // The line itself is inset onto the walking surface so posts sit on stone, not over the drop.
+  const oceanReferencePath=(points:T.Vector3[])=>{
+    const capY=1.235,capH=.09,capW=.16,post=.065,postTop=capY-capH/2,postH=postTop-.055
+    const placePost=(p:T.Vector3)=>{k.box(p.x,FLOOR+.055+postH/2,p.z,post,postH,post,'bronze',k.root,.012);k.box(p.x,FLOOR+.018,p.z,.115,.036,.115,'bronze',k.root,.012)}
+    const terminal=(from:T.Vector3,to:T.Vector3)=>{const dir=to.clone().sub(from).normalize();return from.clone().addScaledVector(dir,post)}
+    const firstPost=terminal(points[0],points[1]),lastPost=terminal(points.at(-1)!,points.at(-2)!)
+    const cornerPosts=points.slice(1,-1)
+    placePost(firstPost);for(const p of cornerPosts)placePost(p);placePost(lastPost)
+    for(let s=0;s<points.length-1;s++){
+      const a=points[s],b=points[s+1],mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z))
+      // Broad cap runs continuously through corners; no floating or clipped terminal pieces.
+      k.box(0,capY,0,capW,capH,d,'bronze',g,.018)
+      const glassA=s===0?firstPost:a,glassB=s===points.length-2?lastPost:b,glassMid=glassA.clone().lerp(glassB,.5),glassD=glassA.distanceTo(glassB)
+      const gg=k.group(glassMid.x,FLOOR,glassMid.z,Math.atan2(glassB.x-glassA.x,glassB.z-glassA.z))
+      k.box(0,.61,0,.04,1.08,Math.max(.01,glassD-post*.7),'glass',gg)
+      const start=s===0?firstPost:a,end=s===points.length-2?lastPost:b,run=start.distanceTo(end),bays=Math.max(1,Math.ceil(run/1.8))
+      for(let i=1;i<bays;i++){const p=start.clone().lerp(end,i/bays);placePost(p)}
     }
   }
-  for(const [a,b] of [[v(-23,FLOOR,-24),v(-15,FLOOR,-24)],[v(16,FLOOR,-24),v(27,FLOOR,-24)]])oceanReferenceRail(a,b)
-  for(const [a,b] of [[v(44,FLOOR,-14),v(44,FLOOR,14)],[v(27,FLOOR,-23),v(40,FLOOR,-23)],[v(-22,FLOOR,33),v(-6.5,FLOOR,33)],[v(20,FLOOR,31.1),v(20,FLOOR,40)]]){
+  // West run: building wall -> terrace corner -> pool-walk edge.
+  oceanReferencePath([v(-22.88,FLOOR,-17.08),v(-22.88,FLOOR,-23.88),v(-14.88,FLOOR,-23.88),v(-14.88,FLOOR,-35.88)])
+  // East run: pool-walk edge -> terrace corner -> lookout corner -> lookout ocean edge.
+  oceanReferencePath([v(15.88,FLOOR,-35.88),v(15.88,FLOOR,-23.88),v(26.88,FLOOR,-23.88),v(26.88,FLOOR,-22.88),v(39.88,FLOOR,-22.88)])
+  for(const [a,b] of [[v(44,FLOOR,-14),v(44,FLOOR,14)],[v(-22,FLOOR,33),v(-6.5,FLOOR,33)],[v(20,FLOOR,31.1),v(20,FLOOR,40)]]){
     const mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR,mid.z,Math.atan2(b.x-a.x,b.z-a.z));k.box(0,.65,0,.035,1.24,d,'glass',g);k.box(0,1.28,0,.045,.04,d,'bronze',g);for(let i=0;i<=d/2;i++)k.box(0,.62,-d/2+i*2,.035,1.24,.035,'bronze',g)
   }
   // Arrival garden pockets: low open rails make the non-walkable planted edges legible without blocking the view.
