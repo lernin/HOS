@@ -7490,6 +7490,20 @@
       tree, tree.gameId, { tier: 12 })
   })
 
+  // Expert 9-piece boss bags: unique under the shipped seat grammar and
+  // deliberately optimized for misleading legal additions and deep false paths.
+  const EXPERT_N9_BOSSES = [
+    ["L:B:C",["DL:C:B",["DL:B:C",["L:C:D"]],["W:B",["L:B:D"]],["DR:B:A"]],["DR:C:D"],["DL:C:D"]],
+    ["L:A:C",["DL:C:B",["DR:B:A",["W:A",["L:A:D"]],["DR:A:C",["L:C:D"]]]],["DR:C:D"],["DL:C:D"]],
+    ["DL:B:C",["DL:C:B",["DL:B:D"],["DR:B:A",["W:A",["L:A:D"]],["DR:A:D"]]],["DR:C:D"],["DL:C:D"]]
+  ]
+  EXPERT_N9_BOSSES.forEach((spec, index) => {
+    const number = 168 + index
+    const tree = challengeTree(spec)
+    addOpenLevel('expert-n9-' + (index + 1), number + ' · 9 Pieces · Boss',
+      tree, tree.gameId, { tier: 13 })
+  })
+
   const GAME_ADAPTIVE = '_adaptive'
 
   function gameProgress() {
