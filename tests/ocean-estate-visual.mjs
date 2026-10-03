@@ -35,7 +35,7 @@ try{
  assert.equal(await touch.locator('body').evaluate(e=>e.scrollWidth<=innerWidth),true,'landscape phone horizontal overflow');await touch.screenshot({path:`${output}/phone-landscape-touch.png`,timeout:120000});await mobile.close()
 
  const planner=await browser.newPage({viewport:{width:915,height:412},deviceScaleFactor:1});planner.on('pageerror',e=>errors.push(e.message));planner.on('console',recordConsole)
- await planner.goto('http://127.0.0.1:4173/',{waitUntil:'load'});await planner.evaluate(()=>{history.pushState({},'', '/ocean-estate-plan');window.dispatchEvent(new PopStateEvent('popstate'))});await planner.locator('.ep-plan').waitFor({state:'visible',timeout:15000});await planner.screenshot({path:`${output}/estate-plan.png`,timeout:120000})
+ await planner.addInitScript(()=>{history.replaceState({},'', '/ocean-estate-plan')});await planner.goto('http://127.0.0.1:4173/',{waitUntil:'load'});await planner.locator('.ep-plan').waitFor({state:'visible',timeout:15000});await planner.screenshot({path:`${output}/estate-plan.png`,timeout:120000})
  await planner.getByRole('button',{name:/Audit/}).first().click();await planner.getByText('R6',{exact:true}).waitFor({state:'visible',timeout:5000});await planner.screenshot({path:`${output}/estate-plan-audit.png`,timeout:120000})
  await planner.locator('polyline[stroke="transparent"]').nth(5).click({force:true});await planner.locator('.ep-selection-card').waitFor({state:'visible',timeout:5000});assert.match(await planner.locator('.ep-selection-card').innerText(),/R6/);await planner.screenshot({path:`${output}/estate-plan-railing-selected.png`,timeout:120000});await planner.close()
 
