@@ -5976,6 +5976,7 @@
     const live = curriculumAnswerTree(snapshot?.tree)
     if (!level || !live || !curriculumMatches(level.tree, live)) return false
     session.cleared = true
+    window.LOGYQGameThumbGain?.advance?.()
     session.telemetryRecorded = true
     const progress = readCurriculumProgress()
     const ms = Math.max(0, Date.now() - (session.startedAt || Date.now()))
@@ -8236,7 +8237,6 @@
       },
     })
     const levelNumber = Math.max(1, gameLevels.findIndex(item => item.id === level.id) + 1)
-    window.LOGYQGameThumbGain?.setLevel?.(levelNumber)
     app.game = {
       id: level.id,
       levelNumber,
