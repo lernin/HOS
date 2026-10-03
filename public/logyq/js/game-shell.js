@@ -82,7 +82,7 @@
       body.logyq-game #logyq-game-puzzle{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       body.logyq-game #logyq-game-status{display:none!important}
       body.logyq-game #Dock .chip{position:relative}
-      body.logyq-game #Dock .chip::before{content:"";position:absolute;inset:-14px;z-index:-1}
+      body.logyq-game #Dock .chip::before{content:"";position:absolute;inset:-14px}
       body.logyq-game #logyq-game-next{position:fixed;z-index:85;left:50%;transform:translateX(-50%);bottom:calc(32px + env(safe-area-inset-bottom));min-width:190px;min-height:56px;padding:0 30px;border:0;border-radius:18px;background:#0f172a;color:white;font:750 18px/1 system-ui;box-shadow:0 10px 30px rgba(15,23,42,.28);touch-action:manipulation}
       body.logyq-game #logyq-game-next[hidden]{display:none!important}
       #logyq-game-pause-panel{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:22px;background:rgba(15,23,42,.28);backdrop-filter:blur(10px)}
