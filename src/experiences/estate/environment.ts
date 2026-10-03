@@ -58,7 +58,7 @@ export function architecture(k:EstateKit){
   for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
   // Unified Estate railing system.
   // Base-plate policy: the outside edge of every pedestal sits half a pedestal width in from the walking-surface edge.
-  const RAIL_BASE=.115,RAIL_EDGE_GAP=RAIL_BASE/2,RAIL_EDGE_INSET=RAIL_BASE,RAIL_POST=.065,RAIL_CAP_OVERHANG=RAIL_POST,RAIL_END_GAP=RAIL_EDGE_INSET-RAIL_CAP_OVERHANG
+  const RAIL_BASE=.115,RAIL_EDGE_GAP=RAIL_BASE/2,RAIL_EDGE_INSET=RAIL_BASE/2+RAIL_EDGE_GAP,RAIL_POST=.065,RAIL_CAP_OVERHANG=RAIL_POST,RAIL_END_GAP=RAIL_EDGE_INSET-RAIL_CAP_OVERHANG
   const estateRailPath=(points:T.Vector3[],opts:{height?:number;glass?:boolean;curb?:boolean}={})=>{
     const height=opts.height??1.235,capH=.09,capW=.16,post=RAIL_POST,base=RAIL_BASE,glass=opts.glass!==false,curb=opts.curb===true
     const floorLift=curb ? .14 : 0,capY=floorLift+height,postTop=capY-capH/2,postH=postTop-(floorLift+.055)
