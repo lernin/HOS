@@ -78,7 +78,7 @@
         <div class="logyq-celebration-upload">
           <input id="logyq-celebration-files" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.webm" multiple>
           <div class="logyq-celebration-grid">
-            <label>Type<select id="logyq-celebration-category"><option value="yay">Yay</option><option value="applause">Applause</option><option value="big_cheer">Big cheer</option><option value="warm">Warm</option><option value="funny">Funny</option></select></label>
+            <label>Type<select id="logyq-celebration-category"><option value="unclassified" selected>Unclassified</option><option value="yay">Yay</option><option value="applause">Applause</option><option value="big_cheer">Big cheer</option><option value="warm">Warm</option><option value="funny">Funny</option></select></label>
             <label>Best for<select id="logyq-celebration-difficulty"><option value="any">Any level</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="vicious">Vicious</option></select></label>
             <label>Intensity<select id="logyq-celebration-intensity"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select></label>
           </div>
@@ -120,7 +120,7 @@
     list.innerHTML=catalog.length?'':'<p>No recordings yet. Upload a few above.</p>'
     for(const s of catalog){
       const row=document.createElement('div');row.className='logyq-celebration-row'
-      row.innerHTML=`<div><strong></strong><span class="logyq-celebration-tags"></span><div class="logyq-celebration-edit"><select data-category><option value="yay">Yay</option><option value="applause">Applause</option><option value="big_cheer">Big cheer</option><option value="warm">Warm</option><option value="funny">Funny</option></select><select data-difficulty><option value="any">Any level</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="vicious">Vicious</option></select><select data-intensity><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div></div><div class="logyq-celebration-actions"><button type="button" data-play>▶ Play</button><button type="button" data-save>Save</button><button type="button" data-default>Use this</button><button type="button" data-delete>Delete</button></div>`
+      row.innerHTML=`<div><strong></strong><span class="logyq-celebration-tags"></span><div class="logyq-celebration-edit"><select data-category><option value="unclassified">Unclassified</option><option value="yay">Yay</option><option value="applause">Applause</option><option value="big_cheer">Big cheer</option><option value="warm">Warm</option><option value="funny">Funny</option></select><select data-difficulty><option value="any">Any level</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option><option value="vicious">Vicious</option></select><select data-intensity><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div></div><div class="logyq-celebration-actions"><button type="button" data-play>▶ Play</button><button type="button" data-save>Save</button><button type="button" data-default>Use this</button><button type="button" data-delete>Delete</button></div>`
       row.querySelector('strong').textContent=s.name
       row.querySelector('.logyq-celebration-tags').textContent=`${s.category.replace('_',' ')} · intensity ${s.intensity} · ${s.difficulty}`
       row.querySelector('[data-category]').value=s.category
@@ -155,7 +155,13 @@
       const res=await fetch(API,{method:'POST',headers:{'x-review-pin':p},body:form})
       const body=await res.json().catch(()=>({}))
       if(res.status===401){try{localStorage.removeItem(PIN_KEY)}catch{};status.textContent='Wrong Lab PIN.';return}
-      if(!res.ok){status.textContent=body.error||'Upload failed.';return}
+      if(!res.ok){
+        const detail = typeof body?.error === 'string' ? body.error :
+          body?.error?.message ? body.error.message :
+          (() => { try { return JSON.stringify(body?.error || body) } catch { return 'Upload failed.' } })()
+        status.textContent = detail || 'Upload failed.'
+        return
+      }
       done++
     }
     status.textContent=`Uploaded ${done} file${done===1?'':'s'}.`;input.value='';loaded=false;await load(true)
