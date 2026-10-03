@@ -206,3 +206,15 @@ test('repaired Library wall is visually grounded to the lower arrival court',()=
  assert.equal(env.includes('Library stair-side foundation'),true)
  assert.equal(env.includes("k.box(8,FLOOR-.60,26,.50,1.20,4,'travertine'"),true)
 })
+
+
+test('ocean-edge reference railing has connected posts and a broad forearm-rest cap',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ assert.equal(env.includes('const oceanReferenceRail='),true)
+ assert.equal(env.includes('capH=.09,capW=.16,post=.055'),true)
+ assert.equal(env.includes('postTop=capY-capH/2'),true)
+ assert.equal(env.includes('postH=postTop-.06'),true)
+ assert.equal(env.includes("k.box(0,capY,0,capW,capH,d,'bronze'"),true)
+ assert.equal(env.includes("k.box(0,.61,0,.04,1.08,Math.max(.01,d-.12),'glass'"),true)
+ assert.equal(env.includes("for(const [a,b] of [[v(-23,FLOOR,-24),v(-15,FLOOR,-24)],[v(16,FLOOR,-24),v(27,FLOOR,-24)]])oceanReferenceRail(a,b)"),true)
+})
