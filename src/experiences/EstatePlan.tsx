@@ -267,16 +267,17 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           {view==='site'&&<ellipse cx="0" cy="-7" rx="58" ry="61" fill="#e8ece1" stroke="#aeb6a7" strokeWidth=".35"/>}
           <rect x="-70" y="12" width="140" height="65" fill="#dceff2" opacity={view==='arrival'?.18:.72}/>
 
-          {viewFloors.map((f,i)=>{
-            const lower=f.name==='Arrival court'||f.name==='Arrival steps'
-            const opacity=view==='site'?.9:view==='arrival'?(lower?1:.16):(lower?.13:1)
-            if(f.name==='Arrival court')return <circle key={`floor-${i}`} cx="1" cy="-41" r="19" fill={floorColor[f.material]||'#e8e1d3'} opacity={opacity} stroke="#918d85" strokeWidth=".18"/>
-            return <rect key={`floor-${i}`} x={f.x1} y={-f.z2} width={f.x2-f.x1} height={f.z2-f.z1} rx=".08" fill={floorColor[f.material]||'#e8e1d3'} opacity={opacity} stroke="#a59e91" strokeWidth=".14"/>
+          {layers.surfaces&&estateSurfaces.map(s=>{
+            const lower=s.kind==='arrival'||s.kind==='steps'
+            const opacity=view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)
+            if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={surfaceFill[s.kind]} opacity={opacity} stroke="#8f897e" strokeWidth=".16"/>
+            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={surfaceFill[s.kind]} opacity={opacity} stroke="#9c9385" strokeWidth=".13"/>
           })}
-          <rect x="-10.9" y="24.2" width="22.8" height="11.8" rx=".18" fill="#8fcfd2" stroke="#4f9ca4" strokeWidth=".22"/>
-          <rect x="-20" y="-27" width="8" height="9" rx=".3" fill="#aab69a" stroke="#75856c" strokeWidth=".18"/>
-          <circle cx="1" cy="-41" r="4" fill="#92c8cb" stroke="#6f8e89" strokeWidth=".18"/>
-          <circle cx="1" cy="-41" r="3.45" fill="#b9e0e1" opacity=".75"/>
+
+          {layers.edges&&estateEdges.map(e=>{
+            const review=auditMode&&e.audit==='review'
+            return <line key={e.id} x1={e.a[0]} y1={-e.a[1]} x2={e.b[0]} y2={-e.b[1]} stroke={review?'#d62f45':edgeStroke[e.kind]} strokeWidth={review?.48:e.kind==='wall'?.34:.26} strokeDasharray={e.kind==='open'?'.55 .34':e.kind==='step'?'.28 .2':undefined} opacity={view==='arrival'?.82:.92}/>
+          })}
 
           {walls.map((w,i)=><rect key={`wall-${i}`} x={w.x1} y={-w.z2} width={Math.max(.12,w.x2-w.x1)} height={Math.max(.12,w.z2-w.z1)} fill="#403d38" opacity={view==='arrival'?.72:.9}/>)}
           {glass.map((w,i)=><rect key={`glass-${i}`} x={w.x1} y={-w.z2} width={Math.max(.11,w.x2-w.x1)} height={Math.max(.11,w.z2-w.z1)} fill="#5aa4b0" opacity=".88"/>)}
