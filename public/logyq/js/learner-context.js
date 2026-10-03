@@ -133,19 +133,13 @@
     return Number.isFinite(n) ? Math.round(n * 100) + '%' : '—'
   }
   function ensureUi() {
-    if (document.getElementById('logyq-tester-pill')) return
-    const pill = document.createElement('button')
-    pill.type = 'button'
-    pill.id = 'logyq-tester-pill'
-    pill.setAttribute('aria-haspopup', 'dialog')
-    document.body.appendChild(pill)
-
+    if (document.getElementById('logyq-tester-panel')) return
     const panel = document.createElement('div')
     panel.id = 'logyq-tester-panel'
     panel.hidden = true
     panel.innerHTML = `
       <section role="dialog" aria-modal="true" aria-labelledby="logyq-tester-title">
-        <header><h2 id="logyq-tester-title">Test learner</h2><button type="button" data-close aria-label="Close">×</button></header>
+        <div class="logyq-tester-head"><h2 id="logyq-tester-title">Test learner</h2><button type="button" data-close aria-label="Close">×</button></div>
         <div id="logyq-tester-summary"></div>
         <div class="logyq-tester-actions">
           <button type="button" data-new>New tester</button>
@@ -157,14 +151,12 @@
 
     const style = document.createElement('style')
     style.textContent = `
-      #logyq-tester-pill{position:fixed;z-index:4700;right:12px;top:max(68px,calc(env(safe-area-inset-top) + 58px));min-height:34px;padding:0 12px;border:1px solid #cbd5e1;border-radius:999px;background:rgba(255,255,255,.94);color:#334155;box-shadow:0 4px 14px rgba(15,23,42,.1);font:700 12px/1 system-ui}
-      body:not(.logyq-home) #logyq-tester-pill{display:none}
       #logyq-tester-panel{position:fixed;inset:0;z-index:7000;display:grid;place-items:center;padding:18px;background:rgba(15,23,42,.35);backdrop-filter:blur(8px)}
       #logyq-tester-panel[hidden]{display:none!important}
       #logyq-tester-panel>section{box-sizing:border-box;width:min(390px,100%);max-height:calc(100dvh - 36px);overflow:auto;padding:18px;border-radius:22px;background:#fff;color:#0f172a;box-shadow:0 24px 70px rgba(15,23,42,.28);font:14px/1.35 system-ui}
-      #logyq-tester-panel header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+      #logyq-tester-panel .logyq-tester-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
       #logyq-tester-panel h2{margin:0;font-size:21px}
-      #logyq-tester-panel header button{width:38px;height:38px;border:0;border-radius:11px;background:#f1f5f9;font-size:24px}
+      #logyq-tester-panel .logyq-tester-head button{width:38px;height:38px;border:0;border-radius:11px;background:#f1f5f9;font-size:24px}
       #logyq-tester-summary{margin:14px 0;padding:13px;border-radius:15px;background:#f8fafc}
       #logyq-tester-summary strong{font-size:18px}.logyq-tester-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}.logyq-tester-metrics span{display:grid;gap:2px;padding:8px;border-radius:11px;background:#fff;text-align:center}.logyq-tester-metrics b{font-size:15px}
       .logyq-tester-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.logyq-tester-actions button{min-height:44px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;font-weight:750}.logyq-tester-actions [data-new]{background:#0f172a;color:#fff;border-color:#0f172a}
@@ -172,23 +164,25 @@
     `
     document.head.appendChild(style)
 
-    pill.addEventListener('click', async () => {
-      panel.hidden = false
-      await refresh()
-      render()
-    })
     panel.addEventListener('click', (event) => {
       if (event.target === panel || event.target.closest('[data-close]')) panel.hidden = true
     })
     panel.querySelector('[data-new]')?.addEventListener('click', () => createNew().catch(error => alert(error.message)))
     panel.querySelector('[data-reset]')?.addEventListener('click', () => resetCurrent().catch(error => alert(error.message)))
   }
+  async function open() {
+    ensureUi()
+    const panel = document.getElementById('logyq-tester-panel')
+    if (!panel) return
+    panel.hidden = false
+    await refresh()
+    render()
+  }
+
   function render() {
     ensureUi()
-    const pill = document.getElementById('logyq-tester-pill')
     const summary = document.getElementById('logyq-tester-summary')
     const recent = document.getElementById('logyq-tester-recent')
-    if (pill) pill.textContent = learner ? `Tester ${learner.lab_number} · ${gradeLabel()}` : 'Start tester'
     if (summary) {
       if (!learner) {
         summary.innerHTML = '<strong>No tester yet</strong><p>Start a fresh synthetic learner before handing the phone to a child.</p>'
@@ -227,6 +221,7 @@
     refresh,
     createNew,
     resetCurrent,
+    open,
     recordGame,
     recordCurriculum,
   })
