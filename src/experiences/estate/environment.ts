@@ -61,7 +61,7 @@ export function architecture(k:EstateKit){
   const RAIL_BASE=.115,RAIL_EDGE_GAP=RAIL_BASE/2,RAIL_EDGE_INSET=RAIL_BASE,RAIL_POST=.065,RAIL_CAP_OVERHANG=RAIL_POST
   const estateRailPath=(points:T.Vector3[],opts:{height?:number;glass?:boolean;curb?:boolean}={})=>{
     const height=opts.height??1.235,capH=.09,capW=.16,post=RAIL_POST,base=RAIL_BASE,glass=opts.glass!==false,curb=opts.curb===true
-    const floorLift=curb?.14:0,capY=floorLift+height,postTop=capY-capH/2,postH=postTop-(floorLift+.055)
+    const floorLift=curb ? .14 : 0,capY=floorLift+height,postTop=capY-capH/2,postH=postTop-(floorLift+.055)
     const placePost=(p:T.Vector3)=>{
       k.box(p.x,FLOOR+floorLift+.055+postH/2,p.z,post,postH,post,'bronze',k.root,.012)
       k.box(p.x,FLOOR+floorLift+.018,p.z,base,.036,base,'bronze',k.root,.012)
