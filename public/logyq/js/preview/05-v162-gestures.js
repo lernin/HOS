@@ -1047,9 +1047,11 @@
 
   function movePreview(drag, x, y) {
     if (!drag?.preview) return
+    const doc = drag.preview.ownerDocument
+    const point = gameThumbPoint(doc, drag, x, y)
     const offset = fingerOffset()
-    const dx = (x - drag.x) + offset.x
-    const dy = (y - drag.y) + offset.y
+    const dx = (point.x - drag.x) + offset.x
+    const dy = (point.y - drag.y) + offset.y
     drag.preview.style.transform = `translate3d(${dx}px,${dy}px,0)`
   }
 
@@ -1276,9 +1278,19 @@
     return { x: C.OFFSET_SIDE_CM * C.PX_PER_CM, y: -D }
   }
 
-  function visualPoint(x, y) {
+  function gameThumbPoint(doc, drag, x, y) {
+    if (!gamePlay(doc) || !drag) return { x, y }
+    const gain = Number(doc.defaultView?.LOGYQGameThumbGain?.value?.()) || 1
+    return {
+      x: drag.x + (x - drag.x) * gain,
+      y: drag.y + (y - drag.y) * gain,
+    }
+  }
+
+  function visualPoint(x, y, doc = null, drag = null) {
+    const point = gameThumbPoint(doc, drag, x, y)
     const offset = fingerOffset()
-    return { x: x + offset.x, y: y + offset.y }
+    return { x: point.x + offset.x, y: point.y + offset.y }
   }
 
   function fingerMovedFromLatch(drag, x, y) {
@@ -1329,14 +1341,14 @@
     const win = doc.defaultView
     const svg = doc.getElementById('canvas')
     const ghost = previewCardCenter(drag)
-    if (!ghost || !drag?.grabGraph || !drag?.nodeGraph) return visualPoint(x, y)
+    if (!ghost || !drag?.grabGraph || !drag?.nodeGraph) return visualPoint(x, y, doc, drag)
     const ghostGraph = clientToGraph(svg, win, ghost.x, ghost.y)
-    if (!ghostGraph) return visualPoint(x, y)
+    if (!ghostGraph) return visualPoint(x, y, doc, drag)
     const pointerGraph = {
       x: ghostGraph.x - drag.nodeGraph.x + drag.grabGraph.x,
       y: ghostGraph.y - drag.nodeGraph.y + drag.grabGraph.y,
     }
-    return graphToClient(svg, win, pointerGraph.x, pointerGraph.y) || visualPoint(x, y)
+    return graphToClient(svg, win, pointerGraph.x, pointerGraph.y) || visualPoint(x, y, doc, drag)
   }
 
   function activeDockKind(doc, drag, x, y) {
