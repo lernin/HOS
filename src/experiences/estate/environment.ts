@@ -2,6 +2,7 @@ import * as T from 'three'
 import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR } from './plan'
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
+import { architecturalPlanters, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
 export function architecture(k:EstateKit){
   for(const f of floors){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
@@ -55,7 +56,7 @@ export function architecture(k:EstateKit){
   // Deep terrace edge and concealed waterline conceal intersections with cliffs.
   for(const x of [-15.1,16.1])k.box(x,FLOOR-1.7,-29.2,.35,3.4,13.8,'travertine')
   k.box(.5,FLOOR-1.54,-36.1,23.4,2.8,.25,'travertine')
-  k.box(.5,FLOOR-1.5,-30.2,23,0.2,12,'waterTile')
+  k.box((poolWater.x1+poolWater.x2)/2,FLOOR-1.5,(poolWater.z1+poolWater.z2)/2,poolWater.x2-poolWater.x1,.2,poolWater.z2-poolWater.z1,'waterTile')
   for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
   // Unified Estate railing system. Geometry is shared with Estate Plan so the 2D plan and 3D world stay aligned.
   const estateRailPath=(points:T.Vector3[],opts:{height?:number;glass?:boolean;curb?:boolean}={})=>{
@@ -101,7 +102,7 @@ export function landscape(k:EstateKit){
   function rock(x:number,y:number,z:number,sx:number,sy:number,sz:number,seed:number,mat?:string){const g=k.rockGeometry(seed),p=g.attributes.position;for(let i=0;i<p.count;i++){const yy=p.getY(i);p.setY(i,Math.round(yy*7)/7*.5+yy*.5)}g.computeVertexNormals();const m=k.mesh(g,mat??(seed%3===0?'basalt':'concrete'),x,y,z);m.scale.set(sx,sy,sz);m.rotation.set(.1,seed,seed*.04)}
   for(let i=0;i<150;i++){const a=i/150*Math.PI*2,r=.9+rand()*.09,x=Math.cos(a)*58*r,z=coastZ(a,r);rock(x,(Math.abs(x)<22&&z<0?-3.8:-.8)+rand(),z,2+rand()*3,1.5+rand()*3,2+rand()*3,i+24)}
   // Courtyard garden, raised beds and water rill.
-  b(-16,FLOOR+.17,22.5,8,.34,9,'travertine',k.root,.12);b(-16,FLOOR+.35,22.5,7.65,.03,8.65,'soil')
+  b((courtyardPlanting.x1+courtyardPlanting.x2)/2,FLOOR+.17,(courtyardPlanting.z1+courtyardPlanting.z2)/2,courtyardPlanting.x2-courtyardPlanting.x1,.34,courtyardPlanting.z2-courtyardPlanting.z1,'travertine',k.root,.12);b((courtyardPlanting.x1+courtyardPlanting.x2)/2,FLOOR+.35,(courtyardPlanting.z1+courtyardPlanting.z2)/2,courtyardPlanting.x2-courtyardPlanting.x1-.35,.03,courtyardPlanting.z2-courtyardPlanting.z1-.35,'soil')
   k.lathe([[0,0],[1.5,0],[1.5,.38],[1.3,.5],[1.12,.38],[0,.28]],'travertine',-15.6,FLOOR+.37,25)
   k.cylinder(-15.6,FLOOR+.71,25,1.18,.025,'waterTile')
   k.lathe([[.55,0],[.6,.1],[.25,.7],[.22,.95],[.65,1.02],[.68,1.1],[.15,1.15]],'bronze',-15.6,FLOOR+.6,25)
@@ -140,19 +141,19 @@ export function landscape(k:EstateKit){
   }
   function grasses(x:number,y:number,z:number,s=1){const g=k.group(x,y,z,rand()*6.28);g.scale.setScalar(s);for(let i=0;i<9;i++){const a=i*2.4,h=.45+rand()*.55,dx=Math.cos(a)*.4,dz=Math.sin(a)*.4;const p=[0,0,0,dx*.3-.03,h*.55,dz*.3,dx,h,dz,dx*.3+.03,h*.5,dz*.3];const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(p,3));geom.setIndex([0,1,2,0,2,3,2,1,0,3,2,0]);geom.computeVertexNormals();k.mesh(geom,i%2?'leaf':'leafLight',0,0,0,g)}}
   // Foyer garden planting: deliberate ornamental beds replace the ambiguous grassy voids beside the Grand Foyer.
-  for(const [cx,cz,rx,rz] of [[-8.5,11,1.9,2.35],[10.5,11.5,1.8,2.75]]){
+  for(const {cx,cz,rx,rz} of foyerGardenBeds){
     b(cx,FLOOR-.16,cz,rx*2+.42,.18,rz*2+.42,'soil',k.root,.12)
     for(let i=0;i<24;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand())*.88,x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r;grasses(x,FLOOR-.04,z,.38+rand()*.42);if(i%3===0){k.cylinder(x,FLOOR+.18,z,.015,.44,'leafDark',k.root,.012,6);k.ellipsoid(x,FLOOR+.43,z,.105,.07,.105,i%2?'pink':'white',k.root,8);k.ellipsoid(x,FLOOR+.45,z,.035,.025,.035,'gold',k.root,8)}}
   }
   // Arrival garden pockets replace ambiguous green dead zones with deliberate flowers and grasses.
   for(const [cx,cz,rx,rz] of [[-21,40,3.1,4.8],[22.5,46.5,2.4,2.7]])for(let i=0;i<28;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r,y=terrainHeight(x,z,.68)+.05;grasses(x,y,z,.42+rand()*.38);if(i%2===0){k.cylinder(x,y+.22,z,.018,.42,'leafDark',k.root,.014,6);k.ellipsoid(x,y+.48,z,.12,.085,.12,'pink',k.root,8)}}
-  tree(-17.6,FLOOR+.37,20.8,1.05,4);tree(-29,5.2,30,1.1,3);tree(46,4,-7,1.25,1);tree(-30,5.1,-25,1.5,8);tree(18,4.7,43,1.2,9)
-  for(const [x,z,s] of [[-8,28,4.2],[10,28,4.7],[-21,-21,4],[25,-22,4.8],[-34,41,4.5],[44,21,4.2]])palm(x,Math.min(FLOOR,terrainHeight(x,z,.65)),z,s,x)
+  for(const t of featureTrees)tree(t.x,t.y,t.z,t.size,t.seed)
+  for(const p of featurePalms)palm(p.x,Math.min(FLOOR,terrainHeight(p.x,p.z,.65)),p.z,p.size,p.x)
   for(let i=0;i<42;i++){const a=i/42*Math.PI*2,r=.75+rand()*.06,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,2)||(x>42&&z<-12)||(Math.abs(x)<21&&z<-25))continue;if(i%4===0)tree(x,terrainHeight(x,z,r),z,.75+rand()*.45,i);else palm(x,terrainHeight(x,z,r),z,3.5+rand()*2,i)}
   for(let i=0;i<210;i++){const a=rand()*Math.PI*2,r=.7+rand()*.18,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,.5))continue;grasses(x,terrainHeight(x,z,r)+.05,z,1+rand());if(i%6===0)rock(x,terrainHeight(x,z,r),z,.7,.5,.65,i)}
   for(let i=0;i<32;i++){const x=-19.5+rand()*6.8,z=18.5+rand()*8;if(Math.hypot(x+15.6,z-25)>1.8)grasses(x,FLOOR+.4,z,.55+rand()*.6)}
   // Pots have modeled lips and soil; crowns use the same coherent frond language.
-  for(const [x,z]of [[-9,-10],[11,-10],[-9,6],[11,6],[25,-10],[38,0],[9,26],[-22,12],[-34,-3],[-27,27],[42,-12],[42,12],[-7,22]]){
+  for(const [x,z] of architecturalPlanters){
     k.lathe([[.3,0],[.4,.06],[.49,.78],[.52,.82],[.49,.89],[.44,.88],[.42,.77]],'ceramic',x,FLOOR,z);k.cylinder(x,FLOOR+.79,z,.43,.03,'soil');const g=k.group(x,FLOOR+.85,z,x);for(let i=0;i<7;i++)frond(g,i*6.28/7,1.2)
   }
   // Garden lanterns: emissive diffusers, no costly point lights per fixture.
