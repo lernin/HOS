@@ -100,7 +100,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const [auditMode,setAuditMode]=useState(false)
   const [selectedRail,setSelectedRail]=useState<string|null>(null)
   const [selectedSurface,setSelectedSurface]=useState<string|null>(null)
-  const [layers,setLayers]=useState({reality:true,surfaces:true,edges:true,labels:true,furniture:true,railings:true,markups:true})
+  const [layers,setLayers]=useState({reality:true,surfaces:false,edges:false,labels:false,furniture:false,railings:false,markups:true})
   const [status,setStatus]=useState('')
   const [last3DView]=useState<Last3DView|null>(readLast3DView)
 
@@ -288,11 +288,11 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         <g transform="rotate(180)">
           {!layers.reality&&<><rect x="-90" y="-90" width="180" height="180" fill="#dceff2" opacity={view==='arrival'?.18:.78}/><polygon points={coastline.map(([x,z])=>`${x},${-z}`).join(' ')} fill="#e8e5d9" stroke="#aaa99e" strokeWidth=".22" opacity={view==='arrival'?.34:.96}/></>}
 
-          {layers.surfaces&&estateSurfaces.map(s=>{
-            const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id
-            const opacity=layers.reality?(view==='arrival'?(lower?.26:.07):.12):(view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1))
-            if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={surfaceFill[s.kind]} opacity={opacity} stroke="#8f897e" strokeWidth=".16"/>
-            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={surfaceFill[s.kind]} opacity={opacity} stroke={selected?'#175f91':patio?'transparent':'#9c9385'} strokeWidth={selected?.5:patio?0:.13} pointerEvents={patio&&tool==='pan'?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRail(null)}:undefined}/>
+          {estateSurfaces.map(s=>{
+            const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id,show=layers.surfaces&&!layers.reality
+            const opacity=show?(view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)):0
+            if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={show?surfaceFill[s.kind]:'transparent'} opacity={opacity} stroke={show?'#8f897e':'transparent'} strokeWidth=".16" pointerEvents="none"/>
+            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={show?surfaceFill[s.kind]:'transparent'} opacity={show?opacity:1} stroke={selected?'#175f91':show&&!patio?'#9c9385':'transparent'} strokeWidth={selected?.5:show&&!patio?.13:0} pointerEvents={patio&&tool==='pan'?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRail(null)}:undefined}/>
           })}
 
           {layers.edges&&estateEdges.map(e=>{
@@ -371,12 +371,20 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     </section>
 
     {!clean&&<aside className={`ep-layer-panel${layersOpen?' open':''}`}>
-      <button className={`ep-audit-toggle${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>
+      <button className={`ep-audit-toggle${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,edges:true,railings:true}))}}>
         <span>Edge audit</span><b>{auditCount}</b>
       </button>
       <strong>Layers</strong>
-      {Object.entries(layers).map(([key,value])=><label key={key}><input type="checkbox" checked={value} onChange={()=>setLayers(x=>({...x,[key]:!x[key as keyof typeof x]}))}/>{key}</label>)}
-      <div className="ep-mini-legend"><i className="deck"/>patio/deck · exact 3D slab <i className="open"/>open edge <i className="rail"/>railing</div>
+      {([
+        ['reality','3D reality'],
+        ['surfaces','Reference zones'],
+        ['edges','Audit edges'],
+        ['labels','Reference labels'],
+        ['furniture','2D furniture'],
+        ['railings','Railing IDs'],
+        ['markups','Markups'],
+      ] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={layers[key]} onChange={()=>setLayers(x=>({...x,[key]:!x[key]}))}/>{label}</label>)}
+      <div className="ep-mini-legend"><i className="deck"/>3D reality = source of truth <i className="open"/>audit edge overlay <i className="rail"/>railing ID overlay</div>
     </aside>}
 
     {!clean&&<footer className="ep-tools">
@@ -387,14 +395,14 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         {(Object.keys(categoryMeta) as Category[]).map(k=><option key={k} value={k}>{categoryMeta[k].label}</option>)}
       </select>
       <div className="ep-history"><button onClick={undo} disabled={!marks.length} aria-label="Undo">↶</button><button onClick={redoOne} disabled={!redo.length} aria-label="Redo">↷</button></div>
-      <button className={`ep-more ep-audit-action${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>Audit {auditCount}</button>
+      <button className={`ep-more ep-audit-action${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,edges:true,railings:true}))}}>Audit {auditCount}</button>
       <button className="ep-more ep-marks-action" onClick={()=>setNotesOpen(true)}>Marks {marks.length}</button>
       <button className="ep-more ep-clean-action" onClick={()=>setClean(true)}>Clean</button>
       <button className="ep-more ep-export-action" onClick={exportPng}>Export</button>
     </footer>}
 
     {!clean&&<nav className="ep-landscape-utils" aria-label="Plan utilities">
-      <button className={auditMode?'active':''} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}} aria-label="Toggle edge audit"><span>◎</span><em>Audit</em><b>{auditCount}</b></button>
+      <button className={auditMode?'active':''} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,edges:true,railings:true}))}} aria-label="Toggle edge audit"><span>◎</span><em>Audit</em><b>{auditCount}</b></button>
       <button className={layersOpen?'active':''} onClick={()=>setLayersOpen(v=>!v)} aria-label="Toggle layers"><span>☷</span><em>Layers</em></button>
       <button onClick={()=>setNotesOpen(true)} aria-label="Open marks"><span>◇</span><em>Marks</em>{marks.length>0&&<b>{marks.length}</b>}</button>
       <button onClick={()=>zoom(.82)} aria-label="Zoom in"><span>＋</span><em>Zoom</em></button>
