@@ -77,7 +77,7 @@ try{
     assert.ok(Math.hypot(pinched.x-470,pinched.y-230)<1,'pinch preserves the world anchor while moving its midpoint')
     await cdp.detach()
     await page.getByRole('button',{name:'Fit plan',exact:true}).click()
-    const house=[[-41,29],[44,-24],[-11,-60],[12,-60],[39,53]]
+    const house=[[-47,44],[50,-24],[-15,-70],[16,-70],[50,55]]
     await includes(house)
     await page.setViewportSize({width:412,height:915})
     await page.locator('.ep-zoom').getByRole('button',{name:'Fit',exact:true}).click()

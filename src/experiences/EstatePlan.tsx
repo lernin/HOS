@@ -443,7 +443,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       <button onClick={()=>setClean(true)} aria-label="Clean view"><span>□</span><em>Clean</em></button>
     </nav>}
 
-    {!clean&&marks.length===0&&!selectedRailData&&!selectedSurfaceData&&!selectedRealitySurface&&<div className="ep-hint">Patios <strong>P1–P7</strong> are exact 3D slabs. Tap one to inspect it; use <strong>Area</strong> to propose an extension.</div>}
+    {!clean&&marks.length===0&&!selectedRailData&&!selectedSurfaceData&&!selectedRealitySurface&&<div className="ep-hint">Patios <strong>P1–P16</strong> are exact 3D slabs. Tap one to inspect it; use <strong>Area</strong> to propose an extension.</div>}
     {!clean&&selectedRailData&&<div className="ep-selection-card">
       <b>{selectedRailData.code}</b>
       <span><strong>{selectedRailData.label}</strong><small>{selectedRailData.family==='guard'?'Full-height guard rail':'Low garden rail'}{selectedRailData.audit==='review'?' · review candidate':''}</small></span>

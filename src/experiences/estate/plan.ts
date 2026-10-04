@@ -1,9 +1,9 @@
-import { spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
+import { spaTreeBed, poolWalkNorth, poolWalkSouth, outdoorPatios, outdoorStairs, type StairFlight } from './site-layout'
 import { estateRailings } from './railings'
 export type Point = { x: number; z: number }
 export type Rect = { x1: number; x2: number; z1: number; z2: number }
 export type FloorUse = 'interior' | 'patio' | 'covered-exterior' | 'arrival' | 'steps'
-export type Floor = Rect & { name: string; material: string; roof?: number; level?: number; use: FloorUse; planCode?: string }
+export type Floor = Rect & { name: string; material: string; roof?: number; level?: number; use: FloorUse; planCode?: string; stair?: StairFlight }
 export type Wall = Rect & { height: number; material: string }
 export const FLOOR = 6
 export const EYE = 1.65
@@ -37,8 +37,10 @@ export const floors: Floor[] = [
   { name: 'Garden gallery', x1: 24, x2: 27, z1: 31, z2: 49, material: 'limestone', roof: 3.3, use: 'covered-exterior', planCode: 'C1' },
   { name: 'Garage', x1: 27, x2: 40, z1: 40, z2: 51, material: 'concrete', roof: 3.3, use: 'interior' },
   { name: 'Arrival steps', x1: -5, x2: 7, z1: 24, z2: 31, material: 'travertine', use: 'steps' },
-  { name: 'Arrival court', x1: -18, x2: 20, z1: 22, z2: 60, material: 'basalt', level: 4.8, use: 'arrival' },
+  { name: 'Arrival court', x1: -18, x2: 20, z1: 22, z2: 60, material: 'cobblestone', level: 4.8, use: 'arrival' },
   { name: 'Garden path', x1: -31, x2: -22, z1: 33, z2: 43, material: 'travertine', use: 'patio', planCode: 'P7' },
+  ...outdoorPatios.map(f=>({...f,material:'travertine',use:'patio' as const})),
+  ...outdoorStairs.map(stair=>({...stair,stair,material:'travertine',use:'steps' as const})),
 ]
 export const walls: Wall[] = []
 export const lintels: (Wall & {base:number})[] = []
@@ -96,7 +98,7 @@ export const glass: Wall[] = [
   {x1:-39.08,x2:-38.98,z1:14,z2:22,height:3.1,material:'glass'},
   {x1:-39.08,x2:-38.98,z1:26,z2:35,height:3.1,material:'glass'},
 ]
-export type Furnishing = { kind:string; x:number; z:number; angle?:number; tone?:string; scale?:number }
+export type Furnishing = { kind:string; x:number; z:number; angle?:number; tone?:string; scale?:number; level?:number }
 export const furnishings:Furnishing[] = [
   {kind:'sofa',x:-2,z:-5,angle:Math.PI},{kind:'sofa',x:-2,z:.6},{kind:'lounge',x:-6,z:-2.4,angle:-Math.PI/2},{kind:'lounge',x:2.3,z:-2.1,angle:Math.PI/2},
   {kind:'coffee',x:-2,z:-2.3},{kind:'piano',x:8.9,z:-6.7,angle:-.5},
@@ -116,6 +118,8 @@ export const furnishings:Furnishing[] = [
   {kind:'sofa',x:-18,z:-17,angle:-Math.PI/2},{kind:'sofa',x:-14.5,z:-20,angle:Math.PI},{kind:'fire',x:-15,z:-17},
   {kind:'outdoorDining',x:21,z:-17.5},
   {kind:'lounger',x:-13,z:-28},{kind:'lounger',x:14,z:-28},
+  ...[-8,-4,5,9].map(x=>({kind:'lounge',x,z:-67,level:5.2,tone:'linen'})),
+  ...[-6,7].map(x=>({kind:'sideTable',x,z:-67,level:5.2})),
   {kind:'lounge',x:32,z:-19,angle:2.5},{kind:'lounge',x:36,z:-19,angle:-2.5},{kind:'fire',x:34,z:-17,scale:.7},
 ]
 const sizes:Record<string,[number,number]>={sofa:[3.5,1.18],lounge:[1.12,1.18],coffee:[1.9,1.35],piano:[2,2.5],dining:[3.5,6.2],island:[3.8,4.9],bed:[3.8,4.1],bath:[2.5,1.35],wardrobeIsland:[1.5,2.6],desk:[3.4,2.3],treadmill:[1.05,2.3],treatment:[1.5,2.7],fire:[2.2,1.3],outdoorDining:[3.4,5.5],lounger:[.95,2.2],sideTable:[.8,.8],floorLamp:[.7,.7],console:[3.7,.8]}
@@ -148,15 +152,22 @@ export const destinations=[
   {name:'Kitchen',x:-12.8,z:10.5,yaw:1.2},{name:'Primary suite',x:28,z:-8.5,yaw:-1.3},
   {name:'Spa',x:-28.5,z:30,yaw:1.4},{name:'Library',x:16,z:17,yaw:Math.PI},
   {name:'Guest suites',x:25.5,z:29.5,yaw:-1.4},{name:'Ocean lookout',x:30,z:-15,yaw:0},
+  {name:'West promenade',x:-43,z:20,yaw:0},{name:'East promenade',x:46,z:25,yaw:0},{name:'Pool-tip terrace',x:.5,z:-64,yaw:0},
 ]
 export function contains(r:Rect,p:Point,pad=0){return p.x>=r.x1-pad&&p.x<=r.x2+pad&&p.z>=r.z1-pad&&p.z<=r.z2+pad}
 function onCourt(p:Point){return Math.hypot(p.x-1,p.z-41)<=19}
-export function floorAt(p:Point):number|null {
-  const f=floors.find(r=>contains(r,p))
-  if(!f)return null
-  if(f.name==='Arrival court'&&!onCourt(p))return null
+function surfaceAt(p:Point):Floor|undefined {
+  // Flights take precedence over the court and lower terrace beneath them.
+  return floors.find(f=>f.stair&&contains(f,p))??floors.find(f=>contains(f,p)&&(f.name!=='Arrival court'||onCourt(p)))
+}
+export function floorHeight(f:Floor,p:Point):number {
+  if(f.stair){const s=f.stair,lo=s.axis==='x'?s.x1:s.z1,hi=s.axis==='x'?s.x2:s.z2,t=Math.max(0,Math.min(1,((s.axis==='x'?p.x:p.z)-lo)/(hi-lo)));return s.startLevel+(s.endLevel-s.startLevel)*t}
   if(f.name==='Arrival steps')return FLOOR-Math.max(0,Math.min(1,(p.z-24)/7))*1.2
   return f.level??FLOOR
+}
+export function floorAt(p:Point):number|null {
+  const f=surfaceAt(p)
+  return f?floorHeight(f,p):null
 }
 // First surface along the ray, using each floor's own height. A single y=FLOOR
 // plane snaps court taps through the ramp into the foyer.
@@ -174,6 +185,13 @@ export function resolveFloorRay(origin:{x:number;y:number;z:number},direction:{x
     bestT=t;best=p
   }
   for(const f of floors){
+    if(f.stair){
+      const s=f.stair,lo=s.axis==='x'?s.x1:s.z1,hi=s.axis==='x'?s.x2:s.z2,slope=(s.endLevel-s.startLevel)/(hi-lo),axisD=s.axis==='x'?dx:dz,axisOrigin=s.axis==='x'?origin.x:origin.z,denom=dy-axisD*slope
+      if(Math.abs(denom)<1e-6)continue
+      const t=(s.startLevel+(axisOrigin-lo)*slope-origin.y)/denom,p={x:origin.x+dx*t,z:origin.z+dz*t}
+      if(contains(f,p))take(t)
+      continue
+    }
     if(f.name==='Arrival steps'){
       const slope=1.2/7,denom=dy+dz*slope
       if(Math.abs(denom)<1e-6)continue
@@ -189,4 +207,4 @@ export function resolveFloorRay(origin:{x:number;y:number;z:number},direction:{x
   }
   return best
 }
-export function locationAt(p:Point){return floors.find(r=>contains(r,p))?.name||'Ocean Estate'}
+export function locationAt(p:Point){return surfaceAt(p)?.name||'Ocean Estate'}

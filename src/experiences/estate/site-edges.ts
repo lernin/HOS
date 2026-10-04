@@ -37,7 +37,7 @@ function surfaceKind(f:Floor):EstateSurfaceKind{
 }
 
 const floorSurfaces:EstateSurface[] = floors.map((f,i)=>{
-  const kind=surfaceKind(f),level=f.level??FLOOR,code=f.planCode??`S${i+1}`
+  const kind=surfaceKind(f),level=f.stair?Math.min(f.stair.startLevel,f.stair.endLevel):f.level??FLOOR,code=f.planCode??`S${i+1}`
   if(f.use==='arrival')return{id:`surface-floor-${i}`,code,label:f.name,kind,shape:'circle',x:1,z:41,r:19,level,source:'3d-floor'}
   return{id:`surface-floor-${i}`,code,label:f.name,kind,shape:'rect',x1:f.x1,x2:f.x2,z1:f.z1,z2:f.z2,level,source:'3d-floor'}
 })
@@ -54,7 +54,8 @@ export const patioSurfaces=estateSurfaces.filter(s=>s.kind==='deck'||s.kind==='c
 
 type RawEdge={a:EstateRailPoint;b:EstateRailPoint;kind:EstateEdgeKind}
 
-const mainFloors=floors.filter(f=>f.name!=='Arrival court'&&f.name!=='Arrival steps'&&(f.level??FLOOR)===FLOOR)
+// Audit the whole constructed circuit, including lower decks and stair flights.
+const mainFloors=floors.filter(f=>f.name!=='Arrival court'&&f.name!=='Arrival steps')
 const xs=[...new Set([
   ...mainFloors.flatMap(f=>[f.x1,f.x2]),
   ...walls.flatMap(r=>[r.x1,r.x2]),
@@ -89,6 +90,7 @@ const railNear=(a:EstateRailPoint,b:EstateRailPoint)=>{
 const kindAt=(a:EstateRailPoint,b:EstateRailPoint):EstateEdgeKind=>{
   const p={x:(a[0]+b[0])/2,z:(a[1]+b[1])/2}
   if(p.z>23.75&&p.z<24.25&&p.x>-5.2&&p.x<7.2)return'step'
+  if(floors.some(f=>f.stair&&nearRect(p,f,.01)&&((f.stair.axis==='x'&&(Math.abs(p.x-f.x1)<.01||Math.abs(p.x-f.x2)<.01))||(f.stair.axis==='z'&&(Math.abs(p.z-f.z1)<.01||Math.abs(p.z-f.z2)<.01)))))return'step'
   if(glass.some(r=>nearRect(p,r,.16)))return'glass'
   if(walls.some(r=>nearRect(p,r,.2)))return'wall'
   if(railNear(a,b))return'railing'

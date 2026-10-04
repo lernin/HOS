@@ -3,7 +3,7 @@ import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR 
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
 import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
-import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
+import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth, outdoorStairs } from './site-layout'
 import { slabWithOpening, buildSpaDome, buildSpaTreeBed } from './spa-dome'
 import { buildTreeStudy } from './tree-studies'
 export function architecture(k:EstateKit){
@@ -11,9 +11,21 @@ export function architecture(k:EstateKit){
   overhead.userData.estatePlanOccluder=true
   for(const [floorIndex,f] of floors.entries()){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
-    if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else{
+    const floorData={kind:'floor',id:`surface-floor-${floorIndex}`,code:f.planCode??null,name:f.name,use:f.use,x1:f.x1,x2:f.x2,z1:f.z1,z2:f.z2}
+    if(f.stair){
+      const st=f.stair,ascending=st.endLevel>st.startLevel,low=Math.min(st.startLevel,st.endLevel),rise=Math.abs(st.endLevel-st.startLevel),run=(st.axis==='x'?w:d)/st.risers
+      for(let i=0;i<st.risers;i++){
+        const rank=ascending?i+1:st.risers-i,top=low+rise*rank/st.risers,bottom=low-.4
+        const tread=k.box(st.axis==='x'?f.x1+run*(i+.5):x,(bottom+top)/2,st.axis==='z'?f.z1+run*(i+.5):z,st.axis==='x'?run:w,top-bottom,st.axis==='z'?run:d,'travertine')
+        tread.userData.estatePlan=floorData
+        // A quiet bronze reveal makes the broad stone treads legible in low light.
+        k.box(st.axis==='x'?f.x1+run*(ascending?i:i+1):x,top-.035,st.axis==='z'?f.z1+run*(ascending?i:i+1):z,st.axis==='x'?.015:w-.12,.015,st.axis==='z'?.015:d-.12,'bronze')
+      }
+      continue
+    }
+    if(f.name==='Arrival court'){const court=k.cylinder(1,y-.2,41,19,.4,f.material,k.root,19,96);court.userData.estatePlan=floorData}else{
       const slab=f.name==='Wellness & spa'?slabWithOpening(k,f,y-.2,.4,f.material,k.root,spaTreeBed):k.box(x,y-.2,z,w,.4,d,f.name==='Garden courtyard'?'courtyardPaving':f.material==='oak'?'oakFloor':f.material)
-      slab.userData.estatePlan={kind:'floor',id:`surface-floor-${floorIndex}`,code:f.planCode??null,name:f.name,use:f.use,x1:f.x1,x2:f.x2,z1:f.z1,z2:f.z2}
+      slab.userData.estatePlan=floorData
     }
     if((f.material==='limestone'||f.material==='travertine')&&f.name!=='Garden courtyard'){
       // Spa paving joints are split around the planted opening.
@@ -35,6 +47,14 @@ export function architecture(k:EstateKit){
       for(const a of [-1,1])k.box(x+a*(w/2-.32),y+f.roof-.05,z,.045,.025,d-.5,'glow',overhead)
     }
   }
+  // Stone piers carry the perimeter decks over the changing cliff edge.
+  // Their foundations reach below the ocean datum, rather than floating slabs.
+  for(const x of [-45,48])for(let z=-20;z<=52;z+=12){
+    if(x<0&&z>44)continue
+    k.box(x,1.7,z,.72,7.8,.72,'travertine',k.root,.06)
+    k.box(x,5.45,z,x<0?4:6,.65,.5,'travertine')
+  }
+  for(const x of [-13,14])for(const z of [-68,-62])k.box(x,1.3,z,.7,7,.7,'travertine',k.root,.045)
   buildSpaDome(k,overhead)
   for(const w of lintels)k.box((w.x1+w.x2)/2,FLOOR+w.base+w.height/2,(w.z1+w.z2)/2,w.x2-w.x1,w.height,w.z2-w.z1,w.material,overhead)
   for(const w of walls)k.box((w.x1+w.x2)/2,FLOOR+w.height/2,(w.z1+w.z2)/2,w.x2-w.x1,w.height,w.z2-w.z1,w.material)
@@ -86,27 +106,35 @@ export function architecture(k:EstateKit){
     const height=opts.height??1.235,capH=.09,capW=.16,post=RAIL_POST,base=RAIL_BASE,glass=opts.glass!==false,curb=opts.curb===true
     const floorLift=curb ? .14 : 0,capY=floorLift+height,postTop=capY-capH/2,postH=postTop-(floorLift+.055)
     const placePost=(p:T.Vector3)=>{
-      const key=`${postKey(p)},${height},${floorLift}`;if(placedPosts.has(key))return;placedPosts.add(key)
-      k.box(p.x,FLOOR+floorLift+.055+postH/2,p.z,post,postH,post,'bronze',k.root,.012)
-      k.box(p.x,FLOOR+floorLift+.018,p.z,base,.036,base,'bronze',k.root,.012)
+      const key=`${postKey(p)},${p.y.toFixed(4)},${height},${floorLift}`;if(placedPosts.has(key))return;placedPosts.add(key)
+      k.box(p.x,p.y+floorLift+.055+postH/2,p.z,post,postH,post,'bronze',k.root,.012)
+      k.box(p.x,p.y+floorLift+.018,p.z,base,.036,base,'bronze',k.root,.012)
     }
     const terminal=(from:T.Vector3,to:T.Vector3)=>{if((endpointCounts.get(postKey(from))??0)>1)return from.clone();const dir=to.clone().sub(from).normalize();return from.clone().addScaledVector(dir,RAIL_CAP_OVERHANG)}
     const firstPost=terminal(points[0],points[1]),lastPost=terminal(points[points.length-1],points[points.length-2]),cornerPosts=points.slice(1,-1)
     placePost(firstPost);for(const p of cornerPosts)placePost(p);placePost(lastPost)
     for(let s=0;s<points.length-1;s++){
-      const a=points[s],b=points[s+1],mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,FLOOR+floorLift,mid.z,Math.atan2(b.x-a.x,b.z-a.z))
+      const a=points[s],b=points[s+1],mid=a.clone().lerp(b,.5),d=a.distanceTo(b),g=k.group(mid.x,mid.y+floorLift,mid.z,Math.atan2(b.x-a.x,b.z-a.z))
+      if(Math.abs(a.y-b.y)>.001){
+        // Upright posts and a sloping glass panel follow the actual stair rise.
+        k.beam([v(a.x,a.y+capY,a.z),v(b.x,b.y+capY,b.z)],.06,'bronze')
+        const start=s===0?firstPost:a,end=s===points.length-2?lastPost:b,bays=Math.max(1,Math.ceil(start.distanceTo(end)/1.8)),gh=height-.155
+        if(glass){const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute([start.x,start.y+.055,start.z,end.x,end.y+.055,end.z,end.x,end.y+.055+gh,end.z,start.x,start.y+.055+gh,start.z],3));geo.setIndex([0,1,2,0,2,3,2,1,0,3,2,0]);geo.computeVertexNormals();k.mesh(geo,'glass')}
+        for(let i=1;i<bays;i++)placePost(start.clone().lerp(end,i/bays))
+        continue
+      }
       if(curb)k.box(0,.07-floorLift,0,.18,.14,d,'limestone',g,.035)
       k.box(0,height,0,capW,capH,d,'bronze',g,.018)
       const start=s===0?firstPost:a,end=s===points.length-2?lastPost:b,run=start.distanceTo(end),bays=Math.max(1,Math.ceil(run/1.8))
       if(glass){
-        const gm=start.clone().lerp(end,.5),gd=start.distanceTo(end),gg=k.group(gm.x,FLOOR+floorLift,gm.z,Math.atan2(end.x-start.x,end.z-start.z))
+        const gm=start.clone().lerp(end,.5),gd=start.distanceTo(end),gg=k.group(gm.x,gm.y+floorLift,gm.z,Math.atan2(end.x-start.x,end.z-start.z))
         const glassH=Math.max(.2,height-.155)
         k.box(0,.055+glassH/2,0,.04,glassH,Math.max(.01,gd-post*.7),'glass',gg)
       }
       for(let i=1;i<bays;i++){const p=start.clone().lerp(end,i/bays);placePost(p)}
     }
   }
-  for(const rail of estateRailings)estateRailPath(rail.points.map(([x,z])=>v(x,FLOOR,z)),rail)
+  for(const rail of estateRailings)estateRailPath(rail.points.map(([x,z],i)=>v(x,rail.levels?.[i]??rail.level??FLOOR,z)),rail)
 
   // Pergola over outdoor dining, secondary circulation remains open.
   for(const x of [17,25])for(const z of [-21.6,-13.2])k.box(x,FLOOR+1.7,z,.17,3.4,.17,'bronze')
@@ -118,7 +146,14 @@ export function landscape(k:EstateKit){
   // All scattered planting excludes the constructed footprint, including the
   // pool void. The perimeter moved during art direction; scatter must follow it.
   const unbuilt=(x:number,z:number,pad=1)=>!floors.some(f=>contains(f,{x,z},pad))&&!contains({x1:poolWater.x1-4,x2:poolWater.x2+4,z1:poolWater.z1-2,z2:poolWater.z2+1},{x,z},pad)
-  function terrainHeight(x:number,z:number,r:number){const arrival=Math.max(0,Math.min(1,(z-24)/9));return 5.5-arrival*1.05-Math.pow(Math.max(0,(r-.7)/.3),1.3)*8+Math.sin(x*.14)*Math.sin(z*.18)*.24}
+  function terrainHeight(x:number,z:number,r:number){
+    const arrival=Math.max(0,Math.min(1,(z-24)/9))
+    let height=5.5-arrival*1.05-Math.pow(Math.max(0,(r-.7)/.3),1.3)*8+Math.sin(x*.14)*Math.sin(z*.18)*.24
+    // Grade a buffer around the lower deck so coarse terrain triangles cannot
+    // interpolate back through its paving. Scattered planting uses this too.
+    for(const f of floors)if(f.level!==undefined&&contains(f,{x,z},4))height=Math.min(height,f.level-.45)
+    return height
+  }
   const verts:number[]=[],ids:number[]=[],segments=100,rings=20
   for(let j=0;j<=rings;j++)for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2,r=j/rings,edge=coastEdgeScale(a),x=Math.cos(a)*58*r*edge,z=coastZ(a,r)*edge;verts.push(x,terrainHeight(x,z,r),z)}
   for(let j=0;j<rings;j++)for(let i=0;i<segments;i++){const a=j*(segments+1)+i,c=a+segments+1;ids.push(a,a+1,c,a+1,c+1,c)}
@@ -140,6 +175,7 @@ export function landscape(k:EstateKit){
     if(Math.abs(Math.atan2(Math.sin(a+Math.PI/2),Math.cos(a+Math.PI/2)))<.44)continue
     const wobble=.18*Math.sin(i*2.37)+.07*Math.sin(i*.83),r=19.46+wobble
     const x=1+Math.cos(a)*r,z=41+Math.sin(a)*r
+    if(outdoorStairs.some(s=>contains(s,{x,z},1.2)))continue
     rock(x,4.48+((i%5)-2)*.025,z,.72+(i%5)*.095,.46+(i%4)*.07,.68+((i+2)%5)*.085,700+i,'charcoalRock')
     if(i%4===0){
       const aa=a+Math.PI/92,rr=19.72+.1*Math.sin(i*1.71)
@@ -170,7 +206,7 @@ export function landscape(k:EstateKit){
     for(let i=0;i<24;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand())*.88,x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r;grasses(x,FLOOR-.04,z,.38+rand()*.42);if(i%3===0){k.cylinder(x,FLOOR+.18,z,.015,.44,'leafDark',k.root,.012,6);k.ellipsoid(x,FLOOR+.43,z,.105,.07,.105,i%2?'pink':'white',k.root,8);k.ellipsoid(x,FLOOR+.45,z,.035,.025,.035,'gold',k.root,8)}}
   }
   // Arrival garden pockets replace ambiguous green dead zones with deliberate flowers and grasses.
-  for(const [cx,cz,rx,rz] of [[-21,40,3.1,4.8],[22.5,46.5,2.4,2.7]])for(let i=0;i<28;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r,y=terrainHeight(x,z,.68)+.05;grasses(x,y,z,.42+rand()*.38);if(i%2===0){k.cylinder(x,y+.22,z,.018,.42,'leafDark',k.root,.014,6);k.ellipsoid(x,y+.48,z,.12,.085,.12,'pink',k.root,8)}}
+  for(const [cx,cz,rx,rz] of [[-21,40,3.1,4.8],[22.5,46.5,2.4,2.7]])for(let i=0;i<28;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r,y=terrainHeight(x,z,.68)+.05;if(!unbuilt(x,z,.4))continue;grasses(x,y,z,.42+rand()*.38);if(i%2===0){k.cylinder(x,y+.22,z,.018,.42,'leafDark',k.root,.014,6);k.ellipsoid(x,y+.48,z,.12,.085,.12,'pink',k.root,8)}}
   for(const t of featureTrees){
     if(t.id==='tree-west-arrival')buildTreeStudy(k,{x:t.x,y:t.y,z:t.z,size:t.size,seed:t.seed,form:'airy'})
     else tree(t.x,t.y,t.z,t.size,t.seed)
@@ -198,7 +234,7 @@ export function contactShadows(scene:T.Scene){
   const tex=new T.DataTexture(data,size,size);tex.needsUpdate=true;tex.magFilter=T.LinearFilter;tex.minFilter=T.LinearFilter
   const mat=new T.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,toneMapped:false}),geo=new T.PlaneGeometry(1,1)
   const mesh=new T.InstancedMesh(geo,mat,furnishings.length),dummy=new T.Object3D()
-  furnishings.forEach((f,i)=>{const r=footprint(f);dummy.position.set(f.x,FLOOR+.047,f.z);dummy.rotation.x=-Math.PI/2;dummy.scale.set(r.x2-r.x1+.7,r.z2-r.z1+.7,1);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix)})
+  furnishings.forEach((f,i)=>{const r=footprint(f);dummy.position.set(f.x,(f.level??FLOOR)+.047,f.z);dummy.rotation.x=-Math.PI/2;dummy.scale.set(r.x2-r.x1+.7,r.z2-r.z1+.7,1);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix)})
   mesh.renderOrder=1;scene.add(mesh);return {dispose(){tex.dispose();mat.dispose();geo.dispose()}}
 }
 export function waters(scene:T.Scene){

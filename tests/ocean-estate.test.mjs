@@ -60,7 +60,7 @@ test('wanted rooms stay connected and ocean, cliffs, and blank garden patches st
  }
  const gallery={x:22,z:34};assert.ok(nav.walkable(gallery)&&navigator.path(plan.spawn,gallery),'gallery past the court lip')
  const lip=nav.moveSafely(gallery,-4,0);assert.ok(lip.x>20,'gallery railing blocks the drop into the court')
- for(const p of [{x:0,z:-40},{x:-20,z:-30},{x:48,z:0},{x:33,z:-26},{x:-21,z:40},{x:23,z:48},{x:10,z:12},{x:-9,z:10}])assert.equal(nav.walkable(p),false,'no-go '+JSON.stringify(p))
+ for(const p of [{x:0,z:-40},{x:-20,z:-30},{x:51,z:0},{x:33,z:-26},{x:-21,z:36},{x:23,z:45},{x:10,z:12},{x:-9,z:10}])assert.equal(nav.walkable(p),false,'no-go '+JSON.stringify(p))
 })
 test('material picker uses the active HOS catalog for every editable surface',()=>{
  const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
@@ -244,8 +244,8 @@ test('railing pedestal edge gap equals half the pedestal width',()=>{
  const pedestal=.115,gap=pedestal/2,centerInset=pedestal
  assert.equal(Number((centerInset-pedestal/2).toFixed(4)),Number(gap.toFixed(4)))
  const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
- assert.equal(rails.includes('p(-23+RAIL_EDGE_INSET,-17.08)'),true)
- assert.equal(rails.includes('p(44-RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET)'),true)
+ assert.equal(rails.includes('p(-47+RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET)'),true)
+ assert.equal(rails.includes('p(50-RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET)'),true)
  assert.equal(rails.includes('p(-22,33-RAIL_EDGE_INSET)'),true)
  assert.equal(rails.includes('p(20+RAIL_EDGE_INSET,31.1)'),true)
 })
@@ -405,9 +405,31 @@ test('Estate Plan floor selection raycasts the actual 3D slab mesh',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  const reality=readFileSync(new URL('../src/experiences/estate/plan-reality.ts',import.meta.url),'utf8')
  const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
- assert.equal(env.includes("slab.userData.estatePlan={kind:'floor'"),true)
+ assert.equal(env.includes("slab.userData.estatePlan=floorData"),true)
  assert.equal(reality.includes("raycaster.intersectObjects(scene.children,true)"),true)
  assert.equal(reality.includes("if(data?.kind==='floor')return data"),true)
  assert.equal(planner.includes("realityEngine.current?.pick(e.clientX,e.clientY)"),true)
  assert.equal(planner.includes("Picked from live 3D mesh"),true)
+})
+
+test('continuous outdoor circuit crosses both arrival stairs, both side patios and the pool-tip stairs',()=>{
+ const stops=[{x:-13,z:41.5},{x:-25,z:41.5},{x:-43,z:30},{x:-43,z:0},{x:-41,z:-20},{x:-13,z:-54},{x:-13,z:-66},{x:.5,z:-63},{x:14,z:-66},{x:14,z:-54},{x:47,z:-20},{x:46,z:25},{x:46,z:53},{x:25,z:53},{x:26,z:49},{x:13,z:49}]
+ let current=stops[0]
+ for(const target of [...stops.slice(1),stops[0]]){
+  assert.ok(nav.walkable(target),'outdoor stop '+JSON.stringify(target))
+  const route=navigator.path(current,target);assert.ok(route,'connected outdoor leg '+JSON.stringify([current,target]))
+  for(const next of route){assert.ok(nav.clearLine(current,next));const count=Math.ceil(Math.hypot(next.x-current.x,next.z-current.z)/.07),dx=(next.x-current.x)/count,dz=(next.z-current.z)/count;for(let i=0;i<count;i++)current=nav.moveSafely(current,dx,dz);assert.ok(Math.hypot(current.x-next.x,current.z-next.z)<.08,'actual movement reaches the waypoint')}
+ }
+})
+test('new stair elevations and floor ray targets join the paving without a drop',()=>{
+ const flights=[{a:{x:-15,z:41.5},b:{x:-22,z:41.5},low:4.8,high:6},{a:{x:15,z:49},b:{x:24,z:49},low:4.8,high:6},{a:{x:-13,z:-64},b:{x:-13,z:-60},low:5.2,high:6},{a:{x:14,z:-64},b:{x:14,z:-60},low:5.2,high:6}]
+ for(const f of flights){assert.ok(nav.clearLine(f.a,f.b),'direct climb stays clear');assert.ok(Math.abs(plan.floorAt(f.a)-f.low)<1e-6);assert.ok(Math.abs(plan.floorAt(f.b)-f.high)<1e-6);let previous=f.low;for(let i=1;i<=40;i++){const p={x:f.a.x+(f.b.x-f.a.x)*i/40,z:f.a.z+(f.b.z-f.a.z)*i/40},h=plan.floorAt(p);assert.ok(h!==null&&Math.abs(h-previous)<=.031);const hit=plan.resolveFloorRay({x:p.x,y:10,z:p.z},{x:0,y:-1,z:0});assert.ok(hit&&Math.hypot(hit.x-p.x,hit.z-p.z)<.001);previous=h}}
+ for(const p of [{x:-48,z:20},{x:51,z:20},{x:0,z:-71},{x:0,z:-58}])assert.equal(nav.walkable(p),false,'outer edge and water remain closed')
+})
+
+
+test('concave garden edges have guards while the outer promenade stays clear',()=>{
+ for(const p of [{x:-39.12,z:-10},{x:-37,z:-17.12},{x:40.12,z:15.5}])assert.equal(nav.walkable(p),false,'garden edge guard '+JSON.stringify(p))
+ assert.ok(nav.clearLine({x:-43,z:0},{x:-43,z:-20}),'west guard does not cut the promenade')
+ assert.ok(nav.clearLine({x:46,z:0},{x:46,z:25}),'east guard does not cut the promenade')
 })
