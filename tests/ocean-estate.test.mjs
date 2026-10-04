@@ -318,3 +318,44 @@ test('site audit uses live estate plan walls glass floors and shared railing geo
  assert.equal(site.includes("if(walls.some"),true)
  assert.equal(site.includes("if(railNear(a,b))return'railing'"),true)
 })
+
+
+test('bird-eye patios are exact shared 3D floor slabs, not inferred room names',()=>{
+ const plan=readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8')
+ const site=readFileSync(new URL('../src/experiences/estate/site-edges.ts',import.meta.url),'utf8')
+ assert.equal(plan.includes("export type FloorUse = 'interior' | 'patio' | 'covered-exterior' | 'arrival' | 'steps'"),true)
+ for(let i=1;i<=7;i++)assert.equal(plan.includes(`planCode: 'P${i}'`),true,`P${i} exact floor slab exists`)
+ assert.equal(plan.includes("name: 'Garden gallery'")&&plan.includes("use: 'covered-exterior', planCode: 'C1'"),true)
+ assert.equal(site.includes("if(f.use==='patio')return'deck'"),true)
+ assert.equal(site.includes("const kind=surfaceKind(f)"),true)
+ assert.equal(site.includes("code=f.planCode??"),true)
+})
+
+test('bird-eye pool and landmark planting share exact 3D geometry constants',()=>{
+ const layout=readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8')
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(layout.includes("x1: -11")&&layout.includes("x2: 12")&&layout.includes("z1: -36.2")&&layout.includes("z2: -24.2"),true)
+ assert.equal(env.includes("poolWater.x2-poolWater.x1"),true)
+ assert.equal(env.includes("for(const t of featureTrees)"),true)
+ assert.equal(env.includes("for(const p of featurePalms)"),true)
+ assert.equal(planner.includes("featureTrees.map"),true)
+ assert.equal(planner.includes("featurePalms.map"),true)
+ assert.equal(planner.includes("architecturalPlanters.map"),true)
+})
+
+test('bird-eye plan does not invent rectangular arrival garden surfaces',()=>{
+ const site=readFileSync(new URL('../src/experiences/estate/site-edges.ts',import.meta.url),'utf8')
+ assert.equal(site.includes("surface-arrival-garden-west"),false)
+ assert.equal(site.includes("surface-arrival-garden-east"),false)
+ assert.equal(site.includes("source:'3d-floor'"),true)
+ assert.equal(site.includes("source:'3d-fixture'"),true)
+})
+
+test('patios are selectable design objects with exact dimensions',()=>{
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(planner.includes("selectedSurfaceData=patioSurfaces.find"),true)
+ assert.equal(planner.includes("setSelectedSurface(s.id)"),true)
+ assert.equal(planner.includes("Exact 3D slab"),true)
+ assert.equal(planner.includes("patioSurfaces.filter"),true)
+})
