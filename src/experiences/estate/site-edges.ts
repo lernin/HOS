@@ -1,6 +1,7 @@
 import { FLOOR, floors, glass, walls } from './plan'
 import type { Floor, Rect } from './plan'
 import { estateRailings } from './railings'
+import { courtyardPlanting, foyerGardenBeds, poolWater } from './site-layout'
 import type { EstateRailPoint } from './railings'
 
 export type EstateSurfaceKind =
@@ -13,8 +14,8 @@ export type EstateSurfaceKind =
   | 'water'
 
 export type EstateSurface =
-  | { id:string; code:string; label:string; kind:EstateSurfaceKind; shape:'rect'; x1:number; x2:number; z1:number; z2:number; level:number }
-  | { id:string; code:string; label:string; kind:EstateSurfaceKind; shape:'circle'; x:number; z:number; r:number; level:number }
+  | { id:string; code:string; label:string; kind:EstateSurfaceKind; shape:'rect'; x1:number; x2:number; z1:number; z2:number; level:number; source:'3d-floor'|'3d-fixture' }
+  | { id:string; code:string; label:string; kind:EstateSurfaceKind; shape:'circle'; x:number; z:number; r:number; level:number; source:'3d-floor'|'3d-fixture' }
 
 export type EstateEdgeKind = 'wall' | 'glass' | 'railing' | 'step' | 'open'
 export type EstateEdge = {
@@ -27,36 +28,29 @@ export type EstateEdge = {
   audit: 'covered' | 'review'
 }
 
-const exteriorDeckNames = new Set([
-  'Ocean terrace','Pool walk','Garden courtyard','Sunrise terrace','Ocean lookout','Garden path',
-])
-const coveredExteriorNames = new Set(['Garden gallery'])
-
 function surfaceKind(f:Floor):EstateSurfaceKind{
-  if(f.name==='Arrival court')return'arrival'
-  if(f.name==='Arrival steps')return'steps'
-  if(exteriorDeckNames.has(f.name))return'deck'
-  if(coveredExteriorNames.has(f.name))return'covered-exterior'
+  if(f.use==='patio')return'deck'
+  if(f.use==='covered-exterior')return'covered-exterior'
+  if(f.use==='arrival')return'arrival'
+  if(f.use==='steps')return'steps'
   return'interior'
 }
 
 const floorSurfaces:EstateSurface[] = floors.map((f,i)=>{
-  const kind=surfaceKind(f),level=f.level??FLOOR
-  if(f.name==='Arrival court')return{id:`surface-floor-${i}`,code:`S${i+1}`,label:f.name,kind,shape:'circle',x:1,z:41,r:19,level}
-  return{id:`surface-floor-${i}`,code:`S${i+1}`,label:f.name,kind,shape:'rect',x1:f.x1,x2:f.x2,z1:f.z1,z2:f.z2,level}
+  const kind=surfaceKind(f),level=f.level??FLOOR,code=f.planCode??`S${i+1}`
+  if(f.use==='arrival')return{id:`surface-floor-${i}`,code,label:f.name,kind,shape:'circle',x:1,z:41,r:19,level,source:'3d-floor'}
+  return{id:`surface-floor-${i}`,code,label:f.name,kind,shape:'rect',x1:f.x1,x2:f.x2,z1:f.z1,z2:f.z2,level,source:'3d-floor'}
 })
 
 const extraSurfaces:EstateSurface[]=[
-  {id:'surface-pool',code:'S31',label:'Infinity pool',kind:'water',shape:'rect',x1:-10.9,x2:11.9,z1:-36,z2:-24.2,level:FLOOR-.08},
-  {id:'surface-courtyard-garden',code:'S32',label:'Courtyard planting',kind:'garden',shape:'rect',x1:-20,x2:-12,z1:18,z2:27,level:FLOOR+.02},
-  {id:'surface-foyer-garden-west',code:'S33',label:'Foyer garden west',kind:'garden',shape:'rect',x1:-10.61,x2:-6.39,z1:8.44,z2:13.56,level:FLOOR-.16},
-  {id:'surface-foyer-garden-east',code:'S34',label:'Foyer garden east',kind:'garden',shape:'rect',x1:8.49,x2:12.51,z1:8.54,z2:14.46,level:FLOOR-.16},
-  {id:'surface-arrival-garden-west',code:'S35',label:'Arrival garden west',kind:'garden',shape:'rect',x1:-24.1,x2:-17.9,z1:35.2,z2:44.8,level:FLOOR-.35},
-  {id:'surface-arrival-garden-east',code:'S36',label:'Arrival garden east',kind:'garden',shape:'rect',x1:20.1,x2:24.9,z1:43.8,z2:49.2,level:FLOOR-.35},
-  {id:'surface-arrival-fountain',code:'S37',label:'Arrival fountain',kind:'water',shape:'circle',x:1,z:41,r:3.45,level:4.86},
+  {id:'surface-pool',code:'W1',label:'Infinity pool',kind:'water',shape:'rect',...poolWater,level:FLOOR-.08,source:'3d-fixture'},
+  {id:'surface-courtyard-garden',code:'G1',label:'Courtyard planting',kind:'garden',shape:'rect',...courtyardPlanting,level:FLOOR+.02,source:'3d-fixture'},
+  ...foyerGardenBeds.map((g,i)=>({id:`surface-${g.id}`,code:`G${i+2}`,label:i===0?'Foyer garden west':'Foyer garden east',kind:'garden' as const,shape:'rect' as const,x1:g.cx-g.rx-.21,x2:g.cx+g.rx+.21,z1:g.cz-g.rz-.21,z2:g.cz+g.rz+.21,level:FLOOR-.16,source:'3d-fixture' as const})),
+  {id:'surface-arrival-fountain',code:'W2',label:'Arrival fountain',kind:'water',shape:'circle',x:1,z:41,r:3.45,level:5.08,source:'3d-fixture'},
 ]
 
 export const estateSurfaces:EstateSurface[]=[...floorSurfaces,...extraSurfaces]
+export const patioSurfaces=estateSurfaces.filter(s=>s.kind==='deck'||s.kind==='covered-exterior')
 
 type RawEdge={a:EstateRailPoint;b:EstateRailPoint;kind:EstateEdgeKind}
 
