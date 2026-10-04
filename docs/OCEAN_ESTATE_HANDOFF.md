@@ -44,3 +44,8 @@ Tap-to-walk samples each floor's own height along the view ray. Court and mid-st
 ## Next decisive step
 
 Review the corrected render artifacts and complete the automated phone UI gate, then open a separately authorized preview on Ashley's S23 Ultra. Walk entry → great room → pool → courtyard → kitchen → primary suite → entry, try drag/tap discrimination and Walk mode, pause/background/resume, and verify that speed, visibility and warmth feel comfortable. Keep any production merge/release separate from this acceptance.
+
+### Ground-truth Estate Plan preview — 2026-10-04
+- Patio slabs P1-P7 are the exact floor rectangles used by the 3D estate builder.
+- Pool, major landscape landmarks, and coastline now share geometry/constants with the 3D scene.
+- The planner no longer invents rectangular arrival-garden surfaces or a schematic straight ocean edge.
