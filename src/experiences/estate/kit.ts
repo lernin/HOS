@@ -5,6 +5,7 @@ import { random, pebbleGeometry } from '../village/kit'
 export { random }
 export const v=(x:number,y:number,z:number)=>new T.Vector3(x,y,z)
 const colors:Record<string,string>={limestone:'#d8cbb7',travertine:'#c9b69a',marble:'#e7e2d5',plaster:'#dfd9ca',oak:'#a58a63',oakFloor:'#a99a7e',walnut:'#644b36',bronze:'#5b4b37',basalt:'#3a4242',charcoalRock:'#5a6261',concrete:'#959488',linen:'#e5ddca',sage:'#8c9b86',clay:'#b19b86',indigo:'#465762',rug:'#b6a991',glass:'#c7e0dc',leaf:'#517352',leafLight:'#80935a',leafDark:'#314e43',bark:'#777365',soil:'#4c5140',white:'#f0ede3',black:'#222a29',gold:'#b29863',glow:'#ffe2af',ceramic:'#bba587',roof:'#72786c',waterTile:'#377e7f',pink:'#c79781',courtyardPaving:'#c9b69a'}
+Object.assign(colors,{treeBark:'#827967',treeLeaf:'#637b60',treeLeafLight:'#93a285',treeLeafDark:'#425f4c'})
 const noiseGLSL=`
 float estateHash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float estateNoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(estateHash(i),estateHash(i+vec3(1,0,0)),f.x),mix(estateHash(i+vec3(0,1,0)),estateHash(i+vec3(1,1,0)),f.x),f.y),mix(mix(estateHash(i+vec3(0,0,1)),estateHash(i+vec3(1,0,1)),f.x),mix(estateHash(i+vec3(0,1,1)),estateHash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -13,7 +14,7 @@ export function createEstateKit(scene:T.Scene){
   const root=new T.Group(),mats=new Map<string,T.MeshStandardMaterial>(),sources=new Set<T.BufferGeometry>(),outputs=new Set<T.BufferGeometry>()
   const cache=new Map<string,T.BufferGeometry>()
   function material(name:string){if(mats.has(name))return mats.get(name)!
-    const metal=['bronze','gold','black'].includes(name),fabric=['linen','sage','clay','indigo','rug'].includes(name),wood=['oak','oakFloor','walnut','bark'].includes(name)
+    const metal=['bronze','gold','black'].includes(name),fabric=['linen','sage','clay','indigo','rug'].includes(name),wood=['oak','oakFloor','walnut','bark','treeBark'].includes(name)
     const m=new T.MeshStandardMaterial({color:colors[name==='domeGlass'?'glass':name]||name,roughness:metal?.28:fabric?.94:wood?.63:name==='marble'?.4:.74,metalness:metal?.8:0})
     if(name==='glass'||name==='domeGlass'){m.color.set(colors.glass);m.transparent=true;m.opacity=name==='domeGlass'?.22:.16;m.roughness=.13;m.metalness=.2;m.depthWrite=false;if(name==='domeGlass')m.side=T.DoubleSide}
     if(name==='glow'){m.emissive.set('#ffca79');m.emissiveIntensity=2;m.roughness=.55}
@@ -51,10 +52,13 @@ export function createEstateKit(scene:T.Scene){
       g.deleteAttribute('uv');g.deleteAttribute('color');g.deleteAttribute('tangent')
       const data:Record<string,unknown>={}
       if(o.userData.estatePlan)data.estatePlan=o.userData.estatePlan
-      for(let parent:T.Object3D|null=o;parent;parent=parent.parent)if(parent.userData.estatePlanOccluder)data.estatePlanOccluder=true
+      for(let parent:T.Object3D|null=o;parent;parent=parent.parent){
+        if(parent.userData.estatePlanOccluder)data.estatePlanOccluder=true
+        if(parent.userData.designLabStudy)data.designLabStudy=parent.userData.designLabStudy
+      }
       // A slab must remain an actual pickable rendered mesh. Overhead pieces
       // stay separate so the plan hides them without building a different house.
-      const pos=new T.Vector3();o.getWorldPosition(pos);const key=mat.uuid+':'+Math.floor(pos.x/28)+':'+Math.floor(pos.z/28)+':'+(o.userData.estatePlan?.id??'')+':'+!!data.estatePlanOccluder
+      const pos=new T.Vector3();o.getWorldPosition(pos);const key=mat.uuid+':'+Math.floor(pos.x/28)+':'+Math.floor(pos.z/28)+':'+(o.userData.estatePlan?.id??'')+':'+!!data.estatePlanOccluder+':'+JSON.stringify(data.designLabStudy??null)
       if(!batches.has(key))batches.set(key,{mat,parts:[],data});batches.get(key)!.parts.push(g)
     })
     for(const {mat,parts,data} of batches.values()){const g=mergeGeometries(parts);parts.forEach(p=>p.dispose());if(!g)continue;outputs.add(g);g.computeBoundingSphere();const m=new T.Mesh(g,mat);m.userData=data;m.castShadow=!mat.transparent&&mat!==material('glow');m.receiveShadow=true;scene.add(m)}root.clear();sources.forEach(g=>g.dispose());sources.clear();cache.clear()

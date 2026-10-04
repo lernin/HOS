@@ -5,6 +5,7 @@ import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './raili
 import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
 import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
 import { slabWithOpening, buildSpaDome, buildSpaTreeBed } from './spa-dome'
+import { buildTreeStudy } from './tree-studies'
 export function architecture(k:EstateKit){
   const overhead=k.group(0,0,0)
   overhead.userData.estatePlanOccluder=true
@@ -170,7 +171,10 @@ export function landscape(k:EstateKit){
   }
   // Arrival garden pockets replace ambiguous green dead zones with deliberate flowers and grasses.
   for(const [cx,cz,rx,rz] of [[-21,40,3.1,4.8],[22.5,46.5,2.4,2.7]])for(let i=0;i<28;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r,y=terrainHeight(x,z,.68)+.05;grasses(x,y,z,.42+rand()*.38);if(i%2===0){k.cylinder(x,y+.22,z,.018,.42,'leafDark',k.root,.014,6);k.ellipsoid(x,y+.48,z,.12,.085,.12,'pink',k.root,8)}}
-  for(const t of featureTrees)tree(t.x,t.y,t.z,t.size,t.seed)
+  for(const t of featureTrees){
+    if(t.id==='tree-west-arrival')buildTreeStudy(k,{x:t.x,y:t.y,z:t.z,size:t.size,seed:t.seed,form:'airy'})
+    else tree(t.x,t.y,t.z,t.size,t.seed)
+  }
   for(const p of featurePalms)palm(p.x,Math.min(FLOOR,terrainHeight(p.x,p.z,.65)),p.z,p.size,p.x)
   for(let i=0;i<42;i++){const a=i/42*Math.PI*2,r=.75+rand()*.06,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,2)||(x>42&&z<-12)||(Math.abs(x)<21&&z<-25))continue;if(i%4===0)tree(x,terrainHeight(x,z,r),z,.75+rand()*.45,i);else palm(x,terrainHeight(x,z,r),z,3.5+rand()*2,i)}
   for(let i=0;i<210;i++){const a=rand()*Math.PI*2,r=.7+rand()*.18,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,.5))continue;grasses(x,terrainHeight(x,z,r)+.05,z,1+rand());if(i%6===0)rock(x,terrainHeight(x,z,r),z,.7,.5,.65,i)}

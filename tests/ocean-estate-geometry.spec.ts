@@ -116,7 +116,7 @@ test('entire spa tree canopy clears the dome and the planted pocket cannot be wa
   const kit=createEstateKit(new T.Scene())
   try {
     landscape(kit);kit.root.updateMatrixWorld(true)
-    const tree=kit.root.children.find(o=>o instanceof T.Group&&Math.abs(o.position.x+31.7)<.01&&Math.abs(o.position.z-29.7)<.01)
+    const tree=kit.root.children.find(o=>o instanceof T.Group&&Math.abs(o.position.x+31.7)<.01&&Math.abs(o.position.z-29.7)<.01&&new T.Box3().setFromObject(o).max.y>9.8)
     assert.ok(tree,'spa tree is deliberately positioned beneath its dome')
     let checked=0
     tree.traverse(o=>{

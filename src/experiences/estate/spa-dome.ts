@@ -2,6 +2,7 @@ import * as T from 'three'
 import { type EstateKit, v } from './kit'
 import { spaDome, spaTreeBed } from './site-layout'
 import type { Rect } from './plan'
+import { buildTreeUnderplanting } from './tree-studies'
 
 type Opening={cx:number;cz:number;rx:number;rz:number}
 const ellipse=(o:Opening)=>new T.Path().absellipse(o.cx,-o.cz,o.rx,o.rz,0,Math.PI*2,true)
@@ -55,9 +56,5 @@ export function buildSpaDome(k:EstateKit,overhead:T.Group){
 export function buildSpaTreeBed(k:EstateKit){
   ring(k,spaTreeBed,.15,6.035,.13,'travertine',k.root)
   const soil=k.mesh(new T.CircleGeometry(1,64),'soil',spaTreeBed.cx,5.95,spaTreeBed.cz);soil.rotation.x=-Math.PI/2;soil.scale.set(spaTreeBed.rx,spaTreeBed.rz,1)
-  // Low planting leaves the tree trunk and treatment circulation legible.
-  for(let i=0;i<15;i++){
-    const a=i*2.4,r=.67+.09*(i%3),x=spaTreeBed.cx+Math.cos(a)*spaTreeBed.rx*r,z=spaTreeBed.cz+Math.sin(a)*spaTreeBed.rz*r
-    k.ellipsoid(x,6.06,z,.16,.14,.18,i%3?'leafDark':'leafLight',k.root,8)
-  }
+  buildTreeUnderplanting(k,spaTreeBed.cx,5.965,spaTreeBed.cz)
 }
