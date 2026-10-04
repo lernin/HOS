@@ -383,8 +383,10 @@ test('Estate Plan defaults to live 3D reality without stale geometry overlays',(
  assert.equal(planner.includes("useState({reality:true,surfaces:false,edges:false,labels:false,furniture:false,railings:false,markups:true})"),true)
  assert.equal(planner.includes("!layers.reality&&walls.map"),true)
  assert.equal(planner.includes("!layers.reality&&glass.map"),true)
- assert.equal(planner.includes("['reality','3D reality']"),true)
- assert.equal(planner.includes("['surfaces','Reference zones']"),true)
+ assert.equal(planner.includes('className="ep-reality-lock"'),true)
+ assert.equal(planner.includes('<b>3D reality</b><small>source of truth</small>'),true)
+ assert.equal(planner.includes("['surfaces','Reference zones']"),false)
+ assert.equal(planner.includes("['furniture','2D furniture']"),false)
 })
 
 test('live 3D and SVG annotations share the same aspect-preserving viewport transform',()=>{
