@@ -361,3 +361,18 @@ test('patios are selectable design objects with exact dimensions',()=>{
  assert.equal(planner.includes("Exact 3D slab"),true)
  assert.equal(planner.includes("patioSurfaces.filter"),true)
 })
+
+
+test('bird-eye terrain coastline is the exact 3D terrain formula',()=>{
+ const layout=readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8')
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(layout.includes('export const coastEdgeScale'),true)
+ assert.equal(layout.includes('export const coastZ'),true)
+ assert.equal(layout.includes('export const coastline'),true)
+ assert.equal(env.includes('edge=coastEdgeScale(a)'),true)
+ assert.equal(env.includes('z=coastZ(a,r)*edge'),true)
+ assert.equal(planner.includes("coastline.map(([x,z])"),true)
+ assert.equal(planner.includes("rx=\"58\" ry=\"61\""),false)
+ assert.equal(planner.includes('x="-70" y="12" width="140" height="65"'),false)
+})
