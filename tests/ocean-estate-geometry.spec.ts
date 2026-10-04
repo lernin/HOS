@@ -4,12 +4,14 @@ import * as T from 'three'
 import { createEstateKit } from '../src/experiences/estate/kit'
 import { architecture, landscape, waters } from '../src/experiences/estate/environment'
 import { createNavigator, walkable, clearLine } from '../src/experiences/estate/navigation'
+import { estateSurfaces, estateEdges } from '../src/experiences/estate/site-edges'
 import { coastPoint } from '../src/experiences/estate/site-layout'
 
 // These are independently checked world footprints, not recomputed expectations.
 const patios=[
   ['P1',-23,27,-24,-12],['P2',-15,-11,-60,-24],['P3',12,16,-60,-24],
   ['P4',-23,-6,14,33],['P5',39,44,-12,14],['P6',27,44,-24,-12],['P7',-31,-22,33,43],
+  ['P8',-47,-23,-24,-17],['P9',-47,-39,-17,44],['P10',-39,-31,39,44],['P11',40,50,14,55],['P12',44,50,-24,14],['P13',24,40,51,55],['P14',-15,16,-70,-60.2],['P15',24,27,49,51],['P16',-31,-22,43,44],
 ] as const
 test('rendered patio meshes keep their identity and exact world footprint after batching',()=>{
   const scene=new T.Scene(),kit=createEstateKit(scene)
@@ -19,7 +21,7 @@ test('rendered patio meshes keep their identity and exact world footprint after 
       const mesh=scene.children.find(o=>o.userData.estatePlan?.code===code)
       assert.ok(mesh,`${code} must survive batching as an identifiable rendered slab`)
       const bounds=new T.Box3().setFromObject(mesh)
-      assert.deepEqual([bounds.min.x,bounds.max.x,bounds.min.z,bounds.max.z],[x1,x2,z1,z2],code)
+      for(const [actual,want] of [[bounds.min.x,x1],[bounds.max.x,x2],[bounds.min.z,z1],[bounds.max.z,z2]])assert.ok(Math.abs(actual-want)<.00001,`${code} world bounds ${actual} should be ${want}`)
       const ray=new T.Raycaster(new T.Vector3((x1+x2)/2,120,(z1+z2)/2),new T.Vector3(0,-1,0))
       assert.equal(ray.intersectObject(mesh)[0]?.object.userData.estatePlan?.code,code)
     }
@@ -49,7 +51,7 @@ test('both extended walks and the squared patio corner are reachable without cro
   let current=west
   for(const p of route){assert.ok(clearLine(current,p),'every leg avoids water and guards');current=p}
   assert.ok(navigator.path({x:1,z:29},corner),'new patio connects to the house')
-  for(const p of [{x:0,z:-58},{x:-16,z:-58},{x:17,z:-58},{x:44,z:-22},{x:42,z:-24}])assert.equal(walkable(p),false,'water, soil and outer guards cannot be walked through')
+  for(const p of [{x:0,z:-58},{x:-16,z:-58},{x:17,z:-58},{x:50,z:-22},{x:42,z:-24}])assert.equal(walkable(p),false,'water, soil and outer guards cannot be walked through')
 })
 
 test('northern coastline moves beyond the pool while arrival coastline stays in place',()=>{
@@ -71,14 +73,14 @@ test('northeast guards meet at one correctly inset corner post',()=>{
     kit.root.traverse(o=>{
       if(!(o instanceof T.Mesh))return
       const p=o.getWorldPosition(new T.Vector3()),dimensions=o.geometry.parameters
-      if(Math.abs(p.x-43.885)>.001||Math.abs(p.z+23.885)>.001)return
+      if(Math.abs(p.x-49.885)>.001||Math.abs(p.z+23.885)>.001)return
       if(dimensions?.width===.065&&dimensions?.depth===.065)posts.push(o)
       if(dimensions?.width===.115&&dimensions?.depth===.115)bases.push(o)
     })
     assert.equal(posts.length,1,'continuous corner has one post rather than two terminal posts')
     assert.equal(bases.length,1,'corner pedestal is not duplicated')
     const b=new T.Box3().setFromObject(bases[0])
-    assert.ok(Math.abs(44-b.max.x-.0575)<.001&&Math.abs(b.min.z+24-.0575)<.001,'half-pedestal edge clearance survives the new corner')
+    assert.ok(Math.abs(50-b.max.x-.0575)<.001&&Math.abs(b.min.z+24-.0575)<.001,'half-pedestal edge clearance survives the new corner')
   } finally {kit.dispose()}
 })
 
@@ -149,4 +151,50 @@ test('overhead geometry remains in the shared model and can be hidden independen
     const visible=scene.children.filter(o=>!o.userData.estatePlanOccluder)
     assert.equal(ray.intersectObjects(visible)[0]?.object.userData.estatePlan?.name,'Grand foyer','cutaway exposes the same actual foyer slab')
   } finally {kit.dispose()}
+})
+
+
+test('four stair flights survive batching with physical risers and their real floor identity',()=>{
+ const scene=new T.Scene(),kit=createEstateKit(scene)
+ try {
+  architecture(kit);kit.finish();scene.updateMatrixWorld(true)
+  const flights=[['ST1',-22,-15,39,44,6,4.8,8,'x'],['ST2',15,24,47,51,4.8,6,8,'x'],['ST3',-15,-11,-64,-60,5.2,6,5,'z'],['ST4',12,16,-64,-60,5.2,6,5,'z']] as const
+  for(const [code,x1,x2,z1,z2,start,end,count,axis] of flights){
+   const meshes=scene.children.filter(m=>m.userData.estatePlan?.code===code)
+   assert.ok(meshes.length,code+' is a selectable real mesh')
+   for(let i=0;i<count;i++){
+    const x=axis==='x'?x1+(x2-x1)*(i+.5)/count:(x1+x2)/2,z=axis==='z'?z1+(z2-z1)*(i+.5)/count:(z1+z2)/2
+    const hit=new T.Raycaster(new T.Vector3(x,10,z),new T.Vector3(0,-1,0)).intersectObjects(meshes)[0]
+    const top=Math.min(start,end)+Math.abs(end-start)*(end>start?i+1:count-i)/count
+    assert.ok(hit&&Math.abs(hit.point.y-top)<.00001,code+' tread elevation')
+   }
+  }
+  const court=scene.children.filter(o=>o.userData.estatePlan?.name==='Arrival court')
+  const hit=new T.Raycaster(new T.Vector3(10,8,48),new T.Vector3(0,-1,0)).intersectObjects(court)[0]
+  assert.ok(hit&&Math.abs(hit.point.y-4.8)<.001,'stone court stays at arrival level')
+  assert.equal((hit.object as T.Mesh<T.BufferGeometry,T.Material>).material,kit.material('cobblestone'))
+ } finally {kit.dispose()}
+})
+
+test('pool-tip paving remains above the island terrain across the entire lower terrace',()=>{
+ const scene=new T.Scene(),kit=createEstateKit(scene)
+ try {
+  architecture(kit);landscape(kit);kit.finish();scene.updateMatrixWorld(true)
+  for(const x of [-13,-8,-3,3,8,14])for(const z of [-68,-66,-64.5,-61]){
+   if(z===-61&&(x===-13||x===14))continue
+   const hits=new T.Raycaster(new T.Vector3(x,9,z),new T.Vector3(0,-1,0)).intersectObjects(scene.children)
+   const floor=hits.find(h=>h.object.userData.estatePlan?.code==='P14')
+   assert.ok(floor,'terrace slab under sample')
+   assert.ok(hits.filter(h=>(h.object as T.Mesh).material===kit.material('soil')).every(h=>h.point.y<floor.point.y-.01),'terrain never protrudes through the lower terrace at '+JSON.stringify({x,z}))
+  }
+ } finally {kit.dispose()}
+})
+
+
+test('plan audit keeps unique surface codes and includes the lower pool terrace perimeter',()=>{
+ assert.equal(new Set(estateSurfaces.map(s=>s.code)).size,estateSurfaces.length,'stairs do not reuse existing room codes')
+ const north=estateEdges.filter(e=>Math.abs(e.a[1]+70)<.001&&Math.abs(e.b[1]+70)<.001)
+ assert.ok(north.length,'lower terrace north perimeter is audited')
+ assert.ok(north.every(e=>e.kind==='railing'&&e.audit==='covered'),'lower terrace perimeter follows its real guard')
+ assert.equal(estateEdges.some(e=>e.kind==='open'&&Math.abs(e.a[1]+64)<.001&&Math.abs(e.b[1]+64)<.001),false,'joined lower landings are not reported as exposed edges')
 })

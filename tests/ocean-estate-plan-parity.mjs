@@ -40,7 +40,7 @@ try{
     return {x:p.x,y:p.y}
   },{x,z})}
   // Catch mirrored, stretched, or stale transforms with asymmetric real slabs.
-  for(const [code,x,z] of [['P1',-19.43,-18.37],['P2',-13,-30],['P2',-13,-58],['P3',14,-30],['P3',14,-58],['P4',-8,29],['P5',42,5],['P6',34,-20],['P6',42,-22],['P7',-27,41]]){
+  for(const [code,x,z] of [['P1',-19.43,-18.37],['P2',-13,-30],['P2',-13,-58],['P3',14,-30],['P3',14,-58],['P4',-8,29],['P5',42,5],['P6',34,-20],['P6',42,-22],['P7',-27,41],['P8',-40,-20],['P9',-43,20],['P10',-34,42],['P11',46,30],['P12',47,0],['P13',34,53],['P14',.5,-66],['P15',25.5,50],['P16',-27,43.5],['ST1',-19,41.5],['ST2',20,49],['ST3',-13,-62],['ST4',14,-62]]){
     const p=await worldPoint(x,z);await page.mouse.click(p.x,p.y)
     await page.locator('.ep-selection-card').waitFor()
     assert.equal(await page.locator('.ep-selection-card>b').innerText(),code,`screen and scene agree on ${code}`)
@@ -89,5 +89,5 @@ try{
   }
   await page.screenshot({path:`${output}/annotated-plan.png`})
   assert.deepEqual(errors,[])
-  console.log('PASS: all seven patio screen picks, zoom/resize/drawing alignment, pool void, and actual estate in PNG export')
+  console.log('PASS: all sixteen patios and four stair screen picks, zoom/resize/drawing alignment, pool void, and actual estate in PNG export')
 }finally{await browser.close();await server.close()}

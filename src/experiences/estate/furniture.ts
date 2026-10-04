@@ -51,7 +51,7 @@ export function furnish(k:EstateKit){
     for(let i=0;i<28;i++){b(-.75+i*.056,.872,-1.02,.007,.006,.3,'black',g);if(i%7!==2&&i%7!==6)b(-.72+i*.056,.895,-.95,.026,.04,.16,'black',g)}
     b(0,.46,-1.6,.9,.13,.45,'black',g,.06);for(const x of [-.32,.32])b(x,.22,-1.6,.06,.44,.3,'black',g)
   }
-  for(const f of furnishings){const g=k.group(f.x,FLOOR,f.z,f.angle);g.scale.setScalar(f.scale||1);rug(f,g)
+  for(const f of furnishings){const g=k.group(f.x,f.level??FLOOR,f.z,f.angle);g.scale.setScalar(f.scale||1);rug(f,g)
     switch(f.kind){case 'sofa':sofa(g,f.tone);break;case 'lounge':lounge(g,f.tone);break;case 'dining':dining(g);break;case 'outdoorDining':dining(g,true);break;case 'bed':bed(g,f.tone);break;case 'piano':piano(g);break
       case 'coffee':b(0,.32,0,1.86,.16,1.28,'travertine',g,.17);for(const x of [-.55,.55])c(x,.15,0,.25,.25,'travertine',g);vase(.5,.41,0,g,.5);book(-.3,.45,-.2,g);book(-.27,.505,-.16,g,'clay',.15);break
       case 'sideTable':c(0,.26,0,.15,.52,'bronze',g);c(0,.53,0,.39,.07,'marble',g,.39,32);book(.05,.61,.02,g);break
