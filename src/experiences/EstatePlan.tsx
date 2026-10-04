@@ -304,7 +304,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
             const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id,show=layers.surfaces&&!layers.reality
             const opacity=show?(view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)):0
             if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={show?surfaceFill[s.kind]:'transparent'} opacity={opacity} stroke={show?'#8f897e':'transparent'} strokeWidth=".16" pointerEvents="none"/>
-            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={show?surfaceFill[s.kind]:'transparent'} opacity={show?opacity:1} stroke={selected?'#175f91':show&&!patio?'#9c9385':'transparent'} strokeWidth={selected?.5:show&&!patio?.13:0} pointerEvents={patio&&tool==='pan'?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRealitySurface(null);setSelectedRail(null)}:undefined}/>
+            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={show?surfaceFill[s.kind]:'transparent'} opacity={show?opacity:1} stroke={selected?'#175f91':show&&!patio?'#9c9385':'transparent'} strokeWidth={selected?.5:(show&&!patio?.13:0)} pointerEvents={patio&&tool==='pan'&&!layers.reality?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRealitySurface(null);setSelectedRail(null)}:undefined}/>
           })}
 
           {layers.edges&&estateEdges.map(e=>{
