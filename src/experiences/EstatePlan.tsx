@@ -387,12 +387,10 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         <span>Edge audit</span><b>{auditCount}</b>
       </button>
       <strong>Layers</strong>
+      <div className="ep-reality-lock"><span>●</span><b>3D reality</b><small>source of truth</small></div>
       {([
-        ['reality','3D reality'],
-        ['surfaces','Reference zones'],
         ['edges','Audit edges'],
         ['labels','Reference labels'],
-        ['furniture','2D furniture'],
         ['railings','Railing IDs'],
         ['markups','Markups'],
       ] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={layers[key]} onChange={()=>setLayers(x=>({...x,[key]:!x[key]}))}/>{label}</label>)}
