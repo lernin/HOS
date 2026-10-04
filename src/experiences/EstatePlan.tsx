@@ -6,6 +6,7 @@ import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces, patio
 import type { EstateSurfaceKind } from './estate/site-edges'
 import { architecturalPlanters, coastline, featurePalms, featureTrees } from './estate/site-layout'
 import { createEstatePlanReality } from './estate/plan-reality'
+import type { EstatePlanPick } from './estate/plan-reality'
 import './estate/estate-plan.css'
 
 type PlanView='main'|'arrival'|'site'
@@ -100,6 +101,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const [auditMode,setAuditMode]=useState(false)
   const [selectedRail,setSelectedRail]=useState<string|null>(null)
   const [selectedSurface,setSelectedSurface]=useState<string|null>(null)
+  const [selectedRealitySurface,setSelectedRealitySurface]=useState<EstatePlanPick|null>(null)
   const [layers,setLayers]=useState({reality:true,surfaces:false,edges:false,labels:false,furniture:false,railings:false,markups:true})
   const [status,setStatus]=useState('')
   const [last3DView]=useState<Last3DView|null>(readLast3DView)
@@ -208,7 +210,17 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       panRef.current=null
       return
     }
-    if(panRef.current?.id===e.pointerId){panRef.current=null;return}
+    if(panRef.current?.id===e.pointerId){
+      const pan=panRef.current
+      panRef.current=null
+      if(layers.reality&&Math.hypot(e.clientX-pan.sx,e.clientY-pan.sy)<8){
+        const hit=realityEngine.current?.pick(e.clientX,e.clientY)??null
+        setSelectedRealitySurface(hit)
+        setSelectedSurface(null)
+        setSelectedRail(null)
+      }
+      return
+    }
     if(drawingPointer.current===e.pointerId)finishDrawing()
   }
   function onWheel(e:ReactWheelEvent<SVGSVGElement>){
@@ -292,7 +304,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
             const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id,show=layers.surfaces&&!layers.reality
             const opacity=show?(view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)):0
             if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={show?surfaceFill[s.kind]:'transparent'} opacity={opacity} stroke={show?'#8f897e':'transparent'} strokeWidth=".16" pointerEvents="none"/>
-            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={show?surfaceFill[s.kind]:'transparent'} opacity={show?opacity:1} stroke={selected?'#175f91':show&&!patio?'#9c9385':'transparent'} strokeWidth={selected?.5:show&&!patio?.13:0} pointerEvents={patio&&tool==='pan'?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRail(null)}:undefined}/>
+            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={show?surfaceFill[s.kind]:'transparent'} opacity={show?opacity:1} stroke={selected?'#175f91':show&&!patio?'#9c9385':'transparent'} strokeWidth={selected?.5:show&&!patio?.13:0} pointerEvents={patio&&tool==='pan'?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRealitySurface(null);setSelectedRail(null)}:undefined}/>
           })}
 
           {layers.edges&&estateEdges.map(e=>{
@@ -312,7 +324,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           {layers.railings&&estateRailings.map(r=>{
             const selected=selectedRail===r.id,review=auditMode&&r.audit==='review',pts=r.points.map(([x,z])=>`${x},${-z}`).join(' ')
             return <g key={r.id}>
-              <polyline points={pts} fill="none" stroke="transparent" strokeWidth="2.2" pointerEvents={tool==='pan'?'stroke':'none'} onPointerDown={e=>{e.stopPropagation();setSelectedRail(r.id);setSelectedSurface(null)}}/>
+              <polyline points={pts} fill="none" stroke="transparent" strokeWidth="2.2" pointerEvents={tool==='pan'?'stroke':'none'} onPointerDown={e=>{e.stopPropagation();setSelectedRail(r.id);setSelectedSurface(null);setSelectedRealitySurface(null)}}/>
               <polyline points={pts} fill="none" stroke={selected?'#175f91':review?'#df7a19':r.family==='garden'?'#7b5f48':'#593f2d'} strokeWidth={selected?.58:review?.5:r.family==='garden'?.28:.36} strokeDasharray={r.family==='garden'?'.55 .22':undefined} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none"/>
             </g>
           })}
@@ -412,11 +424,16 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       <button onClick={()=>setClean(true)} aria-label="Clean view"><span>□</span><em>Clean</em></button>
     </nav>}
 
-    {!clean&&marks.length===0&&!selectedRailData&&!selectedSurfaceData&&<div className="ep-hint">Patios <strong>P1–P7</strong> are exact 3D slabs. Tap one to inspect it; use <strong>Area</strong> to propose an extension.</div>}
+    {!clean&&marks.length===0&&!selectedRailData&&!selectedSurfaceData&&!selectedRealitySurface&&<div className="ep-hint">Patios <strong>P1–P7</strong> are exact 3D slabs. Tap one to inspect it; use <strong>Area</strong> to propose an extension.</div>}
     {!clean&&selectedRailData&&<div className="ep-selection-card">
       <b>{selectedRailData.code}</b>
       <span><strong>{selectedRailData.label}</strong><small>{selectedRailData.family==='guard'?'Full-height guard rail':'Low garden rail'}{selectedRailData.audit==='review'?' · review candidate':''}</small></span>
       <button onClick={()=>setSelectedRail(null)} aria-label="Clear railing selection">×</button>
+    </div>}
+    {!clean&&selectedRealitySurface&&<div className="ep-selection-card ep-surface-card">
+      <b>{selectedRealitySurface.code??'3D'}</b>
+      <span><strong>{selectedRealitySurface.name}</strong><small>Picked from live 3D mesh · {selectedRealitySurface.use} · {(selectedRealitySurface.x2-selectedRealitySurface.x1).toFixed(1)} × {(selectedRealitySurface.z2-selectedRealitySurface.z1).toFixed(1)} m · {((selectedRealitySurface.x2-selectedRealitySurface.x1)*(selectedRealitySurface.z2-selectedRealitySurface.z1)).toFixed(0)} m²</small></span>
+      <button onClick={()=>setSelectedRealitySurface(null)} aria-label="Clear 3D surface selection">×</button>
     </div>}
     {!clean&&selectedSurfaceData&&selectedSurfaceData.shape==='rect'&&<div className="ep-selection-card ep-surface-card">
       <b>{selectedSurfaceData.code}</b>
