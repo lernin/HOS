@@ -2,7 +2,7 @@ import * as T from 'three'
 import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR } from './plan'
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
-import { architecturalPlanters, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
+import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
 export function architecture(k:EstateKit){
   for(const f of floors){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
@@ -90,13 +90,12 @@ export function architecture(k:EstateKit){
 }
 export function landscape(k:EstateKit){
   const rand=random(82031),b=k.box
-  const coastZ=(a:number,r:number)=>7+Math.sin(a)*64*r*(Math.sin(a)<0?.7+.3*Math.min(1,Math.abs(Math.cos(a))*3):1)
   // All scattered planting excludes the constructed footprint, including the
   // pool void. The perimeter moved during art direction; scatter must follow it.
   const unbuilt=(x:number,z:number,pad=1)=>!floors.some(f=>contains(f,{x,z},pad))&&!contains({x1:-15,x2:16,z1:-38,z2:-23},{x,z},pad)
   function terrainHeight(x:number,z:number,r:number){const arrival=Math.max(0,Math.min(1,(z-24)/9));return 5.5-arrival*1.05-Math.pow(Math.max(0,(r-.7)/.3),1.3)*8+Math.sin(x*.14)*Math.sin(z*.18)*.24}
   const verts:number[]=[],ids:number[]=[],segments=100,rings=20
-  for(let j=0;j<=rings;j++)for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2,r=j/rings,edge=1+.04*Math.sin(a*7)+.025*Math.sin(a*13),x=Math.cos(a)*58*r*edge,z=coastZ(a,r)*edge;verts.push(x,terrainHeight(x,z,r),z)}
+  for(let j=0;j<=rings;j++)for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2,r=j/rings,edge=coastEdgeScale(a),x=Math.cos(a)*58*r*edge,z=coastZ(a,r)*edge;verts.push(x,terrainHeight(x,z,r),z)}
   for(let j=0;j<rings;j++)for(let i=0;i<segments;i++){const a=j*(segments+1)+i,c=a+segments+1;ids.push(a,a+1,c,a+1,c+1,c)}
   const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setIndex(ids);geo.computeVertexNormals();k.mesh(geo,'soil')
   function rock(x:number,y:number,z:number,sx:number,sy:number,sz:number,seed:number,mat?:string){const g=k.rockGeometry(seed),p=g.attributes.position;for(let i=0;i<p.count;i++){const yy=p.getY(i);p.setY(i,Math.round(yy*7)/7*.5+yy*.5)}g.computeVertexNormals();const m=k.mesh(g,mat??(seed%3===0?'basalt':'concrete'),x,y,z);m.scale.set(sx,sy,sz);m.rotation.set(.1,seed,seed*.04)}
