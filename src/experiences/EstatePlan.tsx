@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
 import { floors, walls, glass, furnishings, footprint } from './estate/plan'
 import { estateRailings } from './estate/railings'
+import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces } from './estate/site-edges'
+import type { EstateSurfaceKind } from './estate/site-edges'
 import './estate/estate-plan.css'
 
 type PlanView='main'|'arrival'|'site'
@@ -30,8 +32,22 @@ const categoryMeta:Record<Category,{label:string;color:string}>={
   wall:{label:'Wall',color:'#7951a8'},
   remove:{label:'Remove',color:'#b62f46'},
 }
-const floorColor:Record<string,string>={
-  limestone:'#efe7d7',travertine:'#e6dccb',oak:'#d5c2a0',walnut:'#a98b68',concrete:'#d5d3cc',basalt:'#6d7473',
+const surfaceFill:Record<EstateSurfaceKind,string>={
+  interior:'#eee7d9',
+  deck:'url(#ep-deck-hatch)',
+  'covered-exterior':'url(#ep-covered-hatch)',
+  arrival:'#c9c5bc',
+  steps:'url(#ep-step-hatch)',
+  garden:'#cbd8bb',
+  water:'#99cfd4',
+}
+const edgeStroke={wall:'#45413a',glass:'#4b99a7',railing:'#6f5038',step:'#82735f',open:'#d04a53'} as const
+const railMid=(points:readonly (readonly [number,number])[])=>{
+  if(points.length<2)return{x:0,y:0}
+  let best=0,index=0
+  for(let i=0;i<points.length-1;i++){const d=Math.hypot(points[i+1][0]-points[i][0],points[i+1][1]-points[i][1]);if(d>best){best=d;index=i}}
+  const a=points[index],b=points[index+1]
+  return{x:(a[0]+b[0])/2,y:-(a[1]+b[1])/2}
 }
 const pointsString=(pts:Pt[])=>pts.map(q=>`${q.x},${q.y}`).join(' ')
 const rotate180=(p:Pt):Pt=>({x:-p.x,y:-p.y})
@@ -67,8 +83,11 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const pinchRef=useRef<{distance:number;box:Box;mid:{x:number;y:number};rect:DOMRect}|null>(null)
   const [noteDraft,setNoteDraft]=useState<{point:Pt;text:string}|null>(null)
   const [notesOpen,setNotesOpen]=useState(false)
+  const [layersOpen,setLayersOpen]=useState(false)
   const [clean,setClean]=useState(false)
-  const [layers,setLayers]=useState({labels:true,furniture:true,railings:true,markups:true})
+  const [auditMode,setAuditMode]=useState(false)
+  const [selectedRail,setSelectedRail]=useState<string|null>(null)
+  const [layers,setLayers]=useState({surfaces:true,edges:true,labels:true,furniture:true,railings:true,markups:true})
   const [status,setStatus]=useState('')
 
   useEffect(()=>{localStorage.setItem(STORAGE,JSON.stringify(marks))},[marks])
@@ -217,6 +236,8 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
 
   const viewFloors=floors
   const roomLabels=layers.labels?viewFloors.filter(f=>f.name!=='Arrival court'&&f.name!=='Arrival steps'):[]
+  const selectedRailData=estateRailings.find(r=>r.id===selectedRail)??null
+  const auditCount=auditOpenEdges.length+auditReviewRailings.length
 
   return <main className={`ep-root${clean?' ep-clean':''}`}>
     {!clean&&<header className="ep-top">
@@ -233,6 +254,9 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel}>
         <defs>
           <pattern id="ep-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M 5 0 L 0 0 0 5" fill="none" stroke="#d8d4c9" strokeWidth=".08"/></pattern>
+          <pattern id="ep-deck-hatch" width="1.2" height="1.2" patternUnits="userSpaceOnUse"><rect width="1.2" height="1.2" fill="#e5d7c2"/><path d="M0 1.2L1.2 0" stroke="#c9b89f" strokeWidth=".08" opacity=".75"/></pattern>
+          <pattern id="ep-covered-hatch" width="1.4" height="1.4" patternUnits="userSpaceOnUse"><rect width="1.4" height="1.4" fill="#ded6c5"/><path d="M0 .3H1.4M0 1H1.4" stroke="#bbb19f" strokeWidth=".08" opacity=".72"/></pattern>
+          <pattern id="ep-step-hatch" width=".8" height=".8" patternUnits="userSpaceOnUse"><rect width=".8" height=".8" fill="#d9cec0"/><path d="M0 .4H.8" stroke="#aa9a87" strokeWidth=".1"/></pattern>
           {(Object.keys(categoryMeta) as Category[]).map(k=><marker key={k} id={`ep-arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill={categoryMeta[k].color}/></marker>)}
         </defs>
         <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="#f7f3e8"/>
@@ -241,23 +265,30 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           {view==='site'&&<ellipse cx="0" cy="-7" rx="58" ry="61" fill="#e8ece1" stroke="#aeb6a7" strokeWidth=".35"/>}
           <rect x="-70" y="12" width="140" height="65" fill="#dceff2" opacity={view==='arrival'?.18:.72}/>
 
-          {viewFloors.map((f,i)=>{
-            const lower=f.name==='Arrival court'||f.name==='Arrival steps'
-            const opacity=view==='site'?.9:view==='arrival'?(lower?1:.16):(lower?.13:1)
-            if(f.name==='Arrival court')return <circle key={`floor-${i}`} cx="1" cy="-41" r="19" fill={floorColor[f.material]||'#e8e1d3'} opacity={opacity} stroke="#918d85" strokeWidth=".18"/>
-            return <rect key={`floor-${i}`} x={f.x1} y={-f.z2} width={f.x2-f.x1} height={f.z2-f.z1} rx=".08" fill={floorColor[f.material]||'#e8e1d3'} opacity={opacity} stroke="#a59e91" strokeWidth=".14"/>
+          {layers.surfaces&&estateSurfaces.map(s=>{
+            const lower=s.kind==='arrival'||s.kind==='steps'
+            const opacity=view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)
+            if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={surfaceFill[s.kind]} opacity={opacity} stroke="#8f897e" strokeWidth=".16"/>
+            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={surfaceFill[s.kind]} opacity={opacity} stroke="#9c9385" strokeWidth=".13"/>
           })}
-          <rect x="-10.9" y="24.2" width="22.8" height="11.8" rx=".18" fill="#8fcfd2" stroke="#4f9ca4" strokeWidth=".22"/>
-          <rect x="-20" y="-27" width="8" height="9" rx=".3" fill="#aab69a" stroke="#75856c" strokeWidth=".18"/>
-          <circle cx="1" cy="-41" r="4" fill="#92c8cb" stroke="#6f8e89" strokeWidth=".18"/>
-          <circle cx="1" cy="-41" r="3.45" fill="#b9e0e1" opacity=".75"/>
+
+          {layers.edges&&estateEdges.map(e=>{
+            const review=auditMode&&e.audit==='review'
+            return <line key={e.id} x1={e.a[0]} y1={-e.a[1]} x2={e.b[0]} y2={-e.b[1]} stroke={review?'#d62f45':edgeStroke[e.kind]} strokeWidth={review?.48:e.kind==='wall'?.34:.26} strokeDasharray={e.kind==='open'?'.55 .34':e.kind==='step'?'.28 .2':undefined} opacity={view==='arrival'?.82:.92}/>
+          })}
 
           {walls.map((w,i)=><rect key={`wall-${i}`} x={w.x1} y={-w.z2} width={Math.max(.12,w.x2-w.x1)} height={Math.max(.12,w.z2-w.z1)} fill="#403d38" opacity={view==='arrival'?.72:.9}/>)}
           {glass.map((w,i)=><rect key={`glass-${i}`} x={w.x1} y={-w.z2} width={Math.max(.11,w.x2-w.x1)} height={Math.max(.11,w.z2-w.z1)} fill="#5aa4b0" opacity=".88"/>)}
 
           {layers.furniture&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
 
-          {layers.railings&&estateRailings.map(r=><polyline key={r.id} points={r.points.map(([x,z])=>`${x},${-z}`).join(' ')} fill="none" stroke={r.family==='garden'?'#7b5f48':'#593f2d'} strokeWidth={r.family==='garden'?.25:.34} strokeDasharray={r.family==='garden'?'.55 .22':undefined} strokeLinecap="round" strokeLinejoin="round"/>)}
+          {layers.railings&&estateRailings.map(r=>{
+            const selected=selectedRail===r.id,review=auditMode&&r.audit==='review',pts=r.points.map(([x,z])=>`${x},${-z}`).join(' ')
+            return <g key={r.id}>
+              <polyline points={pts} fill="none" stroke="transparent" strokeWidth="2.2" pointerEvents={tool==='pan'?'stroke':'none'} onPointerDown={e=>{e.stopPropagation();setSelectedRail(r.id)}}/>
+              <polyline points={pts} fill="none" stroke={selected?'#175f91':review?'#df7a19':r.family==='garden'?'#7b5f48':'#593f2d'} strokeWidth={selected?.58:review?.5:r.family==='garden'?.28:.36} strokeDasharray={r.family==='garden'?'.55 .22':undefined} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none"/>
+            </g>
+          })}
 
           {layers.markups&&marks.map(mark=>{
             const color=categoryMeta[mark.category].color
@@ -278,6 +309,16 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           return <text key={`label-${i}`} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={labelSize(f.name,w,d)} fill="#48433b" opacity=".82">{f.name}</text>
         })}
 
+        {layers.railings&&estateRailings.filter(r=>auditMode||selectedRail===r.id).map(r=>{
+          const m=rotate180(railMid(r.points)),selected=selectedRail===r.id
+          return <g key={`rail-label-${r.id}`} className="ep-rail-label"><circle cx={m.x} cy={m.y} r={selected?1.05:.86} fill={selected?'#175f91':r.audit==='review'?'#df7a19':'#5f4837'} stroke="#fffaf0" strokeWidth=".18"/><text x={m.x} y={m.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize={selected?.62:.54} fontWeight="800" fill="white">{r.code}</text></g>
+        })}
+
+        {auditMode&&layers.edges&&auditOpenEdges.map(e=>{
+          const p=rotate180({x:(e.a[0]+e.b[0])/2,y:-(e.a[1]+e.b[1])/2})
+          return <g key={`edge-label-${e.id}`}><rect x={p.x-.72} y={p.y-.42} width="1.44" height=".84" rx=".26" fill="#d62f45"/><text x={p.x} y={p.y+.03} textAnchor="middle" dominantBaseline="middle" fontSize=".48" fontWeight="800" fill="white">{e.code}</text></g>
+        })}
+
         {layers.markups&&marks.filter(mark=>mark.tool==='note').map(mark=>{
           const p=rotate180(mark.points[0]),color=categoryMeta[mark.category].color
           return <g key={`note-label-${mark.id}`}><text x={p.x} y={p.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize=".68" fontWeight="700" fill="white">{mark.id}</text>{mark.text&&<text x={p.x+1.2} y={p.y+.12} fontSize=".92" fontWeight="600" fill={color} paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".25">{mark.text}</text>}</g>
@@ -291,26 +332,47 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       {clean&&<button className="ep-clean-exit" onClick={()=>setClean(false)}>Exit clean view</button>}
     </section>
 
-    {!clean&&<aside className="ep-layer-panel">
+    {!clean&&<aside className={`ep-layer-panel${layersOpen?' open':''}`}>
+      <button className={`ep-audit-toggle${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>
+        <span>Edge audit</span><b>{auditCount}</b>
+      </button>
       <strong>Layers</strong>
       {Object.entries(layers).map(([key,value])=><label key={key}><input type="checkbox" checked={value} onChange={()=>setLayers(x=>({...x,[key]:!x[key as keyof typeof x]}))}/>{key}</label>)}
+      <div className="ep-mini-legend"><i className="deck"/>patio/deck <i className="open"/>open edge <i className="rail"/>railing</div>
     </aside>}
 
     {!clean&&<footer className="ep-tools">
       <div className="ep-tools-scroll">
-        {([['pan','Pan'],['pen','Draw'],['arrow','Arrow'],['area','Area'],['note','Note']] as [Tool,string][]).map(([id,label])=><button key={id} className={tool===id?'active':''} onClick={()=>setTool(id)}><span>{id==='pan'?'✥':id==='pen'?'✎':id==='arrow'?'→':id==='area'?'▱':'A1'}</span>{label}</button>)}
+        {([['pan','Pan'],['pen','Draw'],['arrow','Arrow'],['area','Area'],['note','Note']] as [Tool,string][]).map(([id,label])=><button key={id} className={tool===id?'active':''} onClick={()=>setTool(id)}><span>{id==='pan'?'✥':id==='pen'?'✎':id==='arrow'?'→':id==='area'?'▱':'A1'}</span><em>{label}</em></button>)}
       </div>
       <select className="ep-category" value={category} onChange={e=>setCategory(e.target.value as Category)} aria-label="Markup category">
         {(Object.keys(categoryMeta) as Category[]).map(k=><option key={k} value={k}>{categoryMeta[k].label}</option>)}
       </select>
       <div className="ep-history"><button onClick={undo} disabled={!marks.length} aria-label="Undo">↶</button><button onClick={redoOne} disabled={!redo.length} aria-label="Redo">↷</button></div>
-      <button className="ep-more" onClick={()=>setNotesOpen(true)}>Marks {marks.length}</button>
-      <button className="ep-more" onClick={()=>setClean(true)}>Clean</button>
-      <button className="ep-more" onClick={exportPng}>Export</button>
+      <button className={`ep-more ep-audit-action${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>Audit {auditCount}</button>
+      <button className="ep-more ep-marks-action" onClick={()=>setNotesOpen(true)}>Marks {marks.length}</button>
+      <button className="ep-more ep-clean-action" onClick={()=>setClean(true)}>Clean</button>
+      <button className="ep-more ep-export-action" onClick={exportPng}>Export</button>
     </footer>}
 
-    {!clean&&marks.length===0&&<div className="ep-hint">Use <strong>Area</strong> for deck extensions, <strong>Arrow</strong> for railings, and <strong>Note</strong> for callouts. Your marks save automatically on this device.</div>}
-    {!clean&&status&&<div className="ep-status">{status}</div>}
+    {!clean&&<nav className="ep-landscape-utils" aria-label="Plan utilities">
+      <button className={auditMode?'active':''} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}} aria-label="Toggle edge audit"><span>◎</span><em>Audit</em><b>{auditCount}</b></button>
+      <button className={layersOpen?'active':''} onClick={()=>setLayersOpen(v=>!v)} aria-label="Toggle layers"><span>☷</span><em>Layers</em></button>
+      <button onClick={()=>setNotesOpen(true)} aria-label="Open marks"><span>◇</span><em>Marks</em>{marks.length>0&&<b>{marks.length}</b>}</button>
+      <button onClick={()=>zoom(.82)} aria-label="Zoom in"><span>＋</span><em>Zoom</em></button>
+      <button onClick={()=>zoom(1.22)} aria-label="Zoom out"><span>−</span><em>Zoom</em></button>
+      <button onClick={()=>setBox(DEFAULT_BOX[view])} aria-label="Fit plan"><span>⌗</span><em>Fit</em></button>
+      <button onClick={exportPng} aria-label="Export plan"><span>⇩</span><em>Export</em></button>
+      <button onClick={()=>setClean(true)} aria-label="Clean view"><span>□</span><em>Clean</em></button>
+    </nav>}
+
+    {!clean&&marks.length===0&&!selectedRailData&&<div className="ep-hint">Tap <strong>Audit</strong> to see open edges and railing IDs. Use <strong>Area</strong> for deck extensions and <strong>Arrow</strong> for new railings.</div>}
+    {!clean&&selectedRailData&&<div className="ep-selection-card">
+      <b>{selectedRailData.code}</b>
+      <span><strong>{selectedRailData.label}</strong><small>{selectedRailData.family==='guard'?'Full-height guard rail':'Low garden rail'}{selectedRailData.audit==='review'?' · review candidate':''}</small></span>
+      <button onClick={()=>setSelectedRail(null)} aria-label="Clear railing selection">×</button>
+    </div>}
+        {!clean&&status&&<div className="ep-status">{status}</div>}
 
     {noteDraft&&<div className="ep-modal" onClick={()=>setNoteDraft(null)}><section onClick={e=>e.stopPropagation()}><small>{nextId} · {categoryMeta[category].label}</small><h2>Add a note</h2><textarea autoFocus value={noteDraft.text} onChange={e=>setNoteDraft({...noteDraft,text:e.target.value})} placeholder="e.g. Extend the deck to this line"/><div><button onClick={()=>setNoteDraft(null)}>Cancel</button><button className="primary" onClick={addNote}>Add {nextId}</button></div></section></div>}
 

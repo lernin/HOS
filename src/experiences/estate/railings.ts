@@ -1,12 +1,14 @@
 export type EstateRailPoint = readonly [number, number]
 export type EstateRail = {
   id: string
+  code: string
   label: string
   points: readonly EstateRailPoint[]
   height?: number
   glass?: boolean
   curb?: boolean
   family: 'guard' | 'garden'
+  audit?: 'review'
 }
 
 export const RAIL_BASE = .115
@@ -21,6 +23,7 @@ const p = (x:number,z:number):EstateRailPoint => [x,z]
 export const estateRailings: EstateRail[] = [
   {
     id:'west-ocean',
+    code:'R1',
     label:'West ocean terrace',
     family:'guard',
     glass:true,
@@ -33,6 +36,7 @@ export const estateRailings: EstateRail[] = [
   },
   {
     id:'east-ocean',
+    code:'R2',
     label:'East ocean terrace & lookout',
     family:'guard',
     glass:true,
@@ -46,6 +50,7 @@ export const estateRailings: EstateRail[] = [
   },
   {
     id:'sunrise-cliff',
+    code:'R3',
     label:'Sunrise terrace',
     family:'guard',
     glass:true,
@@ -53,6 +58,7 @@ export const estateRailings: EstateRail[] = [
   },
   {
     id:'courtyard-drop',
+    code:'R4',
     label:'Garden courtyard drop',
     family:'guard',
     glass:true,
@@ -60,6 +66,7 @@ export const estateRailings: EstateRail[] = [
   },
   {
     id:'east-gallery-drop',
+    code:'R5',
     label:'East gallery drop',
     family:'guard',
     glass:true,
@@ -67,22 +74,27 @@ export const estateRailings: EstateRail[] = [
   },
   {
     id:'arrival-garden-west',
+    code:'R6',
     label:'Arrival garden west',
     family:'garden',
+    audit:'review',
     height:.82,
     glass:false,
     points:[p(-18.15+RAIL_EDGE_INSET,34.5),p(-18.15+RAIL_EDGE_INSET,47.2)],
   },
   {
     id:'arrival-garden-east',
+    code:'R7',
     label:'Arrival garden east',
     family:'garden',
+    audit:'review',
     height:.82,
     glass:false,
     points:[p(20.15-RAIL_EDGE_INSET,40.2),p(20.15-RAIL_EDGE_INSET,48.4)],
   },
   {
     id:'foyer-garden-west-a',
+    code:'R8',
     label:'Foyer garden west',
     family:'garden',
     height:.82,
@@ -92,6 +104,7 @@ export const estateRailings: EstateRail[] = [
   },
   {
     id:'foyer-garden-west-b',
+    code:'R9',
     label:'Foyer garden west',
     family:'garden',
     height:.82,
@@ -101,6 +114,7 @@ export const estateRailings: EstateRail[] = [
   },
   {
     id:'foyer-garden-east-a',
+    code:'R10',
     label:'Foyer garden east',
     family:'garden',
     height:.82,
@@ -110,6 +124,7 @@ export const estateRailings: EstateRail[] = [
   },
   {
     id:'foyer-garden-east-b',
+    code:'R11',
     label:'Foyer garden east',
     family:'garden',
     height:.82,

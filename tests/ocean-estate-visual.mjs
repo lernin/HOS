@@ -34,6 +34,18 @@ try{
  await touch.getByRole('button',{name:'Estate menu'}).tap();assert.ok(await visible(touch.getByRole('heading',{name:'Go somewhere'})),'destination choices live in the single menu');assert.ok(await visible(touch.getByRole('button',{name:/Great room/})),'menu exposes destinations without a walking-screen button cluster');assert.ok(await visible(touch.getByText('Ocean sound',{exact:true})),'sound control lives in the menu');await touch.getByRole('button',{name:'Close settings'}).tap();await touch.waitForTimeout(120)
  assert.equal(await touch.locator('body').evaluate(e=>e.scrollWidth<=innerWidth),true,'landscape phone horizontal overflow');await touch.screenshot({path:`${output}/phone-landscape-touch.png`,timeout:120000});await mobile.close()
 
- await writeFile(`${output}/verification.json`,JSON.stringify({errors,externalNetwork,diagnostics,phoneViewport:{width:915,height:412},renderer:'Chromium SwiftShader; not physical phone hardware',ui:'landscape entry/single menu, edit-mode control, deterministic floor/wall/stair and artwork picking, touch drag-to-look, clean walking HUD',routeTests:'see Node test output'},null,2))
+ const planner=await browser.newPage({viewport:{width:915,height:412},deviceScaleFactor:1});planner.on('pageerror',e=>errors.push(e.message));planner.on('console',recordConsole)
+ await planner.goto('http://127.0.0.1:4173/tests/ocean-estate-plan-preview.html',{waitUntil:'load'});await planner.locator('.ep-plan').waitFor({state:'visible',timeout:15000})
+ const planLayout=await planner.evaluate(()=>{const box=(sel)=>{const e=document.querySelector(sel);if(!e)return null;const r=e.getBoundingClientRect();return{width:r.width,height:r.height,top:r.top,left:r.left,bottom:r.bottom,right:r.right,display:getComputedStyle(e).display}};return{top:box('.ep-top'),stage:box('.ep-stage'),tools:box('.ep-tools'),utils:box('.ep-landscape-utils'),layers:box('.ep-layer-panel')}})
+ assert.ok(planLayout.top&&planLayout.top.height<=46,'compact landscape top bar')
+ assert.ok(planLayout.stage&&planLayout.stage.height>=360,'landscape plan keeps most vertical space')
+ assert.ok(planLayout.tools&&planLayout.tools.width<=60,'left tool rail stays narrow')
+ assert.ok(planLayout.utils&&planLayout.utils.width<=55,'right utility rail stays narrow')
+ assert.equal(planLayout.layers?.display,'none','layers start closed in compact landscape')
+ await planner.getByRole('button',{name:'Toggle layers'}).click();await planner.locator('.ep-layer-panel.open').waitFor({state:'visible',timeout:3000});await planner.getByRole('button',{name:'Toggle layers'}).click()
+ await planner.screenshot({path:`${output}/estate-plan.png`,timeout:120000})
+ await planner.getByRole('button',{name:'Toggle edge audit'}).click();await planner.getByText('R6',{exact:true}).waitFor({state:'visible',timeout:5000});assert.equal(await planner.locator('polyline[stroke="transparent"]').count(),11,'every railing exposes a wide invisible phone hit target');await planner.screenshot({path:`${output}/estate-plan-audit.png`,timeout:120000});await planner.close()
+
+ await writeFile(`${output}/verification.json`,JSON.stringify({errors,externalNetwork,diagnostics,phoneViewport:{width:915,height:412},renderer:'Chromium SwiftShader; not physical phone hardware',ui:'landscape entry/single menu, edit-mode control, deterministic floor/wall/stair and artwork picking, touch drag-to-look, clean walking HUD, Estate Plan surface/edge audit and railing selection',routeTests:'see Node test output'},null,2))
  assert.ok(diagnostics.calls<350,`Draw calls ${diagnostics.calls}`);assert.ok(diagnostics.triangles<1300000,`Triangles ${diagnostics.triangles}`);assert.deepEqual(errors,[])
 }finally{await page.screenshot({path:output+'/last-ui.png',timeout:120000}).catch(()=>{});await writeFile(`${output}/console-errors.json`,JSON.stringify(errors,null,2));await browser.close()}
