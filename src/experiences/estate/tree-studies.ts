@@ -81,12 +81,15 @@ export function buildTreeStudy(k:EstateKit,{x,y,z,size=1,seed=3,form='airy'}:Tre
       const end=start.clone().add(v(Math.cos(aa)*reach,.2+rand()*.4,Math.sin(aa)*reach))
       const bend=start.clone().lerp(end,.52);bend.y+=.12
       wood(k,g,[start,bend,end],[.025,.014,.0025],seed+j)
-      for(let n=0;n<64;n++){
-        const t=.12+rand()*.92,center=start.clone().lerp(end,t)
-        const offset=rand()*Math.PI*2,width=.14+Math.sin(t*Math.PI)*.34
-        center.add(v(Math.cos(offset)*width,(rand()-.5)*.34,Math.sin(offset)*width))
-        const length=(broad?.22:.17)*(.72+rand()*.55)
-        leaves.add(center,length,length*(broad?.34:.2),rand()*Math.PI*2,(rand()-.5)*1.5,n%7===0?1:n%3===0?2:0)
+      // Add foliage without changing the existing branch/leaf random sequence.
+      const extraLeaves=random(seed*7919+i*997+j*61+6029)
+      for(let n=0;n<128;n++){
+        const leafRand=n<64?rand:extraLeaves
+        const t=.12+leafRand()*.92,center=start.clone().lerp(end,t)
+        const offset=leafRand()*Math.PI*2,width=.14+Math.sin(t*Math.PI)*.34
+        center.add(v(Math.cos(offset)*width,(leafRand()-.5)*.34,Math.sin(offset)*width))
+        const length=(broad?.245:.205)*(.72+leafRand()*.55)
+        leaves.add(center,length,length*(broad?.34:.23),leafRand()*Math.PI*2,(leafRand()-.5)*1.5,n%7===0?1:n%3===0?2:0)
       }
     }
   }

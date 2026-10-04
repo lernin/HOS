@@ -31,3 +31,7 @@ Branch: `feature/ocean-estate-tree-studies-20261004`, based on `14f7a3db6c035598
 Review Trees in the Lab, using trunk/canopy controls and drag-to-orbit, then visit Spa in the same preview. Choose the shared family before replacing island/forest populations. This is visual polish for HOS; it does not advance Procedia's basic launch path. Production merge and any wider forest conversion are separate decisions.
 
 Preview URL, final commit and PR are recorded in the canonical Ocean Estate workroom, HOS issue #79, after deployment readiness is verified.
+
+## October 5 foliage follow-up
+
+Ashley requested more foliage. Each twig now carries twice as many leaves, with slightly larger blades, across all three studies and the shared spa tree. The extra leaves use an independent deterministic random sequence, preserving the existing branch shapes and original leaf placement. Dome clearance and all52 estate/geometry/navigation/village tests passed again, full build passed, and the actual Lab/spa/phone visual run finished with zero JavaScript page errors. Fuller foliage was visually inspected. Software-rendered desktop dome view is now256 calls/~450k triangles (previous tree study256/~432k); physical phone performance remains acceptance work.
