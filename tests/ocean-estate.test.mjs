@@ -109,12 +109,14 @@ test('closed arrival garden pockets read as intentional planted areas',()=>{
 test('grand foyer grass pockets are framed as intentional gardens',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
+ const layout=readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8')
  assert.equal(rails.includes("id:'foyer-garden-west-a'"),true)
  assert.equal(rails.includes("id:'foyer-garden-east-a'"),true)
  assert.equal(rails.includes("curb:true"),true)
  assert.equal(env.includes('Foyer garden planting'),true)
- assert.equal(env.includes('[-8.5,11,1.9,2.35]'),true)
- assert.equal(env.includes('[10.5,11.5,1.8,2.75]'),true)
+ assert.equal(env.includes('for(const {cx,cz,rx,rz} of foyerGardenBeds)'),true)
+ assert.equal(layout.includes("cx:-8.5, cz:11, rx:1.9, rz:2.35"),true)
+ assert.equal(layout.includes("cx:10.5, cz:11.5, rx:1.8, rz:2.75"),true)
 })
 
 
