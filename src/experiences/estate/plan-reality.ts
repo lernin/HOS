@@ -44,7 +44,26 @@ export function createEstatePlanReality(canvas:HTMLCanvasElement){
     camera.top=-box.y
     camera.bottom=-(box.y+box.h)
     camera.updateProjectionMatrix()
+
+    // Match SVG preserveAspectRatio="xMidYMid meet" exactly so the live 3D
+    // reality layer and all annotation overlays share one immutable transform.
+    const viewAspect=box.w/box.h,canvasAspect=w/h
+    let vx=0,vy=0,vw=w,vh=h
+    if(canvasAspect>viewAspect){
+      vw=h*viewAspect
+      vx=(w-vw)/2
+    }else{
+      vh=w/viewAspect
+      vy=(h-vh)/2
+    }
+    renderer.setScissorTest(false)
+    renderer.setClearColor('#dceff2',1)
+    renderer.clear(true,true,true)
+    renderer.setViewport(Math.round(vx),Math.round(vy),Math.round(vw),Math.round(vh))
+    renderer.setScissor(Math.round(vx),Math.round(vy),Math.round(vw),Math.round(vh))
+    renderer.setScissorTest(true)
     renderer.render(scene,camera)
+    renderer.setScissorTest(false)
   }
 
   const observer=new ResizeObserver(()=>render())
