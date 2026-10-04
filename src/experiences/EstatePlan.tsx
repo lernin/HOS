@@ -13,6 +13,14 @@ type Tool='pan'|'pen'|'arrow'|'area'|'note'
 type Category='general'|'deck'|'railing'|'wall'|'remove'
 type Pt={x:number;y:number}
 type Box={x:number;y:number;w:number;h:number}
+type Last3DView={x:number;z:number;yaw:number;at?:number}
+function readLast3DView():Last3DView|null{
+  try{
+    const v=JSON.parse(localStorage.getItem('ocean-estate-plan-last-view-v1')||'null')
+    return v&&Number.isFinite(v.x)&&Number.isFinite(v.z)&&Number.isFinite(v.yaw)?v:null
+  }catch{return null}
+}
+
 type Mark={
   id:string
   tool:Exclude<Tool,'pan'>
@@ -94,6 +102,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const [selectedSurface,setSelectedSurface]=useState<string|null>(null)
   const [layers,setLayers]=useState({reality:true,surfaces:true,edges:true,labels:true,furniture:true,railings:true,markups:true})
   const [status,setStatus]=useState('')
+  const [last3DView]=useState<Last3DView|null>(readLast3DView)
 
   useEffect(()=>{localStorage.setItem(STORAGE,JSON.stringify(marks))},[marks])
   useEffect(()=>{setBox(DEFAULT_BOX[view])},[view])
@@ -346,6 +355,12 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           const p=rotate180(mark.points[0]),color=categoryMeta[mark.category].color
           return <g key={`note-label-${mark.id}`}><text x={p.x} y={p.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize=".68" fontWeight="700" fill="white">{mark.id}</text>{mark.text&&<text x={p.x+1.2} y={p.y+.12} fontSize=".92" fontWeight="600" fill={color} paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".25">{mark.text}</text>}</g>
         })}
+
+        {last3DView&&(()=>{
+          const p=rotate180({x:last3DView.x,y:-last3DView.z}),dx=Math.sin(last3DView.yaw),dy=-Math.cos(last3DView.yaw),len=7,tip={x:p.x+dx*len,y:p.y+dy*len},side={x:-dy,y:dx}
+          const left={x:p.x+side.x*1.7,y:p.y+side.y*1.7},right={x:p.x-side.x*1.7,y:p.y-side.y*1.7}
+          return <g className="ep-last-view" pointerEvents="none"><polygon points={`${left.x},${left.y} ${tip.x},${tip.y} ${right.x},${right.y}`} fill="#1b6b96" fillOpacity=".14" stroke="#1b6b96" strokeWidth=".28"/><circle cx={p.x} cy={p.y} r=".72" fill="#1b6b96" stroke="#fffaf0" strokeWidth=".18"/><text x={p.x+1} y={p.y-.9} fontSize=".62" fontWeight="800" fill="#1b6b96" paintOrder="stroke" stroke="#fffaf0" strokeWidth=".2">3D view</text></g>
+        })()}
 
         <g transform={`translate(${box.x+3} ${box.y+box.h-3})`}><line x1="0" y1="0" x2="10" y2="0" stroke="#4b4842" strokeWidth=".22"/><line x1="0" y1="-.45" x2="0" y2=".45" stroke="#4b4842" strokeWidth=".18"/><line x1="10" y1="-.45" x2="10" y2=".45" stroke="#4b4842" strokeWidth=".18"/><text x="5" y="-1" textAnchor="middle" fontSize=".9" fill="#4b4842">10 m</text></g>
         <g transform={`translate(${box.x+box.w-4} ${box.y+4})`}><path d="M0 -2 L0 2 M0 2 L-1 .5 M0 2 L1 .5" fill="none" stroke="#4b4842" strokeWidth=".22"/><text x="0" y="3.6" textAnchor="middle" fontSize=".9" fill="#4b4842">N</text></g>
