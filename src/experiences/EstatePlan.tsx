@@ -4,7 +4,7 @@ import { floors, walls, glass, furnishings, footprint } from './estate/plan'
 import { estateRailings } from './estate/railings'
 import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces, patioSurfaces } from './estate/site-edges'
 import type { EstateSurfaceKind } from './estate/site-edges'
-import { architecturalPlanters, featurePalms, featureTrees } from './estate/site-layout'
+import { architecturalPlanters, coastline, featurePalms, featureTrees } from './estate/site-layout'
 import './estate/estate-plan.css'
 
 type PlanView='main'|'arrival'|'site'
@@ -265,8 +265,8 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="#f7f3e8"/>
         <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="url(#ep-grid)"/>
         <g transform="rotate(180)">
-          {view==='site'&&<ellipse cx="0" cy="-7" rx="58" ry="61" fill="#e8ece1" stroke="#aeb6a7" strokeWidth=".35"/>}
-          <rect x="-70" y="12" width="140" height="65" fill="#dceff2" opacity={view==='arrival'?.18:.72}/>
+          <rect x="-90" y="-90" width="180" height="180" fill="#dceff2" opacity={view==='arrival'?.18:.78}/>
+          <polygon points={coastline.map(([x,z])=>`${x},${-z}`).join(' ')} fill="#e8e5d9" stroke="#aaa99e" strokeWidth=".22" opacity={view==='arrival'?.34:.96}/>
 
           {layers.surfaces&&estateSurfaces.map(s=>{
             const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id
@@ -350,7 +350,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       </button>
       <strong>Layers</strong>
       {Object.entries(layers).map(([key,value])=><label key={key}><input type="checkbox" checked={value} onChange={()=>setLayers(x=>({...x,[key]:!x[key as keyof typeof x]}))}/>{key}</label>)}
-      <div className="ep-mini-legend"><i className="deck"/>patio/deck <i className="open"/>open edge <i className="rail"/>railing</div>
+      <div className="ep-mini-legend"><i className="deck"/>patio/deck · exact 3D slab <i className="open"/>open edge <i className="rail"/>railing</div>
     </aside>}
 
     {!clean&&<footer className="ep-tools">
@@ -378,7 +378,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       <button onClick={()=>setClean(true)} aria-label="Clean view"><span>□</span><em>Clean</em></button>
     </nav>}
 
-    {!clean&&marks.length===0&&!selectedRailData&&!selectedSurfaceData&&<div className="ep-hint">Tap <strong>Audit</strong> to see open edges and railing IDs. Use <strong>Area</strong> for deck extensions and <strong>Arrow</strong> for new railings.</div>}
+    {!clean&&marks.length===0&&!selectedRailData&&!selectedSurfaceData&&<div className="ep-hint">Patios <strong>P1–P7</strong> are exact 3D slabs. Tap one to inspect it; use <strong>Area</strong> to propose an extension.</div>}
     {!clean&&selectedRailData&&<div className="ep-selection-card">
       <b>{selectedRailData.code}</b>
       <span><strong>{selectedRailData.label}</strong><small>{selectedRailData.family==='guard'?'Full-height guard rail':'Low garden rail'}{selectedRailData.audit==='review'?' · review candidate':''}</small></span>
