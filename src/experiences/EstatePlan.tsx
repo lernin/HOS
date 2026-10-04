@@ -272,7 +272,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
             const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id
             const opacity=view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)
             if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={surfaceFill[s.kind]} opacity={opacity} stroke="#8f897e" strokeWidth=".16"/>
-            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={surfaceFill[s.kind]} opacity={opacity} stroke={selected?'#175f91':patio?'#8b7055':'#9c9385'} strokeWidth={selected?.5:patio?.24:.13} pointerEvents={patio&&tool==='pan'?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRail(null)}:undefined}/>
+            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={surfaceFill[s.kind]} opacity={opacity} stroke={selected?'#175f91':patio?'transparent':'#9c9385'} strokeWidth={selected?.5:patio?0:.13} pointerEvents={patio&&tool==='pan'?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRail(null)}:undefined}/>
           })}
 
           {layers.edges&&estateEdges.map(e=>{
