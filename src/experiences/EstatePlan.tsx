@@ -362,6 +362,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       <button onClick={()=>zoom(.82)} aria-label="Zoom in"><span>＋</span><em>Zoom</em></button>
       <button onClick={()=>zoom(1.22)} aria-label="Zoom out"><span>−</span><em>Zoom</em></button>
       <button onClick={()=>setBox(DEFAULT_BOX[view])} aria-label="Fit plan"><span>⌗</span><em>Fit</em></button>
+      <button onClick={exportPng} aria-label="Export plan"><span>⇩</span><em>Export</em></button>
       <button onClick={()=>setClean(true)} aria-label="Clean view"><span>□</span><em>Clean</em></button>
     </nav>}
 
