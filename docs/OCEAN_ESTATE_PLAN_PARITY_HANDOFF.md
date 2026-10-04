@@ -25,6 +25,12 @@ The plan intentionally remains an overhead cutaway: roofs/overhead beams are hid
 - Existing full estate WebGL/UI suite completed its render and interaction checks but failed its final console gate on seven external-resource `ERR_EMPTY_RESPONSE` errors. A separate network trace confirmed unavailable Wikimedia/National Gallery artwork URLs and the existing material catalog request. Do not report this run as an all-pass render suite.
 - Chromium/SwiftShader is software rendering, not a Samsung S23 Ultra performance check. Current walkthrough render diagnostics: 274 calls, 358,884 triangles, pixel ratio 1.
 
+## Orientation correction — Ashley identified the mirror
+
+Ashley identified the reported mismatch: left and right were reversed. The reality canvas had `scaleX(-1)`, with compensating horizontal inversion in camera bounds, picking, SVG overlays and PNG capture. The previous tests agreed with that mirrored coordinate convention and therefore missed physical orientation.
+
+Removed the horizontal mirror consistently across the image, picking, capture and annotations. Display coordinates now use world X directly and world Z downward, matching arrival-to-ocean walkthrough orientation. Existing notes keep their original world coordinates. The saved viewpoint direction and north arrow are also corrected. An independent browser assertion was first observed failing (`P3` where the west/left `P2` should be), then passing with the fix. All seven patio picks, zoom/resize/drawing/export checks pass in the corrected orientation; an existing-format west-side note remains on its actual slab.
+
 ## Next decisive step
 
 Review the same area's plan and walkthrough within one preview revision. If a patio still differs, identify that location in both views and inspect the actual occluding objects or surface there. Do not change slab dimensions based on the overhead image alone. Keep production acceptance separate.

@@ -50,8 +50,8 @@ export function createEstatePlanReality(canvas:HTMLCanvasElement){
     const w=Math.max(1,Math.round(canvas.clientWidth)),h=Math.max(1,Math.round(canvas.clientHeight))
     renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.25))
     renderer.setSize(w,h,false)
-    camera.left=-(box.x+box.w)
-    camera.right=-box.x
+    camera.left=box.x
+    camera.right=box.x+box.w
     camera.top=-box.y
     camera.bottom=-(box.y+box.h)
     camera.updateProjectionMatrix()
@@ -88,8 +88,8 @@ export function createEstatePlanReality(canvas:HTMLCanvasElement){
     let vx=0,vy=0,vw=rect.width,vh=rect.height
     if(canvasAspect>viewAspect){vw=rect.height*viewAspect;vx=(rect.width-vw)/2}
     else{vh=rect.width/viewAspect;vy=(rect.height-vh)/2}
-    // CSS mirrors the reality canvas horizontally to match the 180° SVG plan.
-    const localX=rect.width-(clientX-rect.left),localY=clientY-rect.top
+    // The overhead camera uses world X directly, matching the walkthrough.
+    const localX=clientX-rect.left,localY=clientY-rect.top
     if(localX<vx||localX>vx+vw||localY<vy||localY>vy+vh)return null
     ndc.set(((localX-vx)/vw)*2-1,1-((localY-vy)/vh)*2)
     raycaster.setFromCamera(ndc,camera)
@@ -116,7 +116,6 @@ export function createEstatePlanReality(canvas:HTMLCanvasElement){
       copy.height=Math.max(1,Math.round(viewport.w*ratio))
       const context=copy.getContext('2d')
       if(!context)throw new Error('Could not capture the estate plan')
-      context.translate(copy.width,0);context.scale(-1,1)
       context.drawImage(canvas,viewport.x*ratio,(canvas.clientHeight-viewport.y-viewport.w)*ratio,viewport.z*ratio,viewport.w*ratio,0,0,copy.width,copy.height)
       return copy.toDataURL('image/png')
     },

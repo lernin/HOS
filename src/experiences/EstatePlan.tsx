@@ -32,7 +32,7 @@ type Mark={
 
 const STORAGE='ocean-estate-plan-markups-v1'
 const DEFAULT_BOX:Record<PlanView,Box>={
-  main:{x:-48,y:-43,w:92,h:96},
+  main:{x:-44,y:-43,w:92,h:96},
   arrival:{x:-28,y:15,w:56,h:49},
   site:{x:-66,y:-63,w:132,h:132},
 }
@@ -61,7 +61,7 @@ const railMid=(points:readonly (readonly [number,number])[])=>{
   return{x:(a[0]+b[0])/2,y:-(a[1]+b[1])/2}
 }
 const pointsString=(pts:Pt[])=>pts.map(q=>`${q.x},${q.y}`).join(' ')
-const rotate180=(p:Pt):Pt=>({x:-p.x,y:-p.y})
+const planDisplay=(p:Pt):Pt=>({x:p.x,y:-p.y})
 
 function readMarks():Mark[]{
   try{
@@ -132,7 +132,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     return{x:out.x,y:out.y}
   }
   function toPlan(clientX:number,clientY:number):Pt{
-    return rotate180(toView(clientX,clientY))
+    return planDisplay(toView(clientX,clientY))
   }
   function commit(mark:Omit<Mark,'id'>){
     setMarks(prev=>[...prev,{...mark,id:nextId}])
@@ -305,7 +305,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         </defs>
         <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill={layers.reality?'transparent':'#f7f3e8'}/>
         <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="url(#ep-grid)" opacity={layers.reality?.34:1}/>
-        <g transform="rotate(180)">
+        <g transform="scale(1,-1)">
           {!layers.reality&&<><rect x="-90" y="-90" width="180" height="180" fill="#dceff2" opacity={view==='arrival'?.18:.78}/><polygon points={coastline.map(([x,z])=>`${x},${-z}`).join(' ')} fill="#e8e5d9" stroke="#aaa99e" strokeWidth=".22" opacity={view==='arrival'?.34:.96}/></>}
 
           {estateSurfaces.map(s=>{
@@ -349,41 +349,41 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         </g>
 
         <text x="0" y="-34" textAnchor="middle" fontSize="2.3" letterSpacing=".35" fill="#6f9ea8" opacity=".72">OCEAN</text>
-        <text x="-.5" y="-30.5" textAnchor="middle" fontSize="1.15" fill="#326f78">Infinity pool</text>
+        <text x=".5" y="-30.5" textAnchor="middle" fontSize="1.15" fill="#326f78">Infinity pool</text>
 
         {roomLabels.map((f,i)=>{
-          const w=f.x2-f.x1,d=f.z2-f.z1,p=rotate180({x:(f.x1+f.x2)/2,y:-(f.z1+f.z2)/2})
+          const w=f.x2-f.x1,d=f.z2-f.z1,p=planDisplay({x:(f.x1+f.x2)/2,y:-(f.z1+f.z2)/2})
           return <text key={`label-${i}`} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={labelSize(f.name,w,d)} fill="#48433b" opacity=".82">{f.name}</text>
         })}
 
         {layers.labels&&patioSurfaces.filter(s=>s.shape==='rect').map(s=>{
-          const p=rotate180({x:(s.x1+s.x2)/2,y:-(s.z1+s.z2)/2}),selected=selectedSurface===s.id
+          const p=planDisplay({x:(s.x1+s.x2)/2,y:-(s.z1+s.z2)/2}),selected=selectedSurface===s.id
           return <g key={`patio-label-${s.id}`} pointerEvents="none"><circle cx={p.x} cy={p.y} r={selected?1.0:.78} fill={selected?'#175f91':'#8b7055'} stroke="#fffaf0" strokeWidth=".16"/><text x={p.x} y={p.y+.04} textAnchor="middle" dominantBaseline="middle" fontSize={selected?.6:.48} fontWeight="800" fill="white">{s.code}</text><text x={p.x+1.05} y={p.y+.08} fontSize=".68" fontWeight="650" fill="#65594b" paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".18">{s.label}</text></g>
         })}
 
         {layers.railings&&estateRailings.filter(r=>auditMode||selectedRail===r.id).map(r=>{
-          const m=rotate180(railMid(r.points)),selected=selectedRail===r.id
+          const m=planDisplay(railMid(r.points)),selected=selectedRail===r.id
           return <g key={`rail-label-${r.id}`} className="ep-rail-label"><circle cx={m.x} cy={m.y} r={selected?1.05:.86} fill={selected?'#175f91':r.audit==='review'?'#df7a19':'#5f4837'} stroke="#fffaf0" strokeWidth=".18"/><text x={m.x} y={m.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize={selected?.62:.54} fontWeight="800" fill="white">{r.code}</text></g>
         })}
 
         {auditMode&&layers.edges&&auditOpenEdges.map(e=>{
-          const p=rotate180({x:(e.a[0]+e.b[0])/2,y:-(e.a[1]+e.b[1])/2})
+          const p=planDisplay({x:(e.a[0]+e.b[0])/2,y:-(e.a[1]+e.b[1])/2})
           return <g key={`edge-label-${e.id}`}><rect x={p.x-.72} y={p.y-.42} width="1.44" height=".84" rx=".26" fill="#d62f45"/><text x={p.x} y={p.y+.03} textAnchor="middle" dominantBaseline="middle" fontSize=".48" fontWeight="800" fill="white">{e.code}</text></g>
         })}
 
         {layers.markups&&marks.filter(mark=>mark.tool==='note').map(mark=>{
-          const p=rotate180(mark.points[0]),color=categoryMeta[mark.category].color
+          const p=planDisplay(mark.points[0]),color=categoryMeta[mark.category].color
           return <g key={`note-label-${mark.id}`}><text x={p.x} y={p.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize=".68" fontWeight="700" fill="white">{mark.id}</text>{mark.text&&<text x={p.x+1.2} y={p.y+.12} fontSize=".92" fontWeight="600" fill={color} paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".25">{mark.text}</text>}</g>
         })}
 
         {last3DView&&(()=>{
-          const p=rotate180({x:last3DView.x,y:-last3DView.z}),dx=Math.sin(last3DView.yaw),dy=-Math.cos(last3DView.yaw),len=7,tip={x:p.x+dx*len,y:p.y+dy*len},side={x:-dy,y:dx}
+          const p=planDisplay({x:last3DView.x,y:-last3DView.z}),dx=-Math.sin(last3DView.yaw),dy=-Math.cos(last3DView.yaw),len=7,tip={x:p.x+dx*len,y:p.y+dy*len},side={x:-dy,y:dx}
           const left={x:p.x+side.x*1.7,y:p.y+side.y*1.7},right={x:p.x-side.x*1.7,y:p.y-side.y*1.7}
           return <g className="ep-last-view" pointerEvents="none"><polygon points={`${left.x},${left.y} ${tip.x},${tip.y} ${right.x},${right.y}`} fill="#1b6b96" fillOpacity=".14" stroke="#1b6b96" strokeWidth=".28"/><circle cx={p.x} cy={p.y} r=".72" fill="#1b6b96" stroke="#fffaf0" strokeWidth=".18"/><text x={p.x+1} y={p.y-.9} fontSize=".62" fontWeight="800" fill="#1b6b96" paintOrder="stroke" stroke="#fffaf0" strokeWidth=".2">3D view</text></g>
         })()}
 
         <g transform={`translate(${box.x+3} ${box.y+box.h-3})`}><line x1="0" y1="0" x2="10" y2="0" stroke="#4b4842" strokeWidth=".22"/><line x1="0" y1="-.45" x2="0" y2=".45" stroke="#4b4842" strokeWidth=".18"/><line x1="10" y1="-.45" x2="10" y2=".45" stroke="#4b4842" strokeWidth=".18"/><text x="5" y="-1" textAnchor="middle" fontSize=".9" fill="#4b4842">10 m</text></g>
-        <g transform={`translate(${box.x+box.w-4} ${box.y+4})`}><path d="M0 -2 L0 2 M0 2 L-1 .5 M0 2 L1 .5" fill="none" stroke="#4b4842" strokeWidth=".22"/><text x="0" y="3.6" textAnchor="middle" fontSize=".9" fill="#4b4842">N</text></g>
+        <g transform={`translate(${box.x+box.w-4} ${box.y+4})`}><path d="M0 2 L0 -2 M0 -2 L-1 -.5 M0 -2 L1 -.5" fill="none" stroke="#4b4842" strokeWidth=".22"/><text x="0" y="-3.6" textAnchor="middle" fontSize=".9" fill="#4b4842">N</text></g>
       </svg>
 
       {!clean&&<div className="ep-zoom"><button onClick={()=>zoom(.82)}>＋</button><button onClick={()=>zoom(1.22)}>−</button><button onClick={()=>setBox(DEFAULT_BOX[view])}>Fit</button></div>}

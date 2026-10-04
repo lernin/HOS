@@ -13,10 +13,30 @@ const browser=await chromium.launch({
 try{
   const page=await browser.newPage({viewport:{width:915,height:412},deviceScaleFactor:1,acceptDownloads:true})
   const errors=[];page.on('pageerror',e=>errors.push(e.message))
+  // Existing notes store world X and negative world Z. Keep those coordinates
+  // unchanged while correcting their display orientation.
+  await page.addInitScript(()=>localStorage.setItem('ocean-estate-plan-markups-v1',JSON.stringify([
+    {id:'A1',tool:'note',category:'general',points:[{x:-13,y:30}],text:'Existing west-side note'},
+  ])))
   await page.goto('http://127.0.0.1:4173/tests/ocean-estate-plan-preview.html')
   await page.locator('.ep-plan').waitFor()
+  // Check physical orientation independently of the helper below. From the
+  // arrival looking toward the ocean, negative world X is the LEFT pool walk.
+  const west=await page.evaluate(()=>{
+    const p=new DOMPoint(-13,-30).matrixTransform(document.querySelector('.ep-plan').getScreenCTM())
+    return {x:p.x,y:p.y}
+  })
+  await page.mouse.click(west.x,west.y)
+  assert.equal(await page.locator('.ep-selection-card>b').innerText(),'P2','west pool walk must be on the left, as in the walkthrough')
+  const legacy=await page.evaluate(()=>{
+    const circle=document.querySelector('.ep-plan circle[fill="#d34f4f"]')
+    const p=new DOMPoint(Number(circle.getAttribute('cx')),Number(circle.getAttribute('cy'))).matrixTransform(circle.getScreenCTM())
+    return {x:p.x,y:p.y}
+  })
+  assert.ok(Math.hypot(legacy.x-west.x,legacy.y-west.y)<1,'existing note remains attached to the west-side slab')
+  await page.locator('.ep-selection-card>button').click()
   async function worldPoint(x,z){return page.evaluate(({x,z})=>{
-    const p=new DOMPoint(-x,z).matrixTransform(document.querySelector('.ep-plan').getScreenCTM())
+    const p=new DOMPoint(x,z).matrixTransform(document.querySelector('.ep-plan').getScreenCTM())
     return {x:p.x,y:p.y}
   },{x,z})}
   // Catch mirrored, stretched, or stale transforms with asymmetric real slabs.
@@ -43,13 +63,13 @@ try{
     const img=new Image();img.src=`data:image/png;base64,${data}`;await img.decode()
     const canvas=document.createElement('canvas');canvas.width=img.width;canvas.height=img.height
     const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0)
-    return [...ctx.getImageData(Math.round((19.43+48)/92*img.width),Math.round((-18.37+43)/96*img.height),1,1).data]
+    return [...ctx.getImageData(Math.round((-19.43+44)/92*img.width),Math.round((-18.37+43)/96*img.height),1,1).data]
   },data.toString('base64'))
   assert.ok(Math.abs(pixel[0]-247)+Math.abs(pixel[1]-243)+Math.abs(pixel[2]-232)>30,`export must include the actual patio, got ${pixel}`)
   await page.getByRole('button',{name:/Draw/}).click()
   const start=await worldPoint(-19.43,-18.37),end=await worldPoint(-17.43,-17.37)
   await page.mouse.move(start.x,start.y);await page.mouse.down();await page.mouse.move(end.x,end.y,{steps:5});await page.mouse.up()
-  const mark=await page.evaluate(()=>JSON.parse(localStorage.getItem('ocean-estate-plan-markups-v1'))[0])
+  const mark=await page.evaluate(()=>JSON.parse(localStorage.getItem('ocean-estate-plan-markups-v1')).at(-1))
   assert.ok(Math.abs(mark.points[0].x+19.43)<.01&&Math.abs(mark.points[0].y-18.37)<.01,'drawing is saved at its actual world coordinate')
   await page.getByRole('button',{name:/Pan/}).click()
   for(const viewport of [{width:412,height:915},{width:1440,height:960},{width:915,height:412}]){

@@ -271,9 +271,8 @@ test('Estate Plan is a routed bird-eye markup workspace backed by live plan geom
  assert.equal(planner.includes('Copy change brief'),true)
  assert.equal(planner.includes('exportPng'),true)
  assert.equal(planner.includes("(['main','arrival','site'] as PlanView[])"),true)
- assert.equal(planner.includes('const rotate180=(p:Pt):Pt=>({x:-p.x,y:-p.y})'),true)
- assert.equal(planner.includes('<g transform="rotate(180)">'),true)
- assert.equal(planner.includes('return rotate180(toView(clientX,clientY))'),true)
+ // Physical left/right orientation and persisted note placement are exercised
+ // by ocean-estate-plan-parity.mjs, rather than requiring a mirrored transform.
 })
 
 test('Estate Plan has a direct Vercel SPA rewrite',()=>{
