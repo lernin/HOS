@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
 import { floors, walls, glass, furnishings, footprint } from './estate/plan'
 import { estateRailings } from './estate/railings'
-import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces } from './estate/site-edges'
+import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces, patioSurfaces } from './estate/site-edges'
 import type { EstateSurfaceKind } from './estate/site-edges'
+import { architecturalPlanters, featurePalms, featureTrees } from './estate/site-layout'
 import './estate/estate-plan.css'
 
 type PlanView='main'|'arrival'|'site'
@@ -87,6 +88,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const [clean,setClean]=useState(false)
   const [auditMode,setAuditMode]=useState(false)
   const [selectedRail,setSelectedRail]=useState<string|null>(null)
+  const [selectedSurface,setSelectedSurface]=useState<string|null>(null)
   const [layers,setLayers]=useState({surfaces:true,edges:true,labels:true,furniture:true,railings:true,markups:true})
   const [status,setStatus]=useState('')
 
@@ -235,8 +237,9 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   }
 
   const viewFloors=floors
-  const roomLabels=layers.labels?viewFloors.filter(f=>f.name!=='Arrival court'&&f.name!=='Arrival steps'):[]
+  const roomLabels=layers.labels?viewFloors.filter(f=>f.use==='interior'):[]
   const selectedRailData=estateRailings.find(r=>r.id===selectedRail)??null
+  const selectedSurfaceData=patioSurfaces.find(s=>s.id===selectedSurface)??null
   const auditCount=auditOpenEdges.length+auditReviewRailings.length
 
   return <main className={`ep-root${clean?' ep-clean':''}`}>
@@ -266,10 +269,10 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           <rect x="-70" y="12" width="140" height="65" fill="#dceff2" opacity={view==='arrival'?.18:.72}/>
 
           {layers.surfaces&&estateSurfaces.map(s=>{
-            const lower=s.kind==='arrival'||s.kind==='steps'
+            const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id
             const opacity=view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)
             if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={surfaceFill[s.kind]} opacity={opacity} stroke="#8f897e" strokeWidth=".16"/>
-            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={surfaceFill[s.kind]} opacity={opacity} stroke="#9c9385" strokeWidth=".13"/>
+            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={surfaceFill[s.kind]} opacity={opacity} stroke={selected?'#175f91':patio?'#8b7055':'#9c9385'} strokeWidth={selected?.5:patio?.24:.13} pointerEvents={patio&&tool==='pan'?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRail(null)}:undefined}/>
           })}
 
           {layers.edges&&estateEdges.map(e=>{
@@ -282,10 +285,14 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
 
           {layers.furniture&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
 
+          {layers.surfaces&&featureTrees.map(t=><g key={t.id} opacity=".9"><circle cx={t.x} cy={-t.z} r="1.15" fill="#9bad88" fillOpacity=".28" stroke="#718464" strokeWidth=".16"/><circle cx={t.x} cy={-t.z} r=".18" fill="#69533f"/></g>)}
+          {layers.surfaces&&featurePalms.map(p=><g key={p.id} opacity=".92"><circle cx={p.x} cy={-p.z} r=".9" fill="#adc093" fillOpacity=".24" stroke="#788d67" strokeWidth=".15" strokeDasharray=".25 .16"/><circle cx={p.x} cy={-p.z} r=".14" fill="#70563e"/></g>)}
+          {layers.surfaces&&architecturalPlanters.map(([x,z],i)=><circle key={`planter-${i}`} cx={x} cy={-z} r=".32" fill="#a9b58f" stroke="#756a58" strokeWidth=".1"/>)}
+
           {layers.railings&&estateRailings.map(r=>{
             const selected=selectedRail===r.id,review=auditMode&&r.audit==='review',pts=r.points.map(([x,z])=>`${x},${-z}`).join(' ')
             return <g key={r.id}>
-              <polyline points={pts} fill="none" stroke="transparent" strokeWidth="2.2" pointerEvents={tool==='pan'?'stroke':'none'} onPointerDown={e=>{e.stopPropagation();setSelectedRail(r.id)}}/>
+              <polyline points={pts} fill="none" stroke="transparent" strokeWidth="2.2" pointerEvents={tool==='pan'?'stroke':'none'} onPointerDown={e=>{e.stopPropagation();setSelectedRail(r.id);setSelectedSurface(null)}}/>
               <polyline points={pts} fill="none" stroke={selected?'#175f91':review?'#df7a19':r.family==='garden'?'#7b5f48':'#593f2d'} strokeWidth={selected?.58:review?.5:r.family==='garden'?.28:.36} strokeDasharray={r.family==='garden'?'.55 .22':undefined} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none"/>
             </g>
           })}
@@ -307,6 +314,11 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         {roomLabels.map((f,i)=>{
           const w=f.x2-f.x1,d=f.z2-f.z1,p=rotate180({x:(f.x1+f.x2)/2,y:-(f.z1+f.z2)/2})
           return <text key={`label-${i}`} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={labelSize(f.name,w,d)} fill="#48433b" opacity=".82">{f.name}</text>
+        })}
+
+        {layers.labels&&patioSurfaces.filter(s=>s.shape==='rect').map(s=>{
+          const p=rotate180({x:(s.x1+s.x2)/2,y:-(s.z1+s.z2)/2}),selected=selectedSurface===s.id
+          return <g key={`patio-label-${s.id}`} pointerEvents="none"><circle cx={p.x} cy={p.y} r={selected?1.0:.78} fill={selected?'#175f91':'#8b7055'} stroke="#fffaf0" strokeWidth=".16"/><text x={p.x} y={p.y+.04} textAnchor="middle" dominantBaseline="middle" fontSize={selected?.6:.48} fontWeight="800" fill="white">{s.code}</text><text x={p.x+1.05} y={p.y+.08} fontSize=".68" fontWeight="650" fill="#65594b" paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".18">{s.label}</text></g>
         })}
 
         {layers.railings&&estateRailings.filter(r=>auditMode||selectedRail===r.id).map(r=>{
@@ -366,11 +378,16 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       <button onClick={()=>setClean(true)} aria-label="Clean view"><span>□</span><em>Clean</em></button>
     </nav>}
 
-    {!clean&&marks.length===0&&!selectedRailData&&<div className="ep-hint">Tap <strong>Audit</strong> to see open edges and railing IDs. Use <strong>Area</strong> for deck extensions and <strong>Arrow</strong> for new railings.</div>}
+    {!clean&&marks.length===0&&!selectedRailData&&!selectedSurfaceData&&<div className="ep-hint">Tap <strong>Audit</strong> to see open edges and railing IDs. Use <strong>Area</strong> for deck extensions and <strong>Arrow</strong> for new railings.</div>}
     {!clean&&selectedRailData&&<div className="ep-selection-card">
       <b>{selectedRailData.code}</b>
       <span><strong>{selectedRailData.label}</strong><small>{selectedRailData.family==='guard'?'Full-height guard rail':'Low garden rail'}{selectedRailData.audit==='review'?' · review candidate':''}</small></span>
       <button onClick={()=>setSelectedRail(null)} aria-label="Clear railing selection">×</button>
+    </div>}
+    {!clean&&selectedSurfaceData&&selectedSurfaceData.shape==='rect'&&<div className="ep-selection-card ep-surface-card">
+      <b>{selectedSurfaceData.code}</b>
+      <span><strong>{selectedSurfaceData.label}</strong><small>Exact 3D slab · {(selectedSurfaceData.x2-selectedSurfaceData.x1).toFixed(1)} × {(selectedSurfaceData.z2-selectedSurfaceData.z1).toFixed(1)} m · {((selectedSurfaceData.x2-selectedSurfaceData.x1)*(selectedSurfaceData.z2-selectedSurfaceData.z1)).toFixed(0)} m²</small></span>
+      <button onClick={()=>setSelectedSurface(null)} aria-label="Clear patio selection">×</button>
     </div>}
         {!clean&&status&&<div className="ep-status">{status}</div>}
 
