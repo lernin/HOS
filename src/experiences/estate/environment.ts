@@ -4,9 +4,12 @@ import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
 import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
 export function architecture(k:EstateKit,opts:{planCutaway?:boolean}={}){
-  for(const f of floors){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
+  for(const [floorIndex,f] of floors.entries()){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
-    if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else k.box(x,y-.2,z,w,.4,d,f.name==='Garden courtyard'?'courtyardPaving':f.material==='oak'?'oakFloor':f.material)
+    if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else{
+      const slab=k.box(x,y-.2,z,w,.4,d,f.name==='Garden courtyard'?'courtyardPaving':f.material==='oak'?'oakFloor':f.material)
+      slab.userData.estatePlan={kind:'floor',id:`surface-floor-${floorIndex}`,code:f.planCode??null,name:f.name,use:f.use,x1:f.x1,x2:f.x2,z1:f.z1,z2:f.z2}
+    }
     if((f.material==='limestone'||f.material==='travertine')&&f.name!=='Garden courtyard'){
       for(let a=f.x1+2.8;a<f.x2;a+=2.8)k.box(a,y+.004,z,.011,.005,d,'rug')
       for(let a=f.z1+1.65;a<f.z2;a+=1.65)k.box(x,y+.005,a,w,.005,.01,'rug')
