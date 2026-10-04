@@ -1,3 +1,4 @@
+import { poolWalkNorth, poolWalkSouth } from './site-layout'
 export type EstateRailPoint = readonly [number, number]
 export type EstateRail = {
   id: string
@@ -29,9 +30,10 @@ export const estateRailings: EstateRail[] = [
     glass:true,
     points:[
       p(-23+RAIL_EDGE_INSET,-17.08),
-      p(-23+RAIL_EDGE_INSET,-24+RAIL_EDGE_INSET),
-      p(-15+RAIL_EDGE_INSET,-24+RAIL_EDGE_INSET),
-      p(-15+RAIL_EDGE_INSET,-36+RAIL_END_GAP),
+      p(-23+RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET),
+      p(-15+RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET),
+      p(-15+RAIL_EDGE_INSET,poolWalkNorth+RAIL_EDGE_INSET),
+      p(-11-RAIL_END_GAP,poolWalkNorth+RAIL_EDGE_INSET),
     ],
   },
   {
@@ -41,11 +43,10 @@ export const estateRailings: EstateRail[] = [
     family:'guard',
     glass:true,
     points:[
-      p(16-RAIL_EDGE_INSET,-36+RAIL_END_GAP),
-      p(16-RAIL_EDGE_INSET,-24+RAIL_EDGE_INSET),
-      p(27-RAIL_EDGE_INSET,-24+RAIL_EDGE_INSET),
-      p(27-RAIL_EDGE_INSET,-23+RAIL_EDGE_INSET),
-      p(40-RAIL_END_GAP,-23+RAIL_EDGE_INSET),
+      p(12+RAIL_END_GAP,poolWalkNorth+RAIL_EDGE_INSET),
+      p(16-RAIL_EDGE_INSET,poolWalkNorth+RAIL_EDGE_INSET),
+      p(16-RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET),
+      p(44-RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET),
     ],
   },
   {
@@ -54,7 +55,7 @@ export const estateRailings: EstateRail[] = [
     label:'Sunrise terrace',
     family:'guard',
     glass:true,
-    points:[p(44-RAIL_EDGE_INSET,-14+RAIL_END_GAP),p(44-RAIL_EDGE_INSET,14-RAIL_END_GAP)],
+    points:[p(44-RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET),p(44-RAIL_EDGE_INSET,14-RAIL_END_GAP)],
   },
   {
     id:'courtyard-drop',

@@ -1,12 +1,13 @@
 import * as T from 'three'
 import { createEstateKit, v } from './kit'
 import './design-lab.css'
+import { buildTreeStudy, buildTreeUnderplanting, treeStudies } from './tree-studies'
 
 type Study={name:string;detail:string;build:(x:number,z:number)=>void}
 type Gallery={key:string;label:string;subtitle:string;studies:Study[]}
 
 const mount=document.querySelector<HTMLDivElement>('#design-lab')!
-mount.innerHTML=`<main class="design-lab-shell"><canvas class="design-lab-canvas" aria-label="Ocean Estate Design Lab"></canvas><header class="design-lab-header"><div><span>OCEAN ESTATE</span><h1>Design Lab</h1><p>Real buildable 3D studies using the same geometry, materials and lighting language as the estate.</p></div><a href="/ocean-estate">Back to estate</a></header><section class="design-lab-panel"><div class="design-lab-tabs"></div><div class="design-lab-grid"></div><div class="design-lab-hint"></div></section></main>`
+mount.innerHTML=`<main class="design-lab-shell"><canvas class="design-lab-canvas" aria-label="Ocean Estate Design Lab"></canvas><header class="design-lab-header"><div><span>OCEAN ESTATE</span><h1>Design Lab</h1><p>Real buildable 3D studies using the same geometry, materials and lighting language as the estate.</p></div><a href="/ocean-estate">Back to estate</a></header><section class="design-lab-panel"><div class="design-lab-tabs"></div><div class="design-lab-views" hidden><button data-view="whole" class="active">Whole tree</button><button data-view="base">Trunk & planting</button><button data-view="canopy">Canopy</button></div><div class="design-lab-grid"></div><div class="design-lab-hint"></div></section></main>`
 const canvas=mount.querySelector<HTMLCanvasElement>('.design-lab-canvas')!
 const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
 renderer.outputColorSpace=T.SRGBColorSpace
@@ -23,6 +24,7 @@ scene.add(new T.HemisphereLight('#d5e0da','#5d4d3d',1.35))
 const key=new T.DirectionalLight('#ffe1b6',3.6)
 key.position.set(-18,23,15)
 key.castShadow=true
+key.shadow.bias=-.00015;key.shadow.normalBias=.045
 key.shadow.mapSize.set(2048,2048)
 key.shadow.camera.left=-24;key.shadow.camera.right=24;key.shadow.camera.top=24;key.shadow.camera.bottom=-24
 scene.add(key,key.target)
@@ -49,13 +51,6 @@ function palmCrown(parent:T.Group,y:number,count:number,length:number,fan=false)
 }
 function trunk(parent:T.Group,h:number,r=.16,bend=.28){
   k.beam([v(0,0,0),v(bend*.25,h*.34,.05),v(bend*.7,h*.7,.08),v(bend,h,.1)],r,'bark',parent,8)
-}
-function canopy(parent:T.Group,y:number,r=1.25,mat='leaf'){
-  for(let i=0;i<8;i++){
-    const a=i*2.399
-    const m=k.ellipsoid(Math.cos(a)*r*.48,y+Math.sin(i*1.7)*.22,Math.sin(a)*r*.48,r*.72,r*.42,r*.65,mat,parent,10)
-    m.rotation.y=a
-  }
 }
 function styleTree(x:number,z:number,style:number){
   platform(x,z)
@@ -102,13 +97,15 @@ const palms:Study[]=[
 {name:'5 · Sculptural Bent Palm',detail:'A dramatic curved trunk for a focal landscape moment.',build(x,z){platform(x,z);const g=k.group(x,.2,z,-.25);k.beam([v(0,0,0),v(.3,1.1,.06),v(.75,2.2,.1),v(1.15,3.25,.08),v(1.35,4.25,0)],.16,'bark',g,9);const crown=new T.Group();crown.position.set(1.35,4.25,0);g.add(crown);palmCrown(crown,.08,9,1.65)}},
 {name:'6 · Dwarf Patio Palm',detail:'Compact palm sized for planters and sheltered terraces.',build(x,z){platform(x,z);k.lathe([[.42,0],[.52,.08],[.46,.62],[.4,.7]],'ceramic',x,.2,z);const g=k.group(x,.85,z);trunk(g,1.45,.11,.12);palmCrown(g,1.58,8,1.05)}}]
 
-const trees:Study[]=[
-{name:'1 · Umbrella Canopy',detail:'Broad horizontal shade tree for courtyards.',build(x,z){platform(x,z);const g=k.group(x,.2,z,.1);trunk(g,3.05,.22,.18);for(const a of [-1.0,-.45,.4,.95])k.beam([v(.18,2.1,.05),v(Math.cos(a)*.75,2.75,Math.sin(a)*.75),v(Math.cos(a)*1.35,3.15,Math.sin(a)*1.35)],.08,'bark',g,7);canopy(g,3.45,1.75)}},
-{name:'2 · Olive Form',detail:'Pale sculptural trunk and airy silver-green crown.',build(x,z){platform(x,z);const g=k.group(x,.2,z);k.beam([v(0,0,0),v(-.18,1.2,.08),v(.14,2.2,.02),v(-.05,3,.06)],.2,'bark',g,8);canopy(g,3.35,1.45,'leafLight')}},
-{name:'3 · Courtyard Tree',detail:'Compact rounded canopy for enclosed garden spaces.',build(x,z){platform(x,z);const g=k.group(x,.2,z);trunk(g,2.65,.19,.08);canopy(g,3.02,1.35)}},
-{name:'4 · Coastal Pine',detail:'Layered flat crowns with an asymmetric trunk.',build(x,z){platform(x,z);const g=k.group(x,.2,z,-.2);trunk(g,4.2,.16,.4);for(const [y,r] of [[2.7,1.25],[3.35,1.55],[4.05,1.15]] as const)for(let i=0;i<5;i++){const a=i*1.256+(y%1);const m=k.ellipsoid(Math.cos(a)*r*.42,y,Math.sin(a)*r*.42,r*.65,.22,r*.52,'leafDark',g,9);m.rotation.y=a}}},
-{name:'5 · Sculptural Branch',detail:'Sparse architectural branching for a gallery-like garden.',build(x,z){platform(x,z);const g=k.group(x,.2,z,.2);k.beam([v(0,0,0),v(.18,1.4,.1),v(-.1,2.7,.12),v(.3,4,.06)],.2,'bark',g,8);for(let i=0;i<5;i++){const a=i*1.35;k.beam([v(0,2+i*.28,0),v(Math.cos(a)*.65,2.8+i*.25,Math.sin(a)*.65),v(Math.cos(a)*1.2,3.2+i*.18,Math.sin(a)*1.2)],.065,'bark',g,7);const m=k.ellipsoid(Math.cos(a)*1.28,3.25+i*.18,Math.sin(a)*1.28,.75,.34,.7,'leaf',g,9);m.rotation.y=a}}},
-{name:'6 · Flowering Tree',detail:'Soft green canopy with restrained warm blossoms.',build(x,z){platform(x,z);const g=k.group(x,.2,z);trunk(g,2.85,.2,.12);canopy(g,3.15,1.45);for(let i=0;i<14;i++){const a=i*2.1;k.ellipsoid(Math.cos(a)*1.15,3.15+Math.sin(i)*.5,Math.sin(a)*1.15,.12,.08,.12,'pink',g,7)}}}]
+const trees:Study[]=treeStudies.map(study=>({name:study.name,detail:study.detail,build(x,z){
+  platform(x,z,6,6)
+  const border=k.cylinder(x,.27,z,1.68,.12,'travertine',k.root,1.68,64)
+  const soil=k.cylinder(x,.335,z,1.53,.015,'soil',k.root,1.53,64)
+  // The lab bed matches the spa planting footprint, including its oval shape.
+  border.scale.z=soil.scale.z=1.95/1.65
+  buildTreeUnderplanting(k,x,.345,z)
+  buildTreeStudy(k,{x,y:.34,z,form:study.form,seed:3})
+}}))
 
 const treeStyleNames=[
   ['1 · Quiet Luxury','Low, broad and restrained. Dense dark-green masses with very little visual noise.'],
@@ -150,7 +147,7 @@ const counters:Study[]=[
 const galleries:Gallery[]=[
 {key:'pillars',label:'Pillars',subtitle:'Entrance architecture',studies:pillars},
 {key:'palms',label:'Palms',subtitle:'Pool and arrival palms',studies:palms},
-{key:'trees',label:'Trees',subtitle:'Canopy and specimen trees',studies:trees},
+{key:'trees',label:'Trees',subtitle:'Three shared tree forms · spa, courtyard and forest',studies:trees},
 {key:'treeStyles',label:'Tree Styles',subtitle:'One tree, nine design languages',studies:treeStyles},
 {key:'plants',label:'Plants',subtitle:'Beds, pots and tropical planting',studies:plants},
 {key:'chairs',label:'Patio Chairs',subtitle:'Pool and terrace seating',studies:chairs},
@@ -159,11 +156,18 @@ const galleries:Gallery[]=[
 
 const galleryGap=58
 const galleryOrigins=galleries.map((_,i)=>new T.Vector3(i*galleryGap,0,0))
+const studyBounds:T.Box3[][]=galleries.map(()=>[])
 const localPositions=[[-8,5.6],[0,5.6],[8,5.6],[-8,-3.2],[0,-3.2],[8,-3.2],[-8,-12],[0,-12],[8,-12]] as const
 for(let gi=0;gi<galleries.length;gi++){
   const origin=galleryOrigins[gi]
   const gallery=galleries[gi]
-  gallery.studies.forEach((study,i)=>{const [lx,lz]=localPositions[i];study.build(origin.x+lx,origin.z+lz)})
+  gallery.studies.forEach((study,i)=>{
+    const first=k.root.children.length,[lx,lz]=localPositions[i];study.build(origin.x+lx,origin.z+lz)
+    k.root.updateMatrixWorld(true)
+    const bounds=new T.Box3()
+    for(const object of k.root.children.slice(first)){object.userData.designLabStudy={gallery:gi,study:i};bounds.expandByObject(object)}
+    studyBounds[gi][i]=bounds
+  })
 }
 k.finish()
 
@@ -171,42 +175,75 @@ const tabs=mount.querySelector<HTMLDivElement>('.design-lab-tabs')!
 const grid=mount.querySelector<HTMLDivElement>('.design-lab-grid')!
 const hint=mount.querySelector<HTMLDivElement>('.design-lab-hint')!
 tabs.innerHTML=galleries.map((g,i)=>`<button data-gallery="${i}" class="${i===0?'active':''}">${g.label}</button>`).join('')
-let activeGallery=0,selected=-1,orbit=.55
+const viewControls=mount.querySelector<HTMLDivElement>('.design-lab-views')!
+let activeGallery=0,selected=-1,orbit=.55,treeView='whole'
 let goalPos=new T.Vector3(0,10.5,22),goalTarget=new T.Vector3(0,2.6,0),target=goalTarget.clone()
 function renderCards(){
   const g=galleries[activeGallery]
   grid.innerHTML=`<button class="${selected<0?'active':''}" data-study="-1"><strong>Overview</strong><span>${g.subtitle}</span></button>`+g.studies.map((s,i)=>`<button class="${selected===i?'active':''}" data-study="${i}"><strong>${s.name}</strong><span>${s.detail}</span></button>`).join('')
   ;[...grid.querySelectorAll<HTMLButtonElement>('[data-study]')].forEach(b=>b.addEventListener('click',()=>chooseStudy(Number(b.dataset.study))))
-  hint.textContent=`${g.label}: tap a study to inspect it. Every item is native estate geometry, not concept art.`
+  viewControls.hidden=g.key!=='trees'||selected<0
+  hint.textContent=g.key==='trees'?'Drag to orbit. Compare the whole tree, its trunk and planting, or the canopy.':`${g.label}: tap a study to inspect it. Every item is native estate geometry, not concept art.`
 }
 function showGallery(index:number){
-  activeGallery=index;selected=-1
+  activeGallery=index;selected=-1;treeView='whole'
   ;[...tabs.querySelectorAll<HTMLButtonElement>('[data-gallery]')].forEach(b=>b.classList.toggle('active',Number(b.dataset.gallery)===index))
   const o=galleryOrigins[index]
   goalPos.set(o.x,10.5,22);goalTarget.set(o.x,2.5,-2.8)
-  fill.position.set(o.x,8,9);key.target.position.set(o.x,0,-2)
-  renderCards()
+  fill.position.set(o.x,8,9);key.position.set(o.x-7,12,10);key.target.position.set(o.x,0,-2)
+  renderCards();camera.position.copy(goalPos);target.copy(goalTarget);camera.clearViewOffset()
+  for(const object of scene.children)if(object.userData.designLabStudy)object.visible=object.userData.designLabStudy.gallery===index
 }
 function chooseStudy(index:number){
   selected=index;renderCards()
+  for(const object of scene.children){const id=object.userData.designLabStudy;if(id)object.visible=id.gallery===activeGallery&&(index<0||id.study===index)}
   const o=galleryOrigins[activeGallery]
-  if(index<0){goalPos.set(o.x,10.5,22);goalTarget.set(o.x,2.5,-2.8);return}
+  if(index<0){goalPos.set(o.x,10.5,22);goalTarget.set(o.x,2.5,-2.8);camera.position.copy(goalPos);target.copy(goalTarget);camera.clearViewOffset();return}
   const [lx,lz]=localPositions[index]
   const x=o.x+lx,z=o.z+lz
   const tall=['palms','trees','treeStyles','pillars'].includes(galleries[activeGallery].key)
-  const y=tall?5.2:3.25,dist=tall?8.7:6.2
+  const tree=galleries[activeGallery].key==='trees'
+  const base=tree&&treeView==='base',crown=tree&&treeView==='canopy'
+  const w=canvas.clientWidth,h=canvas.clientHeight
+  const top=mount.querySelector('.design-lab-header')!.getBoundingClientRect().bottom+8
+  const bottom=mount.querySelector('.design-lab-panel')!.getBoundingClientRect().top-8
+  const available=Math.max(90,bottom-top)
+  const fit=tree?Math.max(1,(h/available)*.65,.85/(w/h)):1
+  if(tree)camera.setViewOffset(w,h,0,h/2-(top+bottom)/2,w,h);else camera.clearViewOffset()
+  const y=base?1.45:crown?5.65:tree?3.7:tall?5.2:3.25,dist=(base?3.2:crown?4.8:tree?10.8:tall?8.7:6.2)*fit
   goalPos.set(x+Math.sin(orbit)*dist,y,z+Math.cos(orbit)*dist)
-  goalTarget.set(x,tall?2.5:1.0,z)
+  goalTarget.set(x,base?.85:crown?4.7:tree?2.9:tall?2.5:1.0,z)
+  if(tree&&!base&&!crown){
+    // Fit the actual specimen and its bed between the UI panels at any aspect.
+    const bounds=studyBounds[activeGallery][index],center=bounds.getCenter(new T.Vector3())
+    goalTarget.copy(center)
+    let distance=7
+    for(let attempt=0;attempt<80;attempt++){
+      goalPos.set(center.x+Math.sin(orbit)*distance,center.y+.8,center.z+Math.cos(orbit)*distance)
+      camera.position.copy(goalPos);camera.lookAt(center);camera.updateMatrixWorld()
+      let inside=true
+      for(const bx of [bounds.min.x,bounds.max.x])for(const by of [bounds.min.y,bounds.max.y])for(const bz of [bounds.min.z,bounds.max.z]){
+        const p=new T.Vector3(bx,by,bz).project(camera),px=(p.x+1)*w/2,py=(1-p.y)*h/2
+        if(px<12||px>w-12||py<top||py>bottom)inside=false
+      }
+      if(inside)break
+      distance*=1.045
+    }
+  }
+  camera.position.copy(goalPos);target.copy(goalTarget)
+  for(const b of viewControls.querySelectorAll<HTMLButtonElement>('[data-view]'))b.classList.toggle('active',b.dataset.view===treeView)
 }
 ;[...tabs.querySelectorAll<HTMLButtonElement>('[data-gallery]')].forEach(b=>b.addEventListener('click',()=>showGallery(Number(b.dataset.gallery))))
-renderCards()
+for(const b of viewControls.querySelectorAll<HTMLButtonElement>('[data-view]'))b.addEventListener('click',()=>{treeView=b.dataset.view!;chooseStudy(selected)})
+const initialGallery=galleries.findIndex(g=>g.key===new URLSearchParams(location.search).get('gallery'))
+if(initialGallery>=0){showGallery(initialGallery);chooseStudy(0)}else renderCards()
 
 let dragging=false,lastX=0
 canvas.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX;canvas.setPointerCapture(e.pointerId)})
 canvas.addEventListener('pointermove',e=>{if(!dragging||selected<0)return;orbit+=(e.clientX-lastX)*.006;lastX=e.clientX;chooseStudy(selected)})
 canvas.addEventListener('pointerup',()=>dragging=false)
 canvas.addEventListener('pointercancel',()=>dragging=false)
-function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
+function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(!w||!h)return;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();if(selected>=0)chooseStudy(selected)}
 new ResizeObserver(resize).observe(canvas);resize()
 function tick(){requestAnimationFrame(tick);camera.position.lerp(goalPos,.06);target.lerp(goalTarget,.08);camera.lookAt(target);renderer.render(scene,camera)}
 tick()

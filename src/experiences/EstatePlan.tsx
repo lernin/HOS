@@ -2,8 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react'
 import { floors, walls, glass, furnishings, footprint } from './estate/plan'
 import { estateRailings } from './estate/railings'
-import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces } from './estate/site-edges'
+import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces, patioSurfaces } from './estate/site-edges'
 import type { EstateSurfaceKind } from './estate/site-edges'
+import { architecturalPlanters, coastline, featurePalms, featureTrees, estatePlanViews, poolWater } from './estate/site-layout'
+import { createEstatePlanReality } from './estate/plan-reality'
+import type { EstatePlanPick } from './estate/plan-reality'
 import './estate/estate-plan.css'
 
 type PlanView='main'|'arrival'|'site'
@@ -11,6 +14,14 @@ type Tool='pan'|'pen'|'arrow'|'area'|'note'
 type Category='general'|'deck'|'railing'|'wall'|'remove'
 type Pt={x:number;y:number}
 type Box={x:number;y:number;w:number;h:number}
+type Last3DView={x:number;z:number;yaw:number;at?:number}
+function readLast3DView():Last3DView|null{
+  try{
+    const v=JSON.parse(localStorage.getItem('ocean-estate-plan-last-view-v1')||'null')
+    return v&&Number.isFinite(v.x)&&Number.isFinite(v.z)&&Number.isFinite(v.yaw)?v:null
+  }catch{return null}
+}
+
 type Mark={
   id:string
   tool:Exclude<Tool,'pan'>
@@ -20,11 +31,7 @@ type Mark={
 }
 
 const STORAGE='ocean-estate-plan-markups-v1'
-const DEFAULT_BOX:Record<PlanView,Box>={
-  main:{x:-48,y:-43,w:92,h:96},
-  arrival:{x:-28,y:15,w:56,h:49},
-  site:{x:-66,y:-63,w:132,h:132},
-}
+const DEFAULT_BOX:Record<PlanView,Box>=estatePlanViews
 const categoryMeta:Record<Category,{label:string;color:string}>={
   general:{label:'General',color:'#d34f4f'},
   deck:{label:'Deck',color:'#2b78c5'},
@@ -50,7 +57,7 @@ const railMid=(points:readonly (readonly [number,number])[])=>{
   return{x:(a[0]+b[0])/2,y:-(a[1]+b[1])/2}
 }
 const pointsString=(pts:Pt[])=>pts.map(q=>`${q.x},${q.y}`).join(' ')
-const rotate180=(p:Pt):Pt=>({x:-p.x,y:-p.y})
+const planDisplay=(p:Pt):Pt=>({x:p.x,y:-p.y})
 
 function readMarks():Mark[]{
   try{
@@ -69,6 +76,8 @@ function markBrief(mark:Mark){
 
 export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}){
   const svgRef=useRef<SVGSVGElement>(null)
+  const realityCanvas=useRef<HTMLCanvasElement>(null)
+  const realityEngine=useRef<ReturnType<typeof createEstatePlanReality>|null>(null)
   const [view,setView]=useState<PlanView>('main')
   const [box,setBox]=useState<Box>(DEFAULT_BOX.main)
   const [tool,setTool]=useState<Tool>('pan')
@@ -87,11 +96,22 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const [clean,setClean]=useState(false)
   const [auditMode,setAuditMode]=useState(false)
   const [selectedRail,setSelectedRail]=useState<string|null>(null)
-  const [layers,setLayers]=useState({surfaces:true,edges:true,labels:true,furniture:true,railings:true,markups:true})
+  const [selectedSurface,setSelectedSurface]=useState<string|null>(null)
+  const [selectedRealitySurface,setSelectedRealitySurface]=useState<EstatePlanPick|null>(null)
+  const [layers,setLayers]=useState({reality:true,surfaces:false,edges:false,labels:false,furniture:false,railings:false,markups:true})
   const [status,setStatus]=useState('')
+  const [last3DView]=useState<Last3DView|null>(readLast3DView)
 
   useEffect(()=>{localStorage.setItem(STORAGE,JSON.stringify(marks))},[marks])
   useEffect(()=>{setBox(DEFAULT_BOX[view])},[view])
+  useEffect(()=>{
+    if(!realityCanvas.current)return
+    const engine=createEstatePlanReality(realityCanvas.current)
+    realityEngine.current=engine
+    engine.render(box)
+    return()=>{engine.dispose();realityEngine.current=null}
+  },[])
+  useEffect(()=>{if(layers.reality)realityEngine.current?.render(box)},[box,layers.reality])
 
   const nextId=useMemo(()=>{
     const max=marks.reduce((n,m)=>Math.max(n,Number(m.id.replace(/\D/g,''))||0),0)
@@ -108,7 +128,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     return{x:out.x,y:out.y}
   }
   function toPlan(clientX:number,clientY:number):Pt{
-    return rotate180(toView(clientX,clientY))
+    return planDisplay(toView(clientX,clientY))
   }
   function commit(mark:Omit<Mark,'id'>){
     setMarks(prev=>[...prev,{...mark,id:nextId}])
@@ -186,7 +206,17 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       panRef.current=null
       return
     }
-    if(panRef.current?.id===e.pointerId){panRef.current=null;return}
+    if(panRef.current?.id===e.pointerId){
+      const pan=panRef.current
+      panRef.current=null
+      if(layers.reality&&Math.hypot(e.clientX-pan.sx,e.clientY-pan.sy)<8){
+        const hit=realityEngine.current?.pick(e.clientX,e.clientY)??null
+        setSelectedRealitySurface(hit)
+        setSelectedSurface(null)
+        setSelectedRail(null)
+      }
+      return
+    }
     if(drawingPointer.current===e.pointerId)finishDrawing()
   }
   function onWheel(e:ReactWheelEvent<SVGSVGElement>){
@@ -221,6 +251,14 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg')
     clone.setAttribute('width','2200')
     clone.setAttribute('height',String(Math.round(2200*box.h/box.w)))
+    const reality=realityEngine.current
+    if(!reality){setStatus('Plan is still loading');return}
+    const base=document.createElementNS('http://www.w3.org/2000/svg','image')
+    base.setAttribute('x',String(box.x));base.setAttribute('y',String(box.y))
+    base.setAttribute('width',String(box.w));base.setAttribute('height',String(box.h))
+    base.setAttribute('preserveAspectRatio','none')
+    base.setAttribute('href',reality.snapshot())
+    clone.insertBefore(base,clone.firstChild)
     const data=new XMLSerializer().serializeToString(clone)
     const blob=new Blob([data],{type:'image/svg+xml;charset=utf-8'})
     const url=URL.createObjectURL(blob),img=new Image()
@@ -235,8 +273,9 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   }
 
   const viewFloors=floors
-  const roomLabels=layers.labels?viewFloors.filter(f=>f.name!=='Arrival court'&&f.name!=='Arrival steps'):[]
+  const roomLabels=layers.labels?viewFloors.filter(f=>f.use==='interior'):[]
   const selectedRailData=estateRailings.find(r=>r.id===selectedRail)??null
+  const selectedSurfaceData=patioSurfaces.find(s=>s.id===selectedSurface)??null
   const auditCount=auditOpenEdges.length+auditReviewRailings.length
 
   return <main className={`ep-root${clean?' ep-clean':''}`}>
@@ -250,6 +289,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     </header>}
 
     <section className="ep-stage">
+      <canvas ref={realityCanvas} className={`ep-reality${layers.reality?' visible':''}`} aria-hidden="true"/>
       <svg ref={svgRef} className="ep-plan" viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`} preserveAspectRatio="xMidYMid meet"
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel}>
         <defs>
@@ -259,17 +299,16 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           <pattern id="ep-step-hatch" width=".8" height=".8" patternUnits="userSpaceOnUse"><rect width=".8" height=".8" fill="#d9cec0"/><path d="M0 .4H.8" stroke="#aa9a87" strokeWidth=".1"/></pattern>
           {(Object.keys(categoryMeta) as Category[]).map(k=><marker key={k} id={`ep-arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill={categoryMeta[k].color}/></marker>)}
         </defs>
-        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="#f7f3e8"/>
-        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="url(#ep-grid)"/>
-        <g transform="rotate(180)">
-          {view==='site'&&<ellipse cx="0" cy="-7" rx="58" ry="61" fill="#e8ece1" stroke="#aeb6a7" strokeWidth=".35"/>}
-          <rect x="-70" y="12" width="140" height="65" fill="#dceff2" opacity={view==='arrival'?.18:.72}/>
+        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill={layers.reality?'transparent':'#f7f3e8'}/>
+        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="url(#ep-grid)" opacity={layers.reality?.34:1}/>
+        <g transform="scale(1,-1)">
+          {!layers.reality&&<><rect x="-90" y="-90" width="180" height="180" fill="#dceff2" opacity={view==='arrival'?.18:.78}/><polygon points={coastline.map(([x,z])=>`${x},${-z}`).join(' ')} fill="#e8e5d9" stroke="#aaa99e" strokeWidth=".22" opacity={view==='arrival'?.34:.96}/></>}
 
-          {layers.surfaces&&estateSurfaces.map(s=>{
-            const lower=s.kind==='arrival'||s.kind==='steps'
-            const opacity=view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)
-            if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={surfaceFill[s.kind]} opacity={opacity} stroke="#8f897e" strokeWidth=".16"/>
-            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={surfaceFill[s.kind]} opacity={opacity} stroke="#9c9385" strokeWidth=".13"/>
+          {estateSurfaces.map(s=>{
+            const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id,show=layers.surfaces&&!layers.reality
+            const opacity=show?(view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)):0
+            if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={show?surfaceFill[s.kind]:'transparent'} opacity={opacity} stroke={show?'#8f897e':'transparent'} strokeWidth=".16" pointerEvents="none"/>
+            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={show?surfaceFill[s.kind]:'transparent'} opacity={show?opacity:1} stroke={selected?'#175f91':show&&!patio?'#9c9385':'transparent'} strokeWidth={selected ? .5 : (show && !patio ? .13 : 0)} pointerEvents={patio&&tool==='pan'&&!layers.reality?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRealitySurface(null);setSelectedRail(null)}:undefined}/>
           })}
 
           {layers.edges&&estateEdges.map(e=>{
@@ -277,15 +316,19 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
             return <line key={e.id} x1={e.a[0]} y1={-e.a[1]} x2={e.b[0]} y2={-e.b[1]} stroke={review?'#d62f45':edgeStroke[e.kind]} strokeWidth={review?.48:e.kind==='wall'?.34:.26} strokeDasharray={e.kind==='open'?'.55 .34':e.kind==='step'?'.28 .2':undefined} opacity={view==='arrival'?.82:.92}/>
           })}
 
-          {walls.map((w,i)=><rect key={`wall-${i}`} x={w.x1} y={-w.z2} width={Math.max(.12,w.x2-w.x1)} height={Math.max(.12,w.z2-w.z1)} fill="#403d38" opacity={view==='arrival'?.72:.9}/>)}
-          {glass.map((w,i)=><rect key={`glass-${i}`} x={w.x1} y={-w.z2} width={Math.max(.11,w.x2-w.x1)} height={Math.max(.11,w.z2-w.z1)} fill="#5aa4b0" opacity=".88"/>)}
+          {!layers.reality&&walls.map((w,i)=><rect key={`wall-${i}`} x={w.x1} y={-w.z2} width={Math.max(.12,w.x2-w.x1)} height={Math.max(.12,w.z2-w.z1)} fill="#403d38" opacity={view==='arrival'?.72:.9}/>)}
+          {!layers.reality&&glass.map((w,i)=><rect key={`glass-${i}`} x={w.x1} y={-w.z2} width={Math.max(.11,w.x2-w.x1)} height={Math.max(.11,w.z2-w.z1)} fill="#5aa4b0" opacity=".88"/>)}
 
-          {layers.furniture&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
+          {layers.furniture&&!layers.reality&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
+
+          {layers.surfaces&&!layers.reality&&featureTrees.map(t=><g key={t.id} opacity=".9"><circle cx={t.x} cy={-t.z} r="1.15" fill="#9bad88" fillOpacity=".28" stroke="#718464" strokeWidth=".16"/><circle cx={t.x} cy={-t.z} r=".18" fill="#69533f"/></g>)}
+          {layers.surfaces&&!layers.reality&&featurePalms.map(p=><g key={p.id} opacity=".92"><circle cx={p.x} cy={-p.z} r=".9" fill="#adc093" fillOpacity=".24" stroke="#788d67" strokeWidth=".15" strokeDasharray=".25 .16"/><circle cx={p.x} cy={-p.z} r=".14" fill="#70563e"/></g>)}
+          {layers.surfaces&&!layers.reality&&architecturalPlanters.map(([x,z],i)=><circle key={`planter-${i}`} cx={x} cy={-z} r=".32" fill="#a9b58f" stroke="#756a58" strokeWidth=".1"/>)}
 
           {layers.railings&&estateRailings.map(r=>{
             const selected=selectedRail===r.id,review=auditMode&&r.audit==='review',pts=r.points.map(([x,z])=>`${x},${-z}`).join(' ')
             return <g key={r.id}>
-              <polyline points={pts} fill="none" stroke="transparent" strokeWidth="2.2" pointerEvents={tool==='pan'?'stroke':'none'} onPointerDown={e=>{e.stopPropagation();setSelectedRail(r.id)}}/>
+              <polyline points={pts} fill="none" stroke="transparent" strokeWidth="2.2" pointerEvents={tool==='pan'?'stroke':'none'} onPointerDown={e=>{e.stopPropagation();setSelectedRail(r.id);setSelectedSurface(null);setSelectedRealitySurface(null)}}/>
               <polyline points={pts} fill="none" stroke={selected?'#175f91':review?'#df7a19':r.family==='garden'?'#7b5f48':'#593f2d'} strokeWidth={selected?.58:review?.5:r.family==='garden'?.28:.36} strokeDasharray={r.family==='garden'?'.55 .22':undefined} strokeLinecap="round" strokeLinejoin="round" pointerEvents="none"/>
             </g>
           })}
@@ -301,31 +344,42 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           {draft.length>1&&(tool==='pen'?<polyline points={pointsString(draft)} fill="none" stroke={categoryMeta[category].color} strokeWidth=".5" strokeDasharray=".5 .24"/>:tool==='area'?<polygon points={pointsString(draft)} fill={categoryMeta[category].color} fillOpacity=".12" stroke={categoryMeta[category].color} strokeWidth=".35" strokeDasharray=".5 .24"/>:<line x1={draft[0].x} y1={draft[0].y} x2={draft[draft.length-1].x} y2={draft[draft.length-1].y} stroke={categoryMeta[category].color} strokeWidth=".5" strokeDasharray=".5 .24"/>)}
         </g>
 
-        <text x="0" y="-34" textAnchor="middle" fontSize="2.3" letterSpacing=".35" fill="#6f9ea8" opacity=".72">OCEAN</text>
-        <text x="-.5" y="-30.5" textAnchor="middle" fontSize="1.15" fill="#326f78">Infinity pool</text>
+        <text x="0" y={poolWater.z1-3} textAnchor="middle" fontSize="2.3" letterSpacing=".35" fill="#6f9ea8" opacity=".72">OCEAN</text>
+        <text x={(poolWater.x1+poolWater.x2)/2} y={(poolWater.z1+poolWater.z2)/2} textAnchor="middle" fontSize="1.15" fill="#326f78">Infinity pool</text>
 
         {roomLabels.map((f,i)=>{
-          const w=f.x2-f.x1,d=f.z2-f.z1,p=rotate180({x:(f.x1+f.x2)/2,y:-(f.z1+f.z2)/2})
+          const w=f.x2-f.x1,d=f.z2-f.z1,p=planDisplay({x:(f.x1+f.x2)/2,y:-(f.z1+f.z2)/2})
           return <text key={`label-${i}`} x={p.x} y={p.y} textAnchor="middle" dominantBaseline="middle" fontSize={labelSize(f.name,w,d)} fill="#48433b" opacity=".82">{f.name}</text>
         })}
 
+        {layers.labels&&patioSurfaces.filter(s=>s.shape==='rect').map(s=>{
+          const p=planDisplay({x:(s.x1+s.x2)/2,y:-(s.z1+s.z2)/2}),selected=selectedSurface===s.id
+          return <g key={`patio-label-${s.id}`} pointerEvents="none"><circle cx={p.x} cy={p.y} r={selected?1.0:.78} fill={selected?'#175f91':'#8b7055'} stroke="#fffaf0" strokeWidth=".16"/><text x={p.x} y={p.y+.04} textAnchor="middle" dominantBaseline="middle" fontSize={selected?.6:.48} fontWeight="800" fill="white">{s.code}</text><text x={p.x+1.05} y={p.y+.08} fontSize=".68" fontWeight="650" fill="#65594b" paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".18">{s.label}</text></g>
+        })}
+
         {layers.railings&&estateRailings.filter(r=>auditMode||selectedRail===r.id).map(r=>{
-          const m=rotate180(railMid(r.points)),selected=selectedRail===r.id
+          const m=planDisplay(railMid(r.points)),selected=selectedRail===r.id
           return <g key={`rail-label-${r.id}`} className="ep-rail-label"><circle cx={m.x} cy={m.y} r={selected?1.05:.86} fill={selected?'#175f91':r.audit==='review'?'#df7a19':'#5f4837'} stroke="#fffaf0" strokeWidth=".18"/><text x={m.x} y={m.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize={selected?.62:.54} fontWeight="800" fill="white">{r.code}</text></g>
         })}
 
         {auditMode&&layers.edges&&auditOpenEdges.map(e=>{
-          const p=rotate180({x:(e.a[0]+e.b[0])/2,y:-(e.a[1]+e.b[1])/2})
+          const p=planDisplay({x:(e.a[0]+e.b[0])/2,y:-(e.a[1]+e.b[1])/2})
           return <g key={`edge-label-${e.id}`}><rect x={p.x-.72} y={p.y-.42} width="1.44" height=".84" rx=".26" fill="#d62f45"/><text x={p.x} y={p.y+.03} textAnchor="middle" dominantBaseline="middle" fontSize=".48" fontWeight="800" fill="white">{e.code}</text></g>
         })}
 
         {layers.markups&&marks.filter(mark=>mark.tool==='note').map(mark=>{
-          const p=rotate180(mark.points[0]),color=categoryMeta[mark.category].color
+          const p=planDisplay(mark.points[0]),color=categoryMeta[mark.category].color
           return <g key={`note-label-${mark.id}`}><text x={p.x} y={p.y+.05} textAnchor="middle" dominantBaseline="middle" fontSize=".68" fontWeight="700" fill="white">{mark.id}</text>{mark.text&&<text x={p.x+1.2} y={p.y+.12} fontSize=".92" fontWeight="600" fill={color} paintOrder="stroke" stroke="#f7f3e8" strokeWidth=".25">{mark.text}</text>}</g>
         })}
 
+        {last3DView&&(()=>{
+          const p=planDisplay({x:last3DView.x,y:-last3DView.z}),dx=-Math.sin(last3DView.yaw),dy=-Math.cos(last3DView.yaw),len=7,tip={x:p.x+dx*len,y:p.y+dy*len},side={x:-dy,y:dx}
+          const left={x:p.x+side.x*1.7,y:p.y+side.y*1.7},right={x:p.x-side.x*1.7,y:p.y-side.y*1.7}
+          return <g className="ep-last-view" pointerEvents="none"><polygon points={`${left.x},${left.y} ${tip.x},${tip.y} ${right.x},${right.y}`} fill="#1b6b96" fillOpacity=".14" stroke="#1b6b96" strokeWidth=".28"/><circle cx={p.x} cy={p.y} r=".72" fill="#1b6b96" stroke="#fffaf0" strokeWidth=".18"/><text x={p.x+1} y={p.y-.9} fontSize=".62" fontWeight="800" fill="#1b6b96" paintOrder="stroke" stroke="#fffaf0" strokeWidth=".2">3D view</text></g>
+        })()}
+
         <g transform={`translate(${box.x+3} ${box.y+box.h-3})`}><line x1="0" y1="0" x2="10" y2="0" stroke="#4b4842" strokeWidth=".22"/><line x1="0" y1="-.45" x2="0" y2=".45" stroke="#4b4842" strokeWidth=".18"/><line x1="10" y1="-.45" x2="10" y2=".45" stroke="#4b4842" strokeWidth=".18"/><text x="5" y="-1" textAnchor="middle" fontSize=".9" fill="#4b4842">10 m</text></g>
-        <g transform={`translate(${box.x+box.w-4} ${box.y+4})`}><path d="M0 -2 L0 2 M0 2 L-1 .5 M0 2 L1 .5" fill="none" stroke="#4b4842" strokeWidth=".22"/><text x="0" y="3.6" textAnchor="middle" fontSize=".9" fill="#4b4842">N</text></g>
+        <g transform={`translate(${box.x+box.w-4} ${box.y+4})`}><path d="M0 2 L0 -2 M0 -2 L-1 -.5 M0 -2 L1 -.5" fill="none" stroke="#4b4842" strokeWidth=".22"/><text x="0" y="-3.6" textAnchor="middle" fontSize=".9" fill="#4b4842">N</text></g>
       </svg>
 
       {!clean&&<div className="ep-zoom"><button onClick={()=>zoom(.82)}>＋</button><button onClick={()=>zoom(1.22)}>−</button><button onClick={()=>setBox(DEFAULT_BOX[view])}>Fit</button></div>}
@@ -333,12 +387,18 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     </section>
 
     {!clean&&<aside className={`ep-layer-panel${layersOpen?' open':''}`}>
-      <button className={`ep-audit-toggle${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>
+      <button className={`ep-audit-toggle${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,edges:true,railings:true}))}}>
         <span>Edge audit</span><b>{auditCount}</b>
       </button>
       <strong>Layers</strong>
-      {Object.entries(layers).map(([key,value])=><label key={key}><input type="checkbox" checked={value} onChange={()=>setLayers(x=>({...x,[key]:!x[key as keyof typeof x]}))}/>{key}</label>)}
-      <div className="ep-mini-legend"><i className="deck"/>patio/deck <i className="open"/>open edge <i className="rail"/>railing</div>
+      <div className="ep-reality-lock"><span>●</span><b>3D reality</b><small>source of truth</small></div>
+      {([
+        ['edges','Audit edges'],
+        ['labels','Reference labels'],
+        ['railings','Railing IDs'],
+        ['markups','Markups'],
+      ] as const).map(([key,label])=><label key={key}><input type="checkbox" checked={layers[key]} onChange={()=>setLayers(x=>({...x,[key]:!x[key]}))}/>{label}</label>)}
+      <div className="ep-mini-legend"><i className="deck"/>3D reality = source of truth <i className="open"/>audit edge overlay <i className="rail"/>railing ID overlay</div>
     </aside>}
 
     {!clean&&<footer className="ep-tools">
@@ -349,14 +409,14 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
         {(Object.keys(categoryMeta) as Category[]).map(k=><option key={k} value={k}>{categoryMeta[k].label}</option>)}
       </select>
       <div className="ep-history"><button onClick={undo} disabled={!marks.length} aria-label="Undo">↶</button><button onClick={redoOne} disabled={!redo.length} aria-label="Redo">↷</button></div>
-      <button className={`ep-more ep-audit-action${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>Audit {auditCount}</button>
+      <button className={`ep-more ep-audit-action${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,edges:true,railings:true}))}}>Audit {auditCount}</button>
       <button className="ep-more ep-marks-action" onClick={()=>setNotesOpen(true)}>Marks {marks.length}</button>
       <button className="ep-more ep-clean-action" onClick={()=>setClean(true)}>Clean</button>
       <button className="ep-more ep-export-action" onClick={exportPng}>Export</button>
     </footer>}
 
     {!clean&&<nav className="ep-landscape-utils" aria-label="Plan utilities">
-      <button className={auditMode?'active':''} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}} aria-label="Toggle edge audit"><span>◎</span><em>Audit</em><b>{auditCount}</b></button>
+      <button className={auditMode?'active':''} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,edges:true,railings:true}))}} aria-label="Toggle edge audit"><span>◎</span><em>Audit</em><b>{auditCount}</b></button>
       <button className={layersOpen?'active':''} onClick={()=>setLayersOpen(v=>!v)} aria-label="Toggle layers"><span>☷</span><em>Layers</em></button>
       <button onClick={()=>setNotesOpen(true)} aria-label="Open marks"><span>◇</span><em>Marks</em>{marks.length>0&&<b>{marks.length}</b>}</button>
       <button onClick={()=>zoom(.82)} aria-label="Zoom in"><span>＋</span><em>Zoom</em></button>
@@ -366,11 +426,21 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       <button onClick={()=>setClean(true)} aria-label="Clean view"><span>□</span><em>Clean</em></button>
     </nav>}
 
-    {!clean&&marks.length===0&&!selectedRailData&&<div className="ep-hint">Tap <strong>Audit</strong> to see open edges and railing IDs. Use <strong>Area</strong> for deck extensions and <strong>Arrow</strong> for new railings.</div>}
+    {!clean&&marks.length===0&&!selectedRailData&&!selectedSurfaceData&&!selectedRealitySurface&&<div className="ep-hint">Patios <strong>P1–P7</strong> are exact 3D slabs. Tap one to inspect it; use <strong>Area</strong> to propose an extension.</div>}
     {!clean&&selectedRailData&&<div className="ep-selection-card">
       <b>{selectedRailData.code}</b>
       <span><strong>{selectedRailData.label}</strong><small>{selectedRailData.family==='guard'?'Full-height guard rail':'Low garden rail'}{selectedRailData.audit==='review'?' · review candidate':''}</small></span>
       <button onClick={()=>setSelectedRail(null)} aria-label="Clear railing selection">×</button>
+    </div>}
+    {!clean&&selectedRealitySurface&&<div className="ep-selection-card ep-surface-card">
+      <b>{selectedRealitySurface.code??'3D'}</b>
+      <span><strong>{selectedRealitySurface.name}</strong><small>Picked from live 3D mesh · {selectedRealitySurface.use} · {(selectedRealitySurface.x2-selectedRealitySurface.x1).toFixed(1)} × {(selectedRealitySurface.z2-selectedRealitySurface.z1).toFixed(1)} m · {((selectedRealitySurface.x2-selectedRealitySurface.x1)*(selectedRealitySurface.z2-selectedRealitySurface.z1)).toFixed(0)} m²</small></span>
+      <button onClick={()=>setSelectedRealitySurface(null)} aria-label="Clear 3D surface selection">×</button>
+    </div>}
+    {!clean&&selectedSurfaceData&&selectedSurfaceData.shape==='rect'&&<div className="ep-selection-card ep-surface-card">
+      <b>{selectedSurfaceData.code}</b>
+      <span><strong>{selectedSurfaceData.label}</strong><small>Exact 3D slab · {(selectedSurfaceData.x2-selectedSurfaceData.x1).toFixed(1)} × {(selectedSurfaceData.z2-selectedSurfaceData.z1).toFixed(1)} m · {((selectedSurfaceData.x2-selectedSurfaceData.x1)*(selectedSurfaceData.z2-selectedSurfaceData.z1)).toFixed(0)} m²</small></span>
+      <button onClick={()=>setSelectedSurface(null)} aria-label="Clear patio selection">×</button>
     </div>}
         {!clean&&status&&<div className="ep-status">{status}</div>}
 

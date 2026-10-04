@@ -2,7 +2,7 @@ import { chromium } from 'playwright'
 import { mkdir,writeFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 const output='artifacts/ocean-estate';await mkdir(output,{recursive:true})
-const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-webgl','--enable-unsafe-swiftshader']})
+const browser=await chromium.launch({executablePath:process.env.ESTATE_CHROMIUM_PATH||undefined,headless:true,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-webgl','--enable-unsafe-swiftshader']})
 const page=await browser.newPage({viewport:{width:1440,height:960},deviceScaleFactor:1}),errors=[],externalNetwork=[]
 const recordConsole=m=>{if(m.type()!=='error')return;const message=m.text();if(message.includes('net::ERR_NAME_NOT_RESOLVED')){externalNetwork.push(message);return}errors.push(message)}
 page.on('pageerror',e=>errors.push(e.message));page.on('console',recordConsole)
@@ -42,8 +42,11 @@ try{
  assert.ok(planLayout.tools&&planLayout.tools.width<=60,'left tool rail stays narrow')
  assert.ok(planLayout.utils&&planLayout.utils.width<=55,'right utility rail stays narrow')
  assert.equal(planLayout.layers?.display,'none','layers start closed in compact landscape')
- await planner.getByRole('button',{name:'Toggle layers'}).click();await planner.locator('.ep-layer-panel.open').waitFor({state:'visible',timeout:3000});await planner.getByRole('button',{name:'Toggle layers'}).click()
- await planner.screenshot({path:`${output}/estate-plan.png`,timeout:120000})
+ await planner.getByRole('button',{name:'Toggle layers'}).click();await planner.locator('.ep-layer-panel.open').waitFor({state:'visible',timeout:3000});assert.equal(await planner.getByText('3D reality',{exact:true}).isVisible(),true,'live 3D reality is visibly locked as the source of truth');await planner.getByRole('button',{name:'Toggle layers'}).click()
+ assert.equal(await planner.locator('.ep-plan rect[fill="#403d38"]').count(),0,'stale SVG wall geometry is absent in reality mode')
+ assert.equal(await planner.locator('.ep-plan rect[fill="#5aa4b0"]').count(),0,'stale SVG glass geometry is absent in reality mode')
+ await planner.screenshot({path:`${output}/estate-plan-reality.png`,timeout:120000})
+ await planner.getByRole('button',{name:'Zoom in'}).click();await planner.getByRole('button',{name:'Zoom in'}).click();await planner.waitForTimeout(180);await planner.screenshot({path:`${output}/estate-plan-reality-zoom.png`,timeout:120000});await planner.getByRole('button',{name:'Fit plan'}).click()
  await planner.getByRole('button',{name:'Toggle edge audit'}).click();await planner.getByText('R6',{exact:true}).waitFor({state:'visible',timeout:5000});assert.equal(await planner.locator('polyline[stroke="transparent"]').count(),11,'every railing exposes a wide invisible phone hit target');await planner.screenshot({path:`${output}/estate-plan-audit.png`,timeout:120000});await planner.close()
 
  await writeFile(`${output}/verification.json`,JSON.stringify({errors,externalNetwork,diagnostics,phoneViewport:{width:915,height:412},renderer:'Chromium SwiftShader; not physical phone hardware',ui:'landscape entry/single menu, edit-mode control, deterministic floor/wall/stair and artwork picking, touch drag-to-look, clean walking HUD, Estate Plan surface/edge audit and railing selection',routeTests:'see Node test output'},null,2))

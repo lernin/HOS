@@ -2,7 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
-const planSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
+const layoutSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
+const layoutUrl='data:text/javascript;base64,'+Buffer.from(layoutSource).toString('base64')
+const railSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("'./site-layout'",JSON.stringify(layoutUrl))
+const railUrl='data:text/javascript;base64,'+Buffer.from(railSource).toString('base64')
+const planSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("'./site-layout'",JSON.stringify(layoutUrl)).replace("'./railings'",JSON.stringify(railUrl))
 const planUrl='data:text/javascript;base64,'+Buffer.from(planSource).toString('base64')
 const navSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/navigation.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("'./plan'",JSON.stringify(planUrl))
 const plan=await import(planUrl),nav=await import('data:text/javascript;base64,'+Buffer.from(navSource).toString('base64'))
@@ -109,12 +113,14 @@ test('closed arrival garden pockets read as intentional planted areas',()=>{
 test('grand foyer grass pockets are framed as intentional gardens',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
+ const layout=readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8')
  assert.equal(rails.includes("id:'foyer-garden-west-a'"),true)
  assert.equal(rails.includes("id:'foyer-garden-east-a'"),true)
  assert.equal(rails.includes("curb:true"),true)
  assert.equal(env.includes('Foyer garden planting'),true)
- assert.equal(env.includes('[-8.5,11,1.9,2.35]'),true)
- assert.equal(env.includes('[10.5,11.5,1.8,2.75]'),true)
+ assert.equal(env.includes('for(const {cx,cz,rx,rz} of foyerGardenBeds)'),true)
+ assert.equal(layout.includes("cx:-8.5, cz:11, rx:1.9, rz:2.35"),true)
+ assert.equal(layout.includes("cx:10.5, cz:11.5, rx:1.8, rz:2.75"),true)
 })
 
 
@@ -229,8 +235,8 @@ test('all estate railings use one shared architectural system',()=>{
  assert.equal(rails.includes('RAIL_END_GAP = RAIL_EDGE_INSET - RAIL_CAP_OVERHANG'),true)
  assert.equal(env.includes('placePost(firstPost)'),true)
  assert.equal(env.includes('for(const p of cornerPosts)placePost(p)'),true)
- assert.equal(planText.includes('west ocean railing returns'),true)
- assert.equal(planText.includes('lookout ocean edge, joined to the terrace corner'),true)
+ assert.equal(planText.includes("estateRailings.filter(r=>r.family==='guard')"),true)
+ assert.equal(nav.walkable({x:42,z:-23.85}),false,'new lookout guard blocks the ocean edge')
 })
 
 
@@ -239,7 +245,7 @@ test('railing pedestal edge gap equals half the pedestal width',()=>{
  assert.equal(Number((centerInset-pedestal/2).toFixed(4)),Number(gap.toFixed(4)))
  const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
  assert.equal(rails.includes('p(-23+RAIL_EDGE_INSET,-17.08)'),true)
- assert.equal(rails.includes('p(44-RAIL_EDGE_INSET,-14+RAIL_END_GAP)'),true)
+ assert.equal(rails.includes('p(44-RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET)'),true)
  assert.equal(rails.includes('p(-22,33-RAIL_EDGE_INSET)'),true)
  assert.equal(rails.includes('p(20+RAIL_EDGE_INSET,31.1)'),true)
 })
@@ -269,9 +275,8 @@ test('Estate Plan is a routed bird-eye markup workspace backed by live plan geom
  assert.equal(planner.includes('Copy change brief'),true)
  assert.equal(planner.includes('exportPng'),true)
  assert.equal(planner.includes("(['main','arrival','site'] as PlanView[])"),true)
- assert.equal(planner.includes('const rotate180=(p:Pt):Pt=>({x:-p.x,y:-p.y})'),true)
- assert.equal(planner.includes('<g transform="rotate(180)">'),true)
- assert.equal(planner.includes('return rotate180(toView(clientX,clientY))'),true)
+ // Physical left/right orientation and persisted note placement are exercised
+ // by ocean-estate-plan-parity.mjs, rather than requiring a mirrored transform.
 })
 
 test('Estate Plan has a direct Vercel SPA rewrite',()=>{
@@ -317,4 +322,92 @@ test('site audit uses live estate plan walls glass floors and shared railing geo
  assert.equal(site.includes("if(glass.some"),true)
  assert.equal(site.includes("if(walls.some"),true)
  assert.equal(site.includes("if(railNear(a,b))return'railing'"),true)
+})
+
+
+test('bird-eye patios are exact shared 3D floor slabs, not inferred room names',()=>{
+ const plan=readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8')
+ const site=readFileSync(new URL('../src/experiences/estate/site-edges.ts',import.meta.url),'utf8')
+ assert.equal(plan.includes("export type FloorUse = 'interior' | 'patio' | 'covered-exterior' | 'arrival' | 'steps'"),true)
+ for(let i=1;i<=7;i++)assert.equal(plan.includes(`planCode: 'P${i}'`),true,`P${i} exact floor slab exists`)
+ assert.equal(plan.includes("name: 'Garden gallery'")&&plan.includes("use: 'covered-exterior', planCode: 'C1'"),true)
+ assert.equal(site.includes("if(f.use==='patio')return'deck'"),true)
+ assert.equal(site.includes("const kind=surfaceKind(f)"),true)
+ assert.equal(site.includes("code=f.planCode??"),true)
+})
+
+test('bird-eye pool and landmark planting share exact 3D geometry constants',()=>{
+ const layout=readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8')
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(layout.includes("x1: -11")&&layout.includes("x2: 12")&&layout.includes("z1: -60.2")&&layout.includes("z2: -24.2"),true)
+ assert.equal(env.includes("poolWater.x2-poolWater.x1"),true)
+ assert.equal(env.includes("for(const t of featureTrees)"),true)
+ assert.equal(env.includes("for(const p of featurePalms)"),true)
+ assert.equal(planner.includes("featureTrees.map"),true)
+ assert.equal(planner.includes("featurePalms.map"),true)
+ assert.equal(planner.includes("architecturalPlanters.map"),true)
+})
+
+test('bird-eye plan does not invent rectangular arrival garden surfaces',()=>{
+ const site=readFileSync(new URL('../src/experiences/estate/site-edges.ts',import.meta.url),'utf8')
+ assert.equal(site.includes("surface-arrival-garden-west"),false)
+ assert.equal(site.includes("surface-arrival-garden-east"),false)
+ assert.equal(site.includes("source:'3d-floor'"),true)
+ assert.equal(site.includes("source:'3d-fixture'"),true)
+})
+
+test('patios are selectable design objects with exact dimensions',()=>{
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(planner.includes("selectedSurfaceData=patioSurfaces.find"),true)
+ assert.equal(planner.includes("setSelectedSurface(s.id)"),true)
+ assert.equal(planner.includes("Exact 3D slab"),true)
+ assert.equal(planner.includes("patioSurfaces.filter"),true)
+})
+
+
+test('bird-eye terrain coastline is the exact 3D terrain formula',()=>{
+ const layout=readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8')
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(layout.includes('export const coastEdgeScale'),true)
+ assert.equal(layout.includes('export const coastZ'),true)
+ assert.equal(layout.includes('export const coastline'),true)
+ assert.equal(env.includes('edge=coastEdgeScale(a)'),true)
+ assert.equal(env.includes('z=coastZ(a,r)*edge'),true)
+ assert.equal(planner.includes("coastline.map(([x,z])"),true)
+ assert.equal(planner.includes("rx=\"58\" ry=\"61\""),false)
+ assert.equal(planner.includes('x="-70" y="12" width="140" height="65"'),false)
+})
+
+
+test('Estate Plan defaults to live 3D reality without stale geometry overlays',()=>{
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(planner.includes("useState({reality:true,surfaces:false,edges:false,labels:false,furniture:false,railings:false,markups:true})"),true)
+ assert.equal(planner.includes("!layers.reality&&walls.map"),true)
+ assert.equal(planner.includes("!layers.reality&&glass.map"),true)
+ assert.equal(planner.includes('className="ep-reality-lock"'),true)
+ assert.equal(planner.includes('<b>3D reality</b><small>source of truth</small>'),true)
+ assert.equal(planner.includes("['surfaces','Reference zones']"),false)
+ assert.equal(planner.includes("['furniture','2D furniture']"),false)
+})
+
+test('live 3D and SVG annotations share the same aspect-preserving viewport transform',()=>{
+ const reality=readFileSync(new URL('../src/experiences/estate/plan-reality.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(planner.includes('preserveAspectRatio="xMidYMid meet"'),true)
+ assert.equal(reality.includes("const viewAspect=box.w/box.h,canvasAspect=w/h"),true)
+ assert.equal(reality.includes("renderer.setViewport(Math.round(vx),Math.round(vy),Math.round(vw),Math.round(vh))"),true)
+ assert.equal(reality.includes("renderer.setScissor(Math.round(vx),Math.round(vy),Math.round(vw),Math.round(vh))"),true)
+})
+
+test('Estate Plan floor selection raycasts the actual 3D slab mesh',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const reality=readFileSync(new URL('../src/experiences/estate/plan-reality.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(env.includes("slab.userData.estatePlan={kind:'floor'"),true)
+ assert.equal(reality.includes("raycaster.intersectObjects(scene.children,true)"),true)
+ assert.equal(reality.includes("if(data?.kind==='floor')return data"),true)
+ assert.equal(planner.includes("realityEngine.current?.pick(e.clientX,e.clientY)"),true)
+ assert.equal(planner.includes("Picked from live 3D mesh"),true)
 })
