@@ -5,6 +5,7 @@ import { estateRailings } from './estate/railings'
 import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces, patioSurfaces } from './estate/site-edges'
 import type { EstateSurfaceKind } from './estate/site-edges'
 import { architecturalPlanters, coastline, featurePalms, featureTrees } from './estate/site-layout'
+import { createEstatePlanReality } from './estate/plan-reality'
 import './estate/estate-plan.css'
 
 type PlanView='main'|'arrival'|'site'
@@ -70,6 +71,8 @@ function markBrief(mark:Mark){
 
 export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}){
   const svgRef=useRef<SVGSVGElement>(null)
+  const realityCanvas=useRef<HTMLCanvasElement>(null)
+  const realityEngine=useRef<ReturnType<typeof createEstatePlanReality>|null>(null)
   const [view,setView]=useState<PlanView>('main')
   const [box,setBox]=useState<Box>(DEFAULT_BOX.main)
   const [tool,setTool]=useState<Tool>('pan')
@@ -89,11 +92,19 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const [auditMode,setAuditMode]=useState(false)
   const [selectedRail,setSelectedRail]=useState<string|null>(null)
   const [selectedSurface,setSelectedSurface]=useState<string|null>(null)
-  const [layers,setLayers]=useState({surfaces:true,edges:true,labels:true,furniture:true,railings:true,markups:true})
+  const [layers,setLayers]=useState({reality:true,surfaces:true,edges:true,labels:true,furniture:true,railings:true,markups:true})
   const [status,setStatus]=useState('')
 
   useEffect(()=>{localStorage.setItem(STORAGE,JSON.stringify(marks))},[marks])
   useEffect(()=>{setBox(DEFAULT_BOX[view])},[view])
+  useEffect(()=>{
+    if(!realityCanvas.current)return
+    const engine=createEstatePlanReality(realityCanvas.current)
+    realityEngine.current=engine
+    engine.render(box)
+    return()=>{engine.dispose();realityEngine.current=null}
+  },[])
+  useEffect(()=>{if(layers.reality)realityEngine.current?.render(box)},[box,layers.reality])
 
   const nextId=useMemo(()=>{
     const max=marks.reduce((n,m)=>Math.max(n,Number(m.id.replace(/\D/g,''))||0),0)
@@ -253,6 +264,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     </header>}
 
     <section className="ep-stage">
+      <canvas ref={realityCanvas} className={`ep-reality${layers.reality?' visible':''}`} aria-hidden="true"/>
       <svg ref={svgRef} className="ep-plan" viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`} preserveAspectRatio="xMidYMid meet"
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel}>
         <defs>
@@ -262,15 +274,14 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           <pattern id="ep-step-hatch" width=".8" height=".8" patternUnits="userSpaceOnUse"><rect width=".8" height=".8" fill="#d9cec0"/><path d="M0 .4H.8" stroke="#aa9a87" strokeWidth=".1"/></pattern>
           {(Object.keys(categoryMeta) as Category[]).map(k=><marker key={k} id={`ep-arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill={categoryMeta[k].color}/></marker>)}
         </defs>
-        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="#f7f3e8"/>
-        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="url(#ep-grid)"/>
+        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill={layers.reality?'transparent':'#f7f3e8'}/>
+        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="url(#ep-grid)" opacity={layers.reality?.34:1}/>
         <g transform="rotate(180)">
-          <rect x="-90" y="-90" width="180" height="180" fill="#dceff2" opacity={view==='arrival'?.18:.78}/>
-          <polygon points={coastline.map(([x,z])=>`${x},${-z}`).join(' ')} fill="#e8e5d9" stroke="#aaa99e" strokeWidth=".22" opacity={view==='arrival'?.34:.96}/>
+          {!layers.reality&&<><rect x="-90" y="-90" width="180" height="180" fill="#dceff2" opacity={view==='arrival'?.18:.78}/><polygon points={coastline.map(([x,z])=>`${x},${-z}`).join(' ')} fill="#e8e5d9" stroke="#aaa99e" strokeWidth=".22" opacity={view==='arrival'?.34:.96}/></>}
 
           {layers.surfaces&&estateSurfaces.map(s=>{
             const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id
-            const opacity=view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)
+            const opacity=layers.reality?(view==='arrival'?(lower?.26:.07):.12):(view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1))
             if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={surfaceFill[s.kind]} opacity={opacity} stroke="#8f897e" strokeWidth=".16"/>
             return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={surfaceFill[s.kind]} opacity={opacity} stroke={selected?'#175f91':patio?'transparent':'#9c9385'} strokeWidth={selected?.5:patio?0:.13} pointerEvents={patio&&tool==='pan'?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRail(null)}:undefined}/>
           })}
@@ -283,11 +294,11 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           {walls.map((w,i)=><rect key={`wall-${i}`} x={w.x1} y={-w.z2} width={Math.max(.12,w.x2-w.x1)} height={Math.max(.12,w.z2-w.z1)} fill="#403d38" opacity={view==='arrival'?.72:.9}/>)}
           {glass.map((w,i)=><rect key={`glass-${i}`} x={w.x1} y={-w.z2} width={Math.max(.11,w.x2-w.x1)} height={Math.max(.11,w.z2-w.z1)} fill="#5aa4b0" opacity=".88"/>)}
 
-          {layers.furniture&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
+          {layers.furniture&&!layers.reality&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
 
-          {layers.surfaces&&featureTrees.map(t=><g key={t.id} opacity=".9"><circle cx={t.x} cy={-t.z} r="1.15" fill="#9bad88" fillOpacity=".28" stroke="#718464" strokeWidth=".16"/><circle cx={t.x} cy={-t.z} r=".18" fill="#69533f"/></g>)}
-          {layers.surfaces&&featurePalms.map(p=><g key={p.id} opacity=".92"><circle cx={p.x} cy={-p.z} r=".9" fill="#adc093" fillOpacity=".24" stroke="#788d67" strokeWidth=".15" strokeDasharray=".25 .16"/><circle cx={p.x} cy={-p.z} r=".14" fill="#70563e"/></g>)}
-          {layers.surfaces&&architecturalPlanters.map(([x,z],i)=><circle key={`planter-${i}`} cx={x} cy={-z} r=".32" fill="#a9b58f" stroke="#756a58" strokeWidth=".1"/>)}
+          {layers.surfaces&&!layers.reality&&featureTrees.map(t=><g key={t.id} opacity=".9"><circle cx={t.x} cy={-t.z} r="1.15" fill="#9bad88" fillOpacity=".28" stroke="#718464" strokeWidth=".16"/><circle cx={t.x} cy={-t.z} r=".18" fill="#69533f"/></g>)}
+          {layers.surfaces&&!layers.reality&&featurePalms.map(p=><g key={p.id} opacity=".92"><circle cx={p.x} cy={-p.z} r=".9" fill="#adc093" fillOpacity=".24" stroke="#788d67" strokeWidth=".15" strokeDasharray=".25 .16"/><circle cx={p.x} cy={-p.z} r=".14" fill="#70563e"/></g>)}
+          {layers.surfaces&&!layers.reality&&architecturalPlanters.map(([x,z],i)=><circle key={`planter-${i}`} cx={x} cy={-z} r=".32" fill="#a9b58f" stroke="#756a58" strokeWidth=".1"/>)}
 
           {layers.railings&&estateRailings.map(r=>{
             const selected=selectedRail===r.id,review=auditMode&&r.audit==='review',pts=r.points.map(([x,z])=>`${x},${-z}`).join(' ')
