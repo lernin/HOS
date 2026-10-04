@@ -376,3 +376,33 @@ test('bird-eye terrain coastline is the exact 3D terrain formula',()=>{
  assert.equal(planner.includes("rx=\"58\" ry=\"61\""),false)
  assert.equal(planner.includes('x="-70" y="12" width="140" height="65"'),false)
 })
+
+
+test('Estate Plan defaults to live 3D reality without stale geometry overlays',()=>{
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(planner.includes("useState({reality:true,surfaces:false,edges:false,labels:false,furniture:false,railings:false,markups:true})"),true)
+ assert.equal(planner.includes("!layers.reality&&walls.map"),true)
+ assert.equal(planner.includes("!layers.reality&&glass.map"),true)
+ assert.equal(planner.includes("['reality','3D reality']"),true)
+ assert.equal(planner.includes("['surfaces','Reference zones']"),true)
+})
+
+test('live 3D and SVG annotations share the same aspect-preserving viewport transform',()=>{
+ const reality=readFileSync(new URL('../src/experiences/estate/plan-reality.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(planner.includes('preserveAspectRatio="xMidYMid meet"'),true)
+ assert.equal(reality.includes("const viewAspect=box.w/box.h,canvasAspect=w/h"),true)
+ assert.equal(reality.includes("renderer.setViewport(Math.round(vx),Math.round(vy),Math.round(vw),Math.round(vh))"),true)
+ assert.equal(reality.includes("renderer.setScissor(Math.round(vx),Math.round(vy),Math.round(vw),Math.round(vh))"),true)
+})
+
+test('Estate Plan floor selection raycasts the actual 3D slab mesh',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const reality=readFileSync(new URL('../src/experiences/estate/plan-reality.ts',import.meta.url),'utf8')
+ const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
+ assert.equal(env.includes("slab.userData.estatePlan={kind:'floor'"),true)
+ assert.equal(reality.includes("raycaster.intersectObjects(scene.children,true)"),true)
+ assert.equal(reality.includes("if(data?.kind==='floor')return data"),true)
+ assert.equal(planner.includes("realityEngine.current?.pick(e.clientX,e.clientY)"),true)
+ assert.equal(planner.includes("Picked from live 3D mesh"),true)
+})
