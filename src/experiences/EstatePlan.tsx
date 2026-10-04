@@ -83,6 +83,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const pinchRef=useRef<{distance:number;box:Box;mid:{x:number;y:number};rect:DOMRect}|null>(null)
   const [noteDraft,setNoteDraft]=useState<{point:Pt;text:string}|null>(null)
   const [notesOpen,setNotesOpen]=useState(false)
+  const [layersOpen,setLayersOpen]=useState(false)
   const [clean,setClean]=useState(false)
   const [auditMode,setAuditMode]=useState(false)
   const [selectedRail,setSelectedRail]=useState<string|null>(null)
@@ -331,7 +332,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       {clean&&<button className="ep-clean-exit" onClick={()=>setClean(false)}>Exit clean view</button>}
     </section>
 
-    {!clean&&<aside className="ep-layer-panel">
+    {!clean&&<aside className={`ep-layer-panel${layersOpen?' open':''}`}>
       <button className={`ep-audit-toggle${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>
         <span>Edge audit</span><b>{auditCount}</b>
       </button>
@@ -342,17 +343,27 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
 
     {!clean&&<footer className="ep-tools">
       <div className="ep-tools-scroll">
-        {([['pan','Pan'],['pen','Draw'],['arrow','Arrow'],['area','Area'],['note','Note']] as [Tool,string][]).map(([id,label])=><button key={id} className={tool===id?'active':''} onClick={()=>setTool(id)}><span>{id==='pan'?'✥':id==='pen'?'✎':id==='arrow'?'→':id==='area'?'▱':'A1'}</span>{label}</button>)}
+        {([['pan','Pan'],['pen','Draw'],['arrow','Arrow'],['area','Area'],['note','Note']] as [Tool,string][]).map(([id,label])=><button key={id} className={tool===id?'active':''} onClick={()=>setTool(id)}><span>{id==='pan'?'✥':id==='pen'?'✎':id==='arrow'?'→':id==='area'?'▱':'A1'}</span><em>{label}</em></button>)}
       </div>
       <select className="ep-category" value={category} onChange={e=>setCategory(e.target.value as Category)} aria-label="Markup category">
         {(Object.keys(categoryMeta) as Category[]).map(k=><option key={k} value={k}>{categoryMeta[k].label}</option>)}
       </select>
       <div className="ep-history"><button onClick={undo} disabled={!marks.length} aria-label="Undo">↶</button><button onClick={redoOne} disabled={!redo.length} aria-label="Redo">↷</button></div>
-      <button className={`ep-more${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>Audit {auditCount}</button>
-            <button className="ep-more" onClick={()=>setNotesOpen(true)}>Marks {marks.length}</button>
-      <button className="ep-more" onClick={()=>setClean(true)}>Clean</button>
-      <button className="ep-more" onClick={exportPng}>Export</button>
+      <button className={`ep-more ep-audit-action${auditMode?' active':''}`} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}}>Audit {auditCount}</button>
+      <button className="ep-more ep-marks-action" onClick={()=>setNotesOpen(true)}>Marks {marks.length}</button>
+      <button className="ep-more ep-clean-action" onClick={()=>setClean(true)}>Clean</button>
+      <button className="ep-more ep-export-action" onClick={exportPng}>Export</button>
     </footer>}
+
+    {!clean&&<nav className="ep-landscape-utils" aria-label="Plan utilities">
+      <button className={auditMode?'active':''} onClick={()=>{const next=!auditMode;setAuditMode(next);if(next)setLayers(x=>({...x,surfaces:true,edges:true,railings:true}))}} aria-label="Toggle edge audit"><span>◎</span><em>Audit</em><b>{auditCount}</b></button>
+      <button className={layersOpen?'active':''} onClick={()=>setLayersOpen(v=>!v)} aria-label="Toggle layers"><span>☷</span><em>Layers</em></button>
+      <button onClick={()=>setNotesOpen(true)} aria-label="Open marks"><span>◇</span><em>Marks</em>{marks.length>0&&<b>{marks.length}</b>}</button>
+      <button onClick={()=>zoom(.82)} aria-label="Zoom in"><span>＋</span><em>Zoom</em></button>
+      <button onClick={()=>zoom(1.22)} aria-label="Zoom out"><span>−</span><em>Zoom</em></button>
+      <button onClick={()=>setBox(DEFAULT_BOX[view])} aria-label="Fit plan"><span>⌗</span><em>Fit</em></button>
+      <button onClick={()=>setClean(true)} aria-label="Clean view"><span>□</span><em>Clean</em></button>
+    </nav>}
 
     {!clean&&marks.length===0&&!selectedRailData&&<div className="ep-hint">Tap <strong>Audit</strong> to see open edges and railing IDs. Use <strong>Area</strong> for deck extensions and <strong>Arrow</strong> for new railings.</div>}
     {!clean&&selectedRailData&&<div className="ep-selection-card">
