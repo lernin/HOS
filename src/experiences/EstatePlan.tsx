@@ -304,7 +304,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
             const lower=s.kind==='arrival'||s.kind==='steps',patio=s.kind==='deck'||s.kind==='covered-exterior',selected=selectedSurface===s.id,show=layers.surfaces&&!layers.reality
             const opacity=show?(view==='site'?.92:view==='arrival'?(lower?1:.16):(lower?.14:1)):0
             if(s.shape==='circle')return <circle key={s.id} cx={s.x} cy={-s.z} r={s.r} fill={show?surfaceFill[s.kind]:'transparent'} opacity={opacity} stroke={show?'#8f897e':'transparent'} strokeWidth=".16" pointerEvents="none"/>
-            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={show?surfaceFill[s.kind]:'transparent'} opacity={show?opacity:1} stroke={selected?'#175f91':show&&!patio?'#9c9385':'transparent'} strokeWidth={selected?.5:(show&&!patio?.13:0)} pointerEvents={patio&&tool==='pan'&&!layers.reality?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRealitySurface(null);setSelectedRail(null)}:undefined}/>
+            return <rect key={s.id} x={s.x1} y={-s.z2} width={s.x2-s.x1} height={s.z2-s.z1} rx=".08" fill={show?surfaceFill[s.kind]:'transparent'} opacity={show?opacity:1} stroke={selected?'#175f91':show&&!patio?'#9c9385':'transparent'} strokeWidth={selected ? .5 : (show && !patio ? .13 : 0)} pointerEvents={patio&&tool==='pan'&&!layers.reality?'all':'none'} onPointerDown={patio?e=>{e.stopPropagation();setSelectedSurface(s.id);setSelectedRealitySurface(null);setSelectedRail(null)}:undefined}/>
           })}
 
           {layers.edges&&estateEdges.map(e=>{
@@ -312,8 +312,8 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
             return <line key={e.id} x1={e.a[0]} y1={-e.a[1]} x2={e.b[0]} y2={-e.b[1]} stroke={review?'#d62f45':edgeStroke[e.kind]} strokeWidth={review?.48:e.kind==='wall'?.34:.26} strokeDasharray={e.kind==='open'?'.55 .34':e.kind==='step'?'.28 .2':undefined} opacity={view==='arrival'?.82:.92}/>
           })}
 
-          {walls.map((w,i)=><rect key={`wall-${i}`} x={w.x1} y={-w.z2} width={Math.max(.12,w.x2-w.x1)} height={Math.max(.12,w.z2-w.z1)} fill="#403d38" opacity={view==='arrival'?.72:.9}/>)}
-          {glass.map((w,i)=><rect key={`glass-${i}`} x={w.x1} y={-w.z2} width={Math.max(.11,w.x2-w.x1)} height={Math.max(.11,w.z2-w.z1)} fill="#5aa4b0" opacity=".88"/>)}
+          {!layers.reality&&walls.map((w,i)=><rect key={`wall-${i}`} x={w.x1} y={-w.z2} width={Math.max(.12,w.x2-w.x1)} height={Math.max(.12,w.z2-w.z1)} fill="#403d38" opacity={view==='arrival'?.72:.9}/>)}
+          {!layers.reality&&glass.map((w,i)=><rect key={`glass-${i}`} x={w.x1} y={-w.z2} width={Math.max(.11,w.x2-w.x1)} height={Math.max(.11,w.z2-w.z1)} fill="#5aa4b0" opacity=".88"/>)}
 
           {layers.furniture&&!layers.reality&&view!=='arrival'&&furnishings.map((f,i)=>{const r=footprint(f);return <rect key={`furn-${i}`} x={r.x1} y={-r.z2} width={r.x2-r.x1} height={r.z2-r.z1} rx=".18" fill="#887d6c" opacity=".26" stroke="#6c6254" strokeWidth=".08"/>})}
 
