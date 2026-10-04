@@ -1,41 +1,42 @@
 export type Point = { x: number; z: number }
 export type Rect = { x1: number; x2: number; z1: number; z2: number }
-export type Floor = Rect & { name: string; material: string; roof?: number; level?: number }
+export type FloorUse = 'interior' | 'patio' | 'covered-exterior' | 'arrival' | 'steps'
+export type Floor = Rect & { name: string; material: string; roof?: number; level?: number; use: FloorUse; planCode?: string }
 export type Wall = Rect & { height: number; material: string }
 export const FLOOR = 6
 export const EYE = 1.65
 export const spawn = { x: 1, z: 29, yaw: 0 }
 export const floors: Floor[] = [
-  { name: 'Great room', x1: -11, x2: 13, z1: -12, z2: 8, material: 'limestone', roof: 5.5 },
-  { name: 'Grand foyer', x1: -6, x2: 8, z1: 8, z2: 24, material: 'limestone', roof: 4.5 },
-  { name: 'Ocean terrace', x1: -23, x2: 27, z1: -24, z2: -12, material: 'travertine' },
-  { name: 'Pool walk', x1: -15, x2: -11, z1: -36, z2: -24, material: 'travertine' },
-  { name: 'Pool walk', x1: 12, x2: 16, z1: -36, z2: -24, material: 'travertine' },
-  { name: 'Dining room', x1: -23, x2: -11, z1: -12, z2: 2, material: 'limestone', roof: 4.2 },
-  { name: 'Kitchen', x1: -23, x2: -11, z1: 2, z2: 14, material: 'limestone', roof: 3.6 },
-  { name: 'Family lounge', x1: -35, x2: -23, z1: -17, z2: -2, material: 'oak', roof: 3.8 },
-  { name: 'Media room', x1: -39, x2: -26, z1: -2, z2: 11, material: 'walnut', roof: 3.4 },
-  { name: 'West gallery', x1: -26, x2: -23, z1: -2, z2: 39, material: 'limestone', roof: 3.4 },
-  { name: 'Fitness studio', x1: -39, x2: -26, z1: 11, z2: 24, material: 'oak', roof: 3.5 },
-  { name: 'Wellness & spa', x1: -39, x2: -26, z1: 24, z2: 39, material: 'travertine', roof: 3.5 },
-  { name: 'Garden courtyard', x1: -23, x2: -6, z1: 14, z2: 33, material: 'travertine' },
-  { name: 'Library', x1: 8, x2: 20, z1: 15, z2: 28, material: 'oak', roof: 3.6 },
-  { name: 'East gallery', x1: 13, x2: 24, z1: -12, z2: 15, material: 'limestone', roof: 3.5 },
-  { name: 'East gallery', x1: 20, x2: 24, z1: 15, z2: 40, material: 'limestone', roof: 3.5 },
-  { name: 'Primary suite', x1: 24, x2: 39, z1: -12, z2: 2, material: 'oak', roof: 3.8 },
-  { name: 'Dressing room', x1: 24, x2: 31, z1: 2, z2: 13, material: 'oak', roof: 3.3 },
-  { name: 'Primary bath', x1: 31, x2: 39, z1: 2, z2: 13, material: 'travertine', roof: 3.3 },
-  { name: 'Sunrise terrace', x1: 39, x2: 44, z1: -14, z2: 14, material: 'travertine' },
-  { name: 'Ocean lookout', x1: 27, x2: 40, z1: -23, z2: -12, material: 'travertine' },
-  { name: 'Sage guest suite', x1: 24, x2: 32, z1: 17, z2: 28, material: 'oak', roof: 3.3 },
-  { name: 'Sand guest suite', x1: 32, x2: 40, z1: 17, z2: 28, material: 'oak', roof: 3.3 },
-  { name: 'Guest gallery', x1: 24, x2: 40, z1: 28, z2: 31, material: 'limestone', roof: 3.3 },
-  { name: 'Indigo guest suite', x1: 27, x2: 40, z1: 31, z2: 40, material: 'oak', roof: 3.3 },
-  { name: 'Garden gallery', x1: 24, x2: 27, z1: 31, z2: 49, material: 'limestone', roof: 3.3 },
-  { name: 'Garage', x1: 27, x2: 40, z1: 40, z2: 51, material: 'concrete', roof: 3.3 },
-  { name: 'Arrival steps', x1: -5, x2: 7, z1: 24, z2: 31, material: 'travertine' },
-  { name: 'Arrival court', x1: -18, x2: 20, z1: 22, z2: 60, material: 'basalt', level: 4.8 },
-  { name: 'Garden path', x1: -31, x2: -22, z1: 33, z2: 43, material: 'travertine' },
+  { name: 'Great room', x1: -11, x2: 13, z1: -12, z2: 8, material: 'limestone', roof: 5.5, use: 'interior' },
+  { name: 'Grand foyer', x1: -6, x2: 8, z1: 8, z2: 24, material: 'limestone', roof: 4.5, use: 'interior' },
+  { name: 'Ocean terrace', x1: -23, x2: 27, z1: -24, z2: -12, material: 'travertine', use: 'patio', planCode: 'P1' },
+  { name: 'Pool walk', x1: -15, x2: -11, z1: -36, z2: -24, material: 'travertine', use: 'patio', planCode: 'P2' },
+  { name: 'Pool walk', x1: 12, x2: 16, z1: -36, z2: -24, material: 'travertine', use: 'patio', planCode: 'P3' },
+  { name: 'Dining room', x1: -23, x2: -11, z1: -12, z2: 2, material: 'limestone', roof: 4.2, use: 'interior' },
+  { name: 'Kitchen', x1: -23, x2: -11, z1: 2, z2: 14, material: 'limestone', roof: 3.6, use: 'interior' },
+  { name: 'Family lounge', x1: -35, x2: -23, z1: -17, z2: -2, material: 'oak', roof: 3.8, use: 'interior' },
+  { name: 'Media room', x1: -39, x2: -26, z1: -2, z2: 11, material: 'walnut', roof: 3.4, use: 'interior' },
+  { name: 'West gallery', x1: -26, x2: -23, z1: -2, z2: 39, material: 'limestone', roof: 3.4, use: 'interior' },
+  { name: 'Fitness studio', x1: -39, x2: -26, z1: 11, z2: 24, material: 'oak', roof: 3.5, use: 'interior' },
+  { name: 'Wellness & spa', x1: -39, x2: -26, z1: 24, z2: 39, material: 'travertine', roof: 3.5, use: 'interior' },
+  { name: 'Garden courtyard', x1: -23, x2: -6, z1: 14, z2: 33, material: 'travertine', use: 'patio', planCode: 'P4' },
+  { name: 'Library', x1: 8, x2: 20, z1: 15, z2: 28, material: 'oak', roof: 3.6, use: 'interior' },
+  { name: 'East gallery', x1: 13, x2: 24, z1: -12, z2: 15, material: 'limestone', roof: 3.5, use: 'interior' },
+  { name: 'East gallery', x1: 20, x2: 24, z1: 15, z2: 40, material: 'limestone', roof: 3.5, use: 'interior' },
+  { name: 'Primary suite', x1: 24, x2: 39, z1: -12, z2: 2, material: 'oak', roof: 3.8, use: 'interior' },
+  { name: 'Dressing room', x1: 24, x2: 31, z1: 2, z2: 13, material: 'oak', roof: 3.3, use: 'interior' },
+  { name: 'Primary bath', x1: 31, x2: 39, z1: 2, z2: 13, material: 'travertine', roof: 3.3, use: 'interior' },
+  { name: 'Sunrise terrace', x1: 39, x2: 44, z1: -14, z2: 14, material: 'travertine', use: 'patio', planCode: 'P5' },
+  { name: 'Ocean lookout', x1: 27, x2: 40, z1: -23, z2: -12, material: 'travertine', use: 'patio', planCode: 'P6' },
+  { name: 'Sage guest suite', x1: 24, x2: 32, z1: 17, z2: 28, material: 'oak', roof: 3.3, use: 'interior' },
+  { name: 'Sand guest suite', x1: 32, x2: 40, z1: 17, z2: 28, material: 'oak', roof: 3.3, use: 'interior' },
+  { name: 'Guest gallery', x1: 24, x2: 40, z1: 28, z2: 31, material: 'limestone', roof: 3.3, use: 'interior' },
+  { name: 'Indigo guest suite', x1: 27, x2: 40, z1: 31, z2: 40, material: 'oak', roof: 3.3, use: 'interior' },
+  { name: 'Garden gallery', x1: 24, x2: 27, z1: 31, z2: 49, material: 'limestone', roof: 3.3, use: 'covered-exterior', planCode: 'C1' },
+  { name: 'Garage', x1: 27, x2: 40, z1: 40, z2: 51, material: 'concrete', roof: 3.3, use: 'interior' },
+  { name: 'Arrival steps', x1: -5, x2: 7, z1: 24, z2: 31, material: 'travertine', use: 'steps' },
+  { name: 'Arrival court', x1: -18, x2: 20, z1: 22, z2: 60, material: 'basalt', level: 4.8, use: 'arrival' },
+  { name: 'Garden path', x1: -31, x2: -22, z1: 33, z2: 43, material: 'travertine', use: 'patio', planCode: 'P7' },
 ]
 export const walls: Wall[] = []
 export const lintels: (Wall & {base:number})[] = []
