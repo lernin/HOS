@@ -3,25 +3,38 @@ import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR 
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
 import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
+import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
+import { slabWithOpening, buildSpaDome, buildSpaTreeBed } from './spa-dome'
 export function architecture(k:EstateKit){
   const overhead=k.group(0,0,0)
   overhead.userData.estatePlanOccluder=true
   for(const [floorIndex,f] of floors.entries()){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
     if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else{
-      const slab=k.box(x,y-.2,z,w,.4,d,f.name==='Garden courtyard'?'courtyardPaving':f.material==='oak'?'oakFloor':f.material)
+      const slab=f.name==='Wellness & spa'?slabWithOpening(k,f,y-.2,.4,f.material,k.root,spaTreeBed):k.box(x,y-.2,z,w,.4,d,f.name==='Garden courtyard'?'courtyardPaving':f.material==='oak'?'oakFloor':f.material)
       slab.userData.estatePlan={kind:'floor',id:`surface-floor-${floorIndex}`,code:f.planCode??null,name:f.name,use:f.use,x1:f.x1,x2:f.x2,z1:f.z1,z2:f.z2}
     }
     if((f.material==='limestone'||f.material==='travertine')&&f.name!=='Garden courtyard'){
-      for(let a=f.x1+2.8;a<f.x2;a+=2.8)k.box(a,y+.004,z,.011,.005,d,'rug')
-      for(let a=f.z1+1.65;a<f.z2;a+=1.65)k.box(x,y+.005,a,w,.005,.01,'rug')
+      // Spa paving joints are split around the planted opening.
+      const segments=(at:number,axis:'x'|'z')=>{
+        if(f.name!=='Wellness & spa')return [[axis==='x'?f.z1:f.x1,axis==='x'?f.z2:f.x2]]
+        const q=(at-(axis==='x'?spaTreeBed.cx:spaTreeBed.cz))/(axis==='x'?spaTreeBed.rx:spaTreeBed.rz)
+        if(Math.abs(q)>=1)return [[axis==='x'?f.z1:f.x1,axis==='x'?f.z2:f.x2]]
+        const radius=(axis==='x'?spaTreeBed.rz:spaTreeBed.rx)*Math.sqrt(1-q*q),center=axis==='x'?spaTreeBed.cz:spaTreeBed.cx
+        return [[axis==='x'?f.z1:f.x1,center-radius],[center+radius,axis==='x'?f.z2:f.x2]]
+      }
+      for(let a=f.x1+2.8;a<f.x2;a+=2.8)for(const [lo,hi] of segments(a,'x'))k.box(a,y+.004,(lo+hi)/2,.011,.005,hi-lo,'rug')
+      for(let a=f.z1+1.65;a<f.z2;a+=1.65)for(const [lo,hi] of segments(a,'z'))k.box((lo+hi)/2,y+.005,a,hi-lo,.005,.01,'rug')
     }
-    if(f.roof){k.box(x,y+f.roof+.22,z,w+.65,.4,d+.65,'travertine',overhead);k.box(x,y+f.roof+.43,z,w-.25,.03,d-.25,'roof',overhead);k.box(x,y+f.roof-.02,z,w,.035,d,'plaster',overhead)
+    if(f.roof){
+      const roofLayer=(yy:number,h:number,ww:number,dd:number,mat:string)=>f.name==='Wellness & spa'?slabWithOpening(k,{x1:x-ww/2,x2:x+ww/2,z1:z-dd/2,z2:z+dd/2},yy,h,mat,overhead,spaDome):k.box(x,yy,z,ww,h,dd,mat,overhead)
+      roofLayer(y+f.roof+.22,.4,w+.65,d+.65,'travertine');roofLayer(y+f.roof+.43,.03,w-.25,d-.25,'roof');roofLayer(y+f.roof-.02,.035,w,d,'plaster')
       // Roof fascia/reveal, warm soffit, clerestory scale instead of flat boxes.
       k.box(x,y+f.roof+.05,f.z1-.27,w+.7,.085,.14,'bronze',overhead)
       for(const a of [-1,1])k.box(x+a*(w/2-.32),y+f.roof-.05,z,.045,.025,d-.5,'glow',overhead)
     }
   }
+  buildSpaDome(k,overhead)
   for(const w of lintels)k.box((w.x1+w.x2)/2,FLOOR+w.base+w.height/2,(w.z1+w.z2)/2,w.x2-w.x1,w.height,w.z2-w.z1,w.material,overhead)
   for(const w of walls)k.box((w.x1+w.x2)/2,FLOOR+w.height/2,(w.z1+w.z2)/2,w.x2-w.x1,w.height,w.z2-w.z1,w.material)
   for(const w of glass){const x=(w.x1+w.x2)/2,z=(w.z1+w.z2)/2,dx=w.x2-w.x1,dz=w.z2-w.z1,roof=floors.filter(f=>f.roof&&contains(f,{x,z},.15)).reduce((h,f)=>Math.max(h,f.roof!),w.height),height=roof-.035;k.box(x,FLOOR+height/2,z,dx,height,dz,'glass')
@@ -59,19 +72,24 @@ export function architecture(k:EstateKit){
   for(const [x,z] of [[-3,11],[5,11],[-3,21],[5,21]]){k.cylinder(x,FLOOR+.44,z,.22,.88,'travertine');k.ellipsoid(x,FLOOR+1.16,z,.32,.38,.19,'bronze')}
   for(let i=0;i<5;i++){const m=k.mesh(new T.TorusGeometry(1.1+i*.07,.025,6,32),'bronze',1,FLOOR+3.2+i*.12,17);m.rotation.x=1.05+i*.09}
   // Deep terrace edge and concealed waterline conceal intersections with cliffs.
-  for(const x of [-15.1,16.1])k.box(x,FLOOR-1.7,-29.2,.35,3.4,13.8,'travertine')
-  k.box(.5,FLOOR-1.54,-36.1,23.4,2.8,.25,'travertine')
-  k.box((poolWater.x1+poolWater.x2)/2,FLOOR-1.5,(poolWater.z1+poolWater.z2)/2,poolWater.x2-poolWater.x1,.2,poolWater.z2-poolWater.z1,'waterTile')
-  for(const x of [-10.95,11.95])k.box(x,FLOOR-.85,-30.2,.15,1.35,12,'waterTile')
+  const poolX=(poolWater.x1+poolWater.x2)/2,poolZ=(poolWater.z1+poolWater.z2)/2,poolWidth=poolWater.x2-poolWater.x1,poolDepth=poolWater.z2-poolWater.z1
+  for(const x of [poolWater.x1-4.1,poolWater.x2+4.1])k.box(x,FLOOR-1.7,(poolWalkNorth+poolWalkSouth)/2,.35,3.4,poolWalkSouth-poolWalkNorth,'travertine')
+  k.box(poolX,FLOOR-1.54,poolWater.z1+.1,poolWidth+.4,2.8,.25,'travertine')
+  k.box(poolX,FLOOR-1.5,poolZ,poolWidth,.2,poolDepth,'waterTile')
+  for(const x of [poolWater.x1+.05,poolWater.x2-.05])k.box(x,FLOOR-.85,poolZ,.15,1.35,poolDepth,'waterTile')
   // Unified Estate railing system. Geometry is shared with Estate Plan so the 2D plan and 3D world stay aligned.
+  const placedPosts=new Set<string>()
+  const endpointCounts=new Map<string,number>(),postKey=(p:T.Vector3)=>`${p.x.toFixed(4)},${p.z.toFixed(4)}`
+  for(const rail of estateRailings)for(const p of [rail.points[0],rail.points[rail.points.length-1]]){const key=postKey(v(p[0],0,p[1]));endpointCounts.set(key,(endpointCounts.get(key)??0)+1)}
   const estateRailPath=(points:T.Vector3[],opts:{height?:number;glass?:boolean;curb?:boolean}={})=>{
     const height=opts.height??1.235,capH=.09,capW=.16,post=RAIL_POST,base=RAIL_BASE,glass=opts.glass!==false,curb=opts.curb===true
     const floorLift=curb ? .14 : 0,capY=floorLift+height,postTop=capY-capH/2,postH=postTop-(floorLift+.055)
     const placePost=(p:T.Vector3)=>{
+      const key=`${postKey(p)},${height},${floorLift}`;if(placedPosts.has(key))return;placedPosts.add(key)
       k.box(p.x,FLOOR+floorLift+.055+postH/2,p.z,post,postH,post,'bronze',k.root,.012)
       k.box(p.x,FLOOR+floorLift+.018,p.z,base,.036,base,'bronze',k.root,.012)
     }
-    const terminal=(from:T.Vector3,to:T.Vector3)=>{const dir=to.clone().sub(from).normalize();return from.clone().addScaledVector(dir,RAIL_CAP_OVERHANG)}
+    const terminal=(from:T.Vector3,to:T.Vector3)=>{if((endpointCounts.get(postKey(from))??0)>1)return from.clone();const dir=to.clone().sub(from).normalize();return from.clone().addScaledVector(dir,RAIL_CAP_OVERHANG)}
     const firstPost=terminal(points[0],points[1]),lastPost=terminal(points[points.length-1],points[points.length-2]),cornerPosts=points.slice(1,-1)
     placePost(firstPost);for(const p of cornerPosts)placePost(p);placePost(lastPost)
     for(let s=0;s<points.length-1;s++){
@@ -95,9 +113,10 @@ export function architecture(k:EstateKit){
 }
 export function landscape(k:EstateKit){
   const rand=random(82031),b=k.box
+  buildSpaTreeBed(k)
   // All scattered planting excludes the constructed footprint, including the
   // pool void. The perimeter moved during art direction; scatter must follow it.
-  const unbuilt=(x:number,z:number,pad=1)=>!floors.some(f=>contains(f,{x,z},pad))&&!contains({x1:-15,x2:16,z1:-38,z2:-23},{x,z},pad)
+  const unbuilt=(x:number,z:number,pad=1)=>!floors.some(f=>contains(f,{x,z},pad))&&!contains({x1:poolWater.x1-4,x2:poolWater.x2+4,z1:poolWater.z1-2,z2:poolWater.z2+1},{x,z},pad)
   function terrainHeight(x:number,z:number,r:number){const arrival=Math.max(0,Math.min(1,(z-24)/9));return 5.5-arrival*1.05-Math.pow(Math.max(0,(r-.7)/.3),1.3)*8+Math.sin(x*.14)*Math.sin(z*.18)*.24}
   const verts:number[]=[],ids:number[]=[],segments=100,rings=20
   for(let j=0;j<=rings;j++)for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2,r=j/rings,edge=coastEdgeScale(a),x=Math.cos(a)*58*r*edge,z=coastZ(a,r)*edge;verts.push(x,terrainHeight(x,z,r),z)}
@@ -216,9 +235,10 @@ export function waters(scene:T.Scene){
   `.replace(';#include',';\n#include')})
   const ocean=new T.Mesh(new T.PlaneGeometry(4500,4500,100,100),water);ocean.rotation.x=-Math.PI/2;ocean.position.set(0,-1.1,-400);scene.add(ocean)
   const poolMat=water.clone();poolMat.uniforms.pool.value=1
-  const pool=new T.Mesh(new T.PlaneGeometry(22.8,11.8),poolMat);pool.rotation.x=-Math.PI/2;pool.position.set(.5,FLOOR-.13,-30.1);scene.add(pool)
+  const poolX=(poolWater.x1+poolWater.x2)/2,poolZ=(poolWater.z1+poolWater.z2)/2,poolWidth=poolWater.x2-poolWater.x1,poolDepth=poolWater.z2-poolWater.z1
+  const pool=new T.Mesh(new T.PlaneGeometry(poolWidth-.2,poolDepth-.2),poolMat);pool.rotation.x=-Math.PI/2;pool.position.set(poolX,FLOOR-.13,poolZ);scene.add(pool)
   const spa=new T.Mesh(new T.PlaneGeometry(4.7,3.5),poolMat);spa.rotation.x=-Math.PI/2;spa.position.set(-32.5,FLOOR+.03,37);scene.add(spa)
   // Infinity overflow is a narrow, softly moving lip, not a chrome mirror.
-  const lip=new T.Mesh(new T.PlaneGeometry(22.8,1.4),poolMat);lip.position.set(.5,FLOOR-.83,-36.05);scene.add(lip)
+  const lip=new T.Mesh(new T.PlaneGeometry(poolWidth-.2,1.4),poolMat);lip.position.set(poolX,FLOOR-.83,poolWater.z1+.15);scene.add(lip)
   return {update(t:number,p:LightPreset){for(const m of [water,poolMat]){m.uniforms.time.value=t;m.uniforms.evening.value=p==='evening'?1:0}},dispose(){for(const o of [ocean,pool,spa,lip])o.geometry.dispose();water.dispose();poolMat.dispose()}}
 }

@@ -14,10 +14,10 @@ export function createEstateKit(scene:T.Scene){
   const cache=new Map<string,T.BufferGeometry>()
   function material(name:string){if(mats.has(name))return mats.get(name)!
     const metal=['bronze','gold','black'].includes(name),fabric=['linen','sage','clay','indigo','rug'].includes(name),wood=['oak','oakFloor','walnut','bark'].includes(name)
-    const m=new T.MeshStandardMaterial({color:colors[name]||name,roughness:metal?.28:fabric?.94:wood?.63:name==='marble'?.4:.74,metalness:metal?.8:0})
-    if(name==='glass'){m.transparent=true;m.opacity=.16;m.roughness=.13;m.metalness=.2;m.depthWrite=false}
+    const m=new T.MeshStandardMaterial({color:colors[name==='domeGlass'?'glass':name]||name,roughness:metal?.28:fabric?.94:wood?.63:name==='marble'?.4:.74,metalness:metal?.8:0})
+    if(name==='glass'||name==='domeGlass'){m.color.set(colors.glass);m.transparent=true;m.opacity=name==='domeGlass'?.22:.16;m.roughness=.13;m.metalness=.2;m.depthWrite=false;if(name==='domeGlass')m.side=T.DoubleSide}
     if(name==='glow'){m.emissive.set('#ffca79');m.emissiveIntensity=2;m.roughness=.55}
-    if(name!=='glass'&&name!=='glow'){
+    if(name!=='glass'&&name!=='domeGlass'&&name!=='glow'){
       m.onBeforeCompile=s=>{
         s.vertexShader='varying vec3 estateP;\n'+s.vertexShader
         s.vertexShader=s.vertexShader.replace('#include <worldpos_vertex>','#include <worldpos_vertex>\nestateP=(modelMatrix*vec4(transformed,1.)).xyz;')
@@ -57,7 +57,7 @@ export function createEstateKit(scene:T.Scene){
       const pos=new T.Vector3();o.getWorldPosition(pos);const key=mat.uuid+':'+Math.floor(pos.x/28)+':'+Math.floor(pos.z/28)+':'+(o.userData.estatePlan?.id??'')+':'+!!data.estatePlanOccluder
       if(!batches.has(key))batches.set(key,{mat,parts:[],data});batches.get(key)!.parts.push(g)
     })
-    for(const {mat,parts,data} of batches.values()){const g=mergeGeometries(parts);parts.forEach(p=>p.dispose());if(!g)continue;outputs.add(g);g.computeBoundingSphere();const m=new T.Mesh(g,mat);m.userData=data;m.castShadow=mat!==material('glass')&&mat!==material('glow');m.receiveShadow=true;scene.add(m)}root.clear();sources.forEach(g=>g.dispose());sources.clear();cache.clear()
+    for(const {mat,parts,data} of batches.values()){const g=mergeGeometries(parts);parts.forEach(p=>p.dispose());if(!g)continue;outputs.add(g);g.computeBoundingSphere();const m=new T.Mesh(g,mat);m.userData=data;m.castShadow=!mat.transparent&&mat!==material('glow');m.receiveShadow=true;scene.add(m)}root.clear();sources.forEach(g=>g.dispose());sources.clear();cache.clear()
   }
   return {root,material,mesh,box,cylinder,beam,ellipsoid,lathe,group,finish,dispose(){sources.forEach(g=>g.dispose());outputs.forEach(g=>g.dispose());mats.forEach(m=>m.dispose())},rockGeometry:pebbleGeometry}
 }

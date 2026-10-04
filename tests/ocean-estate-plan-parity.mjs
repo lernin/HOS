@@ -40,7 +40,7 @@ try{
     return {x:p.x,y:p.y}
   },{x,z})}
   // Catch mirrored, stretched, or stale transforms with asymmetric real slabs.
-  for(const [code,x,z] of [['P1',-19.43,-18.37],['P2',-13,-30],['P3',14,-30],['P4',-8,29],['P5',42,5],['P6',34,-20],['P7',-27,41]]){
+  for(const [code,x,z] of [['P1',-19.43,-18.37],['P2',-13,-30],['P2',-13,-58],['P3',14,-30],['P3',14,-58],['P4',-8,29],['P5',42,5],['P6',34,-20],['P6',42,-22],['P7',-27,41]]){
     const p=await worldPoint(x,z);await page.mouse.click(p.x,p.y)
     await page.locator('.ep-selection-card').waitFor()
     assert.equal(await page.locator('.ep-selection-card>b').innerText(),code,`screen and scene agree on ${code}`)
@@ -59,12 +59,14 @@ try{
   await page.getByRole('button',{name:'Export plan'}).click()
   const download=await downloadPromise;await download.saveAs(`${output}/export.png`)
   const data=await readFile(`${output}/export.png`)
-  const pixel=await page.evaluate(async data=>{
+  const viewBox=await page.locator('.ep-plan').getAttribute('viewBox')
+  const pixel=await page.evaluate(async ({data,viewBox})=>{
     const img=new Image();img.src=`data:image/png;base64,${data}`;await img.decode()
     const canvas=document.createElement('canvas');canvas.width=img.width;canvas.height=img.height
     const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0)
-    return [...ctx.getImageData(Math.round((-19.43+44)/92*img.width),Math.round((-18.37+43)/96*img.height),1,1).data]
-  },data.toString('base64'))
+    const [x,y,w,h]=viewBox.split(' ').map(Number)
+    return [...ctx.getImageData(Math.round((-19.43-x)/w*img.width),Math.round((-18.37-y)/h*img.height),1,1).data]
+  },{data:data.toString('base64'),viewBox})
   assert.ok(Math.abs(pixel[0]-247)+Math.abs(pixel[1]-243)+Math.abs(pixel[2]-232)>30,`export must include the actual patio, got ${pixel}`)
   await page.getByRole('button',{name:/Draw/}).click()
   const start=await worldPoint(-19.43,-18.37),end=await worldPoint(-17.43,-17.37)

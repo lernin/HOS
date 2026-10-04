@@ -2,7 +2,11 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
-const planSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
+const layoutSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
+const layoutUrl='data:text/javascript;base64,'+Buffer.from(layoutSource).toString('base64')
+const railSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("'./site-layout'",JSON.stringify(layoutUrl))
+const railUrl='data:text/javascript;base64,'+Buffer.from(railSource).toString('base64')
+const planSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("'./site-layout'",JSON.stringify(layoutUrl)).replace("'./railings'",JSON.stringify(railUrl))
 const planUrl='data:text/javascript;base64,'+Buffer.from(planSource).toString('base64')
 const navSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/navigation.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("'./plan'",JSON.stringify(planUrl))
 const plan=await import(planUrl),nav=await import('data:text/javascript;base64,'+Buffer.from(navSource).toString('base64'))
@@ -231,8 +235,8 @@ test('all estate railings use one shared architectural system',()=>{
  assert.equal(rails.includes('RAIL_END_GAP = RAIL_EDGE_INSET - RAIL_CAP_OVERHANG'),true)
  assert.equal(env.includes('placePost(firstPost)'),true)
  assert.equal(env.includes('for(const p of cornerPosts)placePost(p)'),true)
- assert.equal(planText.includes('west ocean railing returns'),true)
- assert.equal(planText.includes('lookout ocean edge, joined to the terrace corner'),true)
+ assert.equal(planText.includes("estateRailings.filter(r=>r.family==='guard')"),true)
+ assert.equal(nav.walkable({x:42,z:-23.85}),false,'new lookout guard blocks the ocean edge')
 })
 
 
@@ -241,7 +245,7 @@ test('railing pedestal edge gap equals half the pedestal width',()=>{
  assert.equal(Number((centerInset-pedestal/2).toFixed(4)),Number(gap.toFixed(4)))
  const rails=readFileSync(new URL('../src/experiences/estate/railings.ts',import.meta.url),'utf8')
  assert.equal(rails.includes('p(-23+RAIL_EDGE_INSET,-17.08)'),true)
- assert.equal(rails.includes('p(44-RAIL_EDGE_INSET,-14+RAIL_END_GAP)'),true)
+ assert.equal(rails.includes('p(44-RAIL_EDGE_INSET,poolWalkSouth+RAIL_EDGE_INSET)'),true)
  assert.equal(rails.includes('p(-22,33-RAIL_EDGE_INSET)'),true)
  assert.equal(rails.includes('p(20+RAIL_EDGE_INSET,31.1)'),true)
 })
@@ -336,7 +340,7 @@ test('bird-eye pool and landmark planting share exact 3D geometry constants',()=
  const layout=readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8')
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
- assert.equal(layout.includes("x1: -11")&&layout.includes("x2: 12")&&layout.includes("z1: -36.2")&&layout.includes("z2: -24.2"),true)
+ assert.equal(layout.includes("x1: -11")&&layout.includes("x2: 12")&&layout.includes("z1: -60.2")&&layout.includes("z2: -24.2"),true)
  assert.equal(env.includes("poolWater.x2-poolWater.x1"),true)
  assert.equal(env.includes("for(const t of featureTrees)"),true)
  assert.equal(env.includes("for(const p of featurePalms)"),true)

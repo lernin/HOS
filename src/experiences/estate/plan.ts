@@ -1,3 +1,5 @@
+import { spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
+import { estateRailings } from './railings'
 export type Point = { x: number; z: number }
 export type Rect = { x1: number; x2: number; z1: number; z2: number }
 export type FloorUse = 'interior' | 'patio' | 'covered-exterior' | 'arrival' | 'steps'
@@ -10,8 +12,8 @@ export const floors: Floor[] = [
   { name: 'Great room', x1: -11, x2: 13, z1: -12, z2: 8, material: 'limestone', roof: 5.5, use: 'interior' },
   { name: 'Grand foyer', x1: -6, x2: 8, z1: 8, z2: 24, material: 'limestone', roof: 4.5, use: 'interior' },
   { name: 'Ocean terrace', x1: -23, x2: 27, z1: -24, z2: -12, material: 'travertine', use: 'patio', planCode: 'P1' },
-  { name: 'Pool walk', x1: -15, x2: -11, z1: -36, z2: -24, material: 'travertine', use: 'patio', planCode: 'P2' },
-  { name: 'Pool walk', x1: 12, x2: 16, z1: -36, z2: -24, material: 'travertine', use: 'patio', planCode: 'P3' },
+  { name: 'Pool walk', x1: -15, x2: -11, z1: poolWalkNorth, z2: poolWalkSouth, material: 'travertine', use: 'patio', planCode: 'P2' },
+  { name: 'Pool walk', x1: 12, x2: 16, z1: poolWalkNorth, z2: poolWalkSouth, material: 'travertine', use: 'patio', planCode: 'P3' },
   { name: 'Dining room', x1: -23, x2: -11, z1: -12, z2: 2, material: 'limestone', roof: 4.2, use: 'interior' },
   { name: 'Kitchen', x1: -23, x2: -11, z1: 2, z2: 14, material: 'limestone', roof: 3.6, use: 'interior' },
   { name: 'Family lounge', x1: -35, x2: -23, z1: -17, z2: -2, material: 'oak', roof: 3.8, use: 'interior' },
@@ -26,8 +28,8 @@ export const floors: Floor[] = [
   { name: 'Primary suite', x1: 24, x2: 39, z1: -12, z2: 2, material: 'oak', roof: 3.8, use: 'interior' },
   { name: 'Dressing room', x1: 24, x2: 31, z1: 2, z2: 13, material: 'oak', roof: 3.3, use: 'interior' },
   { name: 'Primary bath', x1: 31, x2: 39, z1: 2, z2: 13, material: 'travertine', roof: 3.3, use: 'interior' },
-  { name: 'Sunrise terrace', x1: 39, x2: 44, z1: -14, z2: 14, material: 'travertine', use: 'patio', planCode: 'P5' },
-  { name: 'Ocean lookout', x1: 27, x2: 40, z1: -23, z2: -12, material: 'travertine', use: 'patio', planCode: 'P6' },
+  { name: 'Sunrise terrace', x1: 39, x2: 44, z1: -12, z2: 14, material: 'travertine', use: 'patio', planCode: 'P5' },
+  { name: 'Ocean lookout', x1: 27, x2: 44, z1: -24, z2: -12, material: 'travertine', use: 'patio', planCode: 'P6' },
   { name: 'Sage guest suite', x1: 24, x2: 32, z1: 17, z2: 28, material: 'oak', roof: 3.3, use: 'interior' },
   { name: 'Sand guest suite', x1: 32, x2: 40, z1: 17, z2: 28, material: 'oak', roof: 3.3, use: 'interior' },
   { name: 'Guest gallery', x1: 24, x2: 40, z1: 28, z2: 31, material: 'limestone', roof: 3.3, use: 'interior' },
@@ -110,7 +112,7 @@ export const furnishings:Furnishing[] = [
   {kind:'bed',x:34.5,z:35.2,angle:Math.PI/2,tone:'indigo'},
   {kind:'sofa',x:-33,z:6,tone:'indigo'},{kind:'sofa',x:-33,z:2,tone:'indigo'},
   {kind:'treadmill',x:-36,z:16},{kind:'treadmill',x:-32.8,z:16},
-  {kind:'treatment',x:-33,z:31.5},
+  {kind:'treatment',x:-36,z:30.7},
   {kind:'sofa',x:-18,z:-17,angle:-Math.PI/2},{kind:'sofa',x:-14.5,z:-20,angle:Math.PI},{kind:'fire',x:-15,z:-17},
   {kind:'outdoorDining',x:21,z:-17.5},
   {kind:'lounger',x:-13,z:-28},{kind:'lounger',x:14,z:-28},
@@ -123,6 +125,7 @@ export function footprint(f:Furnishing):Rect {
   return {x1:f.x-dx,x2:f.x+dx,z1:f.z-dz,z2:f.z+dz}
 }
 export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
+  {x1:spaTreeBed.cx-spaTreeBed.rx-.15,x2:spaTreeBed.cx+spaTreeBed.rx+.15,z1:spaTreeBed.cz-spaTreeBed.rz-.15,z2:spaTreeBed.cz+spaTreeBed.rz+.15},
   {x1:-20,x2:-12,z1:18,z2:27}, // courtyard planting / fountain
   {x1:-22.8,x2:-21.8,z1:3,z2:13}, // kitchen run
   {x1:24.3,x2:25.2,z1:3,z2:12},{x1:29.8,x2:30.8,z1:3,z2:12},
@@ -133,12 +136,11 @@ export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
   {x1:10,x2:19,z1:26.9,z2:27.8}, // library shelves
   {x1:-3,x2:5,z1:37,z2:45}, // arrival fountain
   {x1:-1.4,x2:-.1,z1:22.05,z2:24.12},{x1:2.1,x2:3.4,z1:22.05,z2:24.12}, // open pivot-door leaves
-  {x1:-22,x2:-6.4,z1:32.685,z2:33.085}, // raised garden lip and unified rail; court is a storey below
-  {x1:19.915,x2:20.315,z1:31.05,z2:40}, // east gallery lip and unified rail along the court
-  {x1:-23.085,x2:-22.685,z1:-24.085,z2:-17.0},{x1:-23.0,x2:-14.685,z1:-24.085,z2:-23.685},{x1:-15.085,x2:-14.685,z1:-36.1,z2:-23.7}, // west ocean railing returns
-  {x1:15.685,x2:16.085,z1:-36.1,z2:-23.7},{x1:15.7,x2:27.085,z1:-24.085,z2:-23.685},{x1:26.685,x2:27.085,z1:-24.085,z2:-22.685}, // east terrace/pool railing returns
-  {x1:26.7,x2:40.1,z1:-23.085,z2:-22.685}, // lookout ocean edge, joined to the terrace corner
-  {x1:43.685,x2:44.085,z1:-14.05,z2:14.05}, // sunrise cliff
+  // Guard geometry, collision and plan audit all consume the same polylines.
+  ...estateRailings.filter(r=>r.family==='guard').flatMap(r=>r.points.slice(0,-1).map((a,i)=>{
+    const b=r.points[i+1]
+    return {x1:Math.min(a[0],b[0])-.2,x2:Math.max(a[0],b[0])+.2,z1:Math.min(a[1],b[1])-.2,z2:Math.max(a[1],b[1])+.2}
+  })),
 ]
 export const destinations=[
   {name:'Entrance',x:1,z:27,yaw:0},{name:'Great room',x:7,z:3,yaw:.7},

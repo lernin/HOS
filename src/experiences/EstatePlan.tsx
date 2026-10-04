@@ -4,7 +4,7 @@ import { floors, walls, glass, furnishings, footprint } from './estate/plan'
 import { estateRailings } from './estate/railings'
 import { auditOpenEdges, auditReviewRailings, estateEdges, estateSurfaces, patioSurfaces } from './estate/site-edges'
 import type { EstateSurfaceKind } from './estate/site-edges'
-import { architecturalPlanters, coastline, featurePalms, featureTrees } from './estate/site-layout'
+import { architecturalPlanters, coastline, featurePalms, featureTrees, estatePlanViews, poolWater } from './estate/site-layout'
 import { createEstatePlanReality } from './estate/plan-reality'
 import type { EstatePlanPick } from './estate/plan-reality'
 import './estate/estate-plan.css'
@@ -31,11 +31,7 @@ type Mark={
 }
 
 const STORAGE='ocean-estate-plan-markups-v1'
-const DEFAULT_BOX:Record<PlanView,Box>={
-  main:{x:-44,y:-43,w:92,h:96},
-  arrival:{x:-28,y:15,w:56,h:49},
-  site:{x:-66,y:-63,w:132,h:132},
-}
+const DEFAULT_BOX:Record<PlanView,Box>=estatePlanViews
 const categoryMeta:Record<Category,{label:string;color:string}>={
   general:{label:'General',color:'#d34f4f'},
   deck:{label:'Deck',color:'#2b78c5'},
@@ -348,8 +344,8 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           {draft.length>1&&(tool==='pen'?<polyline points={pointsString(draft)} fill="none" stroke={categoryMeta[category].color} strokeWidth=".5" strokeDasharray=".5 .24"/>:tool==='area'?<polygon points={pointsString(draft)} fill={categoryMeta[category].color} fillOpacity=".12" stroke={categoryMeta[category].color} strokeWidth=".35" strokeDasharray=".5 .24"/>:<line x1={draft[0].x} y1={draft[0].y} x2={draft[draft.length-1].x} y2={draft[draft.length-1].y} stroke={categoryMeta[category].color} strokeWidth=".5" strokeDasharray=".5 .24"/>)}
         </g>
 
-        <text x="0" y="-34" textAnchor="middle" fontSize="2.3" letterSpacing=".35" fill="#6f9ea8" opacity=".72">OCEAN</text>
-        <text x=".5" y="-30.5" textAnchor="middle" fontSize="1.15" fill="#326f78">Infinity pool</text>
+        <text x="0" y={poolWater.z1-3} textAnchor="middle" fontSize="2.3" letterSpacing=".35" fill="#6f9ea8" opacity=".72">OCEAN</text>
+        <text x={(poolWater.x1+poolWater.x2)/2} y={(poolWater.z1+poolWater.z2)/2} textAnchor="middle" fontSize="1.15" fill="#326f78">Infinity pool</text>
 
         {roomLabels.map((f,i)=>{
           const w=f.x2-f.x1,d=f.z2-f.z1,p=planDisplay({x:(f.x1+f.x2)/2,y:-(f.z1+f.z2)/2})
