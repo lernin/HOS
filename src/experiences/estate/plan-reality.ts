@@ -27,10 +27,11 @@ export function createEstatePlanReality(canvas:HTMLCanvasElement){
   scene.add(sun)
 
   const kit=createEstateKit(scene)
-  architecture(kit,{planCutaway:true})
+  architecture(kit)
   furnish(kit)
   landscape(kit)
   kit.finish()
+  for(const mesh of scene.children)if(mesh.userData.estatePlanOccluder)mesh.visible=false
   const water=waters(scene)
   water.update(0,'daylight')
 
@@ -106,6 +107,19 @@ export function createEstatePlanReality(canvas:HTMLCanvasElement){
   return {
     render,
     pick,
+    snapshot(){
+      // Copy immediately after render; the WebGL drawing buffer is transient.
+      render()
+      const viewport=renderer.getViewport(new T.Vector4()),ratio=renderer.getPixelRatio()
+      const copy=document.createElement('canvas')
+      copy.width=Math.max(1,Math.round(viewport.z*ratio))
+      copy.height=Math.max(1,Math.round(viewport.w*ratio))
+      const context=copy.getContext('2d')
+      if(!context)throw new Error('Could not capture the estate plan')
+      context.translate(copy.width,0);context.scale(-1,1)
+      context.drawImage(canvas,viewport.x*ratio,(canvas.clientHeight-viewport.y-viewport.w)*ratio,viewport.z*ratio,viewport.w*ratio,0,0,copy.width,copy.height)
+      return copy.toDataURL('image/png')
+    },
     dispose(){
       if(disposed)return
       disposed=true

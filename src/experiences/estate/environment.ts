@@ -3,7 +3,9 @@ import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR 
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
 import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
-export function architecture(k:EstateKit,opts:{planCutaway?:boolean}={}){
+export function architecture(k:EstateKit){
+  const overhead=k.group(0,0,0)
+  overhead.userData.estatePlanOccluder=true
   for(const [floorIndex,f] of floors.entries()){const w=f.x2-f.x1,d=f.z2-f.z1,x=(f.x1+f.x2)/2,z=(f.z1+f.z2)/2,y=f.level??FLOOR
     if(f.name==='Arrival steps'){for(let i=0;i<14;i++)k.box(x,FLOOR-i*1.2/14-.16,24+i*.5+.25,w,.32,.5,'travertine');continue}
     if(f.name==='Arrival court')k.cylinder(1,y-.2,41,19,.4,'basalt',k.root,19,96);else{
@@ -14,13 +16,13 @@ export function architecture(k:EstateKit,opts:{planCutaway?:boolean}={}){
       for(let a=f.x1+2.8;a<f.x2;a+=2.8)k.box(a,y+.004,z,.011,.005,d,'rug')
       for(let a=f.z1+1.65;a<f.z2;a+=1.65)k.box(x,y+.005,a,w,.005,.01,'rug')
     }
-    if(f.roof&&!opts.planCutaway){k.box(x,y+f.roof+.22,z,w+.65,.4,d+.65,'travertine');k.box(x,y+f.roof+.43,z,w-.25,.03,d-.25,'roof');k.box(x,y+f.roof-.02,z,w,.035,d,'plaster')
+    if(f.roof){k.box(x,y+f.roof+.22,z,w+.65,.4,d+.65,'travertine',overhead);k.box(x,y+f.roof+.43,z,w-.25,.03,d-.25,'roof',overhead);k.box(x,y+f.roof-.02,z,w,.035,d,'plaster',overhead)
       // Roof fascia/reveal, warm soffit, clerestory scale instead of flat boxes.
-      k.box(x,y+f.roof+.05,f.z1-.27,w+.7,.085,.14,'bronze')
-      for(const a of [-1,1])k.box(x+a*(w/2-.32),y+f.roof-.05,z,.045,.025,d-.5,'glow')
+      k.box(x,y+f.roof+.05,f.z1-.27,w+.7,.085,.14,'bronze',overhead)
+      for(const a of [-1,1])k.box(x+a*(w/2-.32),y+f.roof-.05,z,.045,.025,d-.5,'glow',overhead)
     }
   }
-  for(const w of lintels)k.box((w.x1+w.x2)/2,FLOOR+w.base+w.height/2,(w.z1+w.z2)/2,w.x2-w.x1,w.height,w.z2-w.z1,w.material)
+  for(const w of lintels)k.box((w.x1+w.x2)/2,FLOOR+w.base+w.height/2,(w.z1+w.z2)/2,w.x2-w.x1,w.height,w.z2-w.z1,w.material,overhead)
   for(const w of walls)k.box((w.x1+w.x2)/2,FLOOR+w.height/2,(w.z1+w.z2)/2,w.x2-w.x1,w.height,w.z2-w.z1,w.material)
   for(const w of glass){const x=(w.x1+w.x2)/2,z=(w.z1+w.z2)/2,dx=w.x2-w.x1,dz=w.z2-w.z1,roof=floors.filter(f=>f.roof&&contains(f,{x,z},.15)).reduce((h,f)=>Math.max(h,f.roof!),w.height),height=roof-.035;k.box(x,FLOOR+height/2,z,dx,height,dz,'glass')
     for(const y of [.08,height])k.box(x,FLOOR+y,z,dx+.06,.055,dz+.06,'bronze')
@@ -28,7 +30,7 @@ export function architecture(k:EstateKit,opts:{planCutaway?:boolean}={}){
     for(let i=0;i<=count;i++)k.box(w.x1+dx*i/count,FLOOR+height/2,w.z1+dz*i/count,.048,height,.048,'bronze')
   }
   // Great-room ceiling: floating timber fins and a tall stone hearth.
-  if(!opts.planCutaway)for(let i=0;i<28;i++)k.box(-10.7+i*.84,FLOOR+5.28,-2,.085,.23,19.7,'oak')
+  for(let i=0;i<28;i++)k.box(-10.7+i*.84,FLOOR+5.28,-2,.085,.23,19.7,'oak',overhead)
   k.box(-10.76,FLOOR+2.7,0,.39,5.4,3.1,'travertine')
   k.box(-10.54,FLOOR+.75,0,.045,.6,2.4,'black')
   for(let i=0;i<11;i++)k.ellipsoid(-10.49,FLOOR+.58+.03*(i%3),-.95+i*.18,.02,.09,.06,'glow',k.root,8)
@@ -37,7 +39,7 @@ export function architecture(k:EstateKit,opts:{planCutaway?:boolean}={}){
   k.box(8,FLOOR-.60,26,.50,1.20,4,'travertine',k.root,.045)
   k.box(7.98,FLOOR-.03,26,.58,.16,4.08,'limestone',k.root,.035)
   // Covered arrival portal: Design Lab study 4, Fluted Stone, scaled to the real stair approach.
-  if(!opts.planCutaway)k.box(1,FLOOR+4,26.6,13,.28,6,'travertine')
+  k.box(1,FLOOR+4,26.6,13,.28,6,'travertine',overhead)
   const arrivalGround=FLOOR-10*1.2/14,arrivalRoofBottom=FLOOR+4-.14
   const foundationH=.28,plinthH=.18,capH=.14,shaftBottom=arrivalGround+foundationH+plinthH,shaftTop=arrivalRoofBottom-capH,pillarH=shaftTop-shaftBottom,shaftY=shaftBottom+pillarH/2
   for(const x of [-5,7]){
@@ -89,7 +91,7 @@ export function architecture(k:EstateKit,opts:{planCutaway?:boolean}={}){
 
   // Pergola over outdoor dining, secondary circulation remains open.
   for(const x of [17,25])for(const z of [-21.6,-13.2])k.box(x,FLOOR+1.7,z,.17,3.4,.17,'bronze')
-  for(let i=0;i<20;i++)k.box(17+i*.42,FLOOR+3.45,-17.4,.13,.2,9.3,'oak')
+  for(let i=0;i<20;i++)k.box(17+i*.42,FLOOR+3.45,-17.4,.13,.2,9.3,'oak',overhead)
 }
 export function landscape(k:EstateKit){
   const rand=random(82031),b=k.box

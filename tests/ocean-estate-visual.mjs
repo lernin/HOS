@@ -2,7 +2,7 @@ import { chromium } from 'playwright'
 import { mkdir,writeFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 const output='artifacts/ocean-estate';await mkdir(output,{recursive:true})
-const browser=await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-webgl','--enable-unsafe-swiftshader']})
+const browser=await chromium.launch({executablePath:process.env.ESTATE_CHROMIUM_PATH||undefined,headless:true,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-webgl','--enable-unsafe-swiftshader']})
 const page=await browser.newPage({viewport:{width:1440,height:960},deviceScaleFactor:1}),errors=[],externalNetwork=[]
 const recordConsole=m=>{if(m.type()!=='error')return;const message=m.text();if(message.includes('net::ERR_NAME_NOT_RESOLVED')){externalNetwork.push(message);return}errors.push(message)}
 page.on('pageerror',e=>errors.push(e.message));page.on('console',recordConsole)

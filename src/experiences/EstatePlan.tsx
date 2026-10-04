@@ -255,6 +255,14 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg')
     clone.setAttribute('width','2200')
     clone.setAttribute('height',String(Math.round(2200*box.h/box.w)))
+    const reality=realityEngine.current
+    if(!reality){setStatus('Plan is still loading');return}
+    const base=document.createElementNS('http://www.w3.org/2000/svg','image')
+    base.setAttribute('x',String(box.x));base.setAttribute('y',String(box.y))
+    base.setAttribute('width',String(box.w));base.setAttribute('height',String(box.h))
+    base.setAttribute('preserveAspectRatio','none')
+    base.setAttribute('href',reality.snapshot())
+    clone.insertBefore(base,clone.firstChild)
     const data=new XMLSerializer().serializeToString(clone)
     const blob=new Blob([data],{type:'image/svg+xml;charset=utf-8'})
     const url=URL.createObjectURL(blob),img=new Image()

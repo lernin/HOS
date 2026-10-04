@@ -45,14 +45,19 @@ export function createEstateKit(scene:T.Scene){
   function ellipsoid(x:number,y:number,z:number,sx:number,sy:number,sz:number,mat:string,parent:T.Group=root,detail=12){const m=mesh(new T.SphereGeometry(1,detail,Math.max(5,detail/2)),mat,x,y,z,parent);m.scale.set(sx,sy,sz);return m}
   function lathe(points:[number,number][],mat:string,x:number,y:number,z:number,parent:T.Group=root){return mesh(new T.LatheGeometry(points.map(([a,b])=>new T.Vector2(a,b)),24),mat,x,y,z,parent)}
   function group(x:number,y:number,z:number,angle=0){const g=new T.Group();g.position.set(x,y,z);g.rotation.y=angle;root.add(g);return g}
-  function finish(){root.updateMatrixWorld(true);const batches=new Map<string,{mat:T.Material,parts:T.BufferGeometry[]}>()
+  function finish(){root.updateMatrixWorld(true);const batches=new Map<string,{mat:T.Material,parts:T.BufferGeometry[],data:Record<string,unknown>}>()
     root.traverse(o=>{if(!(o instanceof T.Mesh))return;const mat=o.material as T.Material
       let g=o.geometry.clone().applyMatrix4(o.matrixWorld);if(g.index){const old=g;g=g.toNonIndexed();old.dispose()}
       g.deleteAttribute('uv');g.deleteAttribute('color');g.deleteAttribute('tangent')
-      const pos=new T.Vector3();o.getWorldPosition(pos);const key=mat.uuid+':'+Math.floor(pos.x/28)+':'+Math.floor(pos.z/28)
-      if(!batches.has(key))batches.set(key,{mat,parts:[]});batches.get(key)!.parts.push(g)
+      const data:Record<string,unknown>={}
+      if(o.userData.estatePlan)data.estatePlan=o.userData.estatePlan
+      for(let parent:T.Object3D|null=o;parent;parent=parent.parent)if(parent.userData.estatePlanOccluder)data.estatePlanOccluder=true
+      // A slab must remain an actual pickable rendered mesh. Overhead pieces
+      // stay separate so the plan hides them without building a different house.
+      const pos=new T.Vector3();o.getWorldPosition(pos);const key=mat.uuid+':'+Math.floor(pos.x/28)+':'+Math.floor(pos.z/28)+':'+(o.userData.estatePlan?.id??'')+':'+!!data.estatePlanOccluder
+      if(!batches.has(key))batches.set(key,{mat,parts:[],data});batches.get(key)!.parts.push(g)
     })
-    for(const {mat,parts} of batches.values()){const g=mergeGeometries(parts);parts.forEach(p=>p.dispose());if(!g)continue;outputs.add(g);g.computeBoundingSphere();const m=new T.Mesh(g,mat);m.castShadow=mat!==material('glass')&&mat!==material('glow');m.receiveShadow=true;scene.add(m)}root.clear();sources.forEach(g=>g.dispose());sources.clear();cache.clear()
+    for(const {mat,parts,data} of batches.values()){const g=mergeGeometries(parts);parts.forEach(p=>p.dispose());if(!g)continue;outputs.add(g);g.computeBoundingSphere();const m=new T.Mesh(g,mat);m.userData=data;m.castShadow=mat!==material('glass')&&mat!==material('glow');m.receiveShadow=true;scene.add(m)}root.clear();sources.forEach(g=>g.dispose());sources.clear();cache.clear()
   }
   return {root,material,mesh,box,cylinder,beam,ellipsoid,lathe,group,finish,dispose(){sources.forEach(g=>g.dispose());outputs.forEach(g=>g.dispose());mats.forEach(m=>m.dispose())},rockGeometry:pebbleGeometry}
 }
