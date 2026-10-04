@@ -4,6 +4,14 @@ import { architecture, landscape, waters } from './environment'
 import { furnish } from './furniture'
 
 export type EstatePlanBox={x:number;y:number;w:number;h:number}
+export type EstatePlanPick={
+  kind:'floor'
+  id:string
+  code:string|null
+  name:string
+  use:string
+  x1:number;x2:number;z1:number;z2:number
+}
 
 export function createEstatePlanReality(canvas:HTMLCanvasElement){
   const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
@@ -32,6 +40,8 @@ export function createEstatePlanReality(canvas:HTMLCanvasElement){
   camera.lookAt(0,0,0)
   let current:EstatePlanBox={x:-50,y:-50,w:100,h:100}
   let disposed=false
+  const raycaster=new T.Raycaster()
+  const ndc=new T.Vector2()
 
   function render(box:EstatePlanBox=current){
     if(disposed)return
@@ -70,8 +80,32 @@ export function createEstatePlanReality(canvas:HTMLCanvasElement){
   observer.observe(canvas)
   render()
 
+  function pick(clientX:number,clientY:number):EstatePlanPick|null{
+    const rect=canvas.getBoundingClientRect()
+    if(!rect.width||!rect.height)return null
+    const viewAspect=current.w/current.h,canvasAspect=rect.width/rect.height
+    let vx=0,vy=0,vw=rect.width,vh=rect.height
+    if(canvasAspect>viewAspect){vw=rect.height*viewAspect;vx=(rect.width-vw)/2}
+    else{vh=rect.width/viewAspect;vy=(rect.height-vh)/2}
+    // CSS mirrors the reality canvas horizontally to match the 180° SVG plan.
+    const localX=rect.width-(clientX-rect.left),localY=clientY-rect.top
+    if(localX<vx||localX>vx+vw||localY<vy||localY>vy+vh)return null
+    ndc.set(((localX-vx)/vw)*2-1,1-((localY-vy)/vh)*2)
+    raycaster.setFromCamera(ndc,camera)
+    for(const hit of raycaster.intersectObjects(scene.children,true)){
+      let obj:T.Object3D|null=hit.object
+      while(obj){
+        const data=obj.userData?.estatePlan as EstatePlanPick|undefined
+        if(data?.kind==='floor')return data
+        obj=obj.parent
+      }
+    }
+    return null
+  }
+
   return {
     render,
+    pick,
     dispose(){
       if(disposed)return
       disposed=true
