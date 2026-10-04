@@ -80,6 +80,15 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const realityEngine=useRef<ReturnType<typeof createEstatePlanReality>|null>(null)
   const [view,setView]=useState<PlanView>('main')
   const [box,setBox]=useState<Box>(DEFAULT_BOX.main)
+  const [stageSize,setStageSize]=useState({w:0,h:0})
+  // Extend the requested framing to the actual screen. Zoom must reveal more
+  // map in the spare space instead of clipping it to a fixed central strip.
+  const viewportBox=useMemo(()=>{
+    if(!stageSize.w||!stageSize.h)return box
+    const aspect=stageSize.w/stageSize.h
+    const w=Math.max(box.w,box.h*aspect),h=Math.max(box.h,box.w/aspect)
+    return{x:box.x+(box.w-w)/2,y:box.y+(box.h-h)/2,w,h}
+  },[box,stageSize])
   const [tool,setTool]=useState<Tool>('pan')
   const [category,setCategory]=useState<Category>('general')
   const [marks,setMarks]=useState<Mark[]>(readMarks)
@@ -87,9 +96,9 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   const [draft,setDraft]=useState<Pt[]>([])
   const draftRef=useRef<Pt[]>([])
   const drawingPointer=useRef<number|null>(null)
-  const panRef=useRef<{id:number;sx:number;sy:number;box:Box}|null>(null)
+  const panRef=useRef<{id:number;sx:number;sy:number;box:Box;viewport:Box}|null>(null)
   const pointers=useRef(new Map<number,{x:number;y:number}>())
-  const pinchRef=useRef<{distance:number;box:Box;mid:{x:number;y:number};rect:DOMRect}|null>(null)
+  const pinchRef=useRef<{distance:number;box:Box;viewport:Box;mid:{x:number;y:number};rect:DOMRect}|null>(null)
   const [noteDraft,setNoteDraft]=useState<{point:Pt;text:string}|null>(null)
   const [notesOpen,setNotesOpen]=useState(false)
   const [layersOpen,setLayersOpen]=useState(false)
@@ -105,13 +114,21 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
   useEffect(()=>{localStorage.setItem(STORAGE,JSON.stringify(marks))},[marks])
   useEffect(()=>{setBox(DEFAULT_BOX[view])},[view])
   useEffect(()=>{
+    const svg=svgRef.current
+    if(!svg)return
+    const measure=()=>setStageSize({w:svg.clientWidth,h:svg.clientHeight})
+    const observer=new ResizeObserver(measure)
+    observer.observe(svg);measure()
+    return()=>observer.disconnect()
+  },[])
+  useEffect(()=>{
     if(!realityCanvas.current)return
     const engine=createEstatePlanReality(realityCanvas.current)
     realityEngine.current=engine
-    engine.render(box)
+    engine.render(viewportBox)
     return()=>{engine.dispose();realityEngine.current=null}
   },[])
-  useEffect(()=>{if(layers.reality)realityEngine.current?.render(box)},[box,layers.reality])
+  useEffect(()=>{if(layers.reality)realityEngine.current?.render(viewportBox)},[viewportBox,layers.reality])
 
   const nextId=useMemo(()=>{
     const max=marks.reduce((n,m)=>Math.max(n,Number(m.id.replace(/\D/g,''))||0),0)
@@ -157,7 +174,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     if(vals.length!==2||!svgRef.current)return
     const distance=Math.hypot(vals[0].x-vals[1].x,vals[0].y-vals[1].y)
     const mid={x:(vals[0].x+vals[1].x)/2,y:(vals[0].y+vals[1].y)/2}
-    pinchRef.current={distance,box:{...box},mid,rect:svgRef.current.getBoundingClientRect()}
+    pinchRef.current={distance,box:{...box},viewport:viewportBox,mid,rect:svgRef.current.getBoundingClientRect()}
     draftRef.current=[];setDraft([]);drawingPointer.current=null;panRef.current=null
   }
   function onPointerDown(e:ReactPointerEvent<SVGSVGElement>){
@@ -165,7 +182,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     pointers.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
     if(e.pointerType==='touch'&&pointers.current.size===2){startPinch();return}
     if(tool==='pan'){
-      panRef.current={id:e.pointerId,sx:e.clientX,sy:e.clientY,box:{...box}}
+      panRef.current={id:e.pointerId,sx:e.clientX,sy:e.clientY,box:{...box},viewport:viewportBox}
       return
     }
     const p=toPlan(e.clientX,e.clientY)
@@ -181,15 +198,15 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
       const scale=Math.max(.35,Math.min(3,start.distance/dist))
       const w=start.box.w*scale,h=start.box.h*scale
       const sx=(start.mid.x-start.rect.left)/start.rect.width,sy=(start.mid.y-start.rect.top)/start.rect.height
-      const cx=start.box.x+sx*start.box.w,cy=start.box.y+sy*start.box.h
+      const cx=start.viewport.x+sx*start.viewport.w,cy=start.viewport.y+sy*start.viewport.h
       const mx=(mid.x-start.rect.left)/start.rect.width,my=(mid.y-start.rect.top)/start.rect.height
-      setBox({x:cx-mx*w,y:cy-my*h,w,h})
+      setBox({x:cx+(.5-mx)*start.viewport.w*scale-w/2,y:cy+(.5-my)*start.viewport.h*scale-h/2,w,h})
       return
     }
     const pan=panRef.current
     if(pan&&pan.id===e.pointerId&&svgRef.current){
       const rect=svgRef.current.getBoundingClientRect()
-      const dx=(e.clientX-pan.sx)/rect.width*pan.box.w,dy=(e.clientY-pan.sy)/rect.height*pan.box.h
+      const dx=(e.clientX-pan.sx)/rect.width*pan.viewport.w,dy=(e.clientY-pan.sy)/rect.height*pan.viewport.h
       setBox({...pan.box,x:pan.box.x-dx,y:pan.box.y-dy});return
     }
     if(drawingPointer.current!==e.pointerId)return
@@ -250,12 +267,12 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     const clone=svg.cloneNode(true) as SVGSVGElement
     clone.setAttribute('xmlns','http://www.w3.org/2000/svg')
     clone.setAttribute('width','2200')
-    clone.setAttribute('height',String(Math.round(2200*box.h/box.w)))
+    clone.setAttribute('height',String(Math.round(2200*viewportBox.h/viewportBox.w)))
     const reality=realityEngine.current
     if(!reality){setStatus('Plan is still loading');return}
     const base=document.createElementNS('http://www.w3.org/2000/svg','image')
-    base.setAttribute('x',String(box.x));base.setAttribute('y',String(box.y))
-    base.setAttribute('width',String(box.w));base.setAttribute('height',String(box.h))
+    base.setAttribute('x',String(viewportBox.x));base.setAttribute('y',String(viewportBox.y))
+    base.setAttribute('width',String(viewportBox.w));base.setAttribute('height',String(viewportBox.h))
     base.setAttribute('preserveAspectRatio','none')
     base.setAttribute('href',reality.snapshot())
     clone.insertBefore(base,clone.firstChild)
@@ -263,7 +280,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
     const blob=new Blob([data],{type:'image/svg+xml;charset=utf-8'})
     const url=URL.createObjectURL(blob),img=new Image()
     img.onload=()=>{
-      const canvas=document.createElement('canvas');canvas.width=2200;canvas.height=Math.round(2200*box.h/box.w)
+      const canvas=document.createElement('canvas');canvas.width=2200;canvas.height=Math.round(2200*viewportBox.h/viewportBox.w)
       const ctx=canvas.getContext('2d');if(!ctx){URL.revokeObjectURL(url);return}
       ctx.fillStyle='#f7f3e8';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height)
       canvas.toBlob(out=>{if(out){const a=document.createElement('a');a.href=URL.createObjectURL(out);a.download=`ocean-estate-plan-${view}.png`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}},'image/png')
@@ -290,7 +307,7 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
 
     <section className="ep-stage">
       <canvas ref={realityCanvas} className={`ep-reality${layers.reality?' visible':''}`} aria-hidden="true"/>
-      <svg ref={svgRef} className="ep-plan" viewBox={`${box.x} ${box.y} ${box.w} ${box.h}`} preserveAspectRatio="xMidYMid meet"
+      <svg ref={svgRef} className="ep-plan" viewBox={`${viewportBox.x} ${viewportBox.y} ${viewportBox.w} ${viewportBox.h}`} preserveAspectRatio="xMidYMid meet"
         onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} onWheel={onWheel}>
         <defs>
           <pattern id="ep-grid" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M 5 0 L 0 0 0 5" fill="none" stroke="#d8d4c9" strokeWidth=".08"/></pattern>
@@ -299,8 +316,8 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           <pattern id="ep-step-hatch" width=".8" height=".8" patternUnits="userSpaceOnUse"><rect width=".8" height=".8" fill="#d9cec0"/><path d="M0 .4H.8" stroke="#aa9a87" strokeWidth=".1"/></pattern>
           {(Object.keys(categoryMeta) as Category[]).map(k=><marker key={k} id={`ep-arrow-${k}`} viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill={categoryMeta[k].color}/></marker>)}
         </defs>
-        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill={layers.reality?'transparent':'#f7f3e8'}/>
-        <rect x={box.x-20} y={box.y-20} width={box.w+40} height={box.h+40} fill="url(#ep-grid)" opacity={layers.reality?.34:1}/>
+        <rect x={viewportBox.x-20} y={viewportBox.y-20} width={viewportBox.w+40} height={viewportBox.h+40} fill={layers.reality?'transparent':'#f7f3e8'}/>
+        <rect x={viewportBox.x-20} y={viewportBox.y-20} width={viewportBox.w+40} height={viewportBox.h+40} fill="url(#ep-grid)" opacity={layers.reality?.34:1}/>
         <g transform="scale(1,-1)">
           {!layers.reality&&<><rect x="-90" y="-90" width="180" height="180" fill="#dceff2" opacity={view==='arrival'?.18:.78}/><polygon points={coastline.map(([x,z])=>`${x},${-z}`).join(' ')} fill="#e8e5d9" stroke="#aaa99e" strokeWidth=".22" opacity={view==='arrival'?.34:.96}/></>}
 
@@ -378,8 +395,8 @@ export function EstatePlan({onBack,onEstate}:{onBack:()=>void;onEstate:()=>void}
           return <g className="ep-last-view" pointerEvents="none"><polygon points={`${left.x},${left.y} ${tip.x},${tip.y} ${right.x},${right.y}`} fill="#1b6b96" fillOpacity=".14" stroke="#1b6b96" strokeWidth=".28"/><circle cx={p.x} cy={p.y} r=".72" fill="#1b6b96" stroke="#fffaf0" strokeWidth=".18"/><text x={p.x+1} y={p.y-.9} fontSize=".62" fontWeight="800" fill="#1b6b96" paintOrder="stroke" stroke="#fffaf0" strokeWidth=".2">3D view</text></g>
         })()}
 
-        <g transform={`translate(${box.x+3} ${box.y+box.h-3})`}><line x1="0" y1="0" x2="10" y2="0" stroke="#4b4842" strokeWidth=".22"/><line x1="0" y1="-.45" x2="0" y2=".45" stroke="#4b4842" strokeWidth=".18"/><line x1="10" y1="-.45" x2="10" y2=".45" stroke="#4b4842" strokeWidth=".18"/><text x="5" y="-1" textAnchor="middle" fontSize=".9" fill="#4b4842">10 m</text></g>
-        <g transform={`translate(${box.x+box.w-4} ${box.y+4})`}><path d="M0 2 L0 -2 M0 -2 L-1 -.5 M0 -2 L1 -.5" fill="none" stroke="#4b4842" strokeWidth=".22"/><text x="0" y="-3.6" textAnchor="middle" fontSize=".9" fill="#4b4842">N</text></g>
+        <g transform={`translate(${viewportBox.x+3} ${viewportBox.y+viewportBox.h-3})`}><line x1="0" y1="0" x2="10" y2="0" stroke="#4b4842" strokeWidth=".22"/><line x1="0" y1="-.45" x2="0" y2=".45" stroke="#4b4842" strokeWidth=".18"/><line x1="10" y1="-.45" x2="10" y2=".45" stroke="#4b4842" strokeWidth=".18"/><text x="5" y="-1" textAnchor="middle" fontSize=".9" fill="#4b4842">10 m</text></g>
+        <g transform={`translate(${viewportBox.x+viewportBox.w-4} ${viewportBox.y+4})`}><path d="M0 2 L0 -2 M0 -2 L-1 -.5 M0 -2 L1 -.5" fill="none" stroke="#4b4842" strokeWidth=".22"/><text x="0" y="-3.6" textAnchor="middle" fontSize=".9" fill="#4b4842">N</text></g>
       </svg>
 
       {!clean&&<div className="ep-zoom"><button onClick={()=>zoom(.82)}>＋</button><button onClick={()=>zoom(1.22)}>−</button><button onClick={()=>setBox(DEFAULT_BOX[view])}>Fit</button></div>}
