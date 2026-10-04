@@ -112,6 +112,9 @@
     border-radius:8px;
     font-size:8px;
     text-align:center;
+    text-align-last:center;
+    appearance:none;
+    background:#fffaf0;
   }
   .ep-history{
     display:grid;
@@ -248,7 +251,10 @@
     white-space:normal;
     text-align:center;
     opacity:.88;
+    pointer-events:none;
+    animation:epLandscapeHint 6.5s forwards;
   }
+  @keyframes epLandscapeHint{0%,48%{opacity:.88}100%{opacity:0;visibility:hidden}}
   .ep-status{
     right:62px;
     bottom:7px;
