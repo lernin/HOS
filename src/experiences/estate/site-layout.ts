@@ -39,3 +39,13 @@ export const featurePalms = [
 export const architecturalPlanters = [
   [-9,-10],[11,-10],[-9,6],[11,6],[25,-10],[38,0],[9,26],[-22,12],[-34,-3],[-27,27],[42,-12],[42,12],[-7,22],
 ] as const satisfies readonly PlanPoint[]
+
+
+export const coastSegments = 100
+export const coastEdgeScale = (a:number) => 1 + .04*Math.sin(a*7) + .025*Math.sin(a*13)
+export const coastZ = (a:number,r:number) => 7 + Math.sin(a)*64*r*(Math.sin(a)<0 ? .7+.3*Math.min(1,Math.abs(Math.cos(a))*3) : 1)
+export const coastPoint = (a:number,r:number) => {
+  const edge=coastEdgeScale(a)
+  return [Math.cos(a)*58*r*edge,coastZ(a,r)*edge] as const
+}
+export const coastline = Array.from({length:coastSegments+1},(_,i)=>coastPoint(i/coastSegments*Math.PI*2,1))
