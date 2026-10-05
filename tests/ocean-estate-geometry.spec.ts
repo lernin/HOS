@@ -9,7 +9,7 @@ import { coastPoint } from '../src/experiences/estate/site-layout'
 
 // These are independently checked world footprints, not recomputed expectations.
 const patios=[
-  ['P1',-23,27,-24,-12],['P2',-15,-11,-60,-24],['P3',12,16,-60,-24],
+  ['P1',-23,27,-24,-12],['P2',-15,-8,-60,-24],['P3',9,16,-60,-24],
   ['P4',-23,-6,14,33],['P5',39,44,-12,14],['P6',27,44,-24,-12],['P7',-31,-22,33,43],
   ['P8',-47,-23,-24,-17],['P9',-47,-39,-17,44],['P10',-39,-31,39,44],['P11',40,50,14,55],['P12',44,50,-24,14],['P13',24,40,51,55],['P14',-15,16,-70,-60.2],['P15',24,27,49,51],['P16',-31,-22,43,44],
 ] as const
@@ -36,7 +36,7 @@ test('rendered water and overflow extend together to the new north end',()=>{
     scene.updateMatrixWorld(true)
     const pool=scene.children.find(o=>o.position.y>5.8&&o.position.z<-24)!
     const b=new T.Box3().setFromObject(pool)
-    for(const [actual,want] of [[b.min.x,-10.9],[b.max.x,11.9],[b.min.z,-60.1],[b.max.z,-24.3]])assert.ok(Math.abs(actual-want)<.001,`pool surface ${actual} should reach ${want}`)
+    for(const [actual,want] of [[b.min.x,-7.9],[b.max.x,8.9],[b.min.z,-60.1],[b.max.z,-24.3]])assert.ok(Math.abs(actual-want)<.001,`pool surface ${actual} should reach ${want}`)
     const lip=scene.children.find(o=>o.position.y<5.8&&o.position.y>4&&o.position.z<-24)!
     assert.ok(Math.abs(lip.position.z+60.05)<.001,'overflow moves with the far pool edge')
   } finally {water.dispose()}
