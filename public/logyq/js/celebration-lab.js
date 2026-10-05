@@ -60,6 +60,9 @@
     else begin()
     return true
   }
+  function fadeOutAfter(delayMs=0, durationMs=250){
+    return fadeOut(durationMs, delayMs)
+  }
   function play(sound){
     if(!sound)return false
     stop()
@@ -285,5 +288,5 @@
   function close(){stop();const el=document.getElementById('logyq-celebration-lab');if(el)el.hidden=true}
   ensureUi()
   load()
-  window.LOGYQCelebrations=Object.freeze({open,close,load,play,playAuto,prepare,playPrepared,clearPrepared,stop,fadeOut,mode,setMode})
+  window.LOGYQCelebrations=Object.freeze({open,close,load,play,playAuto,prepare,playPrepared,clearPrepared,stop,fadeOut,fadeOutAfter,mode,setMode})
 })()
