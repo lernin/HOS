@@ -616,3 +616,15 @@ test('matching root and descendant repositioning follows mapper promotion withou
   const mismatch = card('root','DL:A:B',[card('child','W:B')])
   assert.equal(grammar.canDrop(mismatch,'root',{type:'node',targetUid:'child'}),false)
 })
+
+
+test('solve celebration is preloaded and is not gated on telemetry', () => {
+  const celebration = readFileSync(new URL('celebration-lab.js', root), 'utf8')
+  const preview = readFileSync(new URL('preview.js', root), 'utf8')
+  assert.match(celebration, /function prepare\(context=\{\}\)/)
+  assert.match(celebration, /audio\.preload='auto'/)
+  assert.match(celebration, /function playPrepared\(\)/)
+  assert.match(preview, /LOGYQCelebrations\?\.prepare\?\./)
+  assert.match(preview, /LOGYQCelebrations\?\.playPrepared\?\.\(\)/)
+  assert.doesNotMatch(preview, /Promise\.resolve\(app\.game\?\.telemetryPromise\)\.then\(play\)/)
+})
