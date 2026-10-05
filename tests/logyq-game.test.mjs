@@ -629,11 +629,11 @@ test('solve celebration is preloaded and is not gated on telemetry', () => {
   assert.doesNotMatch(preview, /Promise\.resolve\(app\.game\?\.telemetryPromise\)\.then\(play\)/)
 })
 
-test('Next keeps celebration full for one second then fades it for one second', () => {
+test('Next waits one second then fades celebration over two seconds', () => {
   const celebration = readFileSync(new URL('celebration-lab.js', root), 'utf8')
   const preview = readFileSync(new URL('preview.js', root), 'utf8')
   assert.match(celebration, /function fadeOut\(ms=250, delayMs=0\)/)
-  assert.match(celebration, /Math\.min\(10000,Number\(ms\)\|\|250\)/)
-  assert.match(celebration, /if\(delay\) setTimeout\(begin,delay\)/)
-  assert.match(preview, /fadeOut\?\.\(1000, 1000\)/)
+  assert.match(celebration, /function fadeOutAfter\(delayMs=0, durationMs=250\)/)
+  assert.match(celebration, /return fadeOut\(durationMs, delayMs\)/)
+  assert.match(preview, /fadeOutAfter\?\.\(1000, 2000\)/)
 })
