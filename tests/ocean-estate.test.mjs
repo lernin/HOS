@@ -433,3 +433,16 @@ test('concave garden edges have guards while the outer promenade stays clear',()
  assert.ok(nav.clearLine({x:-43,z:0},{x:-43,z:-20}),'west guard does not cut the promenade')
  assert.ok(nav.clearLine({x:46,z:0},{x:46,z:25}),'east guard does not cut the promenade')
 })
+
+
+test('Ocean Estate loads the CC0 moss rock set outside the procedural UV-stripping batch',()=>{
+ const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
+ const rocks=readFileSync(new URL('../src/experiences/estate/moss-rocks.ts',import.meta.url),'utf8')
+ const asset=readFileSync(new URL('../public/assets/estate/rock-moss-set-01.glb',import.meta.url))
+ assert.ok(asset.length>250000,'optimized moss rock GLB is present')
+ assert.match(rocks,/rock-moss-set-01\.glb/)
+ assert.match(rocks,/MeshoptDecoder/)
+ assert.match(rocks,/placements:RockPlacement\[\]=\[/)
+ assert.match(scene,/kit\.finish\(\);\s*progress\('Setting the mossy stones…'\)/)
+ assert.match(scene,/await addMossRockSet\(scene,signal\)/)
+})
