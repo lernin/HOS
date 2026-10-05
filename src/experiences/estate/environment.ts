@@ -3,7 +3,7 @@ import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR 
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
 import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
-import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth, outdoorStairs } from './site-layout'
+import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
 import { slabWithOpening, buildSpaDome, buildSpaTreeBed } from './spa-dome'
 import { buildTreeStudy } from './tree-studies'
 export function architecture(k:EstateKit){
