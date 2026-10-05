@@ -2,7 +2,7 @@ import * as T from 'three'
 import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR } from './plan'
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
-import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolWater } from './site-layout'
+import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolDeck, poolWater } from './site-layout'
 import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
 import { slabWithOpening, buildSpaDome, buildSpaTreeBed } from './spa-dome'
 import { buildTreeStudy } from './tree-studies'
@@ -94,7 +94,7 @@ export function architecture(k:EstateKit){
   for(let i=0;i<5;i++){const m=k.mesh(new T.TorusGeometry(1.1+i*.07,.025,6,32),'bronze',1,FLOOR+3.2+i*.12,17);m.rotation.x=1.05+i*.09}
   // Deep terrace edge and concealed waterline conceal intersections with cliffs.
   const poolX=(poolWater.x1+poolWater.x2)/2,poolZ=(poolWater.z1+poolWater.z2)/2,poolWidth=poolWater.x2-poolWater.x1,poolDepth=poolWater.z2-poolWater.z1
-  for(const x of [poolWater.x1-4.1,poolWater.x2+4.1])k.box(x,FLOOR-1.7,(poolWalkNorth+poolWalkSouth)/2,.35,3.4,poolWalkSouth-poolWalkNorth,'travertine')
+  for(const x of [poolDeck.x1-.1,poolDeck.x2+.1])k.box(x,FLOOR-1.7,(poolWalkNorth+poolWalkSouth)/2,.35,3.4,poolWalkSouth-poolWalkNorth,'travertine')
   k.box(poolX,FLOOR-1.54,poolWater.z1+.1,poolWidth+.4,2.8,.25,'travertine')
   k.box(poolX,FLOOR-1.5,poolZ,poolWidth,.2,poolDepth,'waterTile')
   for(const x of [poolWater.x1+.05,poolWater.x2-.05])k.box(x,FLOOR-.85,poolZ,.15,1.35,poolDepth,'waterTile')
