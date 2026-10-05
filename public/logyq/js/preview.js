@@ -8649,8 +8649,8 @@
   document.getElementById('logyq-game-next')?.addEventListener('click', async () => {
     if (!app.game?.cleared) return
     // After Next: hold the applause unchanged for 1 second, then fade it
-    // smoothly over the following 2 seconds while the next puzzle opens.
-    window.LOGYQCelebrations?.fadeOutAfter?.(1000, 2000)
+    // smoothly over the following 3 seconds while the next puzzle opens.
+    window.LOGYQCelebrations?.fadeOutAfter?.(1000, 3000)
     await Promise.resolve(app.game.telemetryPromise).catch(() => null)
     const progress = gameProgress()
     const choice = chooseNext(progress, app.game.id)
