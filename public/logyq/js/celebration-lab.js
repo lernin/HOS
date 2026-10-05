@@ -32,24 +32,32 @@
     preparedAudio=null
     preparedSound=null
   }
-  function fadeOut(ms=250){
+  function fadeOut(ms=250, delayMs=0){
     const audio=currentAudio
     if(!audio)return false
-    const duration=Math.max(80,Math.min(800,Number(ms)||250))
-    const start=performance.now()
-    const initial=Number.isFinite(audio.volume)?audio.volume:0.9
-    const tick=(now)=>{
+    const duration=Math.max(80,Math.min(10000,Number(ms)||250))
+    const delay=Math.max(0,Math.min(10000,Number(delayMs)||0))
+    const begin=()=>{
+      // Capture the clip at request time so a delayed fade can never mute a
+      // newer celebration that starts before this one begins fading.
       if(currentAudio!==audio)return
-      const t=Math.min(1,(now-start)/duration)
-      try{audio.volume=Math.max(0,initial*(1-t))}catch{}
-      if(t>=1){
-        try{audio.pause();audio.currentTime=0;audio.volume=initial}catch{}
-        if(currentAudio===audio)currentAudio=null
-        return
+      const start=performance.now()
+      const initial=Number.isFinite(audio.volume)?audio.volume:0.9
+      const tick=(now)=>{
+        if(currentAudio!==audio)return
+        const t=Math.min(1,(now-start)/duration)
+        try{audio.volume=Math.max(0,initial*(1-t))}catch{}
+        if(t>=1){
+          try{audio.pause();audio.currentTime=0;audio.volume=initial}catch{}
+          if(currentAudio===audio)currentAudio=null
+          return
+        }
+        requestAnimationFrame(tick)
       }
       requestAnimationFrame(tick)
     }
-    requestAnimationFrame(tick)
+    if(delay) setTimeout(begin,delay)
+    else begin()
     return true
   }
   function play(sound){
