@@ -8232,15 +8232,20 @@
       gameArtElement = svg
       if (animate) {
         const profile = gameDifficultyProfile(levelForGuide())
-        const play = (result) => window.LOGYQGameSound?.celebrate?.({
+        const context = {
           difficulty: profile?.band || 'any',
           reasoning: profile?.reasoning,
           pieces: profile?.pieces,
-          achievement: result?.achievement || 'solve',
-          efficiency: result?.attempt?.efficiency ?? null,
-          promoted: Number(result?.attempt?.grade_after || 0) > Number(result?.attempt?.grade_before || 0),
-        })
-        Promise.resolve(app.game?.telemetryPromise).then(play).catch(() => play(null))
+          achievement: app.game?.adaptiveResult?.achievement || 'solve',
+          efficiency: app.game?.adaptiveResult?.attempt?.efficiency ?? null,
+          promoted: Number(app.game?.adaptiveResult?.attempt?.grade_after || 0) >
+            Number(app.game?.adaptiveResult?.attempt?.grade_before || 0),
+        }
+        // The spreading color is the celebratory beat. Play the already-buffered
+        // clip now; telemetry continues independently and must never delay it.
+        if (!window.LOGYQCelebrations?.playPrepared?.()) {
+          window.LOGYQGameSound?.celebrate?.(context)
+        }
       }
       document.body.classList.add('logyq-game-completion')
     }, delay)
@@ -8444,6 +8449,13 @@
       guide: progress[level.id] ? null : level.guide,
       bankCards: { ...level.bankCards },
     }
+    const celebrationProfile = gameDifficultyProfile(level)
+    window.LOGYQCelebrations?.prepare?.({
+      difficulty: celebrationProfile?.band || 'any',
+      reasoning: celebrationProfile?.reasoning,
+      pieces: celebrationProfile?.pieces,
+      achievement: 'solve',
+    }).catch?.(() => {})
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
     app.lastSnapshot = 'game'

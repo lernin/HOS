@@ -8,7 +8,7 @@
   const CATALOG=BASE+'/rest/v1/logyq_celebration_sounds?select=*&active=eq.true&order=created_at.desc'
   const MODE_KEY='logyq_celebration_mode_v1'
   const PIN_KEY='logyq_lab_pin'
-  let catalog=[], loaded=false, currentAudio=null, recentIds=[]
+  let catalog=[], loaded=false, currentAudio=null, preparedAudio=null, preparedSound=null, prepareEpoch=0, recentIds=[]
 
   const publicUrl=(path)=>BASE+'/storage/v1/object/public/'+BUCKET+'/'+encodeURIComponent(path).replace(/%2F/g,'/')
   const mode=()=>{ try{return localStorage.getItem(MODE_KEY)||'auto'}catch{return 'auto'} }
@@ -25,6 +25,12 @@
   }
   function stop(){
     if(currentAudio){ try{currentAudio.pause();currentAudio.currentTime=0}catch{} currentAudio=null }
+  }
+  function clearPrepared(){
+    prepareEpoch++
+    if(preparedAudio){ try{preparedAudio.pause();preparedAudio.removeAttribute('src');preparedAudio.load()}catch{} }
+    preparedAudio=null
+    preparedSound=null
   }
   function fadeOut(ms=250){
     const audio=currentAudio
@@ -51,6 +57,7 @@
     stop()
     try{
       currentAudio=new Audio(publicUrl(sound.storage_path))
+      currentAudio.preload='auto'
       currentAudio.volume=0.9
       currentAudio.play().catch(()=>{})
       return true
@@ -99,7 +106,46 @@
     }
     return chosen
   }
+  async function prepare(context={}){
+    const epoch=++prepareEpoch
+    const selected=mode()
+    if(selected==='off'){ clearPrepared(); return false }
+    await load()
+    if(epoch!==prepareEpoch)return false
+    const chosen=selected.startsWith('id:')
+      ? catalog.find(s=>s.id===selected.slice(3))
+      : chooseAuto(context)
+    if(!chosen)return false
+    try{
+      const audio=new Audio(publicUrl(chosen.storage_path))
+      audio.preload='auto'
+      audio.volume=0.9
+      audio.load()
+      if(epoch!==prepareEpoch)return false
+      if(preparedAudio){ try{preparedAudio.pause()}catch{} }
+      preparedAudio=audio
+      preparedSound=chosen
+      return true
+    }catch{return false}
+  }
+  function playPrepared(){
+    if(!preparedAudio||!preparedSound)return false
+    stop()
+    const audio=preparedAudio
+    preparedAudio=null
+    preparedSound=null
+    currentAudio=audio
+    try{
+      currentAudio.currentTime=0
+      currentAudio.play().catch(()=>{})
+      return true
+    }catch{
+      currentAudio=null
+      return false
+    }
+  }
   async function playAuto(context={}){
+    if(playPrepared())return true
     const selected=mode()
     if(selected==='off')return true
     await load()
@@ -231,5 +277,5 @@
   function close(){stop();const el=document.getElementById('logyq-celebration-lab');if(el)el.hidden=true}
   ensureUi()
   load()
-  window.LOGYQCelebrations=Object.freeze({open,close,load,play,playAuto,stop,fadeOut,mode,setMode})
+  window.LOGYQCelebrations=Object.freeze({open,close,load,play,playAuto,prepare,playPrepared,clearPrepared,stop,fadeOut,mode,setMode})
 })()
