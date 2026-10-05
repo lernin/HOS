@@ -1,4 +1,4 @@
-import { spaTreeBed, poolWalkNorth, poolWalkSouth, outdoorPatios, outdoorStairs, type StairFlight } from './site-layout'
+import { spaTreeBed, poolWater, poolDeck, poolWalkNorth, poolWalkSouth, outdoorPatios, outdoorStairs, type StairFlight } from './site-layout'
 import { estateRailings } from './railings'
 export type Point = { x: number; z: number }
 export type Rect = { x1: number; x2: number; z1: number; z2: number }
@@ -12,8 +12,8 @@ export const floors: Floor[] = [
   { name: 'Great room', x1: -11, x2: 13, z1: -12, z2: 8, material: 'limestone', roof: 5.5, use: 'interior' },
   { name: 'Grand foyer', x1: -6, x2: 8, z1: 8, z2: 24, material: 'limestone', roof: 4.5, use: 'interior' },
   { name: 'Ocean terrace', x1: -23, x2: 27, z1: -24, z2: -12, material: 'travertine', use: 'patio', planCode: 'P1' },
-  { name: 'Pool walk', x1: -15, x2: -11, z1: poolWalkNorth, z2: poolWalkSouth, material: 'travertine', use: 'patio', planCode: 'P2' },
-  { name: 'Pool walk', x1: 12, x2: 16, z1: poolWalkNorth, z2: poolWalkSouth, material: 'travertine', use: 'patio', planCode: 'P3' },
+  { name: 'Pool walk', x1: poolDeck.x1, x2: poolWater.x1, z1: poolWalkNorth, z2: poolWalkSouth, material: 'travertine', use: 'patio', planCode: 'P2' },
+  { name: 'Pool walk', x1: poolWater.x2, x2: poolDeck.x2, z1: poolWalkNorth, z2: poolWalkSouth, material: 'travertine', use: 'patio', planCode: 'P3' },
   { name: 'Dining room', x1: -23, x2: -11, z1: -12, z2: 2, material: 'limestone', roof: 4.2, use: 'interior' },
   { name: 'Kitchen', x1: -23, x2: -11, z1: 2, z2: 14, material: 'limestone', roof: 3.6, use: 'interior' },
   { name: 'Family lounge', x1: -35, x2: -23, z1: -17, z2: -2, material: 'oak', roof: 3.8, use: 'interior' },
