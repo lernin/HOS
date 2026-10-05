@@ -572,6 +572,74 @@
   })
 
   const GAME_ADAPTIVE = '_adaptive'
+  const GAME_MEADOW = '_meadow_v1'
+  const MEADOW_STAGE_COUNT = 8
+  const MEADOW_GATE_REQUIRED = 6
+  // Normalized positions on the 900×1599 Meadow artwork. The puzzle engine
+  // stays adaptive; these are journey positions, not fixed puzzle ids.
+  const MEADOW_POSITIONS = [
+    { x: 29, y: 84 }, { x: 54, y: 76 }, { x: 71, y: 67 }, { x: 45, y: 58 },
+    { x: 26, y: 49 }, { x: 48, y: 40 }, { x: 69, y: 31 }, { x: 47, y: 22 },
+  ]
+  const MEADOW_GATE_POSITION = { x: 62, y: 10.5 }
+
+  function meadowState(progress) {
+    const raw = progress?.[GAME_MEADOW]
+    const stages = raw?.stages && typeof raw.stages === 'object' ? raw.stages : {}
+    const gate = raw?.gate && typeof raw.gate === 'object' ? raw.gate : null
+    return { stages, gate }
+  }
+
+  function meadowCompletedCount(progress) {
+    const state = meadowState(progress)
+    let count = 0
+    for (let stage = 1; stage <= MEADOW_STAGE_COUNT; stage++) if (state.stages[stage]) count++
+    return count
+  }
+
+  function meadowNextStage(progress) {
+    const state = meadowState(progress)
+    for (let stage = 1; stage <= MEADOW_STAGE_COUNT; stage++) if (!state.stages[stage]) return stage
+    return null
+  }
+
+  function meadowStageOpen(progress, stage) {
+    const state = meadowState(progress)
+    if (state.stages[stage]) return true
+    return stage === meadowNextStage(progress)
+  }
+
+  function meadowGateUnlocked(progress) {
+    return meadowCompletedCount(progress) >= MEADOW_GATE_REQUIRED
+  }
+
+  function meadowStars(wrongDrops) {
+    if (!wrongDrops) return 3
+    if (wrongDrops === 1) return 2
+    return 1
+  }
+
+  function recordMeadowSolve(progress, session) {
+    if (!session || (!Number.isInteger(session.meadowStage) && !session.meadowGate)) return progress
+    const now = Date.now()
+    const current = meadowState(progress)
+    const next = {
+      stages: { ...current.stages },
+      gate: current.gate ? { ...current.gate } : null,
+    }
+    if (Number.isInteger(session.meadowStage)) {
+      const stage = Math.max(1, Math.min(MEADOW_STAGE_COUNT, session.meadowStage))
+      const stars = meadowStars(session.wrongDrops || 0)
+      const prior = next.stages[stage]
+      next.stages[stage] = {
+        completedAt: prior?.completedAt || now,
+        stars: Math.max(Number(prior?.stars) || 0, stars),
+      }
+    } else if (session.meadowGate) {
+      next.gate = { completedAt: current.gate?.completedAt || now }
+    }
+    return { ...progress, [GAME_MEADOW]: next }
+  }
 
   function gameProgress() {
     const value = readJson(GAME_KEY, {})
@@ -639,83 +707,93 @@
   }
 
   let trailReturnTop = null
+
   function trailWindow(progress) {
     const choice = chooseNext(progress, null)
     const current = choice.level || gameLevels[0]
-    return { current, levels: gameLevels, choice }
+    return { current, levels: gameLevels, choice, meadow: meadowState(progress) }
   }
 
-  function trailPoint(index) {
-    return { x: 200 + 68 * Math.sin(index * .93), y: 190 + index * 124 }
-  }
-
-  function trailPath(count) {
-    if (!count) return ''
-    const first = trailPoint(0)
-    let route = `M ${first.x} ${first.y}`
-    for (let index = 1; index < count; index++) {
-      const before = trailPoint(index - 1)
-      const next = trailPoint(index)
-      route += ` C ${before.x} ${before.y + 62}, ${next.x} ${next.y - 62}, ${next.x} ${next.y}`
-    }
-    return route
+  function meadowRating(stars) {
+    const rating = document.createElement('span')
+    rating.className = 'logyq-meadow-rating is-' + Math.max(1, Math.min(3, stars || 1))
+    rating.setAttribute('aria-hidden', 'true')
+    return rating
   }
 
   function renderGameTrail(progress) {
-    const stars = document.getElementById('logyq-trail-stars')
-    if (!stars) return
+    const layer = document.getElementById('logyq-trail-stars')
+    if (!layer) return
     const map = document.getElementById('logyq-trail-map')
     const path = document.getElementById('logyq-trail-path')
-    const viewport = document.getElementById('logyq-trail-world')
-    const { current, levels } = trailWindow(progress)
-    const height = trailPoint(levels.length - 1).y + 210
-    if (map) map.style.height = height + 'px'
-    if (path) {
-      path.setAttribute('viewBox', `0 0 400 ${height}`)
-      const route = trailPath(levels.length)
-      path.innerHTML = `<path class="trail-border" d="${route}"/><path class="trail-earth" d="${route}"/>`
+    if (map) map.style.height = ''
+    if (path) path.replaceChildren()
+
+    const meadow = meadowState(progress)
+    const completed = meadowCompletedCount(progress)
+    const nextStage = meadowNextStage(progress)
+    const gateUnlocked = meadowGateUnlocked(progress)
+    const gateComplete = !!meadow.gate
+
+    const counter = document.getElementById('logyq-trail-leaves')
+    if (counter) {
+      counter.textContent = completed + '/' + MEADOW_STAGE_COUNT
+      counter.setAttribute('aria-label', completed + ' of ' + MEADOW_STAGE_COUNT + ' Meadow stages completed')
     }
-    const solved = gameLevels.filter((level) => progress[level.id]).length
-    const leaves = document.getElementById('logyq-trail-leaves')
-    if (leaves) {
-      leaves.textContent = '🍃 ' + solved
-      leaves.setAttribute('aria-label', solved + ' puzzles solved')
-    }
+
     const caption = document.getElementById('logyq-trail-caption')
-    if (caption) caption.textContent = 'Next: Puzzle ' + (gameLevels.indexOf(current) + 1)
-    stars.replaceChildren(...levels.map((level, index) => {
-      const number = index + 1
+    if (caption) {
+      caption.textContent = gateComplete
+        ? (nextStage ? 'Gate cleared · optional Meadow stages remain' : 'Meadow complete')
+        : gateUnlocked
+          ? 'The Meadow gate is open'
+          : 'Complete ' + MEADOW_GATE_REQUIRED + ' stages to open the gate'
+    }
+
+    const continueButton = document.getElementById('logyq-trail-continue')
+    if (continueButton) {
+      continueButton.textContent = !gateComplete && gateUnlocked ? 'Open Gate'
+        : nextStage ? 'Play Stage ' + nextStage : 'Meadow Complete'
+      continueButton.disabled = !nextStage && gateComplete
+    }
+
+    const items = []
+    for (let stage = 1; stage <= MEADOW_STAGE_COUNT; stage++) {
+      const completedStage = meadow.stages[stage]
+      const open = meadowStageOpen(progress, stage)
+      const current = !completedStage && stage === nextStage
       const button = document.createElement('button')
       button.type = 'button'
-      button.className = 'logyq-trail-star' + (progress[level.id] ? ' is-cleared' : '') +
-        (level.id === current.id ? ' is-current' : '')
-      button.dataset.trailLevel = level.id
-      const point = trailPoint(index)
-      button.style.left = (point.x / 4) + '%'
-      button.style.top = point.y + 'px'
-      button.setAttribute('aria-label', 'Puzzle ' + number + (progress[level.id] ? ', completed' : ', ready'))
-      if (level.id === current.id) button.setAttribute('aria-current', 'step')
-      const icon = document.createElement('span')
-      icon.className = 'star-icon'
-      icon.setAttribute('aria-hidden', 'true')
-      icon.textContent = '★'
-      const label = document.createElement('span')
-      label.className = 'star-number'
-      label.setAttribute('aria-hidden', 'true')
-      label.textContent = String(number)
-      button.append(icon, label)
-      return button
-    }))
-    if (viewport) {
-      const currentIndex = Math.max(0, gameLevels.indexOf(current))
-      const returnTop = trailReturnTop
-      trailReturnTop = null
-      const centerCurrent = () => {
-        viewport.scrollTop = returnTop ?? Math.max(0, trailPoint(currentIndex).y - viewport.clientHeight * .42)
-      }
-      centerCurrent()
-      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(centerCurrent)
+      button.className = 'logyq-meadow-stage' +
+        (completedStage ? ' is-completed' : current ? ' is-current' : open ? ' is-open' : ' is-locked')
+      button.dataset.meadowStage = String(stage)
+      button.style.left = MEADOW_POSITIONS[stage - 1].x + '%'
+      button.style.top = MEADOW_POSITIONS[stage - 1].y + '%'
+      button.disabled = !open
+      button.setAttribute('aria-label', 'Meadow stage ' + stage +
+        (completedStage ? ', completed with ' + (completedStage.stars || 1) + ' stars'
+          : current ? ', current stage' : open ? ', available' : ', locked'))
+      if (current) button.setAttribute('aria-current', 'step')
+      const number = document.createElement('span')
+      number.className = 'logyq-meadow-stage-number'
+      number.textContent = String(stage)
+      button.append(number)
+      if (completedStage) button.append(meadowRating(completedStage.stars || 1))
+      items.push(button)
     }
+
+    const gate = document.createElement('button')
+    gate.type = 'button'
+    gate.className = 'logyq-meadow-gate ' + (gateComplete ? 'is-complete' : gateUnlocked ? 'is-open' : 'is-locked')
+    gate.dataset.meadowGate = 'true'
+    gate.style.left = MEADOW_GATE_POSITION.x + '%'
+    gate.style.top = MEADOW_GATE_POSITION.y + '%'
+    gate.disabled = !gateUnlocked
+    gate.setAttribute('aria-label', gateComplete ? 'Meadow gate completed' : gateUnlocked ? 'Meadow gate open' :
+      'Meadow gate locked. Complete ' + MEADOW_GATE_REQUIRED + ' stages.')
+    items.push(gate)
+
+    layer.replaceChildren(...items)
   }
 
   function renderGamePath() {
@@ -1088,8 +1166,17 @@
     })
     const levelNumber = Math.max(1, GAME_LEVELS.findIndex(item => item.id === level.id) + 1)
     window.LOGYQGameThumbGain?.setLevel?.(levelNumber)
-    app.game = { id: level.id, levelNumber, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide,
-      bankCards: { ...level.bankCards } }
+    app.game = {
+      id: level.id,
+      levelNumber,
+      origin,
+      cleared: false,
+      wrongDrops: 0,
+      guide: progress[level.id] ? null : level.guide,
+      meadowStage: Number.isInteger(opts?.meadowStage) ? opts.meadowStage : null,
+      meadowGate: !!opts?.meadowGate,
+      bankCards: { ...level.bankCards },
+    }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
     app.lastSnapshot = 'game'
@@ -1181,11 +1268,18 @@
     window.LOGYQGameGuide?.hide()
     session.guide = null
     session.cleared = true
-    const progress = writeProgress(recordSolve(gameProgress(), level.id, session.wrongDrops || 0))
+    let progress = recordSolve(gameProgress(), level.id, session.wrongDrops || 0)
+    progress = recordMeadowSolve(progress, session)
+    writeProgress(progress)
     const solvedCount = gameLevels.filter((item) => progress[item.id]).length
     const upcoming = chooseNext(progress, level.id).level
     gameStatus(solvedCount >= gameLevels.length ? 'All ' + gameLevels.length + ' levels cleared.' : 'It fits!', true)
-    document.getElementById('logyq-game-next').hidden = !upcoming
+    const journey = Number.isInteger(session.meadowStage) || !!session.meadowGate
+    const nextButton = document.getElementById('logyq-game-next')
+    if (nextButton) {
+      nextButton.hidden = journey ? false : !upcoming
+      nextButton.textContent = journey ? 'Continue' : 'Next'
+    }
     if (upcoming) scheduleGameCameraFit(40)
     scheduleGameCompletionArt()
     return true
@@ -1218,16 +1312,37 @@
     if (open) document.getElementById('logyq-trail-close-levels')?.focus()
     else allLevels.focus()
   }
+  function openMeadowStage(stage) {
+    const progress = gameProgress()
+    if (!Number.isInteger(stage) || stage < 1 || stage > MEADOW_STAGE_COUNT || !meadowStageOpen(progress, stage)) return
+    const choice = trailWindow(progress).choice
+    openTrailLevel(choice.level, { levelUp: choice.leveledUp, meadowStage: stage })
+  }
+
+  function openMeadowGate() {
+    const progress = gameProgress()
+    if (!meadowGateUnlocked(progress)) return
+    const choice = trailWindow(progress).choice
+    openTrailLevel(choice.level, { levelUp: choice.leveledUp, meadowGate: true })
+  }
+
   document.getElementById('logyq-trail-stars')?.addEventListener('click', (event) => {
-    const star = event.target.closest('[data-trail-level]')
-    const level = gameLevels.find((item) => item.id === star?.dataset.trailLevel)
-    if (!level) return
-    const choice = trailWindow(gameProgress()).choice
-    openTrailLevel(level, { levelUp: choice.leveledUp && choice.level?.id === level.id })
+    const stageButton = event.target.closest('[data-meadow-stage]')
+    if (stageButton) {
+      openMeadowStage(Number(stageButton.dataset.meadowStage))
+      return
+    }
+    if (event.target.closest('[data-meadow-gate]')) openMeadowGate()
   })
   document.getElementById('logyq-trail-continue')?.addEventListener('click', () => {
-    const choice = trailWindow(gameProgress()).choice
-    openTrailLevel(choice.level, { levelUp: choice.leveledUp })
+    const progress = gameProgress()
+    const state = meadowState(progress)
+    if (meadowGateUnlocked(progress) && !state.gate) {
+      openMeadowGate()
+      return
+    }
+    const next = meadowNextStage(progress)
+    if (next) openMeadowStage(next)
   })
   allLevels?.addEventListener('click', () => setTrailDrawer(true))
   document.getElementById('logyq-trail-close-levels')?.addEventListener('click', () => setTrailDrawer(false))
@@ -1251,6 +1366,13 @@
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
   document.getElementById('logyq-game-next')?.addEventListener('click', () => {
     if (!app.game?.cleared) return
+    if (Number.isInteger(app.game.meadowStage) || app.game.meadowGate) {
+      const button = document.getElementById('logyq-game-next')
+      if (button) button.textContent = 'Next'
+      renderGamePath()
+      openLibrary()
+      return
+    }
     const progress = gameProgress()
     const choice = chooseNext(progress, app.game.id)
     if (!choice.level) return
@@ -1284,6 +1406,6 @@
   }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
-    recordSolve, chooseNext, trailWindow, presentSolved, layoutBudget: GAME_LAYOUT,
+    recordSolve, chooseNext, trailWindow, meadowState, presentSolved, layoutBudget: GAME_LAYOUT,
     challengeLayoutBudget: CHALLENGE_LAYOUT, measureSolved: layoutSolvedTree, returnBranch: returnGameBranch,
   }
