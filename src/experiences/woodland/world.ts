@@ -20,15 +20,29 @@ export function placements(){
     const kind=r()<.22?'pine':r()<.5?'tree':'tree-b',h=9+r()*9
     out.push({x,z,kind,height:h,angle:r()*Math.PI*2,solid:.65})
   }
-  for(let i=0;i<5400;i++){
+  for(let i=0;i<7600;i++){
     const x=(r()-.5)*400,z=(r()-.5)*400,d=pathDistance(x,z)
     if(Math.hypot(x,z)>200||d<4.8)continue
-    const n=r(),kind=n<.12?'rock':n<.32?'bush':n<.52?'fern':n<.75?'clover':'grass'
-    out.push({x,z,kind,height:kind==='rock'?.6+r()*1.4:kind==='bush'?.8+r()*.8:.25+r()*.55,angle:r()*Math.PI*2,solid:kind==='rock'?.65:0})
+    const n=r(),kind=n<.18?'rock':n<.32?'bush':n<.52?'fern':n<.68?'clover':n<.84?'grass':'flower'
+    const height=kind==='rock'?.38+r()*1.95:kind==='bush'?.7+r()*1.25:kind==='fern'?.32+r()*.95:kind==='grass'?.18+r()*.92:kind==='flower'?.28+r()*1.08:.14+r()*.42
+    out.push({x,z,kind,height,angle:r()*Math.PI*2,solid:kind==='rock'?.55+r()*.28:0})
   }
-  // Keep a generous plant-free shoulder around every trail so foliage never spills onto the road.
-  // A lighter, more distant edge planting still gives the paths a natural frame without visual clutter.
-  for(const line of paths)for(let i=0;i<line.length;i+=4){const p=line[i],q=line[Math.min(i+1,line.length-1)],dx=q.x-p.x,dz=q.z-p.z,l=Math.hypot(dx,dz)||1;for(const side of [-1,1]){const off=5.4+r()*2.2;out.push({x:p.x-dz/l*off*side,z:p.z+dx/l*off*side,kind:r()<.38?'bush':'fern',height:.38+r()*.48,angle:r()*6.28,solid:0})}}
+  // Build lush, irregular trail-edge beds. Keep the walking ribbon clear, but layer
+  // low groundcover, flowers, ferns, taller shrubs and occasional stones beyond it.
+  for(const line of paths)for(let i=0;i<line.length;i+=3){
+    const p=line[i],q=line[Math.min(i+1,line.length-1)],dx=q.x-p.x,dz=q.z-p.z,l=Math.hypot(dx,dz)||1
+    for(const side of [-1,1]){
+      const nx=-dz/l*side,nz=dx/l*side,base=5.35+r()*1.15
+      const count=3+(r()*4|0)
+      for(let j=0;j<count;j++){
+        const along=(r()-.5)*4.2,off=base+r()*3.1
+        const x=p.x+dx/l*along+nx*off,z=p.z+dz/l*along+nz*off
+        const n=r(),kind=n<.12?'rock':n<.28?'bush':n<.49?'fern':n<.64?'grass':n<.78?'clover':'flower'
+        const height=kind==='rock'?.32+r()*1.5:kind==='bush'?.62+r()*1.18:kind==='fern'?.34+r()*1.02:kind==='grass'?.2+r()*.95:kind==='flower'?.3+r()*1.18:.13+r()*.45
+        out.push({x,z,kind,height,angle:r()*Math.PI*2,solid:kind==='rock'?.5+r()*.25:0})
+      }
+    }
+  }
   return out
 }
 export const normalizeMove=(x:number,z:number)=>{const d=Math.max(1,Math.hypot(x,z));return {x:x/d,z:z/d}}
