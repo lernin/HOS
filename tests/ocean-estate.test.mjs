@@ -343,7 +343,7 @@ test('bird-eye pool and landmark planting share exact 3D geometry constants',()=
  const layout=readFileSync(new URL('../src/experiences/estate/site-layout.ts',import.meta.url),'utf8')
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  const planner=readFileSync(new URL('../src/experiences/EstatePlan.tsx',import.meta.url),'utf8')
- assert.equal(layout.includes("x1: -11")&&layout.includes("x2: 12")&&layout.includes("z1: -60.2")&&layout.includes("z2: -24.2"),true)
+ assert.equal(layout.includes("x1: -8")&&layout.includes("x2: 9")&&layout.includes("z1: -60.2")&&layout.includes("z2: -24.2"),true)
  assert.equal(env.includes("poolWater.x2-poolWater.x1"),true)
  assert.equal(env.includes("for(const t of featureTrees)"),true)
  assert.equal(env.includes("for(const p of featurePalms)"),true)
