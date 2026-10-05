@@ -105,7 +105,8 @@ test('closed arrival garden pockets read as intentional planted areas',()=>{
  assert.match(env,/Arrival garden pockets/)
  assert.match(rails,/id:'arrival-garden-west'/)
  assert.match(rails,/id:'arrival-garden-east'/)
- assert.match(env,/ellipsoid\([^\n]*'pink'/)
+ assert.match(env,/flowerSpray\(x,y,z/)
+ assert.match(env,/softPink/)
 })
 
 
