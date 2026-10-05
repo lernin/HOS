@@ -7,6 +7,7 @@ import { decorateArt, type EstateArtChoice, type EstateArtDisplay } from './art'
 import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, resolveFloorRay, spawn, type Point } from './plan'
 import { createEstateEditor, type EditableRoomId, type EditableSurface, type EditorMaterial } from './editor'
+import { addMossRockSet } from './moss-rocks'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;fast:boolean}
 export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean}
 export type EstatePick={kind:'floor'}|{kind:'art';art:EstateArtChoice}
@@ -44,16 +45,18 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
   const fills=Array.from({length:3},()=>{const l=new T.PointLight('#ffd395',12,18,2);scene.add(l);return l})
   const fillLocations:[number,number,number][]= [[-2,-2,3.4],[-17,7,3.1],[32,-4,3.2],[-32,30,2.8],[14,22,3.1],[-32,4,2.7],[27,22,2.8],[36,22,2.8]]
   let fillSelection=[0,1,4],fillSelectionOrigin={x:999,z:999}
-  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,artInstallation:ReturnType<typeof decorateArt>|undefined,editor:ReturnType<typeof createEstateEditor>|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
+  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,artInstallation:ReturnType<typeof decorateArt>|undefined,editor:ReturnType<typeof createEstateEditor>|undefined,mossRocks:Awaited<ReturnType<typeof addMossRockSet>>|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
   const raycaster=new T.Raycaster(),hit=new T.Vector3()
   const marker=new T.Mesh(new T.RingGeometry(.17,.24,36),new T.MeshBasicMaterial({color:'#e7d3a6',side:T.DoubleSide,transparent:true,opacity:.85,depthWrite:false}));marker.rotation.x=-Math.PI/2;marker.visible=false;scene.add(marker)
   let artInspect:ArtInspect|null=null,artExitResolve:(()=>void)|undefined
-  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();artExitResolve?.();editor?.dispose();artInstallation?.dispose();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
+  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();artExitResolve?.();editor?.dispose();artInstallation?.dispose();mossRocks?.dispose();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
   signal.addEventListener('abort',dispose,{once:true})
   try{
     progress('Opening the house…');architecture(kit);furnish(kit);artInstallation=decorateArt(scene,kit)
     await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));if(signal.aborted)throw new DOMException('Aborted','AbortError')
-    progress('Planting the coast…');landscape(kit);kit.finish();editor=createEstateEditor(scene,renderer,camera,canvas);water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
+    progress('Planting the coast…');landscape(kit);kit.finish();
+    progress('Setting the mossy stones…');try{mossRocks=await addMossRockSet(scene,signal)}catch(error){if(signal.aborted)throw error;console.warn('Ocean Estate moss rock set failed to load',error)}
+    editor=createEstateEditor(scene,renderer,camera,canvas);water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
     let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true

@@ -105,7 +105,8 @@ test('closed arrival garden pockets read as intentional planted areas',()=>{
  assert.match(env,/Arrival garden pockets/)
  assert.match(rails,/id:'arrival-garden-west'/)
  assert.match(rails,/id:'arrival-garden-east'/)
- assert.match(env,/ellipsoid\([^\n]*'pink'/)
+ assert.match(env,/flowerSpray\(x,y,z/)
+ assert.match(env,/softPink/)
 })
 
 
@@ -141,14 +142,15 @@ test('arrival court walkability reaches the visible round edge',()=>{
  assert.equal(plan.floorAt({x:19.8,z:41}),4.8,'east side of rendered circle is navigable')
 })
 
-test('entry portal is grounded and round court edge has a continuous natural boulder barrier',()=>{
+test('entry portal is grounded and round court edge uses the textured moss-rock system',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ const rocks=readFileSync(new URL('../src/experiences/estate/moss-rocks.ts',import.meta.url),'utf8')
  assert.equal(env.includes('Massive stair-side abutments'),true)
  assert.equal(env.includes('supportBase=FLOOR-1.22'),true)
- assert.equal(env.includes('Dense natural boulder band marks the round court edge'),true)
- assert.equal(env.includes('i<92'),true)
- assert.equal(env.includes('19.46+wobble'),true)
- assert.equal(env.includes('if(i%4===0)'),true)
+ assert.equal(env.includes('arrival-court boulder edge is now supplied by the textured moss-rock asset system'),true)
+ assert.equal(rocks.includes('for(let i=0;i<92;i++)'),true)
+ assert.equal(rocks.includes('19.46+wobble'),true)
+ assert.equal(rocks.includes('outdoorStairs.some'),true)
 })
 
 test('fill lights use stable selection and eased movement instead of per-frame nearest swapping',()=>{
@@ -160,12 +162,13 @@ test('fill lights use stable selection and eased movement instead of per-frame n
 })
 
 
-test('arrival-court barrier uses charcoal stone rather than black basalt',()=>{
- const kit=readFileSync(new URL('../src/experiences/estate/kit.ts',import.meta.url),'utf8')
+test('all landscape rocks are supplied by the textured moss-rock asset system',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
- assert.equal(kit.includes("charcoalRock:'#5a6261'"),true)
- assert.equal(env.includes("700+i,'charcoalRock'"),true)
- assert.equal(env.includes("900+i,'charcoalRock'"),true)
+ const rocks=readFileSync(new URL('../src/experiences/estate/moss-rocks.ts',import.meta.url),'utf8')
+ assert.equal(/\brock\(/.test(env),false,'procedural rock calls are gone from landscape')
+ assert.equal(rocks.includes('for(let i=0;i<150;i++)'),true,'coastal rock ring is replaced')
+ assert.equal(rocks.includes('for(let i=0;i<92;i++)'),true,'arrival-court rock ring is replaced')
+ assert.equal(rocks.includes('new T.InstancedMesh'),true,'moss-rock variants are instanced for performance')
 })
 
 test('roofed house perimeter has no accidental wall gaps',()=>{
@@ -432,4 +435,17 @@ test('concave garden edges have guards while the outer promenade stays clear',()
  for(const p of [{x:-39.12,z:-10},{x:-37,z:-17.12},{x:40.12,z:15.5}])assert.equal(nav.walkable(p),false,'garden edge guard '+JSON.stringify(p))
  assert.ok(nav.clearLine({x:-43,z:0},{x:-43,z:-20}),'west guard does not cut the promenade')
  assert.ok(nav.clearLine({x:46,z:0},{x:46,z:25}),'east guard does not cut the promenade')
+})
+
+
+test('Ocean Estate loads the CC0 moss rock set outside the procedural UV-stripping batch',()=>{
+ const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
+ const rocks=readFileSync(new URL('../src/experiences/estate/moss-rocks.ts',import.meta.url),'utf8')
+ const asset=readFileSync(new URL('../public/assets/estate/rock-moss-set-01.glb',import.meta.url))
+ assert.ok(asset.length>250000,'optimized moss rock GLB is present')
+ assert.match(rocks,/rock-moss-set-01\.glb/)
+ assert.match(rocks,/MeshoptDecoder/)
+ assert.match(rocks,/const placements=makePlacements\(\)/)
+ assert.match(scene,/kit\.finish\(\);\s*progress\('Setting the mossy stones…'\)/)
+ assert.match(scene,/await addMossRockSet\(scene,signal\)/)
 })
