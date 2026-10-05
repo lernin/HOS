@@ -1,4 +1,4 @@
-import { poolWalkNorth, poolWalkSouth } from './site-layout'
+import { poolWater, poolWalkNorth, poolWalkSouth } from './site-layout'
 export type EstateRailPoint = readonly [number, number]
 export type EstateRail = {
   id: string
@@ -139,7 +139,7 @@ export const estateRailings: EstateRail[] = [
   {id:'west-promende-edge',code:'R12',label:'West cliff promenade',family:'guard',glass:true,points:[p(-47+RAIL_EDGE_INSET,-24+RAIL_EDGE_INSET),p(-47+RAIL_EDGE_INSET,44-RAIL_EDGE_INSET),p(-22-RAIL_END_GAP,44-RAIL_EDGE_INSET)]},
   {id:'west-arrival-drop',code:'R23',label:'West arrival terrace edge',family:'guard',glass:true,points:[p(-22-RAIL_EDGE_INSET,33+RAIL_EDGE_INSET),p(-22-RAIL_EDGE_INSET,39+RAIL_EDGE_INSET)]},
   {id:'pool-tip-edge',code:'R13',label:'Pool-tip terrace',family:'guard',glass:true,level:5.2,points:[p(-15+RAIL_EDGE_INSET,-64),p(-15+RAIL_EDGE_INSET,-70+RAIL_EDGE_INSET),p(16-RAIL_EDGE_INSET,-70+RAIL_EDGE_INSET),p(16-RAIL_EDGE_INSET,-64)]},
-  {id:'pool-tip-water-edge',code:'R14',label:'Pool overflow edge',family:'guard',glass:true,level:5.2,points:[p(-11+RAIL_END_GAP,-60.2-RAIL_EDGE_INSET),p(12-RAIL_END_GAP,-60.2-RAIL_EDGE_INSET)]},
+  {id:'pool-tip-water-edge',code:'R14',label:'Pool overflow edge',family:'guard',glass:true,level:5.2,points:[p(poolWater.x1+RAIL_END_GAP,poolWater.z1-RAIL_EDGE_INSET),p(poolWater.x2-RAIL_END_GAP,poolWater.z1-RAIL_EDGE_INSET)]},
   {id:'west-pool-stair-outer',code:'R15',label:'West pool stair',family:'guard',glass:true,levels:[5.2,6],points:[p(-15+RAIL_EDGE_INSET,-64),p(-15+RAIL_EDGE_INSET,poolWalkNorth+RAIL_EDGE_INSET)]},
   {id:'west-pool-stair-inner',code:'R16',label:'West pool stair',family:'guard',glass:true,levels:[5.2,6],points:[p(-11-RAIL_EDGE_INSET,-64),p(-11-RAIL_EDGE_INSET,poolWalkNorth+RAIL_EDGE_INSET)]},
   {id:'east-pool-stair-outer',code:'R17',label:'East pool stair',family:'guard',glass:true,levels:[5.2,6],points:[p(16-RAIL_EDGE_INSET,-64),p(16-RAIL_EDGE_INSET,poolWalkNorth+RAIL_EDGE_INSET)]},
