@@ -158,8 +158,6 @@ export function landscape(k:EstateKit){
   for(let j=0;j<=rings;j++)for(let i=0;i<=segments;i++){const a=i/segments*Math.PI*2,r=j/rings,edge=coastEdgeScale(a),x=Math.cos(a)*58*r*edge,z=coastZ(a,r)*edge;verts.push(x,terrainHeight(x,z,r),z)}
   for(let j=0;j<rings;j++)for(let i=0;i<segments;i++){const a=j*(segments+1)+i,c=a+segments+1;ids.push(a,a+1,c,a+1,c+1,c)}
   const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(verts,3));geo.setIndex(ids);geo.computeVertexNormals();k.mesh(geo,'soil')
-  function rock(x:number,y:number,z:number,sx:number,sy:number,sz:number,seed:number,mat?:string){const g=k.rockGeometry(seed),p=g.attributes.position;for(let i=0;i<p.count;i++){const yy=p.getY(i);p.setY(i,Math.round(yy*7)/7*.5+yy*.5)}g.computeVertexNormals();const m=k.mesh(g,mat??(seed%3===0?'basalt':'concrete'),x,y,z);m.scale.set(sx,sy,sz);m.rotation.set(.1,seed,seed*.04)}
-  for(let i=0;i<150;i++){const a=i/150*Math.PI*2,r=.9+rand()*.09,x=Math.cos(a)*58*r,z=coastZ(a,r);rock(x,(Math.abs(x)<22&&z<0?-3.8:-.8)+rand(),z,2+rand()*3,1.5+rand()*3,2+rand()*3,i+24)}
   // Courtyard garden, raised beds and water rill.
   b((courtyardPlanting.x1+courtyardPlanting.x2)/2,FLOOR+.17,(courtyardPlanting.z1+courtyardPlanting.z2)/2,courtyardPlanting.x2-courtyardPlanting.x1,.34,courtyardPlanting.z2-courtyardPlanting.z1,'travertine',k.root,.12);b((courtyardPlanting.x1+courtyardPlanting.x2)/2,FLOOR+.35,(courtyardPlanting.z1+courtyardPlanting.z2)/2,courtyardPlanting.x2-courtyardPlanting.x1-.35,.03,courtyardPlanting.z2-courtyardPlanting.z1-.35,'soil')
   k.lathe([[0,0],[1.5,0],[1.5,.38],[1.3,.5],[1.12,.38],[0,.28]],'travertine',-15.6,FLOOR+.37,25)
@@ -169,19 +167,7 @@ export function landscape(k:EstateKit){
   k.lathe([[1.1,0],[1.2,.2],[.6,1],[.45,1.4],[1.1,1.6],[1.15,1.8]],'travertine',1,5.18,41)
   // Arrival court is encircled by planted edges, not an exposed square plane.
   for(let i=0;i<48;i++){const a=i/48*Math.PI*2;k.cylinder(1+Math.cos(a)*4.4,5,41+Math.sin(a)*4.4,.18,.18,'leafDark',k.root,.24,6)}
-  // Dense natural boulder band marks the round court edge while leaving the stair approach open.
-  for(let i=0;i<92;i++){
-    const a=i/92*Math.PI*2
-    if(Math.abs(Math.atan2(Math.sin(a+Math.PI/2),Math.cos(a+Math.PI/2)))<.44)continue
-    const wobble=.18*Math.sin(i*2.37)+.07*Math.sin(i*.83),r=19.46+wobble
-    const x=1+Math.cos(a)*r,z=41+Math.sin(a)*r
-    if(outdoorStairs.some(s=>contains(s,{x,z},1.2)))continue
-    rock(x,4.48+((i%5)-2)*.025,z,.72+(i%5)*.095,.46+(i%4)*.07,.68+((i+2)%5)*.085,700+i,'charcoalRock')
-    if(i%4===0){
-      const aa=a+Math.PI/92,rr=19.72+.1*Math.sin(i*1.71)
-      rock(1+Math.cos(aa)*rr,4.43,41+Math.sin(aa)*rr,.48+(i%3)*.08,.34+(i%2)*.06,.46+((i+1)%3)*.08,900+i,'charcoalRock')
-    }
-  }
+  // The arrival-court boulder edge is now supplied by the textured moss-rock asset system.
   function frond(g:T.Group,angle:number,length:number){const points=[v(0,0,0),v(Math.cos(angle)*length*.4,length*.28,Math.sin(angle)*length*.4),v(Math.cos(angle)*length,length*.03,Math.sin(angle)*length)];k.beam(points,.027,'leafLight',g,5)
     for(let i=1;i<=10;i++){const t=i/11,cx=Math.cos(angle)*length*t,cz=Math.sin(angle)*length*t,cy=Math.sin(t*Math.PI)*length*.25;for(const s of [-1,1]){
       const l=length*.34*Math.sin(t*Math.PI),dx=Math.cos(angle+s*.85)*l,dz=Math.sin(angle+s*.85)*l
@@ -200,21 +186,44 @@ export function landscape(k:EstateKit){
     }for(let i=0;i<5;i++){const a=i*1.256;k.beam([v(0,.4,0),v(Math.cos(a)*.45,.12,Math.sin(a)*.45),v(Math.cos(a)*.9,.01,Math.sin(a)*.9)],.1,'bark',g)}
   }
   function grasses(x:number,y:number,z:number,s=1){const g=k.group(x,y,z,rand()*6.28);g.scale.setScalar(s);for(let i=0;i<9;i++){const a=i*2.4,h=.45+rand()*.55,dx=Math.cos(a)*.4,dz=Math.sin(a)*.4;const p=[0,0,0,dx*.3-.03,h*.55,dz*.3,dx,h,dz,dx*.3+.03,h*.5,dz*.3];const geom=new T.BufferGeometry();geom.setAttribute('position',new T.Float32BufferAttribute(p,3));geom.setIndex([0,1,2,0,2,3,2,1,0,3,2,0]);geom.computeVertexNormals();k.mesh(geom,i%2?'leaf':'leafLight',0,0,0,g)}}
+  function fernPatch(x:number,y:number,z:number,s=1){
+    const g=k.group(x,y,z,rand()*6.28);g.scale.setScalar(s)
+    const count=7+Math.floor(rand()*5)
+    for(let i=0;i<count;i++){
+      const a=i/count*Math.PI*2+rand()*.24,len=.44+rand()*.5,w=.11+rand()*.08,lift=.16+rand()*.24
+      const dx=Math.cos(a)*len,dz=Math.sin(a)*len
+      const geom=new T.BufferGeometry()
+      geom.setAttribute('position',new T.Float32BufferAttribute([0,.02,0,dx*.42-w*Math.sin(a),lift*.85,dz*.42+w*Math.cos(a),dx,lift*.14,dz,dx*.42+w*Math.sin(a),lift*.85,dz*.42-w*Math.cos(a)],3))
+      geom.setIndex([0,1,2,0,2,3,2,1,0,3,2,0]);geom.computeVertexNormals()
+      k.mesh(geom,i%3===0?'fernLight':'fern',0,0,0,g)
+      for(let j=1;j<=4;j++){const t=j/5,px=dx*t,pz=dz*t,py=lift*Math.sin(t*Math.PI)*.75;for(const side of [-1,1])k.ellipsoid(px+Math.sin(a)*side*.075*(1-t*.5),py,pz-Math.cos(a)*side*.075*(1-t*.5),.11*(1-t*.45),.025,.045,'fernLight',g,6)}
+    }
+  }
+  function groundcover(x:number,y:number,z:number,s=1){
+    const g=k.group(x,y,z,rand()*6.28);g.scale.setScalar(s)
+    for(let i=0;i<11;i++){const a=rand()*Math.PI*2,r=.08+rand()*.36,yy=.02+rand()*.08,mat=i%4===0?'mossLight':i%5===0?'burgundyLeaf':'moss';const m=k.ellipsoid(Math.cos(a)*r,yy,Math.sin(a)*r,.12+rand()*.09,.028,.07+rand()*.05,mat,g,6);m.rotation.y=a}
+  }
+  function flowerSpray(x:number,y:number,z:number,s=1,seed=0){
+    const palette=['softPink','white','lavender','blueFlower','coral','yellowFlower'] as const
+    const g=k.group(x,y,z,rand()*6.28);g.scale.setScalar(s)
+    const count=4+seed%5
+    for(let i=0;i<count;i++){const a=rand()*Math.PI*2,r=rand()*.28,h=.28+rand()*.55,px=Math.cos(a)*r,pz=Math.sin(a)*r;k.cylinder(px,h*.48,pz,.011,h,'leafDark',g,.008,5);const mat=palette[(seed+i)%palette.length];k.ellipsoid(px,h,pz,.07+rand()*.045,.045+rand()*.03,.07+rand()*.045,mat,g,7);if(i%2===0)k.ellipsoid(px,h+.012,pz,.018,.012,.018,'gold',g,6)}
+  }
   // Foyer garden planting: deliberate ornamental beds replace the ambiguous grassy voids beside the Grand Foyer.
   for(const {cx,cz,rx,rz} of foyerGardenBeds){
     b(cx,FLOOR-.16,cz,rx*2+.42,.18,rz*2+.42,'soil',k.root,.12)
-    for(let i=0;i<24;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand())*.88,x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r;grasses(x,FLOOR-.04,z,.38+rand()*.42);if(i%3===0){k.cylinder(x,FLOOR+.18,z,.015,.44,'leafDark',k.root,.012,6);k.ellipsoid(x,FLOOR+.43,z,.105,.07,.105,i%2?'pink':'white',k.root,8);k.ellipsoid(x,FLOOR+.45,z,.035,.025,.035,'gold',k.root,8)}}
+    for(let i=0;i<84;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand())*.91,x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r;const y=FLOOR-.035;groundcover(x,y,z,.38+rand()*.48);if(i%2===0)grasses(x,y,z,.28+rand()*.5);if(i%3===0)fernPatch(x,y,z,.34+rand()*.5);if(i%2===0)flowerSpray(x,y,z,.42+rand()*.48,i)}
   }
   // Arrival garden pockets replace ambiguous green dead zones with deliberate flowers and grasses.
-  for(const [cx,cz,rx,rz] of [[-21,40,3.1,4.8],[22.5,46.5,2.4,2.7]])for(let i=0;i<28;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r,y=terrainHeight(x,z,.68)+.05;if(!unbuilt(x,z,.4))continue;grasses(x,y,z,.42+rand()*.38);if(i%2===0){k.cylinder(x,y+.22,z,.018,.42,'leafDark',k.root,.014,6);k.ellipsoid(x,y+.48,z,.12,.085,.12,'pink',k.root,8)}}
+  for(const [cx,cz,rx,rz] of [[-21,40,3.1,4.8],[22.5,46.5,2.4,2.7]])for(let i=0;i<96;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r,y=terrainHeight(x,z,.68)+.05;if(!unbuilt(x,z,.28))continue;groundcover(x,y,z,.42+rand()*.62);if(i%2===0)grasses(x,y,z,.34+rand()*.6);if(i%3===0)fernPatch(x,y,z,.48+rand()*.64);if(i%2===0)flowerSpray(x,y,z,.5+rand()*.58,100+i)}
   for(const t of featureTrees){
     if(t.id==='tree-west-arrival')buildTreeStudy(k,{x:t.x,y:t.y,z:t.z,size:t.size,seed:t.seed,form:'airy'})
     else tree(t.x,t.y,t.z,t.size,t.seed)
   }
   for(const p of featurePalms)palm(p.x,Math.min(FLOOR,terrainHeight(p.x,p.z,.65)),p.z,p.size,p.x)
   for(let i=0;i<42;i++){const a=i/42*Math.PI*2,r=.75+rand()*.06,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,2)||(x>42&&z<-12)||(Math.abs(x)<21&&z<-25))continue;if(i%4===0)tree(x,terrainHeight(x,z,r),z,.75+rand()*.45,i);else palm(x,terrainHeight(x,z,r),z,3.5+rand()*2,i)}
-  for(let i=0;i<210;i++){const a=rand()*Math.PI*2,r=.7+rand()*.18,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,.5))continue;grasses(x,terrainHeight(x,z,r)+.05,z,1+rand());if(i%6===0)rock(x,terrainHeight(x,z,r),z,.7,.5,.65,i)}
-  for(let i=0;i<32;i++){const x=-19.5+rand()*6.8,z=18.5+rand()*8;if(Math.hypot(x+15.6,z-25)>1.8)grasses(x,FLOOR+.4,z,.55+rand()*.6)}
+  for(let i=0;i<420;i++){const a=rand()*Math.PI*2,r=.69+rand()*.19,x=Math.cos(a)*58*r,z=coastZ(a,r);if(!unbuilt(x,z,.5))continue;const y=terrainHeight(x,z,r)+.05;grasses(x,y,z,.7+rand()*1.25);if(i%4===0)fernPatch(x,y,z,.65+rand()*.8);if(i%5===0)groundcover(x,y+.01,z,.55+rand()*.75);if(i%9===0)flowerSpray(x,y,z,.7+rand()*.7,i)}
+  for(let i=0;i<110;i++){const x=-19.5+rand()*6.8,z=18.5+rand()*8;if(Math.hypot(x+15.6,z-25)<=1.8)continue;const y=FLOOR+.4;groundcover(x,y,z,.45+rand()*.62);if(i%2===0)grasses(x,y,z,.4+rand()*.72);if(i%3===0)fernPatch(x,y,z,.48+rand()*.62);if(i%2===0)flowerSpray(x,y,z,.48+rand()*.62,200+i)}
   // Pots have modeled lips and soil; crowns use the same coherent frond language.
   for(const [x,z] of architecturalPlanters){
     k.lathe([[.3,0],[.4,.06],[.49,.78],[.52,.82],[.49,.89],[.44,.88],[.42,.77]],'ceramic',x,FLOOR,z);k.cylinder(x,FLOOR+.79,z,.43,.03,'soil');const g=k.group(x,FLOOR+.85,z,x);for(let i=0;i<7;i++)frond(g,i*6.28/7,1.2)
