@@ -10,7 +10,7 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
   const scene=new T.Scene();scene.background=new T.Color('#bbdce6');scene.fog=new T.Fog('#b7d4cf',60,145)
   const camera=new T.PerspectiveCamera(68,1,.1,320);camera.rotation.order='YXZ'
   scene.add(new T.HemisphereLight('#e6f4ff','#587741',2.1))
-  const sun=new T.DirectionalLight('#fff0c9',3);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:1,far:150});sun.shadow.bias=-.0003;sun.shadow.normalBias=.04;scene.add(sun,sun.target)
+  const sun=new T.DirectionalLight('#fff0c9',3);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-70,right:70,top:70,bottom:-70,near:1,far:150});sun.shadow.bias=-.0003;sun.shadow.normalBias=.04;scene.add(sun,sun.target)
   const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>()
   function track(root:T.Object3D){root.traverse(o=>{if(o instanceof T.Mesh){geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);for(const v of Object.values(m))if(v instanceof T.Texture)textures.add(v)}}})}
   let disposed=false,frame=0
@@ -145,6 +145,7 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
 
     const render=(now:number)=>{if(disposed)return;const dt=Math.min(.05,Math.max(0,(now-previous)/1000));previous=now
       const view=Math.max(0,Math.min(1,input.viewMode/10)),pull=view*view*(3-2*view),skyBoost=T.MathUtils.smoothstep(view,.45,1),flying=view>=.55
+      sun.castShadow=!flying
       if(wasFlying&&!flying)position=safeLanding(position.x,position.z)
       wasFlying=flying
       const beforeX=position.x,beforeZ=position.z
