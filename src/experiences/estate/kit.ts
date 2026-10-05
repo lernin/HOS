@@ -5,7 +5,7 @@ import { random, pebbleGeometry } from '../village/kit'
 export { random }
 export const v=(x:number,y:number,z:number)=>new T.Vector3(x,y,z)
 const colors:Record<string,string>={limestone:'#d8cbb7',travertine:'#c9b69a',marble:'#e7e2d5',plaster:'#dfd9ca',oak:'#a58a63',oakFloor:'#a99a7e',walnut:'#644b36',bronze:'#5b4b37',basalt:'#3a4242',charcoalRock:'#5a6261',concrete:'#959488',linen:'#e5ddca',sage:'#8c9b86',clay:'#b19b86',indigo:'#465762',rug:'#b6a991',glass:'#c7e0dc',leaf:'#517352',leafLight:'#80935a',leafDark:'#314e43',bark:'#777365',soil:'#4c5140',white:'#f0ede3',black:'#222a29',gold:'#b29863',glow:'#ffe2af',ceramic:'#bba587',roof:'#72786c',waterTile:'#377e7f',pink:'#c79781',courtyardPaving:'#c9b69a'}
-Object.assign(colors,{cobblestone:'#c1b6a0',treeBark:'#827967',treeLeaf:'#637b60',treeLeafLight:'#93a285',treeLeafDark:'#425f4c'})
+Object.assign(colors,{cobblestone:'#c1b6a0',treeBark:'#827967',treeLeaf:'#637b60',treeLeafLight:'#93a285',treeLeafDark:'#425f4c',fern:'#4f744d',fernLight:'#86a66e',moss:'#627451',mossLight:'#86976e',lavender:'#9d8ec0',blueFlower:'#7ea8c7',coral:'#d98978',yellowFlower:'#d6bd62',burgundyLeaf:'#70505c',softPink:'#d8a4ad'})
 const noiseGLSL=`
 float estateHash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float estateNoise(vec3 p){vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(mix(estateHash(i),estateHash(i+vec3(1,0,0)),f.x),mix(estateHash(i+vec3(0,1,0)),estateHash(i+vec3(1,1,0)),f.x),f.y),mix(mix(estateHash(i+vec3(0,0,1)),estateHash(i+vec3(1,0,1)),f.x),mix(estateHash(i+vec3(0,1,1)),estateHash(i+vec3(1,1,1)),f.x),f.y),f.z);}
