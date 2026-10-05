@@ -65,7 +65,7 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     }
     // Keep a compacted-earth shoulder, then lay a visibly textured old-stone walking ribbon over it.
     for(const line of paths){trailMesh(line,3.08,.026,'#766548',1);trailMesh(line,2.5,.043,'#cfc1a0',.98,cobbleTexture)}
-    const all=placements(),solids=all.filter(p=>p.solid),kinds=['tree','tree-b','pine','bush','fern','grass','rock','clover'],loader=new GLTFLoader(),batches:T.InstancedMesh[]=[]
+    const all=placements(),solids=all.filter(p=>p.solid),kinds=['tree','tree-b','pine','bush','fern','grass','rock','clover'],loader=new GLTFLoader(),batches:T.InstancedMesh[]=[],flowerBatches:T.InstancedMesh[]=[]
     for(let n=0;n<kinds.length;n++){
       const kind=kinds[n],response=await fetch(`/woodland/${kind}.glb`,{signal});if(!response.ok)throw Error(`Could not load ${kind}`)
       const gltf=await loader.parseAsync(await response.arrayBuffer(),'');track(gltf.scene);if(signal.aborted){geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());throw new DOMException('Aborted','AbortError')}
@@ -75,10 +75,34 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
         const geometry=obj.geometry.clone();geometry.applyMatrix4(obj.matrixWorld);geometry.translate(-center.x,-box.min.y,-center.z);geometry.scale(1/size.y,1/size.y,1/size.y);geometries.add(geometry)
         for(const list of cells.values()){
         const mesh=new T.InstancedMesh(geometry,obj.material,list.length),dummy=new T.Object3D()
-        list.forEach((p,i)=>{dummy.position.set(p.x,heightAt(p.x,p.z)-.04,p.z);dummy.rotation.y=p.angle;dummy.scale.setScalar(p.height);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix)})
+        list.forEach((p,i)=>{dummy.position.set(p.x,heightAt(p.x,p.z)-.04,p.z);dummy.rotation.y=p.angle
+          if(kind==='rock'){const sx=.68+.34*(.5+.5*Math.sin(p.angle*2.7)),sz=.72+.38*(.5+.5*Math.cos(p.angle*3.3));dummy.scale.set(p.height*sx,p.height*(.72+.22*Math.sin(p.angle*1.9)**2),p.height*sz)}
+          else dummy.scale.setScalar(p.height)
+          dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix)})
         mesh.userData.kind=kind;mesh.userData.list=list
         mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere();mesh.receiveShadow=true;mesh.castShadow=kind.startsWith('tree')||kind==='pine'||kind==='rock';scene.add(mesh);batches.push(mesh)}
       });progress((n+1)/kinds.length)
+    }
+
+    // Lightweight authored flowers keep the forest floor colorful without adding
+    // another large texture/model payload. They are instanced and use the same
+    // placement/culling strategy as the imported CC0 vegetation.
+    const flowerList=all.filter(p=>p.kind==='flower')
+    if(flowerList.length){
+      const stemGeo=new T.CylinderGeometry(.035,.05,1,6),bloomGeo=new T.SphereGeometry(.22,7,5),centerGeo=new T.SphereGeometry(.075,7,5)
+      geometries.add(stemGeo);geometries.add(bloomGeo);geometries.add(centerGeo)
+      const stemMat=new T.MeshStandardMaterial({color:'#4f7d45',roughness:1}),bloomMat=new T.MeshStandardMaterial({color:'#ffffff',roughness:.9}),centerMat=new T.MeshStandardMaterial({color:'#e2b84f',roughness:.9})
+      materials.add(stemMat);materials.add(bloomMat);materials.add(centerMat)
+      const stems=new T.InstancedMesh(stemGeo,stemMat,flowerList.length),blooms=new T.InstancedMesh(bloomGeo,bloomMat,flowerList.length),centers=new T.InstancedMesh(centerGeo,centerMat,flowerList.length)
+      const dummy=new T.Object3D(),palette=['#f7d7df','#f4e7a1','#d8c5f1','#f0f1e6','#f2b7cf','#d7e6a8'].map(x=>new T.Color(x))
+      flowerList.forEach((p,i)=>{
+        const y=heightAt(p.x,p.z)-.02,h=p.height,lean=.82+.24*(.5+.5*Math.sin(p.angle*4.1))
+        dummy.position.set(p.x,y+h*.43,p.z);dummy.rotation.set(.06*Math.sin(p.angle*2.1),p.angle,.05*Math.cos(p.angle*2.7));dummy.scale.set(lean,h*.86,lean);dummy.updateMatrix();stems.setMatrixAt(i,dummy.matrix)
+        dummy.position.set(p.x,y+h*.9,p.z);dummy.rotation.set(0,p.angle,0);dummy.scale.set(h*(.62+.12*Math.sin(p.angle*3.7)),h*.23,h*(.62+.1*Math.cos(p.angle*2.9)));dummy.updateMatrix();blooms.setMatrixAt(i,dummy.matrix);blooms.setColorAt(i,palette[i%palette.length])
+        dummy.position.set(p.x,y+h*.93,p.z);dummy.rotation.set(0,p.angle,0);dummy.scale.setScalar(h*.42);dummy.updateMatrix();centers.setMatrixAt(i,dummy.matrix)
+      })
+      stems.instanceMatrix.needsUpdate=true;blooms.instanceMatrix.needsUpdate=true;centers.instanceMatrix.needsUpdate=true;blooms.instanceColor!.needsUpdate=true
+      for(const mesh of [stems,blooms,centers]){mesh.receiveShadow=true;mesh.castShadow=false;mesh.computeBoundingSphere();scene.add(mesh);flowerBatches.push(mesh)}
     }
     const avatar=new T.Group()
     const skin=new T.MeshStandardMaterial({color:'#f0c7a4',roughness:.9})
@@ -138,7 +162,10 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
         const tree=kind==='tree'||kind==='tree-b'||kind==='pine',soft=kind==='bush'||kind==='fern'||kind==='grass'||kind==='clover'
         const width=tree?1+.26*cute:soft?1+.38*cute:1+.15*cute
         const height=tree?1-.14*cute:soft?1-.08*cute:1-.06*cute
-        list.forEach((p,i)=>{styleDummy.position.set(p.x,heightAt(p.x,p.z)-.04,p.z);styleDummy.rotation.set(0,p.angle,0);styleDummy.scale.set(p.height*width,p.height*height,p.height*width);styleDummy.updateMatrix();mesh.setMatrixAt(i,styleDummy.matrix)})
+        list.forEach((p,i)=>{styleDummy.position.set(p.x,heightAt(p.x,p.z)-.04,p.z);styleDummy.rotation.set(0,p.angle,0)
+          if(kind==='rock'){const sx=.68+.34*(.5+.5*Math.sin(p.angle*2.7)),sz=.72+.38*(.5+.5*Math.cos(p.angle*3.3));styleDummy.scale.set(p.height*sx*width,p.height*(.72+.22*Math.sin(p.angle*1.9)**2)*height,p.height*sz*width)}
+          else styleDummy.scale.set(p.height*width,p.height*height,p.height*width)
+          styleDummy.updateMatrix();mesh.setMatrixAt(i,styleDummy.matrix)})
         mesh.instanceMatrix.needsUpdate=true;mesh.computeBoundingSphere()
       }
     }
@@ -197,7 +224,7 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
 
       sun.position.set(position.x-35,70,position.z+25);sun.target.position.set(position.x,0,position.z);sun.target.updateMatrixWorld()
       const sight=145+150*pull
-      for(const b of batches){const p=b.boundingSphere!.center;b.visible=Math.hypot(p.x-position.x,p.z-position.z)<sight+b.boundingSphere!.radius}
+      for(const b of [...batches,...flowerBatches]){const p=b.boundingSphere!.center;b.visible=Math.hypot(p.x-position.x,p.z-position.z)<sight+b.boundingSphere!.radius}
       renderer.render(scene,camera);frame=requestAnimationFrame(render)
     };frame=requestAnimationFrame(render)
     return {dispose,getPosition:()=>({...position}),getHeading:()=>avatarYaw,setPosition:(next:{x:number;z:number})=>{position={x:next.x,z:next.z};moveSpeed=0},reset:()=>{position={x:spawn.x,z:spawn.z};moveSpeed=0;avatarYaw=spawn.yaw;input.yaw=spawn.yaw;input.pitch=0}}
