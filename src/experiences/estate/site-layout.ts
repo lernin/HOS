@@ -4,12 +4,15 @@ export type PlanPoint = readonly [number, number]
 export const spaDome = { cx:-31.7, cz:29.7, rx:4.7, rz:5.15, base:10.18, rise:4.6 }
 export const spaTreeBed = { cx:spaDome.cx, cz:spaDome.cz, rx:1.65, rz:1.95 }
 
+// Pool is intentionally narrower than the surrounding terrace. Keep its original
+// centre line at x=.5, but widen the side patios equally on both sides.
 export const poolWater = {
-  x1: -11,
-  x2: 12,
+  x1: -8,
+  x2: 9,
   z1: -60.2,
   z2: -24.2,
 }
+export const poolDeck = { x1:-15, x2:16 }
 export const poolWalkNorth=poolWater.z1+.2
 export const poolWalkSouth=poolWater.z2+.2
 
@@ -21,7 +24,7 @@ export const outdoorPatios = [
   {name:'East cliff promenade',x1:40,x2:50,z1:14,z2:55,planCode:'P11'},
   {name:'East ocean promenade',x1:44,x2:50,z1:-24,z2:14,planCode:'P12'},
   {name:'East arrival terrace',x1:24,x2:40,z1:51,z2:55,planCode:'P13'},
-  {name:'Pool-tip terrace',x1:-15,x2:16,z1:-70,z2:-60.2,level:5.2,planCode:'P14'},
+  {name:'Pool-tip terrace',x1:poolDeck.x1,x2:poolDeck.x2,z1:-70,z2:-60.2,level:5.2,planCode:'P14'},
   {name:'East arrival landing',x1:24,x2:27,z1:49,z2:51,planCode:'P15'},
   {name:'West arrival landing',x1:-31,x2:-22,z1:43,z2:44,planCode:'P16'},
 ] as const
