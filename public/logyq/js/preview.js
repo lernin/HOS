@@ -5777,6 +5777,7 @@
   }
 
   function leaveCurriculumPlay() {
+    window.LOGYQGameGuide?.hide()
     delete window.__logyqCurriculumReturnToBank
     const state = bridge.core?.state
     if (state) state.curriculumCameraLock = false
@@ -5898,7 +5899,13 @@
       bank: [key],
       bankCards: { [key]: { name: key } },
     }
-    window.LOGYQGameGuide?.show(guideLevel, bridge.core)
+    const draw = () => {
+      const session = app.curriculum
+      if (!session || session.id !== level.id || session.cleared) return
+      window.LOGYQGameGuide?.show(guideLevel, bridge.core)
+      window.setTimeout(() => window.LOGYQGameGuide?.refresh?.(), 160)
+    }
+    window.requestAnimationFrame(() => window.requestAnimationFrame(draw))
   }
 
   function beginCurriculumLevel(level) {
@@ -5926,6 +5933,9 @@
     app.lastSnapshot = 'curriculum'
     updateMapName()
     hideLibrary()
+    const lessonNumber = app.curriculum?.stage || Math.max(1, curriculumPack().findIndex((item) => item.id === level.id) + 1)
+    const lesson = document.getElementById('logyq-curriculum-lesson')
+    if (lesson) lesson.textContent = `Lesson ${lessonNumber}`
     const status = document.getElementById('logyq-curriculum-status')
     if (status) {
       delete status.dataset.tone
@@ -5974,6 +5984,9 @@
     if (!session || session.cleared) return false
     const level = curriculumLevel(session.id)
     const live = curriculumAnswerTree(snapshot?.tree)
+    if (level && live && level.start && curriculumStructureKey(live) !== curriculumStructureKey(level.start)) {
+      window.LOGYQGameGuide?.hide()
+    }
     if (!level || !live || !curriculumMatches(level.tree, live)) return false
     session.cleared = true
     window.LOGYQGameThumbGain?.advance?.()
@@ -6054,6 +6067,10 @@
       check: checkCurriculum,
       answerTree: curriculumAnswerTree,
       returnBranch: returnCurriculumBranch,
+      showGuide: () => {
+        const level = curriculumLevel(app.curriculum?.id)
+        if (level) showCurriculumGuide(level)
+      },
     }
   }
 
