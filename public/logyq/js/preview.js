@@ -5854,11 +5854,44 @@
     }).join('')
   }
 
+  function curriculumFitBounds(level) {
+    const engine = bridge.core
+    const root = engine?.state?.root
+    const base = engine?.treeManager?.contentBBox?.()
+    if (!root || !base || !(base.width > 0) || !(base.height > 0)) return base
+    let left = base.x
+    let top = base.y
+    let right = base.x + base.width
+    let bottom = base.y + base.height
+    if (level?.guide) {
+      const key = Array.isArray(level.bank) ? level.bank[0] : null
+      const levelForGuide = {
+        guide: level.guide,
+        tree: structuredClone(level.start || { name: String(level.tree?.name ?? '').trim() }),
+        bank: key ? [key] : [],
+        bankCards: key ? { [key]: { name: key } } : {},
+      }
+      const target = window.LOGYQGameGuide?.target(levelForGuide, root.descendants())
+      if (target) {
+        const halfW = 70
+        const halfH = 31.5
+        left = Math.min(left, target.x - halfW)
+        right = Math.max(right, target.x + halfW)
+        top = Math.min(top, target.y - halfH)
+        bottom = Math.max(bottom, target.y + halfH)
+      }
+    }
+    return { x: left, y: top, width: right - left, height: bottom - top }
+  }
+
   function settleCurriculumTree(duration = 260) {
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(() => {
         try {
-          bridge.core?.treeManager?.settleRootAnchored?.({ force: true, duration })
+          const level = curriculumLevel(app.curriculum?.id)
+          const bounds = curriculumFitBounds(level)
+          bridge.core?.treeManager?.fitGameBounds?.(bounds, { duration })
+          window.LOGYQGameGuide?.refresh?.()
         } catch (_error) {}
       })
     })
