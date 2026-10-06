@@ -6021,7 +6021,7 @@ window.addEventListener('keydown', (e) => {
     elements.fitBtn.addEventListener('click', ()=> {
       if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
       if (document.body?.classList?.contains('logyq-curriculum')) {
-        this.settleRootAnchored({ force: false });
+        this.fitPuzzleTree(state.root, { duration: 280 });
         return;
       }
       this.autoFit();
@@ -6538,6 +6538,29 @@ centerOnSelected(opts = {}) {
       .duration(duration)
       .ease(d3.easeCubicInOut)
       .call(state.zoom.transform, target)
+  },
+
+  // Shared Game/Curriculum puzzle framing. Use the same physical card
+  // geometry for both surfaces so a one-card start and every rebuilt tree
+  // land in the exact same centered safe frame.
+  fitPuzzleTree(root, { target = null, duration = 0 } = {}){
+    const { config: CONFIG } = logyq
+    if (!root) return
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
+    root.each(node => {
+      left = Math.min(left, node.x - CONFIG.CARD_WIDTH / 2)
+      right = Math.max(right, node.x + CONFIG.CARD_WIDTH / 2)
+      top = Math.min(top, node.y - CONFIG.CARD_HEIGHT / 2)
+      bottom = Math.max(bottom, node.y + CONFIG.CARD_HEIGHT / 2)
+    })
+    if (target && Number.isFinite(target.x) && Number.isFinite(target.y)) {
+      left = Math.min(left, target.x - CONFIG.CARD_WIDTH / 2)
+      right = Math.max(right, target.x + CONFIG.CARD_WIDTH / 2)
+      top = Math.min(top, target.y - CONFIG.CARD_HEIGHT / 2)
+      bottom = Math.max(bottom, target.y + CONFIG.CARD_HEIGHT / 2)
+    }
+    if (!isFinite(left) || !isFinite(top) || !isFinite(right) || !isFinite(bottom)) return
+    this.fitGameBounds({ x: left, y: top, width: right - left, height: bottom - top }, { duration })
   },
 
   // Fit the current assembled board inside the measured safe area.
