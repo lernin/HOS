@@ -386,3 +386,25 @@ test('Curriculum Word Bank can insert a new root above the current root', () => 
   const dock = read('../public/logyq/js/engine/14-word-dock.js')
   assert.match(dock, /drop\.type === 'rootAbove'[\s\S]*state\.chipDrag\.drop = directPuzzleShelf\(\) \? \{ type: 'rootAbove' \} : null/)
 })
+
+
+test('Curriculum runtime shell mirrors the Game header controls', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /function installCurriculumShell\(\)/)
+  assert.match(shell, /button\('logyq-curriculum-back', 'Back'/)
+  assert.match(shell, /id = 'logyq-curriculum-lesson'/)
+  assert.match(shell, /button\('logyq-curriculum-hint', '\?'/)
+  assert.match(shell, /button\('logyq-curriculum-pause', '⚙'/)
+  assert.match(shell, /grid-template-columns:90px minmax\(0,1fr\) 90px/)
+  assert.match(shell, /body\.logyq-curriculum #logyq-curriculum-next\{position:fixed/)
+  assert.match(shell, /window\.LOGYQPreview\?\.curriculum\?\.showGuide\?\.\(\)/)
+})
+
+test('Curriculum exposes and reliably redraws the same animated drag guide as Game', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(source, /window\.requestAnimationFrame\(\(\) => window\.requestAnimationFrame\(draw\)\)/)
+  assert.match(source, /window\.setTimeout\(\(\) => window\.LOGYQGameGuide\?\.refresh\?\.\(\), 160\)/)
+  assert.match(source, /showGuide: \(\) => \{/)
+  assert.match(styles, /#logyq-drag-guide\{position:fixed;inset:0;z-index:78;pointer-events:none\}/)
+})
