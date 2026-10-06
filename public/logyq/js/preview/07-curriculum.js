@@ -167,9 +167,7 @@
 
   function leaveCurriculumPlay() {
     window.LOGYQGameGuide?.hide()
-    cancelCurriculumCameraFit()
-    curriculumPointers.clear()
-    curriculumFitPending = false
+    puzzleCamera.deactivate('curriculum')
     delete window.__logyqCurriculumReturnToBank
     const state = bridge.core?.state
     if (state) state.curriculumCameraLock = false
@@ -206,10 +204,6 @@
     }).join('')
   }
 
-  let curriculumFitTimer = null
-  let curriculumFitPending = false
-  const curriculumPointers = new Set()
-
   function curriculumGuideLevel(level) {
     if (!level?.guide || !Array.isArray(level.bank) || !level.bank.length) return null
     const key = level.bank[0]
@@ -221,69 +215,38 @@
     }
   }
 
+  function curriculumCameraTarget(root) {
+    const level = curriculumLevel(app.curriculum?.id)
+    const guideLevel = app.curriculum?.guide ? curriculumGuideLevel(level) : null
+    return guideLevel ? window.LOGYQGameGuide?.target(guideLevel, root.descendants()) : null
+  }
+
   function cancelCurriculumCameraFit() {
-    if (curriculumFitTimer !== null) clearTimeout(curriculumFitTimer)
-    curriculumFitTimer = null
-    bridge.core?.elements?.svg?.interrupt?.('game-fit')
+    puzzleCamera.cancel('curriculum')
   }
 
   function fitCurriculumCamera(duration = 0) {
-    const engine = bridge.core
-    const root = engine?.state?.root
-    if (!app.curriculum || !root || curriculumPointers.size) return
-    const level = curriculumLevel(app.curriculum.id)
-    const guideLevel = app.curriculum.guide ? curriculumGuideLevel(level) : null
-    const target = guideLevel
-      ? window.LOGYQGameGuide?.target(guideLevel, root.descendants())
-      : null
-    engine.treeManager?.fitPuzzleTree?.(root, { target, duration })
-    window.LOGYQGameGuide?.refresh?.()
+    return puzzleCamera.fitNow('curriculum', duration)
   }
 
   function scheduleCurriculumCameraFit(delay = 280) {
-    if (!app.curriculum || !bridge.core?.state?.root) return
-    curriculumFitPending = true
-    if (curriculumFitTimer !== null) clearTimeout(curriculumFitTimer)
-    curriculumFitTimer = null
-    if (curriculumPointers.size) return
-    curriculumFitTimer = setTimeout(() => {
-      curriculumFitTimer = null
-      if (!app.curriculum || document.body.classList.contains('logyq-home')) return
-      if (curriculumPointers.size || window.__logyqHoldDragFrozen?.()
-          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
-        scheduleCurriculumCameraFit(100)
-        return
-      }
-      curriculumFitPending = false
-      fitCurriculumCamera(280)
-    }, delay)
+    puzzleCamera.schedule('curriculum', delay)
   }
 
   function refitCurriculumCamera() {
-    scheduleCurriculumCameraFit(80)
-    window.LOGYQGameGuide?.refresh?.()
+    puzzleCamera.refit('curriculum')
   }
 
   function seedCurriculumRoot(level) {
     const core = bridge.core
     const state = core?.state
-    if (!level?.tree || !state || !window.d3) return false
+    if (!level?.tree || !state) return false
     const root = structuredClone(level.start || { name: String(level.tree.name ?? '').trim() })
-    core.utils.assignUids(root)
-    state.root = window.d3.hierarchy(root)
-    core.utils.assignIds(state.root)
-    state.wordBank = Array.isArray(level.bank) ? level.bank.slice() : curriculumWords(level.tree).slice(1)
-    state.selectedUid = null
-    state.history = []
-    state.redo = []
-    state.repositionMode = null
+    const bank = Array.isArray(level.bank) ? level.bank.slice() : curriculumWords(level.tree).slice(1)
     state.curriculumCameraLock = true
-    try { core.selection?.clearGroup?.() } catch (_error) {}
-    try { core.selection?.clearSelection?.() } catch (_error) {}
-    core.treeManager.layoutAndRender(false)
-    core.wordDock.render()
+    bridge.loadMap(root, bank, { fit: false })
+    state.curriculumCameraLock = true
     fitCurriculumCamera(0)
-    scheduleCurriculumCameraFit(80)
     return true
   }
 
@@ -390,6 +353,10 @@
       return true
     }
     renderCurriculumChrome()
+    puzzleCamera.activate('curriculum', {
+      target: curriculumCameraTarget,
+      afterFit: () => window.LOGYQGameGuide?.refresh?.(),
+    })
     seedCurriculumRoot(level)
     showCurriculumGuide(level)
     setSaveState('saved')
@@ -462,26 +429,6 @@
     document.getElementById('logyq-curriculum-levels')?.addEventListener('click', () => {
       openLibrary().then(() => setHomeTab('curriculum'))
     })
-    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-      window.addEventListener('pointerdown', event => {
-        if (!app.curriculum) return
-        curriculumPointers.add(event.pointerId)
-        curriculumFitPending = true
-        cancelCurriculumCameraFit()
-      }, true)
-      const releaseCurriculumPointer = event => {
-        curriculumPointers.delete(event.pointerId)
-        if (!curriculumPointers.size && curriculumFitPending) scheduleCurriculumCameraFit()
-      }
-      window.addEventListener('pointerup', releaseCurriculumPointer, true)
-      window.addEventListener('pointercancel', releaseCurriculumPointer, true)
-      window.addEventListener('blur', () => {
-        curriculumPointers.clear()
-        if (curriculumFitPending) scheduleCurriculumCameraFit()
-      })
-      window.addEventListener('resize', refitCurriculumCamera)
-      window.addEventListener('orientationchange', refitCurriculumCamera)
-    }
     preview.curriculum = {
       key: CURRICULUM_KEY,
       pack: curriculumPack,
