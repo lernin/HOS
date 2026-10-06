@@ -183,9 +183,9 @@ test('solved game centering reserves the visible Next button safe area', () => {
 })
 
 
-test('game settings use a gear and expose explicit music on-off control', () => {
+test('game settings use a large ellipsis and expose explicit music on-off control', () => {
   const shell = read('../public/logyq/js/game-shell.js')
-  assert.match(shell, /'⚙', 'Game settings'/)
+  assert.match(shell, /'•••', 'Game settings'/)
   assert.match(shell, /logyq-game-music-toggle/)
   assert.match(shell, /Music: ' \+ \(enabled \? 'On' : 'Off'\)/)
   assert.match(shell, /music\.setEnabled/)
