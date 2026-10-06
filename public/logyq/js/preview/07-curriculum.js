@@ -167,6 +167,9 @@
 
   function leaveCurriculumPlay() {
     window.LOGYQGameGuide?.hide()
+    cancelCurriculumCameraFit()
+    curriculumPointers.clear()
+    curriculumFitPending = false
     delete window.__logyqCurriculumReturnToBank
     const state = bridge.core?.state
     if (state) state.curriculumCameraLock = false
@@ -203,47 +206,62 @@
     }).join('')
   }
 
-  function curriculumFitBounds(level) {
-    const engine = bridge.core
-    const root = engine?.state?.root
-    const base = engine?.treeManager?.contentBBox?.()
-    if (!root || !base || !(base.width > 0) || !(base.height > 0)) return base
-    let left = base.x
-    let top = base.y
-    let right = base.x + base.width
-    let bottom = base.y + base.height
-    if (level?.guide) {
-      const key = Array.isArray(level.bank) ? level.bank[0] : null
-      const levelForGuide = {
-        guide: level.guide,
-        tree: structuredClone(level.start || { name: String(level.tree?.name ?? '').trim() }),
-        bank: key ? [key] : [],
-        bankCards: key ? { [key]: { name: key } } : {},
-      }
-      const target = window.LOGYQGameGuide?.target(levelForGuide, root.descendants())
-      if (target) {
-        const halfW = 70
-        const halfH = 31.5
-        left = Math.min(left, target.x - halfW)
-        right = Math.max(right, target.x + halfW)
-        top = Math.min(top, target.y - halfH)
-        bottom = Math.max(bottom, target.y + halfH)
-      }
+  let curriculumFitTimer = null
+  let curriculumFitPending = false
+  const curriculumPointers = new Set()
+
+  function curriculumGuideLevel(level) {
+    if (!level?.guide || !Array.isArray(level.bank) || !level.bank.length) return null
+    const key = level.bank[0]
+    return {
+      guide: level.guide,
+      tree: structuredClone(level.start || { name: String(level.tree?.name ?? '').trim() }),
+      bank: [key],
+      bankCards: { [key]: { name: key } },
     }
-    return { x: left, y: top, width: right - left, height: bottom - top }
   }
 
-  function settleCurriculumTree(duration = 260) {
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        try {
-          const level = curriculumLevel(app.curriculum?.id)
-          const bounds = curriculumFitBounds(level)
-          bridge.core?.treeManager?.fitGameBounds?.(bounds, { duration })
-          window.LOGYQGameGuide?.refresh?.()
-        } catch (_error) {}
-      })
-    })
+  function cancelCurriculumCameraFit() {
+    if (curriculumFitTimer !== null) clearTimeout(curriculumFitTimer)
+    curriculumFitTimer = null
+    bridge.core?.elements?.svg?.interrupt?.('game-fit')
+  }
+
+  function fitCurriculumCamera(duration = 0) {
+    const engine = bridge.core
+    const root = engine?.state?.root
+    if (!app.curriculum || !root || curriculumPointers.size) return
+    const level = curriculumLevel(app.curriculum.id)
+    const guideLevel = app.curriculum.guide ? curriculumGuideLevel(level) : null
+    const target = guideLevel
+      ? window.LOGYQGameGuide?.target(guideLevel, root.descendants())
+      : null
+    engine.treeManager?.fitPuzzleTree?.(root, { target, duration })
+    window.LOGYQGameGuide?.refresh?.()
+  }
+
+  function scheduleCurriculumCameraFit(delay = 280) {
+    if (!app.curriculum || !bridge.core?.state?.root) return
+    curriculumFitPending = true
+    if (curriculumFitTimer !== null) clearTimeout(curriculumFitTimer)
+    curriculumFitTimer = null
+    if (curriculumPointers.size) return
+    curriculumFitTimer = setTimeout(() => {
+      curriculumFitTimer = null
+      if (!app.curriculum || document.body.classList.contains('logyq-home')) return
+      if (curriculumPointers.size || window.__logyqHoldDragFrozen?.()
+          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
+        scheduleCurriculumCameraFit(100)
+        return
+      }
+      curriculumFitPending = false
+      fitCurriculumCamera(280)
+    }, delay)
+  }
+
+  function refitCurriculumCamera() {
+    scheduleCurriculumCameraFit(80)
+    window.LOGYQGameGuide?.refresh?.()
   }
 
   function seedCurriculumRoot(level) {
@@ -264,7 +282,8 @@
     try { core.selection?.clearSelection?.() } catch (_error) {}
     core.treeManager.layoutAndRender(false)
     core.wordDock.render()
-    settleCurriculumTree(0)
+    fitCurriculumCamera(0)
+    scheduleCurriculumCameraFit(80)
     return true
   }
 
@@ -300,12 +319,10 @@
       window.LOGYQGameGuide?.hide()
       return
     }
-    const key = level.bank[0]
-    const guideLevel = {
-      guide: level.guide,
-      tree: structuredClone(level.start || { name: String(level.tree?.name ?? '').trim() }),
-      bank: [key],
-      bankCards: { [key]: { name: key } },
+    const guideLevel = curriculumGuideLevel(level)
+    if (!guideLevel) {
+      window.LOGYQGameGuide?.hide()
+      return
     }
     const draw = () => {
       const session = app.curriculum
@@ -326,6 +343,7 @@
       cleared: false,
       phase: 'play',
       released: true,
+      guide: level.guide || null,
     }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
@@ -362,7 +380,7 @@
         engine.treeManager.renderEmpty()
       }
       engine.wordDock.render()
-      settleCurriculumTree()
+      scheduleCurriculumCameraFit()
       const status = document.getElementById('logyq-curriculum-status')
       if (status && !session.cleared) {
         delete status.dataset.tone
@@ -383,6 +401,7 @@
     const level = curriculumLevel(session.id)
     const live = curriculumAnswerTree(snapshot?.tree)
     if (level && live && level.start && curriculumStructureKey(live) !== curriculumStructureKey(level.start)) {
+      session.guide = null
       window.LOGYQGameGuide?.hide()
     }
     if (!level || !live || !curriculumMatches(level.tree, live)) return false
@@ -403,6 +422,7 @@
       if (next) {
         nextButton.hidden = false
         nextButton.dataset.nextLevel = next.id
+        scheduleCurriculumCameraFit(40)
       } else {
         nextButton.hidden = true
         nextButton.dataset.nextLevel = ''
@@ -442,6 +462,26 @@
     document.getElementById('logyq-curriculum-levels')?.addEventListener('click', () => {
       openLibrary().then(() => setHomeTab('curriculum'))
     })
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pointerdown', event => {
+        if (!app.curriculum) return
+        curriculumPointers.add(event.pointerId)
+        curriculumFitPending = true
+        cancelCurriculumCameraFit()
+      }, true)
+      const releaseCurriculumPointer = event => {
+        curriculumPointers.delete(event.pointerId)
+        if (!curriculumPointers.size && curriculumFitPending) scheduleCurriculumCameraFit()
+      }
+      window.addEventListener('pointerup', releaseCurriculumPointer, true)
+      window.addEventListener('pointercancel', releaseCurriculumPointer, true)
+      window.addEventListener('blur', () => {
+        curriculumPointers.clear()
+        if (curriculumFitPending) scheduleCurriculumCameraFit()
+      })
+      window.addEventListener('resize', refitCurriculumCamera)
+      window.addEventListener('orientationchange', refitCurriculumCamera)
+    }
     preview.curriculum = {
       key: CURRICULUM_KEY,
       pack: curriculumPack,
@@ -454,6 +494,7 @@
       check: checkCurriculum,
       answerTree: curriculumAnswerTree,
       returnBranch: returnCurriculumBranch,
+      refit: refitCurriculumCamera,
       showGuide: () => {
         const level = curriculumLevel(app.curriculum?.id)
         if (level) showCurriculumGuide(level)
