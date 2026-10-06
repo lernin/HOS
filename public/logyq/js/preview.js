@@ -5826,14 +5826,30 @@
     }).join('')
   }
 
-  function settleCurriculumTree(duration = 260) {
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        try {
-          bridge.core?.treeManager?.settleRootAnchored?.({ force: true, duration })
-        } catch (_error) {}
-      })
+  function curriculumBounds(root) {
+    if (!root) return null
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
+    root.each((node) => {
+      left = Math.min(left, node.x - 70)
+      right = Math.max(right, node.x + 70)
+      top = Math.min(top, node.y - 31.5)
+      bottom = Math.max(bottom, node.y + 31.5)
     })
+    if (!isFinite(left) || !isFinite(top) || !isFinite(right) || !isFinite(bottom)) return null
+    return { x: left, y: top, width: right - left, height: bottom - top }
+  }
+
+  function settleCurriculumTree(duration = 260) {
+    const fit = () => {
+      const engine = bridge.core
+      const root = engine?.state?.root
+      if (!root) return
+      try {
+        engine.treeManager?.fitGameBounds?.(curriculumBounds(root), { duration })
+      } catch (_error) {}
+    }
+    window.requestAnimationFrame(() => window.requestAnimationFrame(fit))
+    window.setTimeout(fit, 320)
   }
 
   function seedCurriculumRoot(level) {
@@ -5926,6 +5942,10 @@
     app.lastSnapshot = 'curriculum'
     updateMapName()
     hideLibrary()
+    const pack = curriculumPack()
+    const lessonNumber = pack.findIndex((item) => item.id === level.id) + 1
+    const lesson = document.getElementById('logyq-curriculum-lesson')
+    if (lesson) lesson.textContent = lessonNumber > 0 ? `Lesson ${lessonNumber}` : 'Lesson'
     const status = document.getElementById('logyq-curriculum-status')
     if (status) {
       delete status.dataset.tone
