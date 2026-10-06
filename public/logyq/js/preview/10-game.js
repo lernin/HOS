@@ -865,8 +865,7 @@
     gameArtTimer = setTimeout(() => {
       gameArtTimer = null
       if (epoch !== gameArtEpoch || !app.game?.cleared || document.body.classList.contains('logyq-home')) return
-      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
-          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
+      if (puzzleCamera.busy('game')) {
         scheduleGameCompletionArt(150, animate)
         return
       }
