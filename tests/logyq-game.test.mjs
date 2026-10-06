@@ -637,3 +637,15 @@ test('Next waits one second then fades celebration over three seconds', () => {
   assert.match(celebration, /return fadeOut\(durationMs, delayMs\)/)
   assert.match(preview, /fadeOutAfter\?\.\(1000, 3000\)/)
 })
+
+
+test('early Game practice repeats below before introducing above and delays sibling until chains', () => {
+  const game = readFileSync(new URL('preview/10-game.js', root), 'utf8')
+  assert.match(game, /const EARLY_TWO_CARD_DIRECTIONS = \['below','below','below','above','above','below','above','below'/)
+  assert.match(game, /const rootStarts = EARLY_TWO_CARD_DIRECTIONS\[number - 1\] !== 'above'/)
+  assert.match(game, /gameLevels\[0\]\.guide = 'below'/)
+  assert.match(game, /gameLevels\[3\]\.guide = 'above'/)
+  assert.doesNotMatch(game, /gameLevels\[1\]\.guide = 'above'/)
+  assert.match(game, /const firstBranch = gameLevels\[27\]/)
+  assert.match(game, /firstBranch\.guide = 'sibling'/)
+})
