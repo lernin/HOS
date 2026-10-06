@@ -285,15 +285,17 @@ test('curriculum has no Mix control or shuffle phase', () => {
   assert.doesNotMatch(source, /__logyqCurriculumMix/)
 })
 
-test('curriculum uses the Game safe-frame fitter and recenters after structural changes', () => {
-  const source = read('../public/logyq/js/preview/07-curriculum.js')
+test('Game and Curriculum share the exact puzzle-tree centering primitive', () => {
+  const curriculum = read('../public/logyq/js/preview/07-curriculum.js')
+  const game = read('../public/logyq/js/preview/10-game.js')
   const engine = read('../public/logyq/js/engine/16-tree-manager.js')
-  assert.match(source, /function curriculumFitBounds\(level\)/)
-  assert.match(source, /window\.LOGYQGameGuide\?\.target\(levelForGuide, root\.descendants\(\)\)/)
-  assert.match(source, /treeManager\?\.fitGameBounds\?\.\(bounds, \{ duration \}\)/)
-  assert.match(source, /engine\.wordDock\.render\(\)\s*settleCurriculumTree\(\)/)
-  assert.match(engine, /const barId = curriculum \? 'logyq-curriculum-bar' : 'logyq-game-bar'/)
-  assert.match(engine, /const nextId = curriculum \? 'logyq-curriculum-next' : 'logyq-game-next'/)
+  assert.match(engine, /fitPuzzleTree\(root, \{ target = null, duration = 0 \} = \{\}\)/)
+  assert.match(engine, /root\.each\(node => \{/)
+  assert.match(engine, /node\.x - CONFIG\.CARD_WIDTH \/ 2/)
+  assert.match(engine, /node\.y - CONFIG\.CARD_HEIGHT \/ 2/)
+  assert.match(engine, /this\.fitGameBounds\(\{ x: left, y: top, width: right - left, height: bottom - top \}, \{ duration \}\)/)
+  assert.match(game, /engine\.treeManager\?\.fitPuzzleTree\?\.\(root, \{ target, duration \}\)/)
+  assert.match(curriculum, /engine\.treeManager\?\.fitPuzzleTree\?\.\(root, \{ target, duration \}\)/)
 })
 
 
@@ -356,9 +358,16 @@ test('sibling guide can target a named child in Curriculum', () => {
   assert.match(guide, /const child = nodes\.find\(node => sameNode\(node, level\.tree\.children\[0\]\)\)/)
 })
 
-test('Curriculum auto-fits after every structural change', () => {
+test('Curriculum defers refitting until a drag is released just like Game', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
   const persistence = read('../public/logyq/js/preview/06-persistence.js')
-  assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*settleCurriculumTree\(\)/)
+  assert.match(source, /let curriculumFitTimer = null/)
+  assert.match(source, /const curriculumPointers = new Set\(\)/)
+  assert.match(source, /function scheduleCurriculumCameraFit\(delay = 280\)/)
+  assert.match(source, /if \(curriculumPointers\.size\) return/)
+  assert.match(source, /window\.addEventListener\('pointerdown',[\s\S]*if \(!app\.curriculum\) return/)
+  assert.match(source, /window\.addEventListener\('pointerup', releaseCurriculumPointer, true\)/)
+  assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*scheduleCurriculumCameraFit\(\)/)
 })
 
 test('Curriculum completion uses a Next button instead of Check', () => {
@@ -422,4 +431,17 @@ test('guided target highlight waits until the dragged piece reaches the ghost ta
   assert.match(guide, /const rect = active\?\.element\?\.querySelector\('#logyq-guide-target'\)\?\.getBoundingClientRect\(\)/)
   assert.match(dock, /const guideTargetReady = !window\.LOGYQGameGuide\?\.active\?\.\(\) \|\| window\.LOGYQGameGuide\?\.containsClientPoint\?\.\(event\.clientX, event\.clientY\)/)
   assert.match(dock, /if \(targetH && guideTargetReady && !logyq\.selection\.showGameChildCaret\(targetUid\)\)/)
+})
+
+
+test('Curriculum refits again when Next appears so solved trees stay centered in the remaining space', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /nextButton\.hidden = false[\s\S]*scheduleCurriculumCameraFit\(40\)/)
+})
+
+test('Curriculum no longer uses the legacy upper-band root anchoring path', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const engine = read('../public/logyq/js/engine/16-tree-manager.js')
+  assert.doesNotMatch(source, /settleRootAnchored/)
+  assert.match(engine, /if \(document\.body\?\.classList\?\.contains\('logyq-curriculum'\)\) \{\s*this\.fitPuzzleTree\(state\.root, \{ duration: 280 \}\)/s)
 })
