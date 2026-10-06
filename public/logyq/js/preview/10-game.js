@@ -932,49 +932,28 @@
     }, delay)
   }
 
-  let gameFitTimer = null
-  let gameFitPending = false
-  const gamePointers = new Set()
-
-  function cancelGameCameraFit() {
-    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
-    gameFitTimer = null
-    bridge.core?.elements?.svg?.interrupt?.('game-fit')
-  }
-
   function levelForGuide() { return gameLevels.find(level => level.id === app.game?.id) }
 
-  function fitGameCamera(duration = 0) {
-    const engine = bridge.core
-    const root = engine?.state?.root
-    if (!app.game || !root || gamePointers.size) return
-    const target = app.game.guide
+  function gameCameraTarget(root) {
+    return app.game?.guide
       ? window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
       : null
-    engine.treeManager?.fitPuzzleTree?.(root, { target, duration })
+  }
+
+  function cancelGameCameraFit() {
+    puzzleCamera.cancel('game')
+  }
+
+  function fitGameCamera(duration = 0) {
+    return puzzleCamera.fitNow('game', duration)
   }
 
   function scheduleGameCameraFit(delay = 280) {
-    if (!app.game || !bridge.core?.state?.root) return
-    gameFitPending = true
-    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
-    gameFitTimer = null
-    if (gamePointers.size) return
-    gameFitTimer = setTimeout(() => {
-      gameFitTimer = null
-      if (!app.game || document.body.classList.contains('logyq-home')) return
-      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
-          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
-        scheduleGameCameraFit(100)
-        return
-      }
-      gameFitPending = false
-      fitGameCamera(280)
-    }, delay)
+    puzzleCamera.schedule('game', delay)
   }
 
   function refitGameCamera() {
-    scheduleGameCameraFit(80)
+    puzzleCamera.refit('game')
     if (gameArtElement) scheduleGameCompletionArt(700, false)
     window.LOGYQGameGuide?.refresh()
   }
@@ -987,9 +966,7 @@
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
     app.game = null
-    cancelGameCameraFit()
-    gamePointers.clear()
-    gameFitPending = false
+    puzzleCamera.deactivate('game')
     document.body.classList.remove('logyq-game')
     delete window.__logyqGameDropAllowed
     delete window.__logyqGameBankNode
@@ -1133,9 +1110,10 @@
     updateMapName()
     hideLibrary()
     gameStatus(levelUp ? 'Level up!' : level.hint)
-    cancelGameCameraFit()
-    gamePointers.clear()
-    gameFitPending = false
+    puzzleCamera.activate('game', {
+      target: gameCameraTarget,
+      afterFit: () => window.LOGYQGameGuide?.refresh?.(),
+    })
     bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice(), { fit: false })
     fitGameCamera()
     if (app.game.guide) window.LOGYQGameGuide?.show(level, bridge.core)
@@ -1256,22 +1234,7 @@
       if (!app.game) return
       if (window.LOGYQGameSound?.enabled()) window.LOGYQGameSound.unlock()
       if (event.target?.closest?.('svg#canvas')) clearGameCompletionArt()
-      gamePointers.add(event.pointerId)
-      gameFitPending = true
-      cancelGameCameraFit()
     }, true)
-    const release = event => {
-      gamePointers.delete(event.pointerId)
-      if (!gamePointers.size && gameFitPending) scheduleGameCameraFit()
-    }
-    window.addEventListener('pointerup', release, true)
-    window.addEventListener('pointercancel', release, true)
-    window.addEventListener('blur', () => {
-      gamePointers.clear()
-      if (gameFitPending) scheduleGameCameraFit()
-    })
-    window.addEventListener('resize', refitGameCamera)
-    window.addEventListener('orientationchange', refitGameCamera)
   }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
