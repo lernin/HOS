@@ -948,23 +948,10 @@
     const engine = bridge.core
     const root = engine?.state?.root
     if (!app.game || !root || gamePointers.size) return
-    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
-    root.each(node => {
-      left = Math.min(left, node.x - GAME_LAYOUT.cardWidth / 2)
-      right = Math.max(right, node.x + GAME_LAYOUT.cardWidth / 2)
-      top = Math.min(top, node.y - GAME_LAYOUT.cardHeight / 2)
-      bottom = Math.max(bottom, node.y + GAME_LAYOUT.cardHeight / 2)
-    })
-    if (app.game.guide) {
-      const target = window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
-      if (target) {
-        left = Math.min(left, target.x - GAME_LAYOUT.cardWidth / 2)
-        right = Math.max(right, target.x + GAME_LAYOUT.cardWidth / 2)
-        top = Math.min(top, target.y - GAME_LAYOUT.cardHeight / 2)
-        bottom = Math.max(bottom, target.y + GAME_LAYOUT.cardHeight / 2)
-      }
-    }
-    engine.treeManager?.fitGameBounds?.({x:left,y:top,width:right-left,height:bottom-top}, {duration})
+    const target = app.game.guide
+      ? window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
+      : null
+    engine.treeManager?.fitPuzzleTree?.(root, { target, duration })
   }
 
   function scheduleGameCameraFit(delay = 280) {
