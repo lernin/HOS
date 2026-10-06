@@ -706,7 +706,7 @@
       body.logyq-curriculum-frozen #Dock.is-empty #logyq-bank-chips::before{content:''}
       @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{max-width:640px}}
       @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
-      #logyq-drag-guide{position:fixed;inset:0;z-index:6;pointer-events:none}
+      #logyq-drag-guide{position:fixed;inset:0;z-index:78;pointer-events:none}
       #logyq-guide-arrow{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
       #logyq-guide-target{position:absolute;box-sizing:border-box;border:2px dashed #64748b;border-radius:12px;background:rgba(255,255,255,.45);overflow:hidden;box-shadow:0 0 0 3px rgba(255,255,255,.7)}
       #logyq-guide-target svg{display:block;width:100%;height:100%;opacity:.35}
