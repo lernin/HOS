@@ -4700,9 +4700,10 @@
     }
     if (app.curriculum) {
       window.LOGYQGameGuide?.hide()
+      app.curriculum.guide = null
       setSaveState('saved')
       maybeCurriculumClear(snapshot)
-      settleCurriculumTree()
+      scheduleCurriculumCameraFit()
       return
     }
     if (app.applyingRemote) return
