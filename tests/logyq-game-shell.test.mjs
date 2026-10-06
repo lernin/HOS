@@ -445,3 +445,40 @@ test('Curriculum no longer uses the legacy upper-band root anchoring path', () =
   assert.doesNotMatch(source, /settleRootAnchored/)
   assert.match(engine, /if \(document\.body\?\.classList\?\.contains\('logyq-curriculum'\)\) \{\s*this\.fitPuzzleTree\(state\.root, \{ duration: 280 \}\)/s)
 })
+
+
+test('Game and Curriculum use one shared puzzle camera controller instead of separate timers', () => {
+  const helpers = read('../public/logyq/js/preview/01-helpers.js')
+  const curriculum = read('../public/logyq/js/preview/07-curriculum.js')
+  const game = read('../public/logyq/js/preview/10-game.js')
+  assert.match(helpers, /function createPuzzleCameraController\(\)/)
+  assert.match(helpers, /const puzzleCamera = createPuzzleCameraController\(\)/)
+  assert.match(helpers, /window\.addEventListener\('pointerdown', onPointerDown, true\)/)
+  assert.match(helpers, /window\.addEventListener\('pointerup', onPointerRelease, true\)/)
+  assert.match(game, /puzzleCamera\.activate\('game'/)
+  assert.match(curriculum, /puzzleCamera\.activate\('curriculum'/)
+  assert.doesNotMatch(game, /let gameFitTimer = null/)
+  assert.doesNotMatch(game, /const gamePointers = new Set\(\)/)
+  assert.doesNotMatch(curriculum, /let curriculumFitTimer = null/)
+  assert.doesNotMatch(curriculum, /const curriculumPointers = new Set\(\)/)
+})
+
+test('Curriculum loads its starting tree through the exact same bridge load path as Game', () => {
+  const curriculum = read('../public/logyq/js/preview/07-curriculum.js')
+  const game = read('../public/logyq/js/preview/10-game.js')
+  assert.match(game, /bridge\.loadMap\([\s\S]*\{ fit: false \}\)/)
+  assert.match(curriculum, /bridge\.loadMap\(root, bank, \{ fit: false \}\)/)
+  assert.match(curriculum, /puzzleCamera\.fitNow\('curriculum'\)/)
+  const seed = curriculum.slice(curriculum.indexOf('function seedCurriculumRoot'), curriculum.indexOf('function returnCurriculumBranch'))
+  assert.doesNotMatch(seed, /schedule/)
+  assert.doesNotMatch(seed, /d3\.hierarchy/)
+})
+
+test('shared puzzle camera performs no delayed correction after initial load', () => {
+  const helpers = read('../public/logyq/js/preview/01-helpers.js')
+  assert.match(helpers, /fitNow\(owner, duration = 0\)/)
+  assert.match(helpers, /schedule\(owner, delay = 280\)/)
+  assert.match(helpers, /if \(pointers\.size\) return/)
+  assert.match(helpers, /if \(window\.__logyqHoldDragFrozen\?\.\(\)/)
+  assert.doesNotMatch(helpers, /setTimeout\([^\n]*fitNow\([^\n]*80/)
+})
