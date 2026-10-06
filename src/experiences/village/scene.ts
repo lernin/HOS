@@ -1,5 +1,6 @@
 import * as T from 'three'
 import { boatStart, docks, houses, isWater, spawn, walkStep, placeName, waterHeight, waterLevel, type Point } from './world'
+import { assistedWalkStep, type PathGuideState } from './locomotion'
 import { createKit, vec } from './kit'
 import { addArchitecture } from './architecture'
 import { addLandscape, addWater } from './landscape'
@@ -45,19 +46,19 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
     observer = new ResizeObserver(resize); observer.observe(canvas); resize()
 
     let position: Point = { ...spawn }, boating = false, boatYaw = 0, velocity = 0, last = performance.now(), lastReport = 0, frames = 0, frameTime = 0, quality = -1
-    let inspection: VillageView | null = null
+    let guide: PathGuideState | null = null, inspection: VillageView | null = null
     const visited = new Set<string>(), cameraPosition = v(spawn.x, spawn.y + 1.6, spawn.z)
     const nearbyDock = () => docks.find(d => Math.hypot(position.x - d.x, position.z - d.z) < (boating ? 4.8 : 3.2))
     const interact = () => {
       if (input.paused) return
       const d = nearbyDock(); if (!d) return
-      if (boating) { boating = false; position = { ...d }; input.yaw = d === docks[0] ? .9 : Math.PI; velocity = 0 }
+      if (boating) { boating = false; position = { ...d }; input.yaw = d === docks[0] ? .9 : Math.PI; velocity = 0; guide = null }
       else {
         if (Math.hypot(position.x - boat.position.x, position.z - boat.position.z) > 5) return
-        boating = true; position = { x: boat.position.x, y: waterLevel+.1, z: boat.position.z }; boatYaw = input.yaw; velocity = 0
+        boating = true; position = { x: boat.position.x, y: waterLevel+.1, z: boat.position.z }; boatYaw = input.yaw; velocity = 0; guide = null
       }
     }
-    const reset = () => { position = { ...spawn }; boating = false; velocity = 0; boat.position.set(boatStart.x, boatStart.y, boatStart.z); boat.rotation.y = 0; input.yaw = spawn.yaw; input.pitch = 0; input.x = 0; input.z = 0; cameraPosition.set(position.x, position.y + 1.6, position.z) }
+    const reset = () => { position = { ...spawn }; boating = false; velocity = 0; guide = null; boat.position.set(boatStart.x, boatStart.y, boatStart.z); boat.rotation.y = 0; input.yaw = spawn.yaw; input.pitch = 0; input.x = 0; input.z = 0; cameraPosition.set(position.x, position.y + 1.6, position.z) }
     const tick = (now: number) => {
       if (disposed) return
       const dt = Math.min(.04, (now - last) / 1000); last = now
@@ -65,6 +66,7 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
       if (!input.paused) {
         const norm = Math.max(1, Math.hypot(input.x, input.z)), x = input.x / norm, z = input.z / norm
         if (boating) {
+          guide = null
           boatYaw -= x * dt * .9; input.yaw -= x * dt * .9
           velocity += (-z * 6.5 - velocity) * Math.min(1, dt * 2)
           const nx = position.x - Math.sin(boatYaw) * velocity * dt, nz = position.z - Math.cos(boatYaw) * velocity * dt
@@ -73,7 +75,8 @@ export async function createVillage(canvas: HTMLCanvasElement, input: VillageInp
         } else {
           const dx = (x * Math.cos(input.yaw) + z * Math.sin(input.yaw)) * dt * 3.5
           const dz = (-x * Math.sin(input.yaw) + z * Math.cos(input.yaw)) * dt * 3.5
-          position = walkStep(position, dx, dz)
+          const move = assistedWalkStep(position, dx, dz, -z, x, guide)
+          position = move.position; guide = move.guide
           boat.position.y = waterLevel+.1 + Math.sin(now * .0016) * .035
         }
         waterMaterial.uniforms.time.value = now * .001;
