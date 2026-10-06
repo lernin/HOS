@@ -226,6 +226,11 @@
     const pointers = new Set()
 
     const current = (name) => !!name && owner === name
+    const busy = (name) => current(name) && (
+      pointers.size > 0
+      || !!window.__logyqHoldDragFrozen?.()
+      || !!bridge.core?.elements?.svg?.classed?.('dragging-mode')
+    )
 
     function cancelTimer() {
       if (timer !== null) clearTimeout(timer)
@@ -273,8 +278,7 @@
       timer = setTimeout(() => {
         timer = null
         if (!current(name) || document.body.classList.contains('logyq-home')) return
-        if (pointers.size || window.__logyqHoldDragFrozen?.()
-            || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
+        if (busy(name)) {
           schedule(name, 100)
           return
         }
@@ -316,7 +320,7 @@
       window.addEventListener('orientationchange', () => { if (owner) refit(owner) })
     }
 
-    return Object.freeze({ activate, deactivate, fitNow, schedule, cancel, refit, current })
+    return Object.freeze({ activate, deactivate, fitNow, schedule, cancel, refit, current, busy })
   }
 
   const puzzleCamera = createPuzzleCameraController()
