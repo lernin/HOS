@@ -6983,6 +6983,10 @@
     return childShape + ':' + contact + ':' + next
   }
 
+  // Early movement curriculum: repeat below three times, introduce above,
+  // then mix the two vertical directions before chains begin.
+  const EARLY_TWO_CARD_DIRECTIONS = ['below','below','below','above','above','below','above','below','above','below','above','below','above','below','above']
+
   const gameLevels = []
   for (const [rootShape, rootName] of GAME_SHAPES) {
     for (const [childShape, childName] of GAME_SHAPES) {
@@ -6991,8 +6995,8 @@
       const intendedRoot = { name: '', gameId: 'piece-r', paint: rootPaint(rootShape) }
       const intendedChild = { name: '', gameId: 'piece-c', paint: childPaint(rootShape, childShape) }
       // One card starts on the canvas and the other in the existing Word Bank.
-      // Alternate the anchor so "always drop below" / "always make root" is not a clue.
-      const rootStarts = number % 2 === 1
+      // Repetition comes first: three below moves, then above, then mixed practice.
+      const rootStarts = EARLY_TWO_CARD_DIRECTIONS[number - 1] !== 'above'
       const anchor = rootStarts ? intendedRoot : intendedChild
       const loose = rootStarts ? intendedChild : intendedRoot
       const bankKey = '__LOGYQ_GAME_CARD__'
@@ -7064,9 +7068,9 @@
     addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
   })
 
-  // Brief first-contact guides; keep the original puzzle IDs and inventory.
+  // Coach the first example of each new relation; practice levels stay uncluttered.
   gameLevels[0].guide = 'below'
-  gameLevels[1].guide = 'above'
+  gameLevels[3].guide = 'above'
   const firstBranch = gameLevels[27]
   firstBranch.guide = 'sibling'
   const firstChild = firstBranch.solution.children[0]
