@@ -320,22 +320,22 @@ test('Curriculum first-contact guide disappears after the child moves a piece', 
 })
 
 
-test('Curriculum opens with four explicit first-contact teaching moves', () => {
+test('Curriculum teaches three below moves before above, then chains before sibling', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   const start = source.indexOf('// CURRICULUM_PURE_START')
   const end = source.indexOf('// CURRICULUM_PURE_END')
   const api = new Function(source.slice(start, end) + '; return { curriculumPack };')()
-  const levels = api.curriculumPack().slice(0, 4)
-  assert.deepEqual(levels.map(level => level.id), ['fruit', 'fruit-banana', 'food-above-fruit', 'fruit-siblings'])
-  assert.deepEqual(levels.map(level => level.guide), ['below', 'below', 'above', 'sibling'])
-  assert.deepEqual(levels[0].start, { name: 'fruit' })
-  assert.deepEqual(levels[0].bank, ['apple'])
-  assert.deepEqual(levels[1].start, { name: 'fruit' })
-  assert.deepEqual(levels[1].bank, ['banana'])
-  assert.deepEqual(levels[2].start, { name: 'fruit' })
-  assert.deepEqual(levels[2].bank, ['food'])
-  assert.deepEqual(levels[3].start, { name: 'fruit', children: [{ name: 'apple' }] })
-  assert.deepEqual(levels[3].bank, ['banana'])
+  const levels = api.curriculumPack()
+  assert.deepEqual(levels.slice(0, 3).map(level => level.guide || 'below-practice'), ['below', 'below-practice', 'below-practice'])
+  assert.equal(levels[3].guide, 'above')
+  assert.equal(levels[4].guide, undefined)
+  assert.ok(levels.slice(5, 9).some(level => level.direction === 'below'))
+  assert.ok(levels.slice(5, 9).some(level => level.direction === 'above'))
+  const firstChain = levels.findIndex(level => level.kind === 'chain')
+  const firstSibling = levels.findIndex(level => level.guide === 'sibling')
+  assert.ok(firstChain >= 0)
+  assert.ok(firstSibling > firstChain)
+  assert.ok(levels.slice(firstChain, firstSibling).some(level => level.depth >= 3))
 })
 
 test('Curriculum seed uses each lesson start tree and explicit Word Bank', () => {
@@ -388,16 +388,17 @@ test('Curriculum Word Bank can insert a new root above the current root', () => 
 })
 
 
-test('Curriculum runtime shell mirrors the Game header controls', () => {
+test('Game and Curriculum use the same quiet header without a hint button', () => {
   const shell = read('../public/logyq/js/game-shell.js')
   assert.match(shell, /function installCurriculumShell\(\)/)
+  assert.match(shell, /button\('logyq-game-back', 'Back'/)
   assert.match(shell, /button\('logyq-curriculum-back', 'Back'/)
-  assert.match(shell, /id = 'logyq-curriculum-lesson'/)
-  assert.match(shell, /button\('logyq-curriculum-hint', '\?'/)
-  assert.match(shell, /button\('logyq-curriculum-pause', '⚙'/)
-  assert.match(shell, /grid-template-columns:90px minmax\(0,1fr\) 90px/)
-  assert.match(shell, /body\.logyq-curriculum #logyq-curriculum-next\{position:fixed/)
-  assert.match(shell, /window\.LOGYQPreview\?\.curriculum\?\.showGuide\?\.\(\)/)
+  assert.doesNotMatch(shell, /logyq-game-hint/)
+  assert.doesNotMatch(shell, /logyq-curriculum-hint/)
+  assert.match(shell, /button\('logyq-game-pause', '•••', 'Game settings'/)
+  assert.match(shell, /button\('logyq-curriculum-pause', '•••', 'Curriculum settings'/)
+  assert.match(shell, /background:rgba\(248,244,250,\.93\)/)
+  assert.match(shell, /body\.logyq-curriculum #logyq-curriculum-status\{display:none!important\}/)
 })
 
 test('Curriculum exposes and reliably redraws the same animated drag guide as Game', () => {
@@ -407,4 +408,14 @@ test('Curriculum exposes and reliably redraws the same animated drag guide as Ga
   assert.match(source, /window\.setTimeout\(\(\) => window\.LOGYQGameGuide\?\.refresh\?\.\(\), 160\)/)
   assert.match(source, /showGuide: \(\) => \{/)
   assert.match(styles, /#logyq-drag-guide\{position:fixed;inset:0;z-index:78;pointer-events:none\}/)
+})
+
+
+test('guided target highlight waits until the dragged piece reaches the ghost target', () => {
+  const guide = read('../public/logyq/js/game-guide.js')
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  assert.match(guide, /function containsClientPoint\(x, y\)/)
+  assert.match(guide, /const rect = active\?\.element\?\.querySelector\('#logyq-guide-target'\)\?\.getBoundingClientRect\(\)/)
+  assert.match(dock, /const guideTargetReady = !window\.LOGYQGameGuide\?\.active\?\.\(\) \|\| window\.LOGYQGameGuide\?\.containsClientPoint\?\.\(event\.clientX, event\.clientY\)/)
+  assert.match(dock, /if \(targetH && guideTargetReady && !logyq\.selection\.showGameChildCaret\(targetUid\)\)/)
 })
