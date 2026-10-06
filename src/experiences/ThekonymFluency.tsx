@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { thekonymReader } from '../lib/supabase'
 
 /**
@@ -39,12 +39,20 @@ function classFor(score: number | null) {
 }
 
 /** – → 0 → 1 → 2 → 3 → 0 … */
-function nextScore(current: number | null): number {
+function nextScore(current: number | null): number | null {
   if (current === null || current === undefined) return 0
-  return current >= 3 ? 0 : current + 1
+  return current >= 3 ? null : current + 1
 }
 
-export default function ThekonymFluency({ pin, onExit }: { pin: string; onExit: () => void }) {
+export default function ThekonymFluency({
+  pin,
+  onExit,
+  onInspect,
+}: {
+  pin: string
+  onExit: () => void
+  onInspect: (termId: string) => void
+}) {
   const [terms, setTerms] = useState<Term[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -52,6 +60,14 @@ export default function ThekonymFluency({ pin, onExit }: { pin: string; onExit: 
   const [pending, setPending] = useState<Record<string, true>>({})
   const [unratedOnly, setUnratedOnly] = useState(false)
   const [query, setQuery] = useState('')
+  const [recentlyTouched, setRecentlyTouched] = useState<Record<string, true>>({})
+  const hideTimers = useRef<Record<string, number>>({})
+
+  useEffect(() => {
+    return () => {
+      for (const timer of Object.values(hideTimers.current)) window.clearTimeout(timer)
+    }
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -76,6 +92,28 @@ export default function ThekonymFluency({ pin, onExit }: { pin: string; onExit: 
     async (term: Term) => {
       const target = nextScore(term.ashleys_fluency)
       const previous = term.ashleys_fluency
+
+      if (hideTimers.current[term.id]) window.clearTimeout(hideTimers.current[term.id])
+      if (target === null) {
+        setRecentlyTouched((current) => {
+          if (!(term.id in current)) return current
+          const next = { ...current }
+          delete next[term.id]
+          return next
+        })
+        delete hideTimers.current[term.id]
+      } else {
+        setRecentlyTouched((current) => ({ ...current, [term.id]: true }))
+        hideTimers.current[term.id] = window.setTimeout(() => {
+          setRecentlyTouched((current) => {
+            if (!(term.id in current)) return current
+            const next = { ...current }
+            delete next[term.id]
+            return next
+          })
+          delete hideTimers.current[term.id]
+        }, 5000)
+      }
 
       // Optimistic: this screen is for moving quickly through 181 terms.
       setTerms((all) => all.map((t) => (t.id === term.id ? { ...t, ashleys_fluency: target } : t)))
@@ -113,14 +151,19 @@ export default function ThekonymFluency({ pin, onExit }: { pin: string; onExit: 
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase()
     return terms.filter((t) => {
-      if (unratedOnly && t.ashleys_fluency !== null && t.ashleys_fluency !== undefined) return false
+      if (
+        unratedOnly &&
+        t.ashleys_fluency !== null &&
+        t.ashleys_fluency !== undefined &&
+        !recentlyTouched[t.id]
+      ) return false
       if (!needle) return true
       return (
         t.term.toLowerCase().includes(needle) ||
         (t.definition ?? '').toLowerCase().includes(needle)
       )
     })
-  }, [terms, unratedOnly, query])
+  }, [terms, unratedOnly, query, recentlyTouched])
 
   const tally = useMemo(() => {
     const counts = [0, 0, 0, 0]
@@ -153,7 +196,7 @@ export default function ThekonymFluency({ pin, onExit }: { pin: string; onExit: 
         <>
           <p className="fluency-intro">
             Every Thekonym, A to Z. Tap a block to cycle how well you know it —
-            <strong> 0 → 1 → 2 → 3 </strong>and back to 0. Each tap saves immediately.
+            <strong> – → 0 → 1 → 2 → 3 → – </strong>. Each tap saves immediately.
           </p>
 
           <div className="fluency-legend">
@@ -195,34 +238,44 @@ export default function ThekonymFluency({ pin, onExit }: { pin: string; onExit: 
 
           <div className="fluency-grid">
             {visible.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => cycle(t)}
-                title={t.definition ?? undefined}
-                aria-label={`${t.term}. ${
-                  t.ashleys_fluency === null || t.ashleys_fluency === undefined
-                    ? 'Not yet rated'
-                    : `Fluency ${t.ashleys_fluency}`
-                }. Tap to change.`}
-                className={[
-                  'fluency-tile',
-                  classFor(t.ashleys_fluency ?? null),
-                  pending[t.id] ? 'is-saving' : '',
-                  failed[t.id] ? 'is-failed' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                <span className="fluency-score">
-                  {t.ashleys_fluency === null || t.ashleys_fluency === undefined
-                    ? '–'
-                    : t.ashleys_fluency}
-                </span>
-                <span className="fluency-term">{t.term}</span>
-                {t.definition && <span className="fluency-def">{t.definition}</span>}
-                {failed[t.id] && <span className="fluency-failed">not saved</span>}
-              </button>
+              <div className="fluency-tile-wrap" key={t.id}>
+                <button
+                  type="button"
+                  className="fluency-help"
+                  onClick={() => onInspect(t.id)}
+                  aria-label={`Open details for ${t.term}`}
+                  title={`Open ${t.term} details`}
+                >
+                  ?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cycle(t)}
+                  title={t.definition ?? undefined}
+                  aria-label={`${t.term}. ${
+                    t.ashleys_fluency === null || t.ashleys_fluency === undefined
+                      ? 'Not yet rated'
+                      : `Fluency ${t.ashleys_fluency}`
+                  }. Tap to change.`}
+                  className={[
+                    'fluency-tile',
+                    classFor(t.ashleys_fluency ?? null),
+                    pending[t.id] ? 'is-saving' : '',
+                    failed[t.id] ? 'is-failed' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <span className="fluency-score">
+                    {t.ashleys_fluency === null || t.ashleys_fluency === undefined
+                      ? '–'
+                      : t.ashleys_fluency}
+                  </span>
+                  <span className="fluency-term">{t.term}</span>
+                  {t.definition && <span className="fluency-def">{t.definition}</span>}
+                  {failed[t.id] && <span className="fluency-failed">not saved</span>}
+                </button>
+              </div>
             ))}
           </div>
 
