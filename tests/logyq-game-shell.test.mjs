@@ -358,15 +358,16 @@ test('sibling guide can target a named child in Curriculum', () => {
   assert.match(guide, /const child = nodes\.find\(node => sameNode\(node, level\.tree\.children\[0\]\)\)/)
 })
 
-test('Curriculum defers refitting until a drag is released just like Game', () => {
+test('Curriculum defers refitting through the same shared pointer lifecycle as Game', () => {
+  const helpers = read('../public/logyq/js/preview/01-helpers.js')
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   const persistence = read('../public/logyq/js/preview/06-persistence.js')
-  assert.match(source, /let curriculumFitTimer = null/)
-  assert.match(source, /const curriculumPointers = new Set\(\)/)
-  assert.match(source, /function scheduleCurriculumCameraFit\(delay = 280\)/)
-  assert.match(source, /if \(curriculumPointers\.size\) return/)
-  assert.match(source, /window\.addEventListener\('pointerdown',[\s\S]*if \(!app\.curriculum\) return/)
-  assert.match(source, /window\.addEventListener\('pointerup', releaseCurriculumPointer, true\)/)
+  assert.match(helpers, /const pointers = new Set\(\)/)
+  assert.match(helpers, /function schedule\(name, delay = 280\)/)
+  assert.match(helpers, /if \(pointers\.size\) return/)
+  assert.match(helpers, /window\.addEventListener\('pointerdown', onPointerDown, true\)/)
+  assert.match(helpers, /window\.addEventListener\('pointerup', onPointerRelease, true\)/)
+  assert.match(source, /function scheduleCurriculumCameraFit\(delay = 280\) \{\s*puzzleCamera\.schedule\('curriculum', delay\)/s)
   assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*scheduleCurriculumCameraFit\(\)/)
 })
 
