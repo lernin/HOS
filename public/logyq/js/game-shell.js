@@ -27,12 +27,11 @@
     const title = document.createElement('strong')
     title.id = 'logyq-game-puzzle'
     title.textContent = 'Puzzle'
-    const hint = button('logyq-game-hint', '?', 'Hint')
-    const pause = button('logyq-game-pause', '⚙', 'Game settings')
+    const pause = button('logyq-game-pause', '•••', 'Game settings')
     pause.setAttribute('aria-expanded', 'false')
     const actions = document.createElement('div')
     actions.id = 'logyq-game-actions'
-    actions.append(hint, pause)
+    actions.append(pause)
     bar.replaceChildren(back, title, actions)
 
     const hiddenControls = document.createElement('div')
@@ -80,12 +79,11 @@
     style.id = 'logyq-game-shell-style'
     style.textContent = `
       body.logyq-game #logiq-mobile-header,body.logyq-game>header,body.logyq-game #logyq-map-title,body.logyq-game #logiq-mobile-panel,body.logyq-game #logyq-paint-strip,body.logyq-game #logyq-warehouse,body.logyq-game #logyq-bank-trash,body.logyq-game #trash{display:none!important}
-      body.logyq-game:not(.logyq-home) #logyq-game-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,232,240,.92);border-radius:17px;background:rgba(255,255,255,.96);color:#0f172a;box-shadow:0 6px 22px rgba(15,23,42,.12);backdrop-filter:blur(12px)}
+      body.logyq-game:not(.logyq-home) #logyq-game-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,215,229,.92);border-radius:17px;background:rgba(248,244,250,.93);color:#0f172a;box-shadow:0 6px 22px rgba(76,58,82,.12);backdrop-filter:blur(12px)}
       body.logyq-game #logyq-game-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#0f172a;font:650 14px/1 system-ui;touch-action:manipulation}
       body.logyq-game #logyq-game-back{justify-self:start;text-align:left;padding:0 10px}
       body.logyq-game #logyq-game-actions{justify-self:end;display:flex;align-items:center;gap:2px}
-      body.logyq-game #logyq-game-hint,body.logyq-game #logyq-game-pause{width:42px;padding:0;font-size:18px}
-      body.logyq-game #logyq-game-hint{font-weight:850;font-size:19px}
+      body.logyq-game #logyq-game-pause{width:48px;padding:0;font-size:20px;font-weight:850;letter-spacing:2px}
       body.logyq-game #logyq-game-puzzle{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       body.logyq-game #Dock .chip.logyq-hint-piece{box-shadow:0 0 0 4px rgba(15,23,42,.22),0 0 0 8px rgba(255,255,255,.85);animation:logyq-hint-pulse 900ms ease-in-out infinite}
       #logyq-game-hint-overlay{position:fixed;inset:0;z-index:78;pointer-events:none}
@@ -244,7 +242,6 @@
     }
 
     back.addEventListener('click', openLevels)
-    hint.addEventListener('click', () => window.LOGYQGameHint?.request?.())
     pause.addEventListener('click', openPause)
     document.getElementById('logyq-game-resume').addEventListener('click', closePause)
     document.getElementById('logyq-game-pause-levels').addEventListener('click', openAllLevels)
@@ -289,12 +286,11 @@
     const title = document.createElement('strong')
     title.id = 'logyq-curriculum-lesson'
     title.textContent = 'Lesson'
-    const hint = button('logyq-curriculum-hint', '?', 'Show hint')
-    const pause = button('logyq-curriculum-pause', '⚙', 'Curriculum settings')
+    const pause = button('logyq-curriculum-pause', '•••', 'Curriculum settings')
     pause.setAttribute('aria-expanded', 'false')
     const actions = document.createElement('div')
     actions.id = 'logyq-curriculum-actions'
-    actions.append(hint, pause)
+    actions.append(pause)
     bar.replaceChildren(back, title, actions)
 
     const hiddenControls = document.createElement('div')
@@ -319,12 +315,11 @@
     style.id = 'logyq-curriculum-shell-style'
     style.textContent = `
       body.logyq-curriculum #logiq-mobile-header,body.logyq-curriculum>header,body.logyq-curriculum #logyq-map-title,body.logyq-curriculum #logiq-mobile-panel,body.logyq-curriculum #logyq-paint-strip,body.logyq-curriculum #logyq-warehouse,body.logyq-curriculum #logyq-bank-trash,body.logyq-curriculum #trash{display:none!important}
-      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,232,240,.92);border-radius:17px;background:rgba(255,255,255,.96);color:#0f172a;box-shadow:0 6px 22px rgba(15,23,42,.12);backdrop-filter:blur(12px)}
+      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,215,229,.92);border-radius:17px;background:rgba(248,244,250,.93);color:#0f172a;box-shadow:0 6px 22px rgba(76,58,82,.12);backdrop-filter:blur(12px)}
       body.logyq-curriculum #logyq-curriculum-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#0f172a;font:650 14px/1 system-ui;touch-action:manipulation}
       body.logyq-curriculum #logyq-curriculum-back{justify-self:start;text-align:left;padding:0 10px}
       body.logyq-curriculum #logyq-curriculum-actions{justify-self:end;display:flex;align-items:center;gap:2px}
-      body.logyq-curriculum #logyq-curriculum-hint,body.logyq-curriculum #logyq-curriculum-pause{width:42px;padding:0;font-size:18px}
-      body.logyq-curriculum #logyq-curriculum-hint{font-weight:850;font-size:19px}
+      body.logyq-curriculum #logyq-curriculum-pause{width:48px;padding:0;font-size:20px;font-weight:850;letter-spacing:2px}
       body.logyq-curriculum #logyq-curriculum-lesson{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       body.logyq-curriculum #logyq-curriculum-status{display:none!important}
       body.logyq-curriculum #logyq-curriculum-next{position:fixed;z-index:85;left:50%;transform:translateX(-50%);bottom:calc(32px + env(safe-area-inset-bottom));min-width:190px;min-height:56px;padding:0 30px;border:0;border-radius:18px;background:#0f172a;color:white;font:750 18px/1 system-ui;box-shadow:0 10px 30px rgba(15,23,42,.28);touch-action:manipulation}
@@ -360,7 +355,6 @@
     }
 
     back.addEventListener('click', openLevels)
-    hint.addEventListener('click', () => window.LOGYQPreview?.curriculum?.showGuide?.())
     pause.addEventListener('click', openPause)
     document.getElementById('logyq-curriculum-resume')?.addEventListener('click', closePause)
     document.getElementById('logyq-curriculum-shell-levels')?.addEventListener('click', openLevels)
