@@ -63,6 +63,12 @@
     until = performance.now() + 900
     if (frame === null) frame = requestAnimationFrame(tick)
   }
+  function containsClientPoint(x, y) {
+    const rect = active?.element?.querySelector('#logyq-guide-target')?.getBoundingClientRect()
+    if (!rect || !(rect.width > 0) || !(rect.height > 0)) return false
+    const pad = 8
+    return x >= rect.left - pad && x <= rect.right + pad && y >= rect.top - pad && y <= rect.bottom + pad
+  }
   function show(level, core) {
     hide()
     if (!level?.guide || !core?.state?.root) return
@@ -93,5 +99,5 @@
     element.append(arrow,ghost); document.body.appendChild(element)
     active = {level,core,element}; refresh()
   }
-  window.LOGYQGameGuide = Object.freeze({show,hide,refresh,target})
+  window.LOGYQGameGuide = Object.freeze({show,hide,refresh,target,containsClientPoint,active:()=>!!active})
 })()
