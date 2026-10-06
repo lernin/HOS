@@ -285,11 +285,15 @@ test('curriculum has no Mix control or shuffle phase', () => {
   assert.doesNotMatch(source, /__logyqCurriculumMix/)
 })
 
-test('curriculum recenters after structural changes', () => {
+test('curriculum uses the Game safe-frame fitter and recenters after structural changes', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
-  assert.match(source, /function settleCurriculumTree\(/)
-  assert.match(source, /treeManager\?\.settleRootAnchored\?\.\(\{ force: true, duration \}\)/)
+  const engine = read('../public/logyq/js/engine/16-tree-manager.js')
+  assert.match(source, /function curriculumFitBounds\(level\)/)
+  assert.match(source, /window\.LOGYQGameGuide\?\.target\(levelForGuide, root\.descendants\(\)\)/)
+  assert.match(source, /treeManager\?\.fitGameBounds\?\.\(bounds, \{ duration \}\)/)
   assert.match(source, /engine\.wordDock\.render\(\)\s*settleCurriculumTree\(\)/)
+  assert.match(engine, /const barId = curriculum \? 'logyq-curriculum-bar' : 'logyq-game-bar'/)
+  assert.match(engine, /const nextId = curriculum \? 'logyq-curriculum-next' : 'logyq-game-next'/)
 })
 
 
