@@ -5,17 +5,44 @@
     return children.length ? { name, children } : { name }
   }
 
-  // First four lessons teach child, child, parent-above, then sibling placement.
+  // Teach one relationship until it feels ordinary: three below moves first,
+  // then introduce above, mix both vertical directions, build chains, and only
+  // then introduce the new sibling/beside relationship.
   function curriculumPack() {
     return [
       { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple')),
-        start: curriculumNode('fruit'), bank: ['apple'], guide: 'below' },
+        start: curriculumNode('fruit'), bank: ['apple'], guide: 'below', direction: 'below' },
       { id: 'fruit-banana', title: 'Fruit + Banana', tree: curriculumNode('fruit', curriculumNode('banana')),
-        start: curriculumNode('fruit'), bank: ['banana'], guide: 'below' },
+        start: curriculumNode('fruit'), bank: ['banana'], direction: 'below' },
+      { id: 'animal-dog', title: 'Animal + Dog', tree: curriculumNode('animal', curriculumNode('dog')),
+        start: curriculumNode('animal'), bank: ['dog'], direction: 'below' },
+
       { id: 'food-above-fruit', title: 'Food above Fruit', tree: curriculumNode('food', curriculumNode('fruit')),
-        start: curriculumNode('fruit'), bank: ['food'], guide: 'above' },
-      { id: 'fruit-siblings', title: 'Fruit siblings', tree: curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
-        start: curriculumNode('fruit', curriculumNode('apple')), bank: ['banana'], guide: 'sibling' },
+        start: curriculumNode('fruit'), bank: ['food'], guide: 'above', direction: 'above' },
+      { id: 'animal-above-mammal', title: 'Animal above Mammal', tree: curriculumNode('animal', curriculumNode('mammal')),
+        start: curriculumNode('mammal'), bank: ['animal'], direction: 'above' },
+
+      { id: 'plant-flower', title: 'Plant + Flower', tree: curriculumNode('plant', curriculumNode('flower')),
+        start: curriculumNode('plant'), bank: ['flower'], direction: 'below' },
+      { id: 'school-above-classroom', title: 'School above Classroom', tree: curriculumNode('school', curriculumNode('classroom')),
+        start: curriculumNode('classroom'), bank: ['school'], direction: 'above' },
+      { id: 'vehicle-car', title: 'Vehicle + Car', tree: curriculumNode('vehicle', curriculumNode('car')),
+        start: curriculumNode('vehicle'), bank: ['car'], direction: 'below' },
+
+      { id: 'food-fruit-apple-chain', title: 'Food → Fruit → Apple',
+        tree: curriculumNode('food', curriculumNode('fruit', curriculumNode('apple'))),
+        start: curriculumNode('food'), bank: ['fruit', 'apple'], kind: 'chain', depth: 3 },
+      { id: 'animal-mammal-dog-chain', title: 'Animal → Mammal → Dog',
+        tree: curriculumNode('animal', curriculumNode('mammal', curriculumNode('dog'))),
+        start: curriculumNode('animal'), bank: ['mammal', 'dog'], kind: 'chain', depth: 3 },
+      { id: 'living-animal-mammal-dog-chain', title: 'Living → Animal → Mammal → Dog',
+        tree: curriculumNode('living', curriculumNode('animal', curriculumNode('mammal', curriculumNode('dog')))),
+        start: curriculumNode('living'), bank: ['animal', 'mammal', 'dog'], kind: 'chain', depth: 4 },
+
+      { id: 'fruit-siblings', title: 'Fruit siblings',
+        tree: curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
+        start: curriculumNode('fruit', curriculumNode('apple')), bank: ['banana'], guide: 'sibling', kind: 'branch' },
+
       { id: 'food', title: 'Food', tree: curriculumNode('food',
         curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
         curriculumNode('meat', curriculumNode('chicken'), curriculumNode('beef'))) },
