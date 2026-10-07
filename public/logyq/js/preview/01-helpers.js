@@ -296,6 +296,11 @@
       schedule(name, 80)
     }
 
+    function scheduleActive(delay = 0) {
+      if (!owner) return
+      schedule(owner, delay)
+    }
+
     function onPointerDown(event) {
       if (!owner) return
       pointers.add(event.pointerId)
@@ -320,7 +325,8 @@
       window.addEventListener('orientationchange', () => { if (owner) refit(owner) })
     }
 
-    return Object.freeze({ activate, deactivate, fitNow, schedule, cancel, refit, current, busy })
+    return Object.freeze({ activate, deactivate, fitNow, schedule, scheduleActive, cancel, refit, current, busy })
   }
 
   const puzzleCamera = createPuzzleCameraController()
+  preview.puzzleCamera = puzzleCamera
