@@ -482,16 +482,14 @@
       #logyq-curriculum-next,#logyq-curriculum-levels{flex:none;border:1px solid #bbf7d0;border-radius:7px;background:#fff;color:#14532d;padding:3px 7px;font:750 12px/1 system-ui,sans-serif;cursor:pointer}
       #logyq-curriculum-next{background:#16a34a;color:#fff;border-color:#16a34a}
       #logyq-curriculum-next[hidden]{display:none!important}
-      #logyq-curriculum-check{display:none;position:fixed;z-index:82;right:12px;left:auto;bottom:calc(12px + env(safe-area-inset-bottom));transform:none;width:98px;min-height:52px;padding:5px 8px;border:0;border-radius:16px;background:#111827;color:#fff;font:800 15px/1 system-ui,sans-serif;box-shadow:0 8px 22px rgba(15,23,42,.24);touch-action:manipulation}
-      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-check:not([hidden]){display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px}
       #logyq-curriculum-check[hidden]{display:none!important}
-      #logyq-curriculum-check-summary{display:flex;align-items:center;justify-content:center;gap:5px;font:750 10px/1 system-ui,sans-serif}
+      #logyq-curriculum-check-summary{position:absolute;right:-5px;top:-7px;display:flex;align-items:center;justify-content:center;gap:3px;padding:2px 4px;border-radius:999px;background:rgba(255,255,255,.98);box-shadow:0 2px 7px rgba(15,23,42,.18);font:800 8px/1 system-ui,sans-serif;white-space:nowrap;pointer-events:none}
       #logyq-curriculum-check-summary[hidden]{display:none!important}
-      #logyq-curriculum-check-summary [data-tone]{display:inline-flex;align-items:center;gap:2px}
-      #logyq-curriculum-check-summary [data-tone="correct"]{color:#4ade80}
-      #logyq-curriculum-check-summary [data-tone="insufficient"]{color:#fbbf24}
-      #logyq-curriculum-check-summary [data-tone="wrong"]{color:#f87171}
-      #logyq-curriculum-check-summary b{font:800 10px/1 system-ui,sans-serif;color:inherit}
+      #logyq-curriculum-check-summary [data-tone]{display:inline-flex;align-items:center;gap:1px}
+      #logyq-curriculum-check-summary [data-tone="correct"]{color:#16a34a}
+      #logyq-curriculum-check-summary [data-tone="insufficient"]{color:#d97706}
+      #logyq-curriculum-check-summary [data-tone="wrong"]{color:#dc2626}
+      #logyq-curriculum-check-summary b{font:800 8px/1 system-ui,sans-serif;color:inherit}
       .logyq-curriculum-action-label{display:block}
       body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-correct{stroke:#22c55e!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;filter:drop-shadow(0 0 5px rgba(34,197,94,.42));transition:stroke .55s ease,opacity .55s ease,filter .55s ease}
       body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-insufficient{stroke:#f59e0b!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 8!important;animation:logyq-semantic-flow .8s linear infinite!important;filter:drop-shadow(0 0 5px rgba(245,158,11,.38))}
@@ -800,9 +798,7 @@
       body.logyq-game #Dock.is-empty,body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
       body.logyq-game #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
-      body.logyq-curriculum-frozen #Dock:not(.is-empty){left:12px;right:118px;transform:none;width:auto;max-width:none;min-width:0;min-height:52px;bottom:calc(12px + env(safe-area-inset-bottom));padding:4px 0;background:transparent;border:0;box-shadow:none;overflow:hidden;justify-content:flex-start}
-      body.logyq-curriculum-frozen #logyq-bank-chips{flex:1 1 auto;min-width:0;display:flex;flex-flow:row nowrap;justify-content:flex-start;align-items:center;gap:8px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;touch-action:pan-x}
-      body.logyq-curriculum-frozen #logyq-bank-chips::-webkit-scrollbar{display:none}
+      body.logyq-curriculum-frozen #Dock:not(.is-empty){min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible}
       body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{max-width:640px}}
       @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
@@ -933,7 +929,7 @@
           <span data-tone="insufficient">● <b data-count="insufficient">0</b></span>
           <span data-tone="wrong">● <b data-count="wrong">0</b></span>
         </span>
-        <span class="logyq-curriculum-action-label">Check</span>
+        <span class="logyq-curriculum-action-label">✓</span>
       </button>
       <div id="logyq-game-bar">
         <span id="logyq-game-name"></span>
