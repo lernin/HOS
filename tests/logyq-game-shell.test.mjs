@@ -272,7 +272,8 @@ test('curriculum seeds each lesson from its explicit start when provided', () =>
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   assert.match(source, /function seedCurriculumRoot\(level\)/)
   assert.match(source, /const root = structuredClone\(level\.start \|\| \{ name: String\(level\.tree\.name/)
-  assert.match(source, /state\.wordBank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /const bank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /bridge\.loadMap\(root, bank, \{ fit: false \}\)/)
   assert.doesNotMatch(source, /function spinCurriculum\(/)
   assert.doesNotMatch(source, /function playCurriculumVegas\(/)
 })
@@ -371,13 +372,14 @@ test('Curriculum defers refitting through the same shared pointer lifecycle as G
   assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*scheduleCurriculumCameraFit\(\)/)
 })
 
-test('Curriculum completion uses a Next button instead of Check', () => {
+test('Curriculum uses Check for evaluation and Next only after success', () => {
   const ui = read('../public/logyq/js/preview/03-ui.js')
   const source = read('../public/logyq/js/preview/07-curriculum.js')
-  assert.doesNotMatch(ui, /id="logyq-curriculum-check"/)
+  assert.match(ui, /id="logyq-curriculum-check">Check<\/button>/)
   assert.match(ui, /id="logyq-curriculum-next" hidden>Next<\/button>/)
+  assert.match(source, /document\.getElementById\('logyq-curriculum-check'\)\?\.addEventListener\('click', checkCurriculum\)/)
+  assert.match(source, /if \(checkButton\) checkButton\.hidden = true/)
   assert.match(source, /nextButton\.hidden = false/)
-  assert.match(source, /document\.getElementById\('logyq-curriculum-next'\)\?\.addEventListener\('click'/)
 })
 
 test('Curriculum Word Bank is bare with words and a compact square when empty', () => {
