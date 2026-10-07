@@ -275,20 +275,7 @@
 
   preview.maps.contentKey = contentKey
 
-  function escapeHtml(value) {
-    return String(value ?? '')
-      .replaceAll('&', '&amp;')
-      .replaceAll('<', '&lt;')
-      .replaceAll('>', '&gt;')
-      .replaceAll('"', '&quot;')
-      .replaceAll("'", '&#039;')
-  }
-
-
-
-  // One camera lifecycle for every direct puzzle surface. Game and Curriculum
-  // only provide their guide target; pointer locking, deferred refits, resize
-  // handling, and the actual tree fit all live here.
+  // One camera lifecycle for every direct puzzle surface.
   function createPuzzleCameraController() {
     let owner = null
     let targetForRoot = null
@@ -309,26 +296,17 @@
       timer = null
       bridge.core?.elements?.svg?.interrupt?.('game-fit')
     }
-
     function activate(name, options = {}) {
-      cancelTimer()
-      pointers.clear()
-      pending = false
+      cancelTimer(); pointers.clear(); pending = false
       owner = name || null
       targetForRoot = typeof options.target === 'function' ? options.target : null
       afterFit = typeof options.afterFit === 'function' ? options.afterFit : null
     }
-
     function deactivate(name) {
       if (!current(name)) return
-      cancelTimer()
-      pointers.clear()
-      pending = false
-      owner = null
-      targetForRoot = null
-      afterFit = null
+      cancelTimer(); pointers.clear(); pending = false
+      owner = null; targetForRoot = null; afterFit = null
     }
-
     function fitNow(name, duration = 0) {
       if (!current(name) || pointers.size) return false
       const engine = bridge.core
@@ -340,7 +318,6 @@
       try { afterFit?.() } catch (_error) {}
       return true
     }
-
     function schedule(name, delay = 280) {
       if (!current(name) || !bridge.core?.state?.root) return
       pending = true
@@ -350,52 +327,42 @@
       timer = setTimeout(() => {
         timer = null
         if (!current(name) || document.body.classList.contains('logyq-home')) return
-        if (busy(name)) {
-          schedule(name, 100)
-          return
-        }
+        if (busy(name)) { schedule(name, 100); return }
         pending = false
         fitNow(name, 280)
       }, delay)
     }
-
-    function cancel(name) {
-      if (!current(name)) return
-      cancelTimer()
-    }
-
-    function refit(name) {
-      schedule(name, 80)
-    }
-
+    function cancel(name) { if (current(name)) cancelTimer() }
+    function refit(name) { schedule(name, 80) }
     function onPointerDown(event) {
       if (!owner) return
-      pointers.add(event.pointerId)
-      pending = true
-      cancelTimer()
+      pointers.add(event.pointerId); pending = true; cancelTimer()
     }
-
     function onPointerRelease(event) {
       pointers.delete(event.pointerId)
       if (!pointers.size && pending && owner) schedule(owner)
     }
-
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('pointerdown', onPointerDown, true)
       window.addEventListener('pointerup', onPointerRelease, true)
       window.addEventListener('pointercancel', onPointerRelease, true)
-      window.addEventListener('blur', () => {
-        pointers.clear()
-        if (pending && owner) schedule(owner)
-      })
+      window.addEventListener('blur', () => { pointers.clear(); if (pending && owner) schedule(owner) })
       window.addEventListener('resize', () => { if (owner) refit(owner) })
       window.addEventListener('orientationchange', () => { if (owner) refit(owner) })
     }
-
     return Object.freeze({ activate, deactivate, fitNow, schedule, cancel, refit, current, busy })
   }
-
   const puzzleCamera = createPuzzleCameraController()
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#039;')
+  }
+
   function injectStyles() {
     const style = document.createElement('style')
     style.id = 'logyq-preview-styles'
@@ -434,10 +401,24 @@
       #logyq-game-levels{display:none}
       #logiq-library[data-shelf="game"] #logyq-game-levels{display:block}
       #logyq-game-levels{overflow:auto;-webkit-overflow-scrolling:touch}
+      .logyq-game-filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0 10px}
+      .logyq-game-filter{display:grid;gap:4px;color:#64748b;font:750 11px/1.2 system-ui,sans-serif;text-transform:uppercase;letter-spacing:.04em}
+      .logyq-game-filter select{width:100%;min-width:0;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;padding:9px 10px;font:700 14px/1.2 system-ui,sans-serif;text-transform:none;letter-spacing:0}
+      #logyq-game-filter-count{margin:0 0 6px;color:#64748b;font:650 12px/1.3 system-ui,sans-serif}
       #logyq-game-path{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
       #logyq-game-path .logyq-tier-head{margin:12px 0 0;padding:2px 2px 0;color:#64748b;font:800 12px/1.2 system-ui,sans-serif;letter-spacing:.04em}
-      #logyq-game-path button{width:100%;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
+      #logyq-game-path button{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;background:#fff;border:1px solid #cbd5e1;border-radius:12px;padding:12px 14px;color:#1e293b;font:700 16px/1.35 system-ui,sans-serif;cursor:pointer}
       #logyq-game-path button.is-cleared{border-color:#86efac;background:#f0fdf4}
+      #logyq-game-path .logyq-game-level-copy{min-width:0;flex:1}
+      #logyq-game-path .logyq-game-level-title{font-weight:800;color:#1e293b}
+      #logyq-game-path .logyq-game-level-hint{font-size:12px;font-weight:500;color:#64748b;margin-top:3px}
+      #logyq-game-path .logyq-game-level-meta{display:flex;flex:none;align-items:flex-end;gap:4px;flex-direction:column;margin:0}
+      #logyq-game-path .logyq-piece-count{font-size:11px;font-weight:700;color:#64748b;margin:0}
+      #logyq-game-path .logyq-difficulty-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 7px;font-size:11px;font-weight:850;line-height:1;white-space:nowrap;margin:0;background:#f1f5f9;color:#334155}
+      #logyq-game-path .logyq-difficulty-badge[data-band="easy"]{background:#dcfce7;color:#166534}
+      #logyq-game-path .logyq-difficulty-badge[data-band="medium"]{background:#fef9c3;color:#854d0e}
+      #logyq-game-path .logyq-difficulty-badge[data-band="hard"]{background:#ffedd5;color:#9a3412}
+      #logyq-game-path .logyq-difficulty-badge[data-band="vicious"]{background:#fee2e2;color:#991b1b}
       body.logyq-game .logyq-shape-chip{position:relative;box-sizing:border-box;width:auto;max-width:none;padding:2px;background:transparent;border:0;min-height:0}
       body.logyq-game .logyq-shape-key{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
       body.logyq-game .logyq-shape-chip svg{display:block;height:30px;width:auto}
@@ -886,7 +867,7 @@
                   </div>
                 </div>
                 <div class="logyq-trail-heading">
-                  <h3>LOGYQ</h3>
+                  <button type="button" id="logyq-trail-home" aria-label="Back to LOGYQ menu">LOGYQ</button>
                   <span id="logyq-trail-leaves" aria-label="0 puzzles solved">🍃 0</span>
                 </div>
                 <div class="logyq-trail-actions">
@@ -898,6 +879,21 @@
                 <div id="logyq-trail-drawer" hidden>
                   <div class="logyq-trail-drawer-head"><strong>Choose a puzzle</strong><button type="button" id="logyq-trail-close-levels">Close</button></div>
                   <p class="logyq-level-intro">Fit the fixed cards into one tree. Matching colors let them connect.</p>
+                  <div class="logyq-game-filters" aria-label="Level filters">
+                    <label class="logyq-game-filter">Pieces
+                      <select id="logyq-game-piece-filter" aria-label="Filter by piece count"><option value="all">All pieces</option></select>
+                    </label>
+                    <label class="logyq-game-filter">Difficulty
+                      <select id="logyq-game-difficulty-filter" aria-label="Filter by difficulty">
+                        <option value="all">All difficulties</option>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                        <option value="vicious">Vicious</option>
+                      </select>
+                    </label>
+                  </div>
+                  <p id="logyq-game-filter-count" aria-live="polite"></p>
                   <ol id="logyq-game-path"></ol>
                 </div>
               </div>
@@ -2331,11 +2327,9 @@
 
   function movePreview(drag, x, y) {
     if (!drag?.preview) return
-    const doc = drag.preview.ownerDocument
-    const point = gameThumbPoint(doc, drag, x, y)
     const offset = fingerOffset()
-    const dx = (point.x - drag.x) + offset.x
-    const dy = (point.y - drag.y) + offset.y
+    const dx = (x - drag.x) + offset.x
+    const dy = (y - drag.y) + offset.y
     drag.preview.style.transform = `translate3d(${dx}px,${dy}px,0)`
   }
 
@@ -2562,19 +2556,9 @@
     return { x: C.OFFSET_SIDE_CM * C.PX_PER_CM, y: -D }
   }
 
-  function gameThumbPoint(doc, drag, x, y) {
-    if (!gamePlay(doc) || !drag) return { x, y }
-    const gain = Number(doc.defaultView?.LOGYQGameThumbGain?.value?.()) || 1
-    return {
-      x: drag.x + (x - drag.x) * gain,
-      y: drag.y + (y - drag.y) * gain,
-    }
-  }
-
-  function visualPoint(x, y, doc = null, drag = null) {
-    const point = gameThumbPoint(doc, drag, x, y)
+  function visualPoint(x, y) {
     const offset = fingerOffset()
-    return { x: point.x + offset.x, y: point.y + offset.y }
+    return { x: x + offset.x, y: y + offset.y }
   }
 
   function fingerMovedFromLatch(drag, x, y) {
@@ -2625,14 +2609,14 @@
     const win = doc.defaultView
     const svg = doc.getElementById('canvas')
     const ghost = previewCardCenter(drag)
-    if (!ghost || !drag?.grabGraph || !drag?.nodeGraph) return visualPoint(x, y, doc, drag)
+    if (!ghost || !drag?.grabGraph || !drag?.nodeGraph) return visualPoint(x, y)
     const ghostGraph = clientToGraph(svg, win, ghost.x, ghost.y)
-    if (!ghostGraph) return visualPoint(x, y, doc, drag)
+    if (!ghostGraph) return visualPoint(x, y)
     const pointerGraph = {
       x: ghostGraph.x - drag.nodeGraph.x + drag.grabGraph.x,
       y: ghostGraph.y - drag.nodeGraph.y + drag.grabGraph.y,
     }
-    return graphToClient(svg, win, pointerGraph.x, pointerGraph.y) || visualPoint(x, y, doc, drag)
+    return graphToClient(svg, win, pointerGraph.x, pointerGraph.y) || visualPoint(x, y)
   }
 
   function activeDockKind(doc, drag, x, y) {
@@ -4795,10 +4779,9 @@
     }
     if (app.curriculum) {
       window.LOGYQGameGuide?.hide()
-      app.curriculum.guide = null
       setSaveState('saved')
       maybeCurriculumClear(snapshot)
-      scheduleCurriculumCameraFit()
+      settleCurriculumTree()
       return
     }
     if (app.applyingRemote) return
@@ -5909,6 +5892,19 @@
       renderCurriculumChrome()
       return
     }
+    const session = app.curriculum
+    if (!session.cleared && !session.telemetryRecorded && Date.now() - (session.startedAt || Date.now()) > 5000) {
+      session.telemetryRecorded = true
+      window.LOGYQLearner?.recordCurriculum?.({
+        item_id: session.id,
+        stage: session.stage || 1,
+        actual_moves: session.actualMoves || 0,
+        returned_pieces: session.returnedPieces || 0,
+        hints_used: session.hintsUsed || 0,
+        elapsed_ms: Math.max(0, Date.now() - (session.startedAt || Date.now())),
+        solved: false,
+      }).catch?.(() => {})
+    }
     app.curriculum = null
     const status = document.getElementById('logyq-curriculum-status')
     if (status) {
@@ -5955,21 +5951,10 @@
     return guideLevel ? window.LOGYQGameGuide?.target(guideLevel, root.descendants()) : null
   }
 
-  function cancelCurriculumCameraFit() {
-    puzzleCamera.cancel('curriculum')
-  }
-
-  function fitCurriculumCamera(duration = 0) {
-    return puzzleCamera.fitNow('curriculum', duration)
-  }
-
-  function scheduleCurriculumCameraFit(delay = 280) {
-    puzzleCamera.schedule('curriculum', delay)
-  }
-
-  function refitCurriculumCamera() {
-    puzzleCamera.refit('curriculum')
-  }
+  function cancelCurriculumCameraFit() { puzzleCamera.cancel('curriculum') }
+  function fitCurriculumCamera(duration = 0) { return puzzleCamera.fitNow('curriculum', duration) }
+  function scheduleCurriculumCameraFit(delay = 280) { puzzleCamera.schedule('curriculum', delay) }
+  function refitCurriculumCamera() { puzzleCamera.refit('curriculum') }
 
   function seedCurriculumRoot(level) {
     const core = bridge.core
@@ -6008,7 +5993,8 @@
       ;(node.children || []).forEach(restore)
     }
     restore(removed)
-    return { tree: removed === nextTree ? null : nextTree, bank: nextBank }
+    const count = (node) => node ? 1 + (node.children || []).reduce((sum, child) => sum + count(child), 0) : 0
+    return { tree: removed === nextTree ? null : nextTree, bank: nextBank, removedCount: count(removed) }
   }
 
   function showCurriculumGuide(level) {
@@ -6033,14 +6019,22 @@
   function beginCurriculumLevel(level) {
     if (!level) return
     leaveGamePlay()
+    const stage = Math.max(1, curriculumPack().findIndex(item => item.id === level.id) + 1)
     app.curriculum = {
       id: level.id,
       title: level.title,
+      stage,
       startedAt: Date.now(),
       cleared: false,
       phase: 'play',
       released: true,
       guide: level.guide || null,
+      actualMoves: 0,
+      returnedPieces: 0,
+      hintsUsed: 0,
+      telemetryRecorded: false,
+      lastTreeKey: null,
+      nextChangeCost: 1,
     }
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
@@ -6065,6 +6059,8 @@
       if (!engine?.state || !session || session.id !== level.id || session.phase !== 'play') return false
       const result = returnCurriculumBranch(engine.state.root?.data, engine.state.wordBank || [], uid)
       if (!result) return false
+      session.returnedPieces = (session.returnedPieces || 0) + (result.removedCount || 1)
+      session.nextChangeCost = result.removedCount || 1
       engine.state.wordBank = result.bank
       engine.state.root = result.tree ? d3.hierarchy(result.tree) : null
       try { engine.selection?.clearGroup?.() } catch (_error) {}
@@ -6107,8 +6103,19 @@
     }
     if (!level || !live || !curriculumMatches(level.tree, live)) return false
     session.cleared = true
+    window.LOGYQGameThumbGain?.advance?.()
+    session.telemetryRecorded = true
     const progress = readCurriculumProgress()
     const ms = Math.max(0, Date.now() - (session.startedAt || Date.now()))
+    window.LOGYQLearner?.recordCurriculum?.({
+      item_id: level.id,
+      stage: session.stage || 1,
+      actual_moves: session.actualMoves || 0,
+      returned_pieces: session.returnedPieces || 0,
+      hints_used: session.hintsUsed || 0,
+      elapsed_ms: ms,
+      solved: true,
+    }).catch?.(() => {})
     progress.levels[level.id] = { clearedAt: new Date().toISOString(), ms }
     writeCurriculumProgress(progress)
     const pack = curriculumPack()
@@ -6182,6 +6189,20 @@
       },
     }
   }
+
+  bridge.subscribe((snapshot) => {
+    const session = app.curriculum
+    if (!session || session.cleared || session.phase !== 'play') return
+    const key = JSON.stringify(snapshot?.tree || null)
+    if (session.lastTreeKey == null) {
+      session.lastTreeKey = key
+      return
+    }
+    if (key === session.lastTreeKey) return
+    session.lastTreeKey = key
+    session.actualMoves = (session.actualMoves || 0) + Math.max(1, session.nextChangeCost || 1)
+    session.nextChangeCost = 1
+  })
 
   bindCurriculum()
   const THEKONYM_KEY = 'logyq_thekonym_mode_v1'
@@ -7658,6 +7679,19 @@
   function chooseNext(progress, justSolvedId) {
     const state = adaptiveState(progress)
     const level = gameLevels.find((item) => item.id === justSolvedId)
+    const learner = window.LOGYQLearner?.current?.()
+    if (learner?.id) {
+      const baseTier = Math.max(1, Math.min(12, window.LOGYQLearner.gradeIndex?.() || 1))
+      const strong = Number(learner.recent_success_rate || 0) >= .8 && Number(learner.recent_efficiency || 0) >= .75
+      const plays = Object.keys(state.played || {}).length
+      const probe = strong && plays > 0 && plays % 4 === 3 && gameLevels.some(item => item.tier === baseTier + 1)
+      const targetTier = probe ? baseTier + 1 : baseTier
+      return {
+        level: pickInTier(targetTier, progress, state.played, justSolvedId),
+        leveledUp: !!level && targetTier > level.tier,
+        adaptive: { clean: 0, tier: targetTier, played: state.played },
+      }
+    }
     const tier = level ? level.tier : state.tier
     if (state.clean >= 3 && gameLevels.some((item) => item.tier === tier + 1)) {
       return {
@@ -7753,23 +7787,396 @@
     }
   }
 
+  const GAME_DIFFICULTY_BANDS = [
+    { id: 'easy', label: 'Easy', max: 3 },
+    { id: 'medium', label: 'Medium', max: 7 },
+    { id: 'hard', label: 'Hard', max: 12 },
+    { id: 'vicious', label: 'Vicious', max: Infinity },
+  ]
+  let gamePieceFilter = 'all'
+  let gameDifficultyFilter = 'all'
+
+  function gameDifficultyBand(score) {
+    return GAME_DIFFICULTY_BANDS.find((band) => score <= band.max) || GAME_DIFFICULTY_BANDS.at(-1)
+  }
+
+  function gameLevelNodes(tree) {
+    return tree ? [tree, ...(tree.children || []).flatMap(gameLevelNodes)] : []
+  }
+
+  function gameLevelPieceCount(level) {
+    return Array.isArray(level?.ids) ? level.ids.length : gameLevelNodes(solutionOf(level)).length
+  }
+
+  function gameCloneTree(tree) {
+    return tree ? { ...tree, children: (tree.children || []).map(gameCloneTree) } : null
+  }
+
+  function gameTreeStateKey(tree) {
+    return tree ? tree.gameId + '(' + (tree.children || []).map(gameTreeStateKey).join(',') + ')' : '∅'
+  }
+
+  function gameTreeNodes(tree) {
+    return tree ? [tree, ...(tree.children || []).flatMap(gameTreeNodes)] : []
+  }
+
+  function gameTargetCards(level) {
+    const cards = new Map()
+    for (const node of gameLevelNodes(solutionOf(level))) {
+      if (node?.gameId && level.ids?.includes(node.gameId)) cards.set(node.gameId, { ...node, children: [] })
+    }
+    for (const card of Object.values(level.bankCards || {})) {
+      if (card?.gameId && level.ids?.includes(card.gameId)) cards.set(card.gameId, { ...card, children: [] })
+    }
+    return cards
+  }
+
+  function gameCandidateDrops(tree) {
+    if (!tree) return [{ type: 'newRootAt' }]
+    const drops = [{ type: 'rootAbove' }]
+    for (const parent of gameTreeNodes(tree)) {
+      const children = parent.children || []
+      for (let i = 0; i <= children.length; i++) {
+        const drop = { type: 'gap', parentUid: parent.gameId }
+        if (children[i - 1]) drop.prevUid = children[i - 1].gameId
+        if (children[i]) drop.nextUid = children[i].gameId
+        drops.push(drop)
+      }
+    }
+    return drops
+  }
+
+  function gameAddCard(tree, card, drop) {
+    const fresh = gameCloneTree(card)
+    if (!tree || drop.type === 'newRootAt') return fresh
+    const copy = gameCloneTree(tree)
+    if (drop.type === 'rootAbove') {
+      fresh.children = [copy]
+      return fresh
+    }
+    const parent = gameTreeNodes(copy).find(node => node.gameId === drop.parentUid)
+    if (!parent) return null
+    parent.children ||= []
+    let index = parent.children.length
+    if (drop.nextUid) {
+      const next = parent.children.findIndex(node => node.gameId === drop.nextUid)
+      if (next >= 0) index = next
+    } else if (drop.prevUid) {
+      const prev = parent.children.findIndex(node => node.gameId === drop.prevUid)
+      if (prev >= 0) index = prev + 1
+    }
+    parent.children.splice(index, 0, fresh)
+    return copy
+  }
+
+  function gameShortestMoves(level, startTree) {
+    if (!level) return null
+    const targetIds = new Set(level.ids || [])
+    const cards = gameTargetCards(level)
+    const start = gameCloneTree(startTree)
+    const queue = [{ tree: start, depth: 0 }]
+    const seen = new Set()
+    for (let cursor = 0; cursor < queue.length && cursor < 12000; cursor++) {
+      const { tree, depth } = queue[cursor]
+      const key = gameTreeStateKey(tree)
+      if (seen.has(key)) continue
+      seen.add(key)
+      if (tree && gameGrammar.complete(tree, [...targetIds])) return depth
+      const used = new Set(gameTreeNodes(tree).map(node => node.gameId))
+      for (const [id, card] of cards) {
+        if (used.has(id)) continue
+        for (const drop of gameCandidateDrops(tree)) {
+          if (tree && !gameGrammar.canAdd(tree, card, drop)) continue
+          const next = gameAddCard(tree, card, drop)
+          if (next) queue.push({ tree: next, depth: depth + 1 })
+        }
+      }
+    }
+    return null
+  }
+
+  function gameMinimumMoves(level) {
+    if (Number.isInteger(level?._minimumMoves)) return level._minimumMoves
+    const exact = gameShortestMoves(level, level?.tree)
+    const fallback = Math.max(0, (level?.ids?.length || 0) - gameTreeNodes(level?.tree).length)
+    level._minimumMoves = Number.isInteger(exact) ? exact : fallback
+    return level._minimumMoves
+  }
+
+  function gameBestHint(level, tree, bankWords) {
+    if (!level) return null
+    const cards = gameTargetCards(level)
+    const words = Array.isArray(bankWords) ? bankWords : []
+    let best = null
+    for (const word of words) {
+      const card = level.bankCards?.[word]
+      if (!card || !cards.has(card.gameId)) continue
+      for (const drop of gameCandidateDrops(tree)) {
+        if (tree && !gameGrammar.canAdd(tree, card, drop)) continue
+        const next = gameAddCard(tree, card, drop)
+        if (!next) continue
+        const remaining = gameShortestMoves(level, next)
+        if (remaining == null) continue
+        if (!best || remaining < best.remaining) best = { word, card, drop, remaining }
+      }
+    }
+    return best
+  }
+
+  let gameHintOverlay = null
+  function clearGameHintVisual() {
+    document.querySelectorAll('#Dock .chip.logyq-hint-piece').forEach(el => el.classList.remove('logyq-hint-piece'))
+    gameHintOverlay?.remove()
+    gameHintOverlay = null
+  }
+
+  function gameHintTargetScreen(hint) {
+    const svg = document.getElementById('canvas')
+    const root = bridge.core?.state?.root
+    if (!svg || !window.d3) return null
+    const rect = svg.getBoundingClientRect()
+    const transform = window.d3.zoomTransform(svg)
+    let point = null
+    if (!root || hint.drop.type === 'newRootAt') {
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height * 0.48 }
+    }
+    if (hint.drop.type === 'rootAbove') {
+      point = { x: root.x, y: root.y - GAME_LAYOUT.nodeHeight }
+    } else {
+      const nodes = root.descendants()
+      const parent = nodes.find(node => node.data?.gameId === hint.drop.parentUid)
+      if (!parent) return null
+      const prev = hint.drop.prevUid && nodes.find(node => node.data?.gameId === hint.drop.prevUid)
+      const next = hint.drop.nextUid && nodes.find(node => node.data?.gameId === hint.drop.nextUid)
+      const x = prev && next ? (prev.x + next.x) / 2
+        : prev ? prev.x + GAME_LAYOUT.nodeWidth * .9
+        : next ? next.x - GAME_LAYOUT.nodeWidth * .9
+        : parent.x
+      point = { x, y: parent.y + GAME_LAYOUT.nodeHeight }
+    }
+    return { x: rect.left + transform.applyX(point.x), y: rect.top + transform.applyY(point.y) }
+  }
+
+  function requestGameHint() {
+    const session = app.game
+    const level = levelForGuide()
+    if (!session || !level || session.cleared) return false
+    const hint = gameBestHint(level, bridge.snapshot()?.tree, bridge.core?.state?.wordBank || [])
+    if (!hint) return false
+    session.hintStage = Math.min(3, (session.hintStage || 0) + 1)
+    session.hintsUsed = Math.max(session.hintsUsed || 0, session.hintStage)
+    clearGameHintVisual()
+    const chip = [...document.querySelectorAll('#Dock .chip')].find(el => el.textContent.trim() === hint.word)
+    chip?.classList.add('logyq-hint-piece')
+    if (session.hintStage >= 2) {
+      const target = gameHintTargetScreen(hint)
+      if (target) {
+        const overlay = document.createElement('div')
+        overlay.id = 'logyq-game-hint-overlay'
+        overlay.innerHTML = '<svg aria-hidden="true"><defs><marker id="logyq-hint-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><polygon points="0,0 10,5 0,10" fill="#0f172a"/></marker></defs><circle class="logyq-hint-target" r="28"></circle><path class="logyq-hint-arrow" marker-end="url(#logyq-hint-head)"></path></svg>'
+        document.body.appendChild(overlay)
+        gameHintOverlay = overlay
+        const targetCircle = overlay.querySelector('.logyq-hint-target')
+        targetCircle.setAttribute('cx', target.x)
+        targetCircle.setAttribute('cy', target.y)
+        const arrow = overlay.querySelector('.logyq-hint-arrow')
+        if (session.hintStage >= 3 && chip) {
+          const source = chip.getBoundingClientRect()
+          const sx = source.left + source.width / 2
+          const sy = source.top
+          const bendY = Math.min(sy - 50, target.y + 80)
+          arrow.setAttribute('d', `M${sx},${sy} C${sx},${bendY} ${target.x},${bendY} ${target.x},${target.y + 30}`)
+        } else {
+          arrow.setAttribute('d', '')
+        }
+      }
+    }
+    return true
+  }
+
+  function gameAttemptPayload(session, level, solved) {
+    const profile = gameDifficultyProfile(level)
+    return {
+      item_id: level.id,
+      puzzle_tier: level.tier,
+      puzzle_difficulty: profile?.reasoning ?? null,
+      minimum_moves: session.minimumMoves ?? gameMinimumMoves(level),
+      actual_moves: session.actualMoves || 0,
+      wrong_drops: session.wrongDrops || 0,
+      returned_pieces: session.returnedPieces || 0,
+      hints_used: session.hintsUsed || 0,
+      elapsed_ms: Math.max(0, Date.now() - (session.startedAt || Date.now())),
+      solved: !!solved,
+      metadata: { piece_count: profile?.pieces || gameLevelPieceCount(level) },
+    }
+  }
+
+  window.LOGYQGameHint = Object.freeze({ request: requestGameHint, hide: clearGameHintVisual })
+
+  function gameDifficultyProfile(level) {
+    if (level._difficultyV2) return level._difficultyV2
+    const initial = structuredClone(level.tree)
+    const solution = solutionOf(level)
+    const solutionIds = new Set(level.ids || [])
+    const allCards = new Map()
+    for (const node of gameLevelNodes(level.tree)) allCards.set(node.gameId, { ...node, children: [] })
+    for (const card of Object.values(level.bankCards || {})) allCards.set(card.gameId, { ...card, children: [] })
+    const pool = [...allCards.values()]
+    const memo = new Map()
+    const treeKey = (tree) => tree.gameId + '(' + (tree.children || []).map(treeKey).join(',') + ')'
+    const cloneTree = (tree) => ({ ...tree, children: (tree.children || []).map(cloneTree) })
+    const currentNodes = (tree) => [tree, ...(tree.children || []).flatMap(currentNodes)]
+    const addTree = (tree, card, drop) => {
+      const copy = cloneTree(tree)
+      const fresh = cloneTree(card)
+      if (drop.type === 'rootAbove') {
+        fresh.children = [copy]
+        return fresh
+      }
+      const target = currentNodes(copy).find((node) => node.gameId === drop.parentUid)
+      if (!target) return null
+      target.children ||= []
+      let index = target.children.length
+      if (drop.nextUid) {
+        const next = target.children.findIndex((node) => node.gameId === drop.nextUid)
+        if (next >= 0) index = next
+      } else if (drop.prevUid) {
+        const prev = target.children.findIndex((node) => node.gameId === drop.prevUid)
+        if (prev >= 0) index = prev + 1
+      }
+      target.children.splice(index, 0, fresh)
+      return copy
+    }
+    const visit = (tree) => {
+      const key = treeKey(tree)
+      if (memo.has(key)) return memo.get(key)
+      const used = new Set(currentNodes(tree).map((node) => node.gameId))
+      const entry = {
+        children: [],
+        complete: false,
+        win: gameGrammar.complete(tree, [...solutionIds]),
+        longestDead: 0,
+      }
+      memo.set(key, entry)
+      if (entry.win) {
+        entry.complete = true
+        return entry
+      }
+      const next = new Map()
+      for (const card of pool) {
+        if (used.has(card.gameId)) continue
+        const drops = [{ type: 'rootAbove' }]
+        for (const parent of currentNodes(tree)) {
+          const children = parent.children || []
+          for (let i = 0; i <= children.length; i++) {
+            const drop = { type: 'gap', parentUid: parent.gameId }
+            if (children[i - 1]) drop.prevUid = children[i - 1].gameId
+            if (children[i]) drop.nextUid = children[i].gameId
+            drops.push(drop)
+          }
+        }
+        for (const drop of drops) {
+          if (!gameGrammar.canAdd(tree, card, drop)) continue
+          const nextTree = addTree(tree, card, drop)
+          if (nextTree) next.set(treeKey(nextTree), nextTree)
+        }
+      }
+      for (const child of next.values()) entry.children.push(visit(child))
+      entry.complete = entry.children.some((child) => child.complete)
+      if (!entry.complete) {
+        entry.longestDead = entry.children.length
+          ? 1 + Math.max(...entry.children.map((child) => child.longestDead))
+          : 0
+      }
+      return entry
+    }
+    visit(initial)
+    let misleading = 0
+    let maxChoices = 0
+    let falsePathDepth = 0
+    let legalAdditions = 0
+    let deadEnds = 0
+    for (const entry of memo.values()) {
+      maxChoices = Math.max(maxChoices, entry.children.length)
+      legalAdditions += entry.children.length
+      if (!entry.children.length && !entry.win) deadEnds += 1
+      for (const child of entry.children) {
+        if (!child.complete) {
+          misleading += 1
+          falsePathDepth = Math.max(falsePathDepth, 1 + child.longestDead)
+        }
+      }
+    }
+    const branchExcess = solution
+      ? gameLevelNodes(solution).reduce((sum, node) => sum + Math.max(0, (node.children || []).length - 1), 0)
+      : 0
+    const reasoning = branchExcess +
+      Math.log2(1 + misleading) +
+      0.5 * Math.log2(1 + maxChoices) +
+      falsePathDepth
+    const band = gameDifficultyBand(reasoning)
+    level._difficultyV2 = {
+      version: 'logyq-difficulty-v2-standard-anchor',
+      reasoning: +reasoning.toFixed(2),
+      band: band.id,
+      bandLabel: band.label,
+      pieces: gameLevelPieceCount(level),
+      reachableStates: memo.size,
+      legalAdditions,
+      misleadingAdditions: misleading,
+      maxAvailableAdditions: maxChoices,
+      falsePathDepth,
+      deadEnds,
+    }
+    return level._difficultyV2
+  }
+
+  function populateGamePieceFilter() {
+    const select = document.getElementById('logyq-game-piece-filter')
+    if (!select || select.dataset.ready === '1') return
+    const counts = [...new Set(gameLevels.map(gameLevelPieceCount))].sort((a, b) => a - b)
+    for (const count of counts) {
+      const option = document.createElement('option')
+      option.value = String(count)
+      option.textContent = count + (count === 1 ? ' piece' : ' pieces')
+      select.appendChild(option)
+    }
+    select.dataset.ready = '1'
+  }
+
   function renderGamePath() {
     const path = document.getElementById('logyq-game-path')
     if (!path) return
+    populateGamePieceFilter()
     const progress = gameProgress()
+    const filtered = gameLevels.filter((level) => {
+      const profile = gameDifficultyProfile(level)
+      return (gamePieceFilter === 'all' || String(profile.pieces) === gamePieceFilter) &&
+        (gameDifficultyFilter === 'all' || profile.band === gameDifficultyFilter)
+    })
     let html = ''
-    let seen = 0
-    for (const level of gameLevels) {
+    let seen = null
+    for (const level of filtered) {
       if (level.tier !== seen) {
         seen = level.tier
         html += '<li class="logyq-tier-head">Tier ' + level.tier + '</li>'
       }
       const done = !!progress[level.id]
+      const profile = gameDifficultyProfile(level)
       html += '<li><button type="button" data-game-level="' + level.id + '"' +
         (done ? ' class="is-cleared"' : '') + '>' +
-        level.title + (done ? ' ✓' : '') + '<span>' + level.hint + '</span></button></li>'
+        '<span class="logyq-game-level-copy"><span class="logyq-game-level-title">' +
+        level.title + (done ? ' ✓' : '') + '</span>' +
+        (level.hint ? '<span class="logyq-game-level-hint">' + level.hint + '</span>' : '') +
+        '</span><span class="logyq-game-level-meta">' +
+        '<span class="logyq-piece-count">' + profile.pieces + ' pieces</span>' +
+        '<span class="logyq-difficulty-badge" data-band="' + profile.band + '">' +
+        profile.bandLabel + ' ' + profile.reasoning.toFixed(1) + '</span></span></button></li>'
     }
+    if (!filtered.length) html = '<li class="logiq-empty"><p>No levels match these filters.</p></li>'
     path.innerHTML = html
+    const count = document.getElementById('logyq-game-filter-count')
+    if (count) count.textContent = filtered.length + ' of ' + gameLevels.length + ' levels'
     renderGameTrail(progress)
   }
 
@@ -7852,7 +8259,9 @@
     if (before !== null && before !== JSON.stringify(snapshot?.tree)) {
       window.LOGYQGameSound?.drop()
       window.LOGYQGameGuide?.hide()
-      app.game.guide = null
+      clearGameHintVisual()
+      if (app.game && !app.game.cleared) app.game.actualMoves = (app.game.actualMoves || 0) + 1
+      if (app.game) app.game.guide = null
     }
   }
   function setupGameSound() {
@@ -7957,31 +8366,34 @@
       }
       document.body.insertBefore(svg, document.getElementById('canvas'))
       gameArtElement = svg
-      if (animate) window.LOGYQGameSound?.complete()
+      if (animate) {
+        const profile = gameDifficultyProfile(levelForGuide())
+        const context = {
+          difficulty: profile?.band || 'any',
+          reasoning: profile?.reasoning,
+          pieces: profile?.pieces,
+          achievement: app.game?.adaptiveResult?.achievement || 'solve',
+          efficiency: app.game?.adaptiveResult?.attempt?.efficiency ?? null,
+          promoted: Number(app.game?.adaptiveResult?.attempt?.grade_after || 0) >
+            Number(app.game?.adaptiveResult?.attempt?.grade_before || 0),
+        }
+        // The spreading color is the celebratory beat. Play the already-buffered
+        // clip now; telemetry continues independently and must never delay it.
+        if (!window.LOGYQCelebrations?.playPrepared?.()) {
+          window.LOGYQGameSound?.celebrate?.(context)
+        }
+      }
       document.body.classList.add('logyq-game-completion')
     }, delay)
   }
 
   function levelForGuide() { return gameLevels.find(level => level.id === app.game?.id) }
-
   function gameCameraTarget(root) {
-    return app.game?.guide
-      ? window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
-      : null
+    return app.game?.guide ? window.LOGYQGameGuide?.target(levelForGuide(), root.descendants()) : null
   }
-
-  function cancelGameCameraFit() {
-    puzzleCamera.cancel('game')
-  }
-
-  function fitGameCamera(duration = 0) {
-    return puzzleCamera.fitNow('game', duration)
-  }
-
-  function scheduleGameCameraFit(delay = 280) {
-    puzzleCamera.schedule('game', delay)
-  }
-
+  function cancelGameCameraFit() { puzzleCamera.cancel('game') }
+  function fitGameCamera(duration = 0) { return puzzleCamera.fitNow('game', duration) }
+  function scheduleGameCameraFit(delay = 280) { puzzleCamera.schedule('game', delay) }
   function refitGameCamera() {
     puzzleCamera.refit('game')
     if (gameArtElement) scheduleGameCompletionArt(700, false)
@@ -7991,8 +8403,15 @@
   function leaveGamePlay() {
     const session = app.game
     if (!session) return
+    const level = gameLevels.find(item => item.id === session.id)
+    if (!session.cleared && !session.telemetryRecorded && level &&
+        ((session.actualMoves || 0) > 0 || (session.hintsUsed || 0) > 0 || Date.now() - (session.startedAt || Date.now()) > 5000)) {
+      session.telemetryRecorded = true
+      window.LOGYQLearner?.recordGame?.(gameAttemptPayload(session, level, false)).catch?.(() => {})
+    }
     clearGameCompletionArt()
     window.LOGYQGameGuide?.hide()
+    clearGameHintVisual()
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
     app.game = null
@@ -8016,6 +8435,7 @@
   function noteWrongDrop() {
     if (!app.game || app.game.cleared) return
     app.game.wrongDrops = (app.game.wrongDrops || 0) + 1
+    app.game.actualMoves = (app.game.actualMoves || 0) + 1
   }
 
   function showGameTier(level, levelUp) {
@@ -8055,7 +8475,12 @@
       ;(node.children || []).forEach(restore)
     }
     restore(removed)
-    return { tree: removed === nextTree ? null : nextTree, bank: nextBank, bankCards: nextCards }
+    return {
+      tree: removed === nextTree ? null : nextTree,
+      bank: nextBank,
+      bankCards: nextCards,
+      removedCount: gameTreeNodes(removed).length,
+    }
   }
 
   function beginGameLevel(level, opts) {
@@ -8064,13 +8489,22 @@
     window.LOGYQGameGuide?.hide()
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
-    const origin = app.game?.origin || (app.curriculum ? {
+    const previousGame = app.game
+    const origin = previousGame?.origin || (app.curriculum ? {
       current: { id: null, name: DEFAULT_NAME }, hasOpenMap: false,
       lastSnapshot: '', snapshot: { tree: null, wordBank: [] },
     } : {
       current: { ...app.current }, hasOpenMap: app.hasOpenMap,
       lastSnapshot: app.lastSnapshot, snapshot: bridge.snapshot(),
     })
+    if (previousGame && !previousGame.cleared && !previousGame.telemetryRecorded) {
+      const previousLevel = gameLevels.find(item => item.id === previousGame.id)
+      if (previousLevel && ((previousGame.actualMoves || 0) > 0 || (previousGame.hintsUsed || 0) > 0 ||
+          Date.now() - (previousGame.startedAt || Date.now()) > 5000)) {
+        previousGame.telemetryRecorded = true
+        window.LOGYQLearner?.recordGame?.(gameAttemptPayload(previousGame, previousLevel, false)).catch?.(() => {})
+      }
+    }
     leaveCurriculumPlay()
     const progress = gameProgress()
     const state = adaptiveState(progress)
@@ -8084,10 +8518,31 @@
         played: { ...state.played, [level.id]: Date.now() },
       },
     })
-    const levelNumber = Math.max(1, GAME_LEVELS.findIndex(item => item.id === level.id) + 1)
-    window.LOGYQGameThumbGain?.setLevel?.(levelNumber)
-    app.game = { id: level.id, levelNumber, origin, cleared: false, wrongDrops: 0, guide:progress[level.id] ? null : level.guide,
-      bankCards: { ...level.bankCards } }
+    const levelNumber = Math.max(1, gameLevels.findIndex(item => item.id === level.id) + 1)
+    app.game = {
+      id: level.id,
+      levelNumber,
+      origin,
+      cleared: false,
+      wrongDrops: 0,
+      actualMoves: 0,
+      returnedPieces: 0,
+      hintsUsed: 0,
+      hintStage: 0,
+      startedAt: Date.now(),
+      minimumMoves: gameMinimumMoves(level),
+      telemetryRecorded: false,
+      telemetryPromise: null,
+      guide: progress[level.id] ? null : level.guide,
+      bankCards: { ...level.bankCards },
+    }
+    const celebrationProfile = gameDifficultyProfile(level)
+    window.LOGYQCelebrations?.prepare?.({
+      difficulty: celebrationProfile?.band || 'any',
+      reasoning: celebrationProfile?.reasoning,
+      pieces: celebrationProfile?.pieces,
+      achievement: 'solve',
+    }).catch?.(() => {})
     app.current = { id: null, name: level.title }
     app.hasOpenMap = true
     app.lastSnapshot = 'game'
@@ -8098,8 +8553,10 @@
     window.__logyqGameDropAllowed = ({ tree, movingUid, drop, trash, multi }) => {
       if (!drop || trash || multi) return false
       const allowed = gameGrammar.canDrop(tree, movingUid, drop)
-      if (!allowed) gameStatus('Those colors do not match here. Try another position.')
-      else rememberGameDrop()
+      if (!allowed) {
+        noteWrongDrop()
+        gameStatus('Those colors do not match here. Try another position.')
+      } else rememberGameDrop()
       return allowed
     }
     window.__logyqGameBankNode = (word) => {
@@ -8111,8 +8568,10 @@
       const card = app.game?.bankCards?.[words[0]]
       const allowed = !!card && (drop.type === 'newRootAt' && !tree
         ? true : gameGrammar.canAdd(tree, card, drop))
-      if (!allowed) gameStatus('Those colors do not match here. Try another position.')
-      else rememberGameDrop()
+      if (!allowed) {
+        noteWrongDrop()
+        gameStatus('Those colors do not match here. Try another position.')
+      } else rememberGameDrop()
       return allowed
     }
     window.__logyqGameReturnToBank = (uid) => {
@@ -8122,6 +8581,9 @@
       const result = returnGameBranch(engine.state.root?.data, engine.state.wordBank || [], session.bankCards, uid, level.id)
       if (!result) return false
       session.bankCards = result.bankCards
+      session.returnedPieces = (session.returnedPieces || 0) + (result.removedCount || 1)
+      session.actualMoves = (session.actualMoves || 0) + (result.removedCount || 1)
+      clearGameHintVisual()
       engine.state.wordBank = result.bank
       engine.state.root = result.tree ? d3.hierarchy(result.tree) : null
       if (engine.state.root) {
@@ -8180,6 +8642,13 @@
     window.LOGYQGameGuide?.hide()
     session.guide = null
     session.cleared = true
+    session.telemetryRecorded = true
+    session.telemetryPromise = window.LOGYQLearner?.recordGame?.(gameAttemptPayload(session, level, true))
+      ?.then?.((result) => {
+        session.adaptiveResult = result
+        return result
+      })
+      ?.catch?.(() => null) || Promise.resolve(null)
     const progress = writeProgress(recordSolve(gameProgress(), level.id, session.wrongDrops || 0))
     const solvedCount = gameLevels.filter((item) => progress[item.id]).length
     const upcoming = chooseNext(progress, level.id).level
@@ -8204,12 +8673,20 @@
 
   function openTrailLevel(level, opts) {
     if (!level) return
+    window.LOGYQGameSound?.unlock?.()
     trailReturnTop = document.getElementById('logyq-trail-world')?.scrollTop ?? null
     beginGameLevel(level, opts)
   }
 
   const trailDrawer = document.getElementById('logyq-trail-drawer')
   const allLevels = document.getElementById('logyq-trail-all-levels')
+  document.getElementById('logyq-trail-home')?.addEventListener('click', () => {
+    setTrailDrawer(false)
+    if (app.game) leaveGamePlay()
+    setHomeTab('maps')
+    renderLibrary()
+    if (app.libraryStatus !== 'live') refreshLibrary()
+  })
   function setTrailDrawer(open) {
     if (!trailDrawer || !allLevels) return
     trailDrawer.hidden = !open
@@ -8239,6 +8716,15 @@
     renderGamePath()
   })
 
+  document.getElementById('logyq-game-piece-filter')?.addEventListener('change', (event) => {
+    gamePieceFilter = event.target.value || 'all'
+    renderGamePath()
+  })
+  document.getElementById('logyq-game-difficulty-filter')?.addEventListener('change', (event) => {
+    gameDifficultyFilter = event.target.value || 'all'
+    renderGamePath()
+  })
+
   document.getElementById('logyq-game-path')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-game-level]')
     if (!button) return
@@ -8248,8 +8734,12 @@
     beginGameLevel(gameLevels[index])
   })
   document.getElementById('logyq-game-check')?.addEventListener('click', checkGame)
-  document.getElementById('logyq-game-next')?.addEventListener('click', () => {
+  document.getElementById('logyq-game-next')?.addEventListener('click', async () => {
     if (!app.game?.cleared) return
+    // After Next: hold the applause unchanged for 1 second, then fade it
+    // smoothly over the following 3 seconds while the next puzzle opens.
+    window.LOGYQCelebrations?.fadeOutAfter?.(1000, 3000)
+    await Promise.resolve(app.game.telemetryPromise).catch(() => null)
     const progress = gameProgress()
     const choice = chooseNext(progress, app.game.id)
     if (!choice.level) return
@@ -8268,7 +8758,8 @@
   }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
-    recordSolve, chooseNext, trailWindow, presentSolved, layoutBudget: GAME_LAYOUT,
+    recordSolve, chooseNext, trailWindow, presentSolved, minimumMoves: gameMinimumMoves, bestHint: gameBestHint,
+    layoutBudget: GAME_LAYOUT,
     challengeLayoutBudget: CHALLENGE_LAYOUT, measureSolved: layoutSolvedTree, returnBranch: returnGameBranch,
   }
   // FOLDER_PURE_START
