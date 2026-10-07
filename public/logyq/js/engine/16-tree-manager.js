@@ -156,7 +156,7 @@ window.addEventListener('keydown', (e) => {
     elements.fitBtn.addEventListener('click', ()=> {
       if (typeof gameCameraLocked === 'function' && gameCameraLocked()) return;
       if (document.body?.classList?.contains('logyq-curriculum')) {
-        this.settleRootAnchored({ force: false });
+        this.fitPuzzleTree(state.root, { duration: 280 });
         return;
       }
       this.autoFit();
@@ -675,10 +675,35 @@ centerOnSelected(opts = {}) {
       .call(state.zoom.transform, target)
   },
 
+  // Shared Game/Curriculum puzzle framing. Use the same physical card
+  // geometry for both surfaces so a one-card start and every rebuilt tree
+  // land in the exact same centered safe frame.
+  fitPuzzleTree(root, { target = null, duration = 0 } = {}){
+    const { config: CONFIG } = logyq
+    if (!root) return
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
+    root.each(node => {
+      left = Math.min(left, node.x - CONFIG.CARD_WIDTH / 2)
+      right = Math.max(right, node.x + CONFIG.CARD_WIDTH / 2)
+      top = Math.min(top, node.y - CONFIG.CARD_HEIGHT / 2)
+      bottom = Math.max(bottom, node.y + CONFIG.CARD_HEIGHT / 2)
+    })
+    if (target && Number.isFinite(target.x) && Number.isFinite(target.y)) {
+      left = Math.min(left, target.x - CONFIG.CARD_WIDTH / 2)
+      right = Math.max(right, target.x + CONFIG.CARD_WIDTH / 2)
+      top = Math.min(top, target.y - CONFIG.CARD_HEIGHT / 2)
+      bottom = Math.max(bottom, target.y + CONFIG.CARD_HEIGHT / 2)
+    }
+    if (!isFinite(left) || !isFinite(top) || !isFinite(right) || !isFinite(bottom)) return
+    this.fitGameBounds({ x: left, y: top, width: right - left, height: bottom - top }, { duration })
+  },
+
   // Fit the current assembled board inside the measured safe area.
   fitGameBounds(bounds, { duration = 0 } = {}){
     const { state, elements } = logyq
-    if (typeof gameCameraLocked === 'function' && !gameCameraLocked()) return
+    const curriculum = !!document.body?.classList?.contains('logyq-curriculum')
+    const game = typeof gameCameraLocked === 'function' && gameCameraLocked()
+    if (!game && !curriculum) return
     const frame = this.usableFrame()
     if (!frame || !bounds || !(bounds.width > 0) || !(bounds.height > 0)) return
     const svgBox = frame.svgNode.getBoundingClientRect()
@@ -703,13 +728,15 @@ centerOnSelected(opts = {}) {
     let right = frame.right
     let bottom = frame.bottom
     const gap = 8
-    const bar = shownRect('logyq-game-bar')
+    const barId = curriculum ? 'logyq-curriculum-bar' : 'logyq-game-bar'
+    const nextId = curriculum ? 'logyq-curriculum-next' : 'logyq-game-next'
+    const bar = shownRect(barId)
     if (bar) {
       const midY = (top + bottom) / 2
       if (bar.height < frame.fullH * 0.45 && bar.bottom <= midY) top = Math.max(top, bar.bottom + gap)
       else if (bar.height < frame.fullH * 0.45 && bar.top >= midY) bottom = Math.min(bottom, bar.top - gap)
     }
-    const next = shownRect('logyq-game-next')
+    const next = shownRect(nextId)
     if (next && next.height < frame.fullH * 0.45) {
       const midY = (top + bottom) / 2
       if (next.bottom <= midY) top = Math.max(top, next.bottom + gap)

@@ -918,6 +918,8 @@ state.chipDrag.drop = null;
 
 if (!drop) { return; }
 
+const guideTargetReady = !window.LOGYQGameGuide?.active?.() || window.LOGYQGameGuide?.containsClientPoint?.(event.clientX, event.clientY)
+
 
 
 
@@ -929,7 +931,7 @@ if (!drop) { return; }
       .attr('cx', cx)
       .attr('cy', cy)
       .attr('r', CONFIG.CARET_DOT_RADIUS)
-      .style('opacity', 1);
+      .style('opacity', guideTargetReady ? 1 : 0);
 
 
 
@@ -961,7 +963,7 @@ state.chipDrag.drop = {
   const targetH = state.root?.descendants()
     .find(n => n.data && n.data._uid === targetUid);
 
-  if (targetH && !logyq.selection.showGameChildCaret(targetUid)) {
+  if (targetH && guideTargetReady && !logyq.selection.showGameChildCaret(targetUid)) {
     // highlight target node
     elements.gNodes.selectAll("g.node")
       .filter(n => n.data && n.data._uid === targetUid)
@@ -983,7 +985,7 @@ state.chipDrag.drop = {
   state.chipDrag.drop = directPuzzleShelf() ? { type: 'rootAbove' } : null
   if (state.chipDrag.drop) {
     const [x, y] = logyq.selection.caretXYFromHit(drop._hit);
-    elements.caretDot.attr('cx', x).attr('cy', y).style('opacity', 1);
+    elements.caretDot.attr('cx', x).attr('cy', y).style('opacity', guideTargetReady ? 1 : 0);
   }
 }
 
@@ -1044,13 +1046,17 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     render();
     logyq.treeManager.layoutAndRender(false);
 
-    // Keep your “drop under pointer” behavior. Game keeps the fitted camera.
-    if (!(typeof gameCameraLocked === 'function' && gameCameraLocked())) {
-    const current = d3.zoomTransform(elements.svg.node());
-    const s = current.k || 1;
-    const rx = state.root.x, ry = state.root.y;
-    const tx = drop.px - s * rx, ty = drop.py - s * ry;
-    elements.svg.call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
+    // Normal mapper preserves free placement under the finger.
+    // Direct puzzle surfaces (Game + Curriculum) always hand camera ownership
+    // back to the shared puzzle camera so the first placed piece recenters.
+    if (!directPuzzleShelf()) {
+      const current = d3.zoomTransform(elements.svg.node());
+      const s = current.k || 1;
+      const rx = state.root.x, ry = state.root.y;
+      const tx = drop.px - s * rx, ty = drop.py - s * ry;
+      elements.svg.call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
+    } else {
+      window.LOGYQPreview?.puzzleCamera?.scheduleActive?.(0);
     }
     return;
   }

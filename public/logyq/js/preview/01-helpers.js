@@ -212,3 +212,121 @@
       .replaceAll("'", '&#039;')
   }
 
+
+
+  // One camera lifecycle for every direct puzzle surface. Game and Curriculum
+  // only provide their guide target; pointer locking, deferred refits, resize
+  // handling, and the actual tree fit all live here.
+  function createPuzzleCameraController() {
+    let owner = null
+    let targetForRoot = null
+    let afterFit = null
+    let timer = null
+    let pending = false
+    const pointers = new Set()
+
+    const current = (name) => !!name && owner === name
+    const busy = (name) => current(name) && (
+      pointers.size > 0
+      || !!window.__logyqHoldDragFrozen?.()
+      || !!bridge.core?.elements?.svg?.classed?.('dragging-mode')
+    )
+
+    function cancelTimer() {
+      if (timer !== null) clearTimeout(timer)
+      timer = null
+      bridge.core?.elements?.svg?.interrupt?.('game-fit')
+    }
+
+    function activate(name, options = {}) {
+      cancelTimer()
+      pointers.clear()
+      pending = false
+      owner = name || null
+      targetForRoot = typeof options.target === 'function' ? options.target : null
+      afterFit = typeof options.afterFit === 'function' ? options.afterFit : null
+    }
+
+    function deactivate(name) {
+      if (!current(name)) return
+      cancelTimer()
+      pointers.clear()
+      pending = false
+      owner = null
+      targetForRoot = null
+      afterFit = null
+    }
+
+    function fitNow(name, duration = 0) {
+      if (!current(name) || pointers.size) return false
+      const engine = bridge.core
+      const root = engine?.state?.root
+      if (!root) return false
+      let target = null
+      try { target = targetForRoot?.(root) || null } catch (_error) {}
+      engine.treeManager?.fitPuzzleTree?.(root, { target, duration })
+      try { afterFit?.() } catch (_error) {}
+      return true
+    }
+
+    function schedule(name, delay = 280) {
+      if (!current(name) || !bridge.core?.state?.root) return
+      pending = true
+      if (timer !== null) clearTimeout(timer)
+      timer = null
+      if (pointers.size) return
+      timer = setTimeout(() => {
+        timer = null
+        if (!current(name) || document.body.classList.contains('logyq-home')) return
+        if (busy(name)) {
+          schedule(name, 100)
+          return
+        }
+        pending = false
+        fitNow(name, 280)
+      }, delay)
+    }
+
+    function cancel(name) {
+      if (!current(name)) return
+      cancelTimer()
+    }
+
+    function refit(name) {
+      schedule(name, 80)
+    }
+
+    function scheduleActive(delay = 0) {
+      if (!owner) return
+      schedule(owner, delay)
+    }
+
+    function onPointerDown(event) {
+      if (!owner) return
+      pointers.add(event.pointerId)
+      pending = true
+      cancelTimer()
+    }
+
+    function onPointerRelease(event) {
+      pointers.delete(event.pointerId)
+      if (!pointers.size && pending && owner) schedule(owner)
+    }
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pointerdown', onPointerDown, true)
+      window.addEventListener('pointerup', onPointerRelease, true)
+      window.addEventListener('pointercancel', onPointerRelease, true)
+      window.addEventListener('blur', () => {
+        pointers.clear()
+        if (pending && owner) schedule(owner)
+      })
+      window.addEventListener('resize', () => { if (owner) refit(owner) })
+      window.addEventListener('orientationchange', () => { if (owner) refit(owner) })
+    }
+
+    return Object.freeze({ activate, deactivate, fitNow, schedule, scheduleActive, cancel, refit, current, busy })
+  }
+
+  const puzzleCamera = createPuzzleCameraController()
+  preview.puzzleCamera = puzzleCamera

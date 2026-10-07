@@ -60,7 +60,8 @@
       @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
         body.logyq-game:not(.logyq-home) #logyq-game-bar{top:8px;left:calc(148px + env(safe-area-inset-left) + 8px);right:68px}
       }
-      #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
+      #logyq-game-check{background:#2563eb!important;color:#fff!important}
+      #logyq-game-next{background:#34a36f!important;color:#fff!important}
       #logyq-game-next[hidden]{display:none}
       .logyq-game-sound-control{display:none!important}
       body.logyq-game .logyq-game-sound-control{display:block!important}
@@ -98,6 +99,19 @@
       #logyq-curriculum-next,#logyq-curriculum-levels{flex:none;border:1px solid #bbf7d0;border-radius:7px;background:#fff;color:#14532d;padding:3px 7px;font:750 12px/1 system-ui,sans-serif;cursor:pointer}
       #logyq-curriculum-next{background:#16a34a;color:#fff;border-color:#16a34a}
       #logyq-curriculum-next[hidden]{display:none!important}
+      #logyq-curriculum-check[hidden]{display:none!important}
+      #logyq-curriculum-check-summary{position:absolute;right:-5px;top:-7px;display:flex;align-items:center;justify-content:center;gap:3px;padding:2px 4px;border-radius:999px;background:rgba(255,255,255,.98);box-shadow:0 2px 7px rgba(15,23,42,.18);font:800 8px/1 system-ui,sans-serif;white-space:nowrap;pointer-events:none}
+      #logyq-curriculum-check-summary[hidden]{display:none!important}
+      #logyq-curriculum-check-summary [data-tone]{display:inline-flex;align-items:center;gap:1px}
+      #logyq-curriculum-check-summary [data-tone="correct"]{color:#16a34a}
+      #logyq-curriculum-check-summary [data-tone="insufficient"]{color:#d97706}
+      #logyq-curriculum-check-summary [data-tone="wrong"]{color:#dc2626}
+      #logyq-curriculum-check-summary b{font:800 8px/1 system-ui,sans-serif;color:inherit}
+      .logyq-curriculum-action-label{display:block}
+      body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-correct{stroke:#22c55e!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;filter:drop-shadow(0 0 5px rgba(34,197,94,.42));transition:stroke .55s ease,opacity .55s ease,filter .55s ease}
+      body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-insufficient{stroke:#f59e0b!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 8!important;animation:logyq-semantic-flow .8s linear infinite!important;filter:drop-shadow(0 0 5px rgba(245,158,11,.38))}
+      body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-wrong{stroke:#ef4444!important;stroke-width:4.5px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 7!important;animation:logyq-semantic-flow .62s linear infinite!important;filter:drop-shadow(0 0 6px rgba(239,68,68,.46))}
+      @keyframes logyq-semantic-flow{to{stroke-dashoffset:-36}}
       body.logyq-curriculum:not(.logyq-home) #logyq-map-title{display:none!important}
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
         body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{top:48px;left:8px;right:8px}
@@ -401,12 +415,11 @@
       body.logyq-game #Dock.is-empty,body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
       body.logyq-game #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
-      body.logyq-curriculum-frozen #Dock:not(.is-empty){min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible}
-      body.logyq-curriculum-frozen #Dock.is-empty{display:flex!important;width:64px;min-width:64px;max-width:64px;height:64px;min-height:64px;max-height:64px;padding:0;border:2px dashed rgba(100,116,139,.55);border-radius:16px;background:rgba(255,255,255,.42);box-shadow:none}
-      body.logyq-curriculum-frozen #Dock.is-empty #logyq-bank-chips::before{content:''}
+      body.logyq-game #Dock:not(.is-empty),body.logyq-curriculum-frozen #Dock:not(.is-empty){min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible}
+      body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{max-width:640px}}
       @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
-      #logyq-drag-guide{position:fixed;inset:0;z-index:6;pointer-events:none}
+      #logyq-drag-guide{position:fixed;inset:0;z-index:78;pointer-events:none}
       #logyq-guide-arrow{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
       #logyq-guide-target{position:absolute;box-sizing:border-box;border:2px dashed #64748b;border-radius:12px;background:rgba(255,255,255,.45);overflow:hidden;box-shadow:0 0 0 3px rgba(255,255,255,.7)}
       #logyq-guide-target svg{display:block;width:100%;height:100%;opacity:.35}

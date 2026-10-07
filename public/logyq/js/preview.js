@@ -275,6 +275,90 @@
 
   preview.maps.contentKey = contentKey
 
+  // One camera lifecycle for every direct puzzle surface.
+  function createPuzzleCameraController() {
+    let owner = null
+    let targetForRoot = null
+    let afterFit = null
+    let timer = null
+    let pending = false
+    const pointers = new Set()
+
+    const current = (name) => !!name && owner === name
+    const busy = (name) => current(name) && (
+      pointers.size > 0
+      || !!window.__logyqHoldDragFrozen?.()
+      || !!bridge.core?.elements?.svg?.classed?.('dragging-mode')
+    )
+
+    function cancelTimer() {
+      if (timer !== null) clearTimeout(timer)
+      timer = null
+      bridge.core?.elements?.svg?.interrupt?.('game-fit')
+    }
+    function activate(name, options = {}) {
+      cancelTimer(); pointers.clear(); pending = false
+      owner = name || null
+      targetForRoot = typeof options.target === 'function' ? options.target : null
+      afterFit = typeof options.afterFit === 'function' ? options.afterFit : null
+    }
+    function deactivate(name) {
+      if (!current(name)) return
+      cancelTimer(); pointers.clear(); pending = false
+      owner = null; targetForRoot = null; afterFit = null
+    }
+    function fitNow(name, duration = 0) {
+      if (!current(name) || pointers.size) return false
+      const engine = bridge.core
+      const root = engine?.state?.root
+      if (!root) return false
+      let target = null
+      try { target = targetForRoot?.(root) || null } catch (_error) {}
+      engine.treeManager?.fitPuzzleTree?.(root, { target, duration })
+      try { afterFit?.() } catch (_error) {}
+      return true
+    }
+    function schedule(name, delay = 280) {
+      if (!current(name) || !bridge.core?.state?.root) return
+      pending = true
+      if (timer !== null) clearTimeout(timer)
+      timer = null
+      if (pointers.size) return
+      timer = setTimeout(() => {
+        timer = null
+        if (!current(name) || document.body.classList.contains('logyq-home')) return
+        if (busy(name)) { schedule(name, 100); return }
+        pending = false
+        fitNow(name, 280)
+      }, delay)
+    }
+    function cancel(name) { if (current(name)) cancelTimer() }
+    function refit(name) { schedule(name, 80) }
+    function scheduleActive(delay = 0) {
+      if (!owner) return
+      schedule(owner, delay)
+    }
+    function onPointerDown(event) {
+      if (!owner) return
+      pointers.add(event.pointerId); pending = true; cancelTimer()
+    }
+    function onPointerRelease(event) {
+      pointers.delete(event.pointerId)
+      if (!pointers.size && pending && owner) schedule(owner)
+    }
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('pointerdown', onPointerDown, true)
+      window.addEventListener('pointerup', onPointerRelease, true)
+      window.addEventListener('pointercancel', onPointerRelease, true)
+      window.addEventListener('blur', () => { pointers.clear(); if (pending && owner) schedule(owner) })
+      window.addEventListener('resize', () => { if (owner) refit(owner) })
+      window.addEventListener('orientationchange', () => { if (owner) refit(owner) })
+    }
+    return Object.freeze({ activate, deactivate, fitNow, schedule, scheduleActive, cancel, refit, current, busy })
+  }
+  const puzzleCamera = createPuzzleCameraController()
+  preview.puzzleCamera = puzzleCamera
+
   function escapeHtml(value) {
     return String(value ?? '')
       .replaceAll('&', '&amp;')
@@ -360,7 +444,8 @@
       @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
         body.logyq-game:not(.logyq-home) #logyq-game-bar{top:8px;left:calc(148px + env(safe-area-inset-left) + 8px);right:68px}
       }
-      #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
+      #logyq-game-check{background:#2563eb!important;color:#fff!important}
+      #logyq-game-next{background:#34a36f!important;color:#fff!important}
       #logyq-game-next[hidden]{display:none}
       .logyq-game-sound-control{display:none!important}
       body.logyq-game .logyq-game-sound-control{display:block!important}
@@ -398,6 +483,19 @@
       #logyq-curriculum-next,#logyq-curriculum-levels{flex:none;border:1px solid #bbf7d0;border-radius:7px;background:#fff;color:#14532d;padding:3px 7px;font:750 12px/1 system-ui,sans-serif;cursor:pointer}
       #logyq-curriculum-next{background:#16a34a;color:#fff;border-color:#16a34a}
       #logyq-curriculum-next[hidden]{display:none!important}
+      #logyq-curriculum-check[hidden]{display:none!important}
+      #logyq-curriculum-check-summary{position:absolute;right:-5px;top:-7px;display:flex;align-items:center;justify-content:center;gap:3px;padding:2px 4px;border-radius:999px;background:rgba(255,255,255,.98);box-shadow:0 2px 7px rgba(15,23,42,.18);font:800 8px/1 system-ui,sans-serif;white-space:nowrap;pointer-events:none}
+      #logyq-curriculum-check-summary[hidden]{display:none!important}
+      #logyq-curriculum-check-summary [data-tone]{display:inline-flex;align-items:center;gap:1px}
+      #logyq-curriculum-check-summary [data-tone="correct"]{color:#16a34a}
+      #logyq-curriculum-check-summary [data-tone="insufficient"]{color:#d97706}
+      #logyq-curriculum-check-summary [data-tone="wrong"]{color:#dc2626}
+      #logyq-curriculum-check-summary b{font:800 8px/1 system-ui,sans-serif;color:inherit}
+      .logyq-curriculum-action-label{display:block}
+      body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-correct{stroke:#22c55e!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;filter:drop-shadow(0 0 5px rgba(34,197,94,.42));transition:stroke .55s ease,opacity .55s ease,filter .55s ease}
+      body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-insufficient{stroke:#f59e0b!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 8!important;animation:logyq-semantic-flow .8s linear infinite!important;filter:drop-shadow(0 0 5px rgba(245,158,11,.38))}
+      body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-wrong{stroke:#ef4444!important;stroke-width:4.5px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 7!important;animation:logyq-semantic-flow .62s linear infinite!important;filter:drop-shadow(0 0 6px rgba(239,68,68,.46))}
+      @keyframes logyq-semantic-flow{to{stroke-dashoffset:-36}}
       body.logyq-curriculum:not(.logyq-home) #logyq-map-title{display:none!important}
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
         body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{top:48px;left:8px;right:8px}
@@ -701,12 +799,11 @@
       body.logyq-game #Dock.is-empty,body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
       body.logyq-game #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
-      body.logyq-curriculum-frozen #Dock:not(.is-empty){min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible}
-      body.logyq-curriculum-frozen #Dock.is-empty{display:flex!important;width:64px;min-width:64px;max-width:64px;height:64px;min-height:64px;max-height:64px;padding:0;border:2px dashed rgba(100,116,139,.55);border-radius:16px;background:rgba(255,255,255,.42);box-shadow:none}
-      body.logyq-curriculum-frozen #Dock.is-empty #logyq-bank-chips::before{content:''}
+      body.logyq-game #Dock:not(.is-empty),body.logyq-curriculum-frozen #Dock:not(.is-empty){min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible}
+      body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{max-width:640px}}
       @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
-      #logyq-drag-guide{position:fixed;inset:0;z-index:6;pointer-events:none}
+      #logyq-drag-guide{position:fixed;inset:0;z-index:78;pointer-events:none}
       #logyq-guide-arrow{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
       #logyq-guide-target{position:absolute;box-sizing:border-box;border:2px dashed #64748b;border-radius:12px;background:rgba(255,255,255,.45);overflow:hidden;box-shadow:0 0 0 3px rgba(255,255,255,.7)}
       #logyq-guide-target svg{display:block;width:100%;height:100%;opacity:.35}
@@ -827,6 +924,14 @@
         <button type="button" id="logyq-curriculum-next" hidden>Next</button>
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
+      <button type="button" id="logyq-curriculum-check">
+        <span id="logyq-curriculum-check-summary" hidden aria-live="polite">
+          <span data-tone="correct">● <b data-count="correct">0</b></span>
+          <span data-tone="insufficient">● <b data-count="insufficient">0</b></span>
+          <span data-tone="wrong">● <b data-count="wrong">0</b></span>
+        </span>
+        <span class="logyq-curriculum-action-label">✓</span>
+      </button>
       <div id="logyq-game-bar">
         <span id="logyq-game-name"></span>
         <span id="logyq-game-tier"></span>
@@ -5643,17 +5748,44 @@
     return children.length ? { name, children } : { name }
   }
 
-  // First four lessons teach child, child, parent-above, then sibling placement.
+  // Teach one relationship until it feels ordinary: three below moves first,
+  // then introduce above, mix both vertical directions, build chains, and only
+  // then introduce the new sibling/beside relationship.
   function curriculumPack() {
     return [
       { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple')),
-        start: curriculumNode('fruit'), bank: ['apple'], guide: 'below' },
+        start: curriculumNode('fruit'), bank: ['apple'], guide: 'below', direction: 'below' },
       { id: 'fruit-banana', title: 'Fruit + Banana', tree: curriculumNode('fruit', curriculumNode('banana')),
-        start: curriculumNode('fruit'), bank: ['banana'], guide: 'below' },
+        start: curriculumNode('fruit'), bank: ['banana'], direction: 'below' },
+      { id: 'animal-dog', title: 'Animal + Dog', tree: curriculumNode('animal', curriculumNode('dog')),
+        start: curriculumNode('animal'), bank: ['dog'], direction: 'below' },
+
       { id: 'food-above-fruit', title: 'Food above Fruit', tree: curriculumNode('food', curriculumNode('fruit')),
-        start: curriculumNode('fruit'), bank: ['food'], guide: 'above' },
-      { id: 'fruit-siblings', title: 'Fruit siblings', tree: curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
-        start: curriculumNode('fruit', curriculumNode('apple')), bank: ['banana'], guide: 'sibling' },
+        start: curriculumNode('fruit'), bank: ['food'], guide: 'above', direction: 'above' },
+      { id: 'animal-above-mammal', title: 'Animal above Mammal', tree: curriculumNode('animal', curriculumNode('mammal')),
+        start: curriculumNode('mammal'), bank: ['animal'], direction: 'above' },
+
+      { id: 'plant-flower', title: 'Plant + Flower', tree: curriculumNode('plant', curriculumNode('flower')),
+        start: curriculumNode('plant'), bank: ['flower'], direction: 'below' },
+      { id: 'school-above-classroom', title: 'School above Classroom', tree: curriculumNode('school', curriculumNode('classroom')),
+        start: curriculumNode('classroom'), bank: ['school'], direction: 'above' },
+      { id: 'vehicle-car', title: 'Vehicle + Car', tree: curriculumNode('vehicle', curriculumNode('car')),
+        start: curriculumNode('vehicle'), bank: ['car'], direction: 'below' },
+
+      { id: 'food-fruit-apple-chain', title: 'Food → Fruit → Apple',
+        tree: curriculumNode('food', curriculumNode('fruit', curriculumNode('apple'))),
+        start: curriculumNode('food'), bank: ['fruit', 'apple'], kind: 'chain', depth: 3 },
+      { id: 'animal-mammal-dog-chain', title: 'Animal → Mammal → Dog',
+        tree: curriculumNode('animal', curriculumNode('mammal', curriculumNode('dog'))),
+        start: curriculumNode('animal'), bank: ['mammal', 'dog'], kind: 'chain', depth: 3 },
+      { id: 'living-animal-mammal-dog-chain', title: 'Living → Animal → Mammal → Dog',
+        tree: curriculumNode('living', curriculumNode('animal', curriculumNode('mammal', curriculumNode('dog')))),
+        start: curriculumNode('living'), bank: ['animal', 'mammal', 'dog'], kind: 'chain', depth: 4 },
+
+      { id: 'fruit-siblings', title: 'Fruit siblings',
+        tree: curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
+        start: curriculumNode('fruit', curriculumNode('apple')), bank: ['banana'], guide: 'sibling', kind: 'branch' },
+
       { id: 'food', title: 'Food', tree: curriculumNode('food',
         curriculumNode('fruit', curriculumNode('apple'), curriculumNode('banana')),
         curriculumNode('meat', curriculumNode('chicken'), curriculumNode('beef'))) },
@@ -5700,6 +5832,63 @@
     return curriculumStructureKey(target) === curriculumStructureKey(live)
   }
 
+  function curriculumName(value) {
+    return String(value ?? '').trim().toLowerCase()
+  }
+
+  function curriculumPathTo(root, wanted, path = []) {
+    if (!root || typeof root !== 'object') return null
+    const name = curriculumName(root.name)
+    const next = name ? [...path, name] : path
+    if (name === wanted) return next
+    for (const child of root.children || []) {
+      const found = curriculumPathTo(child, wanted, next)
+      if (found) return found
+    }
+    return null
+  }
+
+  function curriculumRelation(target, parent, child) {
+    const parentName = curriculumName(parent)
+    const childName = curriculumName(child)
+    if (!parentName || !childName || parentName === childName) return 'wrong'
+    const path = curriculumPathTo(target, childName)
+    if (!path) return 'wrong'
+    const parentIndex = path.lastIndexOf(parentName)
+    if (parentIndex < 0 || parentIndex >= path.length - 1) return 'wrong'
+    return parentIndex === path.length - 2 ? 'correct' : 'insufficient'
+  }
+
+  function curriculumEvaluate(target, live) {
+    const available = new Set(curriculumWords(target).map(curriculumName).filter(Boolean))
+    const present = new Set(curriculumWords(live).map(curriculumName).filter(Boolean))
+    const edges = []
+    const summary = { correct: 0, insufficient: 0, wrong: 0 }
+    const pieces = { correct: 0, insufficient: 0, wrong: 0 }
+    const walk = (node, incoming = null, root = false) => {
+      const parent = String(node?.name ?? '').trim()
+      if (root && parent) {
+        const rootStatus = curriculumName(parent) === curriculumName(target?.name) ? 'correct' : 'wrong'
+        pieces[rootStatus] += 1
+      } else if (incoming) {
+        pieces[incoming] += 1
+      }
+      for (const child of node?.children || []) {
+        const childName = String(child?.name ?? '').trim()
+        let status = 'wrong'
+        if (parent && childName) {
+          status = curriculumRelation(target, parent, childName)
+          edges.push({ parent, child: childName, status })
+          summary[status] += 1
+        }
+        walk(child, status, false)
+      }
+    }
+    if (live) walk(live, null, true)
+    const missing = [...available].filter((name) => !present.has(name))
+    return { edges, summary, pieces, missing }
+  }
+
   function curriculumUnlocked(index, progress, pack) {
     if (index <= 0) return true
     const prev = pack?.[index - 1]
@@ -5727,6 +5916,62 @@
 
   function writeCurriculumProgress(progress) {
     try { localStorage.setItem(CURRICULUM_KEY, JSON.stringify(progress)) } catch (_error) {}
+  }
+
+  let curriculumCorrectTimer = null
+
+  function clearCurriculumCorrectDiagnostics() {
+    bridge.core?.elements?.gLinks?.selectAll?.('path.link')
+      ?.classed?.('logyq-semantic-correct', false)
+  }
+
+  function updateCurriculumCheckSummary(evaluation = null) {
+    const summary = document.getElementById('logyq-curriculum-check-summary')
+    if (!summary) return
+    if (!evaluation) {
+      summary.hidden = true
+      for (const tone of ['correct', 'insufficient', 'wrong']) {
+        const count = summary.querySelector('[data-count="' + tone + '"]')
+        if (count) count.textContent = '0'
+      }
+      return
+    }
+    const pieces = evaluation.pieces || evaluation.summary || {}
+    for (const tone of ['correct', 'insufficient', 'wrong']) {
+      const count = summary.querySelector('[data-count="' + tone + '"]')
+      if (count) count.textContent = String(pieces[tone] || 0)
+    }
+    summary.hidden = false
+  }
+
+  function clearCurriculumDiagnostics() {
+    if (curriculumCorrectTimer !== null) clearTimeout(curriculumCorrectTimer)
+    curriculumCorrectTimer = null
+    updateCurriculumCheckSummary(null)
+    const links = bridge.core?.elements?.gLinks?.selectAll?.('path.link')
+    links?.classed?.('logyq-semantic-correct', false)
+      ?.classed?.('logyq-semantic-insufficient', false)
+      ?.classed?.('logyq-semantic-wrong', false)
+  }
+
+  function paintCurriculumDiagnostics(evaluation) {
+    clearCurriculumDiagnostics()
+    const statuses = new Map((evaluation?.edges || []).map((edge) => [
+      curriculumName(edge.parent) + '→' + curriculumName(edge.child),
+      edge.status,
+    ]))
+    bridge.core?.elements?.gLinks?.selectAll?.('path.link')?.each?.(function(d) {
+      const parent = curriculumName(d?.source?.data?.name)
+      const child = curriculumName(d?.target?.data?.name)
+      const status = statuses.get(parent + '→' + child) || 'wrong'
+      const link = d3.select(this)
+      link.classed('logyq-semantic-correct', status === 'correct')
+      link.classed('logyq-semantic-insufficient', status === 'insufficient')
+      link.classed('logyq-semantic-wrong', status === 'wrong')
+    })
+    if ((evaluation?.summary?.correct || 0) > 0) {
+      curriculumCorrectTimer = window.setTimeout(clearCurriculumCorrectDiagnostics, 900)
+    }
   }
 
   function curriculumLevel(id) {
@@ -5777,6 +6022,9 @@
   }
 
   function leaveCurriculumPlay() {
+    window.LOGYQGameGuide?.hide()
+    clearCurriculumDiagnostics()
+    puzzleCamera.deactivate('curriculum')
     delete window.__logyqCurriculumReturnToBank
     const state = bridge.core?.state
     if (state) state.curriculumCameraLock = false
@@ -5826,35 +6074,38 @@
     }).join('')
   }
 
-  function settleCurriculumTree(duration = 260) {
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        try {
-          bridge.core?.treeManager?.settleRootAnchored?.({ force: true, duration })
-        } catch (_error) {}
-      })
-    })
+  function curriculumGuideLevel(level) {
+    if (!level?.guide || !Array.isArray(level.bank) || !level.bank.length) return null
+    const key = level.bank[0]
+    return {
+      guide: level.guide,
+      tree: structuredClone(level.start || { name: String(level.tree?.name ?? '').trim() }),
+      bank: [key],
+      bankCards: { [key]: { name: key } },
+    }
   }
+
+  function curriculumCameraTarget(root) {
+    const level = curriculumLevel(app.curriculum?.id)
+    const guideLevel = app.curriculum?.guide ? curriculumGuideLevel(level) : null
+    return guideLevel ? window.LOGYQGameGuide?.target(guideLevel, root.descendants()) : null
+  }
+
+  function cancelCurriculumCameraFit() { puzzleCamera.cancel('curriculum') }
+  function fitCurriculumCamera(duration = 0) { return puzzleCamera.fitNow('curriculum', duration) }
+  function scheduleCurriculumCameraFit(delay = 280) { puzzleCamera.schedule('curriculum', delay) }
+  function refitCurriculumCamera() { puzzleCamera.refit('curriculum') }
 
   function seedCurriculumRoot(level) {
     const core = bridge.core
     const state = core?.state
-    if (!level?.tree || !state || !window.d3) return false
+    if (!level?.tree || !state) return false
     const root = structuredClone(level.start || { name: String(level.tree.name ?? '').trim() })
-    core.utils.assignUids(root)
-    state.root = window.d3.hierarchy(root)
-    core.utils.assignIds(state.root)
-    state.wordBank = Array.isArray(level.bank) ? level.bank.slice() : curriculumWords(level.tree).slice(1)
-    state.selectedUid = null
-    state.history = []
-    state.redo = []
-    state.repositionMode = null
+    const bank = Array.isArray(level.bank) ? level.bank.slice() : curriculumWords(level.tree).slice(1)
     state.curriculumCameraLock = true
-    try { core.selection?.clearGroup?.() } catch (_error) {}
-    try { core.selection?.clearSelection?.() } catch (_error) {}
-    core.treeManager.layoutAndRender(false)
-    core.wordDock.render()
-    settleCurriculumTree(0)
+    bridge.loadMap(root, bank, { fit: false })
+    state.curriculumCameraLock = true
+    fitCurriculumCamera(0)
     return true
   }
 
@@ -5891,14 +6142,40 @@
       window.LOGYQGameGuide?.hide()
       return
     }
-    const key = level.bank[0]
-    const guideLevel = {
-      guide: level.guide,
-      tree: structuredClone(level.start || { name: String(level.tree?.name ?? '').trim() }),
-      bank: [key],
-      bankCards: { [key]: { name: key } },
+    const guideLevel = curriculumGuideLevel(level)
+    if (!guideLevel) {
+      window.LOGYQGameGuide?.hide()
+      return
     }
-    window.LOGYQGameGuide?.show(guideLevel, bridge.core)
+    const draw = () => {
+      const session = app.curriculum
+      if (!session || session.id !== level.id || session.cleared) return
+      window.LOGYQGameGuide?.show(guideLevel, bridge.core)
+      window.setTimeout(() => window.LOGYQGameGuide?.refresh?.(), 160)
+    }
+    window.requestAnimationFrame(() => window.requestAnimationFrame(draw))
+  }
+
+  function curriculumPlacedCount(snapshot) {
+    let count = 0
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return
+      if (!node.curriculumPile && String(node.name ?? '').trim()) count += 1
+      for (const child of node.children || []) walk(child)
+    }
+    walk(snapshot?.tree)
+    return count
+  }
+
+  function updateCurriculumCheckVisibility(snapshot = bridge.snapshot()) {
+    const checkButton = document.getElementById('logyq-curriculum-check')
+    if (!checkButton) return
+    const session = app.curriculum
+    if (!session || session.phase !== 'play') {
+      checkButton.hidden = true
+      return
+    }
+    checkButton.hidden = session.cleared || curriculumPlacedCount(snapshot) <= 1
   }
 
   function beginCurriculumLevel(level) {
@@ -5913,6 +6190,7 @@
       cleared: false,
       phase: 'play',
       released: true,
+      guide: level.guide || null,
       actualMoves: 0,
       returnedPieces: 0,
       hintsUsed: 0,
@@ -5926,6 +6204,9 @@
     app.lastSnapshot = 'curriculum'
     updateMapName()
     hideLibrary()
+    const lessonNumber = app.curriculum?.stage || Math.max(1, curriculumPack().findIndex((item) => item.id === level.id) + 1)
+    const lesson = document.getElementById('logyq-curriculum-lesson')
+    if (lesson) lesson.textContent = `Lesson ${lessonNumber}`
     const status = document.getElementById('logyq-curriculum-status')
     if (status) {
       delete status.dataset.tone
@@ -5933,6 +6214,9 @@
     }
     const nextButton = document.getElementById('logyq-curriculum-next')
     if (nextButton) nextButton.hidden = true
+    const checkButton = document.getElementById('logyq-curriculum-check')
+    if (checkButton) checkButton.hidden = true
+    clearCurriculumDiagnostics()
     if (bridge.core?.state) bridge.core.state.curriculumCameraLock = true
     window.__logyqCurriculumReturnToBank = (uid) => {
       const engine = bridge.core
@@ -5954,17 +6238,23 @@
         engine.treeManager.renderEmpty()
       }
       engine.wordDock.render()
-      settleCurriculumTree()
+      scheduleCurriculumCameraFit()
       const status = document.getElementById('logyq-curriculum-status')
       if (status && !session.cleared) {
         delete status.dataset.tone
         status.textContent = 'Piece back in the Word Bank. Keep arranging!'
       }
       bridge.notifyChange?.()
+      updateCurriculumCheckVisibility()
       return true
     }
     renderCurriculumChrome()
+    puzzleCamera.activate('curriculum', {
+      target: curriculumCameraTarget,
+      afterFit: () => window.LOGYQGameGuide?.refresh?.(),
+    })
     seedCurriculumRoot(level)
+    updateCurriculumCheckVisibility()
     showCurriculumGuide(level)
     setSaveState('saved')
   }
@@ -5974,8 +6264,14 @@
     if (!session || session.cleared) return false
     const level = curriculumLevel(session.id)
     const live = curriculumAnswerTree(snapshot?.tree)
+    if (level && live && level.start && curriculumStructureKey(live) !== curriculumStructureKey(level.start)) {
+      session.guide = null
+      window.LOGYQGameGuide?.hide()
+    }
     if (!level || !live || !curriculumMatches(level.tree, live)) return false
     session.cleared = true
+    const checkButton = document.getElementById('logyq-curriculum-check')
+    if (checkButton) checkButton.hidden = true
     window.LOGYQGameThumbGain?.advance?.()
     session.telemetryRecorded = true
     const progress = readCurriculumProgress()
@@ -6003,6 +6299,7 @@
       if (next) {
         nextButton.hidden = false
         nextButton.dataset.nextLevel = next.id
+        scheduleCurriculumCameraFit(40)
       } else {
         nextButton.hidden = true
         nextButton.dataset.nextLevel = ''
@@ -6012,16 +6309,33 @@
   }
 
   function checkCurriculum() {
-    if (!app.curriculum) return false
+    const session = app.curriculum
+    if (!session) return false
+    if (session.cleared) return true
     const snapshot = bridge.snapshot()
-    if (maybeCurriculumClear(snapshot)) return true
-    if (app.curriculum.cleared) return true
-    const status = document.getElementById('logyq-curriculum-status')
-    if (status) {
-      status.dataset.tone = 'wait'
-      status.textContent = 'Not yet. The parents have to match. Sibling order can differ.'
+    const level = curriculumLevel(session.id)
+    const live = curriculumAnswerTree(snapshot?.tree)
+    if (!level || !live) {
+      clearCurriculumDiagnostics()
+      return false
     }
-    return false
+    const evaluation = curriculumEvaluate(level.tree, live)
+    paintCurriculumDiagnostics(evaluation)
+    updateCurriculumCheckSummary(evaluation)
+    const complete = evaluation.summary.wrong === 0 && evaluation.summary.insufficient === 0 && evaluation.missing.length === 0
+    const status = document.getElementById('logyq-curriculum-status')
+    if (!complete) {
+      if (status) {
+        status.dataset.tone = evaluation.summary.wrong ? 'wrong' : 'wait'
+        status.textContent = evaluation.summary.wrong
+          ? 'Some relationships are not true yet.'
+          : evaluation.summary.insufficient
+            ? 'Some relationships are true, but a more specific available parent fits better.'
+            : 'Place every concept, then check again.'
+      }
+      return false
+    }
+    return maybeCurriculumClear(snapshot)
   }
 
   function bindCurriculum() {
@@ -6034,6 +6348,7 @@
       if (!level || !curriculumUnlocked(index, readCurriculumProgress(), pack)) return
       beginCurriculumLevel(level)
     })
+    document.getElementById('logyq-curriculum-check')?.addEventListener('click', checkCurriculum)
     document.getElementById('logyq-curriculum-next')?.addEventListener('click', (event) => {
       const id = event.currentTarget?.dataset?.nextLevel
       const next = id ? curriculumLevel(id) : null
@@ -6047,6 +6362,8 @@
       pack: curriculumPack,
       words: curriculumWords,
       matches: curriculumMatches,
+      evaluate: curriculumEvaluate,
+      clearDiagnostics: clearCurriculumDiagnostics,
       structureKey: curriculumStructureKey,
       unlocked: curriculumUnlocked,
       read: readCurriculumProgress,
@@ -6054,6 +6371,11 @@
       check: checkCurriculum,
       answerTree: curriculumAnswerTree,
       returnBranch: returnCurriculumBranch,
+      refit: refitCurriculumCamera,
+      showGuide: () => {
+        const level = curriculumLevel(app.curriculum?.id)
+        if (level) showCurriculumGuide(level)
+      },
     }
   }
 
@@ -6072,6 +6394,7 @@
   })
 
   bindCurriculum()
+  bridge.subscribe((snapshot) => updateCurriculumCheckVisibility(snapshot))
   const THEKONYM_KEY = 'logyq_thekonym_mode_v1'
   const THEKONYM_EDIT_KEY = 'logyq_thekonym_local_edits_v1'
   const THEKONYM_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('')
@@ -6939,6 +7262,10 @@
     return childShape + ':' + contact + ':' + next
   }
 
+  // Early movement curriculum: repeat below three times, introduce above,
+  // then mix the two vertical directions before chains begin.
+  const EARLY_TWO_CARD_DIRECTIONS = ['below','below','below','above','above','below','above','below','above','below','above','below','above','below','above']
+
   const gameLevels = []
   for (const [rootShape, rootName] of GAME_SHAPES) {
     for (const [childShape, childName] of GAME_SHAPES) {
@@ -6947,8 +7274,8 @@
       const intendedRoot = { name: '', gameId: 'piece-r', paint: rootPaint(rootShape) }
       const intendedChild = { name: '', gameId: 'piece-c', paint: childPaint(rootShape, childShape) }
       // One card starts on the canvas and the other in the existing Word Bank.
-      // Alternate the anchor so "always drop below" / "always make root" is not a clue.
-      const rootStarts = number % 2 === 1
+      // Repetition comes first: three below moves, then above, then mixed practice.
+      const rootStarts = EARLY_TWO_CARD_DIRECTIONS[number - 1] !== 'above'
       const anchor = rootStarts ? intendedRoot : intendedChild
       const loose = rootStarts ? intendedChild : intendedRoot
       const bankKey = '__LOGYQ_GAME_CARD__'
@@ -7020,9 +7347,9 @@
     addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
   })
 
-  // Brief first-contact guides; keep the original puzzle IDs and inventory.
+  // Coach the first example of each new relation; practice levels stay uncluttered.
   gameLevels[0].guide = 'below'
-  gameLevels[1].guide = 'above'
+  gameLevels[3].guide = 'above'
   const firstBranch = gameLevels[27]
   firstBranch.guide = 'sibling'
   const firstChild = firstBranch.solution.children[0]
@@ -8168,8 +8495,7 @@
     gameArtTimer = setTimeout(() => {
       gameArtTimer = null
       if (epoch !== gameArtEpoch || !app.game?.cleared || document.body.classList.contains('logyq-home')) return
-      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
-          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
+      if (puzzleCamera.busy('game')) {
         scheduleGameCompletionArt(150, animate)
         return
       }
@@ -8251,62 +8577,15 @@
     }, delay)
   }
 
-  let gameFitTimer = null
-  let gameFitPending = false
-  const gamePointers = new Set()
-
-  function cancelGameCameraFit() {
-    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
-    gameFitTimer = null
-    bridge.core?.elements?.svg?.interrupt?.('game-fit')
-  }
-
   function levelForGuide() { return gameLevels.find(level => level.id === app.game?.id) }
-
-  function fitGameCamera(duration = 0) {
-    const engine = bridge.core
-    const root = engine?.state?.root
-    if (!app.game || !root || gamePointers.size) return
-    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
-    root.each(node => {
-      left = Math.min(left, node.x - GAME_LAYOUT.cardWidth / 2)
-      right = Math.max(right, node.x + GAME_LAYOUT.cardWidth / 2)
-      top = Math.min(top, node.y - GAME_LAYOUT.cardHeight / 2)
-      bottom = Math.max(bottom, node.y + GAME_LAYOUT.cardHeight / 2)
-    })
-    if (app.game.guide) {
-      const target = window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
-      if (target) {
-        left = Math.min(left, target.x - GAME_LAYOUT.cardWidth / 2)
-        right = Math.max(right, target.x + GAME_LAYOUT.cardWidth / 2)
-        top = Math.min(top, target.y - GAME_LAYOUT.cardHeight / 2)
-        bottom = Math.max(bottom, target.y + GAME_LAYOUT.cardHeight / 2)
-      }
-    }
-    engine.treeManager?.fitGameBounds?.({x:left,y:top,width:right-left,height:bottom-top}, {duration})
+  function gameCameraTarget(root) {
+    return app.game?.guide ? window.LOGYQGameGuide?.target(levelForGuide(), root.descendants()) : null
   }
-
-  function scheduleGameCameraFit(delay = 280) {
-    if (!app.game || !bridge.core?.state?.root) return
-    gameFitPending = true
-    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
-    gameFitTimer = null
-    if (gamePointers.size) return
-    gameFitTimer = setTimeout(() => {
-      gameFitTimer = null
-      if (!app.game || document.body.classList.contains('logyq-home')) return
-      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
-          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
-        scheduleGameCameraFit(100)
-        return
-      }
-      gameFitPending = false
-      fitGameCamera(280)
-    }, delay)
-  }
-
+  function cancelGameCameraFit() { puzzleCamera.cancel('game') }
+  function fitGameCamera(duration = 0) { return puzzleCamera.fitNow('game', duration) }
+  function scheduleGameCameraFit(delay = 280) { puzzleCamera.schedule('game', delay) }
   function refitGameCamera() {
-    scheduleGameCameraFit(80)
+    puzzleCamera.refit('game')
     if (gameArtElement) scheduleGameCompletionArt(700, false)
     window.LOGYQGameGuide?.refresh()
   }
@@ -8326,9 +8605,7 @@
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
     app.game = null
-    cancelGameCameraFit()
-    gamePointers.clear()
-    gameFitPending = false
+    puzzleCamera.deactivate('game')
     document.body.classList.remove('logyq-game')
     delete window.__logyqGameDropAllowed
     delete window.__logyqGameBankNode
@@ -8515,9 +8792,10 @@
     updateMapName()
     hideLibrary()
     gameStatus(levelUp ? 'Level up!' : level.hint)
-    cancelGameCameraFit()
-    gamePointers.clear()
-    gameFitPending = false
+    puzzleCamera.activate('game', {
+      target: gameCameraTarget,
+      afterFit: () => window.LOGYQGameGuide?.refresh?.(),
+    })
     bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice(), { fit: false })
     fitGameCamera()
     if (app.game.guide) window.LOGYQGameGuide?.show(level, bridge.core)
@@ -8666,22 +8944,7 @@
       if (!app.game) return
       if (window.LOGYQGameSound?.enabled()) window.LOGYQGameSound.unlock()
       if (event.target?.closest?.('svg#canvas')) clearGameCompletionArt()
-      gamePointers.add(event.pointerId)
-      gameFitPending = true
-      cancelGameCameraFit()
     }, true)
-    const release = event => {
-      gamePointers.delete(event.pointerId)
-      if (!gamePointers.size && gameFitPending) scheduleGameCameraFit()
-    }
-    window.addEventListener('pointerup', release, true)
-    window.addEventListener('pointercancel', release, true)
-    window.addEventListener('blur', () => {
-      gamePointers.clear()
-      if (gameFitPending) scheduleGameCameraFit()
-    })
-    window.addEventListener('resize', refitGameCamera)
-    window.addEventListener('orientationchange', refitGameCamera)
   }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,

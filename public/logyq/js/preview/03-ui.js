@@ -93,6 +93,14 @@
         <button type="button" id="logyq-curriculum-next" hidden>Next</button>
         <button type="button" id="logyq-curriculum-levels">Levels</button>
       </div>
+      <button type="button" id="logyq-curriculum-check">
+        <span id="logyq-curriculum-check-summary" hidden aria-live="polite">
+          <span data-tone="correct">● <b data-count="correct">0</b></span>
+          <span data-tone="insufficient">● <b data-count="insufficient">0</b></span>
+          <span data-tone="wrong">● <b data-count="wrong">0</b></span>
+        </span>
+        <span class="logyq-curriculum-action-label">✓</span>
+      </button>
       <div id="logyq-game-bar">
         <span id="logyq-game-name"></span>
         <span id="logyq-game-tier"></span>

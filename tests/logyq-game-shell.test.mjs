@@ -183,9 +183,9 @@ test('solved game centering reserves the visible Next button safe area', () => {
 })
 
 
-test('game settings use a gear and expose explicit music on-off control', () => {
+test('game settings use a large ellipsis and expose explicit music on-off control', () => {
   const shell = read('../public/logyq/js/game-shell.js')
-  assert.match(shell, /'⚙', 'Game settings'/)
+  assert.match(shell, /'•••', 'Game settings'/)
   assert.match(shell, /logyq-game-music-toggle/)
   assert.match(shell, /Music: ' \+ \(enabled \? 'On' : 'Off'\)/)
   assert.match(shell, /music\.setEnabled/)
@@ -225,11 +225,11 @@ test('curriculum uses the same direct puzzle gesture path as Game', () => {
   assert.match(dock, /if \(!directPuzzleShelf\(\)\) return null/)
 })
 
-test('curriculum play keeps a compact empty return target', () => {
+test('Curriculum hides the Word Bank completely when it is empty', () => {
   const styles = read('../public/logyq/js/preview/02-styles.js')
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock/)
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty[^\{]*\{[^}]*display:flex!important[^}]*width:64px/s)
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:''/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty\{display:none!important\}/)
+  assert.doesNotMatch(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty[^\{]*\{[^}]*width:64px/s)
+  assert.doesNotMatch(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:''/)
 })
 
 test('curriculum suppresses editor selection decoration', () => {
@@ -272,7 +272,8 @@ test('curriculum seeds each lesson from its explicit start when provided', () =>
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   assert.match(source, /function seedCurriculumRoot\(level\)/)
   assert.match(source, /const root = structuredClone\(level\.start \|\| \{ name: String\(level\.tree\.name/)
-  assert.match(source, /state\.wordBank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /const bank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /bridge\.loadMap\(root, bank, \{ fit: false \}\)/)
   assert.doesNotMatch(source, /function spinCurriculum\(/)
   assert.doesNotMatch(source, /function playCurriculumVegas\(/)
 })
@@ -285,11 +286,17 @@ test('curriculum has no Mix control or shuffle phase', () => {
   assert.doesNotMatch(source, /__logyqCurriculumMix/)
 })
 
-test('curriculum recenters after structural changes', () => {
-  const source = read('../public/logyq/js/preview/07-curriculum.js')
-  assert.match(source, /function settleCurriculumTree\(/)
-  assert.match(source, /treeManager\?\.settleRootAnchored\?\.\(\{ force: true, duration \}\)/)
-  assert.match(source, /engine\.wordDock\.render\(\)\s*settleCurriculumTree\(\)/)
+test('Game and Curriculum share the exact puzzle-tree centering primitive', () => {
+  const curriculum = read('../public/logyq/js/preview/07-curriculum.js')
+  const game = read('../public/logyq/js/preview/10-game.js')
+  const engine = read('../public/logyq/js/engine/16-tree-manager.js')
+  assert.match(engine, /fitPuzzleTree\(root, \{ target = null, duration = 0 \} = \{\}\)/)
+  assert.match(engine, /root\.each\(node => \{/)
+  assert.match(engine, /node\.x - CONFIG\.CARD_WIDTH \/ 2/)
+  assert.match(engine, /node\.y - CONFIG\.CARD_HEIGHT \/ 2/)
+  assert.match(engine, /this\.fitGameBounds\(\{ x: left, y: top, width: right - left, height: bottom - top \}, \{ duration \}\)/)
+  assert.match(game, /engine\.treeManager\?\.fitPuzzleTree\?\.\(root, \{ target, duration \}\)/)
+  assert.match(curriculum, /engine\.treeManager\?\.fitPuzzleTree\?\.\(root, \{ target, duration \}\)/)
 })
 
 
@@ -320,28 +327,29 @@ test('Curriculum first-contact guide disappears after the child moves a piece', 
 })
 
 
-test('Curriculum opens with four explicit first-contact teaching moves', () => {
+test('Curriculum teaches three below moves before above, then chains before sibling', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   const start = source.indexOf('// CURRICULUM_PURE_START')
   const end = source.indexOf('// CURRICULUM_PURE_END')
   const api = new Function(source.slice(start, end) + '; return { curriculumPack };')()
-  const levels = api.curriculumPack().slice(0, 4)
-  assert.deepEqual(levels.map(level => level.id), ['fruit', 'fruit-banana', 'food-above-fruit', 'fruit-siblings'])
-  assert.deepEqual(levels.map(level => level.guide), ['below', 'below', 'above', 'sibling'])
-  assert.deepEqual(levels[0].start, { name: 'fruit' })
-  assert.deepEqual(levels[0].bank, ['apple'])
-  assert.deepEqual(levels[1].start, { name: 'fruit' })
-  assert.deepEqual(levels[1].bank, ['banana'])
-  assert.deepEqual(levels[2].start, { name: 'fruit' })
-  assert.deepEqual(levels[2].bank, ['food'])
-  assert.deepEqual(levels[3].start, { name: 'fruit', children: [{ name: 'apple' }] })
-  assert.deepEqual(levels[3].bank, ['banana'])
+  const levels = api.curriculumPack()
+  assert.deepEqual(levels.slice(0, 3).map(level => level.guide || 'below-practice'), ['below', 'below-practice', 'below-practice'])
+  assert.equal(levels[3].guide, 'above')
+  assert.equal(levels[4].guide, undefined)
+  assert.ok(levels.slice(5, 9).some(level => level.direction === 'below'))
+  assert.ok(levels.slice(5, 9).some(level => level.direction === 'above'))
+  const firstChain = levels.findIndex(level => level.kind === 'chain')
+  const firstSibling = levels.findIndex(level => level.guide === 'sibling')
+  assert.ok(firstChain >= 0)
+  assert.ok(firstSibling > firstChain)
+  assert.ok(levels.slice(firstChain, firstSibling).some(level => level.depth >= 3))
 })
 
 test('Curriculum seed uses each lesson start tree and explicit Word Bank', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   assert.match(source, /const root = structuredClone\(level\.start \|\| \{ name: String\(level\.tree\.name/)
-  assert.match(source, /state\.wordBank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /const bank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /bridge\.loadMap\(root, bank, \{ fit: false \}\)/)
   assert.match(source, /function showCurriculumGuide\(level\)/)
   assert.match(source, /guide: level\.guide/)
 })
@@ -352,25 +360,35 @@ test('sibling guide can target a named child in Curriculum', () => {
   assert.match(guide, /const child = nodes\.find\(node => sameNode\(node, level\.tree\.children\[0\]\)\)/)
 })
 
-test('Curriculum auto-fits after every structural change', () => {
+test('Curriculum defers refitting through the same shared pointer lifecycle as Game', () => {
+  const helpers = read('../public/logyq/js/preview/01-helpers.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
   const persistence = read('../public/logyq/js/preview/06-persistence.js')
-  assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*settleCurriculumTree\(\)/)
+  assert.match(helpers, /const pointers = new Set\(\)/)
+  assert.match(helpers, /function schedule\(name, delay = 280\)/)
+  assert.match(helpers, /if \(pointers\.size\) return/)
+  assert.match(helpers, /window\.addEventListener\('pointerdown', onPointerDown, true\)/)
+  assert.match(helpers, /window\.addEventListener\('pointerup', onPointerRelease, true\)/)
+  assert.match(source, /function scheduleCurriculumCameraFit\(delay = 280\) \{\s*puzzleCamera\.schedule\('curriculum', delay\)/s)
+  assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*scheduleCurriculumCameraFit\(\)/)
 })
 
-test('Curriculum completion uses a Next button instead of Check', () => {
+test('Curriculum uses Check for evaluation and Next only after success', () => {
   const ui = read('../public/logyq/js/preview/03-ui.js')
   const source = read('../public/logyq/js/preview/07-curriculum.js')
-  assert.doesNotMatch(ui, /id="logyq-curriculum-check"/)
+  assert.match(ui, /id="logyq-curriculum-check"/)
+  assert.match(ui, /logyq-curriculum-action-label">✓<\/span>/)
   assert.match(ui, /id="logyq-curriculum-next" hidden>Next<\/button>/)
+  assert.match(source, /document\.getElementById\('logyq-curriculum-check'\)\?\.addEventListener\('click', checkCurriculum\)/)
+  assert.match(source, /if \(checkButton\) checkButton\.hidden = true/)
   assert.match(source, /nextButton\.hidden = false/)
-  assert.match(source, /document\.getElementById\('logyq-curriculum-next'\)\?\.addEventListener\('click'/)
 })
 
-test('Curriculum Word Bank is bare with words and a compact square when empty', () => {
+test('Curriculum Word Bank is centered again and disappears when empty', () => {
   const styles = read('../public/logyq/js/preview/02-styles.js')
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*background:transparent[^}]*border:0[^}]*box-shadow:none/s)
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty[^\{]*\{[^}]*display:flex!important[^}]*width:64px[^}]*min-width:64px[^}]*height:64px/s)
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:''/)
+  assert.match(styles, /body\.logyq-game #Dock:not\(\.is-empty\),body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)\{min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible\}/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty\{display:none!important\}/)
+  assert.doesNotMatch(styles, /right:118px/)
   assert.match(styles, /body\.logyq-curriculum:not\(\.logyq-home\) #logyq-map-title\{display:none!important\}/)
 })
 
@@ -385,4 +403,271 @@ test('Curriculum header uses the same compact phone geometry as Game', () => {
 test('Curriculum Word Bank can insert a new root above the current root', () => {
   const dock = read('../public/logyq/js/engine/14-word-dock.js')
   assert.match(dock, /drop\.type === 'rootAbove'[\s\S]*state\.chipDrag\.drop = directPuzzleShelf\(\) \? \{ type: 'rootAbove' \} : null/)
+})
+
+
+test('Game and Curriculum use the same quiet header without a hint button', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /function installCurriculumShell\(\)/)
+  assert.match(shell, /button\('logyq-game-back', 'Back'/)
+  assert.match(shell, /button\('logyq-curriculum-back', 'Back'/)
+  assert.doesNotMatch(shell, /button\('logyq-game-hint'/)
+  assert.doesNotMatch(shell, /button\('logyq-curriculum-hint'/)
+  assert.match(shell, /button\('logyq-game-pause', '•••', 'Game settings'/)
+  assert.match(shell, /button\('logyq-curriculum-pause', '•••', 'Curriculum settings'/)
+  assert.match(shell, /background:rgba\(248,244,250,\.93\)/)
+  assert.match(shell, /body\.logyq-curriculum #logyq-curriculum-status\{display:none!important\}/)
+})
+
+test('Curriculum exposes and reliably redraws the same animated drag guide as Game', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(source, /window\.requestAnimationFrame\(\(\) => window\.requestAnimationFrame\(draw\)\)/)
+  assert.match(source, /window\.setTimeout\(\(\) => window\.LOGYQGameGuide\?\.refresh\?\.\(\), 160\)/)
+  assert.match(source, /showGuide: \(\) => \{/)
+  assert.match(styles, /#logyq-drag-guide\{position:fixed;inset:0;z-index:78;pointer-events:none\}/)
+})
+
+
+test('guided target highlight waits until the dragged piece reaches the ghost target', () => {
+  const guide = read('../public/logyq/js/game-guide.js')
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  assert.match(guide, /function containsClientPoint\(x, y\)/)
+  assert.match(guide, /const rect = active\?\.element\?\.querySelector\('#logyq-guide-target'\)\?\.getBoundingClientRect\(\)/)
+  assert.match(dock, /const guideTargetReady = !window\.LOGYQGameGuide\?\.active\?\.\(\) \|\| window\.LOGYQGameGuide\?\.containsClientPoint\?\.\(event\.clientX, event\.clientY\)/)
+  assert.match(dock, /if \(targetH && guideTargetReady && !logyq\.selection\.showGameChildCaret\(targetUid\)\)/)
+})
+
+
+test('Curriculum refits again when Next appears so solved trees stay centered in the remaining space', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /nextButton\.hidden = false[\s\S]*scheduleCurriculumCameraFit\(40\)/)
+})
+
+test('Curriculum no longer uses the legacy upper-band root anchoring path', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const engine = read('../public/logyq/js/engine/16-tree-manager.js')
+  assert.doesNotMatch(source, /settleRootAnchored/)
+  assert.match(engine, /if \(document\.body\?\.classList\?\.contains\('logyq-curriculum'\)\) \{\s*this\.fitPuzzleTree\(state\.root, \{ duration: 280 \}\)/s)
+})
+
+
+test('Game and Curriculum use one shared puzzle camera controller instead of separate timers', () => {
+  const helpers = read('../public/logyq/js/preview/01-helpers.js')
+  const curriculum = read('../public/logyq/js/preview/07-curriculum.js')
+  const game = read('../public/logyq/js/preview/10-game.js')
+  assert.match(helpers, /function createPuzzleCameraController\(\)/)
+  assert.match(helpers, /const puzzleCamera = createPuzzleCameraController\(\)/)
+  assert.match(helpers, /window\.addEventListener\('pointerdown', onPointerDown, true\)/)
+  assert.match(helpers, /window\.addEventListener\('pointerup', onPointerRelease, true\)/)
+  assert.match(game, /puzzleCamera\.activate\('game'/)
+  assert.match(curriculum, /puzzleCamera\.activate\('curriculum'/)
+  assert.doesNotMatch(game, /let gameFitTimer = null/)
+  assert.doesNotMatch(game, /const gamePointers = new Set\(\)/)
+  assert.doesNotMatch(curriculum, /let curriculumFitTimer = null/)
+  assert.doesNotMatch(curriculum, /const curriculumPointers = new Set\(\)/)
+})
+
+test('Curriculum loads its starting tree through the exact same bridge load path as Game', () => {
+  const curriculum = read('../public/logyq/js/preview/07-curriculum.js')
+  const game = read('../public/logyq/js/preview/10-game.js')
+  assert.match(game, /bridge\.loadMap\([\s\S]*\{ fit: false \}\)/)
+  assert.match(curriculum, /bridge\.loadMap\(root, bank, \{ fit: false \}\)/)
+  assert.match(curriculum, /puzzleCamera\.fitNow\('curriculum'\)/)
+  const seed = curriculum.slice(curriculum.indexOf('function seedCurriculumRoot'), curriculum.indexOf('function returnCurriculumBranch'))
+  assert.doesNotMatch(seed, /schedule/)
+  assert.doesNotMatch(seed, /d3\.hierarchy/)
+})
+
+test('shared puzzle camera performs no delayed correction after initial load', () => {
+  const helpers = read('../public/logyq/js/preview/01-helpers.js')
+  assert.match(helpers, /fitNow\(owner, duration = 0\)/)
+  assert.match(helpers, /schedule\(owner, delay = 280\)/)
+  assert.match(helpers, /if \(pointers\.size\) return/)
+  assert.match(helpers, /if \(window\.__logyqHoldDragFrozen\?\.\(\)/)
+  assert.doesNotMatch(helpers, /setTimeout\([^\n]*fitNow\([^\n]*80/)
+})
+
+
+test('direct puzzle first-root drops never pin the camera to the finger position', () => {
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  const helpers = read('../public/logyq/js/preview/01-helpers.js')
+  assert.match(dock, /if \(!directPuzzleShelf\(\)\) \{\s*const current = d3\.zoomTransform/s)
+  assert.match(dock, /else \{\s*window\.LOGYQPreview\?\.puzzleCamera\?\.scheduleActive\?\.\(0\)/s)
+  assert.match(helpers, /preview\.puzzleCamera = puzzleCamera/)
+  assert.match(helpers, /function scheduleActive\(delay = 0\)/)
+})
+
+test('first-root free placement remains available in the normal mapper', () => {
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  assert.match(dock, /if \(!directPuzzleShelf\(\)\) \{[\s\S]*drop\.px - s \* rx[\s\S]*drop\.py - s \* ry/s)
+})
+
+
+test('Curriculum semantic checker distinguishes exact, insufficient, and wrong edges', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const start = source.indexOf('// CURRICULUM_PURE_START')
+  const end = source.indexOf('// CURRICULUM_PURE_END')
+  const api = new Function(source.slice(start, end) + '; return { curriculumEvaluate };')()
+  const target = {
+    name: 'animal', children: [
+      { name: 'mammal', children: [{ name: 'dog' }] }
+    ]
+  }
+  const exact = api.curriculumEvaluate(target, target)
+  assert.equal(exact.summary.wrong, 0)
+  assert.equal(exact.summary.insufficient, 0)
+  assert.equal(exact.summary.correct, 2)
+
+  const skipped = api.curriculumEvaluate(target, {
+    name: 'animal', children: [{ name: 'dog' }, { name: 'mammal' }]
+  })
+  assert.equal(skipped.edges.find(edge => edge.parent === 'animal' && edge.child === 'dog').status, 'insufficient')
+
+  const wrong = api.curriculumEvaluate(target, {
+    name: 'mammal', children: [{ name: 'animal', children: [{ name: 'dog' }] }]
+  })
+  assert.equal(wrong.edges.find(edge => edge.parent === 'mammal' && edge.child === 'animal').status, 'wrong')
+})
+
+test('Curriculum accepts a broad edge when no more-specific concept exists in that lesson', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const start = source.indexOf('// CURRICULUM_PURE_START')
+  const end = source.indexOf('// CURRICULUM_PURE_END')
+  const api = new Function(source.slice(start, end) + '; return { curriculumEvaluate };')()
+  const result = api.curriculumEvaluate(
+    { name: 'animal', children: [{ name: 'dog' }] },
+    { name: 'animal', children: [{ name: 'dog' }] }
+  )
+  assert.equal(result.edges[0].status, 'correct')
+  assert.equal(result.summary.correct, 1)
+})
+
+test('Curriculum uses an explicit Check action and does not auto-clear on every structural change', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const persistence = read('../public/logyq/js/preview/06-persistence.js')
+  assert.match(ui, /id="logyq-curriculum-check">Check<\/button>/)
+  assert.match(source, /document\.getElementById\('logyq-curriculum-check'\)\?\.addEventListener\('click', checkCurriculum\)/)
+  assert.doesNotMatch(persistence, /if \(app\.curriculum\) \{[\s\S]{0,220}maybeCurriculumClear\(snapshot\)/)
+})
+
+test('Curriculum check paints only semantic relationship diagnostics after green fades', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(source, /function paintCurriculumDiagnostics\(evaluation\)/)
+  assert.match(source, /classed\('logyq-semantic-correct'/)
+  assert.match(source, /classed\('logyq-semantic-insufficient'/)
+  assert.match(source, /classed\('logyq-semantic-wrong'/)
+  assert.match(source, /window\.setTimeout\(clearCurriculumCorrectDiagnostics, 900\)/)
+  assert.match(styles, /path\.link\.logyq-semantic-insufficient[^{]*\{[^}]*#f59e0b/s)
+  assert.match(styles, /path\.link\.logyq-semantic-wrong[^{]*\{[^}]*#ef4444/s)
+  assert.match(styles, /path\.link\.logyq-semantic-correct[^{]*\{[^}]*#22c55e/s)
+})
+
+test('Curriculum Check succeeds only when every available concept is placed with exact relationships', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /const evaluation = curriculumEvaluate\(level\.tree, live\)/)
+  assert.match(source, /const complete = evaluation\.summary\.wrong === 0 && evaluation\.summary\.insufficient === 0 && evaluation\.missing\.length === 0/)
+  assert.match(source, /if \(!complete\) return false/)
+})
+
+
+test('successful Curriculum Check glows green and immediately morphs Check into Next', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const check = source.slice(source.indexOf('function checkCurriculum()'), source.indexOf('function bindCurriculum()'))
+  assert.match(check, /paintCurriculumDiagnostics\(evaluation\)/)
+  assert.match(check, /updateCurriculumCheckSummary\(evaluation\)/)
+  assert.match(check, /if \(!complete\)[\s\S]*return false/)
+  assert.match(check, /return maybeCurriculumClear\(snapshot\)/)
+  assert.doesNotMatch(source, /curriculumSuccessTimer/)
+  assert.match(source, /window\.setTimeout\(clearCurriculumCorrectDiagnostics, 900\)/)
+})
+
+test('Curriculum floating Check keeps green amber red summary counts', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  const shell = read('../public/logyq/js/game-shell.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(ui, /id="logyq-curriculum-check-summary"/)
+  assert.match(ui, /data-tone="correct"/)
+  assert.match(ui, /data-tone="insufficient"/)
+  assert.match(ui, /data-tone="wrong"/)
+  assert.match(styles, /#logyq-curriculum-check-summary\{[^}]*position:absolute[^}]*right:-5px[^}]*top:-7px/s)
+  assert.match(shell, /#logyq-curriculum-check,#logyq-curriculum-next\{[^}]*width:36px[^}]*height:36px[^}]*border-radius:50%/s)
+  assert.match(source, /function updateCurriculumCheckSummary\(evaluation = null\)/)
+  assert.match(source, /pieces\.correct/)
+  assert.match(source, /pieces\.insufficient/)
+  assert.match(source, /pieces\.wrong/)
+})
+
+test('a Curriculum edit clears stale semantic counts and diagnostics', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const persistence = read('../public/logyq/js/preview/06-persistence.js')
+  assert.match(source, /function clearCurriculumDiagnostics\(\)[\s\S]*updateCurriculumCheckSummary\(null\)/)
+  assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*clearCurriculumDiagnostics\(\)/)
+})
+
+
+test('Curriculum Check and Next live in the header action cluster, not beside the Word Bank', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(shell, /const legacyCheck = document\.getElementById\('logyq-curriculum-check'\)/)
+  assert.match(shell, /actions\.append\(legacyCheck, legacyNext, pause\)/)
+  assert.match(shell, /#logyq-curriculum-check,#logyq-curriculum-next\{[^}]*width:36px[^}]*height:36px[^}]*border-radius:50%/s)
+  assert.match(shell, /#logyq-curriculum-check[^}]*position:relative/s)
+  assert.doesNotMatch(styles, /#logyq-curriculum-check\{[^}]*bottom:/s)
+  assert.doesNotMatch(styles, /#logyq-curriculum-check\{[^}]*right:12px/s)
+})
+
+test('Curriculum Word Bank returns to its centered floating position and still disappears when empty', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /body\.logyq-game #Dock:not\(\.is-empty\),body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)\{min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible\}/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty\{display:none!important\}/)
+  assert.doesNotMatch(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*right:118px/s)
+})
+
+test('Game and Curriculum use deep plum headers with soft white controls', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /background:#5a465f;color:#fff8fc/)
+  assert.match(shell, /#logyq-game-bar button\{[^}]*color:#fff8fc/s)
+  assert.match(shell, /#logyq-curriculum-bar button\{[^}]*color:#fff8fc/s)
+})
+
+test('Game and Curriculum Next buttons use the same warm green success treatment', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /#logyq-game-next\{[^}]*background:#34a36f[^}]*color:white/s)
+  assert.match(shell, /#logyq-curriculum-next\{[^}]*background:#34a36f[^}]*color:white/s)
+})
+
+test('Curriculum Check floats below the header and only appears after more than one placed card', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(shell, /#logyq-curriculum-check\{[^}]*position:fixed[^}]*right:14px[^}]*width:56px[^}]*height:56px[^}]*border-radius:50%/s)
+  assert.match(shell, /@keyframes logyq-check-invite/)
+  assert.match(source, /function curriculumPlacedCount\(snapshot\)/)
+  assert.match(source, /function updateCurriculumCheckVisibility\(snapshot = bridge\.snapshot\(\)\)/)
+  assert.match(source, /checkButton\.hidden = session\.cleared \|\| curriculumPlacedCount\(snapshot\) <= 1/)
+  assert.match(source, /updateCurriculumCheckVisibility\(snapshot\)/)
+})
+
+test('Curriculum Check is outside the header while Next remains the large bottom success action', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /actions\.append\(pause\)/)
+  assert.doesNotMatch(shell, /actions\.append\(legacyCheck/)
+  assert.match(shell, /bar\.after\(legacyStatus, legacyNext, legacyCheck, hiddenControls\)/)
+  assert.match(shell, /#logyq-curriculum-next\{[^}]*left:50%[^}]*bottom:calc\(32px \+ env\(safe-area-inset-bottom\)\)[^}]*min-width:190px[^}]*min-height:56px/s)
+})
+
+
+test('Game and Curriculum Word Banks have no container boundary when populated', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /body\.logyq-game #Dock:not\(\.is-empty\)[^\{]*\{[^}]*background:transparent[^}]*border:0[^}]*box-shadow:none/s)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*background:transparent[^}]*border:0[^}]*box-shadow:none/s)
+})
+
+test('Game Next warm green is not overridden by legacy blue styling', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /#logyq-game-next\{background:#34a36f!important;color:#fff!important\}/)
+  assert.doesNotMatch(styles, /#logyq-game-check,#logyq-game-next\{background:#2563eb!important/)
 })

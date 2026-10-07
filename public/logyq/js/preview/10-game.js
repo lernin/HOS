@@ -20,6 +20,10 @@
     return childShape + ':' + contact + ':' + next
   }
 
+  // Early movement curriculum: repeat below three times, introduce above,
+  // then mix the two vertical directions before chains begin.
+  const EARLY_TWO_CARD_DIRECTIONS = ['below','below','below','above','above','below','above','below','above','below','above','below','above','below','above']
+
   const gameLevels = []
   for (const [rootShape, rootName] of GAME_SHAPES) {
     for (const [childShape, childName] of GAME_SHAPES) {
@@ -28,8 +32,8 @@
       const intendedRoot = { name: '', gameId: 'piece-r', paint: rootPaint(rootShape) }
       const intendedChild = { name: '', gameId: 'piece-c', paint: childPaint(rootShape, childShape) }
       // One card starts on the canvas and the other in the existing Word Bank.
-      // Alternate the anchor so "always drop below" / "always make root" is not a clue.
-      const rootStarts = number % 2 === 1
+      // Repetition comes first: three below moves, then above, then mixed practice.
+      const rootStarts = EARLY_TWO_CARD_DIRECTIONS[number - 1] !== 'above'
       const anchor = rootStarts ? intendedRoot : intendedChild
       const loose = rootStarts ? intendedChild : intendedRoot
       const bankKey = '__LOGYQ_GAME_CARD__'
@@ -101,9 +105,9 @@
     addOpenLevel('branch-'+round+'-'+i, (28+round*4+i)+' · Branch', t, ['a','b','c'][(round+i)%3])
   })
 
-  // Brief first-contact guides; keep the original puzzle IDs and inventory.
+  // Coach the first example of each new relation; practice levels stay uncluttered.
   gameLevels[0].guide = 'below'
-  gameLevels[1].guide = 'above'
+  gameLevels[3].guide = 'above'
   const firstBranch = gameLevels[27]
   firstBranch.guide = 'sibling'
   const firstChild = firstBranch.solution.children[0]
@@ -861,8 +865,7 @@
     gameArtTimer = setTimeout(() => {
       gameArtTimer = null
       if (epoch !== gameArtEpoch || !app.game?.cleared || document.body.classList.contains('logyq-home')) return
-      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
-          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
+      if (puzzleCamera.busy('game')) {
         scheduleGameCompletionArt(150, animate)
         return
       }
@@ -928,62 +931,28 @@
     }, delay)
   }
 
-  let gameFitTimer = null
-  let gameFitPending = false
-  const gamePointers = new Set()
-
-  function cancelGameCameraFit() {
-    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
-    gameFitTimer = null
-    bridge.core?.elements?.svg?.interrupt?.('game-fit')
-  }
-
   function levelForGuide() { return gameLevels.find(level => level.id === app.game?.id) }
 
+  function gameCameraTarget(root) {
+    return app.game?.guide
+      ? window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
+      : null
+  }
+
+  function cancelGameCameraFit() {
+    puzzleCamera.cancel('game')
+  }
+
   function fitGameCamera(duration = 0) {
-    const engine = bridge.core
-    const root = engine?.state?.root
-    if (!app.game || !root || gamePointers.size) return
-    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity
-    root.each(node => {
-      left = Math.min(left, node.x - GAME_LAYOUT.cardWidth / 2)
-      right = Math.max(right, node.x + GAME_LAYOUT.cardWidth / 2)
-      top = Math.min(top, node.y - GAME_LAYOUT.cardHeight / 2)
-      bottom = Math.max(bottom, node.y + GAME_LAYOUT.cardHeight / 2)
-    })
-    if (app.game.guide) {
-      const target = window.LOGYQGameGuide?.target(levelForGuide(), root.descendants())
-      if (target) {
-        left = Math.min(left, target.x - GAME_LAYOUT.cardWidth / 2)
-        right = Math.max(right, target.x + GAME_LAYOUT.cardWidth / 2)
-        top = Math.min(top, target.y - GAME_LAYOUT.cardHeight / 2)
-        bottom = Math.max(bottom, target.y + GAME_LAYOUT.cardHeight / 2)
-      }
-    }
-    engine.treeManager?.fitGameBounds?.({x:left,y:top,width:right-left,height:bottom-top}, {duration})
+    return puzzleCamera.fitNow('game', duration)
   }
 
   function scheduleGameCameraFit(delay = 280) {
-    if (!app.game || !bridge.core?.state?.root) return
-    gameFitPending = true
-    if (gameFitTimer !== null) clearTimeout(gameFitTimer)
-    gameFitTimer = null
-    if (gamePointers.size) return
-    gameFitTimer = setTimeout(() => {
-      gameFitTimer = null
-      if (!app.game || document.body.classList.contains('logyq-home')) return
-      if (gamePointers.size || window.__logyqHoldDragFrozen?.()
-          || bridge.core?.elements?.svg?.classed?.('dragging-mode')) {
-        scheduleGameCameraFit(100)
-        return
-      }
-      gameFitPending = false
-      fitGameCamera(280)
-    }, delay)
+    puzzleCamera.schedule('game', delay)
   }
 
   function refitGameCamera() {
-    scheduleGameCameraFit(80)
+    puzzleCamera.refit('game')
     if (gameArtElement) scheduleGameCompletionArt(700, false)
     window.LOGYQGameGuide?.refresh()
   }
@@ -996,9 +965,7 @@
     window.LOGYQGameSound?.stop()
     gameDropBefore = null
     app.game = null
-    cancelGameCameraFit()
-    gamePointers.clear()
-    gameFitPending = false
+    puzzleCamera.deactivate('game')
     document.body.classList.remove('logyq-game')
     delete window.__logyqGameDropAllowed
     delete window.__logyqGameBankNode
@@ -1142,9 +1109,10 @@
     updateMapName()
     hideLibrary()
     gameStatus(levelUp ? 'Level up!' : level.hint)
-    cancelGameCameraFit()
-    gamePointers.clear()
-    gameFitPending = false
+    puzzleCamera.activate('game', {
+      target: gameCameraTarget,
+      afterFit: () => window.LOGYQGameGuide?.refresh?.(),
+    })
     bridge.loadMap(paintGameTree(structuredClone(level.tree)), level.bank.slice(), { fit: false })
     fitGameCamera()
     if (app.game.guide) window.LOGYQGameGuide?.show(level, bridge.core)
@@ -1265,22 +1233,7 @@
       if (!app.game) return
       if (window.LOGYQGameSound?.enabled()) window.LOGYQGameSound.unlock()
       if (event.target?.closest?.('svg#canvas')) clearGameCompletionArt()
-      gamePointers.add(event.pointerId)
-      gameFitPending = true
-      cancelGameCameraFit()
     }, true)
-    const release = event => {
-      gamePointers.delete(event.pointerId)
-      if (!gamePointers.size && gameFitPending) scheduleGameCameraFit()
-    }
-    window.addEventListener('pointerup', release, true)
-    window.addEventListener('pointercancel', release, true)
-    window.addEventListener('blur', () => {
-      gamePointers.clear()
-      if (gameFitPending) scheduleGameCameraFit()
-    })
-    window.addEventListener('resize', refitGameCamera)
-    window.addEventListener('orientationchange', refitGameCamera)
   }
   preview.game = {
     levels: gameLevels, begin: beginGameLevel, check: checkGame, leave: leaveGamePlay, render: renderGamePath,
