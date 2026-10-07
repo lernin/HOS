@@ -79,12 +79,12 @@
     style.id = 'logyq-game-shell-style'
     style.textContent = `
       body.logyq-game #logiq-mobile-header,body.logyq-game>header,body.logyq-game #logyq-map-title,body.logyq-game #logiq-mobile-panel,body.logyq-game #logyq-paint-strip,body.logyq-game #logyq-warehouse,body.logyq-game #logyq-bank-trash,body.logyq-game #trash{display:none!important}
-      body.logyq-game:not(.logyq-home) #logyq-game-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,215,229,.92);border-radius:17px;background:rgba(248,244,250,.93);color:#0f172a;box-shadow:0 6px 22px rgba(76,58,82,.12);backdrop-filter:blur(12px)}
-      body.logyq-game #logyq-game-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#0f172a;font:650 14px/1 system-ui;touch-action:manipulation}
+      body.logyq-game:not(.logyq-home) #logyq-game-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,215,229,.92);border-radius:17px;background:#26282d;color:#f8fafc;box-shadow:0 6px 22px rgba(15,23,42,.24);backdrop-filter:blur(12px)}
+      body.logyq-game #logyq-game-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#f8fafc;font:650 14px/1 system-ui;touch-action:manipulation}
       body.logyq-game #logyq-game-back{justify-self:start;text-align:left;padding:0 10px}
       body.logyq-game #logyq-game-actions{justify-self:end;display:flex;align-items:center;gap:2px}
       body.logyq-game #logyq-game-pause{width:48px;padding:0;font-size:20px;font-weight:850;letter-spacing:2px}
-      body.logyq-game #logyq-game-puzzle{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      body.logyq-game #logyq-game-puzzle{text-align:center;color:#f8fafc;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       body.logyq-game #Dock .chip.logyq-hint-piece{box-shadow:0 0 0 4px rgba(15,23,42,.22),0 0 0 8px rgba(255,255,255,.85);animation:logyq-hint-pulse 900ms ease-in-out infinite}
       #logyq-game-hint-overlay{position:fixed;inset:0;z-index:78;pointer-events:none}
       #logyq-game-hint-overlay svg{width:100%;height:100%;overflow:visible}
@@ -94,7 +94,7 @@
       body.logyq-game #logyq-game-status{display:none!important}
       body.logyq-game #Dock .chip{position:relative}
       body.logyq-game #Dock .chip::before{content:"";position:absolute;inset:-14px}
-      body.logyq-game #logyq-game-next{position:fixed;z-index:85;left:50%;transform:translateX(-50%);bottom:calc(32px + env(safe-area-inset-bottom));min-width:190px;min-height:56px;padding:0 30px;border:0;border-radius:18px;background:#0f172a;color:white;font:750 18px/1 system-ui;box-shadow:0 10px 30px rgba(15,23,42,.28);touch-action:manipulation}
+      body.logyq-game #logyq-game-next{position:fixed;z-index:85;left:50%;transform:translateX(-50%);bottom:calc(32px + env(safe-area-inset-bottom));min-width:190px;min-height:56px;padding:0 30px;border:0;border-radius:18px;background:#34a36f;color:white;font:750 18px/1 system-ui;box-shadow:0 10px 30px rgba(15,23,42,.28);touch-action:manipulation}
       body.logyq-game #logyq-game-next[hidden]{display:none!important}
       #logyq-game-pause-panel{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:22px;background:rgba(15,23,42,.28);backdrop-filter:blur(10px)}
       #logyq-game-pause-panel[hidden]{display:none!important}
@@ -290,18 +290,18 @@
     const pause = button('logyq-curriculum-pause', '•••', 'Curriculum settings')
     pause.setAttribute('aria-expanded', 'false')
     legacyCheck.setAttribute('aria-label', 'Check lesson')
-    legacyNext.textContent = '→'
+    legacyNext.textContent = 'Next'
     legacyNext.setAttribute('aria-label', 'Next lesson')
     const actions = document.createElement('div')
     actions.id = 'logyq-curriculum-actions'
-    actions.append(legacyCheck, legacyNext, pause)
+    actions.append(pause)
     bar.replaceChildren(back, title, actions)
 
     const hiddenControls = document.createElement('div')
     hiddenControls.id = 'logyq-curriculum-legacy-controls'
     hiddenControls.hidden = true
     hiddenControls.append(legacyLevels)
-    bar.after(legacyStatus, hiddenControls)
+    bar.after(legacyStatus, legacyNext, legacyCheck, hiddenControls)
 
     const panel = document.createElement('div')
     panel.id = 'logyq-curriculum-shell-panel'
@@ -319,16 +319,17 @@
     style.id = 'logyq-curriculum-shell-style'
     style.textContent = `
       body.logyq-curriculum #logiq-mobile-header,body.logyq-curriculum>header,body.logyq-curriculum #logyq-map-title,body.logyq-curriculum #logiq-mobile-panel,body.logyq-curriculum #logyq-paint-strip,body.logyq-curriculum #logyq-warehouse,body.logyq-curriculum #logyq-bank-trash,body.logyq-curriculum #trash{display:none!important}
-      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,215,229,.92);border-radius:17px;background:rgba(248,244,250,.93);color:#0f172a;box-shadow:0 6px 22px rgba(76,58,82,.12);backdrop-filter:blur(12px)}
-      body.logyq-curriculum #logyq-curriculum-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#0f172a;font:650 14px/1 system-ui;touch-action:manipulation}
+      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,215,229,.92);border-radius:17px;background:#26282d;color:#f8fafc;box-shadow:0 6px 22px rgba(15,23,42,.24);backdrop-filter:blur(12px)}
+      body.logyq-curriculum #logyq-curriculum-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#f8fafc;font:650 14px/1 system-ui;touch-action:manipulation}
       body.logyq-curriculum #logyq-curriculum-back{justify-self:start;text-align:left;padding:0 10px}
-      body.logyq-curriculum #logyq-curriculum-actions{justify-self:end;display:flex;align-items:center;gap:4px}
-      body.logyq-curriculum #logyq-curriculum-check,#logyq-curriculum-next{position:relative;width:36px;height:36px;min-width:36px;min-height:36px;padding:0;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.72);color:#0f172a;font:850 20px/1 system-ui;box-shadow:inset 0 0 0 1px rgba(203,213,225,.9);touch-action:manipulation}
-      body.logyq-curriculum #logyq-curriculum-check{font-size:19px}
-      body.logyq-curriculum #logyq-curriculum-next{background:#0f172a;color:#fff;box-shadow:none;font-size:21px}
-      body.logyq-curriculum #logyq-curriculum-check[hidden],body.logyq-curriculum #logyq-curriculum-next[hidden]{display:none!important}
-      body.logyq-curriculum #logyq-curriculum-pause{width:42px;padding:0;font-size:20px;font-weight:850;letter-spacing:2px}
-      body.logyq-curriculum #logyq-curriculum-lesson{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      body.logyq-curriculum #logyq-curriculum-actions{justify-self:end;display:flex;align-items:center;gap:2px}
+      body.logyq-curriculum #logyq-curriculum-check{position:fixed;z-index:84;right:14px;top:calc(max(10px,env(safe-area-inset-top)) + 62px);width:56px;height:56px;min-width:56px;min-height:56px;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:#f8fafc;color:#26282d;font:900 25px/1 system-ui;box-shadow:0 10px 28px rgba(15,23,42,.22),0 0 0 1px rgba(255,255,255,.9);touch-action:manipulation;animation:logyq-check-invite 1.8s ease-in-out infinite}
+      body.logyq-curriculum #logyq-curriculum-check[hidden]{display:none!important}
+      @keyframes logyq-check-invite{50%{transform:translateY(-2px);box-shadow:0 13px 32px rgba(15,23,42,.27),0 0 0 4px rgba(52,163,111,.12)}}
+      body.logyq-curriculum #logyq-curriculum-next{position:fixed;z-index:85;left:50%;transform:translateX(-50%);bottom:calc(32px + env(safe-area-inset-bottom));min-width:190px;min-height:56px;padding:0 30px;border:0;border-radius:18px;background:#34a36f;color:white;font:750 18px/1 system-ui;box-shadow:0 10px 30px rgba(15,23,42,.28);touch-action:manipulation}
+      body.logyq-curriculum #logyq-curriculum-next[hidden]{display:none!important}
+      body.logyq-curriculum #logyq-curriculum-pause{width:48px;padding:0;font-size:20px;font-weight:850;letter-spacing:2px}
+      body.logyq-curriculum #logyq-curriculum-lesson{text-align:center;color:#f8fafc;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       body.logyq-curriculum #logyq-curriculum-status{display:none!important}
       #logyq-curriculum-shell-panel{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:22px;background:rgba(15,23,42,.28);backdrop-filter:blur(10px)}
       #logyq-curriculum-shell-panel[hidden]{display:none!important}
