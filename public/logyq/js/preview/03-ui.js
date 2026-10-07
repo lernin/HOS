@@ -99,7 +99,7 @@
           <span data-tone="insufficient">● <b data-count="insufficient">0</b></span>
           <span data-tone="wrong">● <b data-count="wrong">0</b></span>
         </span>
-        <span class="logyq-curriculum-action-label">Check</span>
+        <span class="logyq-curriculum-action-label">✓</span>
       </button>
       <div id="logyq-game-bar">
         <span id="logyq-game-name"></span>
