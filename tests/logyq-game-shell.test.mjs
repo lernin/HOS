@@ -671,3 +671,78 @@ test('Game Next warm green is not overridden by legacy blue styling', () => {
   assert.match(styles, /#logyq-game-next\{background:#34a36f!important;color:#fff!important\}/)
   assert.doesNotMatch(styles, /#logyq-game-check,#logyq-game-next\{background:#2563eb!important/)
 })
+
+
+test('Word Curriculum API reads the canonical Supabase curriculum catalog', () => {
+  const api = read('../api/logyq-curriculum.ts')
+  assert.match(api, /logiq_word_curriculum_levels/)
+  assert.match(api, /logiq_word_curriculum_nodes/)
+  assert.match(api, /logiq_word_curriculum_lexonyms/)
+  assert.match(api, /order=sequence\.asc/)
+  assert.match(api, /Response\.json\(\{ levels, nodes, lexonyms \}/)
+  assert.doesNotMatch(api, /ACCESS_PIN/)
+})
+
+test('Curriculum catalog rows assemble into a tree, explicit start state, bank, and resolved Lexonyms', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const start = source.indexOf('// CURRICULUM_CATALOG_PURE_START')
+  const end = source.indexOf('// CURRICULUM_CATALOG_PURE_END')
+  assert.ok(start >= 0 && end > start)
+  const api = new Function(source.slice(start, end) + '; return { curriculumCatalogFromRows };')()
+  const payload = {
+    levels: [{
+      id: 'level-uuid', level_key: 'animal-mammal-dog', sequence: 1, band: 3,
+      title: 'Animal → Mammal → Dog', relation_family: 'taxonomy', relation_code: 'hypernym',
+      guide_direction: null, pedagogical_focus: 'three-node chain',
+      difficulty_score: 5, difficulty_features: { max_depth: 3 },
+    }],
+    lexonyms: [
+      { id: 'lx-animal', surface: 'animal', atomonym_id: 'a-animal', inflection_eclogonym_id: 'x', translation_ko: '동물', gloss_en: 'animal gloss' },
+      { id: 'lx-mammal', surface: 'mammal', atomonym_id: 'a-mammal', inflection_eclogonym_id: 'x', translation_ko: '포유류', gloss_en: 'mammal gloss' },
+      { id: 'lx-dog', surface: 'dog', atomonym_id: 'a-dog', inflection_eclogonym_id: 'x', translation_ko: '개', gloss_en: 'dog gloss' },
+    ],
+    nodes: [
+      { level_id: 'level-uuid', node_key: 'animal', parent_node_key: null, sibling_order: 0, lexonym_id: 'lx-animal', starts_on_board: true, bank_order: null },
+      { level_id: 'level-uuid', node_key: 'mammal', parent_node_key: 'animal', sibling_order: 0, lexonym_id: 'lx-mammal', starts_on_board: false, bank_order: 0 },
+      { level_id: 'level-uuid', node_key: 'dog', parent_node_key: 'mammal', sibling_order: 0, lexonym_id: 'lx-dog', starts_on_board: false, bank_order: 1 },
+    ],
+  }
+  const level = api.curriculumCatalogFromRows(payload)[0]
+  assert.equal(level.id, 'animal-mammal-dog')
+  assert.deepEqual(level.tree, {
+    name: 'animal', children: [{ name: 'mammal', children: [{ name: 'dog' }] }],
+  })
+  assert.deepEqual(level.start, { name: 'animal' })
+  assert.deepEqual(level.bank, ['mammal', 'dog'])
+  assert.equal(level.lexonyms.dog.atomonymId, 'a-dog')
+  assert.equal(level.lexonyms.dog.inflectionId, 'x')
+  assert.equal(level.lexonyms.dog.translationKo, '개')
+  assert.equal(level.band, 3)
+  assert.equal(level.depth, 3)
+})
+
+test('Curriculum prefers the database catalog but retains the local pack as offline fallback', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /let curriculumCatalog = null/)
+  assert.match(source, /function curriculumFallbackPack\(\)/)
+  assert.match(source, /function curriculumPack\(\) \{\s*return curriculumCatalog\?\.length \? curriculumCatalog : curriculumFallbackPack\(\)/s)
+  assert.match(source, /async function loadCurriculumCatalog/)
+  assert.match(source, /fetch\('\/api\/logyq-curriculum'/)
+  assert.match(source, /curriculumCatalog = curriculumCatalogFromRows\(payload\)/)
+  assert.match(source, /loadCurriculumCatalog\(\)/)
+})
+
+test('Curriculum translation lookup is tied to the resolved Lexonym metadata, not a raw word dictionary', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(ui, /id="logyq-curriculum-translation"/)
+  assert.match(styles, /#logyq-curriculum-translation/)
+  assert.match(source, /function curriculumLexonymForWord\(word\)/)
+  assert.match(source, /app\.curriculum\?\.lexonyms/)
+  assert.match(source, /function showCurriculumTranslation\(meta, anchor\)/)
+  assert.match(source, /meta\.translationKo/)
+  assert.match(source, /meta\.glossEn/)
+  assert.match(source, /document\.addEventListener\('click', handleCurriculumTranslationTap, true\)/)
+  assert.match(source, /window\.__logyqChipPlacing/)
+})
