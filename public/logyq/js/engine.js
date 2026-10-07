@@ -5552,13 +5552,17 @@ d3.selectAll("g.node").classed("drop-target hover-adopt hover-adopt-sub", false)
     render();
     logyq.treeManager.layoutAndRender(false);
 
-    // Keep your “drop under pointer” behavior. Game keeps the fitted camera.
-    if (!(typeof gameCameraLocked === 'function' && gameCameraLocked())) {
-    const current = d3.zoomTransform(elements.svg.node());
-    const s = current.k || 1;
-    const rx = state.root.x, ry = state.root.y;
-    const tx = drop.px - s * rx, ty = drop.py - s * ry;
-    elements.svg.call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
+    // Normal mapper preserves free placement under the finger.
+    // Direct puzzle surfaces (Game + Curriculum) always hand camera ownership
+    // back to the shared puzzle camera so the first placed piece recenters.
+    if (!directPuzzleShelf()) {
+      const current = d3.zoomTransform(elements.svg.node());
+      const s = current.k || 1;
+      const rx = state.root.x, ry = state.root.y;
+      const tx = drop.px - s * rx, ty = drop.py - s * ry;
+      elements.svg.call(state.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(s));
+    } else {
+      window.LOGYQPreview?.puzzleCamera?.scheduleActive?.(0);
     }
     return;
   }
