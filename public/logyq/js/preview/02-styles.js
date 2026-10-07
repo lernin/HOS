@@ -98,6 +98,13 @@
       #logyq-curriculum-next,#logyq-curriculum-levels{flex:none;border:1px solid #bbf7d0;border-radius:7px;background:#fff;color:#14532d;padding:3px 7px;font:750 12px/1 system-ui,sans-serif;cursor:pointer}
       #logyq-curriculum-next{background:#16a34a;color:#fff;border-color:#16a34a}
       #logyq-curriculum-next[hidden]{display:none!important}
+      #logyq-curriculum-check{display:none;position:fixed;z-index:82;left:50%;bottom:calc(68px + env(safe-area-inset-bottom));transform:translateX(-50%);width:min(220px,calc(100vw - 80px));min-height:48px;border:0;border-radius:999px;background:#111827;color:#fff;font:800 17px/1 system-ui,sans-serif;box-shadow:0 10px 28px rgba(15,23,42,.24);touch-action:manipulation}
+      body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-check:not([hidden]){display:block}
+      #logyq-curriculum-check[hidden]{display:none!important}
+      body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-correct{stroke:#22c55e!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;filter:drop-shadow(0 0 5px rgba(34,197,94,.42));transition:stroke .55s ease,opacity .55s ease,filter .55s ease}
+      body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-insufficient{stroke:#f59e0b!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 8!important;animation:logyq-semantic-flow .8s linear infinite!important;filter:drop-shadow(0 0 5px rgba(245,158,11,.38))}
+      body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-wrong{stroke:#ef4444!important;stroke-width:4.5px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 7!important;animation:logyq-semantic-flow .62s linear infinite!important;filter:drop-shadow(0 0 6px rgba(239,68,68,.46))}
+      @keyframes logyq-semantic-flow{to{stroke-dashoffset:-36}}
       body.logyq-curriculum:not(.logyq-home) #logyq-map-title{display:none!important}
       @media (max-width:700px), (pointer:coarse) and (max-width:1200px), (hover:none) and (max-width:1200px){
         body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{top:48px;left:8px;right:8px}
