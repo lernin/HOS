@@ -492,6 +492,11 @@
       #logyq-curriculum-check-summary [data-tone="wrong"]{color:#dc2626}
       #logyq-curriculum-check-summary b{font:800 8px/1 system-ui,sans-serif;color:inherit}
       .logyq-curriculum-action-label{display:block}
+      #logyq-curriculum-translation{position:fixed;z-index:120;box-sizing:border-box;max-width:min(260px,calc(100vw - 20px));padding:10px 13px;display:grid;grid-template-columns:auto auto;align-items:baseline;gap:3px 10px;border:1px solid rgba(255,255,255,.9);border-radius:16px;background:rgba(255,255,255,.96);color:#334155;box-shadow:0 10px 28px rgba(62,46,66,.18);backdrop-filter:blur(10px);pointer-events:none}
+      #logyq-curriculum-translation[hidden]{display:none!important}
+      #logyq-curriculum-translation strong{font:800 14px/1.15 system-ui,sans-serif;color:#5a465f}
+      #logyq-curriculum-translation .logyq-translation-ko{font:850 18px/1.15 system-ui,sans-serif;color:#14532d}
+      #logyq-curriculum-translation small{grid-column:1/-1;font:600 11px/1.3 system-ui,sans-serif;color:#64748b}
       body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-correct{stroke:#22c55e!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;filter:drop-shadow(0 0 5px rgba(34,197,94,.42));transition:stroke .55s ease,opacity .55s ease,filter .55s ease}
       body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-insufficient{stroke:#f59e0b!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 8!important;animation:logyq-semantic-flow .8s linear infinite!important;filter:drop-shadow(0 0 5px rgba(245,158,11,.38))}
       body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-wrong{stroke:#ef4444!important;stroke-width:4.5px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 7!important;animation:logyq-semantic-flow .62s linear infinite!important;filter:drop-shadow(0 0 6px rgba(239,68,68,.46))}
@@ -873,7 +878,7 @@
           <div class="logiq-library-body">
             <div class="logiq-map-list" id="logiq-map-list" role="tabpanel" aria-labelledby="logyq-tab-maps"></div>
             <div id="logyq-curriculum" role="tabpanel" aria-labelledby="logyq-tab-curriculum" hidden>
-              <p class="logyq-level-intro">Drag the cards into the tree. Sibling order can differ.</p>
+              <p class="logyq-level-intro">Drag the cards into the tree. Tap a word to see its Korean meaning.</p>
               <ol id="logyq-level-path"></ol>
             </div>
             <div id="logyq-game-levels" role="tabpanel" aria-labelledby="logyq-tab-game" hidden>
@@ -932,6 +937,7 @@
         </span>
         <span class="logyq-curriculum-action-label">✓</span>
       </button>
+      <div id="logyq-curriculum-translation" role="status" aria-live="polite" hidden></div>
       <div id="logyq-game-bar">
         <span id="logyq-game-name"></span>
         <span id="logyq-game-tier"></span>
@@ -5748,10 +5754,99 @@
     return children.length ? { name, children } : { name }
   }
 
+  let curriculumCatalog = null
+  let curriculumCatalogTask = null
+
+  // CURRICULUM_CATALOG_PURE_START
+  function curriculumCatalogFromRows(payload = {}) {
+    const levels = Array.isArray(payload.levels) ? payload.levels.slice() : []
+    const nodes = Array.isArray(payload.nodes) ? payload.nodes.slice() : []
+    const lexonyms = Array.isArray(payload.lexonyms) ? payload.lexonyms.slice() : []
+    const lexById = new Map(lexonyms.map((row) => [String(row.id), row]))
+    const nodesByLevel = new Map()
+
+    for (const row of nodes) {
+      const levelId = String(row?.level_id || '')
+      if (!levelId) continue
+      const bucket = nodesByLevel.get(levelId) || []
+      bucket.push(row)
+      nodesByLevel.set(levelId, bucket)
+    }
+
+    const metaFor = (row) => {
+      const lex = lexById.get(String(row?.lexonym_id || '')) || {}
+      return {
+        surface: String(lex.surface || row?.node_key || '').trim(),
+        lexonymId: String(lex.id || ''),
+        lexonymKey: String(lex.lexonym_key || ''),
+        atomonymId: String(lex.atomonym_id || ''),
+        inflectionId: String(lex.inflection_eclogonym_id || ''),
+        translationKo: String(lex.translation_ko || '').trim(),
+        glossEn: String(lex.gloss_en || '').trim(),
+      }
+    }
+
+    const buildTree = (rows, rootRow, allowed = null) => {
+      if (!rootRow) return null
+      const meta = metaFor(rootRow)
+      const children = rows
+        .filter((row) => String(row.parent_node_key || '') === String(rootRow.node_key || '')
+          && (!allowed || allowed.has(String(row.node_key || ''))))
+        .sort((a, b) => Number(a.sibling_order || 0) - Number(b.sibling_order || 0))
+        .map((row) => buildTree(rows, row, allowed))
+        .filter(Boolean)
+      return children.length ? { name: meta.surface, children } : { name: meta.surface }
+    }
+
+    return levels
+      .sort((a, b) => Number(a.sequence || 0) - Number(b.sequence || 0))
+      .map((level) => {
+        const levelRows = (nodesByLevel.get(String(level.id)) || []).slice()
+        const root = levelRows.find((row) => !row.parent_node_key)
+        if (!root) return null
+        const tree = buildTree(levelRows, root)
+        const startRows = levelRows.filter((row) => !!row.starts_on_board)
+        const startKeys = new Set(startRows.map((row) => String(row.node_key || '')))
+        const startRoot = startRows.find((row) => !row.parent_node_key || !startKeys.has(String(row.parent_node_key || '')))
+        const start = startRoot ? buildTree(levelRows, startRoot, startKeys) : { name: metaFor(root).surface }
+        const bankRows = levelRows
+          .filter((row) => !row.starts_on_board)
+          .sort((a, b) => Number(a.bank_order ?? 9999) - Number(b.bank_order ?? 9999))
+        const lexicon = {}
+        for (const row of levelRows) {
+          const meta = metaFor(row)
+          if (meta.surface) lexicon[meta.surface.toLowerCase()] = meta
+        }
+        return {
+          id: String(level.level_key || level.id || ''),
+          dbId: String(level.id || ''),
+          sequence: Number(level.sequence || 0),
+          band: Number(level.band || 0),
+          title: String(level.title || level.level_key || 'Curriculum'),
+          tree,
+          start,
+          bank: bankRows.map((row) => metaFor(row).surface),
+          guide: level.guide_direction || undefined,
+          direction: level.guide_direction || undefined,
+          relationFamily: String(level.relation_family || 'taxonomy'),
+          relationCode: String(level.relation_code || ''),
+          pedagogicalFocus: String(level.pedagogical_focus || ''),
+          difficulty: Number(level.difficulty_score || 0),
+          difficultyFeatures: level.difficulty_features && typeof level.difficulty_features === 'object'
+            ? level.difficulty_features
+            : {},
+          depth: Number(level.difficulty_features?.max_depth || 0) || undefined,
+          lexonyms: lexicon,
+        }
+      })
+      .filter(Boolean)
+  }
+  // CURRICULUM_CATALOG_PURE_END
+
   // Teach one relationship until it feels ordinary: three below moves first,
   // then introduce above, mix both vertical directions, build chains, and only
   // then introduce the new sibling/beside relationship.
-  function curriculumPack() {
+  function curriculumFallbackPack() {
     return [
       { id: 'fruit', title: 'Fruit', tree: curriculumNode('fruit', curriculumNode('apple')),
         start: curriculumNode('fruit'), bank: ['apple'], guide: 'below', direction: 'below' },
@@ -5807,6 +5902,25 @@
         curriculumNode('kitchen', curriculumNode('fridge'), curriculumNode('stove')),
         curriculumNode('bedroom', curriculumNode('bed'), curriculumNode('desk'))) },
     ]
+  }
+
+  function curriculumPack() {
+    return curriculumCatalog?.length ? curriculumCatalog : curriculumFallbackPack()
+  }
+
+  async function loadCurriculumCatalog({ force = false } = {}) {
+    if (curriculumCatalog?.length && !force) return curriculumCatalog
+    if (curriculumCatalogTask && !force) return curriculumCatalogTask
+    curriculumCatalogTask = (async () => {
+      const response = await fetch('/api/logyq-curriculum', { cache: 'no-store' })
+      if (!response.ok) throw new Error('Could not load the word curriculum.')
+      const payload = await response.json()
+      const next = curriculumCatalogFromRows(payload)
+      if (next.length) curriculumCatalog = next
+      if (document.getElementById('logiq-library')?.dataset.shelf === 'curriculum') renderCurriculumPath()
+      return curriculumPack()
+    })().catch(() => curriculumPack()).finally(() => { curriculumCatalogTask = null })
+    return curriculumCatalogTask
   }
 
   function curriculumWords(node, into = []) {
@@ -6023,6 +6137,7 @@
 
   function leaveCurriculumPlay() {
     window.LOGYQGameGuide?.hide()
+    hideCurriculumTranslation()
     clearCurriculumDiagnostics()
     puzzleCamera.deactivate('curriculum')
     delete window.__logyqCurriculumReturnToBank
@@ -6178,8 +6293,72 @@
     checkButton.hidden = session.cleared || curriculumPlacedCount(snapshot) <= 1
   }
 
+  function curriculumLexonymForWord(word) {
+    const key = curriculumName(word)
+    return app.curriculum?.lexonyms?.[key] || null
+  }
+
+  function hideCurriculumTranslation() {
+    const popover = document.getElementById('logyq-curriculum-translation')
+    if (popover) popover.hidden = true
+  }
+
+  function showCurriculumTranslation(meta, anchor) {
+    const popover = document.getElementById('logyq-curriculum-translation')
+    if (!popover || !meta?.translationKo || !anchor?.getBoundingClientRect) return false
+    popover.replaceChildren()
+    const word = document.createElement('strong')
+    word.textContent = meta.surface || ''
+    const translation = document.createElement('span')
+    translation.className = 'logyq-translation-ko'
+    translation.textContent = meta.translationKo
+    popover.append(word, translation)
+    if (meta.glossEn) {
+      const gloss = document.createElement('small')
+      gloss.textContent = meta.glossEn
+      popover.append(gloss)
+    }
+    popover.hidden = false
+    popover.style.left = '12px'
+    popover.style.top = '72px'
+    window.requestAnimationFrame(() => {
+      const anchorRect = anchor.getBoundingClientRect()
+      const popRect = popover.getBoundingClientRect()
+      const gap = 8
+      const left = Math.max(10, Math.min(window.innerWidth - popRect.width - 10, anchorRect.left + anchorRect.width / 2 - popRect.width / 2))
+      let top = anchorRect.top - popRect.height - gap
+      if (top < 68) top = anchorRect.bottom + gap
+      top = Math.max(68, Math.min(window.innerHeight - popRect.height - 10, top))
+      popover.style.left = left + 'px'
+      popover.style.top = top + 'px'
+    })
+    return true
+  }
+
+  function handleCurriculumTranslationTap(event) {
+    if (!app.curriculum || document.body.classList.contains('logyq-home')) return
+    const target = event.target
+    if (!target?.closest) return
+    const chip = target.closest('#Dock .chip')
+    const node = target.closest('svg#canvas g.node')
+    if (!chip && !node) {
+      hideCurriculumTranslation()
+      return
+    }
+    if (window.__logyqChipPlacing) return
+    const word = chip
+      ? String(chip.textContent || '').trim()
+      : String(node?.__data__?.data?.name || node?.__data__?.name || '').trim()
+    const meta = curriculumLexonymForWord(word)
+    if (!meta?.translationKo) return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    showCurriculumTranslation(meta, chip || node)
+  }
+
   function beginCurriculumLevel(level) {
     if (!level) return
+    hideCurriculumTranslation()
     leaveGamePlay()
     const stage = Math.max(1, curriculumPack().findIndex(item => item.id === level.id) + 1)
     app.curriculum = {
@@ -6191,6 +6370,7 @@
       phase: 'play',
       released: true,
       guide: level.guide || null,
+      lexonyms: level.lexonyms || {},
       actualMoves: 0,
       returnedPieces: 0,
       hintsUsed: 0,
@@ -6360,6 +6540,8 @@
     preview.curriculum = {
       key: CURRICULUM_KEY,
       pack: curriculumPack,
+      load: loadCurriculumCatalog,
+      catalogFromRows: curriculumCatalogFromRows,
       words: curriculumWords,
       matches: curriculumMatches,
       evaluate: curriculumEvaluate,
@@ -6394,7 +6576,13 @@
   })
 
   bindCurriculum()
+  document.addEventListener('click', handleCurriculumTranslationTap, true)
+  document.addEventListener('pointerdown', (event) => {
+    if (!app.curriculum || !event.target?.closest?.('#Dock .chip, svg#canvas g.node')) return
+    hideCurriculumTranslation()
+  }, true)
   bridge.subscribe((snapshot) => updateCurriculumCheckVisibility(snapshot))
+  loadCurriculumCatalog()
   const THEKONYM_KEY = 'logyq_thekonym_mode_v1'
   const THEKONYM_EDIT_KEY = 'logyq_thekonym_local_edits_v1'
   const THEKONYM_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('')
