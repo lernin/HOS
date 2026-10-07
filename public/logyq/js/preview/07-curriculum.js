@@ -168,6 +168,7 @@
   }
 
   let curriculumCorrectTimer = null
+  let curriculumSuccessTimer = null
 
   function clearCurriculumCorrectDiagnostics() {
     bridge.core?.elements?.gLinks?.selectAll?.('path.link')
@@ -176,7 +177,9 @@
 
   function clearCurriculumDiagnostics() {
     if (curriculumCorrectTimer !== null) clearTimeout(curriculumCorrectTimer)
+    if (curriculumSuccessTimer !== null) clearTimeout(curriculumSuccessTimer)
     curriculumCorrectTimer = null
+    curriculumSuccessTimer = null
     const links = bridge.core?.elements?.gLinks?.selectAll?.('path.link')
     links?.classed?.('logyq-semantic-correct', false)
       ?.classed?.('logyq-semantic-insufficient', false)
@@ -451,6 +454,20 @@
     setSaveState('saved')
   }
 
+  function finishSuccessfulCurriculumCheck(snapshot) {
+    const checkButton = document.getElementById('logyq-curriculum-check')
+    const nextButton = document.getElementById('logyq-curriculum-next')
+    if (checkButton) checkButton.hidden = true
+    if (nextButton) nextButton.hidden = true
+    if (curriculumSuccessTimer !== null) clearTimeout(curriculumSuccessTimer)
+    curriculumSuccessTimer = window.setTimeout(() => {
+      curriculumSuccessTimer = null
+      clearCurriculumCorrectDiagnostics()
+      maybeCurriculumClear(snapshot)
+    }, 900)
+    return true
+  }
+
   function maybeCurriculumClear(snapshot) {
     const session = app.curriculum
     if (!session || session.cleared) return false
@@ -515,7 +532,7 @@
       }
       return false
     }
-    return maybeCurriculumClear(snapshot)
+    return finishSuccessfulCurriculumCheck(snapshot)
   }
 
   function bindCurriculum() {
