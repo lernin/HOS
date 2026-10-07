@@ -322,7 +322,7 @@
       body.logyq-curriculum #logyq-curriculum-pause{width:48px;padding:0;font-size:20px;font-weight:850;letter-spacing:2px}
       body.logyq-curriculum #logyq-curriculum-lesson{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       body.logyq-curriculum #logyq-curriculum-status{display:none!important}
-      body.logyq-curriculum #logyq-curriculum-next{position:fixed;z-index:85;left:50%;transform:translateX(-50%);bottom:calc(32px + env(safe-area-inset-bottom));min-width:190px;min-height:56px;padding:0 30px;border:0;border-radius:18px;background:#0f172a;color:white;font:750 18px/1 system-ui;box-shadow:0 10px 30px rgba(15,23,42,.28);touch-action:manipulation}
+      body.logyq-curriculum #logyq-curriculum-next{position:fixed;z-index:85;right:12px;left:auto;transform:none;bottom:calc(12px + env(safe-area-inset-bottom));width:98px;min-width:98px;min-height:52px;padding:0 10px;border:0;border-radius:16px;background:#0f172a;color:white;font:800 15px/1 system-ui;box-shadow:0 8px 22px rgba(15,23,42,.24);touch-action:manipulation}
       body.logyq-curriculum #logyq-curriculum-next[hidden]{display:none!important}
       #logyq-curriculum-shell-panel{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:22px;background:rgba(15,23,42,.28);backdrop-filter:blur(10px)}
       #logyq-curriculum-shell-panel[hidden]{display:none!important}
