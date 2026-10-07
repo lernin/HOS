@@ -269,9 +269,10 @@
     if (!bar || document.getElementById('logyq-curriculum-shell-panel')) return
 
     const legacyStatus = document.getElementById('logyq-curriculum-status')
+    const legacyCheck = document.getElementById('logyq-curriculum-check')
     const legacyNext = document.getElementById('logyq-curriculum-next')
     const legacyLevels = document.getElementById('logyq-curriculum-levels')
-    if (!legacyStatus || !legacyNext || !legacyLevels) return
+    if (!legacyStatus || !legacyCheck || !legacyNext || !legacyLevels) return
 
     const button = (id, label, ariaLabel) => {
       const element = document.createElement('button')
@@ -288,16 +289,19 @@
     title.textContent = 'Lesson'
     const pause = button('logyq-curriculum-pause', '•••', 'Curriculum settings')
     pause.setAttribute('aria-expanded', 'false')
+    legacyCheck.setAttribute('aria-label', 'Check lesson')
+    legacyNext.textContent = '→'
+    legacyNext.setAttribute('aria-label', 'Next lesson')
     const actions = document.createElement('div')
     actions.id = 'logyq-curriculum-actions'
-    actions.append(pause)
+    actions.append(legacyCheck, legacyNext, pause)
     bar.replaceChildren(back, title, actions)
 
     const hiddenControls = document.createElement('div')
     hiddenControls.id = 'logyq-curriculum-legacy-controls'
     hiddenControls.hidden = true
     hiddenControls.append(legacyLevels)
-    bar.after(legacyStatus, legacyNext, hiddenControls)
+    bar.after(legacyStatus, hiddenControls)
 
     const panel = document.createElement('div')
     panel.id = 'logyq-curriculum-shell-panel'
@@ -318,12 +322,14 @@
       body.logyq-curriculum:not(.logyq-home) #logyq-curriculum-bar{position:fixed;z-index:80;top:max(10px,env(safe-area-inset-top));left:50%;right:auto;transform:translateX(-50%);width:min(420px,calc(100vw - 24px));height:48px;box-sizing:border-box;padding:5px 6px;display:grid;grid-template-columns:90px minmax(0,1fr) 90px;align-items:center;gap:6px;border:1px solid rgba(226,215,229,.92);border-radius:17px;background:rgba(248,244,250,.93);color:#0f172a;box-shadow:0 6px 22px rgba(76,58,82,.12);backdrop-filter:blur(12px)}
       body.logyq-curriculum #logyq-curriculum-bar button{height:36px;border:0;border-radius:12px;background:transparent;color:#0f172a;font:650 14px/1 system-ui;touch-action:manipulation}
       body.logyq-curriculum #logyq-curriculum-back{justify-self:start;text-align:left;padding:0 10px}
-      body.logyq-curriculum #logyq-curriculum-actions{justify-self:end;display:flex;align-items:center;gap:2px}
-      body.logyq-curriculum #logyq-curriculum-pause{width:48px;padding:0;font-size:20px;font-weight:850;letter-spacing:2px}
+      body.logyq-curriculum #logyq-curriculum-actions{justify-self:end;display:flex;align-items:center;gap:4px}
+      body.logyq-curriculum #logyq-curriculum-check,#logyq-curriculum-next{position:relative;width:36px;height:36px;min-width:36px;min-height:36px;padding:0;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.72);color:#0f172a;font:850 20px/1 system-ui;box-shadow:inset 0 0 0 1px rgba(203,213,225,.9);touch-action:manipulation}
+      body.logyq-curriculum #logyq-curriculum-check{font-size:19px}
+      body.logyq-curriculum #logyq-curriculum-next{background:#0f172a;color:#fff;box-shadow:none;font-size:21px}
+      body.logyq-curriculum #logyq-curriculum-check[hidden],body.logyq-curriculum #logyq-curriculum-next[hidden]{display:none!important}
+      body.logyq-curriculum #logyq-curriculum-pause{width:42px;padding:0;font-size:20px;font-weight:850;letter-spacing:2px}
       body.logyq-curriculum #logyq-curriculum-lesson{text-align:center;color:#0f172a;font:750 16px/1 system-ui;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
       body.logyq-curriculum #logyq-curriculum-status{display:none!important}
-      body.logyq-curriculum #logyq-curriculum-next{position:fixed;z-index:85;right:12px;left:auto;transform:none;bottom:calc(12px + env(safe-area-inset-bottom));width:98px;min-width:98px;min-height:52px;padding:0 10px;border:0;border-radius:16px;background:#0f172a;color:white;font:800 15px/1 system-ui;box-shadow:0 8px 22px rgba(15,23,42,.24);touch-action:manipulation}
-      body.logyq-curriculum #logyq-curriculum-next[hidden]{display:none!important}
       #logyq-curriculum-shell-panel{position:fixed;inset:0;z-index:5000;display:grid;place-items:center;padding:22px;background:rgba(15,23,42,.28);backdrop-filter:blur(10px)}
       #logyq-curriculum-shell-panel[hidden]{display:none!important}
       body.logyq-curriculum.logyq-curriculum-paused svg#canvas,body.logyq-curriculum.logyq-curriculum-paused #Dock{pointer-events:none}
