@@ -6155,6 +6155,28 @@
     window.requestAnimationFrame(() => window.requestAnimationFrame(draw))
   }
 
+  function curriculumPlacedCount(snapshot) {
+    let count = 0
+    const walk = (node) => {
+      if (!node || typeof node !== 'object') return
+      if (!node.curriculumPile && String(node.name ?? '').trim()) count += 1
+      for (const child of node.children || []) walk(child)
+    }
+    walk(snapshot?.tree)
+    return count
+  }
+
+  function updateCurriculumCheckVisibility(snapshot = bridge.snapshot()) {
+    const checkButton = document.getElementById('logyq-curriculum-check')
+    if (!checkButton) return
+    const session = app.curriculum
+    if (!session || session.phase !== 'play') {
+      checkButton.hidden = true
+      return
+    }
+    checkButton.hidden = session.cleared || curriculumPlacedCount(snapshot) <= 1
+  }
+
   function beginCurriculumLevel(level) {
     if (!level) return
     leaveGamePlay()
@@ -6192,7 +6214,7 @@
     const nextButton = document.getElementById('logyq-curriculum-next')
     if (nextButton) nextButton.hidden = true
     const checkButton = document.getElementById('logyq-curriculum-check')
-    if (checkButton) checkButton.hidden = false
+    if (checkButton) checkButton.hidden = true
     clearCurriculumDiagnostics()
     if (bridge.core?.state) bridge.core.state.curriculumCameraLock = true
     window.__logyqCurriculumReturnToBank = (uid) => {
@@ -6222,6 +6244,7 @@
         status.textContent = 'Piece back in the Word Bank. Keep arranging!'
       }
       bridge.notifyChange?.()
+      updateCurriculumCheckVisibility()
       return true
     }
     renderCurriculumChrome()
@@ -6230,6 +6253,7 @@
       afterFit: () => window.LOGYQGameGuide?.refresh?.(),
     })
     seedCurriculumRoot(level)
+    updateCurriculumCheckVisibility()
     showCurriculumGuide(level)
     setSaveState('saved')
   }
@@ -6369,6 +6393,7 @@
   })
 
   bindCurriculum()
+  bridge.subscribe((snapshot) => updateCurriculumCheckVisibility(snapshot))
   const THEKONYM_KEY = 'logyq_thekonym_mode_v1'
   const THEKONYM_EDIT_KEY = 'logyq_thekonym_local_edits_v1'
   const THEKONYM_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#'.split('')
