@@ -121,21 +121,29 @@
     const present = new Set(curriculumWords(live).map(curriculumName).filter(Boolean))
     const edges = []
     const summary = { correct: 0, insufficient: 0, wrong: 0 }
-    const walk = (node) => {
+    const pieces = { correct: 0, insufficient: 0, wrong: 0 }
+    const walk = (node, incoming = null, root = false) => {
       const parent = String(node?.name ?? '').trim()
+      if (root && parent) {
+        const rootStatus = curriculumName(parent) === curriculumName(target?.name) ? 'correct' : 'wrong'
+        pieces[rootStatus] += 1
+      } else if (incoming) {
+        pieces[incoming] += 1
+      }
       for (const child of node?.children || []) {
         const childName = String(child?.name ?? '').trim()
+        let status = 'wrong'
         if (parent && childName) {
-          const status = curriculumRelation(target, parent, childName)
+          status = curriculumRelation(target, parent, childName)
           edges.push({ parent, child: childName, status })
           summary[status] += 1
         }
-        walk(child)
+        walk(child, status, false)
       }
     }
-    if (live) walk(live)
+    if (live) walk(live, null, true)
     const missing = [...available].filter((name) => !present.has(name))
-    return { edges, summary, missing }
+    return { edges, summary, pieces, missing }
   }
 
   function curriculumUnlocked(index, progress, pack) {
@@ -168,18 +176,35 @@
   }
 
   let curriculumCorrectTimer = null
-  let curriculumSuccessTimer = null
 
   function clearCurriculumCorrectDiagnostics() {
     bridge.core?.elements?.gLinks?.selectAll?.('path.link')
       ?.classed?.('logyq-semantic-correct', false)
   }
 
+  function updateCurriculumCheckSummary(evaluation = null) {
+    const summary = document.getElementById('logyq-curriculum-check-summary')
+    if (!summary) return
+    if (!evaluation) {
+      summary.hidden = true
+      for (const tone of ['correct', 'insufficient', 'wrong']) {
+        const count = summary.querySelector('[data-count="' + tone + '"]')
+        if (count) count.textContent = '0'
+      }
+      return
+    }
+    const pieces = evaluation.pieces || evaluation.summary || {}
+    for (const tone of ['correct', 'insufficient', 'wrong']) {
+      const count = summary.querySelector('[data-count="' + tone + '"]')
+      if (count) count.textContent = String(pieces[tone] || 0)
+    }
+    summary.hidden = false
+  }
+
   function clearCurriculumDiagnostics() {
     if (curriculumCorrectTimer !== null) clearTimeout(curriculumCorrectTimer)
-    if (curriculumSuccessTimer !== null) clearTimeout(curriculumSuccessTimer)
     curriculumCorrectTimer = null
-    curriculumSuccessTimer = null
+    updateCurriculumCheckSummary(null)
     const links = bridge.core?.elements?.gLinks?.selectAll?.('path.link')
     links?.classed?.('logyq-semantic-correct', false)
       ?.classed?.('logyq-semantic-insufficient', false)
@@ -454,20 +479,6 @@
     setSaveState('saved')
   }
 
-  function finishSuccessfulCurriculumCheck(snapshot) {
-    const checkButton = document.getElementById('logyq-curriculum-check')
-    const nextButton = document.getElementById('logyq-curriculum-next')
-    if (checkButton) checkButton.hidden = true
-    if (nextButton) nextButton.hidden = true
-    if (curriculumSuccessTimer !== null) clearTimeout(curriculumSuccessTimer)
-    curriculumSuccessTimer = window.setTimeout(() => {
-      curriculumSuccessTimer = null
-      clearCurriculumCorrectDiagnostics()
-      maybeCurriculumClear(snapshot)
-    }, 900)
-    return true
-  }
-
   function maybeCurriculumClear(snapshot) {
     const session = app.curriculum
     if (!session || session.cleared) return false
@@ -519,6 +530,7 @@
     }
     const evaluation = curriculumEvaluate(level.tree, live)
     paintCurriculumDiagnostics(evaluation)
+    updateCurriculumCheckSummary(evaluation)
     const complete = evaluation.summary.wrong === 0 && evaluation.summary.insufficient === 0 && evaluation.missing.length === 0
     const status = document.getElementById('logyq-curriculum-status')
     if (!complete) {
@@ -532,7 +544,7 @@
       }
       return false
     }
-    return finishSuccessfulCurriculumCheck(snapshot)
+    return maybeCurriculumClear(snapshot)
   }
 
   function bindCurriculum() {
