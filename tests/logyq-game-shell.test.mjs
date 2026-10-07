@@ -627,11 +627,11 @@ test('Curriculum Word Bank returns to its centered floating position and still d
   assert.doesNotMatch(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*right:118px/s)
 })
 
-test('Game and Curriculum use charcoal headers with soft white controls', () => {
+test('Game and Curriculum use deep plum headers with soft white controls', () => {
   const shell = read('../public/logyq/js/game-shell.js')
-  assert.match(shell, /background:#26282d;color:#f8fafc/)
-  assert.match(shell, /#logyq-game-bar button\{[^}]*color:#f8fafc/s)
-  assert.match(shell, /#logyq-curriculum-bar button\{[^}]*color:#f8fafc/s)
+  assert.match(shell, /background:#5a465f;color:#fff8fc/)
+  assert.match(shell, /#logyq-game-bar button\{[^}]*color:#fff8fc/s)
+  assert.match(shell, /#logyq-curriculum-bar button\{[^}]*color:#fff8fc/s)
 })
 
 test('Game and Curriculum Next buttons use the same warm green success treatment', () => {
@@ -657,4 +657,17 @@ test('Curriculum Check is outside the header while Next remains the large bottom
   assert.doesNotMatch(shell, /actions\.append\(legacyCheck/)
   assert.match(shell, /bar\.after\(legacyStatus, legacyNext, legacyCheck, hiddenControls\)/)
   assert.match(shell, /#logyq-curriculum-next\{[^}]*left:50%[^}]*bottom:calc\(32px \+ env\(safe-area-inset-bottom\)\)[^}]*min-width:190px[^}]*min-height:56px/s)
+})
+
+
+test('Game and Curriculum Word Banks have no container boundary when populated', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /body\.logyq-game #Dock:not\(\.is-empty\)[^\{]*\{[^}]*background:transparent[^}]*border:0[^}]*box-shadow:none/s)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*background:transparent[^}]*border:0[^}]*box-shadow:none/s)
+})
+
+test('Game Next warm green is not overridden by legacy blue styling', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /#logyq-game-next\{background:#34a36f!important;color:#fff!important\}/)
+  assert.doesNotMatch(styles, /#logyq-game-check,#logyq-game-next\{background:#2563eb!important/)
 })
