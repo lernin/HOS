@@ -728,7 +728,8 @@ test('Curriculum prefers the database catalog but retains the local pack as offl
   assert.match(source, /function curriculumPack\(\) \{\s*return curriculumCatalog\?\.length \? curriculumCatalog : curriculumFallbackPack\(\)/s)
   assert.match(source, /async function loadCurriculumCatalog/)
   assert.match(source, /fetch\('\/api\/logyq-curriculum'/)
-  assert.match(source, /curriculumCatalog = curriculumCatalogFromRows\(payload\)/)
+  assert.match(source, /const next = curriculumCatalogFromRows\(payload\)/)
+  assert.match(source, /if \(next\.length\) curriculumCatalog = next/)
   assert.match(source, /loadCurriculumCatalog\(\)/)
 })
 
