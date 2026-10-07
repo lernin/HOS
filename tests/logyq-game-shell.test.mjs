@@ -634,3 +634,36 @@ test('Curriculum header Check uses a circular checkmark and Next uses the same c
   assert.match(shell, /legacyNext\.textContent = '→'/)
   assert.match(shell, /legacyNext\.setAttribute\('aria-label', 'Next lesson'\)/)
 })
+
+
+test('Game and Curriculum use charcoal headers with soft white controls', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /background:#26282d;color:#f8fafc/)
+  assert.match(shell, /#logyq-game-bar button\{[^}]*color:#f8fafc/s)
+  assert.match(shell, /#logyq-curriculum-bar button\{[^}]*color:#f8fafc/s)
+})
+
+test('Game and Curriculum Next buttons use the same warm green success treatment', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /#logyq-game-next\{[^}]*background:#34a36f[^}]*color:white/s)
+  assert.match(shell, /#logyq-curriculum-next\{[^}]*background:#34a36f[^}]*color:white/s)
+})
+
+test('Curriculum Check floats below the header and only appears after more than one placed card', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(shell, /#logyq-curriculum-check\{[^}]*position:fixed[^}]*right:14px[^}]*width:56px[^}]*height:56px[^}]*border-radius:50%/s)
+  assert.match(shell, /@keyframes logyq-check-invite/)
+  assert.match(source, /function curriculumPlacedCount\(snapshot\)/)
+  assert.match(source, /function updateCurriculumCheckVisibility\(snapshot = bridge\.snapshot\(\)\)/)
+  assert.match(source, /checkButton\.hidden = session\.cleared \|\| curriculumPlacedCount\(snapshot\) <= 1/)
+  assert.match(source, /updateCurriculumCheckVisibility\(snapshot\)/)
+})
+
+test('Curriculum Check is outside the header while Next remains the large bottom success action', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(shell, /actions\.append\(pause\)/)
+  assert.doesNotMatch(shell, /actions\.append\(legacyCheck/)
+  assert.match(shell, /bar\.after\(legacyStatus, legacyNext, legacyCheck, hiddenControls\)/)
+  assert.match(shell, /#logyq-curriculum-next\{[^}]*left:50%[^}]*bottom:calc\(32px \+ env\(safe-area-inset-bottom\)\)[^}]*min-width:190px[^}]*min-height:56px/s)
+})
