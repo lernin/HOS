@@ -101,6 +101,7 @@
         </span>
         <span class="logyq-curriculum-action-label">✓</span>
       </button>
+      <div id="logyq-curriculum-translation" role="status" aria-live="polite" hidden></div>
       <div id="logyq-game-bar">
         <span id="logyq-game-name"></span>
         <span id="logyq-game-tier"></span>
