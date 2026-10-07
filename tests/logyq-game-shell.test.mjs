@@ -483,3 +483,18 @@ test('shared puzzle camera performs no delayed correction after initial load', (
   assert.match(helpers, /if \(window\.__logyqHoldDragFrozen\?\.\(\)/)
   assert.doesNotMatch(helpers, /setTimeout\([^\n]*fitNow\([^\n]*80/)
 })
+
+
+test('direct puzzle first-root drops never pin the camera to the finger position', () => {
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  const helpers = read('../public/logyq/js/preview/01-helpers.js')
+  assert.match(dock, /if \(!directPuzzleShelf\(\)\) \{\s*const current = d3\.zoomTransform/s)
+  assert.match(dock, /else \{\s*window\.LOGYQPreview\?\.puzzleCamera\?\.scheduleActive\?\.\(0\)/s)
+  assert.match(helpers, /preview\.puzzleCamera = puzzleCamera/)
+  assert.match(helpers, /function scheduleActive\(delay = 0\)/)
+})
+
+test('first-root free placement remains available in the normal mapper', () => {
+  const dock = read('../public/logyq/js/engine/14-word-dock.js')
+  assert.match(dock, /if \(!directPuzzleShelf\(\)\) \{[\s\S]*drop\.px - s \* rx[\s\S]*drop\.py - s \* ry/s)
+})
