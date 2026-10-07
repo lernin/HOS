@@ -606,3 +606,30 @@ test('a Curriculum edit clears stale semantic counts and diagnostics', () => {
   assert.match(source, /function clearCurriculumDiagnostics\(\)[\s\S]*updateCurriculumCheckSummary\(null\)/)
   assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*clearCurriculumDiagnostics\(\)/)
 })
+
+
+test('Curriculum Check and Next live in the header action cluster, not beside the Word Bank', () => {
+  const shell = read('../public/logyq/js/game-shell.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(shell, /const legacyCheck = document\.getElementById\('logyq-curriculum-check'\)/)
+  assert.match(shell, /actions\.append\(legacyCheck, legacyNext, pause\)/)
+  assert.match(shell, /#logyq-curriculum-check,#logyq-curriculum-next\{[^}]*width:36px[^}]*height:36px[^}]*border-radius:50%/s)
+  assert.match(shell, /#logyq-curriculum-check[^}]*position:relative/s)
+  assert.doesNotMatch(styles, /#logyq-curriculum-check\{[^}]*bottom:/s)
+  assert.doesNotMatch(styles, /#logyq-curriculum-check\{[^}]*right:12px/s)
+})
+
+test('Curriculum Word Bank returns to its centered floating position and still disappears when empty', () => {
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)\{min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible\}/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty\{display:none!important\}/)
+  assert.doesNotMatch(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*right:118px/s)
+})
+
+test('Curriculum header Check uses a circular checkmark and Next uses the same circular slot', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const shell = read('../public/logyq/js/game-shell.js')
+  assert.match(ui, /logyq-curriculum-action-label">✓<\/span>/)
+  assert.match(shell, /legacyNext\.textContent = '→'/)
+  assert.match(shell, /legacyNext\.setAttribute\('aria-label', 'Next lesson'\)/)
+})
