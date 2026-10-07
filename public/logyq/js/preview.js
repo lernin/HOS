@@ -878,7 +878,7 @@
           <div class="logiq-library-body">
             <div class="logiq-map-list" id="logiq-map-list" role="tabpanel" aria-labelledby="logyq-tab-maps"></div>
             <div id="logyq-curriculum" role="tabpanel" aria-labelledby="logyq-tab-curriculum" hidden>
-              <p class="logyq-level-intro">Drag the cards into the tree. Sibling order can differ.</p>
+              <p class="logyq-level-intro">Drag the cards into the tree. Tap a word to see its Korean meaning.</p>
               <ol id="logyq-level-path"></ol>
             </div>
             <div id="logyq-game-levels" role="tabpanel" aria-labelledby="logyq-tab-game" hidden>
