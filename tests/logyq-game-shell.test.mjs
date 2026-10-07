@@ -348,7 +348,8 @@ test('Curriculum teaches three below moves before above, then chains before sibl
 test('Curriculum seed uses each lesson start tree and explicit Word Bank', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   assert.match(source, /const root = structuredClone\(level\.start \|\| \{ name: String\(level\.tree\.name/)
-  assert.match(source, /state\.wordBank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /const bank = Array\.isArray\(level\.bank\) \? level\.bank\.slice\(\) : curriculumWords\(level\.tree\)\.slice\(1\)/)
+  assert.match(source, /bridge\.loadMap\(root, bank, \{ fit: false \}\)/)
   assert.match(source, /function showCurriculumGuide\(level\)/)
   assert.match(source, /guide: level\.guide/)
 })
