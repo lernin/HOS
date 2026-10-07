@@ -444,7 +444,8 @@
       @media (orientation:landscape) and (max-width:700px),(orientation:landscape) and (pointer:coarse) and (max-width:1200px),(orientation:landscape) and (hover:none) and (max-width:1200px){
         body.logyq-game:not(.logyq-home) #logyq-game-bar{top:8px;left:calc(148px + env(safe-area-inset-left) + 8px);right:68px}
       }
-      #logyq-game-check,#logyq-game-next{background:#2563eb!important;color:#fff!important}
+      #logyq-game-check{background:#2563eb!important;color:#fff!important}
+      #logyq-game-next{background:#34a36f!important;color:#fff!important}
       #logyq-game-next[hidden]{display:none}
       .logyq-game-sound-control{display:none!important}
       body.logyq-game .logyq-game-sound-control{display:block!important}
@@ -798,7 +799,7 @@
       body.logyq-game #Dock.is-empty,body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       body.logyq-game.v2-branch-drag #Dock.is-empty,body.logyq-game.logyq-game-board-drag #Dock.is-empty{display:flex!important;min-width:172px;border-style:dashed;background:rgba(240,253,244,.96)}
       body.logyq-game #Dock.is-empty #logyq-bank-chips::before{content:'Return piece here';color:#475569;font:600 13px system-ui,sans-serif;white-space:nowrap}
-      body.logyq-curriculum-frozen #Dock:not(.is-empty){min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible}
+      body.logyq-game #Dock:not(.is-empty),body.logyq-curriculum-frozen #Dock:not(.is-empty){min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible}
       body.logyq-curriculum-frozen #Dock.is-empty{display:none!important}
       @media (min-width:701px){body.logyq-game #Dock,body.logyq-game #Dock.dock-left,body.logyq-curriculum-frozen #Dock,body.logyq-curriculum-frozen #Dock.dock-left{max-width:640px}}
       @media (orientation:landscape) and (max-width:1200px){body.logyq-game:not(.logyq-home) #logyq-game-bar{left:8px}}
