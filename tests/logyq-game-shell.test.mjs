@@ -406,7 +406,7 @@ test('Curriculum Word Bank can insert a new root above the current root', () => 
 })
 
 
-test('Game and Curriculum use the same quiet header without a hint button', () => {
+test('Game and Curriculum use the same quiet header controls without a hint button', () => {
   const shell = read('../public/logyq/js/game-shell.js')
   assert.match(shell, /function installCurriculumShell\(\)/)
   assert.match(shell, /button\('logyq-game-back', 'Back'/)
@@ -415,7 +415,7 @@ test('Game and Curriculum use the same quiet header without a hint button', () =
   assert.doesNotMatch(shell, /button\('logyq-curriculum-hint'/)
   assert.match(shell, /button\('logyq-game-pause', '•••', 'Game settings'/)
   assert.match(shell, /button\('logyq-curriculum-pause', '•••', 'Curriculum settings'/)
-  assert.match(shell, /background:rgba\(248,244,250,\.93\)/)
+  assert.match(shell, /background:#5a465f;color:#fff8fc/)
   assert.match(shell, /body\.logyq-curriculum #logyq-curriculum-status\{display:none!important\}/)
 })
 
