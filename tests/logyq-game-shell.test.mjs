@@ -225,11 +225,11 @@ test('curriculum uses the same direct puzzle gesture path as Game', () => {
   assert.match(dock, /if \(!directPuzzleShelf\(\)\) return null/)
 })
 
-test('curriculum play keeps a compact empty return target', () => {
+test('Curriculum hides the Word Bank completely when it is empty', () => {
   const styles = read('../public/logyq/js/preview/02-styles.js')
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock/)
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty[^\{]*\{[^}]*display:flex!important[^}]*width:64px/s)
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:''/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty\{display:none!important\}/)
+  assert.doesNotMatch(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty[^\{]*\{[^}]*width:64px/s)
+  assert.doesNotMatch(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:''/)
 })
 
 test('curriculum suppresses editor selection decoration', () => {
@@ -383,11 +383,11 @@ test('Curriculum uses Check for evaluation and Next only after success', () => {
   assert.match(source, /nextButton\.hidden = false/)
 })
 
-test('Curriculum Word Bank is bare with words and a compact square when empty', () => {
+test('Curriculum Word Bank is a scrolling word rail and disappears when empty', () => {
   const styles = read('../public/logyq/js/preview/02-styles.js')
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*background:transparent[^}]*border:0[^}]*box-shadow:none/s)
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty[^\{]*\{[^}]*display:flex!important[^}]*width:64px[^}]*min-width:64px[^}]*height:64px/s)
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty #logyq-bank-chips::before\{content:''/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*right:118px[^}]*background:transparent[^}]*border:0[^}]*box-shadow:none/s)
+  assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty\{display:none!important\}/)
+  assert.match(styles, /body\.logyq-curriculum-frozen #logyq-bank-chips[^\{]*\{[^}]*overflow-x:auto/s)
   assert.match(styles, /body\.logyq-curriculum:not\(\.logyq-home\) #logyq-map-title\{display:none!important\}/)
 })
 
@@ -572,22 +572,36 @@ test('Curriculum Check succeeds only when every available concept is placed with
 })
 
 
-test('successful Curriculum Check shows green first and reveals Next only after the green feedback clears', () => {
+test('successful Curriculum Check glows green and immediately morphs Check into Next', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
-  assert.match(source, /let curriculumSuccessTimer = null/)
-  assert.match(source, /function finishSuccessfulCurriculumCheck\(snapshot\)/)
-  assert.match(source, /checkButton\.hidden = true/)
-  assert.match(source, /nextButton\.hidden = true/)
-  assert.match(source, /curriculumSuccessTimer = window\.setTimeout\(\(\) => \{[\s\S]*maybeCurriculumClear\(snapshot\)[\s\S]*\}, 900\)/)
   const check = source.slice(source.indexOf('function checkCurriculum()'), source.indexOf('function bindCurriculum()'))
   assert.match(check, /paintCurriculumDiagnostics\(evaluation\)/)
+  assert.match(check, /updateCurriculumCheckSummary\(evaluation\)/)
   assert.match(check, /if \(!complete\)[\s\S]*return false/)
-  assert.match(check, /finishSuccessfulCurriculumCheck\(snapshot\)/)
+  assert.match(check, /return maybeCurriculumClear\(snapshot\)/)
+  assert.doesNotMatch(source, /curriculumSuccessTimer/)
+  assert.match(source, /window\.setTimeout\(clearCurriculumCorrectDiagnostics, 900\)/)
 })
 
-test('a Curriculum edit cancels any pending successful-check transition', () => {
+test('Curriculum Check is a pinned action with green amber red summary counts', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(ui, /id="logyq-curriculum-check-summary"/)
+  assert.match(ui, /data-tone="correct"/)
+  assert.match(ui, /data-tone="insufficient"/)
+  assert.match(ui, /data-tone="wrong"/)
+  assert.match(styles, /#logyq-curriculum-check\{[^}]*right:12px[^}]*bottom:calc\(12px \+ env\(safe-area-inset-bottom\)\)/s)
+  assert.match(styles, /#logyq-curriculum-next\{[^}]*right:12px[^}]*bottom:calc\(12px \+ env\(safe-area-inset-bottom\)\)/s)
+  assert.match(source, /function updateCurriculumCheckSummary\(evaluation = null\)/)
+  assert.match(source, /summary\.correct/)
+  assert.match(source, /summary\.insufficient/)
+  assert.match(source, /summary\.wrong/)
+})
+
+test('a Curriculum edit clears stale semantic counts and diagnostics', () => {
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   const persistence = read('../public/logyq/js/preview/06-persistence.js')
-  assert.match(source, /function clearCurriculumDiagnostics\(\)[\s\S]*clearTimeout\(curriculumSuccessTimer\)/)
+  assert.match(source, /function clearCurriculumDiagnostics\(\)[\s\S]*updateCurriculumCheckSummary\(null\)/)
   assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*clearCurriculumDiagnostics\(\)/)
 })
