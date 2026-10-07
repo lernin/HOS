@@ -586,17 +586,18 @@ test('successful Curriculum Check glows green and immediately morphs Check into 
 test('Curriculum Check is a pinned action with green amber red summary counts', () => {
   const ui = read('../public/logyq/js/preview/03-ui.js')
   const styles = read('../public/logyq/js/preview/02-styles.js')
+  const shell = read('../public/logyq/js/game-shell.js')
   const source = read('../public/logyq/js/preview/07-curriculum.js')
   assert.match(ui, /id="logyq-curriculum-check-summary"/)
   assert.match(ui, /data-tone="correct"/)
   assert.match(ui, /data-tone="insufficient"/)
   assert.match(ui, /data-tone="wrong"/)
   assert.match(styles, /#logyq-curriculum-check\{[^}]*right:12px[^}]*bottom:calc\(12px \+ env\(safe-area-inset-bottom\)\)/s)
-  assert.match(styles, /#logyq-curriculum-next\{[^}]*right:12px[^}]*bottom:calc\(12px \+ env\(safe-area-inset-bottom\)\)/s)
+  assert.match(shell, /#logyq-curriculum-next\{[^}]*right:12px[^}]*bottom:calc\(12px \+ env\(safe-area-inset-bottom\)\)/s)
   assert.match(source, /function updateCurriculumCheckSummary\(evaluation = null\)/)
-  assert.match(source, /summary\.correct/)
-  assert.match(source, /summary\.insufficient/)
-  assert.match(source, /summary\.wrong/)
+  assert.match(source, /pieces\.correct/)
+  assert.match(source, /pieces\.insufficient/)
+  assert.match(source, /pieces\.wrong/)
 })
 
 test('a Curriculum edit clears stale semantic counts and diagnostics', () => {
