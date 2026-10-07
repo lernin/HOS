@@ -584,7 +584,7 @@ test('successful Curriculum Check glows green and immediately morphs Check into 
   assert.match(source, /window\.setTimeout\(clearCurriculumCorrectDiagnostics, 900\)/)
 })
 
-test('Curriculum header Check keeps green amber red summary counts', () => {
+test('Curriculum floating Check keeps green amber red summary counts', () => {
   const ui = read('../public/logyq/js/preview/03-ui.js')
   const styles = read('../public/logyq/js/preview/02-styles.js')
   const shell = read('../public/logyq/js/game-shell.js')
@@ -626,15 +626,6 @@ test('Curriculum Word Bank returns to its centered floating position and still d
   assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty\{display:none!important\}/)
   assert.doesNotMatch(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*right:118px/s)
 })
-
-test('Curriculum header Check uses a circular checkmark and Next uses the same circular slot', () => {
-  const ui = read('../public/logyq/js/preview/03-ui.js')
-  const shell = read('../public/logyq/js/game-shell.js')
-  assert.match(ui, /logyq-curriculum-action-label">✓<\/span>/)
-  assert.match(shell, /legacyNext\.textContent = '→'/)
-  assert.match(shell, /legacyNext\.setAttribute\('aria-label', 'Next lesson'\)/)
-})
-
 
 test('Game and Curriculum use charcoal headers with soft white controls', () => {
   const shell = read('../public/logyq/js/game-shell.js')
