@@ -89,6 +89,55 @@
     return curriculumStructureKey(target) === curriculumStructureKey(live)
   }
 
+  function curriculumName(value) {
+    return String(value ?? '').trim().toLowerCase()
+  }
+
+  function curriculumPathTo(root, wanted, path = []) {
+    if (!root || typeof root !== 'object') return null
+    const name = curriculumName(root.name)
+    const next = name ? [...path, name] : path
+    if (name === wanted) return next
+    for (const child of root.children || []) {
+      const found = curriculumPathTo(child, wanted, next)
+      if (found) return found
+    }
+    return null
+  }
+
+  function curriculumRelation(target, parent, child) {
+    const parentName = curriculumName(parent)
+    const childName = curriculumName(child)
+    if (!parentName || !childName || parentName === childName) return 'wrong'
+    const path = curriculumPathTo(target, childName)
+    if (!path) return 'wrong'
+    const parentIndex = path.lastIndexOf(parentName)
+    if (parentIndex < 0 || parentIndex >= path.length - 1) return 'wrong'
+    return parentIndex === path.length - 2 ? 'correct' : 'insufficient'
+  }
+
+  function curriculumEvaluate(target, live) {
+    const available = new Set(curriculumWords(target).map(curriculumName).filter(Boolean))
+    const present = new Set(curriculumWords(live).map(curriculumName).filter(Boolean))
+    const edges = []
+    const summary = { correct: 0, insufficient: 0, wrong: 0 }
+    const walk = (node) => {
+      const parent = String(node?.name ?? '').trim()
+      for (const child of node?.children || []) {
+        const childName = String(child?.name ?? '').trim()
+        if (parent && childName) {
+          const status = curriculumRelation(target, parent, childName)
+          edges.push({ parent, child: childName, status })
+          summary[status] += 1
+        }
+        walk(child)
+      }
+    }
+    if (live) walk(live)
+    const missing = [...available].filter((name) => !present.has(name))
+    return { edges, summary, missing }
+  }
+
   function curriculumUnlocked(index, progress, pack) {
     if (index <= 0) return true
     const prev = pack?.[index - 1]
@@ -116,6 +165,42 @@
 
   function writeCurriculumProgress(progress) {
     try { localStorage.setItem(CURRICULUM_KEY, JSON.stringify(progress)) } catch (_error) {}
+  }
+
+  let curriculumCorrectTimer = null
+
+  function clearCurriculumCorrectDiagnostics() {
+    bridge.core?.elements?.gLinks?.selectAll?.('path.link')
+      ?.classed?.('logyq-semantic-correct', false)
+  }
+
+  function clearCurriculumDiagnostics() {
+    if (curriculumCorrectTimer !== null) clearTimeout(curriculumCorrectTimer)
+    curriculumCorrectTimer = null
+    const links = bridge.core?.elements?.gLinks?.selectAll?.('path.link')
+    links?.classed?.('logyq-semantic-correct', false)
+      ?.classed?.('logyq-semantic-insufficient', false)
+      ?.classed?.('logyq-semantic-wrong', false)
+  }
+
+  function paintCurriculumDiagnostics(evaluation) {
+    clearCurriculumDiagnostics()
+    const statuses = new Map((evaluation?.edges || []).map((edge) => [
+      curriculumName(edge.parent) + '→' + curriculumName(edge.child),
+      edge.status,
+    ]))
+    bridge.core?.elements?.gLinks?.selectAll?.('path.link')?.each?.(function(d) {
+      const parent = curriculumName(d?.source?.data?.name)
+      const child = curriculumName(d?.target?.data?.name)
+      const status = statuses.get(parent + '→' + child) || 'wrong'
+      const link = d3.select(this)
+      link.classed('logyq-semantic-correct', status === 'correct')
+      link.classed('logyq-semantic-insufficient', status === 'insufficient')
+      link.classed('logyq-semantic-wrong', status === 'wrong')
+    })
+    if ((evaluation?.summary?.correct || 0) > 0) {
+      curriculumCorrectTimer = window.setTimeout(clearCurriculumCorrectDiagnostics, 900)
+    }
   }
 
   function curriculumLevel(id) {
@@ -167,6 +252,7 @@
 
   function leaveCurriculumPlay() {
     window.LOGYQGameGuide?.hide()
+    clearCurriculumDiagnostics()
     puzzleCamera.deactivate('curriculum')
     delete window.__logyqCurriculumReturnToBank
     const state = bridge.core?.state
@@ -324,6 +410,9 @@
     }
     const nextButton = document.getElementById('logyq-curriculum-next')
     if (nextButton) nextButton.hidden = true
+    const checkButton = document.getElementById('logyq-curriculum-check')
+    if (checkButton) checkButton.hidden = false
+    clearCurriculumDiagnostics()
     if (bridge.core?.state) bridge.core.state.curriculumCameraLock = true
     window.__logyqCurriculumReturnToBank = (uid) => {
       const engine = bridge.core
@@ -373,6 +462,8 @@
     }
     if (!level || !live || !curriculumMatches(level.tree, live)) return false
     session.cleared = true
+    const checkButton = document.getElementById('logyq-curriculum-check')
+    if (checkButton) checkButton.hidden = true
     const progress = readCurriculumProgress()
     const ms = Math.max(0, Date.now() - (session.startedAt || Date.now()))
     progress.levels[level.id] = { clearedAt: new Date().toISOString(), ms }
@@ -399,16 +490,32 @@
   }
 
   function checkCurriculum() {
-    if (!app.curriculum) return false
+    const session = app.curriculum
+    if (!session) return false
+    if (session.cleared) return true
     const snapshot = bridge.snapshot()
-    if (maybeCurriculumClear(snapshot)) return true
-    if (app.curriculum.cleared) return true
-    const status = document.getElementById('logyq-curriculum-status')
-    if (status) {
-      status.dataset.tone = 'wait'
-      status.textContent = 'Not yet. The parents have to match. Sibling order can differ.'
+    const level = curriculumLevel(session.id)
+    const live = curriculumAnswerTree(snapshot?.tree)
+    if (!level || !live) {
+      clearCurriculumDiagnostics()
+      return false
     }
-    return false
+    const evaluation = curriculumEvaluate(level.tree, live)
+    paintCurriculumDiagnostics(evaluation)
+    const complete = evaluation.summary.wrong === 0 && evaluation.summary.insufficient === 0 && evaluation.missing.length === 0
+    const status = document.getElementById('logyq-curriculum-status')
+    if (!complete) {
+      if (status) {
+        status.dataset.tone = evaluation.summary.wrong ? 'wrong' : 'wait'
+        status.textContent = evaluation.summary.wrong
+          ? 'Some relationships are not true yet.'
+          : evaluation.summary.insufficient
+            ? 'Some relationships are true, but a more specific available parent fits better.'
+            : 'Place every concept, then check again.'
+      }
+      return false
+    }
+    return maybeCurriculumClear(snapshot)
   }
 
   function bindCurriculum() {
@@ -421,6 +528,7 @@
       if (!level || !curriculumUnlocked(index, readCurriculumProgress(), pack)) return
       beginCurriculumLevel(level)
     })
+    document.getElementById('logyq-curriculum-check')?.addEventListener('click', checkCurriculum)
     document.getElementById('logyq-curriculum-next')?.addEventListener('click', (event) => {
       const id = event.currentTarget?.dataset?.nextLevel
       const next = id ? curriculumLevel(id) : null
@@ -434,6 +542,8 @@
       pack: curriculumPack,
       words: curriculumWords,
       matches: curriculumMatches,
+      evaluate: curriculumEvaluate,
+      clearDiagnostics: clearCurriculumDiagnostics,
       structureKey: curriculumStructureKey,
       unlocked: curriculumUnlocked,
       read: readCurriculumProgress,
