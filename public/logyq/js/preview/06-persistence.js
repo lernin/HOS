@@ -57,8 +57,8 @@
     if (app.curriculum) {
       window.LOGYQGameGuide?.hide()
       app.curriculum.guide = null
+      clearCurriculumDiagnostics()
       setSaveState('saved')
-      maybeCurriculumClear(snapshot)
       scheduleCurriculumCameraFit()
       return
     }
