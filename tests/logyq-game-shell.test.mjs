@@ -386,7 +386,7 @@ test('Curriculum uses Check for evaluation and Next only after success', () => {
 
 test('Curriculum Word Bank is centered again and disappears when empty', () => {
   const styles = read('../public/logyq/js/preview/02-styles.js')
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)\{min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible\}/)
+  assert.match(styles, /body\.logyq-game #Dock:not\(\.is-empty\),body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)\{min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible\}/)
   assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty\{display:none!important\}/)
   assert.doesNotMatch(styles, /right:118px/)
   assert.match(styles, /body\.logyq-curriculum:not\(\.logyq-home\) #logyq-map-title\{display:none!important\}/)
@@ -622,7 +622,7 @@ test('Curriculum Check and Next live in the header action cluster, not beside th
 
 test('Curriculum Word Bank returns to its centered floating position and still disappears when empty', () => {
   const styles = read('../public/logyq/js/preview/02-styles.js')
-  assert.match(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)\{min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible\}/)
+  assert.match(styles, /body\.logyq-game #Dock:not\(\.is-empty\),body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)\{min-width:0;min-height:0;padding:0;background:transparent;border:0;box-shadow:none;overflow:visible\}/)
   assert.match(styles, /body\.logyq-curriculum-frozen #Dock\.is-empty\{display:none!important\}/)
   assert.doesNotMatch(styles, /body\.logyq-curriculum-frozen #Dock:not\(\.is-empty\)[^\{]*\{[^}]*right:118px/s)
 })
