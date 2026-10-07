@@ -498,3 +498,72 @@ test('first-root free placement remains available in the normal mapper', () => {
   const dock = read('../public/logyq/js/engine/14-word-dock.js')
   assert.match(dock, /if \(!directPuzzleShelf\(\)\) \{[\s\S]*drop\.px - s \* rx[\s\S]*drop\.py - s \* ry/s)
 })
+
+
+test('Curriculum semantic checker distinguishes exact, insufficient, and wrong edges', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const start = source.indexOf('// CURRICULUM_PURE_START')
+  const end = source.indexOf('// CURRICULUM_PURE_END')
+  const api = new Function(source.slice(start, end) + '; return { curriculumEvaluate };')()
+  const target = {
+    name: 'animal', children: [
+      { name: 'mammal', children: [{ name: 'dog' }] }
+    ]
+  }
+  const exact = api.curriculumEvaluate(target, target)
+  assert.equal(exact.summary.wrong, 0)
+  assert.equal(exact.summary.insufficient, 0)
+  assert.equal(exact.summary.correct, 2)
+
+  const skipped = api.curriculumEvaluate(target, {
+    name: 'animal', children: [{ name: 'dog' }, { name: 'mammal' }]
+  })
+  assert.equal(skipped.edges.find(edge => edge.parent === 'animal' && edge.child === 'dog').status, 'insufficient')
+
+  const wrong = api.curriculumEvaluate(target, {
+    name: 'mammal', children: [{ name: 'animal', children: [{ name: 'dog' }] }]
+  })
+  assert.equal(wrong.edges.find(edge => edge.parent === 'mammal' && edge.child === 'animal').status, 'wrong')
+})
+
+test('Curriculum accepts a broad edge when no more-specific concept exists in that lesson', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const start = source.indexOf('// CURRICULUM_PURE_START')
+  const end = source.indexOf('// CURRICULUM_PURE_END')
+  const api = new Function(source.slice(start, end) + '; return { curriculumEvaluate };')()
+  const result = api.curriculumEvaluate(
+    { name: 'animal', children: [{ name: 'dog' }] },
+    { name: 'animal', children: [{ name: 'dog' }] }
+  )
+  assert.equal(result.edges[0].status, 'correct')
+  assert.equal(result.summary.correct, 1)
+})
+
+test('Curriculum uses an explicit Check action and does not auto-clear on every structural change', () => {
+  const ui = read('../public/logyq/js/preview/03-ui.js')
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const persistence = read('../public/logyq/js/preview/06-persistence.js')
+  assert.match(ui, /id="logyq-curriculum-check">Check<\/button>/)
+  assert.match(source, /document\.getElementById\('logyq-curriculum-check'\)\?\.addEventListener\('click', checkCurriculum\)/)
+  assert.doesNotMatch(persistence, /if \(app\.curriculum\) \{[\s\S]{0,220}maybeCurriculumClear\(snapshot\)/)
+})
+
+test('Curriculum check paints only semantic relationship diagnostics after green fades', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const styles = read('../public/logyq/js/preview/02-styles.js')
+  assert.match(source, /function paintCurriculumDiagnostics\(evaluation\)/)
+  assert.match(source, /classed\('logyq-semantic-correct'/)
+  assert.match(source, /classed\('logyq-semantic-insufficient'/)
+  assert.match(source, /classed\('logyq-semantic-wrong'/)
+  assert.match(source, /window\.setTimeout\(clearCurriculumCorrectDiagnostics, 900\)/)
+  assert.match(styles, /path\.link\.logyq-semantic-insufficient[^{]*\{[^}]*#f59e0b/s)
+  assert.match(styles, /path\.link\.logyq-semantic-wrong[^{]*\{[^}]*#ef4444/s)
+  assert.match(styles, /path\.link\.logyq-semantic-correct[^{]*\{[^}]*#22c55e/s)
+})
+
+test('Curriculum Check succeeds only when every available concept is placed with exact relationships', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /const evaluation = curriculumEvaluate\(level\.tree, live\)/)
+  assert.match(source, /const complete = evaluation\.summary\.wrong === 0 && evaluation\.summary\.insufficient === 0 && evaluation\.missing\.length === 0/)
+  assert.match(source, /if \(!complete\) return false/)
+})
