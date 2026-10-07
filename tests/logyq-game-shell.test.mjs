@@ -570,3 +570,24 @@ test('Curriculum Check succeeds only when every available concept is placed with
   assert.match(source, /const complete = evaluation\.summary\.wrong === 0 && evaluation\.summary\.insufficient === 0 && evaluation\.missing\.length === 0/)
   assert.match(source, /if \(!complete\) return false/)
 })
+
+
+test('successful Curriculum Check shows green first and reveals Next only after the green feedback clears', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  assert.match(source, /let curriculumSuccessTimer = null/)
+  assert.match(source, /function finishSuccessfulCurriculumCheck\(snapshot\)/)
+  assert.match(source, /checkButton\.hidden = true/)
+  assert.match(source, /nextButton\.hidden = true/)
+  assert.match(source, /curriculumSuccessTimer = window\.setTimeout\(\(\) => \{[\s\S]*maybeCurriculumClear\(snapshot\)[\s\S]*\}, 900\)/)
+  const check = source.slice(source.indexOf('function checkCurriculum()'), source.indexOf('function bindCurriculum()'))
+  assert.match(check, /paintCurriculumDiagnostics\(evaluation\)/)
+  assert.match(check, /if \(!complete\)[\s\S]*return false/)
+  assert.match(check, /finishSuccessfulCurriculumCheck\(snapshot\)/)
+})
+
+test('a Curriculum edit cancels any pending successful-check transition', () => {
+  const source = read('../public/logyq/js/preview/07-curriculum.js')
+  const persistence = read('../public/logyq/js/preview/06-persistence.js')
+  assert.match(source, /function clearCurriculumDiagnostics\(\)[\s\S]*clearTimeout\(curriculumSuccessTimer\)/)
+  assert.match(persistence, /if \(app\.curriculum\) \{[\s\S]*clearCurriculumDiagnostics\(\)/)
+})
