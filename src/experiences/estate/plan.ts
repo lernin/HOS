@@ -152,7 +152,7 @@ export const destinations=[
   {name:'Kitchen',x:-12.8,z:10.5,yaw:1.2},{name:'Primary suite',x:28,z:-8.5,yaw:-1.3},
   {name:'Spa',x:-28.5,z:30,yaw:1.4},{name:'Library',x:16,z:17,yaw:Math.PI},
   {name:'Guest suites',x:25.5,z:29.5,yaw:-1.4},{name:'Ocean lookout',x:30,z:-15,yaw:0},
-  {name:'West promenade',x:-43,z:20,yaw:0},{name:'East promenade',x:46,z:25,yaw:0},{name:'Pool-tip terrace',x:.5,z:-64,yaw:0},
+  {name:'West promenade',x:-43,z:20,yaw:0},{name:'East promenade',x:46,z:25,yaw:0},{name:'Pool-tip terrace',x:-9,z:-64,yaw:-1.12},
 ]
 export function contains(r:Rect,p:Point,pad=0){return p.x>=r.x1-pad&&p.x<=r.x2+pad&&p.z>=r.z1-pad&&p.z<=r.z2+pad}
 function onCourt(p:Point){return Math.hypot(p.x-1,p.z-41)<=19}
