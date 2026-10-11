@@ -144,14 +144,18 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(!input.paused&&!inspectView&&!artInspect){
         let dx=0,dz=0;const manual=Math.hypot(input.x,input.z)>.01
         if(manual){path=[];tour=false;marker.visible=false;destination='';arrivalYaw=null;journeyViewYaw=null;const norm=Math.max(1,Math.hypot(input.x,input.z));dx=(input.x*Math.cos(yaw)+input.z*Math.sin(yaw))/norm;dz=(-input.x*Math.sin(yaw)+input.z*Math.cos(yaw))/norm}
-        else if(path.length){const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);if(d<.16){path.shift();if(!path.length){marker.visible=false;dwell=now+2600;const view=destinations.find(item=>item.name===destination);if(view&&input.lookedAt<=journeyLookBaseline){arrivalYaw=view.yaw;arrivalStarted=now;arrivalLookBaseline=input.lookedAt}journeyViewYaw=null}}
+        else if(path.length){const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);if(d<.16){path.shift();if(!path.length){marker.visible=false;dwell=now+2600;const view=destinations.find(item=>item.name===destination);if(view&&now-input.lookedAt>=2800){arrivalYaw=view.yaw;arrivalStarted=now;arrivalLookBaseline=input.lookedAt}journeyViewYaw=null}}
           else{dx=(p.x-position.x)/d;dz=(p.z-position.z)/d;const factor=path.length===1?Math.min(1,d/.95):1;dx*=factor;dz*=factor
-            // A cinematic reveal only for a shallow terrace, starting on final approach.
-            // A deliberate look gesture suppresses the remainder of automatic panning.
-            if(journeyViewYaw!==null&&input.lookedAt<=journeyLookBaseline&&path.length===1&&d<7){
-              const reveal=Math.max(0,Math.min(1,(7-d)/6));
-              const delta=Math.atan2(Math.sin(journeyViewYaw-input.yaw),Math.cos(journeyViewYaw-input.yaw));
-              input.yaw+=delta*(1-Math.exp(-dt*1.4*reveal))
+            // Follow the travel direction by default; visitors can freely look around.
+            // After free-look, return gently once the visitor has had time to explore.
+            const userLooking=now-input.lookedAt<2800
+            const presenting=journeyViewYaw!==null&&path.length===1&&d<7
+            if(!userLooking){
+              const reveal=presenting?Math.max(0,Math.min(1,(7-d)/6)):0
+              const facing=Math.atan2(-dx,-dz)
+              const target=presenting?facing+Math.atan2(Math.sin(journeyViewYaw!-facing),Math.cos(journeyViewYaw!-facing))*reveal:facing
+              const delta=Math.atan2(Math.sin(target-input.yaw),Math.cos(target-input.yaw))
+              input.yaw+=delta*(1-Math.exp(-dt*(presenting?1.8:2.2)))
             }
           }}
         if(arrivalYaw!==null){
