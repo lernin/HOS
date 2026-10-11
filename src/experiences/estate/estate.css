@@ -49,3 +49,8 @@
 .oe-tour-editor-actions .oe-tour-save{background:#d8c89a7a;border-color:#e4cf9440;color:#132c24;font-weight:700}
 @media(max-height:530px){.oe-tour-editor{left:max(6px,env(safe-area-inset-left));bottom:max(6px,env(safe-area-inset-bottom));padding:3px 4px;gap:4px}.oe-tour-editor-actions button,.oe-tour-editor-actions .oe-tour-save{min-height:32px;padding:5px 8px}}
 @media(max-width:680px){.oe-tour-editor{width:max-content;max-width:60vw}}
+
+/* Prominent recovery action: preserve curated viewpoints before switching preview origins. */
+.oe-tour-export{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin:12px 0 18px;padding:15px 16px;min-height:62px;border:2px solid #fff2b7;border-radius:10px;background:#e9ca76;color:#1b3026;text-align:left;font-size:14px;font-weight:800;box-shadow:0 0 0 3px #f9e7aa25,0 8px 22px #07150f44}
+.oe-tour-export span{white-space:nowrap;font-size:12px;font-weight:700;color:#1b3026}
+@media(max-height:530px){.oe-tour-export{min-height:48px;padding:10px 12px;font-size:12px;margin:9px 0 13px}}
