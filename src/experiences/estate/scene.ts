@@ -189,7 +189,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
             viewFov=69+((journeyView?.fov??69)-69)*reveal
           }}
         if(arrivalYaw!==null){
-          if(input.looking||input.lookedAt>arrivalLookBaseline||now-arrivalStarted>3200){arrivalYaw=null;arrivalPitch=null}
+          if(input.looking||input.lookedAt>arrivalLookBaseline||now-arrivalStarted>Math.max(3500,Math.PI/input.maxTurnSpeed*1000+1000)){arrivalYaw=null;arrivalPitch=null}
           else{
             const delta=Math.atan2(Math.sin(arrivalYaw-input.yaw),Math.cos(arrivalYaw-input.yaw))
             input.yaw+=T.MathUtils.clamp(delta*(1-Math.exp(-dt*1.65)),-dt*input.maxTurnSpeed,dt*input.maxTurnSpeed)
