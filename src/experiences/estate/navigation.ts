@@ -29,13 +29,35 @@ function entrancePenalty(a:Point,b:Point):number {
     if(cross<door.from-.01||cross>door.to+.01)continue
     const half=(door.to-door.from)/2,center=(door.from+door.to)/2
     const deviation=Math.abs(cross-center)
-    const allowed=Math.max(.65,half*.55)
+    const allowed=Math.max(.6,Math.min(1.3,half*.42))
     if(deviation>allowed)return Infinity
-    penalty+=7*Math.pow(deviation/half,2)
+    penalty+=12*Math.pow(deviation/Math.max(.6,half),2)
   }
   return penalty
 }
-function centeredLine(a:Point,b:Point){return entrancePenalty(a,b)<Infinity}
+// Guided walks enter a wide doorway on its central axis, well before the
+// wall plane. This prevents the apparent approach toward a doorway jamb.
+function centeredGatewayPoint(p:Point){
+  for(const door of doorways){
+    const half=(door.to-door.from)/2
+    if(half<1.8)continue
+    const axial=door.axis==='x'?p.x:p.z
+    const lateral=door.axis==='x'?p.z:p.x
+    if(Math.abs(axial-door.at)>1.15||lateral<=door.from||lateral>=door.to)continue
+    const allowed=Math.max(.6,Math.min(1.3,half*.42))
+    if(Math.abs(lateral-(door.from+door.to)/2)>allowed)return false
+  }
+  return true
+}
+function centeredLine(a:Point,b:Point){
+  if(!Number.isFinite(entrancePenalty(a,b)))return false
+  const n=Math.max(1,Math.ceil(Math.hypot(b.x-a.x,b.z-a.z)/.22))
+  for(let i=0;i<=n;i++){
+    const t=i/n,p={x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t}
+    if(!centeredGatewayPoint(p))return false
+  }
+  return true
+}
 
 // Prefer breathing room around walls and furniture, while preserving narrow
 // doorway access and the original collision/grade safeguards.
@@ -85,7 +107,7 @@ export function createNavigator(){
   const point=(i:number)=>({x:MINX+(i%COLS)*CELL,z:MINZ+Math.floor(i/COLS)*CELL})
   const comfort=new Uint8Array(grid.length)
   for(let i=0;i<grid.length;i++){
-    const p=point(i);grid[i]=Number(walkable(p,RADIUS+.04))
+    const p=point(i);grid[i]=Number(walkable(p,RADIUS+.04)&&centeredGatewayPoint(p))
     if(grid[i])comfort[i]=Number(walkable(p,COMFORT_RADIUS))
   }
   function nearest(p:Point){const c=Math.round((p.x-MINX)/CELL),r=Math.round((p.z-MINZ)/CELL);let best=-1,dist=Infinity
