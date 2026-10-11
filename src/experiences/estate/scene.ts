@@ -60,12 +60,20 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
     let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
-    let arrivalYaw:number|null=null,arrivalStarted=0,arrivalLookBaseline=0,journeyViewYaw:number|null=null
+    let arrivalYaw:number|null=null,arrivalPitch:number|null=null,arrivalStarted=0,arrivalLookBaseline=0
+    let journeyView:{yaw:number;pitch:number;fov:number;lead:number}|null=null,viewFov=69
     let inspectView:{position:T.Vector3;target:T.Vector3}|null=null
     camera.position.set(position.x,(floorAt(position)??FLOOR)+EYE,position.z)
-    const stop=()=>{path=[];destination='';tour=false;vx=0;vz=0;arrivalYaw=null;journeyViewYaw=null;marker.visible=false}
-    function go(point:Point,name='Your destination'){if(artInspect)return false;const route=navigator.path(position,point);if(!route)return false;path=route;destination=name;arrivalYaw=null;journeyViewYaw=name==='Pool-tip terrace'?destinations.find(d=>d.name===name)?.yaw??null:null;marker.position.set(point.x,(floorAt(point)??FLOOR)+.03,point.z);marker.visible=true;dirty=true;return true}
-    function reset(){stop();artInspect=null;artExitResolve?.();artExitResolve=undefined;camera.fov=69;camera.updateProjectionMatrix();position={x:spawn.x,z:spawn.z};input.yaw=spawn.yaw;input.pitch=-.025;yaw=input.yaw;pitch=input.pitch;camera.position.set(position.x,(floorAt(position)??FLOOR)+EYE,position.z);dirty=true}
+    const stop=()=>{path=[];destination='';tour=false;vx=0;vz=0;arrivalYaw=null;arrivalPitch=null;journeyView=null;marker.visible=false}
+    function go(point:Point,name='Your destination'){
+      if(artInspect)return false
+      const route=navigator.path(position,point);if(!route)return false
+      const view=destinations.find(d=>d.name===name)
+      journeyView=view?{yaw:view.yaw,pitch:view.pitch??.025,fov:view.fov??69,lead:view.approachLead??7}:null
+      viewFov=69;path=route;destination=name;arrivalYaw=null;arrivalPitch=null
+      marker.position.set(point.x,(floorAt(point)??FLOOR)+.03,point.z);marker.visible=true;dirty=true;return true
+    }
+    function reset(){stop();artInspect=null;artExitResolve?.();artExitResolve=undefined;camera.fov=69;viewFov=69;camera.updateProjectionMatrix();position={x:spawn.x,z:spawn.z};input.yaw=spawn.yaw;input.pitch=-.025;yaw=input.yaw;pitch=input.pitch;camera.position.set(position.x,(floorAt(position)??FLOOR)+EYE,position.z);dirty=true}
     function standFor(display:EstateArtDisplay,preferred:T.Vector3){
       const sides=[preferred.clone(),preferred.clone().negate()]
       for(const side of sides)for(const distance of [2.05,1.78,2.35]){
@@ -143,29 +151,54 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(preset!==input.lighting){preset=input.lighting;lighting()}
       if(!input.paused&&!inspectView&&!artInspect){
         let dx=0,dz=0;const manual=Math.hypot(input.x,input.z)>.01
-        if(manual){path=[];tour=false;marker.visible=false;destination='';arrivalYaw=null;journeyViewYaw=null;const norm=Math.max(1,Math.hypot(input.x,input.z));dx=(input.x*Math.cos(yaw)+input.z*Math.sin(yaw))/norm;dz=(-input.x*Math.sin(yaw)+input.z*Math.cos(yaw))/norm}
-        else if(path.length){const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);if(d<.16){path.shift();if(!path.length){marker.visible=false;dwell=now+2600;const view=destinations.find(item=>item.name===destination);if(view&&now-input.lookedAt>=2800){arrivalYaw=view.yaw;arrivalStarted=now;arrivalLookBaseline=input.lookedAt}journeyViewYaw=null}}
-          else{dx=(p.x-position.x)/d;dz=(p.z-position.z)/d;const factor=path.length===1?Math.min(1,d/.95):1;dx*=factor;dz*=factor
-            // Follow the travel direction by default; visitors can freely look around.
-            // After free-look, return gently once the visitor has had time to explore.
-            const userLooking=input.looking||now-input.lookedAt<2800
-            const presenting=journeyViewYaw!==null&&path.length===1&&d<7
-            if(!userLooking){
-              const reveal=presenting?Math.max(0,Math.min(1,(7-d)/6)):0
-              const facing=Math.atan2(-dx,-dz)
-              const target=presenting?facing+Math.atan2(Math.sin(journeyViewYaw!-facing),Math.cos(journeyViewYaw!-facing))*reveal:facing
-              const delta=Math.atan2(Math.sin(target-input.yaw),Math.cos(target-input.yaw))
-              input.yaw+=delta*(1-Math.exp(-dt*(presenting?1.8:2.2)))
+        if(manual){path=[];tour=false;marker.visible=false;destination='';arrivalYaw=null;arrivalPitch=null;journeyView=null;viewFov=69;const norm=Math.max(1,Math.hypot(input.x,input.z));dx=(input.x*Math.cos(yaw)+input.z*Math.sin(yaw))/norm;dz=(-input.x*Math.sin(yaw)+input.z*Math.cos(yaw))/norm}
+        else if(path.length){const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);if(d<.16){path.shift();if(!path.length){
+            marker.visible=false;dwell=now+2600
+            const view=destinations.find(item=>item.name===destination)
+            viewFov=view?.fov??69
+            if(view&&!input.looking&&now-input.lookedAt>=2800){
+              arrivalYaw=view.yaw;arrivalPitch=view.pitch??.025
+              arrivalStarted=now;arrivalLookBaseline=input.lookedAt
             }
+            journeyView=null
+          }}
+          else{dx=(p.x-position.x)/d;dz=(p.z-position.z)/d;const factor=path.length===1?Math.min(1,d/.95):1;dx*=factor;dz*=factor
+            // Look ahead along the route so the camera turns before the body reaches a bend.
+            let ahead=p,prev=position,lookAhead=1.65,remaining=d
+            for(let i=1;i<path.length;i++)remaining+=Math.hypot(path[i].x-path[i-1].x,path[i].z-path[i-1].z)
+            for(const waypoint of path){
+              const segment=Math.hypot(waypoint.x-prev.x,waypoint.z-prev.z)
+              if(segment>=lookAhead){const t=lookAhead/Math.max(segment,.001);ahead={x:prev.x+(waypoint.x-prev.x)*t,z:prev.z+(waypoint.z-prev.z)*t};break}
+              lookAhead-=segment;ahead=waypoint;prev=waypoint
+            }
+            const heading=Math.atan2(position.x-ahead.x,position.z-ahead.z)
+            const reveal=journeyView?ease(Math.max(0,Math.min(1,(journeyView.lead-remaining)/journeyView.lead))):0
+            const userLooking=input.looking||now-input.lookedAt<2800
+            if(!userLooking){
+              const target=journeyView?heading+Math.atan2(Math.sin(journeyView.yaw-heading),Math.cos(journeyView.yaw-heading))*reveal:heading
+              const delta=Math.atan2(Math.sin(target-input.yaw),Math.cos(target-input.yaw))
+              input.yaw+=T.MathUtils.clamp(delta*(1-Math.exp(-dt*2.3)),-dt*1.3,dt*1.3)
+              const targetPitch=-.025+((journeyView?.pitch??-.025)+.025)*reveal
+              input.pitch+=(targetPitch-input.pitch)*(1-Math.exp(-dt*1.4))
+            }
+            // The guided framing tightens subtly as the final composition comes into view.
+            viewFov=69+((journeyView?.fov??69)-69)*reveal
           }}
         if(arrivalYaw!==null){
-          if(input.lookedAt>arrivalLookBaseline||now-arrivalStarted>2600)arrivalYaw=null
-          else{const delta=Math.atan2(Math.sin(arrivalYaw-input.yaw),Math.cos(arrivalYaw-input.yaw));input.yaw+=delta*(1-Math.exp(-dt*1.8));if(Math.abs(delta)<.015)arrivalYaw=null}
+          if(input.looking||input.lookedAt>arrivalLookBaseline||now-arrivalStarted>3200){arrivalYaw=null;arrivalPitch=null}
+          else{
+            const delta=Math.atan2(Math.sin(arrivalYaw-input.yaw),Math.cos(arrivalYaw-input.yaw))
+            input.yaw+=T.MathUtils.clamp(delta*(1-Math.exp(-dt*1.65)),-dt*1.05,dt*1.05)
+            input.pitch+=((arrivalPitch??-.025)-input.pitch)*(1-Math.exp(-dt*1.45))
+            if(Math.abs(delta)<.012&&Math.abs((arrivalPitch??-.025)-input.pitch)<.008){arrivalYaw=null;arrivalPitch=null}
+          }
         }
         if(tour&&!path.length&&now>dwell){const d=destinations[tourIndex%destinations.length];tourIndex++;if(!go(d,d.name)){tour=false}else dwell=Infinity}
         const speed=input.speed*(input.fast?1.45:1),damp=1-Math.exp(-dt*4.8);vx+=(dx*speed-vx)*damp;vz+=(dz*speed-vz)*damp
         const next=moveSafely(position,vx*dt,vz*dt);if(Math.hypot(next.x-position.x,next.z-position.z)<.00005&&!path.length){vx=0;vz=0}position=next
-        yaw+=Math.atan2(Math.sin(input.yaw-yaw),Math.cos(input.yaw-yaw))*(1-Math.exp(-dt*16));pitch+=(input.pitch-pitch)*(1-Math.exp(-dt*16))
+        yaw+=Math.atan2(Math.sin(input.yaw-yaw),Math.cos(input.yaw-yaw))*(1-Math.exp(-dt*11));pitch+=(input.pitch-pitch)*(1-Math.exp(-dt*10))
+        const nextFov=T.MathUtils.damp(camera.fov,viewFov,1.9,dt)
+        if(Math.abs(nextFov-camera.fov)>.001){camera.fov=nextFov;camera.updateProjectionMatrix()}
         const y=(floorAt(position)??FLOOR)+EYE;camera.position.set(position.x,T.MathUtils.damp(camera.position.y,y,10,dt),position.z);camera.rotation.set(pitch,yaw,0,'YXZ')
         dirty=true
       }else{vx=0;vz=0}
