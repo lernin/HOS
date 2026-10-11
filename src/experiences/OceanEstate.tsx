@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createEstate, type EstateInput, type EstateState } from './estate/scene'
 import type { EstateArtChoice } from './estate/art'
 import { estateAudio } from './estate/audio'
-import { destinations, spawn, type EstateTourView, type EstateTourViews } from './estate/plan'
+import { canonicalTourViews, destinations, spawn, type EstateTourView, type EstateTourViews } from './estate/plan'
 import type { LightPreset } from './estate/environment'
 import { estateEditorMaterials, estateEditorPreview, type EditableRoomId, type EditableSurface } from './estate/editor'
 import { loadEstateMaterialCatalog } from './estate/catalog'
@@ -28,8 +28,8 @@ function readTourViews():EstateTourViews{
       if([v.x,v.z,v.yaw,v.pitch].every(n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<10000)&&Math.abs(v.pitch!)<=1.05)
         views[name]={x:v.x!,z:v.z!,yaw:v.yaw!,pitch:v.pitch!}
     }
-    return views
-  }catch{return {}}
+    return {...canonicalTourViews,...views}
+  }catch{return {...canonicalTourViews}}
 }
 const axis=(n:number)=>Math.abs(n)<.12?0:Math.max(-1,Math.min(1,n))
 export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
@@ -114,9 +114,9 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   }
   function resetTourView(){
     if(!editTarget)return
-    const updated={...tourViews};delete updated[editTarget]
+    const updated={...tourViews};if(canonicalTourViews[editTarget])updated[editTarget]=canonicalTourViews[editTarget];else delete updated[editTarget]
     setTourViews(updated);engine.current?.setTourViews(updated)
-    try{localStorage.setItem(tourStorageKey,JSON.stringify(updated));setNotice(editTarget+' restored to the original tour viewpoint.')}
+    try{localStorage.setItem(tourStorageKey,JSON.stringify(updated));setNotice(editTarget+' restored to the shared tour viewpoint.')}
     catch{setNotice('Original view restored for this session.')}
   }
   function toggleEditTour(enabled:boolean){
