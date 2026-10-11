@@ -476,3 +476,36 @@ test('rounded estate routes retain collision-safe segments on representative jou
   assert.ok(Math.hypot(previous.x-end.x,previous.z-end.z)<.01,end.name+' arrives exactly')
  }
 })
+
+test('guided walking avoids physical architectural planters',()=>{
+ for(const [x,z] of [[-9,6],[11,6],[-7,22],[-22,12]]){
+  assert.equal(nav.walkable({x,z}),false,`decorative planter at ${x},${z} must obstruct walking`)
+  for(const offset of [{x:.45,z:0},{x:0,z:.45}])assert.equal(nav.walkable({x:x+offset.x,z:z+offset.z}),false,'do not clip planter crown')
+ }
+})
+test('journeys enter kitchen and wide rooms through central doorway corridors',()=>{
+ for(const [from,to] of [[plan.spawn,plan.destinations.find(d=>d.name==='Kitchen')],[plan.destinations.find(d=>d.name==='Great room'),plan.destinations.find(d=>d.name==='Kitchen')],[plan.destinations.find(d=>d.name==='Kitchen'),plan.spawn]]){
+  const path=navigator.path(from,to)
+  assert.ok(path,`route ${JSON.stringify(from)} → ${to.name??'Entrance'} must remain available`)
+  let prev=from
+  for(const next of path){
+   assert.ok(nav.clearLine(prev,next),'no segment clips physical walls or planters')
+   for(const gate of plan.doorways){
+    const av=gate.axis==='x'?prev.x:prev.z,bv=gate.axis==='x'?next.x:next.z
+    if((av-gate.at)*(bv-gate.at)>=0)continue
+    const t=(gate.at-av)/(bv-av)
+    const crossed=gate.axis==='x'?prev.z+(next.z-prev.z)*t:prev.x+(next.x-prev.x)*t
+    if(crossed<gate.from-.01||crossed>gate.to+.01)continue
+    const center=(gate.from+gate.to)/2,half=(gate.to-gate.from)/2
+    assert.ok(Math.abs(crossed-center)<=Math.max(.65,half*.55)+.01,`doorway edge approach ${gate.axis}=${gate.at}: ${crossed} (central corridor ${center})`)
+   }
+   prev=next
+  }
+ }
+})
+test('kitchen arrival frames the island and dining opening',()=>{
+ const kitchen=plan.destinations.find(d=>d.name==='Kitchen')
+ assert.ok(kitchen.approachLead>=9,'start presenting kitchen before arrival')
+ assert.ok(kitchen.yaw>.65&&kitchen.yaw<1.1,'kitchen frames island without turning into wall')
+ assert.ok(kitchen.fov<=66,'architectural composition uses restrained FOV')
+})
