@@ -85,7 +85,9 @@ test('touch navigation is adaptive: left moves, right looks, and two thumbs sepa
  assert.match(ui,/input\.current\.x=right\?axis\(\(left\.x-left\.startX\)\/72\):0/)
  assert.match(ui,/t\.side==='right'\|\|\(t\.side==='left'&&!hasRight\)/)
  assert.match(ui,/if\(t\.side==='right'\)input\.current\.pitch=/)
- assert.match(ui,/!t\.dragged&&!t\.hadMulti&&touchPointers\.current\.size===0\)handleWorldTap/)
+ assert.match(ui,/!t\.dragged&&!t\.hadMulti&&touchPointers\.current\.size===0\)\{/)
+ assert.match(ui,/if\(t\.side==='right'&&\(state\.moving\|\|state\.touring\)\)/)
+ assert.match(ui,/else handleWorldTap\(e\.clientX,e\.clientY\)/)
  assert.doesNotMatch(ui,/worldPinchStart|pinchReverse/)
 })
 
