@@ -157,6 +157,23 @@ export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
 // Broad rooms retain natural stopping positions; narrow terraces favor offset views.
 export type EstateTourView=Point&{yaw:number;pitch:number}
 export type EstateTourViews=Record<string,EstateTourView>
+// Curated by Ashley in the Ocean Estate editor and recovered from the original
+// browser's localStorage. Keep the captured precision and raw yaw winding;
+// visitors receive these defaults unless they save personal overrides.
+export const canonicalTourViews:EstateTourViews={
+  'Entrance':{x:1.081610574575331,z:35.726961540226334,yaw:12.539239570687128,pitch:0.07465388133420173},
+  'Great room':{x:6.876622640586595,z:3.0899894628341427,yaw:0.7137566185598403,pitch:-0.04883275980056064},
+  'Pool':{x:3.016915884827009,z:-21.89051826514638,yaw:0.04604562666838835,pitch:-0.14749053646937924},
+  'Kitchen':{x:-12.780680148138163,z:10.348661118026529,yaw:0.8625474489044748,pitch:-0.08099428559509533},
+  'Primary suite':{x:27.91043953773047,z:-8.398595009239651,yaw:-2.0531595596430177,pitch:-0.10003057224795651},
+  'Spa':{x:-27.470355875603044,z:29.609525008719295,yaw:-4.38959309701866,pitch:0.26313974936012907},
+  'Library':{x:9.391900769695814,z:20.095187876898343,yaw:-2.4906425910904546,pitch:-0.032035062632773934},
+  'Guest suites':{x:26.0284584509315,z:29.401731633248446,yaw:-1.5621218180813676,pitch:-0.09881240379003349},
+  'Ocean lookout':{x:29.98228939910248,z:-15.328341055158194,yaw:-0.41945714663469597,pitch:-0.0742624635126426},
+  'West promenade':{x:-42.99119699735557,z:19.880785665572954,yaw:0.9258864025981194,pitch:-0.03681744592691179},
+  'East promenade':{x:46.068017150257724,z:24.61818538848024,yaw:6.654098450066121,pitch:-0.1591541528037518},
+  'Pool-tip terrace':{x:10.31659949513227,z:-69.05115313649351,yaw:6.9562695036063795,pitch:-0.049463467416004804},
+}
 export type EstateDestination=Point&{name:string;yaw:number;pitch?:number;fov?:number;approachLead?:number}
 export const destinations:EstateDestination[]=[
   {name:'Entrance',x:1,z:27,yaw:0,pitch:.025},
