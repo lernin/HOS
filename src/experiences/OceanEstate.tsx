@@ -163,7 +163,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
           <button type="button" onClick={nextTourStop}>Next stop →</button>
           {tourViews[editTarget]&&<button type="button" onClick={resetTourView}>Reset</button>}
         </div>
-      </aside>}}
+      </aside>}
     </>}
     {picker&&<section className="oe-material-picker" aria-label={`${roomName(picker.room)} ${picker.surface} materials`}>
       <header><div><span>{roomName(picker.room)}</span><h2>{picker.surface==='floor'?'Floor material':'Main wall material'}</h2></div><button onClick={()=>finishPicker(false)} aria-label="Undo and close">×</button></header>
