@@ -449,3 +449,28 @@ test('Ocean Estate loads the CC0 moss rock set outside the procedural UV-strippi
  assert.match(scene,/kit\.finish\(\);\s*progress\('Setting the mossy stones…'\)/)
  assert.match(scene,/await addMossRockSet\(scene,signal\)/)
 })
+
+test('architectural arrivals stay walkable and publish distinct camera compositions',()=>{
+ for(const d of plan.destinations){
+  assert.ok(nav.walkable(d),d.name+' arrival position must be walkable')
+  assert.ok(Number.isFinite(d.yaw),d.name+' has a finite view heading')
+  if(d.pitch!==undefined)assert.ok(d.pitch>-.2&&d.pitch<.35,d.name+' has a natural vertical frame')
+  if(d.fov!==undefined)assert.ok(d.fov>=60&&d.fov<=69,d.name+' has a restrained lens')
+ }
+ const suite=plan.destinations.find(d=>d.name==='Primary suite')
+ const terrace=plan.destinations.find(d=>d.name==='Pool-tip terrace')
+ assert.ok(suite.pitch>.08&&suite.fov<=65,'primary suite framing reduces empty floor')
+ assert.ok(terrace.x<0&&terrace.approachLead>=8,'shallow terrace presents across the space')
+})
+test('rounded estate routes retain collision-safe segments on representative journeys',()=>{
+ for(const end of plan.destinations.filter(d=>['Primary suite','Great room','Pool-tip terrace','Kitchen','Library'].includes(d.name))){
+  const path=navigator.path(plan.spawn,end)
+  assert.ok(path,end.name+' has a route')
+  let previous=plan.spawn
+  for(const next of path){
+   assert.ok(nav.clearLine(previous,next),end.name+' segment remains traversable')
+   previous=next
+  }
+  assert.ok(Math.hypot(previous.x-end.x,previous.z-end.z)<.01,end.name+' arrives exactly')
+ }
+})
