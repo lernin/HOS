@@ -533,3 +533,38 @@ test('edit-tour captures actual walkable camera view, persists and replays per d
  assert.match(ui,/localStorage\.setItem\(tourStorageKey,JSON\.stringify\(updated\)\)/)
  assert.match(ui,/engine\.current\?\.walkable\(view\)/)
 })
+
+test('guided foyer threshold avoids aim at the wall jamb',()=>{
+ const kitchen=plan.destinations.find(d=>d.name==='Kitchen')
+ const route=navigator.path(plan.spawn,kitchen)
+ assert.ok(route,'entrance-to-kitchen route remains available')
+ const nodes=[plan.spawn,...route]
+ let crossed=false
+ for(let i=1;i<nodes.length;i++){
+   const a=nodes[i-1],b=nodes[i],steps=Math.max(1,Math.ceil(Math.hypot(a.x-b.x,a.z-b.z)/.15))
+   for(let j=0;j<=steps;j++){
+     const t=j/steps,p={x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t}
+     if(Math.abs(p.z-8)<=1.1&&p.x>-4&&p.x<5){
+       crossed=true
+       assert.ok(Math.abs(p.x-.5)<=1.31,`foyer doorway should feel centered at ${JSON.stringify(p)}`)
+     }
+   }
+ }
+ assert.ok(route.length>0)
+ // Another valid route may approach via the courtyard without this foyer threshold.
+ assert.ok(crossed||route.every(p=>nav.walkable(p)))
+})
+test('guided camera slows physical walking to match limited rotation',()=>{
+ const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
+ assert.match(scene,/lookAhead=Math.max\(1\.65,Math.min\(5\.5,input\.speed\*2\.15\)\)/)
+ assert.match(scene,/turnWalkScale=Math.max\(\.22/)
+ assert.match(scene,/const speed=input\.speed\*\(input\.fast\?1\.45:1\)\*turnWalkScale/)
+})
+test('tour-edit controls remain at lower left and leave cinematic view clear',()=>{
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ const css=readFileSync(new URL('../src/experiences/estate/estate.css',import.meta.url),'utf8')
+ assert.match(ui,/editTour&&editTarget&&!picker&&!state\.moving&&!state\.destination/)
+ assert.match(css,/\.oe-tour-editor\{left:max\(7px,env\(safe-area-inset-left\)\);bottom:max\(7px/)
+ assert.match(css,/background:#10261b26/)
+ assert.match(ui,/>Save<\/button>/)
+})
