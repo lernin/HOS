@@ -14,17 +14,36 @@ export function moveSafely(p:Point,dx:number,dz:number):Point {
     else if(walkable({x:q.x,z:q.z+z})&&safeGrade(q,{x:q.x,z:q.z+z}))q.z+=z
   } return q
 }
-// A* over a clearance-eroded grid, followed by visibility smoothing. The same
-// plan drives rendering and navigation. No corner cutting or wall teleports.
+// Prefer breathing room around walls and furniture, while preserving narrow
+// doorway access and the original collision/grade safeguards.
+const COMFORT_RADIUS=.85
+function comfortableLine(a:Point,b:Point){
+  if(!clearLine(a,b))return false
+  const length=Math.hypot(b.x-a.x,b.z-a.z),steps=Math.ceil(length/.2)
+  for(let i=1;i<steps;i++){
+    const distance=Math.min(i*.2,length-i*.2)
+    // Don't reject routes simply because the requested start/end hugs furniture.
+    if(distance<.9)continue
+    const t=i/steps,p={x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t}
+    if(!walkable(p,COMFORT_RADIUS))return false
+  }
+  return true
+}
+// A* over a clearance-eroded grid, followed by comfort-aware visibility smoothing.
+// The same plan drives rendering and navigation. No corner cutting or wall teleports.
 export function createNavigator(){
   const grid=new Uint8Array(COLS*ROWS)
   const point=(i:number)=>({x:MINX+(i%COLS)*CELL,z:MINZ+Math.floor(i/COLS)*CELL})
-  for(let i=0;i<grid.length;i++)grid[i]=Number(walkable(point(i),RADIUS+.04))
+  const comfort=new Uint8Array(grid.length)
+  for(let i=0;i<grid.length;i++){
+    const p=point(i);grid[i]=Number(walkable(p,RADIUS+.04))
+    if(grid[i])comfort[i]=Number(walkable(p,COMFORT_RADIUS))
+  }
   function nearest(p:Point){const c=Math.round((p.x-MINX)/CELL),r=Math.round((p.z-MINZ)/CELL);let best=-1,dist=Infinity
     for(let z=-3;z<=3;z++)for(let x=-3;x<=3;x++){const cx=c+x,rz=r+z,i=rz*COLS+cx;if(cx<0||cx>=COLS||rz<0||rz>=ROWS||!grid[i])continue;const q=point(i),d=Math.hypot(q.x-p.x,q.z-p.z);if(d<dist&&clearLine(p,q)){dist=d;best=i}}return best}
   function path(start:Point,end:Point):Point[]|null {
     if(!walkable(start)||!walkable(end))return null
-    if(clearLine(start,end))return [{...end}]
+    if(comfortableLine(start,end))return [{...end}]
     const a=nearest(start),b=nearest(end);if(a<0||b<0)return null
     const costs=new Float32Array(grid.length).fill(Infinity),parents=new Int32Array(grid.length).fill(-1),closed=new Uint8Array(grid.length)
     const heap:{id:number;score:number}[]=[]
@@ -32,11 +51,15 @@ export function createNavigator(){
     function push(id:number,score:number){heap.push({id,score});let i=heap.length-1;while(i>0){const p=(i-1)>>1;if(heap[p].score<=score)break;[heap[p],heap[i]]=[heap[i],heap[p]];i=p}}
     function pop(){const out=heap[0],last=heap.pop()!;if(heap.length){heap[0]=last;let i=0;for(;;){let n=i,l=i*2+1,r=l+1;if(l<heap.length&&heap[l].score<heap[n].score)n=l;if(r<heap.length&&heap[r].score<heap[n].score)n=r;if(n===i)break;[heap[n],heap[i]]=[heap[i],heap[n]];i=n}}return out.id}
     costs[a]=0;push(a,heuristic(a))
-    while(heap.length){const i=pop();if(closed[i])continue;if(i===b){const route:Point[]=[end];let p=i;while(p!==a){route.push(point(p));p=parents[p]}route.push(point(a));route.reverse();const smooth:Point[]=[];let current=start,k=0;while(k<route.length){let far=k;while(far+1<route.length&&clearLine(current,route[far+1]))far++;smooth.push(route[far]);current=route[far];k=far+1}return smooth}closed[i]=1
+    while(heap.length){const i=pop();if(closed[i])continue;if(i===b){const route:Point[]=[end];let p=i;while(p!==a){route.push(point(p));p=parents[p]}route.push(point(a));route.reverse();const smooth:Point[]=[];let current=start,k=0;while(k<route.length){let far=k;while(far+1<route.length&&comfortableLine(current,route[far+1]))far++;
+        // Narrow doorways must remain traversable even when comfort clearance fails.
+        if(far===k&&!clearLine(current,route[far]))return null;smooth.push(route[far]);current=route[far];k=far+1}return smooth}closed[i]=1
       const col=i%COLS,row=Math.floor(i/COLS)
       for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){const x=col+dx,z=row+dz,j=z*COLS+x;if(x<0||x>=COLS||z<0||z>=ROWS||!grid[j]||closed[j])continue;if(dx&&dz&&(!grid[i+dx]||!grid[i+dz*COLS]))continue
         if(!safeGrade(point(i),point(j)))continue
-        const cost=costs[i]+(dx&&dz?Math.SQRT2:1);if(cost<costs[j]){costs[j]=cost;parents[j]=i;push(j,cost+heuristic(j))}}
+        const step=dx&&dz?Math.SQRT2:1
+        // A small detour through open space is preferable to scraping along walls.
+        const cost=costs[i]+step*(comfort[j]?1:1.65);if(cost<costs[j]){costs[j]=cost;parents[j]=i;push(j,cost+heuristic(j))}}
     } return null
   }return {path}
 }
