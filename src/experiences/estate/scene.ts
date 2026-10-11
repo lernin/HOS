@@ -153,7 +153,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(quality!==input.quality){quality=input.quality;renderer.setPixelRatio(Math.min(devicePixelRatio,quality===0?.85:quality===2?1.35:1));renderer.shadowMap.enabled=true;renderer.shadowMap.needsUpdate=true;resize()}
       if(preset!==input.lighting){preset=input.lighting;lighting()}
       if(!input.paused&&!inspectView&&!artInspect){
-        let dx=0,dz=0;const manual=Math.hypot(input.x,input.z)>.01
+        let dx=0,dz=0,turnWalkScale=1;const manual=Math.hypot(input.x,input.z)>.01
         if(manual){path=[];tour=false;marker.visible=false;destination='';arrivalYaw=null;arrivalPitch=null;journeyView=null;viewFov=69;const norm=Math.max(1,Math.hypot(input.x,input.z));dx=(input.x*Math.cos(yaw)+input.z*Math.sin(yaw))/norm;dz=(-input.x*Math.sin(yaw)+input.z*Math.cos(yaw))/norm}
         else if(path.length){const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);if(d<.16){path.shift();if(!path.length){
             marker.visible=false;dwell=now+2600
@@ -168,7 +168,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
           }}
           else{dx=(p.x-position.x)/d;dz=(p.z-position.z)/d;const factor=path.length===1?Math.min(1,d/.95):1;dx*=factor;dz*=factor
             // Look ahead along the route so the camera turns before the body reaches a bend.
-            let ahead=p,prev=position,lookAhead=1.65,remaining=d
+            let ahead=p,prev=position,lookAhead=Math.max(1.65,Math.min(5.5,input.speed*2.15)),remaining=d
             for(let i=1;i<path.length;i++)remaining+=Math.hypot(path[i].x-path[i-1].x,path[i].z-path[i-1].z)
             for(const waypoint of path){
               const segment=Math.hypot(waypoint.x-prev.x,waypoint.z-prev.z)
@@ -182,6 +182,12 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
               const target=journeyView?heading+Math.atan2(Math.sin(journeyView.yaw-heading),Math.cos(journeyView.yaw-heading))*reveal:heading
               const delta=Math.atan2(Math.sin(target-input.yaw),Math.cos(target-input.yaw))
               input.yaw+=T.MathUtils.clamp(delta*(1-Math.exp(-dt*2.3)),-dt*input.maxTurnSpeed,dt*input.maxTurnSpeed)
+              // A slow camera cannot keep up with a full-speed sharp corner.
+              // Decelerate the guided walk until the viewer faces its path again.
+              // Compare to the physical travel direction, not the cinematic view.
+              const travelYaw=Math.atan2(-dx,-dz)
+              const misalignment=Math.abs(Math.atan2(Math.sin(travelYaw-yaw),Math.cos(travelYaw-yaw)))
+              turnWalkScale=Math.max(.22,1-Math.max(0,misalignment-.18)/1.15)
               const targetPitch=-.025+((journeyView?.pitch??-.025)+.025)*reveal
               input.pitch+=(targetPitch-input.pitch)*(1-Math.exp(-dt*1.4))
             }
@@ -198,7 +204,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
           }
         }
         if(tour&&!path.length&&now>dwell){const d=destinations[tourIndex%destinations.length];tourIndex++;if(!go(d,d.name)){tour=false}else dwell=Infinity}
-        const speed=input.speed*(input.fast?1.45:1),damp=1-Math.exp(-dt*4.8);vx+=(dx*speed-vx)*damp;vz+=(dz*speed-vz)*damp
+        const speed=input.speed*(input.fast?1.45:1)*turnWalkScale,damp=1-Math.exp(-dt*4.8);vx+=(dx*speed-vx)*damp;vz+=(dz*speed-vz)*damp
         const next=moveSafely(position,vx*dt,vz*dt);if(Math.hypot(next.x-position.x,next.z-position.z)<.00005&&!path.length){vx=0;vz=0}position=next
         const cameraDelta=Math.atan2(Math.sin(input.yaw-yaw),Math.cos(input.yaw-yaw))
         const guidedTurn=(path.length>0||arrivalYaw!==null)&&!input.looking&&now-input.lookedAt>=2800
