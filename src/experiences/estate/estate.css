@@ -22,3 +22,6 @@
 .oe-menu-sound button{min-width:58px;min-height:38px;border:1px solid #bdc0a748;background:#31483e;border-radius:999px}
 @media(max-width:680px){.oe-location.oe-location-fade{bottom:max(18px,env(safe-area-inset-bottom))}.oe-location.oe-location-fade h1{font-size:18px}.oe-stop{bottom:max(18px,env(safe-area-inset-bottom))}.oe-settings{padding:20px}.oe-menu-places{grid-template-columns:1fr 1fr}.oe-menu-place{font-size:12px;padding:9px}}
 @media(max-height:530px) and (min-width:681px){.oe-location.oe-location-fade{bottom:18px}.oe-settings{padding:18px}.oe-settings h2{font-size:24px;margin:14px 0 18px}.oe-settings label{margin:14px 0}.oe-menu-section{padding-bottom:14px;margin-bottom:14px}}
+
+/* Automatic journeys only: keep Stop out of the center and free the right-hand look area. */
+.oe-stop{left:18px;right:auto;bottom:max(22px,env(safe-area-inset-bottom));transform:none;z-index:5;padding:10px 16px;max-width:calc(50vw - 26px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

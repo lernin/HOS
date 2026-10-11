@@ -29,6 +29,32 @@ function comfortableLine(a:Point,b:Point){
   }
   return true
 }
+
+// Round open-space waypoint corners into short diagonal transitions.
+// Retain the original bend wherever clearance or slope makes rounding unsafe.
+function softenCorners(start:Point,route:Point[]):Point[]{
+  const points=[start,...route],out:Point[]=[start]
+  for(let i=1;i<points.length-1;i++){
+    const a=points[i-1],b=points[i],c=points[i+1]
+    const ab=Math.hypot(b.x-a.x,b.z-a.z),bc=Math.hypot(c.x-b.x,c.z-b.z)
+    if(ab>.2&&bc>.2){
+      const ux=(b.x-a.x)/ab,uz=(b.z-a.z)/ab,vx=(c.x-b.x)/bc,vz=(c.z-b.z)/bc
+      const bend=ux*vx+uz*vz
+      if(bend<.97&&bend>-.85){
+        const setback=Math.min(.88,ab*.32,bc*.32)
+        const entry={x:b.x-ux*setback,z:b.z-uz*setback}
+        const exit={x:b.x+vx*setback,z:b.z+vz*setback}
+        if(clearLine(out[out.length-1],entry)&&clearLine(entry,exit)&&walkable(entry,.6)&&walkable(exit,.6)){
+          out.push(entry,exit);continue
+        }
+      }
+    }
+    out.push(b)
+  }
+  out.push(points[points.length-1])
+  return out.slice(1)
+}
+
 // A* over a clearance-eroded grid, followed by comfort-aware visibility smoothing.
 // The same plan drives rendering and navigation. No corner cutting or wall teleports.
 export function createNavigator(){
@@ -53,7 +79,7 @@ export function createNavigator(){
     costs[a]=0;push(a,heuristic(a))
     while(heap.length){const i=pop();if(closed[i])continue;if(i===b){const route:Point[]=[end];let p=i;while(p!==a){route.push(point(p));p=parents[p]}route.push(point(a));route.reverse();const smooth:Point[]=[];let current=start,k=0;while(k<route.length){let far=k;while(far+1<route.length&&comfortableLine(current,route[far+1]))far++;
         // Narrow doorways must remain traversable even when comfort clearance fails.
-        if(far===k&&!clearLine(current,route[far]))return null;smooth.push(route[far]);current=route[far];k=far+1}return smooth}closed[i]=1
+        if(far===k&&!clearLine(current,route[far]))return null;smooth.push(route[far]);current=route[far];k=far+1}return softenCorners(start,smooth)}closed[i]=1
       const col=i%COLS,row=Math.floor(i/COLS)
       for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,1],[1,-1],[-1,-1]]){const x=col+dx,z=row+dz,j=z*COLS+x;if(x<0||x>=COLS||z<0||z>=ROWS||!grid[j]||closed[j])continue;if(dx&&dz&&(!grid[i+dx]||!grid[i+dz*COLS]))continue
         if(!safeGrade(point(i),point(j)))continue

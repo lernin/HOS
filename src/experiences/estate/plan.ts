@@ -146,13 +146,23 @@ export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
     return {x1:Math.min(a[0],b[0])-.2,x2:Math.max(a[0],b[0])+.2,z1:Math.min(a[1],b[1])-.2,z2:Math.max(a[1],b[1])+.2}
   })),
 ]
-export const destinations=[
-  {name:'Entrance',x:1,z:27,yaw:0},{name:'Great room',x:7,z:3,yaw:.7},
-  {name:'Pool',x:3,z:-22,yaw:0},{name:'Courtyard',x:-9,z:24,yaw:1.4},
-  {name:'Kitchen',x:-12.8,z:10.5,yaw:1.2},{name:'Primary suite',x:28,z:-8.5,yaw:-1.3},
-  {name:'Spa',x:-28.5,z:30,yaw:1.4},{name:'Library',x:16,z:17,yaw:Math.PI},
-  {name:'Guest suites',x:25.5,z:29.5,yaw:-1.4},{name:'Ocean lookout',x:30,z:-15,yaw:0},
-  {name:'West promenade',x:-43,z:20,yaw:0},{name:'East promenade',x:46,z:25,yaw:0},{name:'Pool-tip terrace',x:.5,z:-64,yaw:0},
+// The walking endpoint and the composed architectural camera view are distinct.
+// Broad rooms retain natural stopping positions; narrow terraces favor offset views.
+export type EstateDestination=Point&{name:string;yaw:number;pitch?:number;fov?:number;approachLead?:number}
+export const destinations:EstateDestination[]=[
+  {name:'Entrance',x:1,z:27,yaw:0,pitch:.025},
+  {name:'Great room',x:7,z:3,yaw:.7,pitch:.065,fov:66,approachLead:7},
+  {name:'Pool',x:3,z:-22,yaw:0,pitch:.045,approachLead:8},
+  {name:'Courtyard',x:-9,z:24,yaw:1.4,pitch:.035},
+  {name:'Kitchen',x:-12.8,z:10.5,yaw:1.2,pitch:.06,approachLead:6},
+  {name:'Primary suite',x:28,z:-8.5,yaw:-1.35,pitch:.115,fov:63,approachLead:10},
+  {name:'Spa',x:-28.5,z:30,yaw:1.4,pitch:.045},
+  {name:'Library',x:16,z:17,yaw:Math.PI,pitch:.07,fov:66},
+  {name:'Guest suites',x:25.5,z:29.5,yaw:-1.4,pitch:.045},
+  {name:'Ocean lookout',x:30,z:-15,yaw:0,pitch:.04},
+  {name:'West promenade',x:-43,z:20,yaw:0},
+  {name:'East promenade',x:46,z:25,yaw:0},
+  {name:'Pool-tip terrace',x:-9,z:-64,yaw:-1.12,pitch:.055,fov:66,approachLead:10},
 ]
 export function contains(r:Rect,p:Point,pad=0){return p.x>=r.x1-pad&&p.x<=r.x2+pad&&p.z>=r.z1-pad&&p.z<=r.z2+pad}
 function onCourt(p:Point){return Math.hypot(p.x-1,p.z-41)<=19}
