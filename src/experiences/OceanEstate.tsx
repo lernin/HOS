@@ -61,7 +61,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     try{localStorage.setItem('ocean-estate-plan-last-view-v1',JSON.stringify({x:state.position.x,z:state.position.z,yaw:input.current.yaw,at:Date.now()}))}catch{/* Planner still opens without persisted view context. */}
     dialog.current?.close();stop();onPlan()
   }
-  function closeSettings(){stop();if(started&&!paused&&!picker&&!artOpen.current){input.current.paused=false;if(sound)void beginSound()}}
+  function closeSettings(){if(started&&!paused&&!picker&&!artOpen.current){input.current.paused=false;if(sound)void beginSound()}}
   function back(){stop();input.current.paused=true;audio.current?.pause();onBack()}
   function openPicker(room:EditableRoomId,surface:EditableSurface){stop();input.current.paused=false;engine.current?.setEditSelection(room,surface);setPicker({room,surface,original:selections[room][surface],current:selections[room][surface]})}
   function previewMaterial(id:string|null){if(!picker)return;engine.current?.setRoomMaterial(picker.room,picker.surface,id);setPicker({...picker,current:id})}
@@ -91,7 +91,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       <div className={`oe-location oe-location-fade${showLocation?' visible':''}`}><h1>{state.location}</h1></div>
       {editMode&&<div className="oe-edit-badge"><span>EDIT MODE</span>{activeRoom?<strong>{roomName(activeRoom)} · tap a floor or wall</strong>:<strong>Walk into the foyer or great room</strong>}</div>}
       {editMode&&activeRoom&&!picker&&(['floor','walls'] as EditableSurface[]).map(surface=>{const p=markers[surface];return p.visible?<button key={surface} className={`oe-surface-marker oe-surface-${surface}`} style={{left:p.x,top:p.y}} onClick={()=>openPicker(activeRoom,surface)} aria-label={`Edit ${surface}`}><span>⚙</span><strong>{surface==='floor'?'Floor':'Walls'}</strong></button>:null})}
-      {(state.moving||state.touring)&&<button className="oe-stop" onClick={stop}>Stop {state.destination?`· ${state.destination}`:''}</button>}
+      {state.touring&&<button className="oe-stop" onClick={stop}>Stop {state.destination?`· ${state.destination}`:''}</button>}
     </>}
     {picker&&<section className="oe-material-picker" aria-label={`${roomName(picker.room)} ${picker.surface} materials`}>
       <header><div><span>{roomName(picker.room)}</span><h2>{picker.surface==='floor'?'Floor material':'Main wall material'}</h2></div><button onClick={()=>finishPicker(false)} aria-label="Undo and close">×</button></header>
