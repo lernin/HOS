@@ -568,3 +568,19 @@ test('tour-edit controls remain at lower left and leave cinematic view clear',()
  assert.match(css,/background:#10261b26/)
  assert.match(ui,/>Save<\/button>/)
 })
+
+test('recovered curated tour positions are committed and provide shared defaults',()=>{
+ const expected=['Entrance','Great room','Pool','Kitchen','Primary suite','Spa','Library','Guest suites','Ocean lookout','West promenade','East promenade','Pool-tip terrace']
+ assert.equal(Object.keys(plan.canonicalTourViews).length,12)
+ for(const name of expected){
+  const p=plan.canonicalTourViews[name]
+  assert.ok(p,`missing curated viewpoint: ${name}`)
+  assert.ok([p.x,p.z,p.yaw,p.pitch].every(Number.isFinite),`invalid values for ${name}`)
+  assert.ok(nav.walkable(p),`curated destination is not walkable: ${name}`)
+ }
+ assert.equal(plan.canonicalTourViews.Entrance.yaw,12.539239570687128)
+ assert.equal(plan.canonicalTourViews['Pool-tip terrace'].x,10.31659949513227)
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ assert.match(ui,/\.\.\.canonicalTourViews,\.\.\.views/)
+ assert.match(ui,/catch\{return \{\.\.\.canonicalTourViews\}\}/)
+})
