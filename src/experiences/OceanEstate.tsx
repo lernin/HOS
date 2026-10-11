@@ -155,13 +155,12 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       {editMode&&<div className="oe-edit-badge"><span>EDIT MODE</span>{activeRoom?<strong>{roomName(activeRoom)} · tap a floor or wall</strong>:<strong>Walk into the foyer or great room</strong>}</div>}
       {editMode&&activeRoom&&!picker&&(['floor','walls'] as EditableSurface[]).map(surface=>{const p=markers[surface];return p.visible?<button key={surface} className={`oe-surface-marker oe-surface-${surface}`} style={{left:p.x,top:p.y}} onClick={()=>openPicker(activeRoom,surface)} aria-label={`Edit ${surface}`}><span>⚙</span><strong>{surface==='floor'?'Floor':'Walls'}</strong></button>:null})}
       {(state.touring||Boolean(state.destination))&&<button className="oe-stop" onClick={stop}>Stop {state.destination?`· ${state.destination}`:''}</button>}
-      {editTour&&editTarget&&!picker&&<aside className="oe-tour-editor" aria-label={`Edit tour viewpoint for ${editTarget}`}>
-        <strong>Edit tour · {editTarget}</strong>
-        <small>Walk to a new spot, look around, then save the view.</small>
+      {editTour&&editTarget&&!picker&&!state.moving&&!state.destination&&<aside className="oe-tour-editor" aria-label={`Edit tour viewpoint for ${editTarget}`}>
+        <strong className="oe-tour-target" title={`Tour stop: ${editTarget}`}>{editTarget}</strong>
         <div className="oe-tour-editor-actions">
-          <button type="button" className="oe-tour-save" onClick={saveTourView} disabled={state.moving||Boolean(state.destination)}>Save viewpoint</button>
-          <button type="button" onClick={nextTourStop}>Next stop →</button>
-          {tourViews[editTarget]&&<button type="button" onClick={resetTourView}>Reset</button>}
+          <button type="button" className="oe-tour-save" onClick={saveTourView} aria-label={`Save viewpoint for ${editTarget}`} title="Save this position and camera view">Save</button>
+          <button type="button" onClick={nextTourStop} aria-label="Next tour stop" title="Next tour stop">Next ›</button>
+          {tourViews[editTarget]&&<button type="button" onClick={resetTourView} aria-label="Reset tour viewpoint" title="Restore original viewpoint">↺</button>}
         </div>
       </aside>}
     </>}
