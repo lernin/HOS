@@ -155,6 +155,8 @@ export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
 ]
 // The walking endpoint and the composed architectural camera view are distinct.
 // Broad rooms retain natural stopping positions; narrow terraces favor offset views.
+export type EstateTourView=Point&{yaw:number;pitch:number}
+export type EstateTourViews=Record<string,EstateTourView>
 export type EstateDestination=Point&{name:string;yaw:number;pitch?:number;fov?:number;approachLead?:number}
 export const destinations:EstateDestination[]=[
   {name:'Entrance',x:1,z:27,yaw:0,pitch:.025},
