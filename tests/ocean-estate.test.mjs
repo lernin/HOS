@@ -474,3 +474,12 @@ test('rounded estate routes retain collision-safe segments on representative jou
   assert.ok(Math.hypot(previous.x-end.x,previous.z-end.z)<.01,end.name+' arrives exactly')
  }
 })
+
+test('guided camera anticipates route bends while keeping thumb-directed free look',()=>{
+ const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
+ assert.match(scene,/lookAhead=1\.65/)
+ assert.match(scene,/journeyView\.lead-remaining/)
+ assert.match(scene,/input\.looking\|\|now-input\.lookedAt<2800/)
+ assert.match(scene,/arrivalPitch=view\.pitch/)
+ assert.match(scene,/camera\.updateProjectionMatrix\(\)/)
+})
