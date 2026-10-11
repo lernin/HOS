@@ -60,11 +60,11 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
     let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
-    let arrivalYaw:number|null=null,arrivalStarted=0,arrivalLookBaseline=0,journeyLookBaseline=0,journeyViewYaw:number|null=null
+    let arrivalYaw:number|null=null,arrivalStarted=0,arrivalLookBaseline=0,journeyViewYaw:number|null=null
     let inspectView:{position:T.Vector3;target:T.Vector3}|null=null
     camera.position.set(position.x,(floorAt(position)??FLOOR)+EYE,position.z)
     const stop=()=>{path=[];destination='';tour=false;vx=0;vz=0;arrivalYaw=null;journeyViewYaw=null;marker.visible=false}
-    function go(point:Point,name='Your destination'){if(artInspect)return false;const route=navigator.path(position,point);if(!route)return false;path=route;destination=name;arrivalYaw=null;journeyLookBaseline=input.lookedAt;journeyViewYaw=name==='Pool-tip terrace'?destinations.find(d=>d.name===name)?.yaw??null:null;marker.position.set(point.x,(floorAt(point)??FLOOR)+.03,point.z);marker.visible=true;dirty=true;return true}
+    function go(point:Point,name='Your destination'){if(artInspect)return false;const route=navigator.path(position,point);if(!route)return false;path=route;destination=name;arrivalYaw=null;journeyViewYaw=name==='Pool-tip terrace'?destinations.find(d=>d.name===name)?.yaw??null:null;marker.position.set(point.x,(floorAt(point)??FLOOR)+.03,point.z);marker.visible=true;dirty=true;return true}
     function reset(){stop();artInspect=null;artExitResolve?.();artExitResolve=undefined;camera.fov=69;camera.updateProjectionMatrix();position={x:spawn.x,z:spawn.z};input.yaw=spawn.yaw;input.pitch=-.025;yaw=input.yaw;pitch=input.pitch;camera.position.set(position.x,(floorAt(position)??FLOOR)+EYE,position.z);dirty=true}
     function standFor(display:EstateArtDisplay,preferred:T.Vector3){
       const sides=[preferred.clone(),preferred.clone().negate()]
