@@ -60,11 +60,11 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
     let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
-    let arrivalYaw:number|null=null,arrivalStarted=0,arrivalLookBaseline=0
+    let arrivalYaw:number|null=null,arrivalStarted=0,arrivalLookBaseline=0,journeyLookBaseline=0,journeyViewYaw:number|null=null
     let inspectView:{position:T.Vector3;target:T.Vector3}|null=null
     camera.position.set(position.x,(floorAt(position)??FLOOR)+EYE,position.z)
-    const stop=()=>{path=[];destination='';tour=false;vx=0;vz=0;arrivalYaw=null;marker.visible=false}
-    function go(point:Point,name='Your destination'){if(artInspect)return false;const route=navigator.path(position,point);if(!route)return false;path=route;destination=name;arrivalYaw=null;marker.position.set(point.x,(floorAt(point)??FLOOR)+.03,point.z);marker.visible=true;dirty=true;return true}
+    const stop=()=>{path=[];destination='';tour=false;vx=0;vz=0;arrivalYaw=null;journeyViewYaw=null;marker.visible=false}
+    function go(point:Point,name='Your destination'){if(artInspect)return false;const route=navigator.path(position,point);if(!route)return false;path=route;destination=name;arrivalYaw=null;journeyLookBaseline=input.lookedAt;journeyViewYaw=name==='Pool-tip terrace'?destinations.find(d=>d.name===name)?.yaw??null:null;marker.position.set(point.x,(floorAt(point)??FLOOR)+.03,point.z);marker.visible=true;dirty=true;return true}
     function reset(){stop();artInspect=null;artExitResolve?.();artExitResolve=undefined;camera.fov=69;camera.updateProjectionMatrix();position={x:spawn.x,z:spawn.z};input.yaw=spawn.yaw;input.pitch=-.025;yaw=input.yaw;pitch=input.pitch;camera.position.set(position.x,(floorAt(position)??FLOOR)+EYE,position.z);dirty=true}
     function standFor(display:EstateArtDisplay,preferred:T.Vector3){
       const sides=[preferred.clone(),preferred.clone().negate()]
@@ -143,10 +143,16 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(preset!==input.lighting){preset=input.lighting;lighting()}
       if(!input.paused&&!inspectView&&!artInspect){
         let dx=0,dz=0;const manual=Math.hypot(input.x,input.z)>.01
-        if(manual){path=[];tour=false;marker.visible=false;destination='';arrivalYaw=null;const norm=Math.max(1,Math.hypot(input.x,input.z));dx=(input.x*Math.cos(yaw)+input.z*Math.sin(yaw))/norm;dz=(-input.x*Math.sin(yaw)+input.z*Math.cos(yaw))/norm}
-        else if(path.length){const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);if(d<.16){path.shift();if(!path.length){marker.visible=false;dwell=now+2600;const view=destinations.find(item=>item.name===destination);if(view){arrivalYaw=view.yaw;arrivalStarted=now;arrivalLookBaseline=input.lookedAt}}}
+        if(manual){path=[];tour=false;marker.visible=false;destination='';arrivalYaw=null;journeyViewYaw=null;const norm=Math.max(1,Math.hypot(input.x,input.z));dx=(input.x*Math.cos(yaw)+input.z*Math.sin(yaw))/norm;dz=(-input.x*Math.sin(yaw)+input.z*Math.cos(yaw))/norm}
+        else if(path.length){const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);if(d<.16){path.shift();if(!path.length){marker.visible=false;dwell=now+2600;const view=destinations.find(item=>item.name===destination);if(view&&input.lookedAt<=journeyLookBaseline){arrivalYaw=view.yaw;arrivalStarted=now;arrivalLookBaseline=input.lookedAt}journeyViewYaw=null}}
           else{dx=(p.x-position.x)/d;dz=(p.z-position.z)/d;const factor=path.length===1?Math.min(1,d/.95):1;dx*=factor;dz*=factor
-            // The travel path does not steer the camera: looking around is independent.
+            // A cinematic reveal only for a shallow terrace, starting on final approach.
+            // A deliberate look gesture suppresses the remainder of automatic panning.
+            if(journeyViewYaw!==null&&input.lookedAt<=journeyLookBaseline&&path.length===1&&d<7){
+              const reveal=Math.max(0,Math.min(1,(7-d)/6));
+              const delta=Math.atan2(Math.sin(journeyViewYaw-input.yaw),Math.cos(journeyViewYaw-input.yaw));
+              input.yaw+=delta*(1-Math.exp(-dt*1.4*reveal))
+            }
           }}
         if(arrivalYaw!==null){
           if(input.lookedAt>arrivalLookBaseline||now-arrivalStarted>2600)arrivalYaw=null
