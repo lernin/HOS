@@ -509,3 +509,5 @@ test('kitchen arrival frames the island and dining opening',()=>{
  assert.ok(kitchen.yaw>.65&&kitchen.yaw<1.1,'kitchen frames island without turning into wall')
  assert.ok(kitchen.fov<=66,'architectural composition uses restrained FOV')
 })
+
+// Preview regression battery: compare crossing corridors and decorative obstacle safety.
