@@ -101,6 +101,17 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     try{localStorage.setItem(tourStorageKey,JSON.stringify(updated));setNotice(editTarget+' tour view saved on this device.')}
     catch{setNotice('Saved for this session; device storage is unavailable.')}
   }
+  function exportTourViews(){
+    const saved=readTourViews()
+    if(!Object.keys(saved).length){setNotice('No saved tour viewpoints found in this browser.');return}
+    const json=JSON.stringify({format:'ocean-estate-tour-views',version:1,viewpoints:saved},null,2)
+    const file=new Blob([json],{type:'application/json'})
+    const url=URL.createObjectURL(file)
+    const link=document.createElement('a')
+    link.href=url;link.download='ocean-estate-tour-views.json';document.body.appendChild(link);link.click();link.remove()
+    setTimeout(()=>URL.revokeObjectURL(url),1000)
+    setNotice(Object.keys(saved).length+' tour viewpoints exported. Keep this file for the shared defaults.')
+  }
   function resetTourView(){
     if(!editTarget)return
     const updated={...tourViews};delete updated[editTarget]
@@ -181,6 +192,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       <section className="oe-menu-section"><h3>Go somewhere</h3><div className="oe-menu-places">{destinations.map((d,i)=><button type="button" className="oe-menu-place" key={d.name} onClick={()=>goFromMenu(d)}><span>{String(i+1).padStart(2,'0')}</span>{d.name}</button>)}</div><button type="button" className="oe-menu-tour" onClick={tourFromMenu}>{editTour?'Start editing tour stops':'Take a quiet tour'} <span>→</span></button><button type="button" className="oe-menu-tour" onClick={openPlan}>Open Estate Plan <span>→</span></button></section>
       <div className="oe-menu-sound"><span><strong>Ocean sound</strong><small>Ambient water and coast</small></span><button type="button" onClick={()=>{const next=!sound;setSound(next);if(!next)audio.current?.pause()}}>{sound?'On':'Off'}</button></div>
       <label>Tour editing<select aria-label="Tour editing" value={editTour?'on':'off'} onChange={e=>toggleEditTour(e.target.value==='on')}><option value="off">Off · enjoy the tour</option><option value="on">On · adjust and save tour stops</option></select></label>
+      {editTour&&<button type="button" className="oe-menu-tour" onClick={exportTourViews}>Export saved tour viewpoints <span>↓ JSON</span></button>}
       {editTour&&<p className="oe-tour-storage-note">Choose a destination or start the tour. At each stop, move and look around, then tap Save viewpoint. Saved stops are remembered on this device.</p>}
       <label>Design editing<select aria-label="Design editing" value={editMode?'on':'off'} onChange={e=>{const on=e.target.value==='on';setEditMode(on);engine.current?.setEditSelection(null,null);setHelp(false)}}><option value="off">Off · just explore</option><option value="on">On · tap walls or floors</option></select></label>
       <label>Light<select aria-label="Light" value={prefs.lighting} onChange={e=>setPrefs(p=>({...p,lighting:e.target.value as LightPreset}))}><option value="daylight">Daylight</option><option value="golden">Golden hour</option><option value="evening">Evening</option></select></label>
