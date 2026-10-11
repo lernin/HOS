@@ -2,23 +2,39 @@ import { useEffect, useRef, useState } from 'react'
 import { createEstate, type EstateInput, type EstateState } from './estate/scene'
 import type { EstateArtChoice } from './estate/art'
 import { estateAudio } from './estate/audio'
-import { destinations, spawn } from './estate/plan'
+import { destinations, spawn, type EstateTourView, type EstateTourViews } from './estate/plan'
 import type { LightPreset } from './estate/environment'
 import { estateEditorMaterials, estateEditorPreview, type EditableRoomId, type EditableSurface } from './estate/editor'
 import { loadEstateMaterialCatalog } from './estate/catalog'
 import './estate/estate.css'
-type Prefs={speed:number;sensitivity:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number}
-const defaults:Prefs={speed:2.4,sensitivity:1,quality:1,lighting:'golden',mode:'explore',volume:.35}
-function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:keyof Prefs,lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:num('speed',1,4) as number,sensitivity:num('sensitivity',.3,2) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number}}catch{return defaults}}
+type Prefs={speed:number;sensitivity:number;turnSpeed:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number}
+const defaults:Prefs={speed:2.4,sensitivity:1,turnSpeed:28,quality:1,lighting:'golden',mode:'explore',volume:.35}
+function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:keyof Prefs,lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:num('speed',1,4) as number,sensitivity:num('sensitivity',.3,2) as number,turnSpeed:num('turnSpeed',15,60) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number}}catch{return defaults}}
 type RoomSelections=Record<EditableRoomId,Record<EditableSurface,string|null>>
 type TouchPoint={side:'left'|'right';x:number;y:number;startX:number;startY:number;dragged:boolean;hadMulti:boolean}
 const selectionDefaults:RoomSelections={foyer:{floor:null,walls:null},'great-room':{floor:null,walls:null}}
 function readSelections():RoomSelections{try{const raw=JSON.parse(localStorage.getItem('ocean-estate-room-materials-v1')||'{}');return {foyer:{...selectionDefaults.foyer,...raw.foyer},'great-room':{...selectionDefaults['great-room'],...raw['great-room']}}}catch{return selectionDefaults}}
 const roomName=(room:EditableRoomId)=>room==='foyer'?'Grand foyer':'Great room'
+const tourStorageKey='ocean-estate-tour-views-v1'
+// Viewpoints persist in this browser; account-wide sync is not yet configured.
+function readTourViews():EstateTourViews{
+  try{
+    const raw:unknown=JSON.parse(localStorage.getItem(tourStorageKey)||'{}')
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return {}
+    const views:EstateTourViews={}
+    for(const [name,item] of Object.entries(raw)){
+      if(!destinations.some(d=>d.name===name)||!item||typeof item!=='object')continue
+      const v=item as Partial<EstateTourView>
+      if([v.x,v.z,v.yaw,v.pitch].every(n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<10000)&&Math.abs(v.pitch!)<=1.05)
+        views[name]={x:v.x!,z:v.z!,yaw:v.yaw!,pitch:v.pitch!}
+    }
+    return views
+  }catch{return {}}
+}
 const axis=(n:number)=>Math.abs(n)<.12?0:Math.max(-1,Math.min(1,n))
 export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const canvas=useRef<HTMLCanvasElement>(null),engine=useRef<Awaited<ReturnType<typeof createEstate>>|null>(null),audio=useRef<ReturnType<typeof estateAudio>|null>(null),dialog=useRef<HTMLDialogElement>(null)
-  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:2.4,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false})
+  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:2.4,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180})
   const pointer=useRef<{id:number;x:number;y:number;startX:number;startY:number;dragged:boolean}|null>(null),keys=useRef(new Set<string>())
   const touchPointers=useRef(new Map<number,TouchPoint>())
   const lastRightTap=useRef<{time:number;x:number;y:number}|null>(null)
@@ -26,7 +42,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const [prefs,setPrefs]=useState(readPrefs),[ready,setReady]=useState(false),[progress,setProgress]=useState('Opening Ocean Estate…'),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[started,setStarted]=useState(false),[paused,setPaused]=useState(false),[sound,setSound]=useState(false),[notice,setNotice]=useState(''),[help,setHelp]=useState(true),[showLocation,setShowLocation]=useState(true)
   const [state,setState]=useState<EstateState>({location:'Arrival steps',position:spawn,moving:false,destination:'',fps:0,touring:false})
   const [art,setArt]=useState<EstateArtChoice|null>(null),[artInfo,setArtInfo]=useState(false),[artZoom,setArtZoom]=useState(1),[artClosing,setArtClosing]=useState(false)
-  const [editMode,setEditMode]=useState(false),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
+  const [editMode,setEditMode]=useState(false),[editTour,setEditTour]=useState(()=>{try{return localStorage.getItem('ocean-estate-edit-tour-v1')==='on'}catch{return false}}),[editTarget,setEditTarget]=useState<string|null>(null),[tourViews,setTourViews]=useState(readTourViews),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
   const [materialCatalog,setMaterialCatalog]=useState(estateEditorMaterials)
   const [markers,setMarkers]=useState<Record<EditableSurface,{x:number;y:number;visible:boolean}>>({floor:{x:0,y:0,visible:false},walls:{x:0,y:0,visible:false}})
   const clearTouch=()=>{touchPointers.current.clear();input.current.x=0;input.current.z=0;input.current.looking=false}
@@ -35,10 +51,10 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const updateTouchMovement=()=>{const touches=[...touchPointers.current.values()],left=touches.find(t=>t.side==='left'),right=touches.find(t=>t.side==='right');if(!left){input.current.x=0;input.current.z=0;return}input.current.z=axis((left.y-left.startY)/72);input.current.x=right?axis((left.x-left.startX)/72):0}
   function handleWorldTap(x:number,y:number){if(input.current.paused)return;if(editMode){if(picker){if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(picked?.kind==='floor')setHelp(false)}}else{const hit=engine.current?.pickEditSurface(x,y);if(hit){openPicker(hit.room,hit.surface);setHelp(false)}else setNotice('Tap a floor or wall in the Grand foyer or Great room.')}}else if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(!picked)setNotice('Tap a clear spot on the floor or a painting.');else if(picked.kind==='art')enterArt(picked.art);else setHelp(false)}}
   useEffect(()=>{const controller=new AbortController();void loadEstateMaterialCatalog(controller.signal).then(setMaterialCatalog).catch(()=>{});return()=>controller.abort()},[])
-  useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
+  useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress,tourViews).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
   useEffect(()=>{const e=engine.current;if(!e)return;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface])},[materialCatalog])
   useEffect(()=>()=>audio.current?.dispose(),[])
-  useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,quality:prefs.quality,lighting:prefs.lighting});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
+  useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,maxTurnSpeed:prefs.turnSpeed*Math.PI/180,quality:prefs.quality,lighting:prefs.lighting});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
   useEffect(()=>{const pause=()=>{if(artOpen.current)void exitArt();stop();input.current.paused=true;audio.current?.pause();setPaused(true)};const visibility=()=>{if(document.hidden)pause()}
     const key=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(e.type==='keyup')keys.current.delete(k);if(input.current.paused)return;if(e.target instanceof HTMLElement&&['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return
       if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','escape','shift'].includes(k))e.preventDefault();else return
