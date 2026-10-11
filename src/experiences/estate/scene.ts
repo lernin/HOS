@@ -8,7 +8,7 @@ import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, resolveFloorRay, spawn, type Point } from './plan'
 import { createEstateEditor, type EditableRoomId, type EditableSurface, type EditorMaterial } from './editor'
 import { addMossRockSet } from './moss-rocks'
-export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;fast:boolean}
+export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean}
 export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean}
 export type EstatePick={kind:'floor'}|{kind:'art';art:EstateArtChoice}
 type ArtPhase='entering'|'active'|'exiting'
@@ -148,7 +148,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
           else{dx=(p.x-position.x)/d;dz=(p.z-position.z)/d;const factor=path.length===1?Math.min(1,d/.95):1;dx*=factor;dz*=factor
             // Follow the travel direction by default; visitors can freely look around.
             // After free-look, return gently once the visitor has had time to explore.
-            const userLooking=now-input.lookedAt<2800
+            const userLooking=input.looking||now-input.lookedAt<2800
             const presenting=journeyViewYaw!==null&&path.length===1&&d<7
             if(!userLooking){
               const reveal=presenting?Math.max(0,Math.min(1,(7-d)/6)):0
