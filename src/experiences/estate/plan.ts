@@ -1,4 +1,4 @@
-import { spaTreeBed, poolWater, poolDeck, poolWalkNorth, poolWalkSouth, outdoorPatios, outdoorStairs, type StairFlight } from './site-layout'
+import { architecturalPlanters, spaTreeBed, poolWater, poolDeck, poolWalkNorth, poolWalkSouth, outdoorPatios, outdoorStairs, type StairFlight } from './site-layout'
 import { estateRailings } from './railings'
 export type Point = { x: number; z: number }
 export type Rect = { x1: number; x2: number; z1: number; z2: number }
@@ -44,11 +44,15 @@ export const floors: Floor[] = [
 ]
 export const walls: Wall[] = []
 export const lintels: (Wall & {base:number})[] = []
+// Shared opening geometry: guided routes should enter through the usable middle,
+// rather than aiming at the jambs or cutting a sharp diagonal through a corner.
+export type Doorway={axis:'x'|'z';at:number;from:number;to:number}
+export const doorways:Doorway[]=[]
 const wall = (x1:number,x2:number,z1:number,z2:number,height=3.5,material='plaster') => walls.push({x1,x2,z1,z2,height,material})
 // Openings are part of the floor plan, not holes patched into collision later.
 export function partition(axis:'x'|'z',at:number,from:number,to:number,gaps:number[][]=[],height=3.5,material='plaster') {
   let edge=from
-  for(const [a,b] of [...gaps,[to,to]]) { if(a>edge) axis==='x'?wall(at-.18,at+.18,edge,a,height,material):wall(edge,a,at-.18,at+.18,height,material); if(b>a){const base=Math.min(3.2,height-.2);lintels.push(axis==='x'?{x1:at-.18,x2:at+.18,z1:a,z2:b,height:height-base,base,material}:{x1:a,x2:b,z1:at-.18,z2:at+.18,height:height-base,base,material})}edge=b }
+  for(const [a,b] of [...gaps,[to,to]]) { if(a>edge) axis==='x'?wall(at-.18,at+.18,edge,a,height,material):wall(edge,a,at-.18,at+.18,height,material); if(b>a){doorways.push({axis,at,from:a,to:b});const base=Math.min(3.2,height-.2);lintels.push(axis==='x'?{x1:at-.18,x2:at+.18,z1:a,z2:b,height:height-base,base,material}:{x1:a,x2:b,z1:at-.18,z2:at+.18,height:height-base,base,material})}edge=b }
 }
 partition('x',-11,-12,8,[[-8,-2],[3,7]],5.5,'travertine')
 partition('x',13,-12,8,[[-7,-2],[3,7]],5.5,'travertine')
@@ -129,6 +133,9 @@ export function footprint(f:Furnishing):Rect {
   return {x1:f.x-dx,x2:f.x+dx,z1:f.z-dz,z2:f.z+dz}
 }
 export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
+  // Decorative planters are physical volumes too. The old navigator ignored them,
+  // so auto-walking could pass straight through pots and their broad fronds.
+  ...architecturalPlanters.map(([x,z])=>({x1:x-.9,x2:x+.9,z1:z-.9,z2:z+.9})),
   {x1:spaTreeBed.cx-spaTreeBed.rx-.15,x2:spaTreeBed.cx+spaTreeBed.rx+.15,z1:spaTreeBed.cz-spaTreeBed.rz-.15,z2:spaTreeBed.cz+spaTreeBed.rz+.15},
   {x1:-20,x2:-12,z1:18,z2:27}, // courtyard planting / fountain
   {x1:-22.8,x2:-21.8,z1:3,z2:13}, // kitchen run
@@ -154,7 +161,7 @@ export const destinations:EstateDestination[]=[
   {name:'Great room',x:7,z:3,yaw:.7,pitch:.065,fov:66,approachLead:7},
   {name:'Pool',x:3,z:-22,yaw:0,pitch:.045,approachLead:8},
   {name:'Courtyard',x:-9,z:24,yaw:1.4,pitch:.035},
-  {name:'Kitchen',x:-12.8,z:10.5,yaw:1.2,pitch:.06,approachLead:6},
+  {name:'Kitchen',x:-12.8,z:10.5,yaw:.84,pitch:.08,fov:65,approachLead:10},
   {name:'Primary suite',x:28,z:-8.5,yaw:-1.35,pitch:.115,fov:63,approachLead:10},
   {name:'Spa',x:-28.5,z:30,yaw:1.4,pitch:.045},
   {name:'Library',x:16,z:17,yaw:Math.PI,pitch:.07,fov:66},
