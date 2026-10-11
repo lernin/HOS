@@ -72,8 +72,46 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   async function beginSound(){try{if(!audio.current)audio.current=estateAudio();audio.current.volume(prefs.volume);await audio.current.play()}catch{setSound(false);setNotice('Sound could not start. You can keep exploring.')}}
   function begin(){stop();input.current.paused=false;setStarted(true);setPaused(false);if(sound)void beginSound()}
   function openSettings(){stop();input.current.paused=true;audio.current?.pause();dialog.current?.showModal()}
-  function goFromMenu(d:(typeof destinations)[number]){if(engine.current?.go(d,d.name)){dialog.current?.close();setHelp(false)}else setNotice('That route is unavailable from here.')}
-  function tourFromMenu(){engine.current?.tour();dialog.current?.close();setHelp(false)}
+  function goFromMenu(d:(typeof destinations)[number]){
+    if(engine.current?.go(d,d.name)){
+      setEditTarget(editTour?d.name:null);dialog.current?.close();setHelp(false)
+    }else setNotice('That route is unavailable from here.')
+  }
+  function tourFromMenu(){
+    if(editTour){
+      const first=destinations[1]
+      if(!engine.current?.go(first,first.name)){setNotice('That tour stop is unavailable from here.');return}
+      setEditTarget(first.name)
+    }else{setEditTarget(null);engine.current?.tour()}
+    dialog.current?.close();setHelp(false)
+  }
+  function nextTourStop(){
+    if(!editTarget)return
+    const index=destinations.findIndex(d=>d.name===editTarget),next=destinations[(index+1)%destinations.length]
+    if(engine.current?.go(next,next.name)){setEditTarget(next.name);setHelp(false)}
+    else setNotice('The next stop is unavailable from here.')
+  }
+  function saveTourView(){
+    if(!editTarget)return
+    if(state.moving||state.destination){setNotice('Stop moving before saving this view.');return}
+    const view=engine.current?.getTourViewpoint()
+    if(!view||!engine.current?.walkable(view)){setNotice('Stand in a clear place before saving.');return}
+    const updated={...tourViews,[editTarget]:view}
+    setTourViews(updated);engine.current?.setTourViews(updated)
+    try{localStorage.setItem(tourStorageKey,JSON.stringify(updated));setNotice(editTarget+' tour view saved on this device.')}
+    catch{setNotice('Saved for this session; device storage is unavailable.')}
+  }
+  function resetTourView(){
+    if(!editTarget)return
+    const updated={...tourViews};delete updated[editTarget]
+    setTourViews(updated);engine.current?.setTourViews(updated)
+    try{localStorage.setItem(tourStorageKey,JSON.stringify(updated));setNotice(editTarget+' restored to the original tour viewpoint.')}
+    catch{setNotice('Original view restored for this session.')}
+  }
+  function toggleEditTour(enabled:boolean){
+    setEditTour(enabled);if(!enabled)setEditTarget(null)
+    try{localStorage.setItem('ocean-estate-edit-tour-v1',enabled?'on':'off')}catch{/* Session still works. */}
+  }
   function openPlan(){
     try{localStorage.setItem('ocean-estate-plan-last-view-v1',JSON.stringify({x:state.position.x,z:state.position.z,yaw:input.current.yaw,at:Date.now()}))}catch{/* Planner still opens without persisted view context. */}
     dialog.current?.close();stop();onPlan()
@@ -141,7 +179,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       <label>Look sensitivity<output>{prefs.sensitivity.toFixed(1)}×</output><input type="range" min=".3" max="2" step=".1" value={prefs.sensitivity} onChange={e=>setPrefs(p=>({...p,sensitivity:+e.target.value}))}/></label>
       <label>Graphics<select aria-label="Graphics" value={prefs.quality} onChange={e=>setPrefs(p=>({...p,quality:+e.target.value}))}><option value={0}>Lighter</option><option value={1}>Balanced</option><option value={2}>Detailed</option></select></label>
       <label>Ocean volume<output>{Math.round(prefs.volume*100)}%</output><input type="range" min="0" max="1" step=".05" value={prefs.volume} onChange={e=>setPrefs(p=>({...p,volume:+e.target.value}))}/></label>
-      <button className="oe-reset" onClick={()=>{engine.current?.reset();dialog.current?.close()}}>Return to the entrance</button><form method="dialog"><button className="oe-primary">Back to exploring ↗</button></form>
+      <button className="oe-reset" onClick={()=>{engine.current?.reset();setEditTarget(null);dialog.current?.close()}}>Return to the entrance</button><form method="dialog"><button className="oe-primary">Back to exploring ↗</button></form>
     </dialog>
   </main>
 }
