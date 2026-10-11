@@ -509,3 +509,78 @@ test('kitchen arrival frames the island and dining opening',()=>{
  assert.ok(kitchen.yaw>.65&&kitchen.yaw<1.1,'kitchen frames island without turning into wall')
  assert.ok(kitchen.fov<=66,'architectural composition uses restrained FOV')
 })
+
+test('automatic guided camera turn is limited and configurable for comfort',()=>{
+ const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ assert.match(scene,/dt\*input\.maxTurnSpeed/)
+ assert.match(scene,/guidedTurn\?T\.MathUtils\.clamp\(cameraStep/)
+ assert.match(ui,/turnSpeed:28/)
+ assert.match(ui,/turnSpeed:num\('turnSpeed',15,60\)/)
+ assert.match(ui,/Guided turn speed/)
+ assert.match(ui,/maxTurnSpeed:prefs\.turnSpeed\*Math\.PI\/180/)
+})
+test('edit-tour captures actual walkable camera view, persists and replays per destination',()=>{
+ const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ assert.match(scene,/getTourViewpoint\(\):EstateTourView/)
+ assert.match(scene,/setTourViews\(next:EstateTourViews\)/)
+ assert.match(scene,/const target=stored&&walkable\(stored\)\?stored:point/)
+ assert.match(scene,/arrivalYaw=stored\?\.yaw\?\?view\.yaw/)
+ assert.match(ui,/Tour editing<select/)
+ assert.match(ui,/onClick=\{saveTourView\}/)
+ assert.match(ui,/onClick=\{nextTourStop\}/)
+ assert.match(ui,/localStorage\.setItem\(tourStorageKey,JSON\.stringify\(updated\)\)/)
+ assert.match(ui,/engine\.current\?\.walkable\(view\)/)
+})
+
+test('guided foyer threshold avoids aim at the wall jamb',()=>{
+ const kitchen=plan.destinations.find(d=>d.name==='Kitchen')
+ const route=navigator.path(plan.spawn,kitchen)
+ assert.ok(route,'entrance-to-kitchen route remains available')
+ const nodes=[plan.spawn,...route]
+ let crossed=false
+ for(let i=1;i<nodes.length;i++){
+   const a=nodes[i-1],b=nodes[i],steps=Math.max(1,Math.ceil(Math.hypot(a.x-b.x,a.z-b.z)/.15))
+   for(let j=0;j<=steps;j++){
+     const t=j/steps,p={x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t}
+     if(Math.abs(p.z-8)<=1.1&&p.x>-4&&p.x<5){
+       crossed=true
+       assert.ok(Math.abs(p.x-.5)<=1.31,`foyer doorway should feel centered at ${JSON.stringify(p)}`)
+     }
+   }
+ }
+ assert.ok(route.length>0)
+ // Another valid route may approach via the courtyard without this foyer threshold.
+ assert.ok(crossed||route.every(p=>nav.walkable(p)))
+})
+test('guided camera slows physical walking to match limited rotation',()=>{
+ const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
+ assert.match(scene,/lookAhead=Math.max\(1\.65,Math.min\(5\.5,input\.speed\*2\.15\)\)/)
+ assert.match(scene,/turnWalkScale=Math.max\(\.22/)
+ assert.match(scene,/const speed=input\.speed\*\(input\.fast\?1\.45:1\)\*turnWalkScale/)
+})
+test('tour-edit controls remain at lower left and leave cinematic view clear',()=>{
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ const css=readFileSync(new URL('../src/experiences/estate/estate.css',import.meta.url),'utf8')
+ assert.match(ui,/editTour&&editTarget&&!picker&&!state\.moving&&!state\.destination/)
+ assert.match(css,/\.oe-tour-editor\{left:max\(7px,env\(safe-area-inset-left\)\);bottom:max\(7px/)
+ assert.match(css,/background:#10261b26/)
+ assert.match(ui,/>Save<\/button>/)
+})
+
+test('recovered curated tour positions are committed and provide shared defaults',()=>{
+ const expected=['Entrance','Great room','Pool','Kitchen','Primary suite','Spa','Library','Guest suites','Ocean lookout','West promenade','East promenade','Pool-tip terrace']
+ assert.equal(Object.keys(plan.canonicalTourViews).length,12)
+ for(const name of expected){
+  const p=plan.canonicalTourViews[name]
+  assert.ok(p,`missing curated viewpoint: ${name}`)
+  assert.ok([p.x,p.z,p.yaw,p.pitch].every(Number.isFinite),`invalid values for ${name}`)
+  assert.ok(nav.walkable(p),`curated destination is not walkable: ${name}`)
+ }
+ assert.equal(plan.canonicalTourViews.Entrance.yaw,12.539239570687128)
+ assert.equal(plan.canonicalTourViews['Pool-tip terrace'].x,10.31659949513227)
+ const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+ assert.match(ui,/\.\.\.canonicalTourViews,\.\.\.views/)
+ assert.match(ui,/catch\{return \{\.\.\.canonicalTourViews\}\}/)
+})

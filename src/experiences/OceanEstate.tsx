@@ -2,23 +2,39 @@ import { useEffect, useRef, useState } from 'react'
 import { createEstate, type EstateInput, type EstateState } from './estate/scene'
 import type { EstateArtChoice } from './estate/art'
 import { estateAudio } from './estate/audio'
-import { destinations, spawn } from './estate/plan'
+import { canonicalTourViews, destinations, spawn, type EstateTourView, type EstateTourViews } from './estate/plan'
 import type { LightPreset } from './estate/environment'
 import { estateEditorMaterials, estateEditorPreview, type EditableRoomId, type EditableSurface } from './estate/editor'
 import { loadEstateMaterialCatalog } from './estate/catalog'
 import './estate/estate.css'
-type Prefs={speed:number;sensitivity:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number}
-const defaults:Prefs={speed:2.4,sensitivity:1,quality:1,lighting:'golden',mode:'explore',volume:.35}
-function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:keyof Prefs,lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:num('speed',1,4) as number,sensitivity:num('sensitivity',.3,2) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number}}catch{return defaults}}
+type Prefs={speed:number;sensitivity:number;turnSpeed:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number}
+const defaults:Prefs={speed:2.4,sensitivity:1,turnSpeed:28,quality:1,lighting:'golden',mode:'explore',volume:.35}
+function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:keyof Prefs,lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:num('speed',1,4) as number,sensitivity:num('sensitivity',.3,2) as number,turnSpeed:num('turnSpeed',15,60) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number}}catch{return defaults}}
 type RoomSelections=Record<EditableRoomId,Record<EditableSurface,string|null>>
 type TouchPoint={side:'left'|'right';x:number;y:number;startX:number;startY:number;dragged:boolean;hadMulti:boolean}
 const selectionDefaults:RoomSelections={foyer:{floor:null,walls:null},'great-room':{floor:null,walls:null}}
 function readSelections():RoomSelections{try{const raw=JSON.parse(localStorage.getItem('ocean-estate-room-materials-v1')||'{}');return {foyer:{...selectionDefaults.foyer,...raw.foyer},'great-room':{...selectionDefaults['great-room'],...raw['great-room']}}}catch{return selectionDefaults}}
 const roomName=(room:EditableRoomId)=>room==='foyer'?'Grand foyer':'Great room'
+const tourStorageKey='ocean-estate-tour-views-v1'
+// Viewpoints persist in this browser; account-wide sync is not yet configured.
+function readTourViews():EstateTourViews{
+  try{
+    const raw:unknown=JSON.parse(localStorage.getItem(tourStorageKey)||'{}')
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return {}
+    const views:EstateTourViews={}
+    for(const [name,item] of Object.entries(raw)){
+      if(!destinations.some(d=>d.name===name)||!item||typeof item!=='object')continue
+      const v=item as Partial<EstateTourView>
+      if([v.x,v.z,v.yaw,v.pitch].every(n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<10000)&&Math.abs(v.pitch!)<=1.05)
+        views[name]={x:v.x!,z:v.z!,yaw:v.yaw!,pitch:v.pitch!}
+    }
+    return {...canonicalTourViews,...views}
+  }catch{return {...canonicalTourViews}}
+}
 const axis=(n:number)=>Math.abs(n)<.12?0:Math.max(-1,Math.min(1,n))
 export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const canvas=useRef<HTMLCanvasElement>(null),engine=useRef<Awaited<ReturnType<typeof createEstate>>|null>(null),audio=useRef<ReturnType<typeof estateAudio>|null>(null),dialog=useRef<HTMLDialogElement>(null)
-  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:2.4,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false})
+  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:2.4,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180})
   const pointer=useRef<{id:number;x:number;y:number;startX:number;startY:number;dragged:boolean}|null>(null),keys=useRef(new Set<string>())
   const touchPointers=useRef(new Map<number,TouchPoint>())
   const lastRightTap=useRef<{time:number;x:number;y:number}|null>(null)
@@ -26,7 +42,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const [prefs,setPrefs]=useState(readPrefs),[ready,setReady]=useState(false),[progress,setProgress]=useState('Opening Ocean Estate…'),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[started,setStarted]=useState(false),[paused,setPaused]=useState(false),[sound,setSound]=useState(false),[notice,setNotice]=useState(''),[help,setHelp]=useState(true),[showLocation,setShowLocation]=useState(true)
   const [state,setState]=useState<EstateState>({location:'Arrival steps',position:spawn,moving:false,destination:'',fps:0,touring:false})
   const [art,setArt]=useState<EstateArtChoice|null>(null),[artInfo,setArtInfo]=useState(false),[artZoom,setArtZoom]=useState(1),[artClosing,setArtClosing]=useState(false)
-  const [editMode,setEditMode]=useState(false),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
+  const [editMode,setEditMode]=useState(false),[editTour,setEditTour]=useState(()=>{try{return localStorage.getItem('ocean-estate-edit-tour-v1')==='on'}catch{return false}}),[editTarget,setEditTarget]=useState<string|null>(null),[tourViews,setTourViews]=useState(readTourViews),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
   const [materialCatalog,setMaterialCatalog]=useState(estateEditorMaterials)
   const [markers,setMarkers]=useState<Record<EditableSurface,{x:number;y:number;visible:boolean}>>({floor:{x:0,y:0,visible:false},walls:{x:0,y:0,visible:false}})
   const clearTouch=()=>{touchPointers.current.clear();input.current.x=0;input.current.z=0;input.current.looking=false}
@@ -35,10 +51,10 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const updateTouchMovement=()=>{const touches=[...touchPointers.current.values()],left=touches.find(t=>t.side==='left'),right=touches.find(t=>t.side==='right');if(!left){input.current.x=0;input.current.z=0;return}input.current.z=axis((left.y-left.startY)/72);input.current.x=right?axis((left.x-left.startX)/72):0}
   function handleWorldTap(x:number,y:number){if(input.current.paused)return;if(editMode){if(picker){if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(picked?.kind==='floor')setHelp(false)}}else{const hit=engine.current?.pickEditSurface(x,y);if(hit){openPicker(hit.room,hit.surface);setHelp(false)}else setNotice('Tap a floor or wall in the Grand foyer or Great room.')}}else if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(!picked)setNotice('Tap a clear spot on the floor or a painting.');else if(picked.kind==='art')enterArt(picked.art);else setHelp(false)}}
   useEffect(()=>{const controller=new AbortController();void loadEstateMaterialCatalog(controller.signal).then(setMaterialCatalog).catch(()=>{});return()=>controller.abort()},[])
-  useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
+  useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress,tourViews).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
   useEffect(()=>{const e=engine.current;if(!e)return;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface])},[materialCatalog])
   useEffect(()=>()=>audio.current?.dispose(),[])
-  useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,quality:prefs.quality,lighting:prefs.lighting});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
+  useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,maxTurnSpeed:prefs.turnSpeed*Math.PI/180,quality:prefs.quality,lighting:prefs.lighting});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
   useEffect(()=>{const pause=()=>{if(artOpen.current)void exitArt();stop();input.current.paused=true;audio.current?.pause();setPaused(true)};const visibility=()=>{if(document.hidden)pause()}
     const key=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(e.type==='keyup')keys.current.delete(k);if(input.current.paused)return;if(e.target instanceof HTMLElement&&['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return
       if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','escape','shift'].includes(k))e.preventDefault();else return
@@ -56,8 +72,57 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   async function beginSound(){try{if(!audio.current)audio.current=estateAudio();audio.current.volume(prefs.volume);await audio.current.play()}catch{setSound(false);setNotice('Sound could not start. You can keep exploring.')}}
   function begin(){stop();input.current.paused=false;setStarted(true);setPaused(false);if(sound)void beginSound()}
   function openSettings(){stop();input.current.paused=true;audio.current?.pause();dialog.current?.showModal()}
-  function goFromMenu(d:(typeof destinations)[number]){if(engine.current?.go(d,d.name)){dialog.current?.close();setHelp(false)}else setNotice('That route is unavailable from here.')}
-  function tourFromMenu(){engine.current?.tour();dialog.current?.close();setHelp(false)}
+  function goFromMenu(d:(typeof destinations)[number]){
+    if(engine.current?.go(d,d.name)){
+      setEditTarget(editTour?d.name:null);dialog.current?.close();setHelp(false)
+    }else setNotice('That route is unavailable from here.')
+  }
+  function tourFromMenu(){
+    if(editTour){
+      const first=destinations[1]
+      if(!engine.current?.go(first,first.name)){setNotice('That tour stop is unavailable from here.');return}
+      setEditTarget(first.name)
+    }else{setEditTarget(null);engine.current?.tour()}
+    dialog.current?.close();setHelp(false)
+  }
+  function nextTourStop(){
+    if(!editTarget)return
+    const index=destinations.findIndex(d=>d.name===editTarget),next=destinations[(index+1)%destinations.length]
+    if(engine.current?.go(next,next.name)){setEditTarget(next.name);setHelp(false)}
+    else setNotice('The next stop is unavailable from here.')
+  }
+  function saveTourView(){
+    if(!editTarget)return
+    if(state.moving||state.destination){setNotice('Stop moving before saving this view.');return}
+    const view=engine.current?.getTourViewpoint()
+    if(!view||!engine.current?.walkable(view)){setNotice('Stand in a clear place before saving.');return}
+    const updated={...tourViews,[editTarget]:view}
+    setTourViews(updated);engine.current?.setTourViews(updated)
+    try{localStorage.setItem(tourStorageKey,JSON.stringify(updated));setNotice(editTarget+' tour view saved on this device.')}
+    catch{setNotice('Saved for this session; device storage is unavailable.')}
+  }
+  function exportTourViews(){
+    const saved=readTourViews()
+    if(!Object.keys(saved).length){setNotice('No saved tour viewpoints found in this browser.');return}
+    const json=JSON.stringify({format:'ocean-estate-tour-views',version:1,viewpoints:saved},null,2)
+    const file=new Blob([json],{type:'application/json'})
+    const url=URL.createObjectURL(file)
+    const link=document.createElement('a')
+    link.href=url;link.download='ocean-estate-tour-views.json';document.body.appendChild(link);link.click();link.remove()
+    setTimeout(()=>URL.revokeObjectURL(url),1000)
+    setNotice(Object.keys(saved).length+' tour viewpoints exported. Keep this file for the shared defaults.')
+  }
+  function resetTourView(){
+    if(!editTarget)return
+    const updated={...tourViews};if(canonicalTourViews[editTarget])updated[editTarget]=canonicalTourViews[editTarget];else delete updated[editTarget]
+    setTourViews(updated);engine.current?.setTourViews(updated)
+    try{localStorage.setItem(tourStorageKey,JSON.stringify(updated));setNotice(editTarget+' restored to the shared tour viewpoint.')}
+    catch{setNotice('Original view restored for this session.')}
+  }
+  function toggleEditTour(enabled:boolean){
+    setEditTour(enabled);if(!enabled)setEditTarget(null)
+    try{localStorage.setItem('ocean-estate-edit-tour-v1',enabled?'on':'off')}catch{/* Session still works. */}
+  }
   function openPlan(){
     try{localStorage.setItem('ocean-estate-plan-last-view-v1',JSON.stringify({x:state.position.x,z:state.position.z,yaw:input.current.yaw,at:Date.now()}))}catch{/* Planner still opens without persisted view context. */}
     dialog.current?.close();stop();onPlan()
@@ -101,6 +166,14 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       {editMode&&<div className="oe-edit-badge"><span>EDIT MODE</span>{activeRoom?<strong>{roomName(activeRoom)} · tap a floor or wall</strong>:<strong>Walk into the foyer or great room</strong>}</div>}
       {editMode&&activeRoom&&!picker&&(['floor','walls'] as EditableSurface[]).map(surface=>{const p=markers[surface];return p.visible?<button key={surface} className={`oe-surface-marker oe-surface-${surface}`} style={{left:p.x,top:p.y}} onClick={()=>openPicker(activeRoom,surface)} aria-label={`Edit ${surface}`}><span>⚙</span><strong>{surface==='floor'?'Floor':'Walls'}</strong></button>:null})}
       {(state.touring||Boolean(state.destination))&&<button className="oe-stop" onClick={stop}>Stop {state.destination?`· ${state.destination}`:''}</button>}
+      {editTour&&editTarget&&!picker&&!state.moving&&!state.destination&&<aside className="oe-tour-editor" aria-label={`Edit tour viewpoint for ${editTarget}`}>
+        <strong className="oe-tour-target" title={`Tour stop: ${editTarget}`}>{editTarget}</strong>
+        <div className="oe-tour-editor-actions">
+          <button type="button" className="oe-tour-save" onClick={saveTourView} aria-label={`Save viewpoint for ${editTarget}`} title="Save this position and camera view">Save</button>
+          <button type="button" onClick={nextTourStop} aria-label="Next tour stop" title="Next tour stop">Next ›</button>
+          {tourViews[editTarget]&&<button type="button" onClick={resetTourView} aria-label="Reset tour viewpoint" title="Restore original viewpoint">↺</button>}
+        </div>
+      </aside>}
     </>}
     {picker&&<section className="oe-material-picker" aria-label={`${roomName(picker.room)} ${picker.surface} materials`}>
       <header><div><span>{roomName(picker.room)}</span><h2>{picker.surface==='floor'?'Floor material':'Main wall material'}</h2></div><button onClick={()=>finishPicker(false)} aria-label="Undo and close">×</button></header>
@@ -116,16 +189,20 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     {notice&&<div className="oe-notice" role="status">{notice}</div>}
     {(!started||paused||error)&&<div className="oe-entry"><section><span className="oe-eyebrow">THE HORIZON RESIDENCE</span><h1>{started&&paused?'Stay a while.':<>A home.<br/>An ocean.<br/>All yours to explore.</>}</h1><p>{error||(started&&paused?'Your walk is paused.':'Warm stone, quiet gardens, and a view that never ends.')}</p>{error?<button className="oe-primary" onClick={()=>{setStarted(false);setPaused(false);setAttempt(n=>n+1)}}>Reopen estate ↗</button>:ready?<button className="oe-primary" onClick={begin}>{started?'Continue exploring':'Step inside'} <span>↗</span></button>:<div className="oe-loading" role="status"><i/>{progress}</div>}<div className="oe-entry-note">Left thumb moves. Right thumb looks. Tap the floor to walk.</div></section></div>}
     <dialog ref={dialog} className="oe-settings" onClose={closeSettings}><form method="dialog"><header><span>YOUR STAY</span><button aria-label="Close settings">×</button></header></form><h2>A little more comfortable.</h2>
-      <section className="oe-menu-section"><h3>Go somewhere</h3><div className="oe-menu-places">{destinations.map((d,i)=><button type="button" className="oe-menu-place" key={d.name} onClick={()=>goFromMenu(d)}><span>{String(i+1).padStart(2,'0')}</span>{d.name}</button>)}</div><button type="button" className="oe-menu-tour" onClick={tourFromMenu}>Take a quiet tour <span>→</span></button><button type="button" className="oe-menu-tour" onClick={openPlan}>Open Estate Plan <span>→</span></button></section>
+      <section className="oe-menu-section"><h3>Go somewhere</h3><div className="oe-menu-places">{destinations.map((d,i)=><button type="button" className="oe-menu-place" key={d.name} onClick={()=>goFromMenu(d)}><span>{String(i+1).padStart(2,'0')}</span>{d.name}</button>)}</div><button type="button" className="oe-menu-tour" onClick={tourFromMenu}>{editTour?'Start editing tour stops':'Take a quiet tour'} <span>→</span></button><button type="button" className="oe-menu-tour" onClick={openPlan}>Open Estate Plan <span>→</span></button></section>
       <div className="oe-menu-sound"><span><strong>Ocean sound</strong><small>Ambient water and coast</small></span><button type="button" onClick={()=>{const next=!sound;setSound(next);if(!next)audio.current?.pause()}}>{sound?'On':'Off'}</button></div>
+      <label>Tour editing<select aria-label="Tour editing" value={editTour?'on':'off'} onChange={e=>toggleEditTour(e.target.value==='on')}><option value="off">Off · enjoy the tour</option><option value="on">On · adjust and save tour stops</option></select></label>
+      {<button type="button" className="oe-tour-export" onClick={exportTourViews}>SAVE YOUR TOUR FOR EVERYONE <span>↓ Export viewpoints</span></button>}
+      {editTour&&<p className="oe-tour-storage-note">Choose a destination or start the tour. At each stop, move and look around, then tap Save viewpoint. Saved stops are remembered on this device.</p>}
       <label>Design editing<select aria-label="Design editing" value={editMode?'on':'off'} onChange={e=>{const on=e.target.value==='on';setEditMode(on);engine.current?.setEditSelection(null,null);setHelp(false)}}><option value="off">Off · just explore</option><option value="on">On · tap walls or floors</option></select></label>
       <label>Light<select aria-label="Light" value={prefs.lighting} onChange={e=>setPrefs(p=>({...p,lighting:e.target.value as LightPreset}))}><option value="daylight">Daylight</option><option value="golden">Golden hour</option><option value="evening">Evening</option></select></label>
       <label>Navigation<select aria-label="Navigation" value={prefs.mode} onChange={e=>setPrefs(p=>({...p,mode:e.target.value as Prefs['mode']}))}><option value="explore">Explore · tap to walk</option><option value="walk">Walk · hold to move</option></select></label>
       <label>Walking pace<output>{prefs.speed.toFixed(1)}</output><input type="range" min="1" max="4" step=".1" value={prefs.speed} onChange={e=>setPrefs(p=>({...p,speed:+e.target.value}))}/></label>
+      <label>Guided turn speed<output>{Math.round(prefs.turnSpeed)}°/s maximum</output><input type="range" min="15" max="60" step="1" value={prefs.turnSpeed} onChange={e=>setPrefs(p=>({...p,turnSpeed:+e.target.value}))}/></label>
       <label>Look sensitivity<output>{prefs.sensitivity.toFixed(1)}×</output><input type="range" min=".3" max="2" step=".1" value={prefs.sensitivity} onChange={e=>setPrefs(p=>({...p,sensitivity:+e.target.value}))}/></label>
       <label>Graphics<select aria-label="Graphics" value={prefs.quality} onChange={e=>setPrefs(p=>({...p,quality:+e.target.value}))}><option value={0}>Lighter</option><option value={1}>Balanced</option><option value={2}>Detailed</option></select></label>
       <label>Ocean volume<output>{Math.round(prefs.volume*100)}%</output><input type="range" min="0" max="1" step=".05" value={prefs.volume} onChange={e=>setPrefs(p=>({...p,volume:+e.target.value}))}/></label>
-      <button className="oe-reset" onClick={()=>{engine.current?.reset();dialog.current?.close()}}>Return to the entrance</button><form method="dialog"><button className="oe-primary">Back to exploring ↗</button></form>
+      <button className="oe-reset" onClick={()=>{engine.current?.reset();setEditTarget(null);dialog.current?.close()}}>Return to the entrance</button><form method="dialog"><button className="oe-primary">Back to exploring ↗</button></form>
     </dialog>
   </main>
 }
