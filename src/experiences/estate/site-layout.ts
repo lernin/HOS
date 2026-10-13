@@ -42,6 +42,19 @@ export const courtyardPlanting = {
   z2: 27,
 }
 
+// Monumental Coastal Arrival (symmetric around x=1): the ceremonial walk
+// remains completely unobstructed. Source shared by rendering and navigation.
+export const arrivalAxis={x:1,z1:31,z2:35.6,width:7.4} as const
+export const arrivalCanopy={x:1,z:27.15,width:18.4,depth:10.1,frontColumns:[-6.3,8.3] as const,columnZ:30.25} as const
+export const arrivalReflectingPools=[
+  {id:'west-reflection',x:-8.6,z:35.35,width:3.4,depth:6.2},
+  {id:'east-reflection',x:10.6,z:35.35,width:3.4,depth:6.2},
+] as const
+export const arrivalGardenBeds=[
+  {id:'west-arrival-garden',x:-13,z:35.8,width:2.15,depth:6.0},
+  {id:'east-arrival-garden',x:15,z:35.8,width:2.15,depth:6.0},
+] as const
+
 export const foyerGardenBeds = [
   { id:'foyer-garden-west', cx:-8.5, cz:11, rx:1.9, rz:2.35 },
   { id:'foyer-garden-east', cx:10.5, cz:11.5, rx:1.8, rz:2.75 },
