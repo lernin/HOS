@@ -69,8 +69,8 @@ export const featureTrees = [
 ] as const
 
 export const featurePalms = [
-  { id:'palm-arrival-west', x:-8, z:28, size:4.2 },
-  { id:'palm-arrival-east', x:10, z:28, size:4.7 },
+  { id:'palm-arrival-west', x:-11, z:28.5, size:4.2 },
+  { id:'palm-arrival-east', x:13, z:28.5, size:4.7 },
   { id:'palm-ocean-west', x:-21, z:-21, size:4 },
   { id:'palm-ocean-east', x:25, z:-22, size:4.8 },
   { id:'palm-garden-west', x:-49, z:36, size:4.5 },
