@@ -59,7 +59,7 @@ export const outlines: PointXZ[][] = [
 ]
 export const islandOutline = curve([
   [-38,-52],[10,-56],[46,-38],[61,-13],[52,8],[42,27],
-  [61,43],[73,68],[69,88],[58,100],[39,99],[22,83],[18,64],
+  [48,40],[54,65],[54,88],[53,102],[37,101],[41,84],[36,67],[24,54],
   [0,57],[-23,56],[-47,42],[-64,20],[-60,-1],[-64,-22],[-55,-39],
 ].map(pt),192)
 
@@ -73,7 +73,7 @@ export function terrainHeight(p: PointXZ): number {
   const d=boundaryDistance(p,islandOutline)
   // Gentle on the beach; dramatic rock faces elsewhere.
   const shoreBlend=smooth(18,34,p.z)*(1-smooth(-18,-4,p.x))
-  const shoreline=.78+(.16-.78)*shoreBlend
+  const shoreline=1.4+(.16-1.4)*shoreBlend
   return Math.min(h,.25+d*shoreline)
 }
 
@@ -251,6 +251,7 @@ export const viewpoints = [
   {id:'roof',label:'Rooftop sky garden',position:{x:63,y:49,z:56},target:{x:8,y:20,z:0}},
   {id:'wing',label:'Floating ocean wing',position:{x:65,y:26,z:25},target:{x:20,y:15,z:-5}},
   {id:'atrium',label:'Grand atrium',position:{x:3,y:10.4,z:13},target:{x:0,y:13.6,z:-9}},
+  {id:'cliff',label:'Cliff promenade',position:{x:94,y:47,z:122},target:{x:36,y:9,z:53}},
   {id:'island',label:'Full island',position:{x:142,y:112,z:185},target:{x:0,y:5,z:25}},
 ] as const
 export const paths: PointXZ[][] = [

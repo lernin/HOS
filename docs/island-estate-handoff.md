@@ -56,7 +56,15 @@ No claim of a second review or final reviewer certification.
 
 ## Next step
 
-Let Ashley inspect the complete building and island on the preview. Prioritize his
-massing/composition feedback. Then finish the known terrain-route/follower issue
-and real-phone controls verification. Merge and production release require separate
-approval. Preview URL and exact commit are recorded in the draft pull request.
+Ashley reviewed the first preview and found the architecture too generic. His
+feedback prioritized sweeping structural form and the exceptional cliff walkway.
+The follow-up pass adds lofted roof ribbons, branching wing supports, and a swept
+promenade with an underside, low parapet, and rock ties. A dedicated Cliff promenade
+camera was added. `npm run export:island-estate` regenerates a portable GLB from
+the same shell geometry as the viewer; the editable shape control points are in
+`sculpture.ts`. The browser and GLB stay driven by the same metre-based layout.
+
+Next: compare the new viewpoints side by side with the original image, then tune
+the primary silhouette. Finish the known terrain-route/follower issue and real-phone
+controls verification after massing is approved. Merge and production release
+require separate approval. Preview URL and exact commit belong in draft PR #204.

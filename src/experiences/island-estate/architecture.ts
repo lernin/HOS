@@ -1,6 +1,7 @@
 import * as T from 'three'
 import { ATRIUM, levels, outlines, pools, circle, stair, stairPoint, landings, glazing, partitions, planters, roofBeds, supports, structuralColumns, pavilionCenter, crownHeight, crownProfile, type PointXZ } from './layout'
 import { type Kit, slabGeometry, surface } from './geometry'
+import { sculpturalShell } from './sculpture'
 
 function perimeter(kit:Kit,p:PointXZ[],y:number,height=1.12,gaps:(p:PointXZ)=>boolean=()=>false) {
   for(let i=0;i<p.length;i++) {
@@ -27,7 +28,7 @@ function shellEdges(kit:Kit,points:PointXZ[],y:number,level:number) {
   const vertices:number[]=[],indices:number[]=[],center={x:0,z:-7},n=points.length
   for(let i=0;i<=n;i++) {
     const p=points[i%n],dx=p.x-center.x,dz=p.z-center.z,len=Math.hypot(dx,dz),a=Math.atan2(dx,dz)
-    const dip=level===2?.35+.9*(.5+.5*Math.sin(a*3+.4)):.3
+    const dip=level===2?.85+1.35*(.5+.5*Math.sin(a*3+.4)):level===1?.55:.3
     const profile=[[.65,y+.07],[.06,y-.04],[-.16,y-.35],[.38,y-.55-dip],[1.25,y-.63]]
     for(const [inset,h] of profile)vertices.push(p.x-dx/len*inset,h,p.z-dz/len*inset)
     if(i){const k=i*5;for(let j=0;j<4;j++)indices.push(k+j-5,k+j,k+j-4,k+j,k+j+1,k+j-4)}
@@ -115,6 +116,7 @@ export function architecture(kit:Kit) {
     shellEdges(kit,outlines[level.id],level.y,level.id)
   }
   for(const support of supports)flowingSupport(kit,support)
+  sculpturalShell(kit)
   for(const {x,z} of structuralColumns) {
     kit.cylinder({x,y:8,z},{x,y:19.7,z},.5,.31,'shell',14)
     kit.sphere({x,y:19.2,z},2.2,.65,2.1,'shell',24)

@@ -2,6 +2,7 @@ import * as T from 'three'
 import { islandOutline, terrainHeight, groundHeight, outlines, contains, boundaryDistance,
   palms, paths, dock, gangwayPoint, planters, roofBeds, circle, type Palm, type WorldPoint } from './layout'
 import { type Kit, ribbon, surface } from './geometry'
+import { cliffPromenade } from './sculpture'
 
 const rand=(seed:number)=>{const a=Math.sin(seed*127.1+58.3)*43758.5453;return a-Math.floor(a)}
 function palm(kit:Kit,p:Palm) {
@@ -87,11 +88,23 @@ export function landscape(kit:Kit) {
     rock(kit,{...inset,y:Math.max(.15,h*.45)},r,r*.9+1,r*.8,i)
     if(i%6===0)rock(kit,{x:p.x*1.05,y:.35,z:(p.z-12)*1.05+12},r*.7,1.1,r*.65,i+71)
   }
-  for(const path of paths) {
+  const cliffSpine=new T.CatmullRomCurve3(paths[1].map(p=>new T.Vector3(p.x,0,p.z)),false,'centripetal')
+  for(let i=0;i<15;i++) {
+    const t=.38+i*.039,p=cliffSpine.getPoint(t),forward=cliffSpine.getTangent(t)
+    const lateral=new T.Vector2(-forward.z,forward.x).normalize()
+    for(const side of [-1,1]) {
+      const q={x:p.x+lateral.x*side*(5.2+rand(i*19+side)*1.5),z:p.z+lateral.y*side*(5.2+rand(i*19+side)*1.5)}
+      if(!contains(q,islandOutline))continue
+      const h=terrainHeight(q)
+      rock(kit,{...q,y:Math.max(.5,h-.7)},2.1+rand(i*7+side)*1.3,2.8+rand(i*9+side)*2.2,2.0+rand(i*11+side)*1.2,600+i*2+side)
+    }
+  }
+  for(const [pathIndex,path] of paths.entries()) {
     const curve=new T.CatmullRomCurve3(path.map(p=>new T.Vector3(p.x,0,p.z)),false,'centripetal')
     const points=curve.getPoints(Math.ceil(curve.getLength()/.8)).map(p=>({x:p.x,z:p.z,y:(groundHeight({x:p.x,z:p.z})??0)+.038}))
     const m=kit.add(ribbon(points,2.4),'stone',{x:0,y:0,z:0},new T.Euler(),true)
     if(m)m.name='Continuous island path'
+    if(pathIndex===1)cliffPromenade(kit,points)
     for(let i=8;i<points.length;i+=12) {
       const p=points[i],a=points[i-1],b=points[i+1]||p,angle=Math.atan2(b.z-a.z,b.x-a.x)
       for(const side of [-1,1]) {
