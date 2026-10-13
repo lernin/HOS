@@ -1,4 +1,4 @@
-import { architecturalPlanters, spaTreeBed, poolWater, poolDeck, poolWalkNorth, poolWalkSouth, outdoorPatios, outdoorStairs, type StairFlight } from './site-layout'
+import { architecturalPlanters, arrivalCanopyColumns, arrivalReflectingBasins, arrivalSpecimenBeds, spaTreeBed, poolWater, poolDeck, poolWalkNorth, poolWalkSouth, outdoorPatios, outdoorStairs, type StairFlight } from './site-layout'
 import { estateRailings } from './railings'
 export type Point = { x: number; z: number }
 export type Rect = { x1: number; x2: number; z1: number; z2: number }
@@ -136,6 +136,11 @@ export const obstacles:Rect[]=[...walls,...glass,...furnishings.map(footprint),
   // Decorative planters are physical volumes too. The old navigator ignored them,
   // so auto-walking could pass straight through pots and their broad fronds.
   ...architecturalPlanters.map(([x,z])=>({x1:x-.9,x2:x+.9,z1:z-.9,z2:z+.9})),
+  // Mirrored exterior water and planted islands are physical landscape, never
+  // an invisible shortcut for the automatic navigator.
+  ...arrivalReflectingBasins.map(b=>({x1:b.x-b.width/2-.13,x2:b.x+b.width/2+.13,z1:b.z-b.depth/2-.13,z2:b.z+b.depth/2+.13})),
+  ...arrivalCanopyColumns.map(p=>({x1:p.x-.86,x2:p.x+.86,z1:p.z-.87,z2:p.z+.87})),
+  ...arrivalSpecimenBeds.map(b=>({x1:b.x-b.radius-.08,x2:b.x+b.radius+.08,z1:b.z-b.radius-.08,z2:b.z+b.radius+.08})),
   {x1:spaTreeBed.cx-spaTreeBed.rx-.15,x2:spaTreeBed.cx+spaTreeBed.rx+.15,z1:spaTreeBed.cz-spaTreeBed.rz-.15,z2:spaTreeBed.cz+spaTreeBed.rz+.15},
   {x1:-20,x2:-12,z1:18,z2:27}, // courtyard planting / fountain
   {x1:-22.8,x2:-21.8,z1:3,z2:13}, // kitchen run
