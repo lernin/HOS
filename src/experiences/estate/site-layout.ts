@@ -76,6 +76,10 @@ export const arrivalCanopyColumns=[
   {id:'arrival-col-west',x:-7.55,z:30.9},
   {id:'arrival-col-east',x:9.55,z:30.9},
 ] as const
+export const arrivalSpecimenBeds=[
+  {id:'arrival-specimen-west',x:-13.2,z:36.7,radius:1.18},
+  {id:'arrival-specimen-east',x:15.2,z:36.7,radius:1.18},
+] as const
 
 export const architecturalPlanters = [
   [-9,-10],[11,-10],[-9,6],[11,6],[25,-10],[38,0],[9,26],[-22,12],[-34,-3],[-27,27],[42,-12],[42,12],[-7,22],
