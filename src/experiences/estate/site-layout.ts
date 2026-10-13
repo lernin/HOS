@@ -64,6 +64,19 @@ export const featurePalms = [
   { id:'palm-garden-east', x:53, z:21, size:4.2 },
 ] as const
 
+// Monumental Coastal Arrival: shared physical footprints for rendering and navigation.
+// The ceremonial axis stays open between x=-3.2 and x=5.2; reflective water and
+// canopy columns occupy only the flanks of the stone forecourt.
+export const arrivalAxis={x:1,walkMinX:-3.2,walkMaxX:5.2,courtLevel:4.8}
+export const arrivalReflectingBasins=[
+  {id:'arrival-reflecting-west',x:-7.7,z:35.1,width:3.8,depth:5.8},
+  {id:'arrival-reflecting-east',x:9.7,z:35.1,width:3.8,depth:5.8},
+] as const
+export const arrivalCanopyColumns=[
+  {id:'arrival-col-west',x:-7.55,z:30.9},
+  {id:'arrival-col-east',x:9.55,z:30.9},
+] as const
+
 export const architecturalPlanters = [
   [-9,-10],[11,-10],[-9,6],[11,6],[25,-10],[38,0],[9,26],[-22,12],[-34,-3],[-27,27],[42,-12],[42,12],[-7,22],
 ] as const satisfies readonly PlanPoint[]
