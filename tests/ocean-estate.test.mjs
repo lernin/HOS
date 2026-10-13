@@ -155,12 +155,17 @@ test('entry portal is grounded and round court edge uses the textured moss-rock 
  assert.equal(rocks.includes('outdoorStairs.some'),true)
 })
 
-test('fill lights use stable selection and eased movement instead of per-frame nearest swapping',()=>{
+test('architectural fixture light positions are fixed independently of camera movement',()=>{
  const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
- assert.equal(scene.includes('fillSelectionOrigin'),true)
- assert.equal(scene.includes('>4){'),true)
- assert.equal(scene.includes('l.position.lerp'),true)
- assert.equal(scene.includes('locations.sort'),false)
+ assert.match(scene,/fixturePositions\.map\(\(\[x,z,height\]\)=>/)
+ assert.match(scene,/light\.position\.set\(x,FLOOR\+height,z\)/)
+ assert.match(scene,/\[1,16,3\.55\]/,'the entrance foyer has its own permanent light')
+ assert.match(scene,/light\.castShadow=false/,'mobile-friendly fixture lights cast no dynamic shadow maps')
+ assert.match(scene,/fills\.forEach\(light=>\{light\.intensity=evening\?48:day\?7:9\}\)/)
+ assert.equal(scene.includes('fillSelection'),false,'camera position cannot reassign fixture lights')
+ assert.equal(scene.includes('fillLocations'),false)
+ assert.equal(scene.includes('lightView'),false)
+ assert.equal(scene.includes('l.position.lerp'),false,'fixture lights may never slide through the building')
 })
 
 
