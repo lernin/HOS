@@ -584,3 +584,34 @@ test('recovered curated tour positions are committed and provide shared defaults
  assert.match(ui,/\.\.\.canonicalTourViews,\.\.\.views/)
  assert.match(ui,/catch\{return \{\.\.\.canonicalTourViews\}\}/)
 })
+
+test('monumental entrance keeps the central ceremonial corridor unblocked',()=>{
+ const axis=site.arrivalAxis
+ const pools=site.arrivalReflectingPools
+ const gardens=site.arrivalGardenBeds
+ assert.equal(pools.length,2)
+ assert.equal(gardens.length,2)
+ assert.equal((pools[0].x+pools[1].x)/2,axis.x,'paired pools flank same approach axis')
+ assert.equal((gardens[0].x+gardens[1].x)/2,axis.x,'specimen gardens balance the approach')
+ for(const p of [...pools,...gardens]){
+  assert.ok(Math.abs(p.x-axis.x)-p.width/2>axis.width/2+.1,`clear pedestrian margin next to ${p.id}`)
+  assert.equal(nav.walkable({x:p.x,z:p.z}),false,`water and planting must be physical obstacles: ${p.id}`)
+ }
+ for(let z=axis.z1+.35;z<=axis.z2;z+=.28)
+  for(const x of [axis.x-1.5,axis.x,axis.x+1.5])
+   assert.ok(nav.walkable({x,z}),`centered grand arrival must be open at (${x},${z})`)
+ const entrance=plan.canonicalTourViews.Entrance
+ assert.ok(nav.walkable(entrance),'preserve saved Entrance view')
+ assert.ok(navigator.path(plan.spawn,entrance),'route to curated Entrance remains available')
+ assert.ok(navigator.path(entrance,plan.destinations.find(p=>p.name==='Kitchen')),'curated Entrance to Kitchen is accessible')
+})
+test('monumental entry has timber soffit, stair lighting and animated reflection',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ assert.match(env,/Monumental Coastal Arrival/)
+ assert.match(env,/arrivalCanopy\.frontColumns/)
+ assert.match(env,/canopyY-\.37/)
+ assert.match(env,/fine recessed brass lighting line/)
+ assert.match(env,/arrivalReflectingPools\.map\(p=>/)
+ assert.match(env,/arrivalWater/)
+ assert.match(env,/arrivalGardenBeds/)
+})
