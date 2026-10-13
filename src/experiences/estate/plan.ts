@@ -38,7 +38,12 @@ export const floors: Floor[] = [
   { name: 'Garage', x1: 27, x2: 40, z1: 40, z2: 51, material: 'concrete', roof: 3.3, use: 'interior' },
   { name: 'Arrival steps', x1: -5, x2: 7, z1: 24, z2: 31, material: 'travertine', use: 'steps' },
   { name: 'Arrival court', x1: -18, x2: 20, z1: 22, z2: 60, material: 'cobblestone', level: 4.8, use: 'arrival' },
-  { name: 'Garden path', x1: -31, x2: -22, z1: 33, z2: 43, material: 'travertine', use: 'patio', planCode: 'P7' },
+  // Wrap the exterior path around (rather than through) the Spa and West gallery.
+  // The former -31..-22 × 33..43 slab lay coplanar on their interior floors,
+  // producing a camera-dependent flashing rectangle in the plan and 3D view.
+  // Together these segments retain every actually exterior part of that path.
+  { name: 'Garden path', x1: -23, x2: -22, z1: 33, z2: 39, material: 'travertine', use: 'patio', planCode: 'P7' },
+  { name: 'Garden path', x1: -31, x2: -22, z1: 39, z2: 43, material: 'travertine', use: 'patio', planCode: 'P7B' },
   ...outdoorPatios.map(f=>({...f,material:'travertine',use:'patio' as const})),
   ...outdoorStairs.map(stair=>({...stair,stair,material:'travertine',use:'steps' as const})),
 ]
