@@ -9,7 +9,7 @@ const railUrl='data:text/javascript;base64,'+Buffer.from(railSource).toString('b
 const planSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/plan.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("'./site-layout'",JSON.stringify(layoutUrl)).replace("'./railings'",JSON.stringify(railUrl))
 const planUrl='data:text/javascript;base64,'+Buffer.from(planSource).toString('base64')
 const navSource=ts.transpileModule(readFileSync(new URL('../src/experiences/estate/navigation.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace("'./plan'",JSON.stringify(planUrl))
-const plan=await import(planUrl),nav=await import('data:text/javascript;base64,'+Buffer.from(navSource).toString('base64'))
+const layout=await import(layoutUrl),plan=await import(planUrl),nav=await import('data:text/javascript;base64,'+Buffer.from(navSource).toString('base64'))
 const navigator=nav.createNavigator()
 test('every first-playable destination is reachable in both directions',()=>{
  for(const d of plan.destinations){assert.equal(nav.walkable(d),true,d.name+' is standable');const path=navigator.path(plan.spawn,d);assert.ok(path,d.name+' reachable from entry');let p=plan.spawn;for(const next of path){assert.ok(nav.clearLine(p,next),d.name+' path segment has clearance');const n=Math.ceil(Math.hypot(next.x-p.x,next.z-p.z)/.07);const dx=(next.x-p.x)/n,dz=(next.z-p.z)/n;for(let i=0;i<n;i++){p=nav.moveSafely(p,dx,dz);assert.ok(nav.walkable(p))}assert.ok(Math.hypot(next.x-p.x,next.z-p.z)<.08,d.name+' reached waypoint')}assert.ok(navigator.path(d,plan.spawn),d.name+' return route')}
@@ -583,4 +583,34 @@ test('recovered curated tour positions are committed and provide shared defaults
  const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
  assert.match(ui,/\.\.\.canonicalTourViews,\.\.\.views/)
  assert.match(ui,/catch\{return \{\.\.\.canonicalTourViews\}\}/)
+})
+
+test('monumental arrival keeps the ceremonial centerline open',()=>{
+ const axis={x:1,z0:31.2,z1:36.15}
+ for(let z=axis.z0;z<=axis.z1;z+=.24)
+  for(const x of [-2.4,-1,1,3,4.4]){
+   assert.ok(nav.walkable({x,z}),`arrival central promenade must be free at ${x}, ${z}`)
+  }
+ const entry={x:1,z:29},forecourt={x:1,z:35.7}
+ assert.ok(navigator.path(entry,forecourt),'entrance-to-forecourt remains navigable')
+ assert.ok(navigator.path(forecourt,entry),'forecourt-to-entrance remains navigable')
+})
+test('monumental arrival water, pier and garden footprints obstruct walking',()=>{
+ for(const basin of layout.arrivalReflectingBasins){
+   assert.equal(nav.walkable({x:basin.x,z:basin.z}),false,basin.id)
+   assert.ok(Math.abs(basin.x-1)>basin.width/2+4,'no basin enters the processional path')
+ }
+ for(const column of layout.arrivalCanopyColumns)
+   assert.equal(nav.walkable({x:column.x,z:column.z}),false,column.id)
+ for(const bed of layout.arrivalSpecimenBeds)
+   assert.equal(nav.walkable({x:bed.x,z:bed.z}),false,bed.id)
+})
+test('monumental coastal arrival renders a substantial roof and true mirrored water',()=>{
+ const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
+ assert.match(env,/MONUMENTAL COASTAL ARRIVAL/)
+ assert.match(env,/20\.2,\.54,11\.0,'travertine'/)
+ assert.match(env,/arrivalReflectingBasins\.map\(basin=>/)
+ assert.match(env,/arrivalPools\]/)
+ assert.match(env,/arrivalCanopyColumns/)
+ assert.match(env,/arrivalSpecimenBeds/)
 })
