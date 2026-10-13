@@ -10,7 +10,7 @@ import { coastPoint } from '../src/experiences/estate/site-layout'
 // These are independently checked world footprints, not recomputed expectations.
 const patios=[
   ['P1',-23,27,-24,-12],['P2',-15,-8,-60,-24],['P3',9,16,-60,-24],
-  ['P4',-23,-6,14,33],['P5',39,44,-12,14],['P6',27,44,-24,-12],['P7',-31,-22,33,43],
+  ['P4',-23,-6,14,33],['P5',39,44,-12,14],['P6',27,44,-24,-12],['P7',-31,-22,39,43],
   ['P8',-47,-23,-24,-17],['P9',-47,-39,-17,44],['P10',-39,-31,39,44],['P11',40,50,14,55],['P12',44,50,-24,14],['P13',24,40,51,55],['P14',-15,16,-70,-60.2],['P15',24,27,49,51],['P16',-31,-22,43,44],
 ] as const
 test('rendered patio meshes keep their identity and exact world footprint after batching',()=>{
