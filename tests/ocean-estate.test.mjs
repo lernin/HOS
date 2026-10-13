@@ -147,8 +147,8 @@ test('arrival court walkability reaches the visible round edge',()=>{
 test('entry portal is grounded and round court edge uses the textured moss-rock system',()=>{
  const env=readFileSync(new URL('../src/experiences/estate/environment.ts',import.meta.url),'utf8')
  const rocks=readFileSync(new URL('../src/experiences/estate/moss-rocks.ts',import.meta.url),'utf8')
- assert.equal(env.includes('Massive stair-side abutments'),true)
- assert.equal(env.includes('supportBase=FLOOR-1.22'),true)
+ assert.equal(env.includes('fluted portico piers land on the arrival court'),true)
+ assert.equal(env.includes('ground=arrivalAxis.courtLevel'),true)
  assert.equal(env.includes('arrival-court boulder edge is now supplied by the textured moss-rock asset system'),true)
  assert.equal(rocks.includes('for(let i=0;i<92;i++)'),true)
  assert.equal(rocks.includes('19.46+wobble'),true)
