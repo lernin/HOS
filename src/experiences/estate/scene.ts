@@ -42,9 +42,27 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
   const sky=new T.Color('#a6c0c5');scene.background=sky;scene.fog=new T.FogExp2(sky,.0018)
   const hemi=new T.HemisphereLight('#c1d7eb','#8f7052',.75);scene.add(hemi)
   const sun=new T.DirectionalLight('#ffe0ad',3.1);sun.position.set(-45,38,-60);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-60,right:60,top:60,bottom:-60,near:1,far:180});sun.shadow.bias=-.00015;sun.shadow.normalBias=.045;scene.add(sun,sun.target)
-  const fills=Array.from({length:3},()=>{const l=new T.PointLight('#ffd395',12,18,2);scene.add(l);return l})
-  const fillLocations:[number,number,number][]= [[-2,-2,3.4],[-17,7,3.1],[32,-4,3.2],[-32,30,2.8],[14,22,3.1],[-32,4,2.7],[27,22,2.8],[36,22,2.8]]
-  let fillSelection=[0,1,4],fillSelectionOrigin={x:999,z:999}
+  // Lights belong to the architecture, never to the viewer.
+  // These fixtures have fixed world positions; every illumination pool remains
+  // stationary even during guided walking, turning, and art inspection.
+  // Keep their shadows disabled and range local for mobile WebGL performance.
+  const fixturePositions:readonly [number,number,number][]=[
+    [1,16,3.55],   // double-height entrance foyer
+    [-2,-2,3.4],   // great room
+    [-17,7,3.1],   // west interior
+    [32,-4,3.2],   // east/primary suite
+    [-32,30,2.8],  // spa
+    [14,22,3.1],   // library
+    [-32,4,2.7],   // west suites
+    [27,22,2.8],   // guest suites
+  ]
+  const fills=fixturePositions.map(([x,z,height])=>{
+    const light=new T.PointLight('#ffd395',8,18,2)
+    light.position.set(x,FLOOR+height,z)
+    light.castShadow=false
+    scene.add(light)
+    return light
+  })
   const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,artInstallation:ReturnType<typeof decorateArt>|undefined,editor:ReturnType<typeof createEstateEditor>|undefined,mossRocks:Awaited<ReturnType<typeof addMossRockSet>>|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
   const raycaster=new T.Raycaster(),hit=new T.Vector3()
   const marker=new T.Mesh(new T.RingGeometry(.17,.24,36),new T.MeshBasicMaterial({color:'#e7d3a6',side:T.DoubleSide,transparent:true,opacity:.85,depthWrite:false}));marker.rotation.x=-Math.PI/2;marker.visible=false;scene.add(marker)
@@ -148,7 +166,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     function resetArtView(){const a=artInspect;if(!a)return 1;a.zoom=1;a.panX=0;a.panY=0;dirty=true;return 1}
     const resize=()=>{const w=canvas.clientWidth,h=canvas.clientHeight;if(w&&h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();dirty=true}}
     observer=new ResizeObserver(resize);observer.observe(canvas);resize()
-    function lighting(){const evening=input.lighting==='evening',day=input.lighting==='daylight';sky.set(evening?'#293c51':day?'#b1ccd8':'#b7c5c4');(scene.fog as T.FogExp2).color.copy(sky);hemi.intensity=evening?.22:day?1:.75;sun.intensity=evening?.07:day?3:3.6;sun.color.set(day?'#fff1db':'#ffe0ad');renderer.toneMappingExposure=evening?1.12:1.06;scene.environmentIntensity=evening?.12:.3;skyDome?.preset(input.lighting);lastShadow={x:999,z:999};renderer.shadowMap.needsUpdate=true;dirty=true}
+    function lighting(){const evening=input.lighting==='evening',day=input.lighting==='daylight';sky.set(evening?'#293c51':day?'#b1ccd8':'#b7c5c4');(scene.fog as T.FogExp2).color.copy(sky);hemi.intensity=evening?.22:day?1:.75;sun.intensity=evening?.07:day?3:3.6;sun.color.set(day?'#fff1db':'#ffe0ad');renderer.toneMappingExposure=evening?1.12:1.06;scene.environmentIntensity=evening?.12:.3;skyDome?.preset(input.lighting);fills.forEach(light=>{light.intensity=evening?48:day?7:9});lastShadow={x:999,z:999};renderer.shadowMap.needsUpdate=true;dirty=true}
     function tick(now:number){if(disposed)return;frame=requestAnimationFrame(tick);const dt=Math.min(.04,(now-last)/1000);last=now
       if(quality!==input.quality){quality=input.quality;renderer.setPixelRatio(Math.min(devicePixelRatio,quality===0?.85:quality===2?1.35:1));renderer.shadowMap.enabled=true;renderer.shadowMap.needsUpdate=true;resize()}
       if(preset!==input.lighting){preset=input.lighting;lighting()}
@@ -216,12 +234,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
         dirty=true
       }else{vx=0;vz=0}
       if(Math.hypot(position.x-lastShadow.x,position.z-lastShadow.z)>12){lastShadow={...position};sun.position.set(-55,input.lighting==='daylight'?70:30,-80);sun.target.position.set(0,6,0);renderer.shadowMap.needsUpdate=true}
-      const lightView=inspectView?.position??artInspect?.stand??position
-      if(Math.hypot(lightView.x-fillSelectionOrigin.x,lightView.z-fillSelectionOrigin.z)>4){
-        fillSelectionOrigin={x:lightView.x,z:lightView.z}
-        fillSelection=fillLocations.map((p,i)=>({i,d:Math.hypot(p[0]-lightView.x,p[1]-lightView.z)})).sort((a,b)=>a.d-b.d).slice(0,3).map(v=>v.i)
-      }
-      fills.forEach((l,i)=>{const p=fillLocations[fillSelection[i]??0],alpha=1-Math.exp(-dt*3.2);l.position.lerp(new T.Vector3(p[0],FLOOR+p[2],p[1]),alpha);l.intensity=input.lighting==='evening'?75:10})
+      // Architectural fixture positions and brightness do not track the camera.
       if(inspectView){camera.position.copy(inspectView.position);camera.lookAt(inspectView.target)}else if(artInspect)updateArtCamera(now)
       if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}
       if(now-lastReport>500){report({location:locationAt(position),moving:!artInspect&&(path.length>0||Math.hypot(vx,vz)>.1),destination:!artInspect&&path.length?destination:'',fps:Math.round(frameCount/((now-lastReport)/1000)),position:{...position},touring:!artInspect&&tour});frameCount=0;lastReport=now}
