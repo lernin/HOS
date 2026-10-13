@@ -1,4 +1,6 @@
-if (window.location.pathname === '/waterfall-village-v2') {
+if (window.location.pathname.replace(/\/$/, '') === '/island-estate') {
+  void import('./island-estate-entry')
+} else if (window.location.pathname === '/waterfall-village-v2') {
   void import('./waterfall-v2-entry')
 } else if (window.location.pathname === '/phonics-swipe') {
   void import('./phonics-swipe-entry')

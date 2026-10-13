@@ -6,6 +6,8 @@
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "rewrites": [
+    { "source": "/island-estate", "destination": "/" },
+    { "source": "/island-estate/", "destination": "/" },
     { "source": "/materials-studio", "destination": "/materials-studio/app.html" },
     { "source": "/ocean-estate", "destination": "/" },
     { "source": "/ocean-estate-plan", "destination": "/" },
