@@ -2,7 +2,7 @@ import * as T from 'three'
 import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR } from './plan'
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
-import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolDeck, poolWater } from './site-layout'
+import { architecturalPlanters, arrivalAxis, arrivalCanopyColumns, arrivalReflectingBasins, arrivalSpecimenBeds, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolDeck, poolWater } from './site-layout'
 import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
 import { slabWithOpening, buildSpaDome, buildSpaTreeBed } from './spa-dome'
 import { buildTreeStudy } from './tree-studies'
@@ -72,24 +72,48 @@ export function architecture(k:EstateKit){
   // Library stair-side foundation: the repaired exterior wall continues visibly down to the lower arrival court.
   k.box(8,FLOOR-.60,26,.50,1.20,4,'travertine',k.root,.045)
   k.box(7.98,FLOOR-.03,26,.58,.16,4.08,'limestone',k.root,.035)
-  // Covered arrival portal: Design Lab study 4, Fluted Stone, scaled to the real stair approach.
-  k.box(1,FLOOR+4,26.6,13,.28,6,'travertine',overhead)
-  const arrivalGround=FLOOR-10*1.2/14,arrivalRoofBottom=FLOOR+4-.14
-  const foundationH=.28,plinthH=.18,capH=.14,shaftBottom=arrivalGround+foundationH+plinthH,shaftTop=arrivalRoofBottom-capH,pillarH=shaftTop-shaftBottom,shaftY=shaftBottom+pillarH/2
-  for(const x of [-5,7]){
-    // Massive stair-side abutments visually carry the portal columns down to the court level.
-    const supportBase=FLOOR-1.22,supportTop=arrivalGround+.34
-    k.box(x,(supportBase+supportTop)/2,29.2,1.72,supportTop-supportBase,1.52,'travertine',k.root,.11)
-    k.box(x,arrivalGround-.02,29.2,1.42,.32,1.28,'limestone',k.root,.075)
-    // Two-stage stone foundation lands visibly on the stair paving.
-    k.box(x,arrivalGround+foundationH/2,29.2,1.06,foundationH,.92,'travertine',k.root,.07)
-    k.box(x,arrivalGround+foundationH+plinthH/2,29.2,.90,plinthH,.80,'limestone',k.root,.045)
-    // The chosen fluted column is deliberately slim relative to the roof span.
-    k.box(x,shaftY,29.2,.82,pillarH,.72,'travertine',k.root,.045)
-    for(const dx of [-.28,-.14,.14,.28])k.box(x+dx,shaftY,29.585,.065,pillarH-.24,.055,'limestone',k.root,.018)
-    k.box(x,shaftY,29.62,.062,pillarH-.55,.05,'glow',k.root,.016)
-    k.box(x,arrivalRoofBottom-capH/2,29.2,.92,capH,.82,'bronze',k.root,.035)
+  // MONUMENTAL COASTAL ARRIVAL — a quiet ceremonial canopy with a deep timber
+  // soffit, limestone fascia and paired fluted piers set OUTSIDE the 12m stairs.
+  // It hangs over the actual front entrance; no new geometry crosses the doors.
+  const canopyCenter=arrivalAxis.x,canopyZ=27.8
+  const roofBottom=FLOOR+4.49
+  k.box(canopyCenter,FLOOR+4.85,canopyZ,20.2,.54,11.0,'travertine',overhead,.06)
+  k.box(canopyCenter,FLOOR+5.18,canopyZ,20.6,.12,11.4,'limestone',overhead)
+  // Inset timber ceiling creates depth without darkening the doorway.
+  k.box(canopyCenter,roofBottom+.055,canopyZ,18.95,.11,9.85,'walnut',overhead)
+  for(let i=0;i<19;i++){
+    const x=-8.2+i*1.02
+    k.box(x,roofBottom-.017,canopyZ,.052,.045,9.5,'oak',overhead)
   }
+  // Bronze reveals catch sunlight; luminous accents provide a warm evening edge.
+  for(const z of [22.52,33.08]){
+    k.box(canopyCenter,FLOOR+4.77,z,19.9,.10,.13,'bronze',overhead)
+    k.box(canopyCenter,FLOOR+4.58,z,18.5,.045,.045,'glow',overhead)
+  }
+  for(const x of [-8.55,10.55])k.box(x,FLOOR+4.62,canopyZ,.085,.06,10.05,'bronze',overhead)
+  // The fluted portico piers land on the arrival court, rather than the
+  // middle of a tread or the natural central walking corridor.
+  for(const support of arrivalCanopyColumns){
+    const {x,z}=support,ground=arrivalAxis.courtLevel
+    k.box(x,ground+.14,z,1.64,.28,1.66,'travertine',k.root,.07)
+    k.box(x,ground+.38,z,1.27,.20,1.27,'limestone',k.root,.045)
+    const bottom=ground+.48,top=roofBottom-.18,height=top-bottom,cy=(top+bottom)/2
+    k.box(x,cy,z,1.02,height,.99,'travertine',k.root,.06)
+    for(const side of [-1,1]){
+      for(const step of [-.27,-.09,.09,.27]){
+        k.box(x+step,cy,z+side*.509,.046,height-.27,.048,'limestone',k.root,.012)
+        k.box(x+side*.509,cy,z+step,.047,height-.27,.046,'limestone',k.root,.012)
+      }
+    }
+    k.box(x,roofBottom-.11,z,1.28,.19,1.29,'bronze',k.root,.03)
+    k.box(x,roofBottom-.26,z+ .515,.74,.033,.037,'glow',k.root)
+  }
+  // The existing pivot doors remain physically untouched. Architectural
+  // highlights lift their proportions without introducing a route obstruction.
+  k.box(1,FLOOR+4.17,23.74,6.15,.13,.25,'bronze',overhead)
+  for(const x of [-2.1,4.1])k.box(x,FLOOR+2.18,23.75,.13,4.35,.17,'travertine',k.root)
+  // Fine inset nosing light makes the long, shallow stair rise legible.
+  for(let i=0;i<14;i++)k.box(1,FLOOR-(i+1)*1.2/14+.006,24+i*.5+.29,11.05,.012,.027,'glow',k.root)
   for(const [x,z] of [[-3,11],[5,11],[-3,21],[5,21]]){k.cylinder(x,FLOOR+.44,z,.22,.88,'travertine');k.ellipsoid(x,FLOOR+1.16,z,.32,.38,.19,'bronze')}
   for(let i=0;i<5;i++){const m=k.mesh(new T.TorusGeometry(1.1+i*.07,.025,6,32),'bronze',1,FLOOR+3.2+i*.12,17);m.rotation.x=1.05+i*.09}
   // Deep terrace edge and concealed waterline conceal intersections with cliffs.
@@ -165,6 +189,36 @@ export function landscape(k:EstateKit){
   k.lathe([[.55,0],[.6,.1],[.25,.7],[.22,.95],[.65,1.02],[.68,1.1],[.15,1.15]],'bronze',-15.6,FLOOR+.6,25)
   k.cylinder(1,4.91,41,4,.2,'travertine',k.root,4,48);k.cylinder(1,5.08,41,3.45,.17,'waterTile',k.root,3.45,48)
   k.lathe([[1.1,0],[1.2,.2],[.6,1],[.45,1.4],[1.1,1.6],[1.15,1.8]],'travertine',1,5.18,41)
+  // A composed, exceptionally legible processional promenade: the court
+  // transitions from cobbled motor court to large stone slabs along a broad axis.
+  const court=arrivalAxis.courtLevel
+  b(arrivalAxis.x,court+.022,33.55,8.45,.044,5.28,'travertine',k.root,.022)
+  for(const x of [arrivalAxis.walkMinX+.12,arrivalAxis.walkMaxX-.12]){
+    b(x,court+.047,33.56,.055,.017,5.12,'bronze',k.root)
+  }
+  for(const z of [31.4,32.72,34.04,35.36])
+    b(arrivalAxis.x,court+.05,z,8.08,.013,.027,'limestone',k.root)
+  // Mirrored narrow reflecting basins: stone-edged water below walking height,
+  // not decorative pools that accidentally turn into unmarked pathways.
+  for(const basin of arrivalReflectingBasins){
+    const {x,z,width,depth}=basin
+    b(x,court+.041,z,width,.082,depth,'limestone',k.root,.045)
+    b(x,court+.090,z,width-.24,.024,depth-.24,'waterTile',k.root,.02)
+    for(const sign of [-1,1]){
+      b(x+sign*(width/2-.075),court+.145,z,.15,.21,depth,'travertine',k.root,.025)
+      b(x,court+.145,z+sign*(depth/2-.075),width-.16,.21,.15,'travertine',k.root,.025)
+    }
+    // Slim bronze perimeter: more elegant than a bulky raised fountain curb.
+    for(const sign of [-1,1]){
+      b(x+sign*(width/2-.15),court+.254,z,.022,.015,depth-.19,'bronze',k.root)
+      b(x,court+.254,z+sign*(depth/2-.15),width-.19,.015,.022,'bronze',k.root)
+    }
+  }
+  // Two restrained planting plinths sit beyond the water, never on the path.
+  for(const bed of arrivalSpecimenBeds){
+    k.cylinder(bed.x,court+.085,bed.z,bed.radius,.17,'travertine',k.root,bed.radius,32)
+    k.cylinder(bed.x,court+.180,bed.z,bed.radius-.16,.035,'soil',k.root,bed.radius-.16,32)
+  }
   // Arrival court is encircled by planted edges, not an exposed square plane.
   for(let i=0;i<48;i++){const a=i/48*Math.PI*2;k.cylinder(1+Math.cos(a)*4.4,5,41+Math.sin(a)*4.4,.18,.18,'leafDark',k.root,.24,6)}
   // The arrival-court boulder edge is now supplied by the textured moss-rock asset system.
@@ -216,6 +270,16 @@ export function landscape(k:EstateKit){
   }
   // Arrival garden pockets replace ambiguous green dead zones with deliberate flowers and grasses.
   for(const [cx,cz,rx,rz] of [[-21,40,3.1,4.8],[22.5,46.5,2.4,2.7]])for(let i=0;i<96;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r,y=terrainHeight(x,z,.68)+.05;if(!unbuilt(x,z,.28))continue;groundcover(x,y,z,.42+rand()*.62);if(i%2===0)grasses(x,y,z,.34+rand()*.6);if(i%3===0)fernPatch(x,y,z,.48+rand()*.64);if(i%2===0)flowerSpray(x,y,z,.5+rand()*.58,100+i)}
+  for(let i=0;i<arrivalSpecimenBeds.length;i++){
+    const bed=arrivalSpecimenBeds[i]
+    tree(bed.x,arrivalAxis.courtLevel+.21,bed.z,.61,i*4+11)
+    for(let j=0;j<14;j++){
+      const angle=j*Math.PI*2/14,r=.65+((j*7)%5)*.043
+      const x=bed.x+Math.cos(angle)*r,z=bed.z+Math.sin(angle)*r
+      if(j%3===0)flowerSpray(x,arrivalAxis.courtLevel+.20,z,.32,300+j)
+      else groundcover(x,arrivalAxis.courtLevel+.20,z,.43)
+    }
+  }
   for(const t of featureTrees){
     if(t.id==='tree-west-arrival')buildTreeStudy(k,{x:t.x,y:t.y,z:t.z,size:t.size,seed:t.seed,form:'airy'})
     else tree(t.x,t.y,t.z,t.size,t.seed)
@@ -287,7 +351,14 @@ export function waters(scene:T.Scene){
   const poolX=(poolWater.x1+poolWater.x2)/2,poolZ=(poolWater.z1+poolWater.z2)/2,poolWidth=poolWater.x2-poolWater.x1,poolDepth=poolWater.z2-poolWater.z1
   const pool=new T.Mesh(new T.PlaneGeometry(poolWidth-.2,poolDepth-.2),poolMat);pool.rotation.x=-Math.PI/2;pool.position.set(poolX,FLOOR-.13,poolZ);scene.add(pool)
   const spa=new T.Mesh(new T.PlaneGeometry(4.7,3.5),poolMat);spa.rotation.x=-Math.PI/2;spa.position.set(-32.5,FLOOR+.03,37);scene.add(spa)
+  const arrivalPools=arrivalReflectingBasins.map(basin=>{
+    const surface=new T.Mesh(new T.PlaneGeometry(basin.width-.31,basin.depth-.31),poolMat)
+    surface.rotation.x=-Math.PI/2
+    surface.position.set(basin.x,arrivalAxis.courtLevel+.145,basin.z)
+    scene.add(surface)
+    return surface
+  })
   // Infinity overflow is a narrow, softly moving lip, not a chrome mirror.
   const lip=new T.Mesh(new T.PlaneGeometry(poolWidth-.2,1.4),poolMat);lip.position.set(poolX,FLOOR-.83,poolWater.z1+.15);scene.add(lip)
-  return {update(t:number,p:LightPreset){for(const m of [water,poolMat]){m.uniforms.time.value=t;m.uniforms.evening.value=p==='evening'?1:0}},dispose(){for(const o of [ocean,pool,spa,lip])o.geometry.dispose();water.dispose();poolMat.dispose()}}
+  return {update(t:number,p:LightPreset){for(const m of [water,poolMat]){m.uniforms.time.value=t;m.uniforms.evening.value=p==='evening'?1:0}},dispose(){for(const o of [ocean,pool,spa,lip,...arrivalPools])o.geometry.dispose();water.dispose();poolMat.dispose()}}
 }
