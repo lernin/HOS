@@ -452,6 +452,7 @@ function App() {
         <span>Choose an experience, then tap Go.</span>
       </section>
       <section className="experience-grid">
+        <article className="experience-card"><span className="experience-icon">Ie</span><span className="experience-copy"><strong>The Island Estate</strong><small>A sculptural white mansion on a private tropical island. Explore three connected levels, the atrium, sky gardens, and floating ocean wings.</small></span><button className="experience-go" onClick={() => { window.location.href = '/island-estate' }}>Go</button></article>
         <article className="experience-card"><span className="experience-icon">Oe</span><span className="experience-copy"><strong>Ocean Estate</strong><small>A warm modern home above the ocean. Tap to walk through the house, gardens, and terraces.</small></span><button className="experience-go" onClick={() => navigate('ocean-estate')}>Go</button></article>
         <article className="experience-card"><span className="experience-icon">Wv</span><span className="experience-copy"><strong>Waterfall Village</strong><small>Climb a treehouse, step inside cosy cottages, and row through the valley to the lake.</small></span><button className="experience-go" onClick={() => navigate('waterfall-village')}>Go</button></article>
         <article className="experience-card">
