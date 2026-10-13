@@ -2,7 +2,7 @@ import * as T from 'three'
 import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR } from './plan'
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
-import { architecturalPlanters, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolDeck, poolWater } from './site-layout'
+import { architecturalPlanters, arrivalAxis, arrivalCanopyColumns, arrivalReflectingBasins, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolDeck, poolWater } from './site-layout'
 import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
 import { slabWithOpening, buildSpaDome, buildSpaTreeBed } from './spa-dome'
 import { buildTreeStudy } from './tree-studies'
@@ -72,24 +72,48 @@ export function architecture(k:EstateKit){
   // Library stair-side foundation: the repaired exterior wall continues visibly down to the lower arrival court.
   k.box(8,FLOOR-.60,26,.50,1.20,4,'travertine',k.root,.045)
   k.box(7.98,FLOOR-.03,26,.58,.16,4.08,'limestone',k.root,.035)
-  // Covered arrival portal: Design Lab study 4, Fluted Stone, scaled to the real stair approach.
-  k.box(1,FLOOR+4,26.6,13,.28,6,'travertine',overhead)
-  const arrivalGround=FLOOR-10*1.2/14,arrivalRoofBottom=FLOOR+4-.14
-  const foundationH=.28,plinthH=.18,capH=.14,shaftBottom=arrivalGround+foundationH+plinthH,shaftTop=arrivalRoofBottom-capH,pillarH=shaftTop-shaftBottom,shaftY=shaftBottom+pillarH/2
-  for(const x of [-5,7]){
-    // Massive stair-side abutments visually carry the portal columns down to the court level.
-    const supportBase=FLOOR-1.22,supportTop=arrivalGround+.34
-    k.box(x,(supportBase+supportTop)/2,29.2,1.72,supportTop-supportBase,1.52,'travertine',k.root,.11)
-    k.box(x,arrivalGround-.02,29.2,1.42,.32,1.28,'limestone',k.root,.075)
-    // Two-stage stone foundation lands visibly on the stair paving.
-    k.box(x,arrivalGround+foundationH/2,29.2,1.06,foundationH,.92,'travertine',k.root,.07)
-    k.box(x,arrivalGround+foundationH+plinthH/2,29.2,.90,plinthH,.80,'limestone',k.root,.045)
-    // The chosen fluted column is deliberately slim relative to the roof span.
-    k.box(x,shaftY,29.2,.82,pillarH,.72,'travertine',k.root,.045)
-    for(const dx of [-.28,-.14,.14,.28])k.box(x+dx,shaftY,29.585,.065,pillarH-.24,.055,'limestone',k.root,.018)
-    k.box(x,shaftY,29.62,.062,pillarH-.55,.05,'glow',k.root,.016)
-    k.box(x,arrivalRoofBottom-capH/2,29.2,.92,capH,.82,'bronze',k.root,.035)
+  // MONUMENTAL COASTAL ARRIVAL — a quiet ceremonial canopy with a deep timber
+  // soffit, limestone fascia and paired fluted piers set OUTSIDE the 12m stairs.
+  // It hangs over the actual front entrance; no new geometry crosses the doors.
+  const canopyCenter=arrivalAxis.x,canopyZ=27.8
+  const roofBottom=FLOOR+4.49
+  k.box(canopyCenter,FLOOR+4.85,canopyZ,20.2,.54,11.0,'travertine',overhead,.06)
+  k.box(canopyCenter,FLOOR+5.18,canopyZ,20.6,.12,11.4,'limestone',overhead)
+  // Inset timber ceiling creates depth without darkening the doorway.
+  k.box(canopyCenter,roofBottom+.055,canopyZ,18.95,.11,9.85,'walnut',overhead)
+  for(let i=0;i<19;i++){
+    const x=-8.2+i*1.02
+    k.box(x,roofBottom-.017,canopyZ,.052,.045,9.5,'oak',overhead)
   }
+  // Bronze reveals catch sunlight; luminous accents provide a warm evening edge.
+  for(const z of [22.52,33.08]){
+    k.box(canopyCenter,FLOOR+4.77,z,19.9,.10,.13,'bronze',overhead)
+    k.box(canopyCenter,FLOOR+4.58,z,18.5,.045,.045,'glow',overhead)
+  }
+  for(const x of [-8.55,10.55])k.box(x,FLOOR+4.62,canopyZ,.085,.06,10.05,'bronze',overhead)
+  // The fluted portico piers land on the arrival court, rather than the
+  // middle of a tread or the natural central walking corridor.
+  for(const support of arrivalCanopyColumns){
+    const {x,z}=support,ground=arrivalAxis.courtLevel
+    k.box(x,ground+.14,z,1.64,.28,1.66,'travertine',k.root,.07)
+    k.box(x,ground+.38,z,1.27,.20,1.27,'limestone',k.root,.045)
+    const bottom=ground+.48,top=roofBottom-.18,height=top-bottom,cy=(top+bottom)/2
+    k.box(x,cy,z,1.02,height,.99,'travertine',k.root,.06)
+    for(const side of [-1,1]){
+      for(const step of [-.27,-.09,.09,.27]){
+        k.box(x+step,cy,z+side*.509,.046,height-.27,.048,'limestone',k.root,.012)
+        k.box(x+side*.509,cy,z+step,.047,height-.27,.046,'limestone',k.root,.012)
+      }
+    }
+    k.box(x,roofBottom-.11,z,1.28,.19,1.29,'bronze',k.root,.03)
+    k.box(x,roofBottom-.26,z+ .515,.74,.033,.037,'glow',k.root)
+  }
+  // The existing pivot doors remain physically untouched. Architectural
+  // highlights lift their proportions without introducing a route obstruction.
+  k.box(1,FLOOR+4.17,23.74,6.15,.13,.25,'bronze',overhead)
+  for(const x of [-2.1,4.1])k.box(x,FLOOR+2.18,23.75,.13,4.35,.17,'travertine',k.root)
+  // Fine inset nosing light makes the long, shallow stair rise legible.
+  for(let i=0;i<14;i++)k.box(1,FLOOR-(i+1)*1.2/14+.006,24+i*.5+.29,11.05,.012,.027,'glow',k.root)
   for(const [x,z] of [[-3,11],[5,11],[-3,21],[5,21]]){k.cylinder(x,FLOOR+.44,z,.22,.88,'travertine');k.ellipsoid(x,FLOOR+1.16,z,.32,.38,.19,'bronze')}
   for(let i=0;i<5;i++){const m=k.mesh(new T.TorusGeometry(1.1+i*.07,.025,6,32),'bronze',1,FLOOR+3.2+i*.12,17);m.rotation.x=1.05+i*.09}
   // Deep terrace edge and concealed waterline conceal intersections with cliffs.
