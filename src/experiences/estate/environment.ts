@@ -351,7 +351,14 @@ export function waters(scene:T.Scene){
   const poolX=(poolWater.x1+poolWater.x2)/2,poolZ=(poolWater.z1+poolWater.z2)/2,poolWidth=poolWater.x2-poolWater.x1,poolDepth=poolWater.z2-poolWater.z1
   const pool=new T.Mesh(new T.PlaneGeometry(poolWidth-.2,poolDepth-.2),poolMat);pool.rotation.x=-Math.PI/2;pool.position.set(poolX,FLOOR-.13,poolZ);scene.add(pool)
   const spa=new T.Mesh(new T.PlaneGeometry(4.7,3.5),poolMat);spa.rotation.x=-Math.PI/2;spa.position.set(-32.5,FLOOR+.03,37);scene.add(spa)
+  const arrivalPools=arrivalReflectingBasins.map(basin=>{
+    const surface=new T.Mesh(new T.PlaneGeometry(basin.width-.31,basin.depth-.31),poolMat)
+    surface.rotation.x=-Math.PI/2
+    surface.position.set(basin.x,arrivalAxis.courtLevel+.145,basin.z)
+    scene.add(surface)
+    return surface
+  })
   // Infinity overflow is a narrow, softly moving lip, not a chrome mirror.
   const lip=new T.Mesh(new T.PlaneGeometry(poolWidth-.2,1.4),poolMat);lip.position.set(poolX,FLOOR-.83,poolWater.z1+.15);scene.add(lip)
-  return {update(t:number,p:LightPreset){for(const m of [water,poolMat]){m.uniforms.time.value=t;m.uniforms.evening.value=p==='evening'?1:0}},dispose(){for(const o of [ocean,pool,spa,lip])o.geometry.dispose();water.dispose();poolMat.dispose()}}
+  return {update(t:number,p:LightPreset){for(const m of [water,poolMat]){m.uniforms.time.value=t;m.uniforms.evening.value=p==='evening'?1:0}},dispose(){for(const o of [ocean,pool,spa,lip,...arrivalPools])o.geometry.dispose();water.dispose();poolMat.dispose()}}
 }
