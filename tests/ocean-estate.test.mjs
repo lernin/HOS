@@ -155,12 +155,17 @@ test('entry portal is grounded and round court edge uses the textured moss-rock 
  assert.equal(rocks.includes('outdoorStairs.some'),true)
 })
 
-test('fill lights use stable selection and eased movement instead of per-frame nearest swapping',()=>{
+test('architectural fixture light positions are fixed independently of camera movement',()=>{
  const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
- assert.equal(scene.includes('fillSelectionOrigin'),true)
- assert.equal(scene.includes('>4){'),true)
- assert.equal(scene.includes('l.position.lerp'),true)
- assert.equal(scene.includes('locations.sort'),false)
+ assert.match(scene,/fixturePositions\.map\(\(\[x,z,height\]\)=>/)
+ assert.match(scene,/light\.position\.set\(x,FLOOR\+height,z\)/)
+ assert.match(scene,/\[1,16,3\.55\]/,'the entrance foyer has its own permanent light')
+ assert.match(scene,/light\.castShadow=false/,'mobile-friendly fixture lights cast no dynamic shadow maps')
+ assert.match(scene,/fills\.forEach\(light=>\{light\.intensity=evening\?48:day\?7:9\}\)/)
+ assert.equal(scene.includes('fillSelection'),false,'camera position cannot reassign fixture lights')
+ assert.equal(scene.includes('fillLocations'),false)
+ assert.equal(scene.includes('lightView'),false)
+ assert.equal(scene.includes('l.position.lerp'),false,'fixture lights may never slide through the building')
 })
 
 
@@ -583,4 +588,21 @@ test('recovered curated tour positions are committed and provide shared defaults
  const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
  assert.match(ui,/\.\.\.canonicalTourViews,\.\.\.views/)
  assert.match(ui,/catch\{return \{\.\.\.canonicalTourViews\}\}/)
+})
+
+test('west gallery exterior paving never overlaps interior floor planes',()=>{
+ const path=plan.floors.filter(f=>f.name==='Garden path')
+ const rooms=plan.floors.filter(f=>['Wellness & spa','West gallery'].includes(f.name))
+ assert.equal(path.length,1,'Garden path is restricted to its full-width exterior landing')
+ for(const p of path)for(const room of rooms){
+  const overlapWidth=Math.max(0,Math.min(p.x2,room.x2)-Math.max(p.x1,room.x1))
+  const overlapDepth=Math.max(0,Math.min(p.z2,room.z2)-Math.max(p.z1,room.z1))
+  assert.equal(overlapWidth*overlapDepth,0,`coplanar floor z-fighting at ${p.planCode} vs ${room.name}`)
+ }
+ const flicker={x:-25,z:37}
+ assert.equal(plan.locationAt(flicker),'West gallery','marked patch belongs to interior gallery only')
+ assert.ok(nav.walkable(flicker),'repair does not remove indoor walking')
+ for(const pt of [{x:-24,z:40},{x:-29,z:40}]){
+  assert.ok(nav.walkable(pt),`exterior path remains continuous at ${JSON.stringify(pt)}`)
+ }
 })
