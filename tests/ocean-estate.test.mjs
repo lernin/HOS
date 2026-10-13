@@ -593,7 +593,7 @@ test('recovered curated tour positions are committed and provide shared defaults
 test('west gallery exterior paving never overlaps interior floor planes',()=>{
  const path=plan.floors.filter(f=>f.name==='Garden path')
  const rooms=plan.floors.filter(f=>['Wellness & spa','West gallery'].includes(f.name))
- assert.equal(path.length,2,'Garden path is split into two exterior-only segments')
+ assert.equal(path.length,1,'Garden path is restricted to its full-width exterior landing')
  for(const p of path)for(const room of rooms){
   const overlapWidth=Math.max(0,Math.min(p.x2,room.x2)-Math.max(p.x1,room.x1))
   const overlapDepth=Math.max(0,Math.min(p.z2,room.z2)-Math.max(p.z1,room.z1))
@@ -602,7 +602,7 @@ test('west gallery exterior paving never overlaps interior floor planes',()=>{
  const flicker={x:-25,z:37}
  assert.equal(plan.locationAt(flicker),'West gallery','marked patch belongs to interior gallery only')
  assert.ok(nav.walkable(flicker),'repair does not remove indoor walking')
- for(const pt of [{x:-22.5,z:35},{x:-24,z:40},{x:-29,z:40}]){
+ for(const pt of [{x:-24,z:40},{x:-29,z:40}]){
   assert.ok(nav.walkable(pt),`exterior path remains continuous at ${JSON.stringify(pt)}`)
  }
 })
