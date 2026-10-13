@@ -2,7 +2,7 @@ import * as T from 'three'
 import { floors, walls, glass, lintels, furnishings, footprint, contains, FLOOR } from './plan'
 import { type EstateKit, random, v } from './kit'
 import { estateRailings, RAIL_BASE, RAIL_POST, RAIL_CAP_OVERHANG } from './railings'
-import { architecturalPlanters, arrivalAxis, arrivalCanopyColumns, arrivalReflectingBasins, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolDeck, poolWater } from './site-layout'
+import { architecturalPlanters, arrivalAxis, arrivalCanopyColumns, arrivalReflectingBasins, arrivalSpecimenBeds, coastEdgeScale, coastZ, courtyardPlanting, featurePalms, featureTrees, foyerGardenBeds, poolDeck, poolWater } from './site-layout'
 import { spaDome, spaTreeBed, poolWalkNorth, poolWalkSouth } from './site-layout'
 import { slabWithOpening, buildSpaDome, buildSpaTreeBed } from './spa-dome'
 import { buildTreeStudy } from './tree-studies'
@@ -189,6 +189,36 @@ export function landscape(k:EstateKit){
   k.lathe([[.55,0],[.6,.1],[.25,.7],[.22,.95],[.65,1.02],[.68,1.1],[.15,1.15]],'bronze',-15.6,FLOOR+.6,25)
   k.cylinder(1,4.91,41,4,.2,'travertine',k.root,4,48);k.cylinder(1,5.08,41,3.45,.17,'waterTile',k.root,3.45,48)
   k.lathe([[1.1,0],[1.2,.2],[.6,1],[.45,1.4],[1.1,1.6],[1.15,1.8]],'travertine',1,5.18,41)
+  // A composed, exceptionally legible processional promenade: the court
+  // transitions from cobbled motor court to large stone slabs along a broad axis.
+  const court=arrivalAxis.courtLevel
+  b(arrivalAxis.x,court+.022,33.55,8.45,.044,5.28,'travertine',k.root,.022)
+  for(const x of [arrivalAxis.walkMinX+.12,arrivalAxis.walkMaxX-.12]){
+    b(x,court+.047,33.56,.055,.017,5.12,'bronze',k.root)
+  }
+  for(const z of [31.4,32.72,34.04,35.36])
+    b(arrivalAxis.x,court+.05,z,8.08,.013,.027,'limestone',k.root)
+  // Mirrored narrow reflecting basins: stone-edged water below walking height,
+  // not decorative pools that accidentally turn into unmarked pathways.
+  for(const basin of arrivalReflectingBasins){
+    const {x,z,width,depth}=basin
+    b(x,court+.041,z,width,.082,depth,'limestone',k.root,.045)
+    b(x,court+.090,z,width-.24,.024,depth-.24,'waterTile',k.root,.02)
+    for(const sign of [-1,1]){
+      b(x+sign*(width/2-.075),court+.145,z,.15,.21,depth,'travertine',k.root,.025)
+      b(x,court+.145,z+sign*(depth/2-.075),width-.16,.21,.15,'travertine',k.root,.025)
+    }
+    // Slim bronze perimeter: more elegant than a bulky raised fountain curb.
+    for(const sign of [-1,1]){
+      b(x+sign*(width/2-.15),court+.254,z,.022,.015,depth-.19,'bronze',k.root)
+      b(x,court+.254,z+sign*(depth/2-.15),width-.19,.015,.022,'bronze',k.root)
+    }
+  }
+  // Two restrained planting plinths sit beyond the water, never on the path.
+  for(const bed of arrivalSpecimenBeds){
+    k.cylinder(bed.x,court+.085,bed.z,bed.radius,.17,'travertine',k.root,bed.radius,32)
+    k.cylinder(bed.x,court+.180,bed.z,bed.radius-.16,.035,'soil',k.root,bed.radius-.16,32)
+  }
   // Arrival court is encircled by planted edges, not an exposed square plane.
   for(let i=0;i<48;i++){const a=i/48*Math.PI*2;k.cylinder(1+Math.cos(a)*4.4,5,41+Math.sin(a)*4.4,.18,.18,'leafDark',k.root,.24,6)}
   // The arrival-court boulder edge is now supplied by the textured moss-rock asset system.
@@ -240,6 +270,16 @@ export function landscape(k:EstateKit){
   }
   // Arrival garden pockets replace ambiguous green dead zones with deliberate flowers and grasses.
   for(const [cx,cz,rx,rz] of [[-21,40,3.1,4.8],[22.5,46.5,2.4,2.7]])for(let i=0;i<96;i++){const a=rand()*Math.PI*2,r=Math.sqrt(rand()),x=cx+Math.cos(a)*rx*r,z=cz+Math.sin(a)*rz*r,y=terrainHeight(x,z,.68)+.05;if(!unbuilt(x,z,.28))continue;groundcover(x,y,z,.42+rand()*.62);if(i%2===0)grasses(x,y,z,.34+rand()*.6);if(i%3===0)fernPatch(x,y,z,.48+rand()*.64);if(i%2===0)flowerSpray(x,y,z,.5+rand()*.58,100+i)}
+  for(let i=0;i<arrivalSpecimenBeds.length;i++){
+    const bed=arrivalSpecimenBeds[i]
+    tree(bed.x,arrivalAxis.courtLevel+.21,bed.z,.61,i*4+11)
+    for(let j=0;j<14;j++){
+      const angle=j*Math.PI*2/14,r=.65+((j*7)%5)*.043
+      const x=bed.x+Math.cos(angle)*r,z=bed.z+Math.sin(angle)*r
+      if(j%3===0)flowerSpray(x,arrivalAxis.courtLevel+.20,z,.32,300+j)
+      else groundcover(x,arrivalAxis.courtLevel+.20,z,.43)
+    }
+  }
   for(const t of featureTrees){
     if(t.id==='tree-west-arrival')buildTreeStudy(k,{x:t.x,y:t.y,z:t.z,size:t.size,seed:t.seed,form:'airy'})
     else tree(t.x,t.y,t.z,t.size,t.seed)
