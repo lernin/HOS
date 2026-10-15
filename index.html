@@ -118,6 +118,31 @@
         setTimeout(addTimerCard, 0);
       })();
 
+      // Procedia Word Writing Lab is a separate production application. Surface a
+      // sibling experiment card in The Lab's real hub, without duplicating its code.
+      (() => {
+        const addWritingLabCard = () => {
+          const grid = document.querySelector('.experience-grid');
+          if (!grid || document.getElementById('word-writing-hub-card')) return;
+
+          const card = document.createElement('article');
+          card.className = 'experience-card';
+          card.id = 'word-writing-hub-card';
+          card.innerHTML = '<span class="experience-icon">W</span><span class="experience-copy"><strong>Word Writing Lab</strong><small>Explore 27 writing exercises, inspect each card, and review the activity matrix.</small></span><button class="experience-go" type="button">Go</button>';
+          card.querySelector('button')?.addEventListener('click', () => {
+            window.location.href = 'https://procedia-two.vercel.app/lab/writing';
+          });
+
+          const musicCard = Array.from(grid.querySelectorAll('.experience-card')).find(el => el.textContent?.includes('Music Discovery'));
+          if (musicCard) musicCard.after(card); else grid.append(card);
+        };
+
+        const root = document.getElementById('root');
+        if (root) new MutationObserver(addWritingLabCard).observe(root, { childList: true, subtree: true });
+        window.addEventListener('popstate', () => setTimeout(addWritingLabCard, 0));
+        setTimeout(addWritingLabCard, 0);
+      })();
+
       // Phonics is a standalone letter-card page. Sibling Lab card only.
       (() => {
         const addPhonicsCard = () => {
