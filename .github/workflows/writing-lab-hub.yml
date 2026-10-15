@@ -1,0 +1,29 @@
+name: Writing Lab hub link
+on:
+  pull_request:
+    paths:
+      - index.html
+      - tests/writing-lab-hub.test.mjs
+      - .github/workflows/writing-lab-hub.yml
+  push:
+    branches:
+      - fix/add-writing-lab-to-hos-hub-20261015
+    paths:
+      - index.html
+      - tests/writing-lab-hub.test.mjs
+      - .github/workflows/writing-lab-hub.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/writing-lab-hub.test.mjs
+      - run: npm run build
