@@ -1,6 +1,6 @@
-import { rpc } from '../db.ts'
-import { downloadPreview } from '../drive.ts'
-import { cleanDetail, json, pins } from '../http.ts'
+import { rpc } from '../db.js'
+import { downloadPreview } from '../drive.js'
+import { cleanDetail, json, pins } from '../http.js'
 
 export default {
   async fetch(request: Request) {

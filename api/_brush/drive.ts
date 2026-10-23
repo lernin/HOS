@@ -1,5 +1,5 @@
 import { createSign } from 'node:crypto'
-import { cleanDetail } from './http.ts'
+import { cleanDetail } from './http.js'
 
 // Trash is a database flag. This module lists, reads, and uploads. It does not
 // delete Drive files or change their parents.

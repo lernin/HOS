@@ -1,6 +1,6 @@
-import { rpc } from '../db.ts'
-import { cleanDetail, json, pins } from '../http.ts'
-import { getThumb } from '../storage.ts'
+import { rpc } from '../db.js'
+import { cleanDetail, json, pins } from '../http.js'
+import { getThumb } from '../storage.js'
 
 export default {
   async fetch(request: Request) {

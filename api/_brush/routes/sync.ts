@@ -1,7 +1,7 @@
-import { countryFromPath, fileStem, filenameAttributes, seriesFromName } from '../../../src/experiences/brush/names.ts'
-import { rpc } from '../db.ts'
-import { driveFolderId, isFolder, isImage, isSidecar, listChildren, readSidecar } from '../drive.ts'
-import { cleanDetail, json, pins } from '../http.ts'
+import { countryFromPath, fileStem, filenameAttributes, seriesFromName } from '../../../src/experiences/brush/names.js'
+import { rpc } from '../db.js'
+import { driveFolderId, isFolder, isImage, isSidecar, listChildren, readSidecar } from '../drive.js'
+import { cleanDetail, json, pins } from '../http.js'
 
 type Job = { id: string, path: string, pageToken?: string }
 type ImagePayload = {

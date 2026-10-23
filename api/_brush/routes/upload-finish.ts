@@ -1,7 +1,7 @@
-import { rpc } from '../db.ts'
-import { uploadsFile } from '../drive.ts'
-import { cleanDetail, json, pins } from '../http.ts'
-import { putThumb } from '../storage.ts'
+import { rpc } from '../db.js'
+import { uploadsFile } from '../drive.js'
+import { cleanDetail, json, pins } from '../http.js'
+import { putThumb } from '../storage.js'
 
 const MAX_THUMB = 2 * 1024 * 1024
 

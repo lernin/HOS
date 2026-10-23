@@ -1,6 +1,6 @@
-import { forwardUploadChunk } from '../drive.ts'
-import { cleanDetail, json, pins } from '../http.ts'
-import { rpc } from '../db.ts'
+import { forwardUploadChunk } from '../drive.js'
+import { cleanDetail, json, pins } from '../http.js'
+import { rpc } from '../db.js'
 
 const MAX_CHUNK = 4 * 1024 * 1024
 const ALIGN = 256 * 1024
