@@ -1,8 +1,6 @@
-import { forwardUploadChunk } from './_brush/drive.ts'
-import { cleanDetail, json, pins } from './_brush/http.ts'
-import { rpc } from './_brush/db.ts'
-
-export const maxDuration = 60
+import { forwardUploadChunk } from '../drive.ts'
+import { cleanDetail, json, pins } from '../http.ts'
+import { rpc } from '../db.ts'
 
 const MAX_CHUNK = 4 * 1024 * 1024
 const ALIGN = 256 * 1024

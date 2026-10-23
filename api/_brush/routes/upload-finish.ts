@@ -1,9 +1,7 @@
-import { rpc } from './_brush/db.ts'
-import { uploadsFile } from './_brush/drive.ts'
-import { cleanDetail, json, pins } from './_brush/http.ts'
-import { putThumb } from './_brush/storage.ts'
-
-export const maxDuration = 60
+import { rpc } from '../db.ts'
+import { uploadsFile } from '../drive.ts'
+import { cleanDetail, json, pins } from '../http.ts'
+import { putThumb } from '../storage.ts'
 
 const MAX_THUMB = 2 * 1024 * 1024
 

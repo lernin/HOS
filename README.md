@@ -72,3 +72,5 @@ x-brush-pin: YOUR_BRUSH_PIN
 `source` may be `scout` or `admin`. The same call exists as `select public.brush_suggest_tag(...)`.
 
 Schema and functions live in `supabase/migrations/20261023140000_brush_beauty_contest.sql`, `supabase/migrations/20261023163000_brush_upload_originals.sql`, and `supabase/migrations/20261023164500_brush_register_upload_qualify.sql` on the Procedia project. Tables use the `brush_` prefix, row level security is on, and the browser reaches them only through the PIN-checked functions. The `brush-thumbs` bucket is private. Only the service role writes or reads it, through the upload and preview routes.
+
+Those HTTP routes are one Vercel function, `api/brush.ts`. Rewrites keep `/api/brush-sync`, `/api/brush-upload`, `/api/brush-upload-session`, `/api/brush-upload-chunk`, `/api/brush-upload-finish`, `/api/brush-image`, `/api/brush-thumb`, `/api/brush-vision`, `/api/brush-suggest`, and `/api/brush-recipe` on the same URLs. Code under `api/_brush/` is shared by that function and is not deployed as its own functions.

@@ -1,10 +1,8 @@
 import { gateway } from '@ai-sdk/gateway'
 import { generateText } from 'ai'
-import { rpc } from './_brush/db.ts'
-import { downloadPreview } from './_brush/drive.ts'
-import { cleanDetail, json, parseJson, pins } from './_brush/http.ts'
-
-export const maxDuration = 60
+import { rpc } from '../db.ts'
+import { downloadPreview } from '../drive.ts'
+import { cleanDetail, json, parseJson, pins } from '../http.ts'
 
 const MODEL = 'openai/gpt-4o-mini'
 

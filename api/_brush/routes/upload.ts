@@ -1,6 +1,4 @@
-import { json } from './_brush/http.ts'
-
-export const maxDuration = 15
+import { json } from '../http.ts'
 
 export default {
   async fetch(request: Request) {
