@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import test from 'node:test'
 import { countryFromPath, fileStem, seriesFromName } from '../src/experiences/brush/names.ts'
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
@@ -74,6 +74,38 @@ test('upload migration keeps originals in Drive and previews in storage', () => 
   assert.match(sql, /games asc/)
   assert.match(sql, /brush_upload_claim/)
   assert.doesNotMatch(sql, /files\.delete|addParents|removeParents/)
-  const retired = readFileSync(new URL('../api/brush-upload.ts', import.meta.url), 'utf8')
+  const retired = readFileSync(new URL('../api/_brush/routes/upload.ts', import.meta.url), 'utf8')
   assert.match(retired, /410/)
+})
+
+function serverlessFunctions(dir, prefix = '') {
+  const found = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name.startsWith('_')) continue
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name
+    if (entry.isDirectory()) found.push(...serverlessFunctions(`${dir}/${entry.name}`, rel))
+    else if (/\.(ts|js|mjs|mts)$/.test(entry.name)) found.push(rel)
+  }
+  return found
+}
+
+test('Brush is one serverless function and the old paths still rewrite', () => {
+  const files = serverlessFunctions(new URL('../api', import.meta.url))
+  assert.ok(files.length <= 12, files.join(', '))
+  assert.deepEqual(files.filter(file => file.startsWith('brush')), ['brush.ts'])
+  const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+  const rewritten = new Map(vercel.rewrites.filter(item => String(item.source).startsWith('/api/brush')).map(item => [item.source, item.destination]))
+  const expected = {
+    '/api/brush-sync': '/api/brush?action=sync',
+    '/api/brush-upload': '/api/brush?action=upload',
+    '/api/brush-upload-session': '/api/brush?action=upload-session',
+    '/api/brush-upload-chunk': '/api/brush?action=upload-chunk',
+    '/api/brush-upload-finish': '/api/brush?action=upload-finish',
+    '/api/brush-image': '/api/brush?action=image',
+    '/api/brush-thumb': '/api/brush?action=thumb',
+    '/api/brush-vision': '/api/brush?action=vision',
+    '/api/brush-suggest': '/api/brush?action=suggest',
+    '/api/brush-recipe': '/api/brush?action=recipe',
+  }
+  assert.deepEqual(Object.fromEntries(rewritten), expected)
 })

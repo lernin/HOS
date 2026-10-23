@@ -1,8 +1,6 @@
-import { rpc } from './_brush/db.ts'
-import { beginResumableUpload } from './_brush/drive.ts'
-import { cleanDetail, json, pins } from './_brush/http.ts'
-
-export const maxDuration = 30
+import { rpc } from '../db.ts'
+import { beginResumableUpload } from '../drive.ts'
+import { cleanDetail, json, pins } from '../http.ts'
 
 const MAX_BYTES = 200 * 1024 * 1024
 const IMAGE = /^image\/(jpeg|png|webp|gif|heic|heif)$/i

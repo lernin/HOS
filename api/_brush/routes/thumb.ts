@@ -1,8 +1,6 @@
-import { rpc } from './_brush/db.ts'
-import { cleanDetail, json, pins } from './_brush/http.ts'
-import { getThumb } from './_brush/storage.ts'
-
-export const maxDuration = 30
+import { rpc } from '../db.ts'
+import { cleanDetail, json, pins } from '../http.ts'
+import { getThumb } from '../storage.ts'
 
 export default {
   async fetch(request: Request) {
