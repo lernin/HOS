@@ -17,6 +17,12 @@ type ImagePayload = {
   prompt_text: string | null
   prompt_source: string | null
   attributes: { trait: string, value: string }[]
+  content_hash: string | null
+}
+
+function contentHash(file: { appProperties?: { brushHash?: string } }) {
+  const hash = file.appProperties?.brushHash?.toLowerCase() || ''
+  return /^[0-9a-f]{64}$/.test(hash) ? hash : null
 }
 
 export default {
@@ -68,6 +74,7 @@ export default {
           prompt_text: prompt,
           prompt_source: prompt ? 'sidecar' : null,
           attributes: filenameAttributes(file.name),
+          content_hash: contentHash(file),
         })
       }
       if (page.nextPageToken) pending.unshift({ ...job, pageToken: page.nextPageToken })

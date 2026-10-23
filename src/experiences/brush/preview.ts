@@ -1,6 +1,7 @@
 import { eloUpdate, nextSigma } from './rank'
 import { suggestRecipe } from './recipe'
 import type { BrushApi, BrushAttribute, BrushImage, BrushTag, Insights } from './types'
+import { attachQueue, UploadQueue, type UploadTransport } from './uploads'
 
 function portrait(title: string, country: string, ink: string, paper: string, accent: string) {
   const canvas = document.createElement('canvas')
@@ -59,10 +60,10 @@ function blank(partial: Pick<BrushImage, 'id' | 'name' | 'country' | 'preview_ur
 
 export function createPreviewClient(): BrushApi {
   const images: BrushImage[] = [
-    blank({ id: 'jp', name: 'Japan_01.jpg', country: 'Japan', preview_url: portrait('Japan 01', 'Japan', '#2a2118', '#d7c4a1', '#7f8f78') }),
-    blank({ id: 'kr', name: 'Korea_02.jpg', country: 'Korea', preview_url: portrait('Korea 02', 'Korea', '#1c2430', '#c5d0dc', '#6e88a8') }),
-    blank({ id: 'st', name: 'Studio_03.jpg', country: 'Studio', preview_url: portrait('Studio 03', 'Studio', '#241c22', '#e6d5cf', '#c4a394') }),
-    blank({ id: 'nt', name: 'Night_04.jpg', country: 'Night', preview_url: portrait('Night 04', 'Night', '#101114', '#9aa0a8', '#3d4450'), trashed: true, trash_count: 1, elo: 1464, games: 1, losses: 1 }),
+    blank({ id: 'jp', name: 'Japan_01.jpg', country: 'Japan', preview_url: portrait('Japan 01', 'Japan', '#2a2118', '#d7c4a1', '#7f8f78'), createdAt: 1 }),
+    blank({ id: 'kr', name: 'Korea_02.jpg', country: 'Korea', preview_url: portrait('Korea 02', 'Korea', '#1c2430', '#c5d0dc', '#6e88a8'), createdAt: 2 }),
+    blank({ id: 'st', name: 'Studio_03.jpg', country: 'Studio', preview_url: portrait('Studio 03', 'Studio', '#241c22', '#e6d5cf', '#c4a394'), createdAt: 3 }),
+    blank({ id: 'nt', name: 'Night_04.jpg', country: 'Night', preview_url: portrait('Night 04', 'Night', '#101114', '#9aa0a8', '#3d4450'), trashed: true, trash_count: 1, elo: 1464, games: 1, losses: 1, createdAt: 4 }),
   ]
   const tags = SEED.map(item => ({ ...item }))
   const badTags = new Map<string, string[]>([['nt', ['t-light']]])
@@ -71,6 +72,57 @@ export function createPreviewClient(): BrushApi {
   ])
   let lastPair: [string, string] | null = null
   let savedRecipe: string | null = null
+  const known = new Set<string>()
+
+  function wait(ms: number, signal?: AbortSignal) {
+    return new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        signal?.removeEventListener('abort', onAbort)
+        resolve()
+      }, ms)
+      const onAbort = () => {
+        clearTimeout(timer)
+        reject(new DOMException('The upload was paused.', 'AbortError'))
+      }
+      if (signal?.aborted) onAbort()
+      else signal?.addEventListener('abort', onAbort, { once: true })
+    })
+  }
+
+  const transport: UploadTransport = {
+    async claim({ hash }) {
+      await wait(15)
+      if (known.has(hash)) return { duplicate: true, name: 'library' }
+      return { duplicate: false, uploadUrl: `preview://${hash}` }
+    },
+    async put({ blob, uploadedBytes, signal, onBytes }) {
+      const total = Math.max(1, blob.size)
+      let sent = uploadedBytes
+      for (let step = 1; step <= 4; step += 1) {
+        await wait(160, signal)
+        sent = Math.min(total, Math.max(sent, Math.round(total * step / 4)))
+        onBytes(sent)
+      }
+      return { id: `up-${crypto.randomUUID()}`, name: '' }
+    },
+    async finish({ hash, name, driveFileId, thumbnail }) {
+      if (known.has(hash)) return { duplicate: true }
+      known.add(hash)
+      images.push(blank({
+        id: driveFileId,
+        name,
+        country: 'Uploads',
+        folder_path: 'Brush Uploads',
+        source: 'upload',
+        games: 0,
+        createdAt: Date.now(),
+        has_thumbnail: Boolean(thumbnail),
+        preview_url: thumbnail ? URL.createObjectURL(thumbnail) : portrait(name, 'Uploads', '#241c18', '#d9c7ae', '#8d735c'),
+      }))
+      return { duplicate: false }
+    },
+  }
+  const queue = attachQueue(new UploadQueue(transport, 'brush-uploads-preview'))
 
   function active() {
     return images.filter(image => !image.trashed)
@@ -79,11 +131,11 @@ export function createPreviewClient(): BrushApi {
   function pair() {
     const pool = active()
     if (pool.length < 2) return { ready: false as const, reason: 'need_images', active: pool.length, total: images.length }
-    const left = [...pool].sort((a, b) => a.games - b.games || b.sigma - a.sigma)[0]
+    const left = [...pool].sort((a, b) => a.games - b.games || (b.createdAt ?? 0) - (a.createdAt ?? 0) || b.sigma - a.sigma)[0]
     const key = (a: string, b: string) => [a, b].sort().join(':')
     const opponents = pool
       .filter(image => image.id !== left.id)
-      .sort((a, b) => Math.abs(a.elo - left.elo) - Math.abs(b.elo - left.elo))
+      .sort((a, b) => a.games - b.games || Math.abs(a.elo - left.elo) - Math.abs(b.elo - left.elo))
     const right = opponents.find(image => !lastPair || key(left.id, image.id) !== key(lastPair[0], lastPair[1])) || opponents[0]
     return { ready: true as const, active: pool.length, total: images.length, left, right }
   }
@@ -174,7 +226,11 @@ export function createPreviewClient(): BrushApi {
     },
     async saveRecipe(body) { savedRecipe = body },
     async sync(onProgress) { onProgress('Preview sync does not call Drive.') },
-    async upload(_files, onProgress) { onProgress('Preview upload does not call Drive.') },
+    subscribeUploads: listener => queue.subscribe(listener),
+    enqueueUploads: files => queue.enqueue(files),
+    retryUpload: id => queue.retry(id),
+    resumeUploads: () => queue.resume(),
+    pauseUploads: () => { queue.pause() },
     async autoTag(imageId) {
       const current = attributes.get(imageId) || []
       current.push({ trait: 'expression', value: 'calm', source: 'vision', confidence: 0.7 })

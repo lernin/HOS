@@ -23,6 +23,7 @@ An explorable treehouse village at `/waterfall-village`, behind the existing Lab
 | `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` | Full JSON key for a Google service account. Required for sync, upload, image preview, and the vision pass. One line is fine. |
 | `BRUSH_DRIVE_FOLDER_ID` | Optional. Defaults to the Beauty Contest folder `1_WEDf6e7FCzUw5nelM1pZypaCBRq0s39`. |
 | `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` | Optional overrides. The app already targets Procedia (`jzaghifuhinkzzhiojre`). |
+| `SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY` | Optional. Stores the small WebP previews in the private `brush-thumbs` bucket. Without it, originals still land in Drive and matchups fall back to the Drive preview. |
 | Vercel AI Gateway | Already used by Book Vocab and Ekpronym. Vision auto-tag and recipe phrasing use `openai/gpt-4o-mini` through that gateway. The contest, tags, Elo, and the draft recipe work without it. |
 
 Drive setup:
@@ -32,9 +33,11 @@ Drive setup:
 3. Share the Beauty Contest folder with the service account email as **Editor** (upload needs write access; read-only cannot create `Brush Uploads`).
 4. Put the JSON in `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` on the Vercel project. Do not commit the key.
 
-Sync walks that folder and its country subfolders, including files already there and later uploads. Uploads from the phone are resized to a long edge of 1600px and stored in a `Brush Uploads` subfolder. Supabase Storage is not used: Drive upload is practical once the service account can write, and resizing keeps each request inside the serverless body limit.
+Sync walks that folder and its country subfolders, including files already there and later uploads. Phone uploads keep the full-size original in a `Brush Uploads` subfolder. The phone sends the file in about 3 MB chunks, up to 3 photos at a time, and retries a failed photo. Reopening Brush continues anything still queued on that phone. Each photo is hashed, so the same picture is not added twice. There is no library cap. One selection can include 100 photos; the rest of that selection is left out.
 
-Trash never deletes or moves a Drive file. It sets `trashed_at` on `brush_images`. Trash Review is where those flagged images are tagged later. A full sync archives only database rows whose Drive file was already gone before that sync started.
+A WebP preview about 1080px tall is cached in the private Supabase Storage bucket `brush-thumbs` so matchups open quickly. Drive stays the source of truth. A new upload starts at 0 games, and the next pairing prefers under-played images, so it enters the contest soon. The pair already on screen stays until that match is decided.
+
+Trash never deletes or moves a Drive file. It sets `trashed_at` on `brush_images`. Trash Review is where those flagged images are tagged later. A full sync archives only database rows whose Drive file was already gone before that sync started. A spare Drive copy of a hashed photo is left where it is and is not added as a second contestant.
 
 ### Brush PIN
 
@@ -68,4 +71,4 @@ x-brush-pin: YOUR_BRUSH_PIN
 
 `source` may be `scout` or `admin`. The same call exists as `select public.brush_suggest_tag(...)`.
 
-Schema and functions live in `supabase/migrations/20261023140000_brush_beauty_contest.sql` on the Procedia project. Tables use the `brush_` prefix, row level security is on, and the browser reaches them only through the PIN-checked functions.
+Schema and functions live in `supabase/migrations/20261023140000_brush_beauty_contest.sql`, `supabase/migrations/20261023163000_brush_upload_originals.sql`, and `supabase/migrations/20261023164500_brush_register_upload_qualify.sql` on the Procedia project. Tables use the `brush_` prefix, row level security is on, and the browser reaches them only through the PIN-checked functions. The `brush-thumbs` bucket is private. Only the service role writes or reads it, through the upload and preview routes.

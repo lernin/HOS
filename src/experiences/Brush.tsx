@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './brush.css'
-import { BrushError, createLiveClient, loadDriveImage } from './brush/client'
+import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush/client'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
 import { createPreviewClient } from './brush/preview'
 import { BackfillOffer, DetailSheet, InsightsScreen, Leaderboard, LibraryScreen, PinScreen, ReasonSheet } from './brush/Sheets'
 import { TrashReview } from './brush/TrashReview'
-import type { BrushApi, BrushImage, BrushTag, Insights, PairResult, TrashImage } from './brush/types'
+import type { BrushApi, BrushImage, BrushTag, Insights, PairResult, TrashImage, UploadSnapshot } from './brush/types'
+import { EMPTY_UPLOADS } from './brush/uploads'
 
 type Screen = 'match' | 'board' | 'love' | 'library' | 'trash'
 type Pending = { kind: 'like' | 'bad', leftId: string, rightId: string, winnerId: string | null, trashLeft: boolean, trashRight: boolean, started: number }
@@ -45,6 +46,10 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [detail, setDetail] = useState<{ image: BrushImage, attributes: { trait: string, value: string, source: string, confidence: number | null }[], prompt: string } | null>(null)
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [phrasing, setPhrasing] = useState(false)
+  const [uploads, setUploads] = useState<UploadSnapshot>(EMPTY_UPLOADS)
+  const addedRef = useRef(0)
+  const viewRef = useRef({ screen, pair, pending })
+  viewRef.current = { screen, pair, pending }
 
   useEffect(() => {
     const media = window.matchMedia('(orientation: portrait)')
@@ -78,8 +83,28 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     if (phase !== 'app') return
     let gone = false
     refresh(client).catch(error => { if (!gone) setMessage(messageOf(error)) })
-    return () => { gone = true }
+    const stop = client.subscribeUploads(setUploads)
+    void client.resumeUploads()
+    return () => {
+      gone = true
+      stop()
+      client.pauseUploads()
+    }
   }, [phase, brushPin, preview])
+
+  useEffect(() => {
+    if (phase !== 'app' || uploads.added <= addedRef.current) {
+      addedRef.current = uploads.added
+      return
+    }
+    addedRef.current = uploads.added
+    const view = viewRef.current
+    const keep = view.screen === 'match' && Boolean(view.pair && view.pair.ready) && !view.pending
+    const kept = view.pair
+    refresh(client).then(() => {
+      if (keep && kept && kept.ready) setPair(kept)
+    }).catch(error => setMessage(messageOf(error)))
+  }, [uploads.added, phase])
 
   useEffect(() => {
     const image = trashed[trashIndex]
@@ -95,16 +120,23 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     ]
     let gone = false
     for (const image of wanted) {
-      if (image.preview_url || urls[image.drive_file_id]) continue
-      loadDriveImage(image.drive_file_id, pin, brushPin).then(url => {
-        if (!gone) setUrls(current => ({ ...current, [image.drive_file_id]: url }))
+      if (image.preview_url) continue
+      const key = image.has_thumbnail ? `thumb:${image.id}` : image.drive_file_id
+      if (urls[key]) continue
+      const load = image.has_thumbnail
+        ? loadThumb(image.id, pin, brushPin).catch(() => loadDriveImage(image.drive_file_id, pin, brushPin))
+        : loadDriveImage(image.drive_file_id, pin, brushPin)
+      load.then(url => {
+        if (!gone) setUrls(current => ({ ...current, [key]: url }))
       }).catch(() => {})
     }
     return () => { gone = true }
   }, [pair, library, trashed, preview, pin, brushPin, urls])
 
   function srcFor(image: BrushImage) {
-    return image.preview_url || urls[image.drive_file_id] || null
+    if (image.preview_url) return image.preview_url
+    if (image.has_thumbnail && urls[`thumb:${image.id}`]) return urls[`thumb:${image.id}`]
+    return urls[image.drive_file_id] || null
   }
 
   async function saveDecision(tagsToSave: string[]) {
@@ -191,6 +223,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
             ))}
           </>
         )}
+        {uploads.total > uploads.completed && <span className="brush-progress" data-upload-nav>{`Uploads ${uploads.completed}/${uploads.total}`}</span>}
         {progress && <span className="brush-progress">{progress}</span>}
       </nav>
 
@@ -270,15 +303,14 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           countries={countries}
           country={country}
           onCountry={setCountry}
-          syncing={progress.startsWith('Sync') || progress.startsWith('Upload')}
+          uploads={uploads}
+          syncing={progress.startsWith('Sync')}
           onSync={() => {
             setProgress('Syncing Beauty Contest')
             client.sync(setProgress).then(() => refresh()).catch(error => setMessage(messageOf(error))).finally(() => setProgress(''))
           }}
-          onUpload={files => {
-            setProgress('Uploading')
-            client.upload(files, setProgress).then(() => refresh()).catch(error => setMessage(messageOf(error))).finally(() => setProgress(''))
-          }}
+          onUpload={files => { client.enqueueUploads(files) }}
+          onRetry={id => client.retryUpload(id)}
           onOpen={image => {
             client.detail(image.id).then(result => setDetail({ ...result, prompt: result.image.prompt_text || '' })).catch(error => setMessage(messageOf(error)))
           }}

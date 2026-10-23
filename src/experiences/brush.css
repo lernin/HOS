@@ -42,6 +42,10 @@
 .brush-offer button{min-height:46px;border-radius:999px;border:0;background:#1b1914;color:#f4efe6}
 .brush-offer .ghost{background:transparent;color:#1b1914;border:1px solid rgba(27,25,20,.3)}
 .brush-note{color:#e7b2a8}
+.brush-queue{display:flex;flex-direction:column;gap:8px}
+.brush-queue-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-top:1px solid rgba(244,239,230,.12);font-size:14px}
+.brush-queue-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brush-queue-row button{border:0;border-radius:999px;min-height:36px;padding:0 12px;background:#efe6d6;color:#1b1914}
 .brush.is-portrait .brush-card-meta{top:58px}
 .brush-trash-layout{position:absolute;inset:0;display:grid;grid-template-rows:minmax(0,1fr) minmax(220px,46%)}
 .brush-trash-layout .brush-sheet{position:relative;inset:auto;max-height:none;height:100%;border-radius:0}

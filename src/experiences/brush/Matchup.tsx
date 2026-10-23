@@ -130,7 +130,7 @@ export function Matchup({
         )
       })}
       {portrait && <button className="brush-text-button" type="button" data-action="flip" style={{ position: 'absolute', top: 58, right: 10, zIndex: 4 }} onClick={onFlip}>Flip</button>}
-      <button className="brush-text-button" type="button" style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', zIndex: 4 }} onClick={onTrashBoth}>Trash both</button>
+      <button className="brush-text-button" type="button" style={{ position: 'absolute', bottom: 78, left: '50%', transform: 'translateX(-50%)', zIndex: 4 }} onClick={onTrashBoth}>Trash both</button>
     </div>
   )
 }

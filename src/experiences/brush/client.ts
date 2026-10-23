@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import type { BrushApi, BrushAttribute, BrushImage, BrushTag, Insights, PairResult, RecordInput, TrashImage } from './types'
+import { attachQueue, SessionExpired, UPLOAD_CHUNK_BYTES, UploadQueue, type UploadClaim, type UploadTransport } from './uploads'
 
 export class BrushError extends Error {
   code: string
@@ -42,28 +43,74 @@ export async function loadDriveImage(driveId: string, labPin: string, brushPin: 
   return url
 }
 
-export async function prepareUpload(file: File) {
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
-  const maxSide = 1600
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale))
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale))
-  const context = canvas.getContext('2d')
-  if (!context) {
-    bitmap.close()
-    throw new Error('Could not prepare that photo.')
+export async function loadThumb(imageId: string, labPin: string, brushPin: string) {
+  const key = `thumb:${imageId}`
+  const cached = imageUrls.get(key)
+  if (cached) return cached
+  const response = await fetch(`/api/brush-thumb?id=${encodeURIComponent(imageId)}`, { headers: headers(labPin, brushPin) })
+  if (!response.ok) throw new BrushError(String(response.status), await readError(response))
+  const url = URL.createObjectURL(await response.blob())
+  imageUrls.set(key, url)
+  return url
+}
+
+function liveTransport(labPin: string, brushPin: string): UploadTransport {
+  return {
+    async claim(input) {
+      const response = await fetch('/api/brush-upload-session', {
+        method: 'POST',
+        headers: { ...headers(labPin, brushPin), 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      if (!response.ok) throw new Error(await readError(response))
+      return response.json() as Promise<UploadClaim>
+    },
+    async put({ blob, mime, uploadUrl, uploadedBytes, signal, onBytes }) {
+      let url = uploadUrl
+      let offset = uploadedBytes
+      const total = blob.size
+      while (offset < total) {
+        const end = Math.min(total, offset + UPLOAD_CHUNK_BYTES) - 1
+        const response = await fetch('/api/brush-upload-chunk', {
+          method: 'POST',
+          headers: {
+            ...headers(labPin, brushPin),
+            'content-type': 'application/octet-stream',
+            'x-upload-url': url,
+            'x-content-range': `bytes ${offset}-${end}/${total}`,
+            'x-upload-mime': mime,
+          },
+          body: blob.slice(offset, end + 1),
+          signal,
+        })
+        if (response.status === 410) throw new SessionExpired()
+        if (!response.ok) throw new Error(await readError(response))
+        const body = await response.json() as { complete?: boolean, uploadUrl?: string, file?: { id: string, name: string } }
+        offset = end + 1
+        onBytes(offset)
+        if (body.uploadUrl) url = body.uploadUrl
+        if (body.complete && body.file?.id) return { id: body.file.id, name: body.file.name || '' }
+      }
+      throw new Error('Drive finished the upload without a file id.')
+    },
+    async finish(input) {
+      const form = new FormData()
+      form.set('driveFileId', input.driveFileId)
+      form.set('name', input.name)
+      form.set('hash', input.hash)
+      form.set('mime', input.mime)
+      form.set('bytes', String(input.bytes))
+      if (input.thumbnail) form.set('thumbnail', input.thumbnail, `${input.hash}.webp`)
+      const response = await fetch('/api/brush-upload-finish', { method: 'POST', headers: headers(labPin, brushPin), body: form })
+      if (!response.ok) throw new Error(await readError(response))
+      return response.json() as Promise<{ duplicate?: boolean }>
+    },
   }
-  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
-  bitmap.close()
-  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.82))
-  if (!blob) throw new Error('Could not prepare that photo.')
-  const name = file.name.replace(/\.[^.]+$/, '') || 'upload'
-  return { blob, name: `${name}.jpg` }
 }
 
 export function createLiveClient(labPin: string, brushPin: string): BrushApi {
   const pinArgs = { lab_pin: labPin, brush_pin: brushPin }
+  const queue = attachQueue(new UploadQueue(liveTransport(labPin, brushPin), 'brush-uploads'))
   return {
     status: () => call<{ pin_set: boolean }>('brush_status', { lab_pin: labPin }),
     async setPin(current, next) {
@@ -140,18 +187,11 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
       }
       throw new Error('Sync is still running. Start it again to continue.')
     },
-    async upload(files, onProgress) {
-      for (let index = 0; index < files.length; index += 1) {
-        const file = files[index]
-        onProgress(`Uploading ${index + 1} of ${files.length}`)
-        const prepared = await prepareUpload(file)
-        const form = new FormData()
-        form.append('image', prepared.blob, prepared.name)
-        const response = await fetch('/api/brush-upload', { method: 'POST', headers: headers(labPin, brushPin), body: form })
-        if (!response.ok) throw new BrushError(String(response.status), await readError(response))
-      }
-      onProgress(`${files.length} photo${files.length === 1 ? '' : 's'} joined the contest.`)
-    },
+    subscribeUploads: listener => queue.subscribe(listener),
+    enqueueUploads: files => queue.enqueue(files),
+    retryUpload: id => queue.retry(id),
+    resumeUploads: () => queue.resume(),
+    pauseUploads: () => { queue.pause() },
     async autoTag(imageId) {
       const response = await fetch('/api/brush-vision', {
         method: 'POST',

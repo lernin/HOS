@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { BrushAttribute, BrushImage, BrushTag, Insights, TurnOffs } from './types'
+import type { BrushAttribute, BrushImage, BrushTag, Insights, TurnOffs, UploadSnapshot } from './types'
 import { suggestRecipe } from './recipe'
 
 export function ReasonSheet({
@@ -162,8 +162,17 @@ export function InsightsScreen({
   )
 }
 
+function uploadLabel(status: string, progress: number) {
+  if (status === 'preparing') return 'Reading'
+  if (status === 'queued') return 'Waiting'
+  if (status === 'uploading') return `Sending ${Math.round(progress * 100)}%`
+  if (status === 'duplicate') return 'Duplicate'
+  if (status === 'failed') return 'Failed'
+  return 'Done'
+}
+
 export function LibraryScreen({
-  images, srcFor, countries, country, onCountry, onSync, onUpload, syncing,   onOpen, onAutoTag, onChangePin,
+  images, srcFor, countries, country, onCountry, onSync, onUpload, onRetry, uploads, syncing, onOpen, onAutoTag, onChangePin,
 }: {
   images: BrushImage[]
   srcFor: (image: BrushImage) => string | null
@@ -172,6 +181,8 @@ export function LibraryScreen({
   onCountry: (country: string) => void
   onSync: () => void
   onUpload: (files: File[]) => void
+  onRetry: (id: string) => void
+  uploads: UploadSnapshot
   syncing: boolean
   onOpen: (image: BrushImage) => void
   onAutoTag: (image: BrushImage) => void
@@ -182,9 +193,27 @@ export function LibraryScreen({
     <div className="brush-scroll" data-screen="library">
       <div className="brush-inline">
         <button type="button" className="brush-upload" disabled={syncing} onClick={onSync}>{syncing ? 'Syncing…' : 'Sync Drive'}</button>
-        <label className="brush-upload">Upload<input type="file" accept="image/*" multiple hidden onChange={event => { const files = [...(event.target.files || [])]; event.target.value = ''; if (files.length) onUpload(files) }} /></label>
+        <label className="brush-upload">Add photos<input data-upload-input type="file" accept="image/*" multiple hidden onChange={event => { const files = [...(event.target.files || [])]; event.target.value = ''; if (files.length) onUpload(files) }} /></label>
         <button type="button" className="ghost" onClick={onChangePin}>Change PIN</button>
       </div>
+      <section className="brush-queue" data-upload-queue data-upload-active={uploads.active} data-upload-percent={uploads.percent}>
+        <p>Full-size originals go to the Brush Uploads folder in Drive. A small preview is cached for matchups. Choose up to 100 photos at a time. There is no limit on the library.</p>
+        {uploads.overflow > 0 && <p data-upload-overflow>Only 100 photos can be chosen at once. {uploads.overflow} left out.</p>}
+        {uploads.total > 0 && (
+          <>
+            <div className="brush-bar" aria-label="Overall upload progress"><span style={{ width: `${uploads.percent}%` }} /></div>
+            <p className="brush-muted">{uploads.completed} of {uploads.total} finished · {uploads.active} sending</p>
+            {uploads.jobs.map(job => (
+              <div key={job.id} className="brush-queue-row" data-upload-status={job.status}>
+                <span>{job.name}</span>
+                <strong>{uploadLabel(job.status, job.progress)}</strong>
+                {job.status === 'failed' && <button type="button" onClick={() => onRetry(job.id)}>Retry</button>}
+                {job.error && <small>{job.error}</small>}
+              </div>
+            ))}
+          </>
+        )}
+      </section>
       <div className="brush-chips">
         <button type="button" aria-pressed={!country} onClick={() => onCountry('')}>All</button>
         {countries.map(item => <button key={item} type="button" aria-pressed={country === item} onClick={() => onCountry(item)}>{item}</button>)}

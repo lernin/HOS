@@ -12,6 +12,7 @@ export function pins(request: Request) {
 export function cleanDetail(error: unknown) {
   return String(error instanceof Error ? error.message : error)
     .replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/https:\/\/www\.googleapis\.com\/upload\/\S+/gi, '[upload-session]')
     .replace(/-----BEGIN[\s\S]*?-----END[^-]+-----/g, '[redacted]')
     .replace(/\s+/g, ' ')
     .slice(0, 500)

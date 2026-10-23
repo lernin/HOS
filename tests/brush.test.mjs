@@ -4,6 +4,7 @@ import test from 'node:test'
 import { countryFromPath, fileStem, seriesFromName } from '../src/experiences/brush/names.ts'
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
+import { retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
 
 test('elo matches the documented 1500 vs 1500 step', () => {
   const first = eloUpdate(1500, 1500, 0, 0, true)
@@ -51,5 +52,28 @@ test('migration keeps trash in the database and accepts Scout tags', () => {
 test('Drive helper never deletes or moves files', () => {
   const source = readFileSync(new URL('../api/_brush/drive.ts', import.meta.url), 'utf8')
   assert.match(source, /does not/)
+  assert.match(source, /redirect: 'manual'/)
+  assert.match(source, /isDriveUploadUrl/)
   assert.doesNotMatch(source, /files\.delete|addParents|removeParents|trash=true/)
+})
+
+test('a batch stops at 100 and retries back off', () => {
+  const batch = takeBatch(Array.from({ length: 101 }, (_, index) => index))
+  assert.equal(batch.accepted.length, 100)
+  assert.equal(batch.overflow, 1)
+  assert.equal(retryDelayMs(1), 1000)
+  assert.equal(retryDelayMs(2), 3000)
+  assert.equal(retryDelayMs(5), 30000)
+})
+
+test('upload migration keeps originals in Drive and previews in storage', () => {
+  const sql = readFileSync(new URL('../supabase/migrations/20261023163000_brush_upload_originals.sql', import.meta.url), 'utf8')
+  assert.match(sql, /content_hash/)
+  assert.match(sql, /brush-thumbs/)
+  assert.match(sql, /created_at desc/)
+  assert.match(sql, /games asc/)
+  assert.match(sql, /brush_upload_claim/)
+  assert.doesNotMatch(sql, /files\.delete|addParents|removeParents/)
+  const retired = readFileSync(new URL('../api/brush-upload.ts', import.meta.url), 'utf8')
+  assert.match(retired, /410/)
 })

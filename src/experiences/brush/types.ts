@@ -1,3 +1,7 @@
+import type { UploadJobView, UploadSnapshot, UploadStatus } from './uploads'
+
+export type { UploadJobView, UploadSnapshot, UploadStatus }
+
 export type BrushImage = {
   id: string
   drive_file_id: string
@@ -18,6 +22,8 @@ export type BrushImage = {
   trashed: boolean
   archived?: boolean
   preview_url?: string
+  has_thumbnail?: boolean
+  createdAt?: number
   bad_tag_ids?: string[]
 }
 
@@ -96,7 +102,11 @@ export type BrushApi = {
   setPrompt: (imageId: string, prompt: string) => Promise<void>
   saveRecipe: (body: string) => Promise<void>
   sync: (onProgress: (message: string) => void) => Promise<void>
-  upload: (files: File[], onProgress: (message: string) => void) => Promise<void>
+  subscribeUploads: (listener: (snapshot: UploadSnapshot) => void) => () => void
+  enqueueUploads: (files: File[]) => { accepted: number, overflow: number }
+  retryUpload: (id: string) => void
+  resumeUploads: () => Promise<void>
+  pauseUploads: () => void
   autoTag: (imageId: string) => Promise<{ suggested: number }>
   backfill: (tag: BrushTag, onProgress: (done: number, total: number) => void) => Promise<void>
 }

@@ -11,7 +11,14 @@ const FOLDER = 'application/vnd.google-apps.folder'
 const IMAGE = /^image\/(jpeg|png|webp|gif|heic|heif)$/i
 const TEXT = /^(text\/|application\/json)/i
 
-export type DriveFile = { id: string, name: string, mimeType: string, size?: string }
+export type DriveFile = {
+  id: string
+  name: string
+  mimeType: string
+  size?: string
+  parents?: string[]
+  appProperties?: { brushHash?: string }
+}
 type ServiceAccount = { client_email: string, private_key: string }
 
 let tokenCache: { token: string, exp: number } | null = null
@@ -91,7 +98,7 @@ export async function listChildren(folderId: string, pageToken?: string) {
   const token = await accessToken(account)
   const url = new URL('https://www.googleapis.com/drive/v3/files')
   url.searchParams.set('q', `'${folderId}' in parents and trashed = false`)
-  url.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType,size)')
+  url.searchParams.set('fields', 'nextPageToken,files(id,name,mimeType,size,appProperties)')
   url.searchParams.set('pageSize', '80')
   url.searchParams.set('supportsAllDrives', 'true')
   url.searchParams.set('includeItemsFromAllDrives', 'true')
@@ -163,6 +170,88 @@ export async function uploadJpeg(name: string, bytes: Uint8Array) {
     body,
   })
   return response.json() as Promise<{ id: string, name: string, mimeType: string }>
+}
+
+const UPLOAD_HOST = 'https://www.googleapis.com/upload/drive/'
+
+export function isDriveUploadUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.hostname === 'www.googleapis.com' && url.pathname.startsWith('/upload/drive/')
+  } catch {
+    return false
+  }
+}
+
+export async function beginResumableUpload(name: string, mime: string, bytes: number, hash: string) {
+  const parent = await ensureUploadsFolder()
+  const token = await accessToken(readServiceAccount())
+  const safeName = name.replace(/[^\w.\- ]+/g, '').slice(0, 180) || 'photo'
+  const response = await fetch(`https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true`, {
+    method: 'POST',
+    redirect: 'manual',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': 'application/json; charset=UTF-8',
+      'x-upload-content-type': mime,
+      'x-upload-content-length': String(bytes),
+    },
+    body: JSON.stringify({
+      name: safeName,
+      parents: [parent],
+      mimeType: mime,
+      appProperties: { brushHash: hash },
+    }),
+  })
+  const location = response.headers.get('location') || ''
+  if (!response.ok || !isDriveUploadUrl(location)) {
+    const detail = cleanDetail(await response.text())
+    throw Object.assign(new Error(detail || 'Drive did not start the upload.'), { status: 502 })
+  }
+  return location
+}
+
+export async function forwardUploadChunk(uploadUrl: string, bytes: Uint8Array, range: string, mime: string) {
+  if (!isDriveUploadUrl(uploadUrl) || !uploadUrl.startsWith(UPLOAD_HOST)) {
+    throw Object.assign(new Error('Upload session is not a Drive URL.'), { status: 400 })
+  }
+  const token = await accessToken(readServiceAccount())
+  const response = await fetch(uploadUrl, {
+    method: 'PUT',
+    redirect: 'manual',
+    headers: {
+      authorization: `Bearer ${token}`,
+      'content-type': mime,
+      'content-range': range,
+    },
+    body: bytes,
+  })
+  if (response.status === 308) {
+    const next = response.headers.get('location') || ''
+    return { complete: false as const, uploadUrl: isDriveUploadUrl(next) ? next : uploadUrl }
+  }
+  if (response.status === 404 || response.status === 410) {
+    throw Object.assign(new Error('Upload session expired.'), { status: 410 })
+  }
+  if (response.status !== 200 && response.status !== 201) {
+    const detail = cleanDetail(await response.text())
+    throw Object.assign(new Error(`Drive upload failed. ${detail}`), { status: 502 })
+  }
+  const file = await response.json() as { id?: string, name?: string }
+  if (!file.id) throw Object.assign(new Error('Drive finished the upload without a file id.'), { status: 502 })
+  return { complete: true as const, file: { id: file.id, name: file.name || '' } }
+}
+
+export async function uploadsFile(fileId: string) {
+  assertId(fileId)
+  const parent = await ensureUploadsFolder()
+  const token = await accessToken(readServiceAccount())
+  const response = await driveFetch(token, `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,parents,mimeType,size,appProperties&supportsAllDrives=true`)
+  const file = await response.json() as DriveFile
+  if (!file.parents?.includes(parent)) {
+    throw Object.assign(new Error('That file is not in Brush Uploads.'), { status: 400 })
+  }
+  return file
 }
 
 export async function downloadPreview(fileId: string) {
