@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { json } from './http.ts'
+import { json } from './http.js'
 
 const url = process.env.SUPABASE_URL || 'https://jzaghifuhinkzzhiojre.supabase.co'
 const key = process.env.SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_rQDzA5bYlbzvaTjyo-uTXw_LiiIAddI'

@@ -1,4 +1,4 @@
-import { json } from '../http.ts'
+import { json } from '../http.js'
 
 export default {
   async fetch(request: Request) {

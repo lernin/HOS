@@ -1,8 +1,8 @@
 import { gateway } from '@ai-sdk/gateway'
 import { generateText } from 'ai'
-import { rpc } from '../db.ts'
-import { downloadPreview } from '../drive.ts'
-import { cleanDetail, json, parseJson, pins } from '../http.ts'
+import { rpc } from '../db.js'
+import { downloadPreview } from '../drive.js'
+import { cleanDetail, json, parseJson, pins } from '../http.js'
 
 const MODEL = 'openai/gpt-4o-mini'
 

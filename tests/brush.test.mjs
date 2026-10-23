@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import { countryFromPath, fileStem, seriesFromName } from '../src/experiences/brush/names.ts'
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
@@ -108,4 +110,26 @@ test('Brush is one serverless function and the old paths still rewrite', () => {
     '/api/brush-recipe': '/api/brush?action=recipe',
   }
   assert.deepEqual(Object.fromEntries(rewritten), expected)
+})
+
+function typescriptFiles(dir) {
+  const found = []
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name)
+    if (entry.isDirectory()) found.push(...typescriptFiles(full))
+    else if (entry.name.endsWith('.ts')) found.push(full)
+  }
+  return found
+}
+
+test('relative api imports use .js so Vercel can resolve the compiled files', () => {
+  const apiDir = fileURLToPath(new URL('../api/', import.meta.url))
+  const bad = []
+  for (const file of typescriptFiles(apiDir)) {
+    const text = readFileSync(file, 'utf8')
+    for (const match of text.matchAll(/from\s+['"](\.[^'"]+)['"]/g)) {
+      if (!match[1].endsWith('.js')) bad.push(`${file.slice(apiDir.length)}: ${match[1]}`)
+    }
+  }
+  assert.deepEqual(bad, [])
 })

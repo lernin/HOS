@@ -1,5 +1,5 @@
-import { rpc } from '../db.ts'
-import { cleanDetail, json, pins } from '../http.ts'
+import { rpc } from '../db.js'
+import { cleanDetail, json, pins } from '../http.js'
 
 type Source = 'admin' | 'scout'
 

@@ -1,7 +1,7 @@
 import { gateway } from '@ai-sdk/gateway'
 import { generateText } from 'ai'
-import { rpc } from '../db.ts'
-import { cleanDetail, json, pins } from '../http.ts'
+import { rpc } from '../db.js'
+import { cleanDetail, json, pins } from '../http.js'
 
 export default {
   async fetch(request: Request) {
