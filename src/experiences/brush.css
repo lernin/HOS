@@ -115,7 +115,7 @@
 .brush-swipe-hint svg{width:13px;height:13px;display:block}
 .brush-swipe-hint.is-left{left:16px}
 .brush-swipe-hint.is-right{right:16px}
-.brush-swipe-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 36px;pointer-events:none}
+.brush-swipe-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 28px;pointer-events:none}
 .brush-swipe-face strong{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(15px,3.8vh,22px);font-weight:750;letter-spacing:.04em;margin-right:-.04em;line-height:1.1}
 .brush-swipe.is-pick .brush-swipe-face strong{font-size:clamp(18px,4.8vh,28px)}
 .brush-swipe-face em{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:normal;font-size:12px;font-weight:650;line-height:1.1}

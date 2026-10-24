@@ -468,7 +468,7 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(css, /brush-swipe/)
   assert.match(css, /\.brush-swipe-hint\.is-left\{left:16px\}/)
   assert.match(css, /\.brush-swipe-hint\.is-right\{right:16px\}/)
-  assert.match(css, /\.brush-swipe-face\{[^}]*padding:8px 36px/)
+  assert.match(css, /\.brush-swipe-face\{[^}]*padding:8px 28px/)
   assert.doesNotMatch(css, /\.brush-control-row \.brush-swipe-face\{padding:0 14px\}/)
   assert.match(matchup, /SwipeHint/)
   assert.match(css, /min-width:\s*84px/)
