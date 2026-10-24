@@ -12,6 +12,7 @@ import { challengerCount, CLOSE_ELO, extendQueue, finalsFieldSize, hashDistance,
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
 import { UPLOAD_BATCH_LIMIT, retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
+import { clampInRanges, clampZoom, contentSpan, faceAimPan, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
 
 test('elo matches the documented 1500 vs 1500 step', () => {
   const first = eloUpdate(1500, 1500, 0, 0, true)
@@ -641,4 +642,87 @@ test('relative api imports use .js so Vercel can resolve the compiled files', ()
     }
   }
   assert.deepEqual(bad, [])
+})
+
+test('pinch stays under the fingers and Face aim reaches the picture edges', () => {
+  const rest = restTranslate(REST_ZOOM)
+  assert.equal(rest.tx, 0)
+  assert.equal(rest.ty, 0)
+  assert.equal(rest.scale, 1)
+
+  const start = imagePointAt(REST_ZOOM, 0.35, 0.62)
+  assert.equal(start.x, 0.35)
+  assert.equal(start.y, 0.62)
+  const zoomed = clampZoom(zoomAround(2, start.x, start.y, 0.35, 0.62))
+  const still = imagePointAt(zoomed, 0.35, 0.62)
+  assert.ok(Math.abs(still.x - 0.35) < 1e-9)
+  assert.ok(Math.abs(still.y - 0.62) < 1e-9)
+
+  const followed = clampZoom(zoomAround(2, start.x, start.y, 0.48, 0.7))
+  const underFingers = imagePointAt(followed, 0.48, 0.7)
+  assert.ok(Math.abs(underFingers.x - start.x) < 1e-9)
+  assert.ok(Math.abs(underFingers.y - start.y) < 1e-9)
+  const before = restTranslate(zoomed)
+  const after = restTranslate(followed)
+  assert.ok(after.tx > before.tx)
+  assert.ok(after.ty > before.ty)
+
+  const width = 200
+  const height = 400
+  const panned = panZoom(zoomed, 20, -10, width, height)
+  const shiftX = (restTranslate(panned).tx - restTranslate(zoomed).tx) / 100 * width
+  const shiftY = (restTranslate(panned).ty - restTranslate(zoomed).ty) / 100 * height
+  assert.ok(Math.abs(shiftX - 20) < 1e-6)
+  assert.ok(Math.abs(shiftY - -10) < 1e-6)
+  const edge = clampZoom({ scale: 2, x: 0, y: 1 })
+  assert.equal(edge.x, 0.25)
+  assert.equal(edge.y, 0.75)
+  assert.equal(clampZoom({ scale: 8, x: 0.5, y: 0.5 }).scale, 4)
+
+  const range = facePanRange(0, 200, 3)
+  assert.deepEqual(range, { min: -200, max: 200 })
+  assert.equal(clampInRanges(500, [range]), 200)
+  assert.equal(clampInRanges(-500, [range]), -200)
+  assert.equal(clampInRanges(40, [range, { min: -50, max: 80 }]), 40)
+  assert.equal(clampInRanges(10, [{ min: -100, max: 20 }, { min: 80, max: 200 }]), 10)
+  assert.equal(clampInRanges(30, [{ min: -100, max: 20 }, { min: 80, max: 200 }]), 20)
+  assert.equal(clampInRanges(500, [{ min: -100, max: 20 }, { min: 80, max: 200 }]), 200)
+
+  const face = { faceTx: 0, faceTy: 0, scale: 3, width: 200, height: 400, imageX: 0.4, imageY: 0.55, screenX: 0.4, screenY: 0.55 }
+  const pan = facePanToPoint(face)
+  const back = imagePointFromFace({ ...face, panX: pan.x, panY: pan.y })
+  assert.ok(Math.abs(back.x - 0.4) < 1e-9)
+  assert.ok(Math.abs(back.y - 0.55) < 1e-9)
+  const moved = facePanToPoint({ ...face, screenX: 0.55, screenY: 0.4 })
+  assert.ok(moved.x > pan.x)
+  assert.ok(moved.y < pan.y)
+  const anchored = imagePointFromFace({ ...face, panX: moved.x, panY: moved.y, screenX: 0.55, screenY: 0.4 })
+  assert.ok(Math.abs(anchored.x - 0.4) < 1e-9)
+  assert.ok(Math.abs(anchored.y - 0.55) < 1e-9)
+
+  const span = contentSpan(100, 200, 1, 'contain')
+  assert.deepEqual(span, { x0: 0, x1: 1, y0: 0.25, y1: 0.75 })
+  const aimed = { faceTx: 4, faceTy: -18, scale: 2.8, width: 220, height: 390, span }
+  const screenY = (panY, edge) => 0.5 + (edge - 0.5) * aimed.scale + aimed.faceTy / 100 + panY / aimed.height
+  const screenX = (panX, edge) => 0.5 + (edge - 0.5) * aimed.scale + aimed.faceTx / 100 + panX / aimed.width
+  const bottom = faceAimPan({ ...aimed, imageX: 0.2, imageY: 1 })
+  const top = faceAimPan({ ...aimed, imageX: 0.8, imageY: 0 })
+  const left = faceAimPan({ ...aimed, imageX: 0, imageY: 0.4 })
+  const right = faceAimPan({ ...aimed, imageX: 1, imageY: 0.6 })
+  assert.ok(Math.abs(screenY(bottom.y, span.y1) - 1) < 1e-6)
+  assert.ok(Math.abs(screenY(top.y, span.y0)) < 1e-6)
+  assert.ok(Math.abs(screenX(left.x, span.x0)) < 1e-6)
+  assert.ok(Math.abs(screenX(right.x, span.x1) - 1) < 1e-6)
+  const mid = faceAimPan({ faceTx: 6, faceTy: -12, scale: 2, width: 200, height: 400, imageX: 0.42, imageY: 0.58 })
+  const atCenterX = 0.5 + (-6 / 100 - mid.x / 200) / 2
+  const atCenterY = 0.5 + (12 / 100 - mid.y / 400) / 2
+  assert.ok(Math.abs(atCenterX - 0.42) < 1e-6)
+  assert.ok(Math.abs(atCenterY - 0.58) < 1e-6)
+
+  const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
+  assert.match(matchup, /faceAimPan/)
+  assert.match(matchup, /120ms ease-out/)
+  assert.match(matchup, /pictureAim/)
+  assert.match(matchup, /zoomAround/)
+  assert.match(matchup, /facePanToPoint/)
 })
