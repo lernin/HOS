@@ -4,6 +4,7 @@ import recipe from './_brush/routes/recipe.js'
 import suggest from './_brush/routes/suggest.js'
 import sync from './_brush/routes/sync.js'
 import thumb from './_brush/routes/thumb.js'
+import faceBackfill from './_brush/routes/face-backfill.js'
 import uploadChunk from './_brush/routes/upload-chunk.js'
 import uploadFinish from './_brush/routes/upload-finish.js'
 import uploadSession from './_brush/routes/upload-session.js'
@@ -24,6 +25,7 @@ const routes: Record<string, BrushRoute> = {
   'upload-finish': uploadFinish,
   image,
   thumb,
+  'face-backfill': faceBackfill,
   vision,
   suggest,
   recipe,

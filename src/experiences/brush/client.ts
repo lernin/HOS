@@ -179,8 +179,9 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
       let runId: string | undefined
       let pending: { id: string, path: string, pageToken?: string }[] | undefined
       let prompts: Record<string, string> = {}
+      let label = 'Beauty Contest'
       for (let step = 0; step < 500; step += 1) {
-        onProgress(pending?.[0]?.path ? `Syncing ${pending[0].path}` : 'Syncing Beauty Contest')
+        onProgress(pending?.length ? `Syncing ${pending[0].path || label}` : `Syncing ${label}`)
         const response = await fetch('/api/brush-sync', {
           method: 'POST',
           headers: { ...headers(labPin, brushPin), 'content-type': 'application/json' },
@@ -194,10 +195,12 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
           imported: number
           done: boolean
           archived?: number
+          folder?: string
         }
         runId = body.runId
         pending = body.pending
         prompts = body.prompts || {}
+        if (body.folder) label = body.folder
         if (body.done) {
           onProgress(`Sync finished. ${body.imported} images, ${body.archived ?? 0} missing files flagged archived.`)
           return

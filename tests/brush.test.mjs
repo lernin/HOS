@@ -5,6 +5,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
 import { faceBoxFromPixels, faceZoom } from '../src/experiences/brush/face.ts'
+import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
 import { challengerCount, extendQueue, finalsFieldSize, hashDistance, newEntrants, pairKey, sameGroup, seedOrder } from '../src/experiences/brush/pair.ts'
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
@@ -375,6 +376,12 @@ test('a skin-tone blob becomes a normalized face box', () => {
   const zoom = faceZoom(box)
   assert.ok(zoom.scale >= 1.4 && zoom.scale <= 5)
   assert.equal(faceBoxFromPixels(4, 4, new Uint8ClampedArray(64)), null)
+  assert.deepEqual(focusBox(null), UPPER_FACE)
+  assert.ok(faceZoom(UPPER_FACE).y < 0.3)
+  const detected = boxFromPixels(100, 200, [30, 20], [70, 90])
+  assert.ok(detected)
+  assert.ok(detected.y < 0.2)
+  assert.ok(detected.w > 0 && detected.h > 0)
 })
 
 function typescriptFiles(dir) {
@@ -405,7 +412,17 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(matchup, /Close call/)
   assert.match(matchup, /Hold for face/)
   assert.match(matchup, /data-action="face"/)
-  assert.match(matchup, /brush-rise|is-entering/)
+  assert.match(matchup, /touchstart/)
+  assert.match(matchup, /passive: false/)
+  assert.match(matchup, /focusBox/)
+  assert.doesNotMatch(matchup, /onLostPointerCapture/)
+  assert.match(css, /-webkit-touch-callout:\s*none/)
+  const upload = readFileSync(new URL('../api/_brush/routes/upload-finish.ts', import.meta.url), 'utf8')
+  const sync = readFileSync(new URL('../api/_brush/routes/sync.ts', import.meta.url), 'utf8')
+  assert.match(upload, /saveDetectedFace/)
+  assert.match(sync, /scanUnscannedFaces/)
+  const faceSql = readFileSync(new URL('../supabase/migrations/20261024053000_brush_face_queue.sql', import.meta.url), 'utf8')
+  assert.match(faceSql, /brush_face_queue/)
   assert.doesNotMatch(matchup, /onPick\(id, 'clear'\)/)
   assert.doesNotMatch(matchup, /◀ This one|That one ▶/)
   assert.match(matchup, /brush-gutter/)

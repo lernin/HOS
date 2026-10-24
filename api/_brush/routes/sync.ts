@@ -1,6 +1,7 @@
 import { countryFromPath, fileStem, filenameAttributes, seriesFromName } from '../../../src/experiences/brush/names.js'
 import { rpc } from '../db.js'
 import { driveFolderId, isFolder, isImage, isSidecar, listChildren, readSidecar } from '../drive.js'
+import { scanUnscannedFaces } from '../face-scan.js'
 import { cleanDetail, json, pins } from '../http.js'
 
 type Job = { id: string, path: string, pageToken?: string }
@@ -37,12 +38,16 @@ export default {
         const begun = await rpc<{ run_id: string }>('brush_sync_begin', { lab_pin: lab, brush_pin: brush })
         runId = begun.run_id
       }
-      const pending = body.pending?.length ? [...body.pending] : [{ id: driveFolderId(), path: '' }]
       const prompts = { ...(body.prompts || {}) }
+      const pending = Array.isArray(body.pending) ? [...body.pending] : [{ id: driveFolderId(), path: '' }]
       const job = pending.shift()
       if (!job) {
+        const faces = await scanUnscannedFaces(lab, brush, null, 6, 20000)
+        if (faces.remaining) {
+          return json({ runId, pending: [], prompts, imported: faces.scanned, done: false, folder: 'Faces' })
+        }
         const finished = await rpc<{ seen: number, archived: number }>('brush_sync_finish', { lab_pin: lab, brush_pin: brush, run_id: runId })
-        return json({ runId, pending: [], prompts, imported: 0, done: true, archived: finished.archived })
+        return json({ runId, pending: [], prompts, imported: faces.scanned, done: true, archived: finished.archived })
       }
 
       const page = await listChildren(job.id, job.pageToken)
@@ -81,6 +86,9 @@ export default {
           lab_pin: lab, brush_pin: brush, images, run_id: runId,
         })
         : { inserted: 0, updated: 0 }
+      if (images.length) {
+        await scanUnscannedFaces(lab, brush, images.map(image => image.drive_file_id), 4, 15000)
+      }
 
       return json({
         runId,
