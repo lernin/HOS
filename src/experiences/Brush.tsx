@@ -51,6 +51,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [phrasing, setPhrasing] = useState(false)
   const [uploads, setUploads] = useState<UploadSnapshot>(EMPTY_UPLOADS)
+  const [menuOpen, setMenuOpen] = useState(false)
   const addedRef = useRef(0)
   const startedRef = useRef(Date.now())
   const hashedRef = useRef(new Set<string>())
@@ -59,6 +60,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const match = deck ? currentMatch(deck) : null
   const matchKey = match ? `${match.left.id}:${match.right.id}` : ''
   const qualify = deck ? progressOf(deck) : null
+  const showingMatch = phase === 'app' && screen === 'match' && deck?.phase !== 'champion' && !!match
+  const landscapeMatch = showingMatch && !portrait
 
   useEffect(() => {
     const media = window.matchMedia('(orientation: portrait)')
@@ -66,6 +69,10 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     media.addEventListener('change', apply)
     return () => media.removeEventListener('change', apply)
   }, [])
+
+  useEffect(() => {
+    setMenuOpen(false)
+  }, [screen, portrait])
 
   useEffect(() => {
     if (preview) return
@@ -354,31 +361,57 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const champion = deck?.championId ? deck.images.find(image => image.id === deck.championId) || null : null
   const challengers = deck ? challengerCount(deck.images) : 0
 
-  return (
-    <main className={`brush${portrait ? ' is-portrait' : ' is-landscape'}`}>
-      <nav className="brush-nav">
-        <button type="button" onClick={onExit}>Hub</button>
+  function navLinks() {
+    return (
+      <>
+        <button type="button" onClick={() => { setMenuOpen(false); onExit() }}>Hub</button>
         {phase === 'app' && (
           <>
             {(['match', 'board', 'love', 'trash', 'library'] as Screen[]).map(item => (
-              <button key={item} type="button" aria-current={screen === item ? 'page' : undefined} onClick={() => setScreen(item)}>
+              <button key={item} type="button" aria-current={screen === item ? 'page' : undefined} onClick={() => { setMenuOpen(false); setScreen(item) }}>
                 {item === 'match' ? 'Match' : item === 'board' ? 'Board' : item === 'love' ? 'Love' : item === 'trash' ? 'Trash' : 'Library'}
               </button>
             ))}
+            {showingMatch && reason && !reason.open && (
+              <button className="brush-text-button" type="button" data-action="reason" onClick={() => { setMenuOpen(false); setReason(current => current ? { ...current, open: true } : current) }}>Add reason</button>
+            )}
             {deck?.phase === 'qualifying' && qualify && <span className="brush-progress" data-qualify>{`Qualifying ${qualify.percent}%`}</span>}
-            {deck?.phase === 'qualifying' && qualify && qualify.total >= 2 && <button type="button" data-action="finals" onClick={goFinals}>Finals</button>}
+            {deck?.phase === 'qualifying' && qualify && qualify.total >= 2 && <button type="button" data-action="finals" onClick={() => { setMenuOpen(false); goFinals() }}>Finals</button>}
             {deck?.phase === 'finals' && <span className="brush-progress" data-finals>{`Finals · round ${deck.rounds.length}`}</span>}
             {challengers > 0 && deck?.focus !== 'placement' && (
               deck?.phase === 'finals'
-                ? <button type="button" data-challengers data-action="challengers" onClick={placeChallengers}>{`New challengers: ${challengers}`}</button>
+                ? <button type="button" data-challengers data-action="challengers" onClick={() => { setMenuOpen(false); placeChallengers() }}>{`New challengers: ${challengers}`}</button>
                 : <span className="brush-progress" data-challengers>{`New challengers: ${challengers}`}</span>
             )}
-            {deck?.phase === 'finals' && deck.focus === 'placement' && <button type="button" data-action="bracket" onClick={backToBracket}>Back to finals</button>}
+            {deck?.phase === 'finals' && deck.focus === 'placement' && <button type="button" data-action="bracket" onClick={() => { setMenuOpen(false); backToBracket() }}>Back to finals</button>}
           </>
         )}
         {uploads.total > uploads.completed && <span className="brush-progress" data-upload-nav>{`Uploads ${uploads.completed}/${uploads.total}`}</span>}
         {progress && <span className="brush-progress">{progress}</span>}
+      </>
+    )
+  }
+
+  return (
+    <main className={`brush${portrait ? ' is-portrait' : ' is-landscape'}${showingMatch ? ' is-match' : ''}`}>
+      <nav className="brush-nav" data-nav>
+        {landscapeMatch && (
+          <button className="brush-menu-button" type="button" data-action="menu" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(open => !open)}>Menu</button>
+        )}
+        {landscapeMatch && zoom.scale > 1 && (
+          <button type="button" data-action="fit" onClick={() => setZoom(REST_ZOOM)}>Fit</button>
+        )}
+        {!landscapeMatch && <div className="brush-nav-row">{navLinks()}</div>}
+        {showingMatch && portrait && (
+          <button type="button" data-action="flip" onClick={() => setFront(side => side === 'left' ? 'right' : 'left')}>Flip</button>
+        )}
+        {showingMatch && portrait && zoom.scale > 1 && (
+          <button type="button" data-action="fit" onClick={() => setZoom(REST_ZOOM)}>Fit</button>
+        )}
+        {landscapeMatch && menuOpen && <div className="brush-menu" data-menu>{navLinks()}</div>}
       </nav>
+      <div className="brush-main">
+      {moment && <button className="brush-moment" type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
 
       {phase === 'boot' && <div className="brush-gate"><p>Opening Brush…</p></div>}
       {(phase === 'set' || phase === 'enter' || phase === 'change') && (
@@ -432,9 +465,6 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           <p>{qualify?.total || 0} active. Sync the Beauty Contest folder or upload more. Trashed images stay in Drive and wait in Trash Review.</p>
           <button className="brush-upload" type="button" onClick={() => setScreen('library')}>Open library</button>
         </div>
-      )}
-      {phase === 'app' && screen === 'match' && match && reason && !reason.open && (
-        <button className="brush-text-button" type="button" data-action="reason" style={{ position: 'absolute', top: 52, left: 10, zIndex: 4 }} onClick={() => setReason(current => current ? { ...current, open: true } : current)}>Add reason</button>
       )}
       {phase === 'app' && screen === 'board' && <Leaderboard images={deck ? [...deck.images].sort((a, b) => b.elo - a.elo || b.games - a.games) : board} srcFor={srcFor} />}
       {phase === 'app' && screen === 'love' && (
@@ -507,7 +537,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         />
       )}
 
-      {moment && <button className="brush-moment" type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
+      {message && phase === 'app' && <p className="brush-note">{message}</p>}
+      </div>
       {reason?.open && (
         <ReasonSheet
           kind={reason.kind}
@@ -537,7 +568,6 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           }}
         />
       )}
-      {message && phase === 'app' && <p className="brush-note" style={{ position: 'absolute', left: 12, right: 12, bottom: 8, zIndex: 7 }}>{message}</p>}
     </main>
   )
 }

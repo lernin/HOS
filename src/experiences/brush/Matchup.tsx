@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
 
@@ -25,6 +25,7 @@ export function Matchup({
   srcFor: (image: BrushImage) => string | null
 }) {
   const stageRef = useRef<HTMLDivElement>(null)
+  const [infoId, setInfoId] = useState<string | null>(null)
   const zoomRef = useRef(zoom)
   const lockRef = useRef(0)
   const portraitRef = useRef(portrait)
@@ -165,33 +166,43 @@ export function Matchup({
     { image: left, side: 'left' as const },
     { image: right, side: 'right' as const },
   ]
+  const frontImage = front === 'left' ? left : right
   const zoomStyle = { transform: `scale(${zoom.scale})`, transformOrigin: `${zoom.x * 100}% ${zoom.y * 100}%` }
 
   return (
-    <div className="brush-stage" data-screen="match" ref={stageRef}>
-      {cards.map(({ image, side }) => {
-        const src = srcFor(image)
-        const showPick = portrait && front === side
-        return (
-          <article key={image.id} className={`brush-card${front === side ? ' is-front' : ''}`} data-side={side} data-image={image.id} data-name={image.name}>
-            <div className="brush-photo-hit" onClick={event => onPhotoClick(event, image.id)}>
-              {src ? <img className="brush-photo" src={src} alt={image.name} style={zoomStyle} draggable={false} /> : <div className="brush-photo" />}
-            </div>
-            <div className="brush-card-meta">
-              <strong>{image.country || 'Untitled'}</strong>
-              <small>{image.name}<br />{Math.round(image.elo)} · {image.games} played</small>
-              {image.games < PLACEMENT_GAMES && <em className="brush-challenger" data-challenger>New challenger</em>}
-            </div>
-            <div className="brush-card-actions">
-              {showPick && <button className="brush-choice" type="button" data-action="pick" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onPick(image.id, 'clear') } }}>Pick</button>}
-              {(showPick || !portrait) && <button className="brush-choice close" type="button" data-action="close" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onPick(image.id, 'close') } }}>Close</button>}
-              {(showPick || !portrait) && <button className="brush-choice danger" type="button" data-action="trash" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onTrash(image.id) } }}>Trash</button>}
-            </div>
-          </article>
-        )
-      })}
-      {portrait && <button className="brush-text-button" type="button" data-action="flip" style={{ position: 'absolute', top: 58, right: 10, zIndex: 4 }} onClick={onFlip}>Flip</button>}
-      {zoom.scale > 1 && <button className="brush-text-button" type="button" data-action="fit" style={{ position: 'absolute', top: 58, left: 10, zIndex: 4 }} onClick={() => onZoom(REST_ZOOM)}>Fit</button>}
+    <div className="brush-stage" data-screen="match">
+      <div className="brush-photos" ref={stageRef}>
+        {cards.map(({ image, side }) => {
+          const src = srcFor(image)
+          const open = infoId === image.id
+          return (
+            <article key={image.id} className={`brush-card${front === side ? ' is-front' : ''}`} data-side={side} data-image={image.id} data-name={image.name}>
+              <div className="brush-photo-hit" onClick={event => onPhotoClick(event, image.id)}>
+                {src ? <img className="brush-photo" src={src} alt={image.name} style={zoomStyle} draggable={false} /> : <div className="brush-photo" />}
+              </div>
+              <div className="brush-caption">
+                <strong>{image.country || 'Untitled'}</strong>
+                {image.games < PLACEMENT_GAMES && <em className="brush-challenger" data-challenger>New</em>}
+                {open && <small data-caption-detail>{image.name} · {Math.round(image.elo)} · {image.games} played</small>}
+                <button className="brush-info" type="button" data-action="info" aria-expanded={open} aria-label={open ? 'Hide filename and rating' : 'Show filename and rating'} onClick={() => setInfoId(current => current === image.id ? null : image.id)}>i</button>
+              </div>
+              {!portrait && (
+                <div className="brush-card-bar">
+                  <button className="brush-choice close" type="button" data-action="close" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onPick(image.id, 'close') } }}>Close</button>
+                  <button className="brush-choice danger" type="button" data-action="trash" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onTrash(image.id) } }}>Trash</button>
+                </div>
+              )}
+            </article>
+          )
+        })}
+      </div>
+      {portrait && (
+        <div className="brush-footer">
+          <button className="brush-choice" type="button" data-action="pick" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onPick(frontImage.id, 'clear') } }}>Pick</button>
+          <button className="brush-choice close" type="button" data-action="close" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onPick(frontImage.id, 'close') } }}>Close</button>
+          <button className="brush-choice danger" type="button" data-action="trash" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onTrash(frontImage.id) } }}>Trash</button>
+        </div>
+      )}
     </div>
   )
 }
