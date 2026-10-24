@@ -71,6 +71,12 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   }, [])
 
   useEffect(() => {
+    if (!moment) return
+    const timer = window.setTimeout(() => setMoment(null), 4200)
+    return () => window.clearTimeout(timer)
+  }, [moment])
+
+  useEffect(() => {
     setMenuOpen(false)
   }, [screen, portrait])
 
@@ -390,7 +396,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
                 {item === 'match' ? 'Match' : item === 'board' ? 'Board' : item === 'love' ? 'Love' : item === 'trash' ? 'Trash' : 'Library'}
               </button>
             ))}
-            {showingMatch && reason && !reason.open && (
+            {showingMatch && deck?.phase === 'finals' && reason && !reason.open && (
               <button className="brush-text-button" type="button" data-action="reason" onClick={() => { setMenuOpen(false); setReason(current => current ? { ...current, open: true } : current) }}>Add reason</button>
             )}
           </>
@@ -414,7 +420,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         </nav>
       )}
       <div className="brush-main">
-      {moment && !landscapeMatch && <button className="brush-moment" type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
+      {moment && <button className={`brush-moment${landscapeMatch ? ' brush-banner' : ''}`} type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
+      {landscapeMatch && message && phase === 'app' && <p className="brush-note brush-banner" data-note style={moment ? { top: 46 } : undefined}>{message}</p>}
 
       {phase === 'boot' && <div className="brush-gate"><p>Opening Brush…</p></div>}
       {(phase === 'set' || phase === 'enter' || phase === 'change') && (
@@ -462,17 +469,36 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           srcFor={srcFor}
           leftChrome={landscapeMatch ? (
             <>
-              <button className="brush-menu-button" type="button" data-action="menu" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(open => !open)}>Menu</button>
-              {zoom.scale > 1 && <button type="button" data-action="fit" onClick={() => setZoom(REST_ZOOM)}>Fit</button>}
-              {reason && !reason.open && <button className="brush-text-button" type="button" data-action="reason" onClick={() => setReason(current => current ? { ...current, open: true } : current)}>Add reason</button>}
-              {moment && <button className="brush-moment" type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
+              <button className="brush-menu-button brush-icon-button" type="button" data-action="menu" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(open => !open)}>
+                <MenuIcon />
+              </button>
+              {zoom.scale > 1 && <button className="brush-icon-button" type="button" data-action="fit" aria-label="Fit" onClick={() => setZoom(REST_ZOOM)}>1:1</button>}
+              {deck?.phase === 'finals' && reason && !reason.open && (
+                <button className="brush-icon-button" type="button" data-action="reason" aria-label="Add reason" onClick={() => setReason(current => current ? { ...current, open: true } : current)}>
+                  <ReasonIcon />
+                </button>
+              )}
               {menuOpen && <div className="brush-menu" data-menu>{navLinks()}</div>}
             </>
           ) : null}
           rightChrome={landscapeMatch ? (
             <>
-              {statusChrome()}
-              {message && phase === 'app' && <p className="brush-note">{message}</p>}
+              {deck?.phase === 'qualifying' && qualify && <span className="brush-progress" data-qualify aria-label={`Qualifying ${qualify.percent}%`}>{`${qualify.percent}%`}</span>}
+              {deck?.phase === 'qualifying' && qualify && qualify.total >= 2 && (
+                <button className="brush-icon-button" type="button" data-action="finals" aria-label="Finals" onClick={() => { setMenuOpen(false); goFinals() }}>
+                  <FlagIcon />
+                </button>
+              )}
+              {deck?.phase === 'finals' && <span className="brush-progress" data-finals aria-label={`Finals round ${deck.rounds.length}`}>{deck.rounds.length}</span>}
+              {challengers > 0 && deck?.focus !== 'placement' && (
+                deck?.phase === 'finals'
+                  ? <button className="brush-icon-button" type="button" data-challengers data-action="challengers" aria-label={`New challengers: ${challengers}`} onClick={() => { setMenuOpen(false); placeChallengers() }}>{challengers}</button>
+                  : <span className="brush-progress" data-challengers aria-label={`New challengers: ${challengers}`}>{challengers}</span>
+              )}
+              {deck?.phase === 'finals' && deck.focus === 'placement' && (
+                <button className="brush-icon-button" type="button" data-action="bracket" aria-label="Back to finals" onClick={() => { setMenuOpen(false); backToBracket() }}>↩</button>
+              )}
+              {uploads.total > uploads.completed && <span className="brush-progress" data-upload-nav aria-label={`Uploads ${uploads.completed} of ${uploads.total}`}>{`${uploads.completed}/${uploads.total}`}</span>}
             </>
           ) : null}
         />
@@ -588,4 +614,16 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       )}
     </main>
   )
+}
+
+function MenuIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+}
+
+function FlagIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15M7 5.5h9.2l-2.1 3.4 2.1 3.4H7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" /></svg>
+}
+
+function ReasonIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8.5h8.2L18 12l-3.8 3.5H6z" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
 }
