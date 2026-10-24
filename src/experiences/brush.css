@@ -168,6 +168,33 @@
 .brush-offer .ghost{background:transparent;color:#1b1914;border:1px solid rgba(27,25,20,.3)}
 .brush-note{color:#e7b2a8}
 .brush-main>.brush-note{flex:0 0 auto;margin:0;padding:4px 12px 6px;background:#0c0d0b}
+.brush-file-input{position:absolute;left:-40px;top:0;width:32px;height:32px;opacity:0;overflow:hidden;border:0}
+.brush-menu-upload{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;min-height:36px;padding:0 12px 0 10px;background:#efe6d6;color:#1b1914;font-size:14px;font-weight:700;line-height:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.brush-menu-upload svg{width:16px;height:16px;flex:0 0 auto}
+.brush-menu .brush-menu-upload{width:100%;min-height:48px;border-radius:14px;padding:0 14px;font-size:16px;justify-content:flex-start}
+.brush-library-upload{display:flex;align-items:center;gap:14px;width:100%;min-height:76px;padding:14px 16px;border:0;border-radius:18px;background:#efe6d6;color:#1b1914;text-align:left;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.brush-library-upload svg{width:28px;height:28px;flex:0 0 auto}
+.brush-library-upload strong{display:block;font-size:18px;font-weight:700;line-height:1.15}
+.brush-library-upload small{display:block;margin-top:2px;font-size:13px;font-weight:500;color:rgba(27,25,20,.68);line-height:1.3}
+.brush-upload-scrim{position:absolute;z-index:12;inset:0;background:rgba(8,8,6,.62);display:flex;align-items:flex-end;justify-content:center}
+.brush-upload-sheet{width:min(100%,520px);max-height:min(78dvh,680px);overflow:hidden}
+.brush-sheet-grab{width:42px;height:4px;border-radius:99px;background:rgba(244,239,230,.28);align-self:center}
+.brush-upload-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brush-upload-head h2{margin:0;font-size:26px}
+.brush-upload-head button{flex:0 0 auto;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid rgba(244,239,230,.28);background:transparent;color:#f4efe6}
+.brush-upload-files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;overflow:auto;min-height:0}
+.brush-upload-files li{display:flex;flex-direction:column;gap:6px}
+.brush-upload-file-top{display:flex;align-items:baseline;gap:10px}
+.brush-upload-file-top span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}
+.brush-upload-file-top strong{flex:0 0 auto;font-size:12px;font-weight:650;color:rgba(244,239,230,.72)}
+.brush-upload-files .brush-bar{height:6px}
+.brush-upload-files .brush-bar span{background:#d7c4a1;transition:width 180ms ease}
+.brush-upload-files [data-upload-status="done"] strong{color:#efe6d6}
+.brush-upload-files [data-upload-status="done"] .brush-bar span{background:#efe6d6}
+.brush-upload-files [data-upload-status="failed"] strong{color:#e7b2a8}
+.brush-upload-files [data-upload-status="failed"] .brush-bar span{background:#e7b2a8}
+.brush-upload-files small{color:#e7b2a8;font-size:12px;line-height:1.3}
+.brush-upload-files button{align-self:flex-start;border:0;border-radius:999px;min-height:36px;padding:0 14px;background:#efe6d6;color:#1b1914}
 .brush-queue{display:flex;flex-direction:column;gap:8px}
 .brush-queue-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0;border-top:1px solid rgba(244,239,230,.12);font-size:14px}
 .brush-queue-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

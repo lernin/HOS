@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import './brush.css'
 import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush/client'
 import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, type Deck, type Decision } from './brush/deck'
@@ -7,7 +7,7 @@ import { enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type Outb
 import { matchMoments, standingOf, type BrushMoment } from './brush/level'
 import { challengerCount, hashImage } from './brush/pair'
 import { createPreviewClient } from './brush/preview'
-import { BackfillOffer, DetailSheet, InsightsScreen, Leaderboard, LibraryScreen, PinScreen, ReasonSheet } from './brush/Sheets'
+import { BackfillOffer, DetailSheet, InsightsScreen, Leaderboard, LibraryScreen, PinScreen, ReasonSheet, UploadIcon, UploadProgressSheet } from './brush/Sheets'
 import { TrashReview } from './brush/TrashReview'
 import type { BrushApi, BrushImage, BrushTag, Insights, Margin, TrashImage, UploadSnapshot } from './brush/types'
 import { EMPTY_UPLOADS } from './brush/uploads'
@@ -53,6 +53,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [urls, setUrls] = useState<Record<string, string>>({})
   const [phrasing, setPhrasing] = useState(false)
   const [uploads, setUploads] = useState<UploadSnapshot>(EMPTY_UPLOADS)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const addedRef = useRef(0)
   const startedRef = useRef(Date.now())
@@ -380,15 +381,30 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
             : <span className="brush-progress" data-challengers>{`New challengers: ${challengers}`}</span>
         )}
         {deck?.phase === 'finals' && deck.focus === 'placement' && <button type="button" data-action="bracket" onClick={() => { setMenuOpen(false); backToBracket() }}>Back to finals</button>}
-        {uploads.total > uploads.completed && <span className="brush-progress" data-upload-nav>{`Uploads ${uploads.completed}/${uploads.total}`}</span>}
+        {uploads.total > uploads.completed && <button type="button" className="brush-progress" data-upload-nav onClick={() => { setMenuOpen(false); setUploadOpen(true) }}>{`Uploads ${uploads.completed}/${uploads.total}`}</button>}
         {progress && <span className="brush-progress">{progress}</span>}
       </>
     )
   }
 
+  function onGallery(event: ChangeEvent<HTMLInputElement>) {
+    const files = [...(event.target.files || [])]
+    event.target.value = ''
+    if (!files.length) return
+    setMenuOpen(false)
+    setUploadOpen(true)
+    client.enqueueUploads(files)
+  }
+
   function navLinks() {
     return (
       <>
+        {phase === 'app' && (
+          <label htmlFor="brush-gallery" className="brush-menu-upload" data-action="upload">
+            <UploadIcon />
+            <span>Upload</span>
+          </label>
+        )}
         <button type="button" onClick={() => { setMenuOpen(false); onExit() }}>Hub</button>
         {phase === 'app' && (
           <>
@@ -409,6 +425,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
 
   return (
     <main className={`brush${portrait ? ' is-portrait' : ' is-landscape'}${showingMatch ? ' is-match' : ''}`}>
+      {phase === 'app' && <input id="brush-gallery" className="brush-file-input" data-upload-input type="file" accept="image/*" multiple onChange={onGallery} />}
       {!landscapeMatch && (
         <nav className="brush-nav" data-nav>
           <div className="brush-nav-row">{navLinks()}</div>
@@ -506,7 +523,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
               {deck?.phase === 'finals' && deck.focus === 'placement' && (
                 <button className="brush-icon-button" type="button" data-action="bracket" aria-label="Back to finals" onClick={() => { setMenuOpen(false); backToBracket() }}>↩</button>
               )}
-              {uploads.total > uploads.completed && <span className="brush-progress" data-upload-nav aria-label={`Uploads ${uploads.completed} of ${uploads.total}`}>{`${uploads.completed}/${uploads.total}`}</span>}
+              {uploads.total > uploads.completed && <button className="brush-progress" type="button" data-upload-nav aria-label={`Uploads ${uploads.completed} of ${uploads.total}`} onClick={() => setUploadOpen(true)}>{`${uploads.completed}/${uploads.total}`}</button>}
             </>
           ) : null}
         />
@@ -548,14 +565,11 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           countries={countries}
           country={country}
           onCountry={setCountry}
-          uploads={uploads}
           syncing={progress.startsWith('Sync')}
           onSync={() => {
             setProgress('Syncing Beauty Contest')
             client.sync(setProgress).then(() => loadAll()).catch(error => setMessage(messageOf(error))).finally(() => setProgress(''))
           }}
-          onUpload={files => { client.enqueueUploads(files) }}
-          onRetry={id => client.retryUpload(id)}
           onOpen={image => {
             client.detail(image.id).then(result => setDetail({ ...result, prompt: result.image.prompt_text || '' })).catch(error => setMessage(messageOf(error)))
           }}
@@ -602,6 +616,9 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           onSkip={() => { setReason(current => current ? { ...current, open: false } : current); setPickedTags([]) }}
           onDone={() => saveReason(pickedTags)}
         />
+      )}
+      {uploadOpen && (
+        <UploadProgressSheet uploads={uploads} onRetry={id => client.retryUpload(id)} onClose={() => setUploadOpen(false)} />
       )}
       {offer && <BackfillOffer label={offer.label} onSkip={() => setOffer(null)} onRun={() => { runBackfill().catch(error => setMessage(messageOf(error))) }} />}
       {detail && (
