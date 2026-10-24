@@ -24,6 +24,30 @@ export function fileStem(name: string) {
   return base.replace(/\.[^.]+$/, '').replace(/\.prompt$/i, '')
 }
 
+export type GroupSource = {
+  name: string
+  folder_path?: string
+  series?: string | null
+}
+
+/** Keys that mean "same model or series". Shared by the client queue and private.brush_group_keys. */
+export function groupKeys(source: GroupSource) {
+  const keys: string[] = []
+  const stem = fileStem(source.name).toLowerCase()
+  const stripped = stem.replace(/[_\s-]+\d+$/, '')
+  if (stripped) keys.push(`stem:${stripped}`)
+  const parts = stripped.split(/[_\s-]+/).filter(Boolean)
+  if (parts.length >= 2) keys.push(`family:${parts[0]}_${parts[1]}`)
+  else if (parts.length === 1) keys.push(`family:${parts[0]}`)
+  if (stem.includes('redo3')) keys.push('series:redo3')
+  if (stem.includes('pony')) keys.push('series:pony')
+  const folderParts = (source.folder_path || '').split('/').map(part => part.trim().toLowerCase()).filter(Boolean)
+  if (folderParts.length >= 2) keys.push(`folder:${folderParts.join('/')}`)
+  const series = source.series?.trim().toLowerCase()
+  if (series) keys.push(`label:${series}`)
+  return keys
+}
+
 export function filenameAttributes(name: string) {
   return FILENAME_ATTRIBUTES
     .filter(item => item.pattern.test(name))

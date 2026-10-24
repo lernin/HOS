@@ -37,6 +37,8 @@ Sync walks that folder and its country subfolders, including files already there
 
 A WebP preview about 1080px tall is cached in the private Supabase Storage bucket `brush-thumbs` so matchups open quickly. Drive stays the source of truth. A new upload starts at 0 games, and the next pairing prefers under-played images, so it enters the contest soon. The pair already on screen stays until that match is decided.
 
+Qualifying is one tap. Tapping a landscape photo, or Pick in portrait, is a clear choice and moves Elo by the full step. Close is a nearer call and moves Elo by one third of that step. Trash still only flags the row. The next few pairs are chosen on the phone and the result is sent behind that. Qualifying will not put two photos from the same filename family (`Japan_Model_*`, `Japan_R3_*`, `redo3`, `pony`), the same Drive subfolder, or a near-identical preview together while another opponent exists. Finals is a top-16 bracket. He can open it early, or after every active photo has four games. A reason is optional and does not hold up the next pair. The photo picker accepts a gallery selection of up to 100 images and does not open the camera by itself.
+
 Trash never deletes or moves a Drive file. It sets `trashed_at` on `brush_images`. Trash Review is where those flagged images are tagged later. A full sync archives only database rows whose Drive file was already gone before that sync started. A spare Drive copy of a hashed photo is left where it is and is not added as a second contestant.
 
 ### Brush PIN
@@ -71,6 +73,6 @@ x-brush-pin: YOUR_BRUSH_PIN
 
 `source` may be `scout` or `admin`. The same call exists as `select public.brush_suggest_tag(...)`.
 
-Schema and functions live in `supabase/migrations/20261023140000_brush_beauty_contest.sql`, `supabase/migrations/20261023163000_brush_upload_originals.sql`, and `supabase/migrations/20261023164500_brush_register_upload_qualify.sql` on the Procedia project. Tables use the `brush_` prefix, row level security is on, and the browser reaches them only through the PIN-checked functions. The `brush-thumbs` bucket is private. Only the service role writes or reads it, through the upload and preview routes.
+Schema and functions live in `supabase/migrations/20261023140000_brush_beauty_contest.sql`, `supabase/migrations/20261023163000_brush_upload_originals.sql`, `supabase/migrations/20261023164500_brush_register_upload_qualify.sql`, and `supabase/migrations/20261023233000_brush_quick_picks.sql` on the Procedia project. Tables use the `brush_` prefix, row level security is on, and the browser reaches them only through the PIN-checked functions. The `brush-thumbs` bucket is private. Only the service role writes or reads it, through the upload and preview routes.
 
 Those HTTP routes are one Vercel function, `api/brush.ts`. Rewrites keep `/api/brush-sync`, `/api/brush-upload`, `/api/brush-upload-session`, `/api/brush-upload-chunk`, `/api/brush-upload-finish`, `/api/brush-image`, `/api/brush-thumb`, `/api/brush-vision`, `/api/brush-suggest`, and `/api/brush-recipe` on the same URLs. Code under `api/_brush/` is shared by that function and is not deployed as its own functions.

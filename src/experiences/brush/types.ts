@@ -24,7 +24,24 @@ export type BrushImage = {
   preview_url?: string
   has_thumbnail?: boolean
   createdAt?: number
+  perceptual_hash?: string | null
   bad_tag_ids?: string[]
+}
+
+export type Margin = 'clear' | 'close'
+
+export type ContestPhase = 'qualifying' | 'finals' | 'champion'
+
+export type RoundMatch = {
+  leftId: string
+  rightId: string
+  winnerId: string | null
+}
+
+export type ContestState = {
+  phase: ContestPhase
+  rounds: RoundMatch[][]
+  championId: string | null
 }
 
 export type BrushTag = {
@@ -81,6 +98,7 @@ export type RecordInput = {
   trashRight?: boolean
   tagIds: string[]
   decidedMs?: number
+  margin?: Margin
 }
 
 export type BrushApi = {
@@ -88,7 +106,11 @@ export type BrushApi = {
   setPin: (current: string | null, next: string) => Promise<void>
   unlock: (brushPin: string) => Promise<void>
   nextPair: () => Promise<PairResult>
-  record: (input: RecordInput) => Promise<void>
+  record: (input: RecordInput) => Promise<{ match_id: string | null }>
+  annotate: (matchId: string, tagIds: string[]) => Promise<void>
+  contest: () => Promise<ContestState>
+  saveContest: (state: ContestState) => Promise<void>
+  setPhash: (imageId: string, hash: string) => Promise<void>
   leaderboard: () => Promise<BrushImage[]>
   library: () => Promise<BrushImage[]>
   tags: () => Promise<BrushTag[]>

@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase'
-import type { BrushApi, BrushAttribute, BrushImage, BrushTag, Insights, PairResult, RecordInput, TrashImage } from './types'
+import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights, PairResult, RecordInput, TrashImage } from './types'
 import { attachQueue, SessionExpired, UPLOAD_CHUNK_BYTES, UploadQueue, type UploadClaim, type UploadTransport } from './uploads'
 
 export class BrushError extends Error {
@@ -121,7 +121,7 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
     },
     nextPair: () => call<PairResult>('brush_next_pair', pinArgs),
     async record(input: RecordInput) {
-      await call('brush_record', {
+      const data = await call<{ match_id?: string | null }>('brush_record', {
         ...pinArgs,
         left_id: input.leftId,
         right_id: input.rightId,
@@ -131,7 +131,22 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
         trash_right: Boolean(input.trashRight),
         tag_ids: input.tagIds,
         decided_ms: input.decidedMs ?? null,
+        margin: input.margin || 'clear',
       })
+      return { match_id: data?.match_id ?? null }
+    },
+    async annotate(matchId, tagIds) {
+      await call('brush_annotate', { ...pinArgs, match_id: matchId, tag_ids: tagIds })
+    },
+    async contest() {
+      const data = await call<{ phase: ContestState['phase'], rounds: ContestState['rounds'], champion_id: string | null }>('brush_contest_get', pinArgs)
+      return { phase: data?.phase || 'qualifying', rounds: data?.rounds || [], championId: data?.champion_id || null }
+    },
+    async saveContest(state) {
+      await call('brush_contest_put', { ...pinArgs, phase: state.phase, rounds: state.rounds, champion_id: state.championId })
+    },
+    async setPhash(imageId, hash) {
+      await call('brush_set_phash', { ...pinArgs, image_id: imageId, perceptual_hash: hash })
     },
     leaderboard: () => call<BrushImage[]>('brush_leaderboard', pinArgs),
     library: () => call<BrushImage[]>('brush_library', pinArgs),

@@ -1,6 +1,9 @@
-/** Same step as private.brush_rate. K is 48 until both images have 8 games, then 24. */
-export function eloUpdate(eloA: number, eloB: number, gamesA: number, gamesB: number, aWon: boolean) {
-  const k = Math.min(gamesA, gamesB) < 8 ? 48 : 24
+export type Margin = 'clear' | 'close'
+
+/** Same step as private.brush_rate. K is 48 until both images have 8 games, then 24. A close call uses one third of that. */
+export function eloUpdate(eloA: number, eloB: number, gamesA: number, gamesB: number, aWon: boolean, margin: Margin = 'clear') {
+  const base = Math.min(gamesA, gamesB) < 8 ? 48 : 24
+  const k = margin === 'close' ? base / 3 : base
   const expectedA = 1 / (1 + 10 ** ((eloB - eloA) / 400))
   const scoreA = aWon ? 1 : 0
   const scoreB = aWon ? 0 : 1

@@ -1,6 +1,7 @@
+import { extendQueue } from './pair.ts'
 import { eloUpdate, nextSigma } from './rank'
 import { suggestRecipe } from './recipe'
-import type { BrushApi, BrushAttribute, BrushImage, BrushTag, Insights } from './types'
+import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights } from './types'
 import { attachQueue, UploadQueue, type UploadTransport } from './uploads'
 
 function portrait(title: string, country: string, ink: string, paper: string, accent: string) {
@@ -60,18 +61,20 @@ function blank(partial: Pick<BrushImage, 'id' | 'name' | 'country' | 'preview_ur
 
 export function createPreviewClient(): BrushApi {
   const images: BrushImage[] = [
-    blank({ id: 'jp', name: 'Japan_01.jpg', country: 'Japan', preview_url: portrait('Japan 01', 'Japan', '#2a2118', '#d7c4a1', '#7f8f78'), createdAt: 1 }),
-    blank({ id: 'kr', name: 'Korea_02.jpg', country: 'Korea', preview_url: portrait('Korea 02', 'Korea', '#1c2430', '#c5d0dc', '#6e88a8'), createdAt: 2 }),
-    blank({ id: 'st', name: 'Studio_03.jpg', country: 'Studio', preview_url: portrait('Studio 03', 'Studio', '#241c22', '#e6d5cf', '#c4a394'), createdAt: 3 }),
-    blank({ id: 'nt', name: 'Night_04.jpg', country: 'Night', preview_url: portrait('Night 04', 'Night', '#101114', '#9aa0a8', '#3d4450'), trashed: true, trash_count: 1, elo: 1464, games: 1, losses: 1, createdAt: 4 }),
+    blank({ id: 'jp', name: 'Japan_Model_01.jpg', country: 'Japan', folder_path: 'Japan/Models', preview_url: portrait('Japan 01', 'Japan', '#2a2118', '#d7c4a1', '#7f8f78'), createdAt: 1 }),
+    blank({ id: 'jp2', name: 'Japan_Model_02.jpg', country: 'Japan', folder_path: 'Japan/Models', preview_url: portrait('Japan 02', 'Japan', '#3a2a22', '#e4d2b4', '#8f7358'), createdAt: 2 }),
+    blank({ id: 'kr', name: 'Korea_02.jpg', country: 'Korea', preview_url: portrait('Korea 02', 'Korea', '#1c2430', '#c5d0dc', '#6e88a8'), createdAt: 3 }),
+    blank({ id: 'st', name: 'Studio_03.jpg', country: 'Studio', preview_url: portrait('Studio 03', 'Studio', '#241c22', '#e6d5cf', '#c4a394'), createdAt: 4 }),
+    blank({ id: 'nt', name: 'Night_04.jpg', country: 'Night', preview_url: portrait('Night 04', 'Night', '#101114', '#9aa0a8', '#3d4450'), trashed: true, trash_count: 1, elo: 1464, games: 1, losses: 1, createdAt: 5 }),
   ]
   const tags = SEED.map(item => ({ ...item }))
   const badTags = new Map<string, string[]>([['nt', ['t-light']]])
   const attributes = new Map<string, BrushAttribute[]>([
     ['jp', [{ trait: 'hair shine', value: 'glossy', source: 'vision', confidence: 0.8, wins: 0, games: 0, trashes: 0 }]],
   ])
-  let lastPair: [string, string] | null = null
   let savedRecipe: string | null = null
+  let recentKeys: string[] = []
+  let contest: ContestState = { phase: 'qualifying', rounds: [], championId: null }
   const known = new Set<string>()
 
   function wait(ms: number, signal?: AbortSignal) {
@@ -131,12 +134,10 @@ export function createPreviewClient(): BrushApi {
   function pair() {
     const pool = active()
     if (pool.length < 2) return { ready: false as const, reason: 'need_images', active: pool.length, total: images.length }
-    const left = [...pool].sort((a, b) => a.games - b.games || (b.createdAt ?? 0) - (a.createdAt ?? 0) || b.sigma - a.sigma)[0]
-    const key = (a: string, b: string) => [a, b].sort().join(':')
-    const opponents = pool
-      .filter(image => image.id !== left.id)
-      .sort((a, b) => a.games - b.games || Math.abs(a.elo - left.elo) - Math.abs(b.elo - left.elo))
-    const right = opponents.find(image => !lastPair || key(left.id, image.id) !== key(lastPair[0], lastPair[1])) || opponents[0]
+    const [slot] = extendQueue(pool, [], recentKeys, 1)
+    if (!slot) return { ready: false as const, reason: 'need_images', active: pool.length, total: images.length }
+    const left = pool.find(image => image.id === slot.leftId) || pool[0]
+    const right = pool.find(image => image.id === slot.rightId) || pool[1]
     return { ready: true as const, active: pool.length, total: images.length, left, right }
   }
 
@@ -175,9 +176,9 @@ export function createPreviewClient(): BrushApi {
     async record(input) {
       const left = images.find(image => image.id === input.leftId)
       const right = images.find(image => image.id === input.rightId)
-      if (!left || !right) return
+      if (!left || !right) return { match_id: null }
       if (input.decision === 'pick' && input.winnerId) {
-        const rated = eloUpdate(left.elo, right.elo, left.games, right.games, input.winnerId === left.id)
+        const rated = eloUpdate(left.elo, right.elo, left.games, right.games, input.winnerId === left.id, input.margin || 'clear')
         left.elo = rated.eloA
         right.elo = rated.eloB
         left.sigma = nextSigma(left.sigma)
@@ -195,7 +196,15 @@ export function createPreviewClient(): BrushApi {
           badTags.set(image.id, [...existing])
         }
       }
-      lastPair = [left.id, right.id]
+      recentKeys = [...recentKeys, [left.id, right.id].sort().join(':')].slice(-40)
+      return { match_id: `preview-${crypto.randomUUID()}` }
+    },
+    async annotate() {},
+    async contest() { return contest },
+    async saveContest(next) { contest = next },
+    async setPhash(imageId, hash) {
+      const image = images.find(item => item.id === imageId)
+      if (image) image.perceptual_hash = hash
     },
     async leaderboard() { return [...images].sort((a, b) => b.elo - a.elo) },
     async library() { return [...images] },

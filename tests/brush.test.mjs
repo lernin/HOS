@@ -3,10 +3,12 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { countryFromPath, fileStem, seriesFromName } from '../src/experiences/brush/names.ts'
+import { applyDecision, bootDeck, currentMatch, startFinals } from '../src/experiences/brush/deck.ts'
+import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
+import { extendQueue, finalsFieldSize, hashDistance, pairKey, sameGroup, seedOrder } from '../src/experiences/brush/pair.ts'
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
-import { retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
+import { UPLOAD_BATCH_LIMIT, retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
 
 test('elo matches the documented 1500 vs 1500 step', () => {
   const first = eloUpdate(1500, 1500, 0, 0, true)
@@ -19,6 +21,102 @@ test('elo matches the documented 1500 vs 1500 step', () => {
   assert.equal(settled.eloB, 1488)
   assert.equal(nextSigma(350), 329)
   assert.equal(nextSigma(60), 60)
+  const close = eloUpdate(1500, 1500, 0, 0, true, 'close')
+  assert.equal(close.k, 16)
+  assert.equal(close.eloA, 1508)
+  assert.equal(close.eloB, 1492)
+  const settledClose = eloUpdate(1500, 1500, 8, 8, true, 'close')
+  assert.equal(settledClose.k, 8)
+  assert.equal(settledClose.eloA, 1504)
+  assert.equal(settledClose.eloB, 1496)
+})
+
+function image(partial) {
+  return {
+    folder_path: partial.country || '',
+    series: null,
+    elo: 1500,
+    sigma: 350,
+    games: 0,
+    wins: 0,
+    losses: 0,
+    trash_count: 0,
+    trashed: false,
+    drive_file_id: partial.id,
+    mime_type: 'image/jpeg',
+    source: 'drive',
+    prompt_text: null,
+    country: partial.country || '',
+    ...partial,
+  }
+}
+
+test('qualifying keeps the same model apart and shuffles the next pair', () => {
+  assert.equal(seriesFromName('Japan_Model_R5_03.jpg'), 'Model R5')
+  const modelA = image({ id: 'a', name: 'Japan_Model_01.jpg', country: 'Japan', folder_path: 'Japan/Models' })
+  const modelB = image({ id: 'b', name: 'Japan_Model_02.jpg', country: 'Japan', folder_path: 'Japan/Models' })
+  const roundA = image({ id: 'c', name: 'Japan_R3_01.jpg', country: 'Japan', folder_path: 'Japan/R3' })
+  const roundB = image({ id: 'd', name: 'Japan_R3_09.jpg', country: 'Japan', folder_path: 'Japan/R3' })
+  const redoA = image({ id: 'e', name: 'redo3_alpha_01.jpg', country: 'Studio' })
+  const redoB = image({ id: 'f', name: 'redo3_beta_02.jpg', country: 'Studio' })
+  const pony = image({ id: 'g', name: 'pony_01.jpg', country: 'Korea' })
+  const korea = image({ id: 'h', name: 'Korea_02.jpg', country: 'Korea' })
+  assert.ok(sameGroup(modelA, modelB))
+  assert.equal(sameGroup(modelA, roundA), false)
+  assert.ok(sameGroup(roundA, roundB))
+  assert.ok(sameGroup(redoA, redoB))
+  assert.equal(sameGroup(redoA, pony), false)
+  assert.ok(groupKeys(modelA).includes('family:japan_model'))
+  assert.ok(groupKeys({ name: 'Japan_Model_R5_03.jpg' }).includes('family:japan_model'))
+  assert.equal(groupKeys({ name: 'Solo.jpg', folder_path: 'Japan' }).some(key => key.startsWith('folder:')), false)
+  assert.ok(sameGroup(
+    image({ id: 'p', name: 'one.jpg', perceptual_hash: 'ffffffffffffffff' }),
+    image({ id: 'q', name: 'two.jpg', perceptual_hash: 'fffffffffffffff0' }),
+  ))
+  assert.equal(hashDistance('ffffffffffffffff', 'fffffffffffffff0'), 4)
+  const pool = [modelA, modelB, roundA, roundB, redoA, redoB, pony, korea]
+  let seed = 7
+  const rng = () => {
+    seed = (seed * 16807) % 2147483647
+    return (seed - 1) / 2147483646
+  }
+  const queue = extendQueue(pool, [], [], 12, rng)
+  assert.ok(queue.length >= 8)
+  for (const slot of queue) {
+    const left = pool.find(item => item.id === slot.leftId)
+    const right = pool.find(item => item.id === slot.rightId)
+    assert.equal(sameGroup(left, right), false)
+  }
+  for (let index = 1; index < queue.length; index += 1) {
+    assert.notEqual(pairKey(queue[index].leftId, queue[index].rightId), pairKey(queue[index - 1].leftId, queue[index - 1].rightId))
+  }
+  const deck = bootDeck(pool, null, rng)
+  const picked = applyDecision(deck, {
+    leftId: deck.queue[0].leftId,
+    rightId: deck.queue[0].rightId,
+    kind: 'pick',
+    winnerId: deck.queue[0].leftId,
+    trashLeft: false,
+    trashRight: false,
+    margin: 'close',
+  }, rng)
+  const winner = picked.images.find(item => item.id === deck.queue[0].leftId)
+  assert.equal(winner.elo, 1508)
+  assert.equal(winner.games, 1)
+  const finals = startFinals({
+    ...deck,
+    images: [
+      image({ id: 'only-a', name: 'Japan_Model_01.jpg', elo: 1600 }),
+      image({ id: 'only-b', name: 'Japan_Model_02.jpg', elo: 1400 }),
+    ],
+    queue: [],
+  })
+  const finalPair = currentMatch(finals)
+  assert.equal(finals.phase, 'finals')
+  assert.ok(sameGroup(finalPair.left, finalPair.right))
+  assert.deepEqual(seedOrder(8), [0, 7, 3, 4, 1, 6, 2, 5])
+  assert.equal(finalsFieldSize(20), 16)
+  assert.equal(finalsFieldSize(3), 2)
 })
 
 test('folder country and series come from the Drive path', () => {
@@ -121,6 +219,28 @@ function typescriptFiles(dir) {
   }
   return found
 }
+
+test('quick picks keep a gallery chooser and a smaller close-call step', () => {
+  const sheet = readFileSync(new URL('../src/experiences/brush/Sheets.tsx', import.meta.url), 'utf8')
+  const input = sheet.slice(sheet.indexOf('data-upload-input'), sheet.indexOf('data-upload-input') + 180)
+  assert.match(input, /accept="image\/\*"/)
+  assert.match(input, /multiple/)
+  assert.equal(input.includes('capture'), false)
+  assert.equal(UPLOAD_BATCH_LIMIT, 100)
+  const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../src/experiences/brush.css', import.meta.url), 'utf8')
+  assert.match(css, /touch-action:\s*none/)
+  assert.match(matchup, /passive: false/)
+  assert.match(matchup, /data-action="close"/)
+  assert.doesNotMatch(matchup, /Love both|onTrashBoth/)
+  const sql = readFileSync(new URL('../supabase/migrations/20261023233000_brush_quick_picks.sql', import.meta.url), 'utf8')
+  assert.match(sql, /margin text default 'clear'/)
+  assert.match(sql, /perceptual_hash/)
+  assert.match(sql, /brush_group_keys/)
+  assert.match(sql, /brush_contest/)
+  assert.match(sql, /1\.0 \/ 3\.0/)
+  assert.doesNotMatch(sql, /files\.delete|addParents|removeParents/)
+})
 
 test('relative api imports use .js so Vercel can resolve the compiled files', () => {
   const apiDir = fileURLToPath(new URL('../api/', import.meta.url))
