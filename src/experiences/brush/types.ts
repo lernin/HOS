@@ -26,6 +26,7 @@ export type BrushImage = {
   trash_count: number
   trashed: boolean
   archived?: boolean
+  unreadable?: boolean
   preview_url?: string
   has_thumbnail?: boolean
   createdAt?: number
@@ -120,6 +121,7 @@ export type BrushApi = {
   saveContest: (state: ContestState) => Promise<void>
   setPhash: (imageId: string, hash: string) => Promise<void>
   setFaceBox: (imageId: string, faceBox: FaceBox | null) => Promise<void>
+  flagUnreadable: (imageId: string) => Promise<void>
   leaderboard: () => Promise<BrushImage[]>
   library: () => Promise<BrushImage[]>
   tags: () => Promise<BrushTag[]>

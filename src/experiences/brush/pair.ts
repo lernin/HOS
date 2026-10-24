@@ -19,6 +19,7 @@ export type Pairable = GroupSource & {
   perceptual_hash?: string | null
   trashed?: boolean
   archived?: boolean
+  unreadable?: boolean
   country?: string
   prompt_text?: string | null
 }
@@ -119,7 +120,7 @@ export function sameGroup(left: Pairable, right: Pairable) {
 }
 
 function active(pool: Pairable[]) {
-  return pool.filter(image => !image.trashed && !image.archived)
+  return pool.filter(image => !image.trashed && !image.archived && !image.unreadable)
 }
 
 export function challengerCount(pool: Pairable[]) {
@@ -329,7 +330,7 @@ export function extendQueue(pool: Pairable[], queue: Slot[], recentKeys: string[
   const next = queue.filter(slot => {
     const left = shadow.find(image => image.id === slot.leftId)
     const right = shadow.find(image => image.id === slot.rightId)
-    return left && right && !left.trashed && !right.trashed && !left.archived && !right.archived
+    return left && right && !left.trashed && !right.trashed && !left.archived && !right.archived && !left.unreadable && !right.unreadable
   })
   const keys = [...recentKeys]
   for (const slot of next) {

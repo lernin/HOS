@@ -33,7 +33,7 @@ Drive setup:
 3. Share the Beauty Contest folder with the service account email as **Editor** (upload needs write access; read-only cannot create `Brush Uploads`).
 4. Put the JSON in `GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON` on the Vercel project. Do not commit the key.
 
-Sync walks that folder and its country subfolders, including files already there and later uploads. Phone uploads keep the full-size original in a `Brush Uploads` subfolder. The phone sends the file in about 3 MB chunks, up to 3 photos at a time, and retries a failed photo. Reopening Brush continues anything still queued on that phone. Each photo is hashed, so the same picture is not added twice. There is no library cap. One selection can include 100 photos; the rest of that selection is left out.
+Sync walks that folder and its subfolders, including files already there and later uploads. It runs when Brush opens, from the Library sync button, and once a day. New files join as unranked challengers, and a face box is read on the way in. Phone uploads keep the full-size original in a `Brush Uploads` subfolder. The phone sends the file in about 3 MB chunks, up to 3 photos at a time, and retries a failed photo. Reopening Brush continues anything still queued on that phone. Each photo is hashed, so the same picture is not added twice. There is no library cap. One selection can include 100 photos; the rest of that selection is left out.
 
 A WebP preview about 1080px tall is cached in the private Supabase Storage bucket `brush-thumbs` so matchups open quickly. Drive stays the source of truth. A new upload starts at 0 games, and the next pairing prefers under-played images, so it enters the contest soon. The pair already on screen stays until that match is decided.
 

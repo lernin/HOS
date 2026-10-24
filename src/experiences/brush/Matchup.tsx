@@ -554,7 +554,7 @@ export function Matchup({
     { image: right, side: 'right' as const },
   ]
   const frontImage = front === 'left' ? left : right
-  const fit: 'contain' | 'cover' = !portrait && frame && frame.scale < 0.999 ? 'cover' : 'contain'
+  const fit = 'contain' as const
   layoutRef.current = { fit, leftRatio, rightRatio }
 
   function photoStyle(image: BrushImage) {
@@ -735,15 +735,14 @@ export function Matchup({
       <div className="brush-photos" ref={stageRef}>
         {cards.map(({ image, side }) => {
           const src = side === 'left' ? leftSrc : rightSrc
-          const sized = !portrait && frame ? { width: side === 'left' ? frame.left : frame.right, aspectRatio: 'auto' } : undefined
           return (
-            <article key={image.id} className={`brush-card${front === side ? ' is-front' : ''}${glow === side ? ' is-glow' : ''}${glow && glow !== side ? ' is-dim' : ''}${farewell?.winner === side ? ' is-shimmer' : ''}${farewell?.loser === side ? ' is-farewell' : ''}`} data-side={side} data-image={image.id} data-name={image.name} style={sized}>
+            <article key={image.id} className={`brush-card${front === side ? ' is-front' : ''}${glow === side ? ' is-glow' : ''}${glow && glow !== side ? ' is-dim' : ''}${farewell?.winner === side ? ' is-shimmer' : ''}${farewell?.loser === side ? ' is-farewell' : ''}`} data-side={side} data-image={image.id} data-name={image.name} data-photo-slot>
               <div className="brush-photo-hit" ref={node => { hitRefs.current[side] = node }} onClick={onPhotoClick}>
                 {src ? (
                   <div className={`brush-slide${entering === side || entering === 'both' ? ' is-entering' : ''}`}>
                     <img className="brush-photo" src={src} alt={image.name} style={photoStyle(image)} draggable={false} />
                   </div>
-                ) : <div className="brush-photo" />}
+                ) : null}
                 <div className="brush-photo-glow" />
               </div>
               {portrait && <div className="brush-portrait-stats">{pictureStats(image, 'portrait')}</div>}
