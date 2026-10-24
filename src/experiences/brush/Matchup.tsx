@@ -1,10 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { faceZoom, focusBox } from './face'
+import { faceShift, faceZoom, focusBox } from './face'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
 
 const PHOTO_GAP = 8
-const MIN_GUTTER = 88
+const LEFT_RAIL = 44
+const RIGHT_MIN = 168
+const SWIPE_THRESHOLD = 56
+const SWIPE_TRAVEL = 88
 
 function useImageRatio(src: string | null) {
   const [ratio, setRatio] = useState(9 / 16)
@@ -30,7 +33,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export function Matchup({
-  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, leftChrome = null, rightChrome = null,
+  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, leftChrome = null, rightChrome = null, notice = null,
 }: {
   left: BrushImage
   right: BrushImage
@@ -44,13 +47,15 @@ export function Matchup({
   srcFor: (image: BrushImage) => string | null
   leftChrome?: ReactNode
   rightChrome?: ReactNode
+  notice?: ReactNode
 }) {
   const stageRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
   const [infoId, setInfoId] = useState<string | null>(null)
   const [frame, setFrame] = useState<{ left: number, right: number, scale: number } | null>(null)
-  const [faceHeld, setFaceHeld] = useState({ left: false, right: false })
-  const [releasing, setReleasing] = useState({ left: false, right: false })
+  const [faceHeld, setFaceHeld] = useState(false)
+  const [faceMotion, setFaceMotion] = useState(false)
+  const faceHeldRef = useRef(false)
   const [entering, setEntering] = useState<'left' | 'right' | null>(null)
   const previousIds = useRef<{ left: string, right: string } | null>(null)
   const leftSrc = srcFor(left)
@@ -173,7 +178,7 @@ export function Matchup({
       const naturalLeft = rect.height * leftRatio
       const naturalRight = rect.height * rightRatio
       const natural = naturalLeft + naturalRight
-      const budget = rect.width - PHOTO_GAP - MIN_GUTTER * 2
+      const budget = rect.width - PHOTO_GAP - LEFT_RAIL - RIGHT_MIN
       const scale = natural > budget ? Math.max(0, budget) / natural : 1
       const next = {
         left: scale < 1 ? Math.floor(naturalLeft * scale) : naturalLeft,
@@ -218,15 +223,20 @@ export function Matchup({
     if (portrait) onFlip()
   }
 
-  function holdFace(side: 'left' | 'right') {
-    setFaceHeld(current => current[side] ? current : { ...current, [side]: true })
-    setReleasing(current => current[side] ? { ...current, [side]: false } : current)
+  function holdFace() {
+    faceHeldRef.current = true
+    setFaceHeld(true)
+    setFaceMotion(true)
   }
 
-  function releaseFace(side: 'left' | 'right') {
-    setFaceHeld(current => current[side] ? { ...current, [side]: false } : current)
-    setReleasing(current => ({ ...current, [side]: true }))
-    window.setTimeout(() => setReleasing(current => current[side] ? { ...current, [side]: false } : current), 320)
+  function releaseFace() {
+    faceHeldRef.current = false
+    setFaceHeld(false)
+    setFaceMotion(true)
+    onZoom(REST_ZOOM)
+    window.setTimeout(() => {
+      if (!faceHeldRef.current) setFaceMotion(false)
+    }, 280)
   }
 
   const cards = [
@@ -236,21 +246,15 @@ export function Matchup({
   const frontImage = front === 'left' ? left : right
   const fit = !portrait && frame && frame.scale < 0.999 ? 'cover' : 'contain'
 
-  function photoStyle(image: BrushImage, side: 'left' | 'right') {
-    const focus = faceHeld[side] ? faceZoom(focusBox(image.face_box)) : null
-    const animate = Boolean(focus) || releasing[side]
-    if (focus) {
-      return {
-        transform: `translate(${focus.tx}%, ${focus.ty}%) scale(${focus.scale})`,
-        transformOrigin: `${focus.x * 100}% ${focus.y * 100}%`,
-        transition: 'transform 280ms ease',
-        objectFit: fit as 'contain' | 'cover',
-      }
-    }
+  function photoStyle(image: BrushImage) {
+    const focus = faceHeld ? faceShift(faceZoom(focusBox(image.face_box))) : null
+    const scale = focus ? focus.scale : zoom.scale
+    const tx = focus ? focus.tx : (zoom.x - 0.5) * (1 - zoom.scale) * 100
+    const ty = focus ? focus.ty : (zoom.y - 0.5) * (1 - zoom.scale) * 100
     return {
-      transform: `scale(${zoom.scale})`,
-      transformOrigin: `${zoom.x * 100}% ${zoom.y * 100}%`,
-      transition: animate ? 'transform 280ms ease' : undefined,
+      transform: `translate(${tx}%, ${ty}%) scale(${scale})`,
+      transformOrigin: '50% 50%',
+      transition: faceMotion ? 'transform 250ms ease' : undefined,
       objectFit: fit as 'contain' | 'cover',
     }
   }
@@ -283,35 +287,33 @@ export function Matchup({
     onTrash(id)
   }
 
-  function gutterName(image: BrushImage) {
+  function pairName(image: BrushImage, side: 'left' | 'right') {
     const open = infoId === image.id
+    const label = open ? image.name : (image.country || 'Untitled')
     return (
-      <div className="brush-gutter-name">
-        <strong>{open ? image.name : (image.country || 'Untitled')}</strong>
+      <div className={`brush-pair-name is-${side}`} data-name-side={side}>
+        <strong>{label}</strong>
         {image.games < PLACEMENT_GAMES && <em className="brush-challenger" data-challenger>NEW</em>}
         <button className="brush-info" type="button" data-action="info" aria-expanded={open} aria-label={open ? 'Hide filename and rating' : 'Show filename and rating'} title={open ? `${Math.round(image.elo)} · ${image.games} played` : image.name} onClick={() => toggleInfo(image.id)}>i</button>
       </div>
     )
   }
 
-  function gutter(image: BrushImage, side: 'left' | 'right') {
-    return (
-      <aside className={`brush-gutter is-${side}`} data-gutter={side}>
-        <div className="brush-gutter-top">{side === 'left' ? leftChrome : rightChrome}</div>
-        {gutterName(image)}
-        <div className="brush-gutter-actions">
-          <button className="brush-pick-arrow" type="button" data-action="pick" onClick={event => choose(event, image.id, 'clear')}>{side === 'left' ? 'WINNER →' : '← WINNER'}</button>
-          <button className="brush-choice close" type="button" data-action="close" onClick={event => choose(event, image.id, 'close')}>Close call</button>
-          <button className="brush-choice danger" type="button" data-action="trash" onClick={event => discard(event, image.id)}>Trash</button>
-          <FaceHoldButton side={side} pressed={faceHeld[side]} onHold={holdFace} onRelease={releaseFace} />
-        </div>
-      </aside>
-    )
+  function swipeCommit(kind: 'pick' | 'close' | 'trash', side: 'left' | 'right') {
+    if (Date.now() < lockRef.current) return
+    lockRef.current = Date.now() + 450
+    const image = side === 'left' ? left : right
+    if (kind === 'trash') onTrash(image.id)
+    else onPick(image.id, kind === 'close' ? 'close' : 'clear')
   }
 
   return (
     <div className="brush-stage" data-screen="match" ref={frameRef}>
-      {!portrait && gutter(left, 'left')}
+      {!portrait && (
+        <aside className="brush-gutter is-left" data-gutter="left">
+          <div className="brush-gutter-top">{leftChrome}</div>
+        </aside>
+      )}
       <div className="brush-photos" ref={stageRef}>
         {cards.map(({ image, side }) => {
           const src = side === 'left' ? leftSrc : rightSrc
@@ -321,7 +323,7 @@ export function Matchup({
               <div className="brush-photo-hit" onClick={onPhotoClick}>
                 {src ? (
                   <div className={`brush-slide${entering === side ? ' is-entering' : ''}`}>
-                    <img className="brush-photo" src={src} alt={image.name} style={photoStyle(image, side)} draggable={false} />
+                    <img className="brush-photo" src={src} alt={image.name} style={photoStyle(image)} draggable={false} />
                   </div>
                 ) : <div className="brush-photo" />}
               </div>
@@ -330,7 +332,22 @@ export function Matchup({
           )
         })}
       </div>
-      {!portrait && gutter(right, 'right')}
+      {!portrait && (
+        <aside className="brush-gutter is-right" data-gutter="right">
+          <div className="brush-gutter-top">{rightChrome}</div>
+          {notice}
+          <div className="brush-pair-names">
+            {pairName(left, 'left')}
+            {pairName(right, 'right')}
+          </div>
+          <div className="brush-gutter-actions">
+            <SwipePad kind="pick" label="WINNER" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} />
+            <SwipePad kind="close" label="Close call" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} />
+            <SwipePad kind="trash" label="Trash" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} />
+            <FaceHoldButton pressed={faceHeld} onHold={holdFace} onRelease={releaseFace} />
+          </div>
+        </aside>
+      )}
       {portrait && (
         <div className="brush-footer">
           <button className="brush-choice" type="button" data-action="pick" onClick={event => choose(event, frontImage.id, 'clear')}>Pick</button>
@@ -343,16 +360,15 @@ export function Matchup({
 }
 
 function FaceHoldButton({
-  side, pressed, onHold, onRelease,
+  pressed, onHold, onRelease,
 }: {
-  side: 'left' | 'right'
   pressed: boolean
-  onHold: (side: 'left' | 'right') => void
-  onRelease: (side: 'left' | 'right') => void
+  onHold: () => void
+  onRelease: () => void
 }) {
   const ref = useRef<HTMLButtonElement>(null)
-  const api = useRef({ side, onHold, onRelease })
-  api.current = { side, onHold, onRelease }
+  const api = useRef({ onHold, onRelease })
+  api.current = { onHold, onRelease }
   useEffect(() => {
     const node = ref.current
     if (!node) return
@@ -361,11 +377,11 @@ function FaceHoldButton({
     const begin = (pointerId: number) => {
       const empty = pointers.size === 0
       pointers.add(pointerId)
-      if (empty) api.current.onHold(api.current.side)
+      if (empty) api.current.onHold()
     }
     const end = (pointerId: number) => {
       if (!pointers.delete(pointerId)) return
-      if (pointers.size === 0) api.current.onRelease(api.current.side)
+      if (pointers.size === 0) api.current.onRelease()
     }
     const start = (event: PointerEvent) => {
       if (event.cancelable) event.preventDefault()
@@ -404,12 +420,129 @@ function FaceHoldButton({
       node.removeEventListener('contextmenu', blockMenu)
       window.removeEventListener('pointerup', stop)
       window.removeEventListener('pointercancel', stop)
-      if (pointers.size) api.current.onRelease(api.current.side)
+      if (pointers.size) api.current.onRelease()
     }
   }, [])
   return (
-    <button ref={ref} className="brush-face-hold" type="button" data-action="face" data-face={side} aria-pressed={pressed} aria-label="Hold for face">
+    <button ref={ref} className="brush-face-hold" type="button" data-action="face" data-face="both" aria-pressed={pressed} aria-label="Hold for face">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="3.4" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M6.5 19.2c1.1-2.8 3-4.2 5.5-4.2s4.4 1.4 5.5 4.2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
     </button>
+  )
+}
+
+function vibrate(ms: number) {
+  navigator.vibrate?.(ms)
+}
+
+function SwipePad({
+  kind, label, leftName, rightName, onCommit,
+}: {
+  kind: 'pick' | 'close' | 'trash'
+  label: string
+  leftName: string
+  rightName: string
+  onCommit: (kind: 'pick' | 'close' | 'trash', side: 'left' | 'right') => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+  const api = useRef({ onCommit, kind })
+  api.current = { onCommit, kind }
+  const [drag, setDrag] = useState<{ dx: number, aim: 'left' | 'right' | null, snapping: boolean }>({ dx: 0, aim: null, snapping: false })
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+    let pointerId: number | null = null
+    let startX = 0
+    let lastAim: 'left' | 'right' | null = null
+    let timer = 0
+    const block: AddEventListenerOptions = { passive: false }
+    const aimOf = (dx: number) => dx <= -SWIPE_THRESHOLD ? 'left' as const : dx >= SWIPE_THRESHOLD ? 'right' as const : null
+    const show = (dx: number, snapping: boolean) => {
+      const clamped = Math.max(-SWIPE_TRAVEL, Math.min(SWIPE_TRAVEL, dx))
+      const aim = aimOf(dx)
+      if (aim && aim !== lastAim) vibrate(12)
+      if (!aim) lastAim = null
+      else lastAim = aim
+      setDrag({ dx: clamped, aim, snapping })
+    }
+    const down = (event: PointerEvent) => {
+      if (pointerId !== null) return
+      if (event.cancelable) event.preventDefault()
+      event.stopPropagation()
+      window.clearTimeout(timer)
+      pointerId = event.pointerId
+      startX = event.clientX
+      lastAim = null
+      show(0, false)
+    }
+    const move = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return
+      if (event.cancelable) event.preventDefault()
+      show(event.clientX - startX, false)
+    }
+    const up = (event: PointerEvent) => {
+      if (event.pointerId !== pointerId) return
+      pointerId = null
+      const dx = event.clientX - startX
+      const side = aimOf(dx)
+      if (!side) {
+        show(0, true)
+        timer = window.setTimeout(() => setDrag({ dx: 0, aim: null, snapping: false }), 180)
+        return
+      }
+      show(side === 'left' ? -SWIPE_TRAVEL : SWIPE_TRAVEL, true)
+      vibrate(20)
+      timer = window.setTimeout(() => {
+        api.current.onCommit(api.current.kind, side)
+        setDrag({ dx: 0, aim: null, snapping: false })
+      }, 150)
+    }
+    const touchStart = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault()
+      event.stopPropagation()
+    }
+    const blockMenu = (event: Event) => event.preventDefault()
+    node.addEventListener('pointerdown', down, block)
+    node.addEventListener('touchstart', touchStart, block)
+    node.addEventListener('contextmenu', blockMenu)
+    window.addEventListener('pointermove', move, block)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    return () => {
+      window.clearTimeout(timer)
+      node.removeEventListener('pointerdown', down)
+      node.removeEventListener('touchstart', touchStart)
+      node.removeEventListener('contextmenu', blockMenu)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+  }, [])
+  const hint = kind === 'pick'
+    ? `Swipe left ← WINNER for ${leftName}. Swipe right WINNER → for ${rightName}.`
+    : `Swipe left for ${leftName}. Swipe right for ${rightName}.`
+  const aimed = drag.aim === 'left' ? leftName : drag.aim === 'right' ? rightName : ''
+  return (
+    <div
+      ref={ref}
+      className={`brush-swipe is-${kind}`}
+      data-swipe={kind}
+      data-action={kind === 'pick' ? 'pick' : kind === 'close' ? 'close' : 'trash'}
+      data-aim={drag.aim || 'none'}
+      role="group"
+      tabIndex={0}
+      aria-label={hint}
+      onKeyDown={event => {
+        if (event.key === 'ArrowLeft') api.current.onCommit(kind, 'left')
+        if (event.key === 'ArrowRight') api.current.onCommit(kind, 'right')
+      }}
+    >
+      <div className="brush-swipe-wash" style={{ width: `${Math.min(100, Math.abs(drag.dx) / SWIPE_TRAVEL * 100)}%` }} />
+      <span className="brush-swipe-hint is-left" aria-hidden="true">←</span>
+      <span className="brush-swipe-hint is-right" aria-hidden="true">→</span>
+      <div className="brush-swipe-face" style={{ transform: `translateX(${drag.dx}px)`, transition: drag.snapping ? 'transform 160ms ease' : undefined }}>
+        <strong>{label}</strong>
+        {aimed && <em>{aimed}</em>}
+      </div>
+    </div>
   )
 }

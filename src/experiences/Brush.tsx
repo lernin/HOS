@@ -420,8 +420,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         </nav>
       )}
       <div className="brush-main">
-      {moment && <button className={`brush-moment${landscapeMatch ? ' brush-banner' : ''}`} type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
-      {landscapeMatch && message && phase === 'app' && <p className="brush-note brush-banner" data-note style={moment ? { top: 46 } : undefined}>{message}</p>}
+      {moment && !landscapeMatch && <button className="brush-moment" type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
 
       {phase === 'boot' && <div className="brush-gate"><p>Opening Brush…</p></div>}
       {(phase === 'set' || phase === 'enter' || phase === 'change') && (
@@ -467,6 +466,12 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           onPick={pick}
           onTrash={trashOne}
           srcFor={srcFor}
+          notice={landscapeMatch ? (
+            <>
+              {moment && <button className="brush-gutter-toast" type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
+              {message && phase === 'app' && <p className="brush-note brush-gutter-toast is-note" data-note>{message}</p>}
+            </>
+          ) : null}
           leftChrome={landscapeMatch ? (
             <>
               <button className="brush-menu-button brush-icon-button" type="button" data-action="menu" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(open => !open)}>

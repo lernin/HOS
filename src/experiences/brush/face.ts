@@ -118,15 +118,15 @@ export async function detectFaceBox(source: CanvasImageSource): Promise<FaceBox 
 export type FaceFrame = { scale: number, x: number, y: number, tx: number, ty: number }
 
 // Place the eye line about a third of the way down, with the whole head and a
-// little hair in frame. Slightly wider than a tight face crop. If the head
-// already touches the top, keep the image edge pinned instead of opening a gap.
+// little hair in frame. A bit closer than the first pass. If the head already
+// touches the top, keep the image edge pinned instead of opening a gap.
 export function faceZoom(box: FaceBox): FaceFrame {
   const eyeX = clamp(box.x + box.w * 0.5, 0, 1)
   const eyeY = clamp(box.y + box.h * 0.36, 0, 1)
-  const above = Math.max(0.025, eyeY - box.y + box.h * 0.1)
-  const below = Math.max(0.025, box.y + box.h - eyeY + box.h * 0.06)
-  const half = Math.max(0.025, box.w * 0.62)
-  const scale = clamp(Math.min(0.3 / above, 0.6 / below, 0.46 / half, 3.1), 1.25, 3.1)
+  const above = Math.max(0.025, eyeY - box.y + box.h * 0.08)
+  const below = Math.max(0.025, box.y + box.h - eyeY + box.h * 0.04)
+  const half = Math.max(0.025, box.w * 0.54)
+  const scale = clamp(Math.min(0.36 / above, 0.68 / below, 0.52 / half, 3.5), 1.35, 3.5)
   const targetY = clamp(0.33, 1 - (1 - eyeY) * scale, eyeY * scale)
   const targetX = clamp(0.5, 1 - (1 - eyeX) * scale, eyeX * scale)
   return {
@@ -135,5 +135,17 @@ export function faceZoom(box: FaceBox): FaceFrame {
     y: eyeY,
     tx: (targetX - eyeX) * 100,
     ty: (targetY - eyeY) * 100,
+  }
+}
+
+// Same framing, written as translate+scale around the center so a pinch zoom
+// and a face zoom can ease into each other.
+export function faceShift(frame: FaceFrame) {
+  const targetX = frame.x + frame.tx / 100
+  const targetY = frame.y + frame.ty / 100
+  return {
+    scale: frame.scale,
+    tx: (targetX - 0.5 - (frame.x - 0.5) * frame.scale) * 100,
+    ty: (targetY - 0.5 - (frame.y - 0.5) * frame.scale) * 100,
   }
 }
