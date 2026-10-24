@@ -17,6 +17,8 @@
 .brush-choice{flex:1;min-height:46px;background:rgba(12,13,11,.78)}
 .brush-choice.danger{border-color:#e7b2a8}
 .brush-choice.close{flex:0.7;min-height:36px;font-size:13px}
+.brush-challenger{display:block;margin-top:4px;font-style:normal;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#f3d7a1}
+.brush-moment{position:absolute;z-index:6;top:54px;left:50%;transform:translateX(-50%);max-width:calc(100% - 24px);background:#efe6d6;color:#1b1914;border:0;border-radius:999px;min-height:36px;padding:0 14px}
 .brush-scroll{position:absolute;inset:0;overflow:auto;padding:64px 16px max(20px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
 .brush-scroll h2{font-family:Georgia,serif;font-weight:500;font-size:28px;margin:0}
 .brush-panel{border:1px solid rgba(244,239,230,.16);border-radius:18px;padding:14px;background:#141510}

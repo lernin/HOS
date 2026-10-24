@@ -3,9 +3,9 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { applyDecision, bootDeck, currentMatch, startFinals } from '../src/experiences/brush/deck.ts'
+import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
-import { extendQueue, finalsFieldSize, hashDistance, pairKey, sameGroup, seedOrder } from '../src/experiences/brush/pair.ts'
+import { challengerCount, extendQueue, finalsFieldSize, hashDistance, newEntrants, pairKey, sameGroup, seedOrder } from '../src/experiences/brush/pair.ts'
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
 import { UPLOAD_BATCH_LIMIT, retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
@@ -29,6 +29,10 @@ test('elo matches the documented 1500 vs 1500 step', () => {
   assert.equal(settledClose.k, 8)
   assert.equal(settledClose.eloA, 1504)
   assert.equal(settledClose.eloB, 1496)
+  const placement = eloUpdate(1500, 1700, 0, 20, true)
+  assert.equal(placement.kA, 48)
+  assert.equal(placement.kB, 24)
+  assert.ok(Math.abs(placement.eloA - 1500) > Math.abs(placement.eloB - 1700))
 })
 
 function image(partial) {
@@ -117,6 +121,118 @@ test('qualifying keeps the same model apart and shuffles the next pair', () => {
   assert.deepEqual(seedOrder(8), [0, 7, 3, 4, 1, 6, 2, 5])
   assert.equal(finalsFieldSize(20), 16)
   assert.equal(finalsFieldSize(3), 2)
+})
+
+test('a visit resumes the bracket and newcomers place without resetting ratings', () => {
+  const seeded = [
+    image({ id: 'a', name: 'Alpha_01.jpg', elo: 1700, games: 9, wins: 6 }),
+    image({ id: 'b', name: 'Beta_01.jpg', elo: 1600, games: 9, wins: 5 }),
+    image({ id: 'c', name: 'Gamma_01.jpg', elo: 1500, games: 9, wins: 4 }),
+    image({ id: 'd', name: 'Delta_01.jpg', elo: 1400, games: 9, wins: 3 }),
+  ]
+  const started = startFinals(bootDeck(seeded, { phase: 'qualifying', rounds: [], championId: null }))
+  const live = currentMatch(started)
+  const mid = applyDecision(started, {
+    leftId: live.left.id,
+    rightId: live.right.id,
+    kind: 'pick',
+    winnerId: live.left.id,
+    trashLeft: false,
+    trashRight: false,
+    margin: 'clear',
+  })
+  const resumed = bootDeck(mid.images, { phase: mid.phase, rounds: mid.rounds, championId: mid.championId })
+  assert.equal(resumed.phase, 'finals')
+  assert.equal(startFinals(resumed), resumed)
+  const resumedMatch = currentMatch(resumed)
+  const midMatch = currentMatch(mid)
+  assert.equal(pairKey(resumedMatch.left.id, resumedMatch.right.id), pairKey(midMatch.left.id, midMatch.right.id))
+  const replayed = replayPending(bootDeck(seeded, { phase: 'finals', rounds: started.rounds, championId: null }), [{
+    leftId: live.left.id,
+    rightId: live.right.id,
+    decision: 'pick',
+    winnerId: live.left.id,
+    trashLeft: false,
+    trashRight: false,
+    margin: 'clear',
+    matchId: null,
+  }])
+  assert.equal(replayed.rounds[0].find(slot => slot.leftId === live.left.id || slot.rightId === live.left.id).winnerId, live.left.id)
+  assert.equal(replayed.images.find(item => item.id === live.left.id).games, live.left.games + 1)
+
+  const fresh = image({ id: 'new', name: 'Solo_New.jpg', country: 'Uploads', folder_path: 'Brush Uploads', elo: 1500, games: 0 })
+  const stale = resumed.images.map(item => item.id === 'a' ? { ...item, elo: 1500, games: 0, wins: 0 } : item)
+  const merged = mergeLibrary(resumed, [...stale, fresh])
+  assert.equal(merged.images.find(item => item.id === 'a').elo, resumed.images.find(item => item.id === 'a').elo)
+  assert.equal(merged.images.find(item => item.id === 'a').games, resumed.images.find(item => item.id === 'a').games)
+  assert.equal(merged.phase, 'finals')
+  assert.equal(merged.rounds.flat().some(slot => slot.leftId === 'new' || slot.rightId === 'new'), false)
+  assert.equal(challengerCount(merged.images), 1)
+
+  let seed = 3
+  const rng = () => {
+    seed = (seed * 16807) % 2147483647
+    return (seed - 1) / 2147483646
+  }
+  const placing = openPlacement(merged, rng)
+  const placed = currentMatch(placing)
+  assert.ok([placed.left.id, placed.right.id].includes('new'))
+  const kept = applyDecision(placing, {
+    leftId: placed.left.id,
+    rightId: placed.right.id,
+    kind: 'pick',
+    winnerId: 'new',
+    trashLeft: false,
+    trashRight: false,
+    margin: 'clear',
+  }, rng)
+  assert.equal(kept.phase, 'finals')
+  assert.deepEqual(kept.rounds, placing.rounds)
+  assert.equal(kept.images.find(item => item.id === 'new').games, 1)
+  assert.equal(returnToBracket(kept).focus, 'bracket')
+  assert.equal(currentMatch(returnToBracket(kept)).left.id, resumedMatch.left.id)
+
+  const veterans = [1200, 1400, 1600, 1800, 2000].map(elo => image({
+    id: `e${elo}`,
+    name: `Lane_${elo}.jpg`,
+    elo,
+    games: 12,
+    wins: 6,
+  }))
+  const queue = extendQueue([fresh, ...veterans], [], [], 5, rng)
+  assert.equal(queue.length, 5)
+  const opponents = queue.map(slot => slot.leftId === 'new' ? slot.rightId : slot.leftId)
+  assert.deepEqual(opponents, ['e1600', 'e1800', 'e1400', 'e2000', 'e1200'])
+  assert.ok(queue.every(slot => slot.leftId === 'new' || slot.rightId === 'new'))
+
+  const field = [
+    ...Array.from({ length: 16 }, (_, index) => image({ id: `v${index}`, name: `Vet_${index}.jpg`, elo: 1505, games: 10, wins: 5 })),
+    ...Array.from({ length: 3 }, (_, index) => image({ id: `low${index}`, name: `Low_${index}.jpg`, elo: 1400, games: 10, wins: 2 })),
+    image({ id: 'rose', name: 'Rose_01.jpg', elo: 1490, games: 2, wins: 1 }),
+  ]
+  const before = field
+  const rose = eloUpdate(1490, 1505, 2, 10, true)
+  const after = field.map(item => {
+    if (item.id === 'rose') return { ...item, elo: rose.eloA, games: 3, wins: 2 }
+    if (item.id === 'v0') return { ...item, elo: rose.eloB, games: 11, wins: 5 }
+    return item
+  })
+  assert.deepEqual(newEntrants(before, after).map(item => item.id), ['rose'])
+  assert.deepEqual(newEntrants(after, after).map(item => item.id), [])
+
+  const upload = readFileSync(new URL('../supabase/migrations/20261023163000_brush_upload_originals.sql', import.meta.url), 'utf8')
+  const conflict = upload.slice(upload.lastIndexOf('on conflict (drive_file_id)'), upload.indexOf('updated_at = pg_catalog.now();', upload.lastIndexOf('on conflict (drive_file_id)')))
+  assert.doesNotMatch(conflict, /\belo\b|\bgames\b/)
+  const ongoing = readFileSync(new URL('../supabase/migrations/20261024013000_brush_ongoing_tournament.sql', import.meta.url), 'utf8')
+  assert.match(ongoing, /games_a < 8/)
+  assert.match(ongoing, /games_b < 8/)
+  assert.match(ongoing, /games < 5/)
+  assert.match(ongoing, /percentile_cont/)
+  assert.doesNotMatch(ongoing, /files\.delete|addParents|removeParents/)
+  const screen = readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8')
+  assert.match(screen, /New challengers:/)
+  assert.match(screen, /entered the top 16!/)
+  assert.match(readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8'), /data-challenger/)
 })
 
 test('folder country and series come from the Drive path', () => {

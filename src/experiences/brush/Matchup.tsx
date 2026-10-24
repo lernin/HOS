@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
 
 export type Zoom = { scale: number, x: number, y: number }
@@ -179,6 +180,7 @@ export function Matchup({
             <div className="brush-card-meta">
               <strong>{image.country || 'Untitled'}</strong>
               <small>{image.name}<br />{Math.round(image.elo)} · {image.games} played</small>
+              {image.games < PLACEMENT_GAMES && <em className="brush-challenger" data-challenger>New challenger</em>}
             </div>
             <div className="brush-card-actions">
               {showPick && <button className="brush-choice" type="button" data-action="pick" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onPick(image.id, 'clear') } }}>Pick</button>}
