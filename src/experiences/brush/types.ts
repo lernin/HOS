@@ -17,6 +17,7 @@ export type BrushImage = {
   prompt_source?: string | null
   elo: number
   sigma: number
+  volatility?: number
   games: number
   wins: number
   losses: number

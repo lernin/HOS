@@ -535,7 +535,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           <button className="brush-upload" type="button" onClick={() => setScreen('library')}>Open library</button>
         </div>
       )}
-      {phase === 'app' && screen === 'board' && <Leaderboard images={deck ? [...deck.images].sort((a, b) => b.elo - a.elo || b.games - a.games) : board} srcFor={srcFor} />}
+      {phase === 'app' && screen === 'board' && <Leaderboard images={deck?.images || board} srcFor={srcFor} />}
       {phase === 'app' && screen === 'love' && (
         <InsightsScreen
           insights={insights}

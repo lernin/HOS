@@ -8,35 +8,39 @@ import { levelOf, levelProgress, matchMoments, standingOf } from '../src/experie
 import { faceBoxFromPixels, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
 import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
-import { challengerCount, CLOSE_ELO, extendQueue, finalsFieldSize, hashDistance, lookOf, newEntrants, nextQualifyingPair, pairKey, RECENT_WINDOW, sameGroup, seedOrder, WILDCARD_RATE } from '../src/experiences/brush/pair.ts'
-import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
+import { challengerCount, CLOSE_ELO, extendQueue, finalsFieldSize, hashDistance, lookOf, newEntrants, nextContender, nextQualifyingPair, pairKey, PLACEMENT_GAMES, RECENT_WINDOW, sameGroup, seedOrder, WILDCARD_RATE } from '../src/experiences/brush/pair.ts'
+import { conservativeRating, glickoPeriod, glickoUpdate, INITIAL_RD, INITIAL_VOLATILITY, MIN_RD, rdForGames } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
 import { UPLOAD_BATCH_LIMIT, retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
 import { approach, clampInRanges, clampZoom, contentSpan, faceAimPan, faceDragGain, faceDragPan, faceEdgePan, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
 
-test('elo matches the documented 1500 vs 1500 step', () => {
-  const first = eloUpdate(1500, 1500, 0, 0, true)
-  assert.equal(first.k, 48)
-  assert.equal(first.eloA, 1524)
-  assert.equal(first.eloB, 1476)
-  const settled = eloUpdate(1500, 1500, 8, 8, true)
-  assert.equal(settled.k, 24)
-  assert.equal(settled.eloA, 1512)
-  assert.equal(settled.eloB, 1488)
-  assert.equal(nextSigma(350), 329)
-  assert.equal(nextSigma(60), 60)
-  const close = eloUpdate(1500, 1500, 0, 0, true, 'close')
-  assert.equal(close.k, 16)
-  assert.equal(close.eloA, 1508)
-  assert.equal(close.eloB, 1492)
-  const settledClose = eloUpdate(1500, 1500, 8, 8, true, 'close')
-  assert.equal(settledClose.k, 8)
-  assert.equal(settledClose.eloA, 1504)
-  assert.equal(settledClose.eloB, 1496)
-  const placement = eloUpdate(1500, 1700, 0, 20, true)
-  assert.equal(placement.kA, 48)
-  assert.equal(placement.kB, 24)
-  assert.ok(Math.abs(placement.eloA - 1500) > Math.abs(placement.eloB - 1700))
+test('glicko-2 matches the published example and keeps a close call smaller', () => {
+  const paper = glickoPeriod({ rating: 1500, rd: 200, volatility: 0.06 }, [
+    { rating: 1400, rd: 30, score: 1 },
+    { rating: 1550, rd: 100, score: 0 },
+    { rating: 1700, rd: 300, score: 0 },
+  ])
+  assert.ok(Math.abs(paper.rating - 1464.06) < 0.01, paper.rating)
+  assert.ok(Math.abs(paper.rd - 151.52) < 0.01, paper.rd)
+  assert.ok(Math.abs(paper.volatility - 0.05999) < 0.00001, paper.volatility)
+  const fresh = { rating: 1500, rd: INITIAL_RD, volatility: INITIAL_VOLATILITY }
+  const clear = glickoUpdate(fresh, fresh, true, 'clear')
+  const close = glickoUpdate(fresh, fresh, true, 'close')
+  assert.ok(clear.eloA > 1500 && clear.eloB < 1500)
+  assert.ok(close.eloA > 1500 && close.eloA < clear.eloA)
+  assert.ok(close.eloB < 1500 && close.eloB > clear.eloB)
+  assert.ok(clear.sigmaA < INITIAL_RD && clear.sigmaA >= MIN_RD)
+  assert.equal(rdForGames(0), 350)
+  assert.equal(rdForGames(48), 50)
+  assert.equal(rdForGames(200), 50)
+  const lucky = glickoUpdate(
+    { rating: 1500, rd: 350, volatility: 0.06 },
+    { rating: 1600, rd: 50, volatility: 0.06 },
+    true,
+  )
+  assert.ok(conservativeRating(lucky.eloA, lucky.sigmaA) < conservativeRating(1600, 50))
+  assert.match(readFileSync(new URL('../src/experiences/brush/rank.ts', import.meta.url), 'utf8'), /rating - 2 \* RD/)
+  assert.match(readFileSync(new URL('../src/experiences/brush/Sheets.tsx', import.meta.url), 'utf8'), /compareConservative/)
 })
 
 function image(partial) {
@@ -110,7 +114,10 @@ test('qualifying keeps the same model apart and shuffles the next pair', () => {
   }, rng)
   const winner = picked.images.find(item => item.id === deck.queue[0].leftId)
   const loser = picked.images.find(item => item.id === deck.queue[0].rightId)
-  assert.equal(winner.elo, 1508)
+  assert.ok(winner.elo > 1500)
+  assert.ok(loser.elo < 1500)
+  assert.ok(winner.elo - 1500 < 1500 - loser.elo + 1e-6)
+  assert.ok(winner.sigma < 350 && winner.sigma >= 50)
   assert.equal(winner.games, 1)
   assert.equal(winner.close_wins, 1)
   assert.equal(loser.close_losses, 1)
@@ -211,22 +218,27 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   const opponents = queue.map(slot => slot.leftId === 'new' ? slot.rightId : slot.leftId)
   assert.ok(queue.every(slot => slot.leftId === 'new' || slot.rightId === 'new'))
   const opponentElos = opponents.map(id => veterans.find(item => item.id === id).elo)
-  assert.ok(Math.max(...opponentElos) - Math.min(...opponentElos) >= 600, opponentElos.join(','))
-  assert.ok(new Set(opponents).size >= 4, opponents.join(','))
+  assert.ok(Math.min(...opponentElos) <= 1400, opponentElos.join(','))
+  assert.ok(Math.max(...opponentElos) >= 1800, opponentElos.join(','))
 
   const field = [
-    ...Array.from({ length: 16 }, (_, index) => image({ id: `v${index}`, name: `Vet_${index}.jpg`, elo: 1505, games: 10, wins: 5 })),
-    ...Array.from({ length: 3 }, (_, index) => image({ id: `low${index}`, name: `Low_${index}.jpg`, elo: 1400, games: 10, wins: 2 })),
-    image({ id: 'rose', name: 'Rose_01.jpg', elo: 1490, games: 2, wins: 1 }),
+    ...Array.from({ length: 16 }, (_, index) => image({ id: `v${index}`, name: `Vet_${index}.jpg`, elo: 1505, sigma: 80, games: 10, wins: 5 })),
+    ...Array.from({ length: 3 }, (_, index) => image({ id: `low${index}`, name: `Low_${index}.jpg`, elo: 1400, sigma: 80, games: 10, wins: 2 })),
+    image({ id: 'rose', name: 'Rose_01.jpg', elo: 1490, sigma: 350, volatility: 0.06, games: 2, wins: 1 }),
   ]
   const before = field
-  const rose = eloUpdate(1490, 1505, 2, 10, true)
+  const rose = glickoUpdate(
+    { rating: 1490, rd: 350, volatility: 0.06 },
+    { rating: 1505, rd: 80, volatility: 0.06 },
+    true,
+  )
   const after = field.map(item => {
-    if (item.id === 'rose') return { ...item, elo: rose.eloA, games: 3, wins: 2 }
-    if (item.id === 'v0') return { ...item, elo: rose.eloB, games: 11, wins: 5 }
+    if (item.id === 'rose') return { ...item, elo: rose.eloA, sigma: rose.sigmaA, games: 3, wins: 2 }
+    if (item.id === 'v0') return { ...item, elo: rose.eloB, sigma: rose.sigmaB, games: 11, wins: 5 }
     return item
   })
-  assert.deepEqual(newEntrants(before, after).map(item => item.id), ['rose'])
+  assert.ok(conservativeRating(rose.eloA, rose.sigmaA) < conservativeRating(1505, 80))
+  assert.deepEqual(newEntrants(before, after).map(item => item.id), [])
   assert.deepEqual(newEntrants(after, after).map(item => item.id), [])
 
   const upload = readFileSync(new URL('../supabase/migrations/20261023163000_brush_upload_originals.sql', import.meta.url), 'utf8')
@@ -242,7 +254,10 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   assert.match(screen, /New challengers:/)
   assert.match(screen, /matchMoments/)
   assert.match(readFileSync(new URL('../src/experiences/brush/level.ts', import.meta.url), 'utf8'), /entered the top 16!/)
-  assert.match(readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8'), /data-challenger/)
+  const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
+  assert.match(matchup, /data-challenger/)
+  assert.match(matchup, /data-placement/)
+  assert.match(matchup, /\$\{image\.games\}\/\$\{PLACEMENT_GAMES\}/)
 })
 
 test('pairings prefer a different look, a fresh opponent, and a close rating', () => {
@@ -329,6 +344,63 @@ test('pairings prefer a different look, a fresh opponent, and a close rating', (
   assert.match(memory, /brush_contest_get/)
   assert.match(memory, /limit 10/)
   assert.match(readFileSync(new URL('../src/experiences/brush/client.ts', import.meta.url), 'utf8'), /recentKeys/)
+
+  const hungry = image({ id: 'hungry', name: 'Hungry_01.jpg', country: 'Sweden', elo: 1500, games: 0, sigma: 350, prompt_text: 'park, blue dress' })
+  const mid = image({ id: 'mid', name: 'Mid_01.jpg', country: 'Korea', elo: 1500, games: 3, sigma: 180, prompt_text: 'cafe, cream dress' })
+  const placed = [1200, 1500, 1800].map(elo => image({
+    id: `placed-${elo}`,
+    name: `Placed_${elo}.jpg`,
+    country: elo === 1500 ? 'Japan' : 'Thailand',
+    elo,
+    games: 12,
+    sigma: 60,
+    prompt_text: 'garden, gold dress',
+  }))
+  const waiting = extendQueue([hungry, mid, ...placed], [], [], 5, steady)
+  assert.equal(waiting.length, 5)
+  assert.ok(waiting[0].leftId === 'hungry' || waiting[0].rightId === 'hungry')
+  const unplaced = new Set(['hungry', 'mid'])
+  assert.ok(waiting.every(slot => unplaced.has(slot.leftId) || unplaced.has(slot.rightId)))
+  const rankedOnly = extendQueue(placed, [], [], 3, steady)
+  assert.equal(rankedOnly.length, 3)
+  assert.ok(rankedOnly.every(slot => !unplaced.has(slot.leftId) && !unplaced.has(slot.rightId)))
+
+  const sure = image({ id: 'sure', name: 'Sure_01.jpg', country: 'Sweden', elo: 1600, games: 30, sigma: 50, prompt_text: 'garden, gold dress' })
+  const shaky = image({ id: 'shaky', name: 'Shaky_01.jpg', country: 'Korea', elo: 1600, games: 8, sigma: 300, prompt_text: 'park, blue dress' })
+  const ladder = [
+    image({ id: 'low', name: 'Low_01.jpg', country: 'Thailand', elo: 1200, games: 20, sigma: 60, prompt_text: 'beach, white dress' }),
+    sure,
+    shaky,
+    image({ id: 'high', name: 'High_01.jpg', country: 'Vietnam', elo: 2000, games: 20, sigma: 60, prompt_text: 'alley, navy outfit' }),
+  ]
+  const informative = nextQualifyingPair([hungry, ...ladder], { rng: steady })
+  assert.equal(informative.left.id, 'hungry')
+  assert.equal(informative.right.id, 'sure')
+  const rungs = [1200, 1400, 1600, 1800, 2000].map(elo => image({
+    id: `rung-${elo}`,
+    name: `Rung_${elo}.jpg`,
+    country: 'Studio',
+    elo,
+    games: 12,
+    sigma: 80,
+  }))
+  const debut = image({ id: 'debut', name: 'Debut_01.jpg', country: 'Uploads', elo: 1500, games: 0, sigma: 350 })
+  const walked = extendQueue([debut, ...rungs], [], [], 5, steady)
+  const walkedElos = walked.map(slot => {
+    const id = slot.leftId === 'debut' ? slot.rightId : slot.leftId
+    return rungs.find(item => item.id === id).elo
+  })
+  assert.deepEqual(walkedElos, [1600, 1800, 1400, 1800, 1400])
+
+  const keep = image({ id: 'keep', name: 'Keep_01.jpg', country: 'Japan', elo: 1550, games: 12, sigma: 60, prompt_text: 'studio, sage dress' })
+  const starved = image({ id: 'starved', name: 'Starved_01.jpg', country: 'Sweden', elo: 1500, games: 1, sigma: 250, prompt_text: 'park, blue dress' })
+  const later = image({ id: 'later', name: 'Later_01.jpg', country: 'Korea', elo: 1500, games: 4, sigma: 160, prompt_text: 'cafe, cream dress' })
+  const rival = image({ id: 'rival', name: 'Rival_01.jpg', country: 'Thailand', elo: 1550, games: 20, sigma: 55, prompt_text: 'beach, white dress' })
+  assert.equal(nextContender([keep, starved, later, rival], 'keep', { rng: steady }).id, 'starved')
+  const twinModel = image({ id: 'twin', name: 'Japan_Model_02.jpg', country: 'Japan', folder_path: 'Japan/Models', elo: 1500, games: 0, sigma: 350 })
+  const keepModel = image({ id: 'model', name: 'Japan_Model_01.jpg', country: 'Japan', folder_path: 'Japan/Models', elo: 1600, games: 12, sigma: 60 })
+  assert.equal(nextContender([keepModel, twinModel, later], 'model', { rng: steady }).id, 'later')
+  assert.equal(PLACEMENT_GAMES, 5)
 })
 
 test('folder country and series come from the Drive path', () => {
@@ -632,6 +704,18 @@ test('levels stay open and a fifth placement debuts', () => {
   assert.deepEqual(standingOf(after, 'b'), { rank: 1, total: 2 })
   assert.equal(standingOf(after, 'a').rank, 2)
   assert.equal(standingOf([{ ...before[0] }], 'a'), null)
+  const lucky = image({ id: 'lucky', name: 'Lucky.jpg', country: 'Lucky', elo: 1800, sigma: 350, games: 6 })
+  const settledPic = image({ id: 'settled', name: 'Settled.jpg', country: 'Settled', elo: 1600, sigma: 50, games: 40 })
+  assert.equal(standingOf([lucky, settledPic], 'settled').rank, 1)
+  assert.equal(standingOf([lucky, settledPic], 'lucky').rank, 2)
+  assert.equal(levelOf(1800), 4)
+  const glickoSql = readFileSync(new URL('../supabase/migrations/20261024230000_brush_glicko.sql', import.meta.url), 'utf8')
+  assert.match(glickoSql, /volatility/)
+  assert.match(glickoSql, /sqrt/)
+  assert.match(glickoSql, /greatest\(50/)
+  assert.match(glickoSql, /2\.0 \/ 3\.0/)
+  assert.match(glickoSql, /'volatility', image\.volatility/)
+  assert.doesNotMatch(glickoSql.slice(0, glickoSql.indexOf('private.brush_glicko_f')), /\belo\s*=/)
   const levels = readFileSync(new URL('../supabase/migrations/20261024120000_brush_levels.sql', import.meta.url), 'utf8')
   assert.match(levels, /close_wins/)
   assert.match(levels, /close_losses/)

@@ -1,4 +1,5 @@
 import { countryFromPath, filenameAttributes, groupKeys, seriesFromName, type GroupSource } from './names.ts'
+import { compareConservative, glickoInformation, rdOf } from './rank.ts'
 
 export const QUALIFY_TARGET = 4
 export const QUEUE_DEPTH = 5
@@ -14,6 +15,7 @@ export type Pairable = GroupSource & {
   id: string
   elo: number
   games: number
+  sigma?: number
   perceptual_hash?: string | null
   trashed?: boolean
   archived?: boolean
@@ -125,7 +127,7 @@ export function challengerCount(pool: Pairable[]) {
 }
 
 export function rankedActive(pool: Pairable[]) {
-  return active(pool).sort((a, b) => b.elo - a.elo || b.games - a.games || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+  return active(pool).sort(compareConservative)
 }
 
 export function newEntrants(before: Pairable[], after: Pairable[]) {
@@ -172,12 +174,16 @@ function traitsOf(ids: Iterable<string>, byId: Map<string, Pairable>) {
   return traits
 }
 
-type Scored = { image: Pairable, hard: boolean, diversity: number, gap: number }
+type Scored = { image: Pairable, hard: boolean, diversity: number, gap: number, info: number }
+
+/** Inside a placement band, this much information offsets a small variety penalty. It does not override a recent repeat. */
+const INFO_WEIGHT = 400
 
 function scoreOpponent(anchor: Pairable, image: Pairable, target: number, keys: string[], avoidIds: string[], byId: Map<string, Pairable>): Scored {
   const hard = sameGroup(anchor, image)
   const gap = Math.abs(image.elo - target)
-  if (hard) return { image, hard, diversity: 0, gap }
+  const info = glickoInformation(anchor.elo, image.elo, rdOf(image))
+  if (hard) return { image, hard, diversity: 0, gap, info: 0 }
   const recent = keys.slice(-RECENT_WINDOW)
   const older = keys.slice(0, -RECENT_WINDOW)
   const anchorLook = lookOf(anchor)
@@ -199,7 +205,7 @@ function scoreOpponent(anchor: Pairable, image: Pairable, target: number, keys: 
   for (const trait of lookTraits(anchor)) {
     if (candidateLooks.has(trait) && !lookTraits(image).includes(trait)) diversity += 120
   }
-  return { image, hard, diversity, gap }
+  return { image, hard, diversity, gap, info }
 }
 
 function pickFrom(items: Scored[], rng: () => number) {
@@ -219,9 +225,19 @@ function pickOpponent(anchor: Pairable, images: Pairable[], target: number, plac
   if (placingAnchor) {
     const field = established.length ? established : source
     if (wildcard) return pickFrom(field, rng)
-    const ranked = [...field].sort((a, b) => (a.gap * 2 + a.diversity) - (b.gap * 2 + b.diversity) || a.image.id.localeCompare(b.image.id))
-    const best = ranked[0].gap * 2 + ranked[0].diversity
-    const band = ranked.filter(item => item.gap * 2 + item.diversity <= best + 40)
+    const widths = [CLOSE_ELO, CLOSE_ELO * 2, CLOSE_ELO * 4, Number.POSITIVE_INFINITY]
+    let near = field
+    for (const width of widths) {
+      const within = field.filter(item => item.gap <= width)
+      if (within.length) {
+        near = within
+        break
+      }
+    }
+    const value = (item: Scored) => item.diversity - item.info * INFO_WEIGHT
+    const ranked = [...near].sort((a, b) => value(a) - value(b) || a.gap - b.gap || a.image.id.localeCompare(b.image.id))
+    const best = value(ranked[0])
+    const band = ranked.filter(item => value(item) <= best + 40)
     return pickFrom(band, rng)
   }
   if (anchor.games >= PLACEMENT_GAMES) {
@@ -279,11 +295,29 @@ export function nextQualifyingPair(pool: Pairable[], options: { avoidIds?: strin
   return { left: anchor, right: opponent }
 }
 
+function starvedNewcomer(keep: Pairable, images: Pairable[], keys: string[], rng: () => number) {
+  const newcomers = images.filter(image => image.id !== keep.id && image.games < PLACEMENT_GAMES && !sameGroup(keep, image))
+  if (!newcomers.length) return null
+  const minGames = Math.min(...newcomers.map(image => image.games))
+  const starved = newcomers.filter(image => image.games === minGames)
+  const byId = new Map(images.map(image => [image.id, image]))
+  const scored = starved.map(image => ({ ...scoreOpponent(image, keep, image.elo, keys, [], byId), image }))
+  const value = (item: Scored) => item.diversity - item.info * INFO_WEIGHT
+  scored.sort((a, b) => value(a) - value(b) || a.image.id.localeCompare(b.image.id))
+  const best = value(scored[0])
+  const band = scored.filter(item => value(item) <= best + 40)
+  return pickFrom(band, rng)
+}
+
 export function nextContender(pool: Pairable[], keepId: string, options: { recentKeys?: string[], rng?: () => number } = {}) {
   const rng = options.rng || Math.random
   const images = active(pool)
   const keep = images.find(image => image.id === keepId)
   if (!keep) return null
+  if (keep.games >= PLACEMENT_GAMES) {
+    const challenger = starvedNewcomer(keep, images, options.recentKeys || [], rng)
+    if (challenger) return challenger
+  }
   const established = images.filter(image => image.games >= PLACEMENT_GAMES && image.id !== keep.id)
   const placingAnchor = keep.games < PLACEMENT_GAMES && established.length > 0
   const target = placingAnchor ? placementTarget(keep.games, established) : keep.elo

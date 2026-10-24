@@ -1,5 +1,5 @@
 import { extendQueue } from './pair.ts'
-import { eloUpdate, nextSigma } from './rank'
+import { conservativeRating, glickoUpdate, INITIAL_VOLATILITY } from './rank'
 import { suggestRecipe } from './recipe'
 import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights } from './types'
 import { attachQueue, UploadQueue, type UploadTransport } from './uploads'
@@ -52,6 +52,7 @@ function blank(partial: Pick<BrushImage, 'id' | 'name' | 'country' | 'preview_ur
     prompt_text: partial.country === 'Japan' ? 'soft daylight, sage dress, glossy long hair, eye-level close portrait' : null,
     elo: 1500,
     sigma: 350,
+    volatility: INITIAL_VOLATILITY,
     games: 0,
     wins: 0,
     losses: 0,
@@ -184,11 +185,18 @@ export function createPreviewClient(): BrushApi {
       const right = images.find(image => image.id === input.rightId)
       if (!left || !right) return { match_id: null }
       if (input.decision === 'pick' && input.winnerId) {
-        const rated = eloUpdate(left.elo, right.elo, left.games, right.games, input.winnerId === left.id, input.margin || 'clear')
+        const rated = glickoUpdate(
+          { rating: left.elo, rd: left.sigma, volatility: left.volatility },
+          { rating: right.elo, rd: right.sigma, volatility: right.volatility },
+          input.winnerId === left.id,
+          input.margin || 'clear',
+        )
         left.elo = rated.eloA
         right.elo = rated.eloB
-        left.sigma = nextSigma(left.sigma)
-        right.sigma = nextSigma(right.sigma)
+        left.sigma = rated.sigmaA
+        right.sigma = rated.sigmaB
+        left.volatility = rated.volatilityA
+        right.volatility = rated.volatilityB
         left.games += 1
         right.games += 1
         const close = (input.margin || 'clear') === 'close'
@@ -228,7 +236,7 @@ export function createPreviewClient(): BrushApi {
         image.face_scanned = true
       }
     },
-    async leaderboard() { return [...images].sort((a, b) => b.elo - a.elo) },
+    async leaderboard() { return [...images].sort((a, b) => conservativeRating(b.elo, b.sigma) - conservativeRating(a.elo, a.sigma)) },
     async library() { return [...images] },
     async tags() { return tags.filter(item => item.status !== 'rejected') },
     async insights() { return insights() },
