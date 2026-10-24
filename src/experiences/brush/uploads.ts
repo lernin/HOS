@@ -105,13 +105,12 @@ export type UploadTransport = {
 }
 
 function snapshotOf(jobs: StoredJob[], overflow: number): UploadSnapshot {
-  const visible = jobs.filter(job => job.status !== 'done')
   const completed = jobs.filter(job => job.status === 'done' || job.status === 'duplicate').length
   const added = jobs.filter(job => job.status === 'done').length
   const active = jobs.filter(job => job.status === 'uploading').length
   const percent = jobs.length ? Math.round(jobs.reduce((sum, job) => sum + (job.status === 'done' || job.status === 'duplicate' ? 1 : job.progress), 0) / jobs.length * 100) : 0
   return {
-    jobs: visible.slice(-100).map(job => ({ id: job.id, name: job.name, status: job.status, progress: job.progress, error: job.error })),
+    jobs: jobs.slice(-UPLOAD_BATCH_LIMIT).map(job => ({ id: job.id, name: job.name, status: job.status, progress: job.progress, error: job.error })),
     total: jobs.length,
     completed,
     added,
@@ -183,6 +182,7 @@ export class UploadQueue {
   }
 
   enqueue(files: File[]) {
+    this.jobs = this.jobs.filter(job => job.status !== 'done' && job.status !== 'duplicate')
     const batch = takeBatch(files)
     this.overflow = batch.overflow
     void this.ingest(batch.accepted)

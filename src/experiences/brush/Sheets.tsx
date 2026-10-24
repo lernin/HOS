@@ -170,11 +170,79 @@ function uploadLabel(status: string, progress: number) {
   if (status === 'uploading') return `Sending ${Math.round(progress * 100)}%`
   if (status === 'duplicate') return 'Duplicate'
   if (status === 'failed') return 'Failed'
-  return 'Done'
+  return 'Added'
+}
+
+function uploadPercent(status: string, progress: number) {
+  if (status === 'done' || status === 'duplicate') return 100
+  return Math.max(0, Math.min(100, Math.round(progress * 100)))
+}
+
+export function UploadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 16.5V6.5M8.2 10.2 12 6.5l3.8 3.7M5 18.5h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function uploadCopy(uploads: UploadSnapshot) {
+  const pending = uploads.jobs.some(job => job.status === 'preparing' || job.status === 'queued' || job.status === 'uploading')
+  const failed = uploads.jobs.some(job => job.status === 'failed')
+  if (uploads.total === 0) return { title: 'Uploading', body: 'Reading the photos you chose.' }
+  if (!pending && !failed) {
+    if (uploads.added === 0) return { title: 'Already in the library', body: 'None of these were new, so nothing joined the contest.' }
+    const noun = uploads.added === 1 ? 'new challenger' : 'new challengers'
+    return { title: 'New challengers', body: `${uploads.added} ${noun}. Full-size originals are in the Brush Uploads folder.` }
+  }
+  if (!pending && failed) return { title: 'Some photos need a retry', body: 'Finished photos are already new challengers. Retry sends the full-size file again.' }
+  return { title: 'Uploading', body: 'Full-size originals go to the Brush Uploads folder. A face box is read as each photo arrives, then it joins as a new challenger.' }
+}
+
+export function UploadProgressSheet({
+  uploads, onRetry, onClose,
+}: {
+  uploads: UploadSnapshot
+  onRetry: (id: string) => void
+  onClose: () => void
+}) {
+  const copy = uploadCopy(uploads)
+  return (
+    <div className="brush-upload-scrim" onClick={event => { if (event.target === event.currentTarget) onClose() }}>
+      <section className="brush-sheet brush-upload-sheet" role="dialog" aria-modal="true" aria-label="Upload progress" data-upload-sheet data-upload-queue data-upload-active={uploads.active} data-upload-percent={uploads.percent}>
+        <span className="brush-sheet-grab" aria-hidden="true" />
+        <div className="brush-upload-head">
+          <h2>{copy.title}</h2>
+          <button type="button" onClick={onClose}>Close</button>
+        </div>
+        <p className="brush-muted">{copy.body}</p>
+        {uploads.overflow > 0 && <p data-upload-overflow>Only 100 photos can be chosen at once. {uploads.overflow} left out.</p>}
+        {uploads.total > 0 && (
+          <>
+            <div className="brush-bar" aria-label="Overall upload progress"><span style={{ width: `${uploads.percent}%` }} /></div>
+            <p className="brush-muted brush-num">{uploads.completed} of {uploads.total} finished{uploads.active > 0 ? ` · ${uploads.active} sending` : ''}</p>
+          </>
+        )}
+        <ul className="brush-upload-files">
+          {uploads.jobs.map(job => (
+            <li key={job.id} data-upload-status={job.status}>
+              <div className="brush-upload-file-top">
+                <span>{job.name}</span>
+                <strong className="brush-num">{uploadLabel(job.status, job.progress)}</strong>
+              </div>
+              <div className="brush-bar" aria-hidden="true"><span style={{ width: `${uploadPercent(job.status, job.progress)}%` }} /></div>
+              {job.error && <small>{job.error}</small>}
+              {job.status === 'failed' && <button type="button" onClick={() => onRetry(job.id)}>Retry</button>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  )
 }
 
 export function LibraryScreen({
-  images, srcFor, countries, country, onCountry, onSync, onUpload, onRetry, uploads, syncing, onOpen, onAutoTag, onChangePin,
+  images, srcFor, countries, country, onCountry, onSync, syncing, onOpen, onAutoTag, onChangePin,
 }: {
   images: BrushImage[]
   srcFor: (image: BrushImage) => string | null
@@ -182,9 +250,6 @@ export function LibraryScreen({
   country: string
   onCountry: (country: string) => void
   onSync: () => void
-  onUpload: (files: File[]) => void
-  onRetry: (id: string) => void
-  uploads: UploadSnapshot
   syncing: boolean
   onOpen: (image: BrushImage) => void
   onAutoTag: (image: BrushImage) => void
@@ -193,29 +258,17 @@ export function LibraryScreen({
   const visible = images.filter(image => !country || image.country === country)
   return (
     <div className="brush-scroll" data-screen="library">
+      <label className="brush-library-upload" htmlFor="brush-gallery" data-action="upload">
+        <UploadIcon />
+        <span>
+          <strong>Upload</strong>
+          <small>From your phone gallery · up to 100 photos</small>
+        </span>
+      </label>
       <div className="brush-inline">
         <button type="button" className="brush-upload" disabled={syncing} onClick={onSync}>{syncing ? 'Syncing…' : 'Sync Drive'}</button>
-        <label className="brush-upload">Add photos<input data-upload-input type="file" accept="image/*" multiple hidden onChange={event => { const files = [...(event.target.files || [])]; event.target.value = ''; if (files.length) onUpload(files) }} /></label>
         <button type="button" className="ghost" onClick={onChangePin}>Change PIN</button>
       </div>
-      <section className="brush-queue" data-upload-queue data-upload-active={uploads.active} data-upload-percent={uploads.percent}>
-        <p>Full-size originals go to the Brush Uploads folder in Drive. A small preview is cached for matchups. Choose up to 100 photos at a time. There is no limit on the library.</p>
-        {uploads.overflow > 0 && <p data-upload-overflow>Only 100 photos can be chosen at once. {uploads.overflow} left out.</p>}
-        {uploads.total > 0 && (
-          <>
-            <div className="brush-bar" aria-label="Overall upload progress"><span style={{ width: `${uploads.percent}%` }} /></div>
-            <p className="brush-muted">{uploads.completed} of {uploads.total} finished · {uploads.active} sending</p>
-            {uploads.jobs.map(job => (
-              <div key={job.id} className="brush-queue-row" data-upload-status={job.status}>
-                <span>{job.name}</span>
-                <strong>{uploadLabel(job.status, job.progress)}</strong>
-                {job.status === 'failed' && <button type="button" onClick={() => onRetry(job.id)}>Retry</button>}
-                {job.error && <small>{job.error}</small>}
-              </div>
-            ))}
-          </>
-        )}
-      </section>
       <div className="brush-chips">
         <button type="button" aria-pressed={!country} onClick={() => onCountry('')}>All</button>
         {countries.map(item => <button key={item} type="button" aria-pressed={country === item} onClick={() => onCountry(item)}>{item}</button>)}
