@@ -29,7 +29,7 @@
 .brush-card-bar .brush-choice,.brush-footer .brush-choice{min-height:32px}
 .brush.is-portrait .brush-footer .brush-choice{min-height:44px}
 .brush.is-landscape.is-match .brush-stage{flex-direction:row;align-items:stretch;height:100%}
-.brush.is-landscape.is-match .brush-photos{flex:0 0 auto;width:max-content;max-width:calc(100% - 176px);height:100%;gap:8px}
+.brush.is-landscape.is-match .brush-photos{flex:0 0 auto;width:max-content;max-width:calc(100% - 212px);height:100%;gap:8px}
 .brush.is-landscape.is-match .brush-card{flex:0 0 auto;width:auto;height:100%;aspect-ratio:9/16;max-width:none;background:transparent}
 .brush.is-landscape.is-match .brush-photo-hit{height:100%}
 .brush.is-landscape.is-match .brush-photo{height:100%;width:100%;object-fit:contain}
@@ -42,12 +42,33 @@
 .brush.is-landscape.is-match .brush-menu-button{display:inline-grid;width:30px;min-height:30px;padding:0}
 .brush-gutter-name{flex:0 0 24px;height:24px;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;overflow:hidden}
 .brush-gutter-name strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:650;line-height:24px}
+.brush.is-landscape.is-match .brush-gutter.is-left{flex:0 0 44px;width:44px;min-width:44px;max-width:44px;padding:4px;align-items:center}
+.brush.is-landscape.is-match .brush-gutter.is-left .brush-gutter-top{flex:0 0 auto;height:auto;flex-direction:column;align-items:center}
+.brush.is-landscape.is-match .brush-gutter.is-right{flex:1 1 168px;min-width:168px}
 .brush-gutter-actions{flex:1 1 auto;min-height:0;width:100%;display:flex;flex-direction:column;justify-content:space-evenly;align-items:stretch;gap:6px;overflow:hidden}
-.brush .brush-pick-arrow{flex:0 1 auto;width:100%;height:clamp(48px,13vh,68px);min-height:36px;padding:0 6px;border:0;border-radius:14px;background:#efe6d6;color:#1b1914;font-size:clamp(16px,4.4vh,26px);font-weight:750;line-height:1.05;text-align:center;white-space:nowrap}
-.brush-gutter .brush-choice{flex:0 1 auto;width:100%;height:clamp(36px,9.2vh,46px);min-height:32px;padding:0 6px;font-size:14px;line-height:1.1;border-radius:12px;white-space:nowrap}
-.brush-face-hold{flex:0 1 auto;width:100%;height:clamp(36px,9.2vh,46px);min-height:32px;margin:0;padding:0;border:1px solid rgba(244,239,230,.35);border-radius:12px;background:rgba(12,13,11,.82);color:#f4efe6;display:grid;place-items:center;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.brush-pair-names{flex:0 0 26px;height:26px;min-width:0;display:flex;align-items:center;gap:6px}
+.brush-pair-name{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:3px;overflow:hidden}
+.brush-pair-name.is-right{justify-content:flex-end}
+.brush-pair-name strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650;line-height:26px}
+.brush-gutter-toast{flex:0 0 26px;height:26px;width:100%;min-width:0;margin:0;padding:0 10px;border:0;border-radius:999px;background:#efe6d6;color:#1b1914;font-size:12px;line-height:26px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brush-gutter-toast.is-note{background:rgba(231,178,168,.14);color:#e7b2a8}
+.brush-swipe{position:relative;flex:1 1 0;min-height:0;width:100%;overflow:hidden;border:1px solid rgba(244,239,230,.28);border-radius:16px;background:rgba(12,13,11,.82);color:#f4efe6;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+.brush-swipe.is-pick{flex-grow:1.3;background:#efe6d6;color:#1b1914;border-color:#efe6d6}
+.brush-swipe.is-trash{border-color:#e7b2a8}
+.brush-swipe-wash{position:absolute;top:0;bottom:0;width:0;pointer-events:none;background:rgba(243,215,161,.42)}
+.brush-swipe[data-aim="left"] .brush-swipe-wash{left:0}
+.brush-swipe[data-aim="right"] .brush-swipe-wash{right:0}
+.brush-swipe.is-trash .brush-swipe-wash{background:rgba(231,178,168,.45)}
+.brush-swipe-hint{position:absolute;top:0;bottom:0;width:28px;display:grid;place-items:center;font-size:20px;font-weight:700;opacity:.72;pointer-events:none;z-index:1}
+.brush-swipe-hint.is-left{left:2px}
+.brush-swipe-hint.is-right{right:2px}
+.brush-swipe[data-aim="left"] .brush-swipe-hint.is-left,.brush-swipe[data-aim="right"] .brush-swipe-hint.is-right{opacity:1;transform:scale(1.2)}
+.brush-swipe-face{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0 32px;pointer-events:none}
+.brush-swipe-face strong{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:clamp(15px,3.8vh,22px);font-weight:750;letter-spacing:.04em;line-height:1.1}
+.brush-swipe.is-pick .brush-swipe-face strong{font-size:clamp(18px,4.8vh,28px)}
+.brush-swipe-face em{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-style:normal;font-size:12px;font-weight:650;line-height:1.1}
+.brush-face-hold{flex:0 0 42px;width:100%;height:42px;min-height:42px;margin:0;padding:0;border:1px solid rgba(244,239,230,.35);border-radius:14px;background:rgba(12,13,11,.82);color:#f4efe6;display:grid;place-items:center;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .brush-face-hold[aria-pressed="true"]{background:#efe6d6;color:#1b1914}
-.brush.is-landscape.is-match .brush-banner{position:absolute;z-index:8;left:50%;top:10px;transform:translateX(-50%);width:max-content;min-width:0;max-width:min(300px,42vw);margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:auto;box-shadow:0 10px 28px rgba(0,0,0,.38)}
 .brush-gutter [data-challengers]{background:rgba(243,215,161,.16);border-color:rgba(243,215,161,.45);color:#f3d7a1}
 .brush-slide{width:100%;height:100%}
 .brush-slide.is-entering{animation:brush-rise 300ms ease-out both}
@@ -62,7 +83,7 @@
 .brush-choice{flex:1;min-height:44px;background:rgba(12,13,11,.78)}
 .brush-choice.danger{border-color:#e7b2a8}
 .brush-choice.close{flex:0.72}
-.brush-gutter .brush-choice,.brush-gutter .brush-choice.close{flex:0 1 auto;width:100%;height:clamp(36px,9.2vh,46px);min-height:32px}
+.brush-gutter .brush-choice,.brush-gutter .brush-choice.close{flex:1;min-height:44px;width:auto;height:auto}
 .brush-challenger{display:block;margin-top:4px;font-style:normal;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#f3d7a1}
 .brush-caption .brush-challenger{display:inline;margin:0;flex:0 0 auto}
 .brush-moment{position:relative;z-index:1;align-self:center;margin:4px auto;max-width:calc(100% - 16px);background:#efe6d6;color:#1b1914;border:0;border-radius:999px;min-height:32px;padding:0 14px}

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
-import { faceBoxFromPixels, faceZoom } from '../src/experiences/brush/face.ts'
+import { faceBoxFromPixels, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
 import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
 import { challengerCount, extendQueue, finalsFieldSize, hashDistance, newEntrants, pairKey, sameGroup, seedOrder } from '../src/experiences/brush/pair.ts'
@@ -374,11 +374,14 @@ test('a skin-tone blob becomes a normalized face box', () => {
   assert.ok(box.y + box.h <= 1.001)
   assert.ok(box.y < 0.5)
   const zoom = faceZoom(box)
-  assert.ok(zoom.scale >= 1.25 && zoom.scale <= 3.1)
+  assert.ok(zoom.scale >= 1.35 && zoom.scale <= 3.5)
   const framed = faceZoom({ x: 0.32, y: 0.14, w: 0.26, h: 0.28 })
   const eyeLine = framed.y + framed.ty / 100
   assert.ok(eyeLine > 0.3 && eyeLine < 0.36, `eye line ${eyeLine}`)
-  assert.ok(framed.scale < 0.82 / 0.28)
+  assert.ok(framed.scale > 2.6 && framed.scale <= 3.5, `scale ${framed.scale}`)
+  const shift = faceShift(framed)
+  const shiftedEye = 0.5 + (framed.y - 0.5) * shift.scale + shift.ty / 100
+  assert.ok(Math.abs(shiftedEye - eyeLine) < 0.001)
   const topped = faceZoom({ x: 0.3, y: 0, w: 0.28, h: 0.22 })
   const toppedEye = topped.y + topped.ty / 100
   const visibleTop = topped.y - toppedEye / topped.scale
@@ -421,8 +424,13 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(matchup, /Close call/)
   assert.match(matchup, /Hold for face/)
   assert.match(matchup, /data-action="face"/)
-  assert.match(matchup, /data-face=\{side\}/)
-  assert.match(matchup, /faceHeld\[side\]/)
+  assert.match(matchup, /data-face="both"/)
+  assert.match(matchup, /data-swipe=/)
+  assert.match(matchup, /navigator\.vibrate/)
+  assert.match(matchup, /SWIPE_THRESHOLD/)
+  assert.match(matchup, /faceHeld/)
+  assert.match(matchup, /faceShift/)
+  assert.match(matchup, /250ms ease/)
   assert.match(matchup, /pointerId/)
   assert.match(matchup, /touchstart/)
   assert.match(matchup, /passive: false/)
@@ -448,8 +456,11 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(brush, /data-action="flip"/)
   assert.match(brush, /data-action="menu"/)
   assert.match(brush, /deck\?\.phase === 'finals' && reason/)
-  assert.match(brush, /brush-banner/)
+  assert.match(brush, /brush-gutter-toast/)
+  assert.match(brush, /data-moment="top16"/)
   assert.match(css, /brush-gutter-actions/)
+  assert.match(css, /brush-swipe/)
+  assert.match(css, /min-width:\s*168px/)
   assert.match(css, /justify-content:\s*space-evenly/)
   const sql = readFileSync(new URL('../supabase/migrations/20261023233000_brush_quick_picks.sql', import.meta.url), 'utf8')
   assert.match(sql, /margin text default 'clear'/)
