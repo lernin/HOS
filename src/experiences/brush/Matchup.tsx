@@ -49,10 +49,9 @@ export function Matchup({
   const frameRef = useRef<HTMLDivElement>(null)
   const [infoId, setInfoId] = useState<string | null>(null)
   const [frame, setFrame] = useState<{ left: number, right: number, scale: number } | null>(null)
-  const [faceHold, setFaceHold] = useState<'left' | 'right' | null>(null)
-  const [releasing, setReleasing] = useState<'left' | 'right' | null>(null)
+  const [faceHeld, setFaceHeld] = useState({ left: false, right: false })
+  const [releasing, setReleasing] = useState({ left: false, right: false })
   const [entering, setEntering] = useState<'left' | 'right' | null>(null)
-  const faceHoldRef = useRef<'left' | 'right' | null>(null)
   const previousIds = useRef<{ left: string, right: string } | null>(null)
   const leftSrc = srcFor(left)
   const rightSrc = srcFor(right)
@@ -220,17 +219,14 @@ export function Matchup({
   }
 
   function holdFace(side: 'left' | 'right') {
-    faceHoldRef.current = side
-    setReleasing(null)
-    setFaceHold(side)
+    setFaceHeld(current => current[side] ? current : { ...current, [side]: true })
+    setReleasing(current => current[side] ? { ...current, [side]: false } : current)
   }
 
   function releaseFace(side: 'left' | 'right') {
-    if (faceHoldRef.current !== side) return
-    faceHoldRef.current = null
-    setFaceHold(null)
-    setReleasing(side)
-    window.setTimeout(() => setReleasing(current => current === side ? null : current), 320)
+    setFaceHeld(current => current[side] ? { ...current, [side]: false } : current)
+    setReleasing(current => ({ ...current, [side]: true }))
+    window.setTimeout(() => setReleasing(current => current[side] ? { ...current, [side]: false } : current), 320)
   }
 
   const cards = [
@@ -241,13 +237,20 @@ export function Matchup({
   const fit = !portrait && frame && frame.scale < 0.999 ? 'cover' : 'contain'
 
   function photoStyle(image: BrushImage, side: 'left' | 'right') {
-    const focus = faceHold === side ? faceZoom(focusBox(image.face_box)) : null
-    const view = focus || zoom
-    const animate = Boolean(focus) || releasing === side
+    const focus = faceHeld[side] ? faceZoom(focusBox(image.face_box)) : null
+    const animate = Boolean(focus) || releasing[side]
+    if (focus) {
+      return {
+        transform: `translate(${focus.tx}%, ${focus.ty}%) scale(${focus.scale})`,
+        transformOrigin: `${focus.x * 100}% ${focus.y * 100}%`,
+        transition: 'transform 280ms ease',
+        objectFit: fit as 'contain' | 'cover',
+      }
+    }
     return {
-      transform: `scale(${view.scale})`,
-      transformOrigin: `${view.x * 100}% ${view.y * 100}%`,
-      transition: animate ? 'transform 300ms ease' : undefined,
+      transform: `scale(${zoom.scale})`,
+      transformOrigin: `${zoom.x * 100}% ${zoom.y * 100}%`,
+      transition: animate ? 'transform 280ms ease' : undefined,
       objectFit: fit as 'contain' | 'cover',
     }
   }
@@ -280,17 +283,28 @@ export function Matchup({
     onTrash(id)
   }
 
+  function gutterName(image: BrushImage) {
+    const open = infoId === image.id
+    return (
+      <div className="brush-gutter-name">
+        <strong>{open ? image.name : (image.country || 'Untitled')}</strong>
+        {image.games < PLACEMENT_GAMES && <em className="brush-challenger" data-challenger>NEW</em>}
+        <button className="brush-info" type="button" data-action="info" aria-expanded={open} aria-label={open ? 'Hide filename and rating' : 'Show filename and rating'} title={open ? `${Math.round(image.elo)} · ${image.games} played` : image.name} onClick={() => toggleInfo(image.id)}>i</button>
+      </div>
+    )
+  }
+
   function gutter(image: BrushImage, side: 'left' | 'right') {
     return (
       <aside className={`brush-gutter is-${side}`} data-gutter={side}>
         <div className="brush-gutter-top">{side === 'left' ? leftChrome : rightChrome}</div>
-        <div className="brush-gutter-stack">
-          {captionFor(image)}
+        {gutterName(image)}
+        <div className="brush-gutter-actions">
           <button className="brush-pick-arrow" type="button" data-action="pick" onClick={event => choose(event, image.id, 'clear')}>{side === 'left' ? 'WINNER →' : '← WINNER'}</button>
           <button className="brush-choice close" type="button" data-action="close" onClick={event => choose(event, image.id, 'close')}>Close call</button>
           <button className="brush-choice danger" type="button" data-action="trash" onClick={event => discard(event, image.id)}>Trash</button>
+          <FaceHoldButton side={side} pressed={faceHeld[side]} onHold={holdFace} onRelease={releaseFace} />
         </div>
-        <FaceHoldButton side={side} pressed={faceHold === side} onHold={holdFace} onRelease={releaseFace} />
       </aside>
     )
   }
@@ -342,42 +356,60 @@ function FaceHoldButton({
   useEffect(() => {
     const node = ref.current
     if (!node) return
-    let active = false
+    const pointers = new Set<number>()
     const block: AddEventListenerOptions = { passive: false }
-    const stop = (event: Event) => {
-      if (event.cancelable && event.currentTarget === node) event.preventDefault()
-      if (!active) return
-      active = false
-      window.removeEventListener('pointerup', stop)
-      window.removeEventListener('pointercancel', stop)
-      window.removeEventListener('touchend', stop)
-      window.removeEventListener('touchcancel', stop)
-      api.current.onRelease(api.current.side)
+    const begin = (pointerId: number) => {
+      const empty = pointers.size === 0
+      pointers.add(pointerId)
+      if (empty) api.current.onHold(api.current.side)
     }
-    const start = (event: Event) => {
+    const end = (pointerId: number) => {
+      if (!pointers.delete(pointerId)) return
+      if (pointers.size === 0) api.current.onRelease(api.current.side)
+    }
+    const start = (event: PointerEvent) => {
       if (event.cancelable) event.preventDefault()
-      if (active) return
-      active = true
-      api.current.onHold(api.current.side)
-      window.addEventListener('pointerup', stop)
-      window.addEventListener('pointercancel', stop)
-      window.addEventListener('touchend', stop, block)
-      window.addEventListener('touchcancel', stop, block)
+      event.stopPropagation()
+      begin(event.pointerId)
+    }
+    const stop = (event: PointerEvent) => {
+      end(event.pointerId)
+    }
+    const touchStart = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault()
+      event.stopPropagation()
+    }
+    const touchEnd = (event: TouchEvent) => {
+      if (event.cancelable && event.currentTarget === node) event.preventDefault()
     }
     const blockMenu = (event: Event) => {
       event.preventDefault()
     }
     node.addEventListener('pointerdown', start, block)
-    node.addEventListener('touchstart', start, block)
+    node.addEventListener('touchstart', touchStart, block)
+    node.addEventListener('pointerup', stop)
+    node.addEventListener('pointercancel', stop)
+    node.addEventListener('touchend', touchEnd, block)
+    node.addEventListener('touchcancel', touchEnd, block)
     node.addEventListener('contextmenu', blockMenu)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
     return () => {
       node.removeEventListener('pointerdown', start)
-      node.removeEventListener('touchstart', start)
+      node.removeEventListener('touchstart', touchStart)
+      node.removeEventListener('pointerup', stop)
+      node.removeEventListener('pointercancel', stop)
+      node.removeEventListener('touchend', touchEnd)
+      node.removeEventListener('touchcancel', touchEnd)
       node.removeEventListener('contextmenu', blockMenu)
-      if (active) stop(new Event('pointercancel'))
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+      if (pointers.size) api.current.onRelease(api.current.side)
     }
   }, [])
   return (
-    <button ref={ref} className="brush-face-hold" type="button" data-action="face" aria-pressed={pressed}>Hold for face</button>
+    <button ref={ref} className="brush-face-hold" type="button" data-action="face" data-face={side} aria-pressed={pressed} aria-label="Hold for face">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="3.4" fill="none" stroke="currentColor" strokeWidth="1.7" /><path d="M6.5 19.2c1.1-2.8 3-4.2 5.5-4.2s4.4 1.4 5.5 4.2" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
+    </button>
   )
 }

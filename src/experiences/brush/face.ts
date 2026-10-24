@@ -115,11 +115,25 @@ export async function detectFaceBox(source: CanvasImageSource): Promise<FaceBox 
   return faceBoxFromPixels(sampleW, sampleH, context.getImageData(0, 0, sampleW, sampleH).data)
 }
 
-export function faceZoom(box: FaceBox) {
-  const scale = clamp(0.82 / Math.max(box.w, box.h), 1.4, 5)
+export type FaceFrame = { scale: number, x: number, y: number, tx: number, ty: number }
+
+// Place the eye line about a third of the way down, with the whole head and a
+// little hair in frame. Slightly wider than a tight face crop. If the head
+// already touches the top, keep the image edge pinned instead of opening a gap.
+export function faceZoom(box: FaceBox): FaceFrame {
+  const eyeX = clamp(box.x + box.w * 0.5, 0, 1)
+  const eyeY = clamp(box.y + box.h * 0.36, 0, 1)
+  const above = Math.max(0.025, eyeY - box.y + box.h * 0.1)
+  const below = Math.max(0.025, box.y + box.h - eyeY + box.h * 0.06)
+  const half = Math.max(0.025, box.w * 0.62)
+  const scale = clamp(Math.min(0.3 / above, 0.6 / below, 0.46 / half, 3.1), 1.25, 3.1)
+  const targetY = clamp(0.33, 1 - (1 - eyeY) * scale, eyeY * scale)
+  const targetX = clamp(0.5, 1 - (1 - eyeX) * scale, eyeX * scale)
   return {
     scale,
-    x: clamp(box.x + box.w / 2, 0, 1),
-    y: clamp(box.y + box.h / 2, 0, 1),
+    x: eyeX,
+    y: eyeY,
+    tx: (targetX - eyeX) * 100,
+    ty: (targetY - eyeY) * 100,
   }
 }
