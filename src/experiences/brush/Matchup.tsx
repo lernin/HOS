@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { faceZoom } from './face'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
 
@@ -48,6 +49,11 @@ export function Matchup({
   const frameRef = useRef<HTMLDivElement>(null)
   const [infoId, setInfoId] = useState<string | null>(null)
   const [frame, setFrame] = useState<{ left: number, right: number, scale: number } | null>(null)
+  const [faceHold, setFaceHold] = useState<'left' | 'right' | null>(null)
+  const [releasing, setReleasing] = useState<'left' | 'right' | null>(null)
+  const [entering, setEntering] = useState<'left' | 'right' | null>(null)
+  const faceHoldRef = useRef<'left' | 'right' | null>(null)
+  const previousIds = useRef<{ left: string, right: string } | null>(null)
   const leftSrc = srcFor(left)
   const rightSrc = srcFor(right)
   const leftRatio = useImageRatio(leftSrc)
@@ -144,15 +150,7 @@ export function Matchup({
         return
       }
       if (zoomRef.current.scale > 1) return
-      if (portraitRef.current) {
-        actions.current.onFlip()
-        return
-      }
-      const card = target?.closest('[data-image]')
-      const id = card?.getAttribute('data-image')
-      if (!id) return
-      lockRef.current = Date.now() + 450
-      actions.current.onPick(id, 'clear')
+      if (portraitRef.current) actions.current.onFlip()
     }
 
     stage.addEventListener('touchstart', onTouchStart, { passive: false })
@@ -191,6 +189,19 @@ export function Matchup({
     return () => observer.disconnect()
   }, [portrait, leftRatio, rightRatio])
 
+  useLayoutEffect(() => {
+    const previous = previousIds.current
+    previousIds.current = { left: left.id, right: right.id }
+    if (!previous) return
+    const leftChanged = previous.left !== left.id
+    const rightChanged = previous.right !== right.id
+    if (leftChanged === rightChanged) return
+    const side = leftChanged ? 'left' : 'right'
+    setEntering(side)
+    const timer = window.setTimeout(() => setEntering(current => current === side ? null : current), 300)
+    return () => window.clearTimeout(timer)
+  }, [left.id, right.id])
+
   function locked(event: React.MouseEvent) {
     if (Date.now() < lockRef.current) {
       event.preventDefault()
@@ -200,16 +211,29 @@ export function Matchup({
     return false
   }
 
-  function onPhotoClick(event: React.MouseEvent<HTMLDivElement>, id: string) {
+  function onPhotoClick(event: React.MouseEvent<HTMLDivElement>) {
     if (locked(event)) return
     const pointer = event.nativeEvent instanceof PointerEvent ? event.nativeEvent.pointerType : 'mouse'
     if (pointer === 'touch') return
     if (zoomRef.current.scale > 1) return
     if (portrait) onFlip()
-    else {
-      lockRef.current = Date.now() + 450
-      onPick(id, 'clear')
-    }
+  }
+
+  function holdFace(side: 'left' | 'right', event: React.PointerEvent<HTMLButtonElement>) {
+    if (event.button !== 0) return
+    event.preventDefault()
+    faceHoldRef.current = side
+    setReleasing(null)
+    setFaceHold(side)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  function releaseFace(side: 'left' | 'right') {
+    if (faceHoldRef.current !== side) return
+    faceHoldRef.current = null
+    setFaceHold(null)
+    setReleasing(side)
+    window.setTimeout(() => setReleasing(current => current === side ? null : current), 320)
   }
 
   const cards = [
@@ -217,8 +241,20 @@ export function Matchup({
     { image: right, side: 'right' as const },
   ]
   const frontImage = front === 'left' ? left : right
-  const zoomStyle = { transform: `scale(${zoom.scale})`, transformOrigin: `${zoom.x * 100}% ${zoom.y * 100}%` }
   const fit = !portrait && frame && frame.scale < 0.999 ? 'cover' : 'contain'
+
+  function photoStyle(image: BrushImage, side: 'left' | 'right') {
+    const box = faceHold === side ? image.face_box : null
+    const focus = box ? faceZoom(box) : null
+    const view = focus || zoom
+    const animate = Boolean(focus) || releasing === side
+    return {
+      transform: `scale(${view.scale})`,
+      transformOrigin: `${view.x * 100}% ${view.y * 100}%`,
+      transition: animate ? 'transform 300ms ease' : undefined,
+      objectFit: fit as 'contain' | 'cover',
+    }
+  }
 
   function toggleInfo(id: string) {
     setInfoId(current => current === id ? null : id)
@@ -254,10 +290,21 @@ export function Matchup({
         <div className="brush-gutter-top">{side === 'left' ? leftChrome : rightChrome}</div>
         <div className="brush-gutter-stack">
           {captionFor(image)}
-          <button className="brush-pick-arrow" type="button" data-action="pick" onClick={event => choose(event, image.id, 'clear')}>{side === 'left' ? '◀ This one' : 'That one ▶'}</button>
-          <button className="brush-choice close" type="button" data-action="close" onClick={event => choose(event, image.id, 'close')}>Close</button>
+          <button className="brush-pick-arrow" type="button" data-action="pick" onClick={event => choose(event, image.id, 'clear')}>{side === 'left' ? 'WINNER →' : '← WINNER'}</button>
+          <button className="brush-choice close" type="button" data-action="close" onClick={event => choose(event, image.id, 'close')}>Close call</button>
           <button className="brush-choice danger" type="button" data-action="trash" onClick={event => discard(event, image.id)}>Trash</button>
         </div>
+        <button
+          className="brush-face-hold"
+          type="button"
+          data-action="face"
+          aria-pressed={faceHold === side}
+          onPointerDown={event => holdFace(side, event)}
+          onPointerUp={() => releaseFace(side)}
+          onPointerCancel={() => releaseFace(side)}
+          onLostPointerCapture={() => releaseFace(side)}
+          onContextMenu={event => event.preventDefault()}
+        >Hold for face</button>
       </aside>
     )
   }
@@ -271,8 +318,12 @@ export function Matchup({
           const sized = !portrait && frame ? { width: side === 'left' ? frame.left : frame.right, aspectRatio: 'auto' } : undefined
           return (
             <article key={image.id} className={`brush-card${front === side ? ' is-front' : ''}`} data-side={side} data-image={image.id} data-name={image.name} style={sized}>
-              <div className="brush-photo-hit" onClick={event => onPhotoClick(event, image.id)}>
-                {src ? <img className="brush-photo" src={src} alt={image.name} style={{ ...zoomStyle, objectFit: fit }} draggable={false} /> : <div className="brush-photo" />}
+              <div className="brush-photo-hit" onClick={onPhotoClick}>
+                {src ? (
+                  <div className={`brush-slide${entering === side ? ' is-entering' : ''}`}>
+                    <img className="brush-photo" src={src} alt={image.name} style={photoStyle(image, side)} draggable={false} />
+                  </div>
+                ) : <div className="brush-photo" />}
               </div>
               {portrait && captionFor(image)}
             </article>

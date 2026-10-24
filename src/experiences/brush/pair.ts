@@ -154,6 +154,22 @@ export function nextQualifyingPair(pool: Pairable[], options: { avoidIds?: strin
   return { left: anchor, right: opponent }
 }
 
+export function nextContender(pool: Pairable[], keepId: string, options: { recentKeys?: string[], rng?: () => number } = {}) {
+  const rng = options.rng || Math.random
+  const keep = active(pool).find(image => image.id === keepId)
+  if (!keep) return null
+  const recent = new Set(options.recentKeys || [])
+  const candidates = active(pool).filter(image => image.id !== keepId && !sameGroup(keep, image))
+  if (!candidates.length) return null
+  const ranked = candidates.map(image => ({
+    image,
+    score: (recent.has(pairKey(keepId, image.id)) ? 1500 : 0) + Math.abs(image.elo - keep.elo) * 0.15 + rng() * 40,
+  }))
+  ranked.sort((a, b) => a.score - b.score || a.image.id.localeCompare(b.image.id))
+  const band = ranked.filter(item => item.score <= ranked[0].score + 40)
+  return band[Math.floor(rng() * band.length)].image
+}
+
 export function extendQueue(pool: Pairable[], queue: Slot[], recentKeys: string[], depth = QUEUE_DEPTH, rng: () => number = Math.random) {
   const shadow = pool.map(image => ({ ...image }))
   const next = queue.filter(slot => {

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
+import { faceBoxFromPixels, faceZoom } from '../src/experiences/brush/face.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
 import { challengerCount, extendQueue, finalsFieldSize, hashDistance, newEntrants, pairKey, sameGroup, seedOrder } from '../src/experiences/brush/pair.ts'
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
@@ -326,6 +327,56 @@ test('Brush is one serverless function and the old paths still rewrite', () => {
   assert.deepEqual(Object.fromEntries(rewritten), expected)
 })
 
+test('trashing one picture keeps the other and brings a different model', () => {
+  const japan = image({ id: 'a', name: 'Japan_Model_01.jpg', country: 'Japan', folder_path: 'Japan/Models' })
+  const japan2 = image({ id: 'b', name: 'Japan_Model_02.jpg', country: 'Japan', folder_path: 'Japan/Models' })
+  const korea = image({ id: 'c', name: 'Korea_02.jpg', country: 'Korea' })
+  const studio = image({ id: 'd', name: 'Studio_03.jpg', country: 'Studio' })
+  const deck = bootDeck([japan, japan2, korea, studio], null, () => 0)
+  const match = currentMatch(deck)
+  assert.ok(match)
+  const next = applyDecision(deck, {
+    leftId: match.left.id,
+    rightId: match.right.id,
+    kind: 'trash',
+    winnerId: null,
+    trashLeft: false,
+    trashRight: true,
+    margin: 'clear',
+  }, () => 0)
+  const after = currentMatch(next)
+  assert.ok(after)
+  assert.equal(after.left.id, match.left.id)
+  assert.notEqual(after.right.id, match.right.id)
+  assert.equal(sameGroup(after.left, after.right), false)
+  assert.equal(next.images.find(item => item.id === match.right.id).trashed, true)
+  assert.equal(next.images.find(item => item.id === match.left.id).elo, match.left.elo)
+})
+
+test('a skin-tone blob becomes a normalized face box', () => {
+  const width = 40
+  const height = 40
+  const data = new Uint8ClampedArray(width * height * 4)
+  for (let y = 8; y <= 28; y += 1) {
+    for (let x = 12; x <= 27; x += 1) {
+      const offset = (y * width + x) * 4
+      data[offset] = 200
+      data[offset + 1] = 150
+      data[offset + 2] = 120
+      data[offset + 3] = 255
+    }
+  }
+  const box = faceBoxFromPixels(width, height, data)
+  assert.ok(box)
+  assert.ok(box.x >= 0 && box.y >= 0 && box.w > 0 && box.h > 0)
+  assert.ok(box.x + box.w <= 1.001)
+  assert.ok(box.y + box.h <= 1.001)
+  assert.ok(box.y < 0.5)
+  const zoom = faceZoom(box)
+  assert.ok(zoom.scale >= 1.4 && zoom.scale <= 5)
+  assert.equal(faceBoxFromPixels(4, 4, new Uint8ClampedArray(64)), null)
+})
+
 function typescriptFiles(dir) {
   const found = []
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -349,8 +400,14 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(matchup, /passive: false/)
   assert.match(matchup, /data-action="close"/)
   assert.doesNotMatch(matchup, /Love both|onTrashBoth/)
-  assert.match(matchup, /◀ This one/)
-  assert.match(matchup, /That one ▶/)
+  assert.match(matchup, /WINNER →/)
+  assert.match(matchup, /← WINNER/)
+  assert.match(matchup, /Close call/)
+  assert.match(matchup, /Hold for face/)
+  assert.match(matchup, /data-action="face"/)
+  assert.match(matchup, /brush-rise|is-entering/)
+  assert.doesNotMatch(matchup, /onPick\(id, 'clear'\)/)
+  assert.doesNotMatch(matchup, /◀ This one|That one ▶/)
   assert.match(matchup, /brush-gutter/)
   assert.match(css, /min-width:\s*88px/)
   assert.match(css, /object-fit:\s*contain/)
@@ -367,6 +424,10 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(sql, /brush_contest/)
   assert.match(sql, /1\.0 \/ 3\.0/)
   assert.doesNotMatch(sql, /files\.delete|addParents|removeParents/)
+  const face = readFileSync(new URL('../supabase/migrations/20261024040000_brush_face_box.sql', import.meta.url), 'utf8')
+  assert.match(face, /brush_set_face_box/)
+  assert.match(face, /face_box/)
+  assert.match(face, /face_scanned/)
 })
 
 test('relative api imports use .js so Vercel can resolve the compiled files', () => {
