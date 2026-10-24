@@ -12,7 +12,7 @@ import { challengerCount, extendQueue, finalsFieldSize, hashDistance, newEntrant
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
 import { UPLOAD_BATCH_LIMIT, retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
-import { FACE_PAN_GAIN, clampInRanges, clampZoom, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
+import { clampInRanges, clampZoom, contentSpan, faceAimPan, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
 
 test('elo matches the documented 1500 vs 1500 step', () => {
   const first = eloUpdate(1500, 1500, 0, 0, true)
@@ -548,8 +548,7 @@ test('relative api imports use .js so Vercel can resolve the compiled files', ()
   assert.deepEqual(bad, [])
 })
 
-test('pinch stays under the fingers and Face pan moves twice as far', () => {
-  assert.equal(FACE_PAN_GAIN, 2)
+test('pinch stays under the fingers and Face aim reaches the picture edges', () => {
   const rest = restTranslate(REST_ZOOM)
   assert.equal(rest.tx, 0)
   assert.equal(rest.ty, 0)
@@ -592,8 +591,6 @@ test('pinch stays under the fingers and Face pan moves twice as far', () => {
   assert.equal(clampInRanges(10, [{ min: -100, max: 20 }, { min: 80, max: 200 }]), 10)
   assert.equal(clampInRanges(30, [{ min: -100, max: 20 }, { min: 80, max: 200 }]), 20)
   assert.equal(clampInRanges(500, [{ min: -100, max: 20 }, { min: 80, max: 200 }]), 200)
-  const gained = 30 * FACE_PAN_GAIN
-  assert.equal(clampInRanges(gained, [range]), 60)
 
   const face = { faceTx: 0, faceTy: 0, scale: 3, width: 200, height: 400, imageX: 0.4, imageY: 0.55, screenX: 0.4, screenY: 0.55 }
   const pan = facePanToPoint(face)
@@ -607,8 +604,29 @@ test('pinch stays under the fingers and Face pan moves twice as far', () => {
   assert.ok(Math.abs(anchored.x - 0.4) < 1e-9)
   assert.ok(Math.abs(anchored.y - 0.55) < 1e-9)
 
+  const span = contentSpan(100, 200, 1, 'contain')
+  assert.deepEqual(span, { x0: 0, x1: 1, y0: 0.25, y1: 0.75 })
+  const aimed = { faceTx: 4, faceTy: -18, scale: 2.8, width: 220, height: 390, span }
+  const screenY = (panY, edge) => 0.5 + (edge - 0.5) * aimed.scale + aimed.faceTy / 100 + panY / aimed.height
+  const screenX = (panX, edge) => 0.5 + (edge - 0.5) * aimed.scale + aimed.faceTx / 100 + panX / aimed.width
+  const bottom = faceAimPan({ ...aimed, imageX: 0.2, imageY: 1 })
+  const top = faceAimPan({ ...aimed, imageX: 0.8, imageY: 0 })
+  const left = faceAimPan({ ...aimed, imageX: 0, imageY: 0.4 })
+  const right = faceAimPan({ ...aimed, imageX: 1, imageY: 0.6 })
+  assert.ok(Math.abs(screenY(bottom.y, span.y1) - 1) < 1e-6)
+  assert.ok(Math.abs(screenY(top.y, span.y0)) < 1e-6)
+  assert.ok(Math.abs(screenX(left.x, span.x0)) < 1e-6)
+  assert.ok(Math.abs(screenX(right.x, span.x1) - 1) < 1e-6)
+  const mid = faceAimPan({ faceTx: 6, faceTy: -12, scale: 2, width: 200, height: 400, imageX: 0.42, imageY: 0.58 })
+  const atCenterX = 0.5 + (-6 / 100 - mid.x / 200) / 2
+  const atCenterY = 0.5 + (12 / 100 - mid.y / 400) / 2
+  assert.ok(Math.abs(atCenterX - 0.42) < 1e-6)
+  assert.ok(Math.abs(atCenterY - 0.58) < 1e-6)
+
   const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
-  assert.match(matchup, /FACE_PAN_GAIN/)
+  assert.match(matchup, /faceAimPan/)
+  assert.match(matchup, /120ms ease-out/)
+  assert.match(matchup, /pictureAim/)
   assert.match(matchup, /zoomAround/)
   assert.match(matchup, /facePanToPoint/)
 })

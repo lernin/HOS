@@ -1,7 +1,8 @@
 export type Zoom = { scale: number, x: number, y: number }
 
 export const REST_ZOOM: Zoom = { scale: 1, x: 0.5, y: 0.5 }
-export const FACE_PAN_GAIN = 2
+
+export type ContentSpan = { x0: number, x1: number, y0: number, y1: number }
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -90,6 +91,50 @@ export function facePanToPoint(input: {
   return {
     x: (input.screenX - 0.5 - (input.imageX - 0.5) * input.scale - input.faceTx / 100) * input.width,
     y: (input.screenY - 0.5 - (input.imageY - 0.5) * input.scale - input.faceTy / 100) * input.height,
+  }
+}
+
+export function contentSpan(elementWidth: number, elementHeight: number, imageRatio: number, fit: 'contain' | 'cover'): ContentSpan {
+  const full: ContentSpan = { x0: 0, x1: 1, y0: 0, y1: 1 }
+  if (fit === 'cover' || elementWidth <= 1 || elementHeight <= 1 || !(imageRatio > 0)) return full
+  const elementRatio = elementWidth / elementHeight
+  if (Math.abs(elementRatio - imageRatio) < 0.01) return full
+  if (imageRatio > elementRatio) {
+    const inset = (1 - elementRatio / imageRatio) / 2
+    return { x0: 0, x1: 1, y0: inset, y1: 1 - inset }
+  }
+  const inset = (1 - imageRatio / elementRatio) / 2
+  return { x0: inset, x1: 1 - inset, y0: 0, y1: 1 }
+}
+
+// Place a picture point at the zoom center, then stop at the picture edges.
+// Finger fraction 0 is the top or left of the picture; 1 is the bottom or right.
+export function faceAimPan(input: {
+  faceTx: number
+  faceTy: number
+  scale: number
+  width: number
+  height: number
+  imageX: number
+  imageY: number
+  span?: ContentSpan
+}) {
+  const span = input.span ?? { x0: 0, x1: 1, y0: 0, y1: 1 }
+  const ex = span.x0 + clamp(input.imageX, 0, 1) * (span.x1 - span.x0)
+  const ey = span.y0 + clamp(input.imageY, 0, 1) * (span.y1 - span.y0)
+  const baseX = input.faceTx / 100 * input.width
+  const baseY = input.faceTy / 100 * input.height
+  const centerX = -(ex - 0.5) * input.scale * input.width
+  const centerY = -(ey - 0.5) * input.scale * input.height
+  const edgeX = (edge: number, screen: number) => (screen - 0.5 - (edge - 0.5) * input.scale) * input.width - baseX
+  const edgeY = (edge: number, screen: number) => (screen - 0.5 - (edge - 0.5) * input.scale) * input.height - baseY
+  const minX = Math.min(edgeX(span.x0, 0), edgeX(span.x1, 1))
+  const maxX = Math.max(edgeX(span.x0, 0), edgeX(span.x1, 1))
+  const minY = Math.min(edgeY(span.y0, 0), edgeY(span.y1, 1))
+  const maxY = Math.max(edgeY(span.y0, 0), edgeY(span.y1, 1))
+  return {
+    x: clamp(centerX - baseX, minX, maxX),
+    y: clamp(centerY - baseY, minY, maxY),
   }
 }
 
