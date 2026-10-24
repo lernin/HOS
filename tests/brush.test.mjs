@@ -40,6 +40,7 @@ test('glicko-2 matches the published example and keeps a close call smaller', ()
   )
   assert.ok(conservativeRating(lucky.eloA, lucky.sigmaA) < conservativeRating(1600, 50))
   assert.match(readFileSync(new URL('../src/experiences/brush/rank.ts', import.meta.url), 'utf8'), /rating - 2 \* RD/)
+  assert.match(readFileSync(new URL('../src/experiences/brush/Sheets.tsx', import.meta.url), 'utf8'), /compareConservative/)
 })
 
 function image(partial) {

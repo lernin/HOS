@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { levelOf } from './level'
 import { PLACEMENT_GAMES } from './pair'
+import { compareConservative } from './rank'
 import type { BrushAttribute, BrushImage, BrushTag, Insights, TurnOffs, UploadSnapshot } from './types'
 import { suggestRecipe } from './recipe'
 
@@ -69,7 +70,7 @@ export function BackfillOffer({ label, onSkip, onRun }: { label: string, onSkip:
 }
 
 export function Leaderboard({ images, srcFor }: { images: BrushImage[], srcFor: (image: BrushImage) => string | null }) {
-  const ranked = [...images].sort((a, b) => b.elo - a.elo)
+  const ranked = [...images].sort(compareConservative)
   return (
     <div className="brush-scroll" data-screen="board">
       <h2>Leaderboard</h2>
