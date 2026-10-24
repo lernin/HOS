@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './brush.css'
 import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush/client'
-import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, progressOf, rememberFace, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, type Deck, type Decision } from './brush/deck'
-import { detectFaceBox } from './brush/face'
+import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, type Deck, type Decision } from './brush/deck'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
 import { enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
 import { challengerCount, hashImage, newEntrants } from './brush/pair'
@@ -56,7 +55,6 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const addedRef = useRef(0)
   const startedRef = useRef(Date.now())
   const hashedRef = useRef(new Set<string>())
-  const facedRef = useRef(new Set<string>())
   const deckRef = useRef<Deck | null>(null)
   deckRef.current = deck
   const match = deck ? currentMatch(deck) : null
@@ -198,27 +196,6 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           if (!mounted || !hash) return
           setDeck(current => current ? rememberHash(current, image.id, hash) : current)
           void client.setPhash(image.id, hash).catch(() => {})
-        }).catch(() => {})
-      }
-      img.src = src
-    }
-    return () => { mounted = false }
-  }, [deck, urls, client])
-
-  useEffect(() => {
-    if (!deck) return
-    let mounted = true
-    for (const image of deck.images) {
-      if (image.face_scanned || image.face_box || image.trashed || facedRef.current.has(image.id)) continue
-      const src = image.preview_url || (image.has_thumbnail && urls[`thumb:${image.id}`]) || urls[image.drive_file_id]
-      if (!src) continue
-      facedRef.current.add(image.id)
-      const img = new Image()
-      img.onload = () => {
-        void detectFaceBox(img).then(box => {
-          if (!mounted) return
-          setDeck(current => current ? rememberFace(current, image.id, box) : current)
-          void client.setFaceBox(image.id, box).catch(() => {})
         }).catch(() => {})
       }
       img.src = src

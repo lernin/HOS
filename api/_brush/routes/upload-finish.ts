@@ -1,5 +1,6 @@
 import { rpc } from '../db.js'
-import { uploadsFile } from '../drive.js'
+import { downloadPreview, uploadsFile } from '../drive.js'
+import { saveDetectedFace } from '../face-scan.js'
 import { cleanDetail, json, pins } from '../http.js'
 import { putThumb } from '../storage.js'
 
@@ -20,8 +21,10 @@ export default {
       const file = await uploadsFile(driveFileId)
       const thumbnail = form.get('thumbnail')
       let thumbnailPath: string | null = null
+      let faceBytes: Uint8Array | null = null
       if (thumbnail instanceof File && thumbnail.size > 0 && thumbnail.size <= MAX_THUMB && thumbnail.type === 'image/webp') {
-        const stored = await putThumb(hash, new Uint8Array(await thumbnail.arrayBuffer()))
+        faceBytes = new Uint8Array(await thumbnail.arrayBuffer())
+        const stored = await putThumb(hash, faceBytes)
         if (stored) thumbnailPath = `${hash}.webp`
       }
       const registered = await rpc<{ duplicate?: boolean, id?: string }>('brush_register_upload', {
@@ -34,6 +37,14 @@ export default {
         byte_size: bytes,
         thumbnail_path: thumbnailPath,
       })
+      if (registered.id && !faceBytes) {
+        try {
+          faceBytes = (await downloadPreview(file.id)).bytes
+        } catch { faceBytes = null }
+      }
+      if (registered.id && faceBytes) {
+        try { await saveDetectedFace(lab, brush, registered.id, faceBytes) } catch { /* the photo is saved; the next sync can retry the face */ }
+      }
       return json({ duplicate: Boolean(registered.duplicate), id: registered.id || null, thumbnail: Boolean(thumbnailPath) })
     } catch (error) {
       const status = typeof error === 'object' && error && 'status' in error ? Number(error.status) : 500

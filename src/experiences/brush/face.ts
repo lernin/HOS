@@ -1,4 +1,8 @@
 import type { FaceBox } from './types'
+import { focusBox as focusKnown, UPPER_FACE } from './face-box.ts'
+
+export { UPPER_FACE }
+export const focusBox = focusKnown
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
