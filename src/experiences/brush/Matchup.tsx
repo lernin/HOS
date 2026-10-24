@@ -1,6 +1,24 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
+
+const PHOTO_GAP = 8
+const MIN_GUTTER = 88
+
+function useImageRatio(src: string | null) {
+  const [ratio, setRatio] = useState(9 / 16)
+  useEffect(() => {
+    if (!src) return
+    let gone = false
+    const img = new Image()
+    img.onload = () => {
+      if (!gone && img.naturalWidth > 0 && img.naturalHeight > 0) setRatio(img.naturalWidth / img.naturalHeight)
+    }
+    img.src = src
+    return () => { gone = true }
+  }, [src])
+  return ratio
+}
 
 export type Zoom = { scale: number, x: number, y: number }
 
@@ -11,7 +29,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export function Matchup({
-  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor,
+  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, leftChrome = null, rightChrome = null,
 }: {
   left: BrushImage
   right: BrushImage
@@ -23,9 +41,17 @@ export function Matchup({
   onPick: (id: string, margin: Margin) => void
   onTrash: (id: string) => void
   srcFor: (image: BrushImage) => string | null
+  leftChrome?: ReactNode
+  rightChrome?: ReactNode
 }) {
   const stageRef = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
   const [infoId, setInfoId] = useState<string | null>(null)
+  const [frame, setFrame] = useState<{ left: number, right: number, scale: number } | null>(null)
+  const leftSrc = srcFor(left)
+  const rightSrc = srcFor(right)
+  const leftRatio = useImageRatio(leftSrc)
+  const rightRatio = useImageRatio(rightSrc)
   const zoomRef = useRef(zoom)
   const lockRef = useRef(0)
   const portraitRef = useRef(portrait)
@@ -141,6 +167,30 @@ export function Matchup({
     }
   }, [])
 
+  useLayoutEffect(() => {
+    const frameNode = frameRef.current
+    if (!frameNode || portrait) return
+    const apply = () => {
+      const rect = frameNode.getBoundingClientRect()
+      if (rect.width <= 0 || rect.height <= 0) return
+      const naturalLeft = rect.height * leftRatio
+      const naturalRight = rect.height * rightRatio
+      const natural = naturalLeft + naturalRight
+      const budget = rect.width - PHOTO_GAP - MIN_GUTTER * 2
+      const scale = natural > budget ? Math.max(0, budget) / natural : 1
+      const next = {
+        left: scale < 1 ? Math.floor(naturalLeft * scale) : naturalLeft,
+        right: scale < 1 ? Math.floor(naturalRight * scale) : naturalRight,
+        scale,
+      }
+      setFrame(current => current && Math.abs(current.left - next.left) < 0.5 && Math.abs(current.right - next.right) < 0.5 && Math.abs(current.scale - next.scale) < 0.001 ? current : next)
+    }
+    apply()
+    const observer = new ResizeObserver(apply)
+    observer.observe(frameNode)
+    return () => observer.disconnect()
+  }, [portrait, leftRatio, rightRatio])
+
   function locked(event: React.MouseEvent) {
     if (Date.now() < lockRef.current) {
       event.preventDefault()
@@ -168,39 +218,73 @@ export function Matchup({
   ]
   const frontImage = front === 'left' ? left : right
   const zoomStyle = { transform: `scale(${zoom.scale})`, transformOrigin: `${zoom.x * 100}% ${zoom.y * 100}%` }
+  const fit = !portrait && frame && frame.scale < 0.999 ? 'cover' : 'contain'
+
+  function toggleInfo(id: string) {
+    setInfoId(current => current === id ? null : id)
+  }
+
+  function captionFor(image: BrushImage) {
+    const open = infoId === image.id
+    return (
+      <div className="brush-caption">
+        <strong>{image.country || 'Untitled'}</strong>
+        {image.games < PLACEMENT_GAMES && <em className="brush-challenger" data-challenger>New</em>}
+        {open && <small data-caption-detail>{image.name} · {Math.round(image.elo)} · {image.games} played</small>}
+        <button className="brush-info" type="button" data-action="info" aria-expanded={open} aria-label={open ? 'Hide filename and rating' : 'Show filename and rating'} onClick={() => toggleInfo(image.id)}>i</button>
+      </div>
+    )
+  }
+
+  function choose(event: React.MouseEvent, id: string, margin: Margin) {
+    if (locked(event)) return
+    lockRef.current = Date.now() + 450
+    onPick(id, margin)
+  }
+
+  function discard(event: React.MouseEvent, id: string) {
+    if (locked(event)) return
+    lockRef.current = Date.now() + 450
+    onTrash(id)
+  }
+
+  function gutter(image: BrushImage, side: 'left' | 'right') {
+    return (
+      <aside className={`brush-gutter is-${side}`} data-gutter={side}>
+        <div className="brush-gutter-top">{side === 'left' ? leftChrome : rightChrome}</div>
+        <div className="brush-gutter-stack">
+          {captionFor(image)}
+          <button className="brush-pick-arrow" type="button" data-action="pick" onClick={event => choose(event, image.id, 'clear')}>{side === 'left' ? '◀ This one' : 'That one ▶'}</button>
+          <button className="brush-choice close" type="button" data-action="close" onClick={event => choose(event, image.id, 'close')}>Close</button>
+          <button className="brush-choice danger" type="button" data-action="trash" onClick={event => discard(event, image.id)}>Trash</button>
+        </div>
+      </aside>
+    )
+  }
 
   return (
-    <div className="brush-stage" data-screen="match">
+    <div className="brush-stage" data-screen="match" ref={frameRef}>
+      {!portrait && gutter(left, 'left')}
       <div className="brush-photos" ref={stageRef}>
         {cards.map(({ image, side }) => {
-          const src = srcFor(image)
-          const open = infoId === image.id
+          const src = side === 'left' ? leftSrc : rightSrc
+          const sized = !portrait && frame ? { width: side === 'left' ? frame.left : frame.right, aspectRatio: 'auto' } : undefined
           return (
-            <article key={image.id} className={`brush-card${front === side ? ' is-front' : ''}`} data-side={side} data-image={image.id} data-name={image.name}>
+            <article key={image.id} className={`brush-card${front === side ? ' is-front' : ''}`} data-side={side} data-image={image.id} data-name={image.name} style={sized}>
               <div className="brush-photo-hit" onClick={event => onPhotoClick(event, image.id)}>
-                {src ? <img className="brush-photo" src={src} alt={image.name} style={zoomStyle} draggable={false} /> : <div className="brush-photo" />}
+                {src ? <img className="brush-photo" src={src} alt={image.name} style={{ ...zoomStyle, objectFit: fit }} draggable={false} /> : <div className="brush-photo" />}
               </div>
-              <div className="brush-caption">
-                <strong>{image.country || 'Untitled'}</strong>
-                {image.games < PLACEMENT_GAMES && <em className="brush-challenger" data-challenger>New</em>}
-                {open && <small data-caption-detail>{image.name} · {Math.round(image.elo)} · {image.games} played</small>}
-                <button className="brush-info" type="button" data-action="info" aria-expanded={open} aria-label={open ? 'Hide filename and rating' : 'Show filename and rating'} onClick={() => setInfoId(current => current === image.id ? null : image.id)}>i</button>
-              </div>
-              {!portrait && (
-                <div className="brush-card-bar">
-                  <button className="brush-choice close" type="button" data-action="close" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onPick(image.id, 'close') } }}>Close</button>
-                  <button className="brush-choice danger" type="button" data-action="trash" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onTrash(image.id) } }}>Trash</button>
-                </div>
-              )}
+              {portrait && captionFor(image)}
             </article>
           )
         })}
       </div>
+      {!portrait && gutter(right, 'right')}
       {portrait && (
         <div className="brush-footer">
-          <button className="brush-choice" type="button" data-action="pick" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onPick(frontImage.id, 'clear') } }}>Pick</button>
-          <button className="brush-choice close" type="button" data-action="close" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onPick(frontImage.id, 'close') } }}>Close</button>
-          <button className="brush-choice danger" type="button" data-action="trash" onClick={event => { if (!locked(event)) { lockRef.current = Date.now() + 450; onTrash(frontImage.id) } }}>Trash</button>
+          <button className="brush-choice" type="button" data-action="pick" onClick={event => choose(event, frontImage.id, 'clear')}>Pick</button>
+          <button className="brush-choice close" type="button" data-action="close" onClick={event => choose(event, frontImage.id, 'close')}>Close</button>
+          <button className="brush-choice danger" type="button" data-action="trash" onClick={event => discard(event, frontImage.id)}>Trash</button>
         </div>
       )}
     </div>

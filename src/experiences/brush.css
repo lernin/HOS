@@ -10,10 +10,7 @@
 .brush-menu-button{display:none}
 .brush-menu{position:absolute;z-index:2;top:0;left:100%;height:100%;width:min(280px,70vw);background:#16140f;display:flex;flex-direction:column;gap:8px;padding:12px;overflow:auto}
 .brush-menu button,.brush-menu .brush-text-button{width:100%;min-height:40px;text-align:left}
-.brush.is-landscape.is-match{flex-direction:row}
-.brush.is-landscape.is-match .brush-nav{width:48px;flex:0 0 48px;flex-direction:column;align-items:center;align-self:stretch;justify-content:flex-start;gap:4px;padding:4px;overflow:visible}
 .brush.is-landscape.is-match .brush-menu-button{display:inline-flex;width:40px;min-height:32px;padding:0;font-size:11px}
-.brush.is-landscape.is-match .brush-nav>[data-action="fit"]{width:40px;min-height:32px;padding:0;font-size:11px}
 .brush-main{flex:1;min-height:0;min-width:0;position:relative;display:flex;flex-direction:column}
 .brush-stage{position:relative;flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;touch-action:none}
 .brush-photos{flex:1;min-height:0;min-width:0;display:flex;gap:4px;touch-action:none}
@@ -31,6 +28,25 @@
 .brush-card-bar,.brush-footer{flex:0 0 auto;display:flex;gap:4px;padding:4px;background:#0c0d0b}
 .brush-card-bar .brush-choice,.brush-footer .brush-choice{min-height:32px}
 .brush.is-portrait .brush-footer .brush-choice{min-height:44px}
+.brush.is-landscape.is-match .brush-stage{flex-direction:row;align-items:stretch;height:100%}
+.brush.is-landscape.is-match .brush-photos{flex:0 0 auto;width:max-content;max-width:calc(100% - 176px);height:100%;gap:8px}
+.brush.is-landscape.is-match .brush-card{flex:0 0 auto;width:auto;height:100%;aspect-ratio:9/16;max-width:none;background:transparent}
+.brush.is-landscape.is-match .brush-photo-hit{height:100%}
+.brush.is-landscape.is-match .brush-photo{height:100%;width:100%;object-fit:contain}
+.brush-gutter{position:relative;flex:1 1 88px;min-width:88px;height:100%;display:flex;flex-direction:column;align-items:center;padding:6px;min-height:0;overflow:visible}
+.brush-gutter-top{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;text-align:center;font-size:11px;line-height:1.2}
+.brush-gutter-top button{min-height:28px;height:auto;padding:4px 6px;font-size:11px;line-height:1.2;white-space:normal;max-width:100%}
+.brush-gutter-top .brush-progress,.brush-gutter-top .brush-note,.brush-gutter-top .brush-moment{max-width:100%}
+.brush-gutter .brush-moment{position:relative;left:auto;transform:none;margin:0;white-space:normal;min-height:28px;height:auto;padding:6px 8px;font-size:12px}
+.brush-gutter-stack{flex:1;min-height:0;width:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px}
+.brush-gutter-stack>*{width:min(100%,168px)}
+.brush .brush-pick-arrow{min-height:84px;width:min(100%,168px);padding:10px 8px;border:0;border-radius:18px;background:#efe6d6;color:#1b1914;font-size:clamp(16px,2.2vw,22px);font-weight:700;line-height:1.15;text-align:center}
+.brush-gutter-top button{border:1px solid rgba(244,239,230,.28);background:rgba(12,13,11,.72);border-radius:999px;color:inherit}
+.brush-gutter .brush-choice{flex:0 0 auto;min-height:36px}
+.brush-gutter .brush-caption{flex-direction:column;align-items:center;justify-content:center;max-height:none;min-height:0;height:auto;padding:0;background:transparent;line-height:1.25;text-align:center;overflow:visible;gap:2px}
+.brush-gutter .brush-caption strong,.brush-gutter .brush-caption small{white-space:normal;overflow:visible;text-overflow:clip;text-align:center}
+.brush-gutter .brush-info{margin-left:0}
+.brush-gutter .brush-menu{left:0;top:40px;height:calc(100% - 40px)}
 .brush-card-meta,.brush-card-actions{position:absolute;left:0;right:0;z-index:2;display:flex;justify-content:space-between;gap:8px;padding:10px}
 .brush-card-meta{top:8px;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.7);pointer-events:none}
 .brush-card-meta small,.brush-muted{color:rgba(244,239,230,.72)}
@@ -38,6 +54,7 @@
 .brush-choice{flex:1;min-height:44px;background:rgba(12,13,11,.78)}
 .brush-choice.danger{border-color:#e7b2a8}
 .brush-choice.close{flex:0.72}
+.brush-gutter .brush-choice,.brush-gutter .brush-choice.close{flex:0 0 auto;min-height:36px}
 .brush-challenger{display:block;margin-top:4px;font-style:normal;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#f3d7a1}
 .brush-caption .brush-challenger{display:inline;margin:0;flex:0 0 auto}
 .brush-moment{position:relative;z-index:1;align-self:center;margin:4px auto;max-width:calc(100% - 16px);background:#efe6d6;color:#1b1914;border:0;border-radius:999px;min-height:32px;padding:0 14px}
