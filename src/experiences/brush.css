@@ -75,19 +75,19 @@
 @keyframes brush-level-glow{0%,100%{filter:none}40%{filter:brightness(1.45)}}
 .brush-level-track{display:flex;flex-direction:column;gap:3px}
 .brush-level-meta{display:flex;justify-content:space-between;gap:6px;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:rgba(244,239,230,.55);line-height:1.1}
-.brush-level-bar{height:3px;border-radius:99px;background:rgba(244,239,230,.12);overflow:hidden}
+.brush-level-bar{height:4px;border-radius:99px;background:rgba(244,239,230,.12);overflow:hidden}
 .brush-level-bar>span{display:block;height:100%;width:0;background:#efe6d6;border-radius:99px;transition:width 320ms ease}
 .brush-stat-grid{display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(244,239,230,.12);padding-top:5px}
 .brush-close-mark{font-style:normal;font-size:9px;letter-spacing:.03em;color:rgba(228,201,138,.88);font-variant-numeric:tabular-nums;line-height:1.1}
 .brush-portrait-stats{flex:0 0 auto;padding:8px 12px 10px;background:#12110e;border-top:1px solid rgba(244,239,230,.14)}
-.brush-stats.is-portrait{display:grid;grid-template-columns:minmax(0,1.1fr) auto minmax(0,1.3fr);grid-template-areas:"name badge stats" "track track track" "traits traits traits";gap:6px 12px;align-items:center}
+.brush-stats.is-portrait{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name badge" "stats stats" "track track" "traits traits";gap:6px 12px;align-items:center}
 .brush-stats.is-portrait .brush-strip-id{grid-area:name}
 .brush-stats.is-portrait .brush-level-badge{grid-area:badge;min-width:108px}
 .brush-stats.is-portrait .brush-stat-grid{grid-area:stats;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;border-top:0;padding-top:0}
 .brush-stats.is-portrait .brush-level-track{grid-area:track}
 .brush-stats.is-portrait .brush-strip-traits{grid-area:traits}
 .brush-controls{position:relative;flex:1.35 1 210px;min-width:196px;max-width:340px;height:100%;display:flex;flex-direction:column;padding:4px 6px 6px;min-height:0}
-.brush-controls .brush-gutter-actions{height:100%}
+.brush-controls .brush-gutter-actions{flex:1 1 auto;height:auto;min-height:0}
 .brush-control-row{flex:1 1 0;min-height:0;display:flex;gap:6px;align-items:stretch}
 .brush-control-row>.brush-swipe,.brush-control-row>.brush-face-hold{flex:1 1 0;width:auto;height:100%;min-width:0;min-height:0}
 .brush-control-row>.brush-face-hold{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;border-radius:16px}
