@@ -1,41 +1,69 @@
-/* One scrollable map; stars and the painted path share the same coordinates. */
+/* Meadow world progression: scenery is static art; every interactive state is layered above it.
+   Keep node and gate states modular so Vercel previews match the production asset pack. Preview refresh 2026-10-04. */
 body.logyq-home #logiq-library[data-shelf="game"] .logiq-modal{display:flex;flex-direction:column}
 body.logyq-home #logiq-library[data-shelf="game"] .logiq-modal-head{display:none}
 body.logyq-home #logiq-library[data-shelf="game"] .logiq-library-body{display:flex;flex:1;min-height:0;padding:0}
 #logiq-library[data-shelf="game"] #logyq-game-levels{position:relative;flex:1;min-height:0;max-height:none;overflow:hidden}
-#logyq-game-trail{position:relative;isolation:isolate;width:min(100%,560px);height:100%;min-height:440px;margin:auto;overflow:hidden;background:#88b856;color:#fff;font-family:system-ui,sans-serif}
-#logyq-trail-world{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:#416b3c transparent}
-#logyq-trail-map{position:relative;width:100%;background:#82b854 url('/logyq/images/forest-map-ground.webp') center top / 100% auto repeat-y}
-#logyq-trail-path{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-#logyq-trail-path .trail-border{fill:none;stroke:#776235;stroke-width:61;stroke-linecap:round;stroke-linejoin:round;opacity:.78}
-#logyq-trail-path .trail-earth{fill:none;stroke:#e8c378;stroke-width:49;stroke-linecap:round;stroke-linejoin:round}
-#logyq-trail-stars{position:absolute;inset:0}
-.logyq-trail-star{position:absolute;display:grid;place-items:center;width:clamp(54px,17vw,72px);height:clamp(54px,17vw,72px);padding:0;border:3px solid #fff4ca;border-radius:50%;background:radial-gradient(circle at 37% 27%,#fff8ce,#d9a761 70%,#ae6938);color:#fff9df;box-shadow:0 5px 0 #8b5b36,0 9px 18px rgba(45,60,21,.38);transform:translate(-50%,-50%);cursor:pointer;touch-action:manipulation;text-shadow:0 2px 3px rgba(100,67,27,.7)}
-.logyq-trail-star .star-icon{font:900 28px/1 system-ui;transform:translateY(-5px)}
-.logyq-trail-star .star-number{position:absolute;bottom:5px;left:0;right:0;font:900 12px/1 system-ui}
-.logyq-trail-star.is-cleared{background:radial-gradient(circle at 37% 27%,#faffc7,#a4d065 68%,#5e9a42);border-color:#eaffbe;box-shadow:0 5px 0 #497b33,0 0 22px rgba(203,255,143,.7)}
-.logyq-trail-star.is-current{border-color:#fff;box-shadow:0 5px 0 #9d602e,0 0 0 7px rgba(255,237,138,.45),0 0 28px #fff2aa;animation:logyq-trail-pulse 1.9s ease-in-out infinite}
-.logyq-trail-star:hover{filter:brightness(1.12)}
-.logyq-trail-star:focus-visible,#logyq-game-trail button:focus-visible,#logyq-trail-world:focus-visible{outline:4px solid #fff;outline-offset:3px}
-@keyframes logyq-trail-pulse{50%{box-shadow:0 5px 0 #9d602e,0 0 0 11px rgba(255,237,138,.22),0 0 34px #fff2aa}}
-.logyq-trail-heading{position:absolute;z-index:2;top:0;left:0;right:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px 42px;background:linear-gradient(rgba(16,63,38,.75),transparent);pointer-events:none}
-.logyq-trail-heading #logyq-trail-home{pointer-events:auto;margin:0;padding:0;border:0;background:transparent;color:#fff8df;font:950 clamp(31px,8.5vw,46px)/1 system-ui;letter-spacing:.06em;text-shadow:0 3px 0 #7b4a20,0 6px 14px rgba(28,55,32,.55);cursor:pointer;touch-action:manipulation}
-#logyq-trail-leaves{display:inline-flex;align-items:center;gap:5px;min-height:36px;padding:0 12px;border:1px solid rgba(255,255,255,.8);border-radius:999px;background:rgba(19,76,50,.82);box-shadow:0 4px 15px rgba(14,49,29,.25);font:800 16px/1 system-ui;white-space:nowrap}
-.logyq-trail-actions{position:absolute;z-index:2;bottom:0;left:0;right:0;display:grid;justify-items:center;gap:8px;padding:44px 18px calc(15px + env(safe-area-inset-bottom));text-align:center;background:linear-gradient(transparent,rgba(14,57,35,.8) 40%,rgba(14,57,35,.88))}
-#logyq-trail-caption{margin:0;color:#fff8de;font:800 16px/1.2 system-ui;text-shadow:0 2px 8px #20422f}
-#logyq-trail-continue{width:min(330px,100%);min-height:56px;border:2px solid #fff0bd;border-radius:18px;background:linear-gradient(#efa946,#c4772b);color:#fff9df;box-shadow:0 5px 0 #8a4e24,0 11px 25px rgba(23,46,24,.38);font:900 21px/1 system-ui;cursor:pointer;touch-action:manipulation}
-#logyq-trail-all-levels{min-height:38px;padding:0 20px;border:1px solid rgba(255,255,255,.8);border-radius:999px;background:rgba(20,67,45,.8);color:#fff;font:750 14px/1 system-ui;cursor:pointer;touch-action:manipulation}
-#logyq-trail-reset-progress{min-height:34px;padding:0 16px;border:1px solid rgba(255,255,255,.58);border-radius:999px;background:rgba(36,67,48,.58);color:#f7f4e9;font:700 12px/1 system-ui;cursor:pointer;touch-action:manipulation}
+
+#logyq-game-trail{position:relative;isolation:isolate;width:min(100%,560px);height:100%;min-height:440px;margin:auto;overflow:hidden;background:#86b45d;color:#fff;font-family:system-ui,sans-serif}
+#logyq-trail-world{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;background:#86b45d}
+#logyq-trail-world::-webkit-scrollbar{display:none}
+#logyq-trail-map{position:relative;width:100%;aspect-ratio:900/1599;margin:0 auto;background:#86b45d url('/logyq/assets/game/backgrounds/meadow-map.webp') center center / 100% 100% no-repeat}
+#logyq-trail-path{display:none}
+#logyq-trail-stars{position:absolute;inset:0;z-index:2}
+
+.logyq-meadow-stage,.logyq-meadow-gate{position:absolute;transform:translate(-50%,-50%);padding:0;border:0;background-color:transparent;background-repeat:no-repeat;background-position:center;background-size:contain;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;filter:drop-shadow(0 5px 5px rgba(48,55,28,.28))}
+.logyq-meadow-stage{width:clamp(68px,17vw,92px);aspect-ratio:1.18/1}
+.logyq-meadow-stage.is-locked{background-image:url('/logyq/assets/game/nodes/stage-locked.webp');cursor:default;filter:grayscale(.08) drop-shadow(0 3px 4px rgba(48,55,28,.2))}
+.logyq-meadow-stage.is-open{background-image:url('/logyq/assets/game/nodes/stage-open.webp')}
+.logyq-meadow-stage.is-current{background-image:url('/logyq/assets/game/nodes/stage-current.webp');animation:logyq-meadow-pulse 1.9s ease-in-out infinite}
+.logyq-meadow-stage.is-completed{background-image:url('/logyq/assets/game/nodes/stage-one-star.webp')}
+.logyq-meadow-stage-number{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);min-width:1.2em;color:#fffdf0;font:950 clamp(18px,5vw,28px)/1 system-ui,sans-serif;text-align:center;text-shadow:0 2px 3px rgba(73,49,20,.72)}
+.logyq-meadow-stage.is-locked .logyq-meadow-stage-number{color:#e7eadf;text-shadow:0 2px 3px rgba(46,55,44,.65)}
+.logyq-meadow-rating{position:absolute;left:50%;top:77%;transform:translate(-50%,-50%);width:70%;height:38%;background:center/contain no-repeat;pointer-events:none}
+.logyq-meadow-rating.is-1{background-image:url('/logyq/assets/game/ratings/rating-one.webp')}
+.logyq-meadow-rating.is-2{background-image:url('/logyq/assets/game/ratings/rating-two.webp')}
+.logyq-meadow-rating.is-3{background-image:url('/logyq/assets/game/ratings/rating-three.webp')}
+.logyq-meadow-stage.is-current::after{content:"";position:absolute;inset:-23%;background:url('/logyq/assets/game/effects/current-ring.webp') center/contain no-repeat;pointer-events:none;z-index:-1}
+
+.logyq-meadow-gate{width:clamp(112px,28vw,160px);aspect-ratio:1.12/1}
+.logyq-meadow-gate.is-locked{background-image:url('/logyq/assets/game/gates/gate-locked.webp');cursor:default}
+.logyq-meadow-gate.is-open{background-image:url('/logyq/assets/game/gates/gate-open.webp');animation:logyq-gate-glow 1.8s ease-in-out infinite}
+.logyq-meadow-gate.is-complete{background-image:url('/logyq/assets/game/gates/gate-complete.webp')}
+.logyq-meadow-gate.is-open::after,.logyq-meadow-gate.is-complete::after{content:"";position:absolute;inset:-20%;background:url('/logyq/assets/game/effects/reward-glow.webp') center/contain no-repeat;z-index:-1;pointer-events:none}
+
+.logyq-trail-heading{position:absolute;z-index:3;top:0;left:0;right:0;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:max(10px,env(safe-area-inset-top)) 12px 38px;background:linear-gradient(rgba(39,76,41,.42),transparent);pointer-events:none}
+.logyq-trail-heading h3{width:clamp(150px,43vw,225px);height:clamp(58px,16vw,88px);margin:0;background:url('/logyq/assets/game/props/title-meadow-trail.webp') left top/contain no-repeat;font-size:0;color:transparent}
+#logyq-trail-leaves{display:grid;place-items:center;min-width:74px;min-height:42px;margin-top:4px;padding:4px 12px;border:0;border-radius:18px;background:rgba(30,81,47,.88);box-shadow:0 4px 12px rgba(24,55,34,.25);font:900 16px/1 system-ui,sans-serif;white-space:nowrap}
+#logyq-trail-leaves::before{content:"MEADOW";display:block;margin-bottom:3px;font:800 9px/1 system-ui,sans-serif;letter-spacing:.08em;opacity:.86}
+
+.logyq-trail-actions{position:absolute;z-index:3;bottom:0;left:0;right:0;display:grid;justify-items:center;gap:6px;padding:36px 14px calc(10px + env(safe-area-inset-bottom));text-align:center;background:linear-gradient(transparent,rgba(22,65,38,.62) 47%,rgba(22,65,38,.78))}
+#logyq-trail-caption{margin:0;max-width:340px;color:#fffbe9;font:800 13px/1.2 system-ui,sans-serif;text-shadow:0 2px 7px rgba(26,55,32,.85)}
+#logyq-trail-continue{width:min(292px,78%);min-height:50px;padding:0 22px;border:2px solid rgba(255,247,205,.9);border-radius:17px;background:linear-gradient(#f2ba54,#d78532);color:#fffdf0;box-shadow:0 5px 0 #915326,0 10px 20px rgba(22,49,29,.28);font:900 19px/1 system-ui,sans-serif;cursor:pointer;touch-action:manipulation}
+#logyq-trail-continue:disabled{opacity:.65;cursor:default;filter:saturate(.65)}
+#logyq-trail-all-levels,#logyq-trail-reset-progress{min-height:34px;padding:0 16px;border:1px solid rgba(255,255,255,.6);border-radius:999px;background:rgba(30,76,49,.68);color:#fff;font:750 12px/1 system-ui,sans-serif;cursor:pointer}
+
 #logyq-trail-drawer{position:absolute;z-index:5;inset:0;box-sizing:border-box;overflow:auto;padding:18px 20px 32px;background:#f7f4e9;color:#274733}
 #logyq-trail-drawer[hidden]{display:none}
 .logyq-trail-drawer-head{position:sticky;top:-18px;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;background:#f7f4e9;font:850 20px/1.2 system-ui}
 #logyq-trail-close-levels{min-height:40px;padding:0 16px;border:1px solid #a7bf9b;border-radius:12px;background:#fff;color:#274733;font:750 14px/1 system-ui;cursor:pointer}
 #logyq-trail-drawer .logyq-level-intro{color:#40634e}
 #logyq-trail-drawer #logyq-game-path{margin:0}
-@media (max-width:700px){#logyq-game-trail{width:100%;min-height:0}.logyq-trail-heading{padding-top:18px}}
-@media (orientation:landscape) and (max-height:600px){#logyq-game-trail{min-height:0}.logyq-trail-heading #logyq-trail-home{font-size:30px}.logyq-trail-actions{left:auto;width:min(260px,40%);padding:18px 8px 8px;background:rgba(14,57,35,.78);border-radius:18px 0 0 0}#logyq-trail-caption{font-size:12px}#logyq-trail-continue{min-height:44px;font-size:17px}}
-@media (prefers-reduced-motion:reduce){.logyq-trail-star.is-current{animation:none}}
 
-/* Testing controls live in the in-game gear menu; keep DOM hooks hidden on forest. */
+.logyq-meadow-stage:focus-visible,.logyq-meadow-gate:focus-visible,#logyq-game-trail button:focus-visible,#logyq-trail-world:focus-visible{outline:4px solid #fff;outline-offset:3px}
+@keyframes logyq-meadow-pulse{50%{filter:drop-shadow(0 0 13px rgba(255,242,148,.98)) drop-shadow(0 4px 5px rgba(48,55,28,.25))}}
+@keyframes logyq-gate-glow{50%{filter:drop-shadow(0 0 16px rgba(255,228,126,.95)) drop-shadow(0 5px 5px rgba(48,55,28,.25))}}
+
+@media (max-width:700px){#logyq-game-trail{width:100%;min-height:0}.logyq-trail-heading{padding-left:9px;padding-right:9px}.logyq-trail-actions{padding-bottom:calc(8px + env(safe-area-inset-bottom))}}
+@media (orientation:landscape) and (max-height:600px){
+  #logyq-game-trail{width:min(100%,430px);min-height:0}
+  .logyq-trail-heading h3{width:145px;height:56px}
+  .logyq-trail-actions{left:auto;width:min(245px,48%);padding:26px 8px 8px;background:linear-gradient(transparent,rgba(22,65,38,.78) 34%);border-radius:20px 0 0 0}
+  #logyq-trail-caption{font-size:11px}
+  #logyq-trail-continue{width:92%;min-height:42px;font-size:16px}
+}
+@media (prefers-reduced-motion:reduce){.logyq-meadow-stage.is-current,.logyq-meadow-gate.is-open{animation:none}}
+
+/* Testing controls remain available from the in-game gear menu, not on the child-facing map. */
 #logyq-game-trail>.logyq-trail-actions #logyq-trail-all-levels,
 #logyq-game-trail>.logyq-trail-actions #logyq-trail-reset-progress{display:none!important}
