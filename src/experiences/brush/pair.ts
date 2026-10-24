@@ -4,6 +4,8 @@ export const QUALIFY_TARGET = 4
 export const QUEUE_DEPTH = 5
 export const FINALS_SIZE = 16
 export const HASH_DISTANCE = 8
+export const PLACEMENT_GAMES = 5
+export const PLACEMENT_QUANTILES = [0.5, 0.8, 0.2, 0.65, 0.35]
 
 export type Pairable = GroupSource & {
   id: string
@@ -74,22 +76,58 @@ function active(pool: Pairable[]) {
   return pool.filter(image => !image.trashed && !image.archived)
 }
 
+export function challengerCount(pool: Pairable[]) {
+  return active(pool).filter(image => image.games < PLACEMENT_GAMES).length
+}
+
+export function rankedActive(pool: Pairable[]) {
+  return active(pool).sort((a, b) => b.elo - a.elo || b.games - a.games || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+}
+
+export function newEntrants(before: Pairable[], after: Pairable[]) {
+  const field = active(after)
+  if (field.length <= FINALS_SIZE) return []
+  const previous = new Set(rankedActive(before).slice(0, FINALS_SIZE).map(image => image.id))
+  const prior = new Map(before.map(image => [image.id, image]))
+  return rankedActive(after).slice(0, FINALS_SIZE).filter(image => {
+    const was = prior.get(image.id)
+    return was && was.games < PLACEMENT_GAMES && !previous.has(image.id)
+  })
+}
+
+function placementTarget(games: number, established: Pairable[]) {
+  const sorted = [...established].sort((a, b) => a.elo - b.elo || a.id.localeCompare(b.id))
+  const quantile = PLACEMENT_QUANTILES[Math.min(Math.max(games, 0), PLACEMENT_QUANTILES.length - 1)]
+  const index = Math.round(quantile * (sorted.length - 1))
+  return sorted[Math.min(sorted.length - 1, Math.max(0, index))].elo
+}
+
 export function nextQualifyingPair(pool: Pairable[], options: { avoidIds?: string[], recentKeys?: string[], rng?: () => number } = {}) {
   const rng = options.rng || Math.random
   const avoidIds = options.avoidIds || []
   const recentKeys = new Set(options.recentKeys || [])
   const images = active(pool)
   if (images.length < 2) return null
-  const minGames = Math.min(...images.map(image => image.games))
-  const fresh = images.filter(image => image.games === minGames)
-  let anchorPool = rng() < 0.7 ? fresh : images
+  const placing = images.filter(image => image.games < PLACEMENT_GAMES)
+  const established = images.filter(image => image.games >= PLACEMENT_GAMES)
+  let anchorPool: Pairable[]
+  if (placing.length) {
+    const minGames = Math.min(...placing.map(image => image.games))
+    anchorPool = placing.filter(image => image.games === minGames)
+  } else {
+    const minGames = Math.min(...images.map(image => image.games))
+    const fresh = images.filter(image => image.games === minGames)
+    anchorPool = rng() < 0.7 ? fresh : images
+  }
   const unseen = anchorPool.filter(image => !avoidIds.includes(image.id))
   if (unseen.length) anchorPool = unseen
-  else {
+  else if (!placing.length) {
     const anyUnseen = images.filter(image => !avoidIds.includes(image.id))
     if (anyUnseen.length) anchorPool = anyUnseen
   }
   const anchor = anchorPool[Math.floor(rng() * anchorPool.length)]
+  const placingAnchor = anchor.games < PLACEMENT_GAMES && established.some(image => image.id !== anchor.id)
+  const target = placingAnchor ? placementTarget(anchor.games, established.filter(image => image.id !== anchor.id)) : anchor.elo
   const ranked = images
     .filter(image => image.id !== anchor.id)
     .map(image => {
@@ -101,15 +139,17 @@ export function nextQualifyingPair(pool: Pairable[], options: { avoidIds?: strin
         + (lookalike ? 10000 : 0)
         + (avoidIds.includes(image.id) ? 3000 : 0)
         + (recentKeys.has(key) ? 1500 : 0)
-        + image.games * 20
-        + Math.abs(image.elo - anchor.elo) * 0.15
-        + rng() * 80
+        + (placingAnchor
+          ? (image.games < PLACEMENT_GAMES ? 5000 : 0) + Math.abs(image.elo - target)
+          : image.games * 20 + Math.abs(image.elo - anchor.elo) * 0.15)
+        + rng() * (placingAnchor ? 0.4 : 80)
       return { image, score }
     })
   const different = ranked.filter(item => item.score < 10000)
   const bandSource = different.length ? different : ranked
   bandSource.sort((a, b) => a.score - b.score)
-  const band = bandSource.filter(item => item.score <= bandSource[0].score + 80)
+  const slack = placingAnchor ? 0.5 : 80
+  const band = bandSource.filter(item => item.score <= bandSource[0].score + slack)
   const opponent = band[Math.floor(rng() * band.length)].image
   return { left: anchor, right: opponent }
 }

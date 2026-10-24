@@ -7,6 +7,7 @@ export type Deck = {
   queue: Slot[]
   recentKeys: string[]
   phase: ContestState['phase']
+  focus: 'bracket' | 'placement'
   rounds: RoundMatch[][]
   championId: string | null
 }
@@ -35,6 +36,7 @@ export function bootDeck(images: BrushImage[], contest: ContestState | null, rng
     queue: [],
     recentKeys: [],
     phase: contest?.phase || 'qualifying',
+    focus: 'bracket',
     rounds: contest?.rounds || [],
     championId: contest?.championId || null,
   }
@@ -44,7 +46,7 @@ export function bootDeck(images: BrushImage[], contest: ContestState | null, rng
 
 export function currentMatch(deck: Deck) {
   if (deck.phase === 'champion') return null
-  if (deck.phase === 'finals') {
+  if (deck.phase === 'finals' && deck.focus !== 'placement') {
     const round = deck.rounds[deck.rounds.length - 1] || []
     const slot = round.find(match => !match.winnerId)
     if (!slot) return null
@@ -90,6 +92,10 @@ function trash(images: BrushImage[], decision: Decision) {
 export function applyDecision(deck: Deck, decision: Decision, rng: () => number = Math.random): Deck {
   const images = decision.kind === 'pick' ? rate(deck.images, decision) : trash(deck.images, decision)
   const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-40)
+  if (deck.phase === 'finals' && deck.focus === 'placement') {
+    const queue = deck.queue.filter(slot => pairKey(slot.leftId, slot.rightId) !== pairKey(decision.leftId, decision.rightId))
+    return { ...deck, images, recentKeys, queue: extendQueue(images, queue, recentKeys, undefined, rng) }
+  }
   if (deck.phase === 'finals') {
     const winnerId = decision.kind === 'pick'
       ? decision.winnerId
@@ -114,14 +120,60 @@ export function applyDecision(deck: Deck, decision: Decision, rng: () => number 
 }
 
 export function startFinals(deck: Deck): Deck {
+  if (deck.phase === 'finals' && deck.focus !== 'placement' && currentMatch(deck)) return deck
   const ranked = active(deck.images).sort((a, b) => b.elo - a.elo || b.games - a.games || a.name.localeCompare(b.name))
   const round = seedBracket(ranked.map(image => image.id))
   if (!round.length) return deck
-  return { ...deck, phase: 'finals', rounds: [round], championId: null, queue: [] }
+  return { ...deck, phase: 'finals', focus: 'bracket', rounds: [round], championId: null, queue: [] }
+}
+
+export function openPlacement(deck: Deck, rng: () => number = Math.random): Deck {
+  return { ...deck, focus: 'placement', queue: extendQueue(deck.images, [], deck.recentKeys, undefined, rng) }
+}
+
+export function returnToBracket(deck: Deck): Deck {
+  return { ...deck, focus: 'bracket', queue: [] }
+}
+
+export type PendingResult = {
+  leftId: string
+  rightId: string
+  decision: 'pick' | 'trash'
+  winnerId: string | null
+  trashLeft: boolean
+  trashRight: boolean
+  margin: Margin
+  matchId: string | null
+}
+
+export function replayPending(deck: Deck, pending: PendingResult[], rng: () => number = Math.random): Deck {
+  let next = deck
+  for (const item of pending) {
+    if (item.matchId) continue
+    const decision: Decision = {
+      leftId: item.leftId,
+      rightId: item.rightId,
+      kind: item.decision,
+      winnerId: item.winnerId,
+      trashLeft: item.trashLeft,
+      trashRight: item.trashRight,
+      margin: item.margin,
+    }
+    if (next.phase === 'finals' && next.focus !== 'placement') {
+      const live = currentMatch(next)
+      const same = Boolean(live && pairKey(live.left.id, live.right.id) === pairKey(item.leftId, item.rightId))
+      if (!same) {
+        next = { ...next, images: decision.kind === 'pick' ? rate(next.images, decision) : trash(next.images, decision) }
+        continue
+      }
+    }
+    next = applyDecision(next, decision, rng)
+  }
+  return next
 }
 
 export function resumeQualifying(deck: Deck, rng: () => number = Math.random): Deck {
-  return { ...deck, phase: 'qualifying', queue: extendQueue(deck.images, [], deck.recentKeys, undefined, rng) }
+  return { ...deck, phase: 'qualifying', focus: 'bracket', queue: extendQueue(deck.images, [], deck.recentKeys, undefined, rng) }
 }
 
 export function mergeLibrary(deck: Deck, remote: BrushImage[], rng: () => number = Math.random): Deck {

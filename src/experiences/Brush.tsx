@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './brush.css'
 import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush/client'
-import { applyDecision, bootDeck, currentMatch, mergeLibrary, progressOf, rememberHash, resumeQualifying, startFinals, type Deck, type Decision } from './brush/deck'
+import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, type Deck, type Decision } from './brush/deck'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
 import { enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
-import { hashImage } from './brush/pair'
+import { challengerCount, hashImage, newEntrants } from './brush/pair'
 import { createPreviewClient } from './brush/preview'
 import { BackfillOffer, DetailSheet, InsightsScreen, Leaderboard, LibraryScreen, PinScreen, ReasonSheet } from './brush/Sheets'
 import { TrashReview } from './brush/TrashReview'
@@ -45,6 +45,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [offer, setOffer] = useState<BrushTag | null>(null)
   const [progress, setProgress] = useState('')
   const [message, setMessage] = useState('')
+  const [moment, setMoment] = useState<string | null>(null)
   const [country, setCountry] = useState('')
   const [detail, setDetail] = useState<{ image: BrushImage, attributes: { trait: string, value: string, source: string, confidence: number | null }[], prompt: string } | null>(null)
   const [urls, setUrls] = useState<Record<string, string>>({})
@@ -84,7 +85,10 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     setLibrary(nextLibrary)
     setInsights(nextInsights)
     setTrashed(nextTrashed)
-    setDeck(current => current ? mergeLibrary(current, nextLibrary) : bootDeck(nextLibrary, contest))
+    setDeck(current => {
+      const base = current ? mergeLibrary(current, nextLibrary) : bootDeck(nextLibrary, contest)
+      return current ? base : replayPending(base, readOutbox(preview))
+    })
   }
 
   function sendResult(item: OutboxItem) {
@@ -206,6 +210,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     const current = deckRef.current
     if (!current) return
     const next = applyDecision(current, decision)
+    const arrival = newEntrants(current.images, next.images)[0]
+    if (arrival) setMoment(`${arrival.name} entered the top 16!`)
     setDeck(next)
     setZoom(REST_ZOOM)
     setFront('left')
@@ -272,6 +278,25 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     persistContest(next)
   }
 
+  function placeChallengers() {
+    const current = deckRef.current
+    if (!current) return
+    setDeck(openPlacement(current))
+    setScreen('match')
+    setZoom(REST_ZOOM)
+    setFront('left')
+    setReason(null)
+  }
+
+  function backToBracket() {
+    const current = deckRef.current
+    if (!current) return
+    setDeck(returnToBracket(current))
+    setZoom(REST_ZOOM)
+    setFront('left')
+    setReason(null)
+  }
+
   function keepQualifying() {
     const current = deckRef.current
     if (!current) return
@@ -327,6 +352,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
 
   const countries = [...new Set(library.map(image => image.country).filter(Boolean))]
   const champion = deck?.championId ? deck.images.find(image => image.id === deck.championId) || null : null
+  const challengers = deck ? challengerCount(deck.images) : 0
 
   return (
     <main className={`brush${portrait ? ' is-portrait' : ' is-landscape'}`}>
@@ -342,6 +368,12 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
             {deck?.phase === 'qualifying' && qualify && <span className="brush-progress" data-qualify>{`Qualifying ${qualify.percent}%`}</span>}
             {deck?.phase === 'qualifying' && qualify && qualify.total >= 2 && <button type="button" data-action="finals" onClick={goFinals}>Finals</button>}
             {deck?.phase === 'finals' && <span className="brush-progress" data-finals>{`Finals · round ${deck.rounds.length}`}</span>}
+            {challengers > 0 && deck?.focus !== 'placement' && (
+              deck?.phase === 'finals'
+                ? <button type="button" data-challengers data-action="challengers" onClick={placeChallengers}>{`New challengers: ${challengers}`}</button>
+                : <span className="brush-progress" data-challengers>{`New challengers: ${challengers}`}</span>
+            )}
+            {deck?.phase === 'finals' && deck.focus === 'placement' && <button type="button" data-action="bracket" onClick={backToBracket}>Back to finals</button>}
           </>
         )}
         {uploads.total > uploads.completed && <span className="brush-progress" data-upload-nav>{`Uploads ${uploads.completed}/${uploads.total}`}</span>}
@@ -475,6 +507,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         />
       )}
 
+      {moment && <button className="brush-moment" type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
       {reason?.open && (
         <ReasonSheet
           kind={reason.kind}
