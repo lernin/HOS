@@ -1,21 +1,6 @@
-import sharp from 'sharp'
 import { rpc } from '../db.js'
-import { downloadPreview } from '../drive.js'
 import { cleanDetail, json, pins } from '../http.js'
-import { detectFaceBoxFromBytes } from '../face-detect.js'
 import { scanUnscannedFaces } from '../face-scan.js'
-
-async function samplePhotos(driveIds: string[]) {
-  const samples: { driveId: string, box: { x: number, y: number, w: number, h: number } | null, jpeg: string }[] = []
-  for (const driveId of driveIds.slice(0, 2)) {
-    if (!/^[\w-]{10,}$/.test(driveId)) continue
-    const image = await downloadPreview(driveId)
-    const jpeg = await sharp(Buffer.from(image.bytes), { failOn: 'none' }).rotate().resize(540, 960, { fit: 'inside' }).jpeg({ quality: 72 }).toBuffer()
-    const box = await detectFaceBoxFromBytes(image.bytes)
-    samples.push({ driveId, box, jpeg: jpeg.toString('base64') })
-  }
-  return samples
-}
 
 export default {
   async fetch(request: Request) {
@@ -26,12 +11,6 @@ export default {
     const brush = process.env.BRUSH_PIN?.trim() || ''
     if (!lab || !brush) return json({ error: 'Brush is not configured.' }, 503)
     try {
-      if (request.headers.get('x-face-sample') === '1') {
-        const body = await request.json() as { driveIds?: string[] }
-        const gate = await rpc<{ ok: boolean }>('brush_gate', { lab_pin: lab, brush_pin: brush })
-        if (!gate.ok) return json({ error: 'Wrong PIN.' }, 401)
-        return json({ samples: await samplePhotos(Array.isArray(body.driveIds) ? body.driveIds : []) })
-      }
       const gate = await rpc<{ ok: boolean }>('brush_gate', { lab_pin: lab, brush_pin: brush })
       if (!gate.ok) return json({ error: 'Wrong PIN.' }, 401)
       const started = Date.now()
