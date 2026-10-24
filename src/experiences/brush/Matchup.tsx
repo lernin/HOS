@@ -3,7 +3,7 @@ import { faceShift, faceZoom, focusBox } from './face'
 import { levelOf, levelProgress, levelTier, type Standing } from './level'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
-import { clampInRanges, clampZoom, contentSpan, faceAimPan, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround, type Zoom } from './zoom'
+import { approach, clampZoom, contentSpan, faceDragGain, faceDragPan, faceEdgePan, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround, type Zoom } from './zoom'
 
 export type { Zoom }
 export { REST_ZOOM }
@@ -60,29 +60,6 @@ function hitAt(stage: HTMLElement, x: number, y: number) {
   return best
 }
 
-function pictureAim(stage: HTMLElement, x: number, y: number) {
-  const hits = visibleHits(stage)
-  let best: HTMLElement | null = null
-  let bestDistance = Number.POSITIVE_INFINITY
-  for (const hit of hits) {
-    const rect = hit.getBoundingClientRect()
-    const dx = x < rect.left ? rect.left - x : x > rect.right ? x - rect.right : 0
-    const dy = y < rect.top ? rect.top - y : y > rect.bottom ? y - rect.bottom : 0
-    const distance = Math.hypot(dx, dy)
-    if (distance < bestDistance) {
-      bestDistance = distance
-      best = hit
-    }
-  }
-  if (!best) return null
-  const rect = best.getBoundingClientRect()
-  if (rect.width < 2 || rect.height < 2) return null
-  return {
-    x: clamp((x - rect.left) / rect.width, 0, 1),
-    y: clamp((y - rect.top) / rect.height, 0, 1),
-  }
-}
-
 function screenOn(hit: HTMLElement, x: number, y: number) {
   const rect = hit.getBoundingClientRect()
   return {
@@ -116,8 +93,7 @@ export function Matchup({
   const frameRef = useRef<HTMLDivElement>(null)
   const [frame, setFrame] = useState<{ left: number, right: number, scale: number } | null>(null)
   const [faceHeld, setFaceHeld] = useState(false)
-  const [faceMotion, setFaceMotion] = useState<false | 'settle' | 'follow'>(false)
-  const [faceAim, setFaceAim] = useState<{ x: number, y: number } | null>(null)
+  const [faceMotion, setFaceMotion] = useState<false | 'settle'>(false)
   const [facePan, setFacePan] = useState({ x: 0, y: 0, scale: 1 })
   const hitRefs = useRef<{ left: HTMLDivElement | null, right: HTMLDivElement | null }>({ left: null, right: null })
   const faceHeldRef = useRef(false)
@@ -135,6 +111,7 @@ export function Matchup({
   const pairRef = useRef({ left, right })
   const lockRef = useRef(0)
   const aliveRef = useRef(true)
+  const layoutRef = useRef({ fit: 'contain' as 'contain' | 'cover', leftRatio: 9 / 16, rightRatio: 9 / 16 })
   const portraitRef = useRef(portrait)
   const actions = useRef({ onZoom, onFlip, onPick })
   zoomRef.current = zoom
@@ -255,138 +232,204 @@ export function Matchup({
   useEffect(() => {
     const pointers = new Map<number, { x: number, y: number }>()
     let holdId: number | null = null
-    let origin: { x: number, y: number } | null = null
-    let moved = false
+    let drag: { id: number, originX: number, originY: number, startX: number, startY: number, gainX: number, gainY: number, engaged: boolean } | null = null
     let pinch: { dist: number, scale: number, imageX: number, imageY: number, hit: HTMLElement, side: 'left' | 'right' } | null = null
-    let aimPoint: { x: number, y: number } | null = null
-    const pan = { x: 0, y: 0, scale: 1 }
+    const target = { x: 0, y: 0, scale: 1 }
+    const shown = { x: 0, y: 0, scale: 1 }
+    let frame = 0
+    let epoch = 0
     const block: AddEventListenerOptions = { passive: false, capture: true }
-    const publish = (aim: { x: number, y: number } | null, glide: false | 'settle' | 'follow') => {
-      setFaceMotion(glide)
-      setFaceAim(aim)
-      setFacePan({ x: pan.x, y: pan.y, scale: pan.scale })
+    const stop = () => {
+      epoch += 1
+      if (frame) cancelAnimationFrame(frame)
+      frame = 0
     }
-    const heldBounds = (pinchScale: number) => {
+    const kick = () => {
+      if (frame) return
+      const token = epoch
+      const step = () => {
+        if (token !== epoch || !aliveRef.current) {
+          frame = 0
+          return
+        }
+        shown.x = approach(shown.x, target.x, 0.42)
+        shown.y = approach(shown.y, target.y, 0.42)
+        shown.scale = approach(shown.scale, target.scale, 0.42)
+        setFaceMotion(false)
+        setFacePan({ x: shown.x, y: shown.y, scale: shown.scale })
+        if (shown.x === target.x && shown.y === target.y && shown.scale === target.scale) {
+          frame = 0
+          return
+        }
+        frame = requestAnimationFrame(step)
+      }
+      frame = requestAnimationFrame(step)
+    }
+    const edgeOf = (side: 'left' | 'right', pinchScale: number) => {
       const stage = stageRef.current
-      if (!stage) return { x: [] as { min: number, max: number }[], y: [] as { min: number, max: number }[] }
-      const ranges = { x: [] as { min: number, max: number }[], y: [] as { min: number, max: number }[] }
-      for (const side of ['left', 'right'] as const) {
-        const hit = stage.querySelector<HTMLElement>(`[data-side="${side}"] .brush-photo-hit`)
-        if (!hit) continue
+      const hit = stage?.querySelector<HTMLElement>(`[data-side="${side}"] .brush-photo-hit`)
+      if (!hit) return null
+      const rect = hit.getBoundingClientRect()
+      if (rect.width < 2 || rect.height < 2) return null
+      const focus = faceShift(faceZoom(focusBox(pairRef.current[side].face_box)))
+      const width = hit.clientWidth || rect.width
+      const height = hit.clientHeight || rect.height
+      const ratio = side === 'left' ? layoutRef.current.leftRatio : layoutRef.current.rightRatio
+      return faceEdgePan({
+        faceTx: focus.tx,
+        faceTy: focus.ty,
+        scale: focus.scale * pinchScale,
+        width,
+        height,
+        span: contentSpan(width, height, ratio, layoutRef.current.fit),
+      })
+    }
+    const sharedEdge = (pinchScale: number) => {
+      const edges = [edgeOf('left', pinchScale), edgeOf('right', pinchScale)].filter(item => item !== null)
+      if (!edges.length) return { minX: -400, maxX: 400, minY: -800, maxY: 800 }
+      return {
+        minX: Math.min(...edges.map(item => item.minX)),
+        maxX: Math.max(...edges.map(item => item.maxX)),
+        minY: Math.min(...edges.map(item => item.minY)),
+        maxY: Math.max(...edges.map(item => item.maxY)),
+      }
+    }
+    const measure = (point: { x: number, y: number }) => {
+      const stage = stageRef.current
+      const hits = stage ? [...stage.querySelectorAll<HTMLElement>('.brush-photo-hit')] : []
+      let chosen: HTMLElement | null = null
+      for (const hit of hits) {
         const rect = hit.getBoundingClientRect()
         if (rect.width < 2 || rect.height < 2) continue
-        const focus = faceShift(faceZoom(focusBox(pairRef.current[side].face_box)))
-        const scale = focus.scale * pinchScale
-        ranges.x.push(facePanRange(focus.tx, rect.width, scale))
-        ranges.y.push(facePanRange(focus.ty, rect.height, scale))
+        const inside = point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
+        if (!chosen || inside) chosen = hit
+        if (inside) break
       }
-      return ranges
+      if (!chosen) return { width: 240, height: 360 }
+      const rect = chosen.getBoundingClientRect()
+      return { width: rect.width, height: rect.height }
     }
-    const clampHeld = (x: number, y: number, pinchScale: number) => {
-      const ranges = heldBounds(pinchScale)
-      return { x: clampInRanges(x, ranges.x), y: clampInRanges(y, ranges.y) }
+    const ensureDrag = (id: number, point: { x: number, y: number }) => {
+      if (drag?.id === id) return drag
+      target.x = shown.x
+      target.y = shown.y
+      target.scale = shown.scale
+      const size = measure(point)
+      const edge = sharedEdge(target.scale)
+      drag = {
+        id,
+        originX: point.x,
+        originY: point.y,
+        startX: target.x,
+        startY: target.y,
+        gainX: faceDragGain(size.width, edge.minX, edge.maxX),
+        gainY: faceDragGain(size.height, edge.minY, edge.maxY),
+        engaged: false,
+      }
+      return drag
     }
     const apply = () => {
-      const points = [...pointers.values()]
-      if (points.length >= 2) {
-        const [a, b] = points
+      if (holdId === null) return
+      const extra = [...pointers.entries()].filter(([id]) => id !== holdId)
+      if (extra.length >= 2) {
+        drag = null
+        const [, a] = extra[0]
+        const [, b] = extra[1]
         const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1
         const cx = (a.x + b.x) / 2
         const cy = (a.y + b.y) / 2
         const stage = stageRef.current
         if (!pinch && stage) {
           const hit = hitAt(stage, cx, cy)
-          const side = hit?.closest<HTMLElement>('[data-side]')?.dataset.side === 'right' ? 'right' : 'left'
-          if (hit) {
-            const focus = faceShift(faceZoom(focusBox(pairRef.current[side].face_box)))
-            const screen = screenOn(hit, cx, cy)
-            if (aimPoint) {
-              const img = hit.querySelector('img')
-              const ratio = img && img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : 9 / 16
-              const aimed = faceAimPan({
-                faceTx: focus.tx,
-                faceTy: focus.ty,
-                scale: focus.scale * pan.scale,
-                width: hit.clientWidth || screen.width,
-                height: hit.clientHeight || screen.height,
-                imageX: aimPoint.x,
-                imageY: aimPoint.y,
-                span: contentSpan(hit.clientWidth || screen.width, hit.clientHeight || screen.height, ratio, 'contain'),
-              })
-              pan.x = aimed.x
-              pan.y = aimed.y
-              aimPoint = null
-            }
-            const image = imagePointFromFace({
-              faceTx: focus.tx,
-              faceTy: focus.ty,
-              scale: focus.scale * pan.scale,
-              panX: pan.x,
-              panY: pan.y,
-              width: hit.clientWidth || screen.width,
-              height: hit.clientHeight || screen.height,
-              screenX: screen.x,
-              screenY: screen.y,
-            })
-            pinch = { dist, scale: pan.scale, imageX: image.x, imageY: image.y, hit, side }
-          }
-        }
-        if (pinch) {
-          const focus = faceShift(faceZoom(focusBox(pairRef.current[pinch.side].face_box)))
-          const nextScale = clamp(pinch.scale * (dist / pinch.dist), 0.55, 2.6)
-          const screen = screenOn(pinch.hit, cx, cy)
-          const next = facePanToPoint({
+          if (!hit) return
+          const side = hit.closest<HTMLElement>('[data-side]')?.dataset.side === 'right' ? 'right' : 'left'
+          const focus = faceShift(faceZoom(focusBox(pairRef.current[side].face_box)))
+          const screen = screenOn(hit, cx, cy)
+          const width = hit.clientWidth || screen.width
+          const height = hit.clientHeight || screen.height
+          const image = imagePointFromFace({
             faceTx: focus.tx,
             faceTy: focus.ty,
-            scale: focus.scale * nextScale,
-            width: screen.width,
-            height: screen.height,
-            imageX: pinch.imageX,
-            imageY: pinch.imageY,
+            scale: focus.scale * shown.scale,
+            panX: shown.x,
+            panY: shown.y,
+            width,
+            height,
             screenX: screen.x,
             screenY: screen.y,
           })
-          const fitted = clampHeld(next.x, next.y, nextScale)
-          pan.scale = nextScale
-          pan.x = fitted.x
-          pan.y = fitted.y
-          moved = true
-          publish(null, false)
+          pinch = { dist, scale: shown.scale, imageX: image.x, imageY: image.y, hit, side }
         }
+        if (!pinch) return
+        const focus = faceShift(faceZoom(focusBox(pairRef.current[pinch.side].face_box)))
+        const nextScale = clamp(pinch.scale * (dist / pinch.dist), 0.55, 2.6)
+        const screen = screenOn(pinch.hit, cx, cy)
+        const next = facePanToPoint({
+          faceTx: focus.tx,
+          faceTy: focus.ty,
+          scale: focus.scale * nextScale,
+          width: pinch.hit.clientWidth || screen.width,
+          height: pinch.hit.clientHeight || screen.height,
+          imageX: pinch.imageX,
+          imageY: pinch.imageY,
+          screenX: screen.x,
+          screenY: screen.y,
+        })
+        const edge = sharedEdge(nextScale)
+        target.scale = nextScale
+        target.x = clamp(next.x, edge.minX, edge.maxX)
+        target.y = clamp(next.y, edge.minY, edge.maxY)
+        kick()
         return
       }
       pinch = null
-      if (holdId === null || !origin) return
-      const point = pointers.get(holdId)
-      if (!point) return
-      if (!moved && Math.hypot(point.x - origin.x, point.y - origin.y) < 8) return
-      const stage = stageRef.current
-      const aim = stage ? pictureAim(stage, point.x, point.y) : null
-      if (!aim) return
-      moved = true
-      aimPoint = aim
-      pan.x = 0
-      pan.y = 0
-      publish(aim, 'follow')
+      const active = extra[0] ?? (pointers.get(holdId) ? [holdId, pointers.get(holdId)!] as const : null)
+      if (!active) return
+      const [id, point] = active
+      const current = ensureDrag(id, point)
+      const dx = point.x - current.originX
+      const dy = point.y - current.originY
+      if (!current.engaged && Math.hypot(dx, dy) < 6) return
+      current.engaged = true
+      const edge = sharedEdge(target.scale)
+      const next = faceDragPan({
+        originX: current.originX,
+        originY: current.originY,
+        x: point.x,
+        y: point.y,
+        startX: current.startX,
+        startY: current.startY,
+        gainX: current.gainX,
+        gainY: current.gainY,
+        minX: edge.minX,
+        maxX: edge.maxX,
+        minY: edge.minY,
+        maxY: edge.maxY,
+      })
+      target.x = next.x
+      target.y = next.y
+      kick()
     }
     const down = (event: PointerEvent) => {
-      const target = event.target instanceof Element ? event.target : null
-      const onFace = Boolean(target?.closest('[data-action="face"]'))
+      const targetNode = event.target instanceof Element ? event.target : null
+      const onFace = Boolean(targetNode?.closest('[data-action="face"]'))
       if (onFace && holdId === null) {
         if (event.cancelable) event.preventDefault()
         holdId = event.pointerId
-        origin = { x: event.clientX, y: event.clientY }
-        moved = false
+        drag = null
         pinch = null
-        aimPoint = null
-        pan.x = 0
-        pan.y = 0
-        pan.scale = 1
-        pointers.set(event.pointerId, origin)
+        stop()
+        target.x = 0
+        target.y = 0
+        target.scale = 1
+        shown.x = 0
+        shown.y = 0
+        shown.scale = 1
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+        ensureDrag(event.pointerId, { x: event.clientX, y: event.clientY })
         faceHeldRef.current = true
         setFaceHeld(true)
         setFaceMotion('settle')
-        setFaceAim(null)
         setFacePan({ x: 0, y: 0, scale: 1 })
         return
       }
@@ -395,6 +438,8 @@ export function Matchup({
       event.stopPropagation()
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       pinch = null
+      drag = null
+      ensureDrag(event.pointerId, { x: event.clientX, y: event.clientY })
     }
     const move = (event: PointerEvent) => {
       if (!pointers.has(event.pointerId)) return
@@ -407,22 +452,25 @@ export function Matchup({
       pointers.delete(event.pointerId)
       pinch = null
       if (event.pointerId !== holdId) {
-        const rest = holdId === null ? undefined : pointers.get(holdId)
-        if (rest) origin = { x: rest.x, y: rest.y }
-        moved = false
+        drag = null
+        const extra = [...pointers.entries()].filter(([id]) => id !== holdId)
+        const next = extra[0] ?? (holdId !== null && pointers.get(holdId) ? [holdId, pointers.get(holdId)!] as const : null)
+        if (next) ensureDrag(next[0], next[1])
         return
       }
       holdId = null
-      origin = null
+      drag = null
       pointers.clear()
-      aimPoint = null
-      pan.x = 0
-      pan.y = 0
-      pan.scale = 1
+      stop()
+      target.x = 0
+      target.y = 0
+      target.scale = 1
+      shown.x = 0
+      shown.y = 0
+      shown.scale = 1
       faceHeldRef.current = false
       setFaceHeld(false)
       setFaceMotion('settle')
-      setFaceAim(null)
       setFacePan({ x: 0, y: 0, scale: 1 })
       actions.current.onZoom(REST_ZOOM)
       window.setTimeout(() => {
@@ -434,6 +482,7 @@ export function Matchup({
     window.addEventListener('pointerup', up, block)
     window.addEventListener('pointercancel', up, block)
     return () => {
+      stop()
       window.removeEventListener('pointerdown', down, block)
       window.removeEventListener('pointermove', move, block)
       window.removeEventListener('pointerup', up, block)
@@ -441,7 +490,6 @@ export function Matchup({
       if (holdId !== null) {
         faceHeldRef.current = false
         setFaceHeld(false)
-        setFaceAim(null)
       }
     }
   }, [])
@@ -506,7 +554,8 @@ export function Matchup({
     { image: right, side: 'right' as const },
   ]
   const frontImage = front === 'left' ? left : right
-  const fit = !portrait && frame && frame.scale < 0.999 ? 'cover' : 'contain'
+  const fit: 'contain' | 'cover' = !portrait && frame && frame.scale < 0.999 ? 'cover' : 'contain'
+  layoutRef.current = { fit, leftRatio, rightRatio }
 
   function photoStyle(image: BrushImage) {
     const focus = faceHeld ? faceShift(faceZoom(focusBox(image.face_box))) : null
@@ -518,33 +567,25 @@ export function Matchup({
     const hit = hitRefs.current[side]
     const width = hit?.clientWidth || (frame ? (side === 'left' ? frame.left : frame.right) : 0)
     const height = hit?.clientHeight || frameRef.current?.clientHeight || 0
-    const heldFit = faceAim ? 'contain' as const : fit
     let px = focus ? facePan.x : 0
     let py = focus ? facePan.y : 0
     if (focus && width > 1 && height > 1) {
-      if (faceAim) {
-        const aimed = faceAimPan({
-          faceTx: focus.tx,
-          faceTy: focus.ty,
-          scale,
-          width,
-          height,
-          imageX: faceAim.x,
-          imageY: faceAim.y,
-          span: contentSpan(width, height, side === 'left' ? leftRatio : rightRatio, 'contain'),
-        })
-        px = aimed.x
-        py = aimed.y
-      } else {
-        px = clampInRanges(px, [facePanRange(focus.tx, width, scale)])
-        py = clampInRanges(py, [facePanRange(focus.ty, height, scale)])
-      }
+      const edge = faceEdgePan({
+        faceTx: focus.tx,
+        faceTy: focus.ty,
+        scale,
+        width,
+        height,
+        span: contentSpan(width, height, side === 'left' ? leftRatio : rightRatio, fit),
+      })
+      px = clamp(px, edge.minX, edge.maxX)
+      py = clamp(py, edge.minY, edge.maxY)
     }
     return {
       transform: `translate(${px}px, ${py}px) translate(${tx}%, ${ty}%) scale(${scale})`,
       transformOrigin: '50% 50%',
-      transition: faceMotion === 'settle' ? 'transform 250ms ease' : faceMotion === 'follow' ? 'transform 120ms ease-out' : undefined,
-      objectFit: heldFit as 'contain' | 'cover',
+      transition: faceMotion === 'settle' ? 'transform 250ms ease' : undefined,
+      objectFit: fit,
     }
   }
 

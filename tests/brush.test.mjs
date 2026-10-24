@@ -12,7 +12,7 @@ import { challengerCount, CLOSE_ELO, extendQueue, finalsFieldSize, hashDistance,
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
 import { UPLOAD_BATCH_LIMIT, retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
-import { clampInRanges, clampZoom, contentSpan, faceAimPan, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
+import { approach, clampInRanges, clampZoom, contentSpan, faceAimPan, faceDragGain, faceDragPan, faceEdgePan, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
 
 test('elo matches the documented 1500 vs 1500 step', () => {
   const first = eloUpdate(1500, 1500, 0, 0, true)
@@ -729,10 +729,34 @@ test('pinch stays under the fingers and Face aim reaches the picture edges', () 
   assert.ok(Math.abs(atCenterX - 0.42) < 1e-6)
   assert.ok(Math.abs(atCenterY - 0.58) < 1e-6)
 
+  const dragged = faceDragPan({ originX: 40, originY: 80, x: 40, y: 80, startX: 0, startY: 0, gainX: 1.5, gainY: 2, minX: -120, maxX: 90, minY: -400, maxY: 60 })
+  assert.deepEqual(dragged, { x: 0, y: 0 })
+  const lower = faceDragPan({ originX: 40, originY: 80, x: 40, y: 110, startX: 0, startY: 0, gainX: 1.5, gainY: 2, minX: -120, maxX: 90, minY: -400, maxY: 60 })
+  const lowerStill = faceDragPan({ originX: 40, originY: 80, x: 70, y: 140, startX: 0, startY: 0, gainX: 1.5, gainY: 2, minX: -120, maxX: 90, minY: -400, maxY: 60 })
+  assert.ok(lower.y < dragged.y)
+  assert.ok(lowerStill.y < lower.y)
+  assert.ok(lowerStill.x < dragged.x)
+  assert.equal(faceDragPan({ originX: 0, originY: 0, x: 0, y: 999, startX: 0, startY: 0, gainX: 1, gainY: 3, minX: -10, maxX: 10, minY: -50, maxY: 20 }).y, -50)
+  assert.equal(faceDragGain(200, -300, 100), 2)
+  const edges = faceEdgePan({ faceTx: 0, faceTy: 0, scale: 2, width: 100, height: 200 })
+  assert.ok(edges.minY < 0 && edges.maxY > 0 && edges.minY < edges.maxY)
+  let eased = 0
+  const samples = []
+  for (let step = 0; step < 16; step += 1) {
+    eased = approach(eased, -80, 0.42)
+    samples.push(eased)
+  }
+  assert.ok(samples.every((sample, index) => index === 0 || sample <= samples[index - 1] + 1e-9))
+  assert.equal(samples.at(-1), -80)
+
   const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
-  assert.match(matchup, /faceAimPan/)
-  assert.match(matchup, /120ms ease-out/)
-  assert.match(matchup, /pictureAim/)
+  assert.match(matchup, /faceDragPan/)
+  assert.match(matchup, /requestAnimationFrame/)
+  assert.match(matchup, /holdId/)
+  assert.match(matchup, /id !== holdId/)
+  assert.doesNotMatch(matchup, /120ms ease-out/)
+  assert.doesNotMatch(matchup, /pictureAim/)
   assert.match(matchup, /zoomAround/)
   assert.match(matchup, /facePanToPoint/)
+  assert.match(matchup, /250ms ease/)
 })

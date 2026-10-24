@@ -138,6 +138,58 @@ export function faceAimPan(input: {
   }
 }
 
+export function faceEdgePan(input: {
+  faceTx: number
+  faceTy: number
+  scale: number
+  width: number
+  height: number
+  span?: ContentSpan
+}) {
+  const top = faceAimPan({ ...input, imageX: 0.5, imageY: 0 })
+  const bottom = faceAimPan({ ...input, imageX: 0.5, imageY: 1 })
+  const left = faceAimPan({ ...input, imageX: 0, imageY: 0.5 })
+  const right = faceAimPan({ ...input, imageX: 1, imageY: 0.5 })
+  return {
+    minX: Math.min(left.x, right.x),
+    maxX: Math.max(left.x, right.x),
+    minY: Math.min(top.y, bottom.y),
+    maxY: Math.max(top.y, bottom.y),
+  }
+}
+
+export function faceDragGain(travel: number, min: number, max: number) {
+  return Math.max(1, (max - min) / Math.max(1, travel))
+}
+
+// Drag down and right reveal lower and righter parts of the picture.
+export function faceDragPan(input: {
+  originX: number
+  originY: number
+  x: number
+  y: number
+  startX: number
+  startY: number
+  gainX: number
+  gainY: number
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+}) {
+  return {
+    x: clamp(input.startX - (input.x - input.originX) * input.gainX, input.minX, input.maxX),
+    y: clamp(input.startY - (input.y - input.originY) * input.gainY, input.minY, input.maxY),
+  }
+}
+
+export function approach(current: number, target: number, amount: number) {
+  if (!(amount > 0)) return current
+  if (amount >= 1) return target
+  const next = current + (target - current) * amount
+  return Math.abs(target - next) <= 0.35 ? target : next
+}
+
 export function imagePointFromFace(input: {
   faceTx: number
   faceTy: number
