@@ -42,6 +42,18 @@ export function takeBatch<T>(files: T[]) {
   }
 }
 
+export async function retryLoad<T>(load: () => Promise<T>, attempts = 3) {
+  let last: unknown
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await load()
+    } catch (error) {
+      last = error
+    }
+  }
+  throw last instanceof Error ? last : new Error('That photo did not load.')
+}
+
 export function retryDelayMs(attempt: number) {
   return Math.min(30_000, 1000 * 3 ** Math.max(0, attempt - 1))
 }

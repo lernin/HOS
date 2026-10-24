@@ -40,6 +40,36 @@ export function bootDeck(images: BrushImage[], contest: ContestState | null, rng
   return { ...deck, queue: extendQueue(images, [], deck.recentKeys, undefined, rng) }
 }
 
+export function dropUnreadable(deck: Deck, imageId: string, rng: () => number = Math.random): Deck {
+  const before = currentMatch(deck)
+  const images = deck.images.map(image => image.id === imageId ? { ...image, unreadable: true } : image)
+  if (deck.phase === 'finals' && deck.focus !== 'placement') {
+    const rounds = deck.rounds.map((round, index) => {
+      if (index !== deck.rounds.length - 1) return round
+      return round.map(match => {
+        if (match.winnerId || (match.leftId !== imageId && match.rightId !== imageId)) return match
+        const keepId = match.leftId === imageId ? match.rightId : match.leftId
+        const contender = nextContender(images, keepId, { recentKeys: deck.recentKeys, rng })
+        if (!contender) return match
+        return match.leftId === imageId ? { ...match, leftId: contender.id } : { ...match, rightId: contender.id }
+      })
+    })
+    return { ...deck, images, rounds }
+  }
+  let queue = deck.queue.filter(slot => slot.leftId !== imageId && slot.rightId !== imageId)
+  if (before && (before.left.id === imageId || before.right.id === imageId)) {
+    const keepId = before.left.id === imageId ? before.right.id : before.left.id
+    const contender = nextContender(images, keepId, { recentKeys: deck.recentKeys, rng })
+    if (contender) {
+      const slot = before.left.id === imageId
+        ? { leftId: contender.id, rightId: keepId }
+        : { leftId: keepId, rightId: contender.id }
+      queue = [slot, ...queue.filter(item => pairKey(item.leftId, item.rightId) !== pairKey(slot.leftId, slot.rightId))]
+    }
+  }
+  return { ...deck, images, queue: extendQueue(images, queue, deck.recentKeys, undefined, rng) }
+}
+
 export function currentMatch(deck: Deck) {
   if (deck.phase === 'champion') return null
   if (deck.phase === 'finals' && deck.focus !== 'placement') {
@@ -55,7 +85,7 @@ export function currentMatch(deck: Deck) {
   if (!slot) return null
   const left = byId(deck.images, slot.leftId)
   const right = byId(deck.images, slot.rightId)
-  if (!left || !right || left.trashed || right.trashed || left.archived || right.archived) return null
+  if (!left || !right || left.trashed || right.trashed || left.archived || right.archived || left.unreadable || right.unreadable) return null
   return { left, right }
 }
 
@@ -217,6 +247,7 @@ export function mergeLibrary(deck: Deck, remote: BrushImage[], rng: () => number
       face_scanned: remoteImage.face_scanned || current.face_scanned,
       perceptual_hash: current.perceptual_hash || remoteImage.perceptual_hash,
       preview_url: remoteImage.preview_url || current.preview_url,
+      unreadable: current.unreadable || remoteImage.unreadable,
     }
     if (!ahead) return { ...remoteImage, ...face }
     return {

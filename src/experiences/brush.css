@@ -29,11 +29,11 @@
 .brush-card-bar .brush-choice,.brush-footer .brush-choice{min-height:32px}
 .brush.is-portrait .brush-footer .brush-choice{min-height:44px}
 .brush.is-landscape.is-match .brush-stage{flex-direction:row;align-items:stretch;height:100%}
-.brush.is-landscape.is-match .brush-photos{flex:0 0 auto;width:max-content;max-width:calc(100% - 364px);height:100%;gap:8px;overflow:hidden}
-.brush.is-landscape.is-match .brush-card{flex:0 0 auto;width:auto;height:100%;aspect-ratio:9/16;max-width:none;background:transparent;border-radius:13px;overflow:hidden;border:1px solid rgba(244,239,230,.16)}
-.brush.is-landscape.is-match .brush-photo-hit{height:100%}
+.brush.is-landscape.is-match .brush-photos{flex:1 1 auto;width:auto;max-width:none;min-width:0;height:100%;gap:8px;overflow:hidden}
+.brush.is-landscape.is-match .brush-card{flex:1 1 0;width:0;min-width:0;height:100%;aspect-ratio:auto;max-width:none;background:transparent;border:0;border-radius:0;overflow:hidden}
+.brush.is-landscape.is-match .brush-photo-hit{height:100%;background:transparent}
 .brush.is-portrait .brush-photo-hit{margin:0 8px;border-radius:13px;border:1px solid rgba(244,239,230,.16)}
-.brush.is-landscape.is-match .brush-photo{height:100%;width:100%;object-fit:contain}
+.brush.is-landscape.is-match .brush-photo{height:100%;width:100%;object-fit:contain;object-position:center;border-radius:13px;background:transparent}
 .brush-gutter{position:relative;flex:1 1 88px;min-width:88px;height:100%;display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:4px 6px 6px;min-height:0;overflow:visible}
 .brush-gutter-top{flex:0 0 34px;height:34px;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;width:100%;min-width:0}
 .brush-gutter-top>button,.brush-gutter-top>.brush-progress,.brush-gutter-top>.brush-icon-button{flex:0 1 auto;min-width:0;max-width:100%}
@@ -44,7 +44,7 @@
 .brush-gutter-name{flex:0 0 24px;height:24px;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;overflow:hidden}
 .brush-gutter-name strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:650;line-height:24px}
 .brush-gutter-actions{flex:1 1 auto;min-height:0;width:100%;display:flex;flex-direction:column;justify-content:space-evenly;align-items:stretch;gap:6px;overflow:hidden}
-.brush-info-strip{position:relative;flex:1 1 84px;min-width:84px;max-width:112px;height:100%;display:flex;flex-direction:column;gap:4px;padding:4px 6px 8px;min-height:0;overflow:visible}
+.brush-info-strip{position:relative;flex:0 0 96px;width:96px;min-width:84px;max-width:112px;height:100%;display:flex;flex-direction:column;gap:4px;padding:4px 6px 8px;min-height:0;overflow:visible}
 .brush-strip-tools{display:flex;flex-wrap:wrap;align-items:center;align-content:flex-start;gap:4px;flex:0 0 auto;max-height:64px;overflow:hidden}
 .brush-strip-tools>.brush-progress,.brush-strip-tools>.brush-icon-button,.brush-strip-tools>.brush-menu-button{height:28px;min-height:28px;padding:0 7px;border:1px solid rgba(244,239,230,.28);border-radius:999px;background:rgba(12,13,11,.72);color:#f4efe6;font-size:11px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-grid;place-items:center}
 .brush-strip-tools>.brush-icon-button,.brush-strip-tools>.brush-menu-button{width:28px;padding:0}
@@ -97,7 +97,7 @@
 .brush-stats.is-portrait .brush-stat-grid{grid-area:stats;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;border-top:0;padding-top:0}
 .brush-stats.is-portrait .brush-level-track{grid-area:track}
 .brush-stats.is-portrait .brush-strip-traits{grid-area:traits}
-.brush-controls{position:relative;flex:1.35 1 210px;min-width:196px;max-width:340px;height:100%;display:flex;flex-direction:column;padding:4px 6px 6px;min-height:0}
+.brush-controls{position:relative;flex:0 0 210px;width:210px;min-width:196px;max-width:340px;height:100%;display:flex;flex-direction:column;padding:4px 6px 6px;min-height:0}
 .brush-controls .brush-gutter-actions{flex:1 1 auto;height:auto;min-height:0}
 .brush-control-row{flex:1 1 0;min-height:0;display:flex;gap:6px;align-items:stretch}
 .brush-control-row>.brush-swipe,.brush-control-row>.brush-face-hold{flex:1 1 0;width:auto;height:100%;min-width:0;min-height:0}

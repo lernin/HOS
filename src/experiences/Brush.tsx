@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import './brush.css'
 import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush/client'
-import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, type Deck, type Decision } from './brush/deck'
+import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, type Deck, type Decision } from './brush/deck'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
 import { enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
 import { matchMoments, standingOf, type BrushMoment } from './brush/level'
@@ -10,7 +10,7 @@ import { createPreviewClient } from './brush/preview'
 import { BackfillOffer, DetailSheet, InsightsScreen, Leaderboard, LibraryScreen, PinScreen, ReasonSheet, UploadIcon, UploadProgressSheet } from './brush/Sheets'
 import { TrashReview } from './brush/TrashReview'
 import type { BrushApi, BrushImage, BrushTag, Insights, Margin, TrashImage, UploadSnapshot } from './brush/types'
-import { EMPTY_UPLOADS } from './brush/uploads'
+import { EMPTY_UPLOADS, retryLoad } from './brush/uploads'
 
 type Screen = 'match' | 'board' | 'love' | 'library' | 'trash'
 type Reason = { id: string, kind: 'like' | 'bad', open: boolean }
@@ -122,6 +122,17 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   }
 
   useEffect(() => {
+    if (phase !== 'app' || preview) return
+    let gone = false
+    void client.sync(() => {}).then(() => {
+      if (!gone) return loadAll(client)
+    }).catch(error => {
+      if (!gone) setMessage(messageOf(error))
+    })
+    return () => { gone = true }
+  }, [phase, preview, client])
+
+  useEffect(() => {
     if (phase !== 'app') return
     let gone = false
     loadAll(client).catch(error => { if (!gone) setMessage(messageOf(error)) })
@@ -153,25 +164,32 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     setTrashSelected(image?.bad_tag_ids || [])
   }, [trashIndex, trashed])
 
+  const urlsRef = useRef(urls)
+  const portraitLoads = useRef(new Set<string>())
+  urlsRef.current = urls
+
   useEffect(() => {
     if (preview || !deck) return
     const queued = deck.queue.slice(0, 5).flatMap(slot => deck.images.filter(image => image.id === slot.leftId || image.id === slot.rightId))
     const finals = deck.rounds.flatMap(round => round.flatMap(slot => deck.images.filter(image => image.id === slot.leftId || image.id === slot.rightId)))
     const wanted = [...(match ? [match.left, match.right] : []), ...queued, ...finals.slice(0, 8), ...library.slice(0, 24), ...trashed.slice(0, 8)]
-    let gone = false
     for (const image of wanted) {
-      if (image.preview_url) continue
+      if (image.preview_url || image.unreadable) continue
       const key = image.has_thumbnail ? `thumb:${image.id}` : image.drive_file_id
-      if (urls[key]) continue
-      const load = image.has_thumbnail
+      if (urlsRef.current[key] || portraitLoads.current.has(key)) continue
+      portraitLoads.current.add(key)
+      const load = () => image.has_thumbnail
         ? loadThumb(image.id, pin, brushPin).catch(() => loadDriveImage(image.drive_file_id, pin, brushPin))
         : loadDriveImage(image.drive_file_id, pin, brushPin)
-      load.then(url => {
-        if (!gone) setUrls(current => current[key] ? current : { ...current, [key]: url })
-      }).catch(() => {})
+      void retryLoad(load, 3).then(url => {
+        urlsRef.current = { ...urlsRef.current, [key]: url }
+        setUrls(current => current[key] ? current : { ...current, [key]: url })
+      }).catch(() => {
+        setDeck(current => current ? dropUnreadable(current, image.id) : current)
+        void client.flagUnreadable(image.id).catch(() => {})
+      }).finally(() => { portraitLoads.current.delete(key) })
     }
-    return () => { gone = true }
-  }, [deck, matchKey, library, trashed, preview, pin, brushPin, urls])
+  }, [deck, matchKey, library, trashed, preview, pin, brushPin, client])
 
   useEffect(() => {
     if (!deck) return

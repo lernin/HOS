@@ -5,8 +5,12 @@
     "deploymentEnabled": false
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
+  "crons": [
+    { "path": "/api/brush-sync-daily", "schedule": "0 16 * * *" }
+  ],
   "rewrites": [
     { "source": "/api/brush-sync", "destination": "/api/brush?action=sync" },
+    { "source": "/api/brush-sync-daily", "destination": "/api/brush?action=sync-daily" },
     { "source": "/api/brush-upload-session", "destination": "/api/brush?action=upload-session" },
     { "source": "/api/brush-upload-chunk", "destination": "/api/brush?action=upload-chunk" },
     { "source": "/api/brush-upload-finish", "destination": "/api/brush?action=upload-finish" },

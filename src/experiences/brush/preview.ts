@@ -4,10 +4,10 @@ import { suggestRecipe } from './recipe'
 import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights } from './types'
 import { attachQueue, UploadQueue, type UploadTransport } from './uploads'
 
-function portrait(title: string, country: string, ink: string, paper: string, accent: string) {
+function portrait(title: string, country: string, ink: string, paper: string, accent: string, width = 540, height = 960) {
   const canvas = document.createElement('canvas')
-  canvas.width = 540
-  canvas.height = 960
+  canvas.width = width
+  canvas.height = height
   const context = canvas.getContext('2d')
   if (!context) return ''
   context.fillStyle = paper
@@ -70,7 +70,7 @@ export function createPreviewClient(): BrushApi {
   const images: BrushImage[] = [
     blank({ id: 'jp', name: 'Japan_Model_01.jpg', country: 'Japan', folder_path: 'Japan/Models', perceptual_hash: '0000000000000000', preview_url: portrait('Japan 01', 'Japan', '#2a2118', '#d7c4a1', '#7f8f78'), createdAt: 1 }),
     blank({ id: 'jp2', name: 'Japan_Model_02.jpg', country: 'Japan', folder_path: 'Japan/Models', perceptual_hash: '00000000000000ff', preview_url: portrait('Japan 02', 'Japan', '#3a2a22', '#e4d2b4', '#8f7358'), createdAt: 2 }),
-    blank({ id: 'kr', name: 'Korea_02.jpg', country: 'Korea', perceptual_hash: 'ffffffffffffffff', preview_url: portrait('Korea 02', 'Korea', '#1c2430', '#c5d0dc', '#6e88a8'), createdAt: 3 }),
+    blank({ id: 'kr', name: 'Korea_02.jpg', country: 'Korea', perceptual_hash: 'ffffffffffffffff', preview_url: portrait('Korea 02', 'Korea', '#1c2430', '#c5d0dc', '#6e88a8', 1400, 800), createdAt: 3 }),
     blank({ id: 'st', name: 'Studio_03.jpg', country: 'Studio', perceptual_hash: '0f0f0f0f0f0f0f0f', preview_url: portrait('Studio 03', 'Studio', '#241c22', '#e6d5cf', '#c4a394'), createdAt: 4 }),
     blank({ id: 'nt', name: 'Night_04.jpg', country: 'Night', perceptual_hash: '3333333333333333', preview_url: portrait('Night 04', 'Night', '#101114', '#9aa0a8', '#3d4450'), trashed: true, trash_count: 1, elo: 1464, games: 1, losses: 1, createdAt: 5 }),
   ]
@@ -235,6 +235,10 @@ export function createPreviewClient(): BrushApi {
         image.face_box = faceBox
         image.face_scanned = true
       }
+    },
+    async flagUnreadable(imageId) {
+      const image = images.find(item => item.id === imageId)
+      if (image) image.unreadable = true
     },
     async leaderboard() { return [...images].sort((a, b) => conservativeRating(b.elo, b.sigma) - conservativeRating(a.elo, a.sigma)) },
     async library() { return [...images] },

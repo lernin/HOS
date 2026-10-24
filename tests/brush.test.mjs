@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
+import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
 import { levelOf, levelProgress, matchMoments, standingOf } from '../src/experiences/brush/level.ts'
 import { faceBoxFromPixels, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
 import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
@@ -11,7 +11,7 @@ import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/exp
 import { challengerCount, CLOSE_ELO, extendQueue, finalsFieldSize, hashDistance, lookOf, newEntrants, nextContender, nextQualifyingPair, pairKey, PLACEMENT_GAMES, RECENT_WINDOW, sameGroup, seedOrder, WILDCARD_RATE } from '../src/experiences/brush/pair.ts'
 import { conservativeRating, glickoPeriod, glickoUpdate, INITIAL_RD, INITIAL_VOLATILITY, MIN_RD, rdForGames } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
-import { UPLOAD_BATCH_LIMIT, retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
+import { UPLOAD_BATCH_LIMIT, retryDelayMs, retryLoad, takeBatch } from '../src/experiences/brush/uploads.ts'
 import { approach, clampInRanges, clampZoom, contentSpan, faceAimPan, faceDragGain, faceDragPan, faceEdgePan, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
 
 test('glicko-2 matches the published example and keeps a close call smaller', () => {
@@ -481,6 +481,7 @@ test('Brush is one serverless function and the old paths still rewrite', () => {
   const rewritten = new Map(vercel.rewrites.filter(item => String(item.source).startsWith('/api/brush')).map(item => [item.source, item.destination]))
   const expected = {
     '/api/brush-sync': '/api/brush?action=sync',
+    '/api/brush-sync-daily': '/api/brush?action=sync-daily',
     '/api/brush-upload': '/api/brush?action=upload',
     '/api/brush-upload-session': '/api/brush?action=upload-session',
     '/api/brush-upload-chunk': '/api/brush?action=upload-chunk',
@@ -843,4 +844,63 @@ test('pinch stays under the fingers and Face aim reaches the picture edges', () 
   assert.match(matchup, /zoomAround/)
   assert.match(matchup, /facePanToPoint/)
   assert.match(matchup, /250ms ease/)
+})
+
+test('a portrait that will not load is replaced without changing the match record', () => {
+  const images = ['Japan', 'Korea', 'Thailand', 'Vietnam', 'Canada', 'Sweden'].map((country, index) => image({
+    id: country.toLowerCase(),
+    name: `${country}_Solo_01.jpg`,
+    country,
+    elo: 1500 + index * 40,
+    games: index < 2 ? 1 : 8,
+    wins: index < 2 ? 0 : 4,
+    losses: index < 2 ? 1 : 4,
+  }))
+  const deck = bootDeck(images, null, () => 0.5)
+  const match = currentMatch(deck)
+  assert.ok(match)
+  const before = deck.images.map(item => ({ id: item.id, elo: item.elo, games: item.games, wins: item.wins, losses: item.losses }))
+  const next = dropUnreadable(deck, match.left.id, () => 0.5)
+  const replaced = currentMatch(next)
+  assert.ok(replaced)
+  assert.equal(replaced.right.id, match.right.id)
+  assert.notEqual(replaced.left.id, match.left.id)
+  assert.equal(next.images.find(item => item.id === match.left.id).unreadable, true)
+  assert.deepEqual(next.images.map(item => ({ id: item.id, elo: item.elo, games: item.games, wins: item.wins, losses: item.losses })), before)
+  const sql = readFileSync(new URL('../supabase/migrations/20261024234500_brush_unreadable.sql', import.meta.url), 'utf8')
+  assert.match(sql, /unreadable_at/)
+  assert.match(sql, /brush_flag_unreadable/)
+  assert.doesNotMatch(sql, /set elo|games = 0/)
+})
+
+test('portrait loads are retried and landscape slots stay equal', async () => {
+  let calls = 0
+  await assert.rejects(() => retryLoad(async () => {
+    calls += 1
+    throw new Error('Drive preview failed')
+  }, 3))
+  assert.equal(calls, 3)
+  calls = 0
+  assert.equal(await retryLoad(async () => {
+    calls += 1
+    if (calls < 2) throw new Error('temporary')
+    return 'ready'
+  }, 3), 'ready')
+  const css = readFileSync(new URL('../src/experiences/brush.css', import.meta.url), 'utf8')
+  const card = css.slice(css.indexOf('.brush.is-landscape.is-match .brush-card{'), css.indexOf('.brush.is-landscape.is-match .brush-photo-hit{'))
+  assert.match(card, /flex:1 1 0/)
+  assert.doesNotMatch(card, /aspect-ratio:9\/16/)
+  assert.match(css, /object-position:center/)
+  const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
+  assert.match(matchup, /data-photo-slot/)
+  assert.doesNotMatch(matchup, /width: side === 'left' \? frame\.left/)
+  const brush = readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8')
+  assert.match(brush, /retryLoad/)
+  assert.match(brush, /dropUnreadable/)
+  assert.match(brush, /flagUnreadable/)
+  assert.match(brush, /client\.sync\(/)
+  const vercel = JSON.parse(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'))
+  assert.equal(vercel.crons.length, 1)
+  assert.equal(vercel.crons[0].path, '/api/brush-sync-daily')
+  assert.match(vercel.crons[0].schedule, /^\d+ \d+ \* \* \*$/)
 })
