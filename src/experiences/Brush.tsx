@@ -466,9 +466,15 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           onPick={pick}
           onTrash={trashOne}
           srcFor={srcFor}
+          rankFor={id => {
+            const pool = (deck?.images || []).filter(image => !image.trashed)
+            const sorted = [...pool].sort((a, b) => b.elo - a.elo || b.games - a.games || a.name.localeCompare(b.name))
+            const index = sorted.findIndex(image => image.id === id)
+            return index < 0 ? null : index + 1
+          }}
           notice={landscapeMatch ? (
             <>
-              {moment && <button className="brush-gutter-toast" type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
+              {moment && <button className="brush-gutter-toast" type="button" data-moment="top16" title={moment} onClick={() => setMoment(null)}>{moment}</button>}
               {message && phase === 'app' && <p className="brush-note brush-gutter-toast is-note" data-note>{message}</p>}
             </>
           ) : null}
