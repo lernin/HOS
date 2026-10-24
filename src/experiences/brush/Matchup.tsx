@@ -526,6 +526,21 @@ function FaceHoldButton({ pressed }: { pressed: boolean }) {
   )
 }
 
+function SwipeHint({ side, shift }: { side: 'left' | 'right', shift: number }) {
+  const toward = side === 'left' ? Math.min(0, shift) : Math.max(0, shift)
+  return (
+    <span
+      className={`brush-swipe-hint is-${side}`}
+      aria-hidden="true"
+      style={{ transform: `translateX(${toward * 5}px)`, opacity: 0.5 + Math.abs(toward) * 0.25 }}
+    >
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <path d={side === 'left' ? 'M10.25 3.25 5.5 8l4.75 4.75' : 'M5.75 3.25 10.5 8 5.75 12.75'} fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </span>
+  )
+}
+
 function vibrate(ms: number) {
   navigator.vibrate?.(ms)
 }
@@ -622,6 +637,7 @@ function SwipePad({
     ? `Swipe left ← WINNER for ${leftName}. Swipe right WINNER → for ${rightName}.`
     : `Swipe left for ${leftName}. Swipe right for ${rightName}.`
   const aimed = drag.aim === 'left' ? leftName : drag.aim === 'right' ? rightName : ''
+  const shift = Math.max(-1, Math.min(1, drag.dx / SWIPE_TRAVEL))
   return (
     <div
       ref={ref}
@@ -638,8 +654,8 @@ function SwipePad({
       }}
     >
       <div className="brush-swipe-wash" style={{ width: `${Math.min(100, Math.abs(drag.dx) / SWIPE_TRAVEL * 100)}%` }} />
-      <span className="brush-swipe-hint is-left" aria-hidden="true">←</span>
-      <span className="brush-swipe-hint is-right" aria-hidden="true">→</span>
+      <SwipeHint side="left" shift={shift} />
+      <SwipeHint side="right" shift={shift} />
       <div className="brush-swipe-face" style={{ transform: `translateX(${drag.dx}px)`, transition: drag.snapping ? 'transform 160ms ease' : undefined }}>
         <strong>{label}</strong>
         {aimed && <em>{aimed}</em>}
