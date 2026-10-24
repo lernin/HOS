@@ -1,6 +1,6 @@
 import type { BrushImage, ContestState, Margin } from './types.ts'
-import { eloUpdate, nextSigma } from './rank.ts'
-import { advanceBracket, extendQueue, nextContender, pairKey, qualifyingProgress, seedBracket, type RoundMatch, type Slot } from './pair.ts'
+import { glickoUpdate } from './rank.ts'
+import { advanceBracket, extendQueue, nextContender, pairKey, qualifyingProgress, rankedActive, seedBracket, type RoundMatch, type Slot } from './pair.ts'
 
 export type Deck = {
   images: BrushImage[]
@@ -24,10 +24,6 @@ export type Decision = {
 
 function byId(images: BrushImage[], id: string) {
   return images.find(image => image.id === id) || null
-}
-
-function active(images: BrushImage[]) {
-  return images.filter(image => !image.trashed && !image.archived)
 }
 
 export function bootDeck(images: BrushImage[], contest: ContestState | null, rng: () => number = Math.random): Deck {
@@ -67,17 +63,22 @@ function rate(images: BrushImage[], decision: Decision) {
   const left = byId(images, decision.leftId)
   const right = byId(images, decision.rightId)
   if (!left || !right || !decision.winnerId) return images
-  const rated = eloUpdate(left.elo, right.elo, left.games, right.games, decision.winnerId === left.id, decision.margin)
+  const rated = glickoUpdate(
+    { rating: left.elo, rd: left.sigma, volatility: left.volatility },
+    { rating: right.elo, rd: right.sigma, volatility: right.volatility },
+    decision.winnerId === left.id,
+    decision.margin,
+  )
   return images.map(image => {
     if (image.id === left.id) {
       const won = decision.winnerId === left.id
       const close = decision.margin === 'close'
-      return { ...image, elo: rated.eloA, sigma: nextSigma(image.sigma), games: image.games + 1, wins: image.wins + (won ? 1 : 0), losses: image.losses + (won ? 0 : 1), close_wins: (image.close_wins || 0) + (won && close ? 1 : 0), close_losses: (image.close_losses || 0) + (!won && close ? 1 : 0) }
+      return { ...image, elo: rated.eloA, sigma: rated.sigmaA, volatility: rated.volatilityA, games: image.games + 1, wins: image.wins + (won ? 1 : 0), losses: image.losses + (won ? 0 : 1), close_wins: (image.close_wins || 0) + (won && close ? 1 : 0), close_losses: (image.close_losses || 0) + (!won && close ? 1 : 0) }
     }
     if (image.id === right.id) {
       const won = decision.winnerId === right.id
       const close = decision.margin === 'close'
-      return { ...image, elo: rated.eloB, sigma: nextSigma(image.sigma), games: image.games + 1, wins: image.wins + (won ? 1 : 0), losses: image.losses + (won ? 0 : 1), close_wins: (image.close_wins || 0) + (won && close ? 1 : 0), close_losses: (image.close_losses || 0) + (!won && close ? 1 : 0) }
+      return { ...image, elo: rated.eloB, sigma: rated.sigmaB, volatility: rated.volatilityB, games: image.games + 1, wins: image.wins + (won ? 1 : 0), losses: image.losses + (won ? 0 : 1), close_wins: (image.close_wins || 0) + (won && close ? 1 : 0), close_losses: (image.close_losses || 0) + (!won && close ? 1 : 0) }
     }
     return image
   })
@@ -150,7 +151,7 @@ export function applyDecision(deck: Deck, decision: Decision, rng: () => number 
 
 export function startFinals(deck: Deck): Deck {
   if (deck.phase === 'finals' && deck.focus !== 'placement' && currentMatch(deck)) return deck
-  const ranked = active(deck.images).sort((a, b) => b.elo - a.elo || b.games - a.games || a.name.localeCompare(b.name))
+  const ranked = rankedActive(deck.images)
   const round = seedBracket(ranked.map(image => image.id))
   if (!round.length) return deck
   return { ...deck, phase: 'finals', focus: 'bracket', rounds: [round], championId: null, queue: [] }
@@ -222,6 +223,7 @@ export function mergeLibrary(deck: Deck, remote: BrushImage[], rng: () => number
       ...remoteImage,
       elo: current.elo,
       sigma: current.sigma,
+      volatility: current.volatility ?? remoteImage.volatility,
       games: current.games,
       wins: current.wins,
       losses: current.losses,

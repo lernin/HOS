@@ -630,7 +630,7 @@ export function Matchup({
             type="button"
             className="brush-strip-toggle"
             aria-expanded={open}
-            aria-label={`${image.country || image.name || 'Untitled'}, ${ranked ? `level ${level}` : 'unranked'}`}
+            aria-label={`${image.country || image.name || 'Untitled'}, ${ranked ? `level ${level}` : `unranked, placement ${image.games} of ${PLACEMENT_GAMES}`}, ${image.wins} wins, ${image.losses} losses`}
             onClick={event => {
               event.stopPropagation()
               setStripOpen(current => ({ ...current, [side]: !current[side] }))
@@ -638,7 +638,7 @@ export function Matchup({
           >
             {badge}
             <span className="brush-strip-glance">
-              <span data-stat="rank" title={standing ? `#${standing.rank} of ${standing.total} ranked` : 'Unranked'}>{standing ? `#${standing.rank}` : '—'}</span>
+              <span data-stat="rank" data-placement={ranked ? undefined : 'pending'} title={standing ? `#${standing.rank} of ${standing.total} ranked` : `Placement ${image.games} of ${PLACEMENT_GAMES}`}>{standing ? `#${standing.rank}` : `${image.games}/${PLACEMENT_GAMES}`}</span>
               <span aria-hidden="true"> · </span>
               <span className="brush-num">{image.wins}–{image.losses}</span>
             </span>

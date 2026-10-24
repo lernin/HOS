@@ -1,4 +1,5 @@
 import { newEntrants, PLACEMENT_GAMES } from './pair.ts'
+import { compareConservative } from './rank.ts'
 import type { BrushImage } from './types.ts'
 
 export const LEVEL_ORIGIN = 1500
@@ -12,7 +13,7 @@ export type BrushMoment = {
   imageId?: string
 }
 
-type Rankable = Pick<BrushImage, 'id' | 'name' | 'elo' | 'games'> & { trashed?: boolean, archived?: boolean, country?: string }
+type Rankable = Pick<BrushImage, 'id' | 'name' | 'elo' | 'games'> & { sigma?: number, trashed?: boolean, archived?: boolean, country?: string }
 
 export function levelOf(elo: number) {
   return Math.max(1, 1 + Math.floor((elo - LEVEL_ORIGIN) / LEVEL_SPAN))
@@ -34,7 +35,7 @@ export function levelTier(level: number) {
 export function standingOf(images: Rankable[], id: string): Standing | null {
   const ranked = images
     .filter(image => !image.trashed && !image.archived && image.games >= PLACEMENT_GAMES)
-    .sort((a, b) => b.elo - a.elo || b.games - a.games || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+    .sort(compareConservative)
   const index = ranked.findIndex(image => image.id === id)
   if (index < 0) return null
   return { rank: index + 1, total: ranked.length }
