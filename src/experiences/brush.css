@@ -45,8 +45,8 @@
 .brush-gutter-actions{flex:1 1 auto;min-height:0;width:100%;display:flex;flex-direction:column;justify-content:space-evenly;align-items:stretch;gap:6px;overflow:hidden}
 .brush-info-strip{position:relative;flex:1 1 84px;min-width:84px;max-width:112px;height:100%;display:flex;flex-direction:column;gap:4px;padding:4px 6px 8px;min-height:0;overflow:visible}
 .brush-strip-tools{display:flex;flex-wrap:wrap;align-items:center;align-content:flex-start;gap:4px;flex:0 0 auto;max-height:64px;overflow:hidden}
-.brush-strip-tools>.brush-progress,.brush-strip-tools>.brush-icon-button,.brush-strip-tools>.brush-menu-button{height:28px;min-height:28px;padding:0 6px;border:1px solid rgba(244,239,230,.28);border-radius:999px;background:rgba(12,13,11,.72);color:#f4efe6;font-size:11px;line-height:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.brush-strip-tools>.brush-icon-button,.brush-strip-tools>.brush-menu-button{width:28px;padding:0;display:inline-grid;place-items:center}
+.brush-strip-tools>.brush-progress,.brush-strip-tools>.brush-icon-button,.brush-strip-tools>.brush-menu-button{height:28px;min-height:28px;padding:0 7px;border:1px solid rgba(244,239,230,.28);border-radius:999px;background:rgba(12,13,11,.72);color:#f4efe6;font-size:11px;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:inline-grid;place-items:center}
+.brush-strip-tools>.brush-icon-button,.brush-strip-tools>.brush-menu-button{width:28px;padding:0}
 .brush-strip-tools [data-challengers]{background:rgba(243,215,161,.16);border-color:rgba(243,215,161,.45);color:#f3d7a1}
 .brush-strip-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:3px;overflow:hidden}
 .brush-strip-id strong,.brush-strip-id small{display:block;min-width:0;overflow:hidden}
