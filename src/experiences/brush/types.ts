@@ -2,6 +2,8 @@ import type { UploadJobView, UploadSnapshot, UploadStatus } from './uploads'
 
 export type { UploadJobView, UploadSnapshot, UploadStatus }
 
+export type FaceBox = { x: number, y: number, w: number, h: number }
+
 export type BrushImage = {
   id: string
   drive_file_id: string
@@ -25,6 +27,8 @@ export type BrushImage = {
   has_thumbnail?: boolean
   createdAt?: number
   perceptual_hash?: string | null
+  face_box?: FaceBox | null
+  face_scanned?: boolean
   bad_tag_ids?: string[]
 }
 
@@ -111,6 +115,7 @@ export type BrushApi = {
   contest: () => Promise<ContestState>
   saveContest: (state: ContestState) => Promise<void>
   setPhash: (imageId: string, hash: string) => Promise<void>
+  setFaceBox: (imageId: string, faceBox: FaceBox | null) => Promise<void>
   leaderboard: () => Promise<BrushImage[]>
   library: () => Promise<BrushImage[]>
   tags: () => Promise<BrushTag[]>

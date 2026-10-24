@@ -1,6 +1,6 @@
 import type { BrushImage, ContestState, Margin } from './types.ts'
 import { eloUpdate, nextSigma } from './rank.ts'
-import { advanceBracket, extendQueue, pairKey, qualifyingProgress, seedBracket, type RoundMatch, type Slot } from './pair.ts'
+import { advanceBracket, extendQueue, nextContender, pairKey, qualifyingProgress, seedBracket, type RoundMatch, type Slot } from './pair.ts'
 
 export type Deck = {
   images: BrushImage[]
@@ -89,7 +89,34 @@ function trash(images: BrushImage[], decision: Decision) {
   })
 }
 
+function replaceTrashed(deck: Deck, decision: Decision, rng: () => number): Deck | null {
+  const images = trash(deck.images, decision)
+  const keepId = decision.trashLeft ? decision.rightId : decision.leftId
+  const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-40)
+  const contender = nextContender(images, keepId, { recentKeys, rng })
+  if (!contender) return null
+  const slot = decision.trashLeft
+    ? { leftId: contender.id, rightId: keepId }
+    : { leftId: keepId, rightId: contender.id }
+  if (deck.phase === 'finals' && deck.focus !== 'placement') {
+    const rounds = deck.rounds.map((round, index) => {
+      if (index !== deck.rounds.length - 1) return round
+      return round.map(match => {
+        if (match.winnerId || match.leftId !== decision.leftId || match.rightId !== decision.rightId) return match
+        return { ...match, leftId: slot.leftId, rightId: slot.rightId }
+      })
+    })
+    return { ...deck, images, recentKeys, rounds }
+  }
+  const rest = deck.queue.slice(1)
+  return { ...deck, images, recentKeys, queue: extendQueue(images, [slot, ...rest], recentKeys, undefined, rng) }
+}
+
 export function applyDecision(deck: Deck, decision: Decision, rng: () => number = Math.random): Deck {
+  if (decision.kind === 'trash' && decision.trashLeft !== decision.trashRight) {
+    const replaced = replaceTrashed(deck, decision, rng)
+    if (replaced) return replaced
+  }
   const images = decision.kind === 'pick' ? rate(deck.images, decision) : trash(deck.images, decision)
   const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-40)
   if (deck.phase === 'finals' && deck.focus === 'placement') {
@@ -182,9 +209,13 @@ export function mergeLibrary(deck: Deck, remote: BrushImage[], rng: () => number
     const current = localById.get(remoteImage.id)
     if (!current) return remoteImage
     const ahead = current.games > remoteImage.games || current.trash_count > remoteImage.trash_count
-    if (!ahead) {
-      return { ...remoteImage, perceptual_hash: current.perceptual_hash || remoteImage.perceptual_hash, preview_url: remoteImage.preview_url || current.preview_url }
+    const face = {
+      face_box: remoteImage.face_box || current.face_box,
+      face_scanned: remoteImage.face_scanned || current.face_scanned,
+      perceptual_hash: current.perceptual_hash || remoteImage.perceptual_hash,
+      preview_url: remoteImage.preview_url || current.preview_url,
     }
+    if (!ahead) return { ...remoteImage, ...face }
     return {
       ...remoteImage,
       elo: current.elo,
@@ -194,8 +225,7 @@ export function mergeLibrary(deck: Deck, remote: BrushImage[], rng: () => number
       losses: current.losses,
       trashed: current.trashed || remoteImage.trashed,
       trash_count: Math.max(current.trash_count, remoteImage.trash_count),
-      perceptual_hash: current.perceptual_hash || remoteImage.perceptual_hash,
-      preview_url: remoteImage.preview_url || current.preview_url,
+      ...face,
     }
   })
   if (deck.phase !== 'qualifying') return { ...deck, images }
@@ -205,6 +235,10 @@ export function mergeLibrary(deck: Deck, remote: BrushImage[], rng: () => number
 
 export function rememberHash(deck: Deck, imageId: string, hash: string): Deck {
   return { ...deck, images: deck.images.map(image => image.id === imageId ? { ...image, perceptual_hash: hash } : image) }
+}
+
+export function rememberFace(deck: Deck, imageId: string, faceBox: BrushImage['face_box']): Deck {
+  return { ...deck, images: deck.images.map(image => image.id === imageId ? { ...image, face_box: faceBox, face_scanned: true } : image) }
 }
 
 export function progressOf(deck: Deck) {

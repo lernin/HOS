@@ -148,6 +148,9 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
     async setPhash(imageId, hash) {
       await call('brush_set_phash', { ...pinArgs, image_id: imageId, perceptual_hash: hash })
     },
+    async setFaceBox(imageId, faceBox) {
+      await call('brush_set_face_box', { ...pinArgs, image_id: imageId, face_box: faceBox })
+    },
     leaderboard: () => call<BrushImage[]>('brush_leaderboard', pinArgs),
     library: () => call<BrushImage[]>('brush_library', pinArgs),
     tags: () => call<BrushTag[]>('brush_tags', pinArgs),
