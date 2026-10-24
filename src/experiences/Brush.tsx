@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './brush.css'
 import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush/client'
+import { applyDecision, bootDeck, currentMatch, mergeLibrary, progressOf, rememberHash, resumeQualifying, startFinals, type Deck, type Decision } from './brush/deck'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
+import { enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
+import { hashImage } from './brush/pair'
 import { createPreviewClient } from './brush/preview'
 import { BackfillOffer, DetailSheet, InsightsScreen, Leaderboard, LibraryScreen, PinScreen, ReasonSheet } from './brush/Sheets'
 import { TrashReview } from './brush/TrashReview'
-import type { BrushApi, BrushImage, BrushTag, Insights, PairResult, TrashImage, UploadSnapshot } from './brush/types'
+import type { BrushApi, BrushImage, BrushTag, Insights, Margin, TrashImage, UploadSnapshot } from './brush/types'
 import { EMPTY_UPLOADS } from './brush/uploads'
 
 type Screen = 'match' | 'board' | 'love' | 'library' | 'trash'
-type Pending = { kind: 'like' | 'bad', leftId: string, rightId: string, winnerId: string | null, trashLeft: boolean, trashRight: boolean, started: number }
+type Reason = { id: string, kind: 'like' | 'bad', open: boolean }
 
 const EMPTY_INSIGHTS: Insights = {
   images: 0, active: 0, trashed: 0, matches: 0, tags: [], attributes: [], combinations: [],
@@ -29,7 +32,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [portrait, setPortrait] = useState(() => window.matchMedia('(orientation: portrait)').matches)
   const [front, setFront] = useState<'left' | 'right'>('left')
   const [zoom, setZoom] = useState<Zoom>(REST_ZOOM)
-  const [pair, setPair] = useState<PairResult | null>(null)
+  const [deck, setDeck] = useState<Deck | null>(null)
   const [tags, setTags] = useState<BrushTag[]>([])
   const [board, setBoard] = useState<BrushImage[]>([])
   const [library, setLibrary] = useState<BrushImage[]>([])
@@ -37,7 +40,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [trashed, setTrashed] = useState<TrashImage[]>([])
   const [trashIndex, setTrashIndex] = useState(0)
   const [trashSelected, setTrashSelected] = useState<string[]>([])
-  const [pending, setPending] = useState<Pending | null>(null)
+  const [reason, setReason] = useState<Reason | null>(null)
   const [pickedTags, setPickedTags] = useState<string[]>([])
   const [offer, setOffer] = useState<BrushTag | null>(null)
   const [progress, setProgress] = useState('')
@@ -48,8 +51,13 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [phrasing, setPhrasing] = useState(false)
   const [uploads, setUploads] = useState<UploadSnapshot>(EMPTY_UPLOADS)
   const addedRef = useRef(0)
-  const viewRef = useRef({ screen, pair, pending })
-  viewRef.current = { screen, pair, pending }
+  const startedRef = useRef(Date.now())
+  const hashedRef = useRef(new Set<string>())
+  const deckRef = useRef<Deck | null>(null)
+  deckRef.current = deck
+  const match = deck ? currentMatch(deck) : null
+  const matchKey = match ? `${match.left.id}:${match.right.id}` : ''
+  const qualify = deck ? progressOf(deck) : null
 
   useEffect(() => {
     const media = window.matchMedia('(orientation: portrait)')
@@ -67,22 +75,41 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     return () => { gone = true }
   }, [preview, pin])
 
-  async function refresh(api = client) {
-    const [nextPair, nextTags, nextBoard, nextLibrary, nextInsights, nextTrashed] = await Promise.all([
-      api.nextPair(), api.tags(), api.leaderboard(), api.library(), api.insights(), api.trashed(),
+  async function loadAll(api = client) {
+    const [nextTags, nextBoard, nextLibrary, nextInsights, nextTrashed, contest] = await Promise.all([
+      api.tags(), api.leaderboard(), api.library(), api.insights(), api.trashed(), api.contest(),
     ])
-    setPair(nextPair)
     setTags(nextTags)
     setBoard(nextBoard)
     setLibrary(nextLibrary)
     setInsights(nextInsights)
     setTrashed(nextTrashed)
+    setDeck(current => current ? mergeLibrary(current, nextLibrary) : bootDeck(nextLibrary, contest))
+  }
+
+  function sendResult(item: OutboxItem) {
+    return client.record({
+      leftId: item.leftId,
+      rightId: item.rightId,
+      decision: item.decision,
+      winnerId: item.winnerId,
+      trashLeft: item.trashLeft,
+      trashRight: item.trashRight,
+      tagIds: [],
+      decidedMs: item.decidedMs ?? undefined,
+      margin: item.margin,
+    })
   }
 
   useEffect(() => {
     if (phase !== 'app') return
     let gone = false
-    refresh(client).catch(error => { if (!gone) setMessage(messageOf(error)) })
+    loadAll(client).catch(error => { if (!gone) setMessage(messageOf(error)) })
+    if (readOutbox(preview).length) {
+      void flushOutbox(preview, sendResult, (matchId, tagIds) => client.annotate(matchId, tagIds)).catch(error => {
+        if (!gone) setMessage(messageOf(error))
+      })
+    }
     const stop = client.subscribeUploads(setUploads)
     void client.resumeUploads()
     return () => {
@@ -98,12 +125,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       return
     }
     addedRef.current = uploads.added
-    const view = viewRef.current
-    const keep = view.screen === 'match' && Boolean(view.pair && view.pair.ready) && !view.pending
-    const kept = view.pair
-    refresh(client).then(() => {
-      if (keep && kept && kept.ready) setPair(kept)
-    }).catch(error => setMessage(messageOf(error)))
+    loadAll(client).catch(error => setMessage(messageOf(error)))
   }, [uploads.added, phase])
 
   useEffect(() => {
@@ -112,12 +134,10 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   }, [trashIndex, trashed])
 
   useEffect(() => {
-    if (preview) return
-    const wanted = [
-      ...(pair && pair.ready ? [pair.left, pair.right] : []),
-      ...library.slice(0, 24),
-      ...trashed.slice(0, 8),
-    ]
+    if (preview || !deck) return
+    const queued = deck.queue.slice(0, 5).flatMap(slot => deck.images.filter(image => image.id === slot.leftId || image.id === slot.rightId))
+    const finals = deck.rounds.flatMap(round => round.flatMap(slot => deck.images.filter(image => image.id === slot.leftId || image.id === slot.rightId)))
+    const wanted = [...(match ? [match.left, match.right] : []), ...queued, ...finals.slice(0, 8), ...library.slice(0, 24), ...trashed.slice(0, 8)]
     let gone = false
     for (const image of wanted) {
       if (image.preview_url) continue
@@ -127,11 +147,50 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         ? loadThumb(image.id, pin, brushPin).catch(() => loadDriveImage(image.drive_file_id, pin, brushPin))
         : loadDriveImage(image.drive_file_id, pin, brushPin)
       load.then(url => {
-        if (!gone) setUrls(current => ({ ...current, [key]: url }))
+        if (!gone) setUrls(current => current[key] ? current : { ...current, [key]: url })
       }).catch(() => {})
     }
     return () => { gone = true }
-  }, [pair, library, trashed, preview, pin, brushPin, urls])
+  }, [deck, matchKey, library, trashed, preview, pin, brushPin, urls])
+
+  useEffect(() => {
+    if (!deck) return
+    const wanted = new Map<string, BrushImage>()
+    if (match) { wanted.set(match.left.id, match.left); wanted.set(match.right.id, match.right) }
+    for (const slot of deck.queue.slice(0, 5)) {
+      for (const image of deck.images) {
+        if (image.id === slot.leftId || image.id === slot.rightId) wanted.set(image.id, image)
+      }
+    }
+    for (const image of wanted.values()) {
+      const src = image.preview_url || (image.has_thumbnail ? urls[`thumb:${image.id}`] : urls[image.drive_file_id])
+      if (!src) continue
+      const img = new Image()
+      img.src = src
+      void img.decode?.().catch(() => {})
+    }
+  }, [deck, matchKey, urls])
+
+  useEffect(() => {
+    if (!deck) return
+    let mounted = true
+    for (const image of deck.images) {
+      if (image.perceptual_hash || image.trashed || hashedRef.current.has(image.id)) continue
+      const src = image.preview_url || (image.has_thumbnail && urls[`thumb:${image.id}`]) || urls[image.drive_file_id]
+      if (!src) continue
+      hashedRef.current.add(image.id)
+      const img = new Image()
+      img.onload = () => {
+        void hashImage(img).then(hash => {
+          if (!mounted || !hash) return
+          setDeck(current => current ? rememberHash(current, image.id, hash) : current)
+          void client.setPhash(image.id, hash).catch(() => {})
+        }).catch(() => {})
+      }
+      img.src = src
+    }
+    return () => { mounted = false }
+  }, [deck, urls, client])
 
   function srcFor(image: BrushImage) {
     if (image.preview_url) return image.preview_url
@@ -139,48 +198,106 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     return urls[image.drive_file_id] || null
   }
 
-  async function saveDecision(tagsToSave: string[]) {
-    if (!pending || !pair || !pair.ready) return
-    await client.record({
-      leftId: pending.leftId,
-      rightId: pending.rightId,
-      decision: pending.kind === 'like' ? 'pick' : 'trash',
-      winnerId: pending.winnerId,
-      trashLeft: pending.trashLeft,
-      trashRight: pending.trashRight,
-      tagIds: tagsToSave,
-      decidedMs: Date.now() - pending.started,
-    })
-    setPending(null)
-    setPickedTags([])
+  function persistContest(next: Deck) {
+    void client.saveContest({ phase: next.phase, rounds: next.rounds, championId: next.championId }).catch(error => setMessage(messageOf(error)))
+  }
+
+  function commit(decision: Decision) {
+    const current = deckRef.current
+    if (!current) return
+    const next = applyDecision(current, decision)
+    setDeck(next)
     setZoom(REST_ZOOM)
     setFront('left')
-    await refresh()
+    const item: OutboxItem = {
+      id: crypto.randomUUID(),
+      leftId: decision.leftId,
+      rightId: decision.rightId,
+      decision: decision.kind,
+      winnerId: decision.winnerId,
+      trashLeft: decision.trashLeft,
+      trashRight: decision.trashRight,
+      margin: decision.margin,
+      tagIds: [],
+      decidedMs: Date.now() - startedRef.current,
+      matchId: null,
+      attempts: 0,
+    }
+    enqueueResult(preview, item)
+    setPickedTags([])
+    setReason({ id: item.id, kind: decision.kind === 'pick' ? 'like' : 'bad', open: current.phase === 'finals' })
+    if (next.phase !== current.phase || next.championId !== current.championId || JSON.stringify(next.rounds) !== JSON.stringify(current.rounds)) persistContest(next)
+    startedRef.current = Date.now()
+    void flushOutbox(preview, sendResult, (matchId, tagIds) => client.annotate(matchId, tagIds)).catch(error => setMessage(messageOf(error)))
   }
 
-  function openChoice(id: string) {
-    if (!pair || !pair.ready) return
-    setPickedTags([])
-    setPending({ kind: 'like', leftId: pair.left.id, rightId: pair.right.id, winnerId: id, trashLeft: false, trashRight: false, started: Date.now() })
-  }
-
-  function openTrash(ids: string[]) {
-    if (!pair || !pair.ready) return
-    setPickedTags([])
-    setPending({
-      kind: 'bad',
-      leftId: pair.left.id,
-      rightId: pair.right.id,
-      winnerId: null,
-      trashLeft: ids.includes(pair.left.id),
-      trashRight: ids.includes(pair.right.id),
-      started: Date.now(),
+  function pick(id: string, margin: Margin) {
+    if (!match) return
+    commit({
+      leftId: match.left.id,
+      rightId: match.right.id,
+      kind: 'pick',
+      winnerId: id,
+      trashLeft: false,
+      trashRight: false,
+      margin,
     })
+  }
+
+  function trashOne(id: string) {
+    if (!match) return
+    commit({
+      leftId: match.left.id,
+      rightId: match.right.id,
+      kind: 'trash',
+      winnerId: null,
+      trashLeft: id === match.left.id,
+      trashRight: id === match.right.id,
+      margin: 'clear',
+    })
+  }
+
+  function goFinals() {
+    const current = deckRef.current
+    if (!current) return
+    const next = startFinals(current)
+    if (next === current) {
+      setMessage('Need two active portraits before a final.')
+      return
+    }
+    setDeck(next)
+    setZoom(REST_ZOOM)
+    setFront('left')
+    setReason(null)
+    persistContest(next)
+  }
+
+  function keepQualifying() {
+    const current = deckRef.current
+    if (!current) return
+    const next = resumeQualifying(current)
+    setDeck(next)
+    setReason(null)
+    persistContest(next)
+  }
+
+  function saveReason(tagIds: string[]) {
+    if (!reason) return
+    const pending = readOutbox(preview).some(item => item.id === reason.id)
+    if (pending) {
+      tagOutbox(preview, reason.id, tagIds)
+      void flushOutbox(preview, sendResult, (matchId, ids) => client.annotate(matchId, ids)).catch(error => setMessage(messageOf(error)))
+    } else {
+      const matchId = sentMatch(reason.id)
+      if (matchId && tagIds.length) void client.annotate(matchId, tagIds).catch(error => setMessage(messageOf(error)))
+    }
+    setReason(current => current ? { ...current, open: false } : current)
+    setPickedTags([])
   }
 
   async function approve(tag: BrushTag) {
     await client.reviewTag(tag.id, 'approve')
-    await refresh()
+    await loadAll()
     setOffer({ ...tag, status: 'live' })
   }
 
@@ -192,7 +309,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       await client.backfill(tag, (done, total) => setProgress(`Noting ${tag.label} · ${done} of ${total}`))
       setProgress('')
       setMessage(`Noted “${tag.label}” where the vision pass could see it.`)
-      await refresh()
+      await loadAll()
     } catch (error) {
       setProgress('')
       setMessage(messageOf(error))
@@ -205,10 +322,11 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     await client.saveTrashTags(image.id, trashSelected)
     if (step) setTrashIndex(index => Math.min(trashed.length - 1, Math.max(0, index + step)))
     else setMessage('Tags saved on the flagged image. The Drive file was not moved.')
-    await refresh()
+    await loadAll()
   }
 
   const countries = [...new Set(library.map(image => image.country).filter(Boolean))]
+  const champion = deck?.championId ? deck.images.find(image => image.id === deck.championId) || null : null
 
   return (
     <main className={`brush${portrait ? ' is-portrait' : ' is-landscape'}`}>
@@ -217,10 +335,13 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         {phase === 'app' && (
           <>
             {(['match', 'board', 'love', 'trash', 'library'] as Screen[]).map(item => (
-              <button key={item} type="button" aria-current={screen === item ? 'page' : undefined} onClick={() => { setScreen(item); setPending(null) }}>
+              <button key={item} type="button" aria-current={screen === item ? 'page' : undefined} onClick={() => setScreen(item)}>
                 {item === 'match' ? 'Match' : item === 'board' ? 'Board' : item === 'love' ? 'Love' : item === 'trash' ? 'Trash' : 'Library'}
               </button>
             ))}
+            {deck?.phase === 'qualifying' && qualify && <span className="brush-progress" data-qualify>{`Qualifying ${qualify.percent}%`}</span>}
+            {deck?.phase === 'qualifying' && qualify && qualify.total >= 2 && <button type="button" data-action="finals" onClick={goFinals}>Finals</button>}
+            {deck?.phase === 'finals' && <span className="brush-progress" data-finals>{`Finals · round ${deck.rounds.length}`}</span>}
           </>
         )}
         {uploads.total > uploads.completed && <span className="brush-progress" data-upload-nav>{`Uploads ${uploads.completed}/${uploads.total}`}</span>}
@@ -251,35 +372,45 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         />
       )}
 
-      {phase === 'app' && screen === 'match' && pair?.ready && (
+      {phase === 'app' && screen === 'match' && deck?.phase === 'champion' && (
+        <div className="brush-scroll" data-screen="champion">
+          <h2>Champion</h2>
+          {champion && srcFor(champion) && <img src={srcFor(champion) || ''} alt={champion.name} style={{ width: 'min(100%, 280px)', aspectRatio: '9 / 16', objectFit: 'cover', borderRadius: 18 }} />}
+          <p>{champion?.name || 'The bracket is finished.'} {champion ? `· ${Math.round(champion.elo)}` : ''}</p>
+          <button className="brush-upload" type="button" data-action="requalify" onClick={keepQualifying}>Keep qualifying</button>
+        </div>
+      )}
+      {phase === 'app' && screen === 'match' && deck?.phase !== 'champion' && match && (
         <Matchup
-          left={pair.left}
-          right={pair.right}
+          left={match.left}
+          right={match.right}
           front={front}
           portrait={portrait}
           zoom={zoom}
           onZoom={setZoom}
           onFlip={() => setFront(side => side === 'left' ? 'right' : 'left')}
-          onChoose={openChoice}
-          onTrash={id => openTrash([id])}
-          onTrashBoth={() => openTrash([pair.left.id, pair.right.id])}
+          onPick={pick}
+          onTrash={trashOne}
           srcFor={srcFor}
         />
       )}
-      {phase === 'app' && screen === 'match' && pair && !pair.ready && (
+      {phase === 'app' && screen === 'match' && deck && deck.phase !== 'champion' && !match && (
         <div className="brush-scroll" data-screen="match">
           <h2>Need two portraits</h2>
-          <p>{pair.active} active of {pair.total}. Sync the Beauty Contest folder or upload more. Trashed images stay in Drive and wait in Trash Review.</p>
+          <p>{qualify?.total || 0} active. Sync the Beauty Contest folder or upload more. Trashed images stay in Drive and wait in Trash Review.</p>
           <button className="brush-upload" type="button" onClick={() => setScreen('library')}>Open library</button>
         </div>
       )}
-      {phase === 'app' && screen === 'board' && <Leaderboard images={board} srcFor={srcFor} />}
+      {phase === 'app' && screen === 'match' && match && reason && !reason.open && (
+        <button className="brush-text-button" type="button" data-action="reason" style={{ position: 'absolute', top: 52, left: 10, zIndex: 4 }} onClick={() => setReason(current => current ? { ...current, open: true } : current)}>Add reason</button>
+      )}
+      {phase === 'app' && screen === 'board' && <Leaderboard images={deck ? [...deck.images].sort((a, b) => b.elo - a.elo || b.games - a.games) : board} srcFor={srcFor} />}
       {phase === 'app' && screen === 'love' && (
         <InsightsScreen
           insights={insights}
           phrasing={phrasing}
           onApprove={tag => { approve(tag).catch(error => setMessage(messageOf(error))) }}
-          onReject={tag => { client.reviewTag(tag.id, 'reject').then(() => refresh()).catch(error => setMessage(messageOf(error))) }}
+          onReject={tag => { client.reviewTag(tag.id, 'reject').then(() => loadAll()).catch(error => setMessage(messageOf(error))) }}
           onPhrase={draft => {
             if (preview) { setMessage('Preview keeps the draft. The model is not called.'); return }
             setPhrasing(true)
@@ -291,7 +422,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
               const body = await response.json() as { body?: string, error?: string }
               if (!response.ok) throw new Error(body.error || 'Could not phrase the recipe.')
               setMessage('Phrased recipe saved. It is still only a suggestion.')
-              await refresh()
+              await loadAll()
             }).catch(error => setMessage(messageOf(error))).finally(() => setPhrasing(false))
           }}
         />
@@ -307,7 +438,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           syncing={progress.startsWith('Sync')}
           onSync={() => {
             setProgress('Syncing Beauty Contest')
-            client.sync(setProgress).then(() => refresh()).catch(error => setMessage(messageOf(error))).finally(() => setProgress(''))
+            client.sync(setProgress).then(() => loadAll()).catch(error => setMessage(messageOf(error))).finally(() => setProgress(''))
           }}
           onUpload={files => { client.enqueueUploads(files) }}
           onRetry={id => client.retryUpload(id)}
@@ -318,7 +449,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
             setProgress(`Tagging ${image.name}`)
             client.autoTag(image.id).then(result => {
               setMessage(result.suggested ? `${result.suggested} new tag${result.suggested === 1 ? '' : 's'} suggested.` : 'Attributes updated.')
-              return refresh()
+              return loadAll()
             }).catch(error => setMessage(messageOf(error))).finally(() => setProgress(''))
           }}
           onChangePin={() => setPhase('change')}
@@ -333,27 +464,27 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           src={trashed[trashIndex] ? srcFor(trashed[trashIndex]) : null}
           onToggle={id => setTrashSelected(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])}
           onApprove={tag => { approve(tag).catch(error => setMessage(messageOf(error))) }}
-          onReject={tag => { client.reviewTag(tag.id, 'reject').then(() => refresh()).catch(error => setMessage(messageOf(error))) }}
+          onReject={tag => { client.reviewTag(tag.id, 'reject').then(() => loadAll()).catch(error => setMessage(messageOf(error))) }}
           onSave={() => { saveTrash(0).catch(error => setMessage(messageOf(error))) }}
           onStep={delta => { saveTrash(delta).catch(error => setMessage(messageOf(error))) }}
           onRestore={() => {
             const image = trashed[trashIndex]
             if (!image) return
-            client.restore(image.id).then(() => refresh()).catch(error => setMessage(messageOf(error)))
+            client.restore(image.id).then(() => loadAll()).catch(error => setMessage(messageOf(error)))
           }}
         />
       )}
 
-      {pending && (
+      {reason?.open && (
         <ReasonSheet
-          kind={pending.kind}
+          kind={reason.kind}
           tags={tags}
           selected={pickedTags}
           onToggle={id => setPickedTags(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id])}
           onApprove={tag => { approve(tag).catch(error => setMessage(messageOf(error))) }}
-          onReject={tag => { client.reviewTag(tag.id, 'reject').then(() => refresh()).catch(error => setMessage(messageOf(error))) }}
-          onSkip={() => { saveDecision([]).catch(error => setMessage(messageOf(error))) }}
-          onDone={() => { saveDecision(pickedTags).catch(error => setMessage(messageOf(error))) }}
+          onReject={tag => { client.reviewTag(tag.id, 'reject').then(() => loadAll()).catch(error => setMessage(messageOf(error))) }}
+          onSkip={() => { setReason(current => current ? { ...current, open: false } : current); setPickedTags([]) }}
+          onDone={() => saveReason(pickedTags)}
         />
       )}
       {offer && <BackfillOffer label={offer.label} onSkip={() => setOffer(null)} onRun={() => { runBackfill().catch(error => setMessage(messageOf(error))) }} />}
@@ -368,7 +499,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           onAutoTag={() => {
             client.autoTag(detail.image.id).then(() => client.detail(detail.image.id)).then(result => {
               setDetail({ ...result, prompt: result.image.prompt_text || detail.prompt })
-              return refresh()
+              return loadAll()
             }).catch(error => setMessage(messageOf(error)))
           }}
         />

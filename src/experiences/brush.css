@@ -4,7 +4,7 @@
 .brush-nav button,.brush-nav .brush-progress{pointer-events:auto}
 .brush-nav button,.brush-text-button,.brush-choice{border:1px solid rgba(244,239,230,.28);background:rgba(12,13,11,.72);border-radius:999px;min-height:36px;padding:0 12px}
 .brush-nav button[aria-current="page"]{background:#efe6d6;color:#1b1914;border-color:#efe6d6}
-.brush-stage{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;gap:8px}
+.brush-stage{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;gap:8px;touch-action:none}
 .brush-card{position:relative;height:100%;aspect-ratio:9/16;max-width:calc(50% - 4px);overflow:hidden;background:#171812}
 .brush.is-portrait .brush-card{display:none;height:100%;width:min(100vw,calc(100dvh * 9 / 16));max-width:100%}
 .brush.is-portrait .brush-card.is-front{display:block}
@@ -16,6 +16,7 @@
 .brush-card-actions{bottom:max(8px,env(safe-area-inset-bottom))}
 .brush-choice{flex:1;min-height:46px;background:rgba(12,13,11,.78)}
 .brush-choice.danger{border-color:#e7b2a8}
+.brush-choice.close{flex:0.7;min-height:36px;font-size:13px}
 .brush-scroll{position:absolute;inset:0;overflow:auto;padding:64px 16px max(20px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
 .brush-scroll h2{font-family:Georgia,serif;font-weight:500;font-size:28px;margin:0}
 .brush-panel{border:1px solid rgba(244,239,230,.16);border-radius:18px;padding:14px;background:#141510}
