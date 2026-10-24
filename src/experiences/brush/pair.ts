@@ -1,4 +1,4 @@
-import { groupKeys, type GroupSource } from './names.ts'
+import { countryFromPath, filenameAttributes, groupKeys, seriesFromName, type GroupSource } from './names.ts'
 
 export const QUALIFY_TARGET = 4
 export const QUEUE_DEPTH = 5
@@ -6,6 +6,9 @@ export const FINALS_SIZE = 16
 export const HASH_DISTANCE = 8
 export const PLACEMENT_GAMES = 5
 export const PLACEMENT_QUANTILES = [0.5, 0.8, 0.2, 0.65, 0.35]
+export const RECENT_WINDOW = 10
+export const CLOSE_ELO = 150
+export const WILDCARD_RATE = 0.2
 
 export type Pairable = GroupSource & {
   id: string
@@ -14,6 +17,47 @@ export type Pairable = GroupSource & {
   perceptual_hash?: string | null
   trashed?: boolean
   archived?: boolean
+  country?: string
+  prompt_text?: string | null
+}
+
+const DRESS_COLORS = ['ivory', 'white', 'black', 'sage', 'emerald', 'green', 'olive', 'red', 'crimson', 'burgundy', 'maroon', 'pink', 'blush', 'rose', 'blue', 'navy', 'cobalt', 'gold', 'yellow', 'orange', 'purple', 'lilac', 'lavender', 'brown', 'beige', 'cream', 'silver', 'gray', 'grey', 'teal', 'coral']
+const SETTINGS = ['studio', 'beach', 'street', 'garden', 'cafe', 'bedroom', 'night', 'city', 'park', 'rooftop', 'forest', 'alley', 'office', 'stage', 'balcony', 'temple', 'shrine', 'library', 'pool', 'outdoor', 'indoor', 'sunset', 'neon']
+
+export type Look = { country: string, series: string, setting: string, dress: string }
+
+function firstWord(text: string, words: string[]) {
+  let best = ''
+  let at = Number.POSITIVE_INFINITY
+  for (const word of words) {
+    const index = text.search(new RegExp(`\\b${word}\\b`, 'i'))
+    if (index >= 0 && index < at) {
+      at = index
+      best = word.toLowerCase()
+    }
+  }
+  return best === 'grey' ? 'gray' : best
+}
+
+function dressColor(text: string) {
+  const labeled = text.match(/clothes\/dress colour\s*[:=]\s*([a-z][\w\s-]{0,24})/i)
+  const source = labeled ? labeled[1] : text
+  const before = source.match(new RegExp(`\\b(${DRESS_COLORS.join('|')})\\b(?:[\\w\\s-]{0,24})\\b(?:dress|gown|outfit|clothes|kimono|skirt|blouse)`, 'i'))
+  const after = source.match(new RegExp(`\\b(?:dress|gown|outfit|clothes|kimono|skirt|blouse)\\b(?:[\\w\\s-]{0,16})\\b(${DRESS_COLORS.join('|')})\\b`, 'i'))
+  const color = (before?.[1] || after?.[1] || (labeled ? firstWord(source, DRESS_COLORS) : '')).toLowerCase()
+  return color === 'grey' ? 'gray' : color
+}
+
+export function lookOf(image: Pairable): Look {
+  const text = `${image.name} ${image.prompt_text || ''} ${image.folder_path || ''}`.toLowerCase()
+  const fromName = filenameAttributes(image.name).find(item => item.trait === 'setting/background')
+  const labeledSetting = text.match(/setting\/background\s*[:=]\s*([a-z][\w\s-]{0,24})/i)
+  return {
+    country: (image.country || countryFromPath(image.folder_path || '')).trim().toLowerCase(),
+    series: (image.series || seriesFromName(image.name) || '').trim().toLowerCase(),
+    setting: (fromName?.value || (labeledSetting ? firstWord(labeledSetting[1], SETTINGS) || labeledSetting[1].trim().toLowerCase() : '') || firstWord(text, SETTINGS)),
+    dress: dressColor(text),
+  }
 }
 
 export type Slot = { leftId: string, rightId: string }
@@ -102,10 +146,112 @@ function placementTarget(games: number, established: Pairable[]) {
   return sorted[Math.min(sorted.length - 1, Math.max(0, index))].elo
 }
 
+function recentOpponents(id: string, keys: string[]) {
+  const found = new Set<string>()
+  for (const key of keys) {
+    const [left, right] = key.split(':')
+    if (left === id) found.add(right)
+    else if (right === id) found.add(left)
+  }
+  return found
+}
+
+function lookTraits(image: Pairable | undefined) {
+  if (!image) return []
+  const look = lookOf(image)
+  const traits: string[] = []
+  if (look.setting) traits.push(`setting:${look.setting}`)
+  if (look.dress) traits.push(`dress:${look.dress}`)
+  if (look.country) traits.push(`country:${look.country}`)
+  return traits
+}
+
+function traitsOf(ids: Iterable<string>, byId: Map<string, Pairable>) {
+  const traits = new Set<string>()
+  for (const id of ids) lookTraits(byId.get(id)).forEach(trait => traits.add(trait))
+  return traits
+}
+
+type Scored = { image: Pairable, hard: boolean, diversity: number, gap: number }
+
+function scoreOpponent(anchor: Pairable, image: Pairable, target: number, keys: string[], avoidIds: string[], byId: Map<string, Pairable>): Scored {
+  const hard = sameGroup(anchor, image)
+  const gap = Math.abs(image.elo - target)
+  if (hard) return { image, hard, diversity: 0, gap }
+  const recent = keys.slice(-RECENT_WINDOW)
+  const older = keys.slice(0, -RECENT_WINDOW)
+  const anchorLook = lookOf(anchor)
+  const look = lookOf(image)
+  const faced = recentOpponents(anchor.id, recent)
+  const facedEarlier = recentOpponents(anchor.id, older)
+  const recentLooks = traitsOf(faced, byId)
+  const candidateLooks = traitsOf(recentOpponents(image.id, recent), byId)
+  let diversity = avoidIds.includes(image.id) ? 3000 : 0
+  if (faced.has(image.id)) diversity += 1600
+  else if (facedEarlier.has(image.id)) diversity += 400
+  if (anchorLook.country && look.country && anchorLook.country === look.country) diversity += 240
+  if (anchorLook.series && look.series && anchorLook.series === look.series) diversity += 280
+  if (anchorLook.setting && look.setting && anchorLook.setting === look.setting) diversity += 200
+  if (anchorLook.dress && look.dress && anchorLook.dress === look.dress) diversity += 200
+  for (const trait of lookTraits(image)) {
+    if (recentLooks.has(trait) && !lookTraits(anchor).includes(trait)) diversity += 120
+  }
+  for (const trait of lookTraits(anchor)) {
+    if (candidateLooks.has(trait) && !lookTraits(image).includes(trait)) diversity += 120
+  }
+  return { image, hard, diversity, gap }
+}
+
+function pickFrom(items: Scored[], rng: () => number) {
+  return items[Math.floor(rng() * items.length)].image
+}
+
+function pickOpponent(anchor: Pairable, images: Pairable[], target: number, placingAnchor: boolean, keys: string[], avoidIds: string[], rng: () => number) {
+  const byId = new Map(images.map(image => [image.id, image]))
+  const scored = images
+    .filter(image => image.id !== anchor.id)
+    .map(image => scoreOpponent(anchor, image, target, keys, avoidIds, byId))
+  const legal = scored.filter(item => !item.hard)
+  const source = legal.length ? legal : scored
+  if (!source.length) return null
+  const established = source.filter(item => item.image.games >= PLACEMENT_GAMES)
+  const wildcard = rng() < WILDCARD_RATE
+  if (placingAnchor) {
+    const field = established.length ? established : source
+    if (wildcard) return pickFrom(field, rng)
+    const ranked = [...field].sort((a, b) => (a.gap * 2 + a.diversity) - (b.gap * 2 + b.diversity) || a.image.id.localeCompare(b.image.id))
+    const best = ranked[0].gap * 2 + ranked[0].diversity
+    const band = ranked.filter(item => item.gap * 2 + item.diversity <= best + 40)
+    return pickFrom(band, rng)
+  }
+  if (anchor.games >= PLACEMENT_GAMES) {
+    const field = established.length ? established : source
+    if (wildcard) return pickFrom(field, rng)
+    const widths = [CLOSE_ELO, CLOSE_ELO * 2, CLOSE_ELO * 4, Number.POSITIVE_INFINITY]
+    let band = field
+    for (const width of widths) {
+      const within = field.filter(item => item.gap <= width)
+      if (within.length) {
+        band = within
+        break
+      }
+    }
+    band.sort((a, b) => a.diversity - b.diversity || a.gap - b.gap || a.image.id.localeCompare(b.image.id))
+    const varied = band.filter(item => item.diversity <= band[0].diversity + 30)
+    varied.sort((a, b) => a.gap - b.gap || a.image.id.localeCompare(b.image.id))
+    const tight = varied.filter(item => item.gap <= varied[0].gap + 40)
+    return pickFrom(tight, rng)
+  }
+  if (wildcard) return pickFrom(source, rng)
+  const ordered = [...source].sort((a, b) => a.diversity - b.diversity || a.gap - b.gap || a.image.id.localeCompare(b.image.id))
+  const varied = ordered.filter(item => item.diversity <= ordered[0].diversity + 40)
+  return pickFrom(varied, rng)
+}
+
 export function nextQualifyingPair(pool: Pairable[], options: { avoidIds?: string[], recentKeys?: string[], rng?: () => number } = {}) {
   const rng = options.rng || Math.random
   const avoidIds = options.avoidIds || []
-  const recentKeys = new Set(options.recentKeys || [])
+  const recentKeys = options.recentKeys || []
   const images = active(pool)
   if (images.length < 2) return null
   const placing = images.filter(image => image.games < PLACEMENT_GAMES)
@@ -128,46 +274,20 @@ export function nextQualifyingPair(pool: Pairable[], options: { avoidIds?: strin
   const anchor = anchorPool[Math.floor(rng() * anchorPool.length)]
   const placingAnchor = anchor.games < PLACEMENT_GAMES && established.some(image => image.id !== anchor.id)
   const target = placingAnchor ? placementTarget(anchor.games, established.filter(image => image.id !== anchor.id)) : anchor.elo
-  const ranked = images
-    .filter(image => image.id !== anchor.id)
-    .map(image => {
-      const key = pairKey(anchor.id, image.id)
-      const keys = new Set(groupKeys(anchor))
-      const seriesClash = groupKeys(image).some(item => keys.has(item))
-      const lookalike = Boolean(anchor.perceptual_hash && image.perceptual_hash && hashDistance(anchor.perceptual_hash, image.perceptual_hash) <= HASH_DISTANCE)
-      const score = (seriesClash ? 10000 : 0)
-        + (lookalike ? 10000 : 0)
-        + (avoidIds.includes(image.id) ? 3000 : 0)
-        + (recentKeys.has(key) ? 1500 : 0)
-        + (placingAnchor
-          ? (image.games < PLACEMENT_GAMES ? 5000 : 0) + Math.abs(image.elo - target)
-          : image.games * 20 + Math.abs(image.elo - anchor.elo) * 0.15)
-        + rng() * (placingAnchor ? 0.4 : 80)
-      return { image, score }
-    })
-  const different = ranked.filter(item => item.score < 10000)
-  const bandSource = different.length ? different : ranked
-  bandSource.sort((a, b) => a.score - b.score)
-  const slack = placingAnchor ? 0.5 : 80
-  const band = bandSource.filter(item => item.score <= bandSource[0].score + slack)
-  const opponent = band[Math.floor(rng() * band.length)].image
+  const opponent = pickOpponent(anchor, images, target, placingAnchor, recentKeys, avoidIds, rng)
+  if (!opponent) return null
   return { left: anchor, right: opponent }
 }
 
 export function nextContender(pool: Pairable[], keepId: string, options: { recentKeys?: string[], rng?: () => number } = {}) {
   const rng = options.rng || Math.random
-  const keep = active(pool).find(image => image.id === keepId)
+  const images = active(pool)
+  const keep = images.find(image => image.id === keepId)
   if (!keep) return null
-  const recent = new Set(options.recentKeys || [])
-  const candidates = active(pool).filter(image => image.id !== keepId && !sameGroup(keep, image))
-  if (!candidates.length) return null
-  const ranked = candidates.map(image => ({
-    image,
-    score: (recent.has(pairKey(keepId, image.id)) ? 1500 : 0) + Math.abs(image.elo - keep.elo) * 0.15 + rng() * 40,
-  }))
-  ranked.sort((a, b) => a.score - b.score || a.image.id.localeCompare(b.image.id))
-  const band = ranked.filter(item => item.score <= ranked[0].score + 40)
-  return band[Math.floor(rng() * band.length)].image
+  const established = images.filter(image => image.games >= PLACEMENT_GAMES && image.id !== keep.id)
+  const placingAnchor = keep.games < PLACEMENT_GAMES && established.length > 0
+  const target = placingAnchor ? placementTarget(keep.games, established) : keep.elo
+  return pickOpponent(keep, images, target, placingAnchor, options.recentKeys || [], [], rng)
 }
 
 export function extendQueue(pool: Pairable[], queue: Slot[], recentKeys: string[], depth = QUEUE_DEPTH, rng: () => number = Math.random) {

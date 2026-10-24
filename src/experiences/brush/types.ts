@@ -48,6 +48,7 @@ export type ContestState = {
   phase: ContestPhase
   rounds: RoundMatch[][]
   championId: string | null
+  recentKeys?: string[]
 }
 
 export type BrushTag = {

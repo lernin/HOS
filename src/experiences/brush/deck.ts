@@ -34,14 +34,14 @@ export function bootDeck(images: BrushImage[], contest: ContestState | null, rng
   const deck: Deck = {
     images,
     queue: [],
-    recentKeys: [],
+    recentKeys: (contest?.recentKeys || []).slice(-40),
     phase: contest?.phase || 'qualifying',
     focus: 'bracket',
     rounds: contest?.rounds || [],
     championId: contest?.championId || null,
   }
   if (deck.phase !== 'qualifying') return deck
-  return { ...deck, queue: extendQueue(images, [], [], undefined, rng) }
+  return { ...deck, queue: extendQueue(images, [], deck.recentKeys, undefined, rng) }
 }
 
 export function currentMatch(deck: Deck) {
