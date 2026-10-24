@@ -1,14 +1,12 @@
 import sync from './sync.js'
 import { json } from '../http.js'
 
-const LAB_PIN = '3476'
 const BUDGET_MS = 45_000
 
 function authorized(request: Request) {
   const secret = process.env.CRON_SECRET?.trim()
-  const header = request.headers.get('authorization') || ''
-  if (secret && header === `Bearer ${secret}`) return true
-  return /vercel-cron/i.test(request.headers.get('user-agent') || '')
+  if (!secret) return false
+  return request.headers.get('authorization') === `Bearer ${secret}`
 }
 
 export default {
@@ -16,7 +14,8 @@ export default {
     if (request.method !== 'GET') return json({ error: 'Method not allowed.' }, 405)
     if (!authorized(request)) return json({ error: 'Not found.' }, 404)
     const brush = process.env.BRUSH_PIN?.trim() || ''
-    if (!brush) return json({ error: 'Brush sync is not configured.' }, 503)
+    const lab = process.env.ACCESS_PIN?.trim() || ''
+    if (!brush || !lab) return json({ error: 'Brush sync is not configured.' }, 503)
     let runId: string | undefined
     let pending: { id: string, path: string, pageToken?: string }[] | undefined
     let prompts: Record<string, string> = {}
@@ -28,7 +27,7 @@ export default {
         method: 'POST',
         headers: {
           'content-type': 'application/json',
-          'x-lab-pin': LAB_PIN,
+          'x-lab-pin': lab,
           'x-brush-pin': brush,
         },
         body: JSON.stringify({ runId, pending, prompts }),

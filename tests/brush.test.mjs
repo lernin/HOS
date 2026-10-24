@@ -904,3 +904,14 @@ test('portrait loads are retried and landscape slots stay equal', async () => {
   assert.equal(vercel.crons[0].path, '/api/brush-sync-daily')
   assert.match(vercel.crons[0].schedule, /^\d+ \d+ \* \* \*$/)
 })
+
+test('daily sync accepts only a bearer cron secret', () => {
+  const source = readFileSync(new URL('../api/_brush/routes/sync-daily.ts', import.meta.url), 'utf8')
+  assert.match(source, /const secret = process\.env\.CRON_SECRET\?\.trim\(\)/)
+  assert.match(source, /if \(!secret\) return false/)
+  assert.match(source, /request\.headers\.get\('authorization'\) === `Bearer \$\{secret\}`/)
+  assert.match(source, /process\.env\.ACCESS_PIN\?\.trim\(\)/)
+  assert.doesNotMatch(source, /vercel-cron/i)
+  assert.doesNotMatch(source, /user-agent/i)
+  assert.doesNotMatch(source, /3476/)
+})
