@@ -55,6 +55,8 @@ function blank(partial: Pick<BrushImage, 'id' | 'name' | 'country' | 'preview_ur
     games: 0,
     wins: 0,
     losses: 0,
+    close_wins: 0,
+    close_losses: 0,
     trash_count: 0,
     trashed: false,
     face_box: PREVIEW_FACE,
@@ -189,7 +191,16 @@ export function createPreviewClient(): BrushApi {
         right.sigma = nextSigma(right.sigma)
         left.games += 1
         right.games += 1
-        if (input.winnerId === left.id) { left.wins += 1; right.losses += 1 } else { right.wins += 1; left.losses += 1 }
+        const close = (input.margin || 'clear') === 'close'
+        if (input.winnerId === left.id) {
+          left.wins += 1
+          right.losses += 1
+          if (close) { left.close_wins = (left.close_wins || 0) + 1; right.close_losses = (right.close_losses || 0) + 1 }
+        } else {
+          right.wins += 1
+          left.losses += 1
+          if (close) { right.close_wins = (right.close_wins || 0) + 1; left.close_losses = (left.close_losses || 0) + 1 }
+        }
       } else {
         if (input.trashLeft) { left.trashed = true; left.trash_count += 1 }
         if (input.trashRight) { right.trashed = true; right.trash_count += 1 }

@@ -20,6 +20,8 @@ export type BrushImage = {
   games: number
   wins: number
   losses: number
+  close_wins?: number
+  close_losses?: number
   trash_count: number
   trashed: boolean
   archived?: boolean

@@ -4,7 +4,8 @@ import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush
 import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, type Deck, type Decision } from './brush/deck'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
 import { enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
-import { challengerCount, hashImage, newEntrants } from './brush/pair'
+import { matchMoments, standingOf, type BrushMoment } from './brush/level'
+import { challengerCount, hashImage } from './brush/pair'
 import { createPreviewClient } from './brush/preview'
 import { BackfillOffer, DetailSheet, InsightsScreen, Leaderboard, LibraryScreen, PinScreen, ReasonSheet } from './brush/Sheets'
 import { TrashReview } from './brush/TrashReview'
@@ -45,7 +46,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [offer, setOffer] = useState<BrushTag | null>(null)
   const [progress, setProgress] = useState('')
   const [message, setMessage] = useState('')
-  const [moment, setMoment] = useState<string | null>(null)
+  const [moments, setMoments] = useState<BrushMoment[]>([])
+  const moment = moments[0] || null
   const [country, setCountry] = useState('')
   const [detail, setDetail] = useState<{ image: BrushImage, attributes: { trait: string, value: string, source: string, confidence: number | null }[], prompt: string } | null>(null)
   const [urls, setUrls] = useState<Record<string, string>>({})
@@ -72,7 +74,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
 
   useEffect(() => {
     if (!moment) return
-    const timer = window.setTimeout(() => setMoment(null), 4200)
+    const timer = window.setTimeout(() => setMoments(queue => queue.slice(1)), 3600)
     return () => window.clearTimeout(timer)
   }, [moment])
 
@@ -223,8 +225,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     const current = deckRef.current
     if (!current) return
     const next = applyDecision(current, decision)
-    const arrival = newEntrants(current.images, next.images)[0]
-    if (arrival) setMoment(`${arrival.name} entered the top 16!`)
+    setMoments(matchMoments(current.images, next.images))
     setDeck(next)
     setZoom(REST_ZOOM)
     setFront('left')
@@ -420,7 +421,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         </nav>
       )}
       <div className="brush-main">
-      {moment && !landscapeMatch && <button className="brush-moment" type="button" data-moment="top16" onClick={() => setMoment(null)}>{moment}</button>}
+      {moment && !landscapeMatch && <button className={`brush-moment is-${moment.kind}`} type="button" data-moment={moment.kind === 'level' ? 'level' : moment.kind === 'placement' ? 'placement' : 'top16'} title={moment.text} onClick={() => setMoments(queue => queue.slice(1))}>{moment.text}</button>}
 
       {phase === 'boot' && <div className="brush-gate"><p>Opening Brush…</p></div>}
       {(phase === 'set' || phase === 'enter' || phase === 'change') && (
@@ -466,15 +467,11 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           onPick={pick}
           onTrash={trashOne}
           srcFor={srcFor}
-          rankFor={id => {
-            const pool = (deck?.images || []).filter(image => !image.trashed)
-            const sorted = [...pool].sort((a, b) => b.elo - a.elo || b.games - a.games || a.name.localeCompare(b.name))
-            const index = sorted.findIndex(image => image.id === id)
-            return index < 0 ? null : index + 1
-          }}
+          rankFor={id => standingOf(deck?.images || [], id)}
+          celebrateId={moment && moment.kind !== 'top16' ? moment.imageId || null : null}
           notice={landscapeMatch ? (
             <>
-              {moment && <button className="brush-gutter-toast" type="button" data-moment="top16" title={moment} onClick={() => setMoment(null)}>{moment}</button>}
+              {moment && <button className={`brush-gutter-toast is-${moment.kind}`} type="button" data-moment={moment.kind === 'level' ? 'level' : moment.kind === 'placement' ? 'placement' : 'top16'} title={moment.text} onClick={() => setMoments(queue => queue.slice(1))}>{moment.text}</button>}
               {message && phase === 'app' && <p className="brush-note brush-gutter-toast is-note" data-note>{message}</p>}
             </>
           ) : null}

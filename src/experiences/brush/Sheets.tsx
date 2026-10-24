@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { levelOf } from './level'
+import { PLACEMENT_GAMES } from './pair'
 import type { BrushAttribute, BrushImage, BrushTag, Insights, TurnOffs, UploadSnapshot } from './types'
 import { suggestRecipe } from './recipe'
 
@@ -74,7 +76,7 @@ export function Leaderboard({ images, srcFor }: { images: BrushImage[], srcFor: 
       {ranked.map((image, index) => (
         <div className="brush-row" key={image.id}>
           <span>{index + 1}. {image.name}<br /><small className="brush-muted">{image.country || 'No country'}{image.trashed ? ' · trashed' : ''}</small></span>
-          <strong>{Math.round(image.elo)} <small className="brush-muted">{image.wins}–{image.losses} · trash {image.trash_count}</small></strong>
+          <strong className="brush-num">{image.games >= PLACEMENT_GAMES ? `Lv ${levelOf(image.elo)}` : 'Unranked'} · {Math.round(image.elo)} <small className="brush-muted">{image.wins}–{image.losses}{(image.close_wins || image.close_losses) ? ` · ${image.close_wins || 0}–${image.close_losses || 0} close` : ''} · trash {image.trash_count}</small></strong>
           {srcFor(image) && <img src={srcFor(image) || ''} alt="" width={36} height={64} style={{ objectFit: 'cover', borderRadius: 6 }} />}
         </div>
       ))}
