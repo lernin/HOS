@@ -3,6 +3,10 @@ import { faceShift, faceZoom, focusBox } from './face'
 import { levelOf, levelProgress, levelTier, type Standing } from './level'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
+import { clampInRanges, clampZoom, FACE_PAN_GAIN, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround, type Zoom } from './zoom'
+
+export type { Zoom }
+export { REST_ZOOM }
 
 const PHOTO_GAP = 8
 const INFO_MIN = 84
@@ -25,12 +29,45 @@ function useImageRatio(src: string | null) {
   return ratio
 }
 
-export type Zoom = { scale: number, x: number, y: number }
-
-export const REST_ZOOM: Zoom = { scale: 1, x: 0.5, y: 0.5 }
-
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
+}
+
+function visibleHits(stage: HTMLElement) {
+  return [...stage.querySelectorAll<HTMLElement>('.brush-photo-hit')].filter(hit => {
+    const rect = hit.getBoundingClientRect()
+    return rect.width > 2 && rect.height > 2
+  })
+}
+
+function hitAt(stage: HTMLElement, x: number, y: number) {
+  const hits = visibleHits(stage)
+  const inside = hits.find(hit => {
+    const rect = hit.getBoundingClientRect()
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+  })
+  if (inside) return inside
+  let best: HTMLElement | null = null
+  let bestDistance = Number.POSITIVE_INFINITY
+  for (const hit of hits) {
+    const rect = hit.getBoundingClientRect()
+    const distance = Math.hypot(x - (rect.left + rect.width / 2), y - (rect.top + rect.height / 2))
+    if (distance < bestDistance) {
+      bestDistance = distance
+      best = hit
+    }
+  }
+  return best
+}
+
+function screenOn(hit: HTMLElement, x: number, y: number) {
+  const rect = hit.getBoundingClientRect()
+  return {
+    x: rect.width ? (x - rect.left) / rect.width : 0.5,
+    y: rect.height ? (y - rect.top) / rect.height : 0.5,
+    width: rect.width,
+    height: rect.height,
+  }
 }
 
 export function Matchup({
@@ -66,10 +103,12 @@ export function Matchup({
   const leftRatio = useImageRatio(leftSrc)
   const rightRatio = useImageRatio(rightSrc)
   const zoomRef = useRef(zoom)
+  const pairRef = useRef({ left, right })
   const lockRef = useRef(0)
   const portraitRef = useRef(portrait)
   const actions = useRef({ onZoom, onFlip, onPick })
   zoomRef.current = zoom
+  pairRef.current = { left, right }
   portraitRef.current = portrait
   actions.current = { onZoom, onFlip, onPick }
 
@@ -77,15 +116,11 @@ export function Matchup({
     const node = stageRef.current
     if (!node) return
     const stage = node
-    let origin: { x: number, y: number } | null = null
-    let pinch: { distance: number, scale: number } | null = null
+    let origin: { x: number, y: number, hit: HTMLElement } | null = null
+    let pinch: { distance: number, scale: number, imageX: number, imageY: number, hit: HTMLElement } | null = null
     let moved = false
     let pinching = false
     let suppressUntil = 0
-
-    function box() {
-      return stage.getBoundingClientRect()
-    }
 
     function onTouchStart(event: TouchEvent) {
       if (faceHeldRef.current) {
@@ -96,13 +131,21 @@ export function Matchup({
         event.preventDefault()
         pinching = true
         const [a, b] = [event.touches[0], event.touches[1]]
-        pinch = { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1, scale: zoomRef.current.scale }
+        const midX = (a.clientX + b.clientX) / 2
+        const midY = (a.clientY + b.clientY) / 2
+        const hit = hitAt(stage, midX, midY)
+        if (!hit) return
+        const screen = screenOn(hit, midX, midY)
+        const image = imagePointAt(zoomRef.current, screen.x, screen.y)
+        pinch = { distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1, scale: zoomRef.current.scale, imageX: image.x, imageY: image.y, hit }
         return
       }
       const target = event.target instanceof Element ? event.target : null
       if (target?.closest('button')) return
       const touch = event.touches[0]
-      origin = { x: touch.clientX, y: touch.clientY }
+      const hit = hitAt(stage, touch.clientX, touch.clientY)
+      if (!hit) return
+      origin = { x: touch.clientX, y: touch.clientY, hit }
       moved = false
     }
 
@@ -116,12 +159,9 @@ export function Matchup({
         pinching = true
         const [a, b] = [event.touches[0], event.touches[1]]
         const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1
-        const rect = box()
-        actions.current.onZoom({
-          scale: clamp(pinch.scale * (distance / pinch.distance), 1, 4),
-          x: clamp(((a.clientX + b.clientX) / 2 - rect.left) / rect.width, 0, 1),
-          y: clamp(((a.clientY + b.clientY) / 2 - rect.top) / rect.height, 0, 1),
-        })
+        const screen = screenOn(pinch.hit, (a.clientX + b.clientX) / 2, (a.clientY + b.clientY) / 2)
+        const scale = clamp(pinch.scale * (distance / pinch.distance), 1, 4)
+        actions.current.onZoom(clampZoom(zoomAround(scale, pinch.imageX, pinch.imageY, screen.x, screen.y)))
         return
       }
       if (event.touches.length !== 1 || !origin) return
@@ -131,13 +171,9 @@ export function Matchup({
       if (Math.hypot(dx, dy) > 12) moved = true
       if (zoomRef.current.scale > 1 && moved) {
         event.preventDefault()
-        const rect = box()
-        actions.current.onZoom({
-          ...zoomRef.current,
-          x: clamp(zoomRef.current.x - dx / rect.width / zoomRef.current.scale, 0, 1),
-          y: clamp(zoomRef.current.y - dy / rect.height / zoomRef.current.scale, 0, 1),
-        })
-        origin = { x: touch.clientX, y: touch.clientY }
+        const rect = origin.hit.getBoundingClientRect()
+        actions.current.onZoom(panZoom(zoomRef.current, dx, dy, rect.width, rect.height))
+        origin = { x: touch.clientX, y: touch.clientY, hit: origin.hit }
       }
     }
 
@@ -186,12 +222,32 @@ export function Matchup({
     let holdId: number | null = null
     let origin: { x: number, y: number } | null = null
     let moved = false
-    let pinch: { dist: number, scale: number, cx: number, cy: number, x: number, y: number } | null = null
+    let pinch: { dist: number, scale: number, imageX: number, imageY: number, hit: HTMLElement, side: 'left' | 'right' } | null = null
     const pan = { x: 0, y: 0, scale: 1 }
     const block: AddEventListenerOptions = { passive: false, capture: true }
     const publish = () => {
       setFaceMotion(false)
       setFacePan({ x: pan.x, y: pan.y, scale: pan.scale })
+    }
+    const heldBounds = (pinchScale: number) => {
+      const stage = stageRef.current
+      if (!stage) return { x: [] as { min: number, max: number }[], y: [] as { min: number, max: number }[] }
+      const ranges = { x: [] as { min: number, max: number }[], y: [] as { min: number, max: number }[] }
+      for (const side of ['left', 'right'] as const) {
+        const hit = stage.querySelector<HTMLElement>(`[data-side="${side}"] .brush-photo-hit`)
+        if (!hit) continue
+        const rect = hit.getBoundingClientRect()
+        if (rect.width < 2 || rect.height < 2) continue
+        const focus = faceShift(faceZoom(focusBox(pairRef.current[side].face_box)))
+        const scale = focus.scale * pinchScale
+        ranges.x.push(facePanRange(focus.tx, rect.width, scale))
+        ranges.y.push(facePanRange(focus.ty, rect.height, scale))
+      }
+      return ranges
+    }
+    const clampHeld = (x: number, y: number, pinchScale: number) => {
+      const ranges = heldBounds(pinchScale)
+      return { x: clampInRanges(x, ranges.x), y: clampInRanges(y, ranges.y) }
     }
     const apply = () => {
       const points = [...pointers.values()]
@@ -200,12 +256,49 @@ export function Matchup({
         const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1
         const cx = (a.x + b.x) / 2
         const cy = (a.y + b.y) / 2
-        if (!pinch) pinch = { dist, scale: pan.scale, cx, cy, x: pan.x, y: pan.y }
-        pan.scale = clamp(pinch.scale * (dist / pinch.dist), 0.55, 2.6)
-        pan.x = pinch.x + (cx - pinch.cx)
-        pan.y = pinch.y + (cy - pinch.cy)
-        moved = true
-        publish()
+        const stage = stageRef.current
+        if (!pinch && stage) {
+          const hit = hitAt(stage, cx, cy)
+          const side = hit?.closest<HTMLElement>('[data-side]')?.dataset.side === 'right' ? 'right' : 'left'
+          if (hit) {
+            const focus = faceShift(faceZoom(focusBox(pairRef.current[side].face_box)))
+            const screen = screenOn(hit, cx, cy)
+            const image = imagePointFromFace({
+              faceTx: focus.tx,
+              faceTy: focus.ty,
+              scale: focus.scale * pan.scale,
+              panX: pan.x,
+              panY: pan.y,
+              width: screen.width,
+              height: screen.height,
+              screenX: screen.x,
+              screenY: screen.y,
+            })
+            pinch = { dist, scale: pan.scale, imageX: image.x, imageY: image.y, hit, side }
+          }
+        }
+        if (pinch) {
+          const focus = faceShift(faceZoom(focusBox(pairRef.current[pinch.side].face_box)))
+          const nextScale = clamp(pinch.scale * (dist / pinch.dist), 0.55, 2.6)
+          const screen = screenOn(pinch.hit, cx, cy)
+          const next = facePanToPoint({
+            faceTx: focus.tx,
+            faceTy: focus.ty,
+            scale: focus.scale * nextScale,
+            width: screen.width,
+            height: screen.height,
+            imageX: pinch.imageX,
+            imageY: pinch.imageY,
+            screenX: screen.x,
+            screenY: screen.y,
+          })
+          const fitted = clampHeld(next.x, next.y, nextScale)
+          pan.scale = nextScale
+          pan.x = fitted.x
+          pan.y = fitted.y
+          moved = true
+          publish()
+        }
         return
       }
       pinch = null
@@ -214,8 +307,9 @@ export function Matchup({
       if (!point) return
       if (!moved && Math.hypot(point.x - origin.x, point.y - origin.y) < 8) return
       moved = true
-      pan.x += point.x - origin.x
-      pan.y += point.y - origin.y
+      const fitted = clampHeld(pan.x + (point.x - origin.x) * FACE_PAN_GAIN, pan.y + (point.y - origin.y) * FACE_PAN_GAIN, pan.scale)
+      pan.x = fitted.x
+      pan.y = fitted.y
       origin = { x: point.x, y: point.y }
       publish()
     }
@@ -353,11 +447,20 @@ export function Matchup({
 
   function photoStyle(image: BrushImage) {
     const focus = faceHeld ? faceShift(faceZoom(focusBox(image.face_box))) : null
-    const scale = focus ? focus.scale * facePan.scale : zoom.scale
-    const tx = focus ? focus.tx : (zoom.x - 0.5) * (1 - zoom.scale) * 100
-    const ty = focus ? focus.ty : (zoom.y - 0.5) * (1 - zoom.scale) * 100
-    const px = focus ? facePan.x : 0
-    const py = focus ? facePan.y : 0
+    const rested = restTranslate(zoom)
+    const scale = focus ? focus.scale * facePan.scale : rested.scale
+    const tx = focus ? focus.tx : rested.tx
+    const ty = focus ? focus.ty : rested.ty
+    let px = focus ? facePan.x : 0
+    let py = focus ? facePan.y : 0
+    if (focus && frame) {
+      const width = image.id === left.id ? frame.left : frame.right
+      const height = frameRef.current?.clientHeight || 0
+      if (width > 1 && height > 1) {
+        px = clampInRanges(px, [facePanRange(focus.tx, width, scale)])
+        py = clampInRanges(py, [facePanRange(focus.ty, height, scale)])
+      }
+    }
     return {
       transform: `translate(${px}px, ${py}px) translate(${tx}%, ${ty}%) scale(${scale})`,
       transformOrigin: '50% 50%',
