@@ -108,6 +108,11 @@
       #logyq-curriculum-check-summary [data-tone="wrong"]{color:#dc2626}
       #logyq-curriculum-check-summary b{font:800 8px/1 system-ui,sans-serif;color:inherit}
       .logyq-curriculum-action-label{display:block}
+      #logyq-curriculum-translation{position:fixed;z-index:120;box-sizing:border-box;max-width:min(260px,calc(100vw - 20px));padding:10px 13px;display:grid;grid-template-columns:auto auto;align-items:baseline;gap:3px 10px;border:1px solid rgba(255,255,255,.9);border-radius:16px;background:rgba(255,255,255,.96);color:#334155;box-shadow:0 10px 28px rgba(62,46,66,.18);backdrop-filter:blur(10px);pointer-events:none}
+      #logyq-curriculum-translation[hidden]{display:none!important}
+      #logyq-curriculum-translation strong{font:800 14px/1.15 system-ui,sans-serif;color:#5a465f}
+      #logyq-curriculum-translation .logyq-translation-ko{font:850 18px/1.15 system-ui,sans-serif;color:#14532d}
+      #logyq-curriculum-translation small{grid-column:1/-1;font:600 11px/1.3 system-ui,sans-serif;color:#64748b}
       body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-correct{stroke:#22c55e!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;filter:drop-shadow(0 0 5px rgba(34,197,94,.42));transition:stroke .55s ease,opacity .55s ease,filter .55s ease}
       body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-insufficient{stroke:#f59e0b!important;stroke-width:4px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 8!important;animation:logyq-semantic-flow .8s linear infinite!important;filter:drop-shadow(0 0 5px rgba(245,158,11,.38))}
       body.logyq-curriculum svg#canvas g.links path.link.logyq-semantic-wrong{stroke:#ef4444!important;stroke-width:4.5px!important;stroke-opacity:1!important;opacity:1!important;stroke-dasharray:10 7!important;animation:logyq-semantic-flow .62s linear infinite!important;filter:drop-shadow(0 0 6px rgba(239,68,68,.46))}
