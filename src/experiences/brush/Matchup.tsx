@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { faceShift, faceZoom, focusBox } from './face'
+import { levelOf, levelProgress, levelTier, type Standing } from './level'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
 
@@ -33,7 +34,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 export function Matchup({
-  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, leftChrome = null, rightChrome = null, notice = null, rankFor = () => null,
+  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, leftChrome = null, rightChrome = null, notice = null, rankFor = () => null, celebrateId = null,
 }: {
   left: BrushImage
   right: BrushImage
@@ -48,11 +49,11 @@ export function Matchup({
   leftChrome?: ReactNode
   rightChrome?: ReactNode
   notice?: ReactNode
-  rankFor?: (id: string) => number | null
+  rankFor?: (id: string) => Standing | null
+  celebrateId?: string | null
 }) {
   const stageRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
-  const [infoId, setInfoId] = useState<string | null>(null)
   const [frame, setFrame] = useState<{ left: number, right: number, scale: number } | null>(null)
   const [faceHeld, setFaceHeld] = useState(false)
   const [faceMotion, setFaceMotion] = useState(false)
@@ -365,18 +366,56 @@ export function Matchup({
     }
   }
 
-  function toggleInfo(id: string) {
-    setInfoId(current => current === id ? null : id)
-  }
-
-  function captionFor(image: BrushImage) {
-    const open = infoId === image.id
+  function pictureStats(image: BrushImage, layout: 'strip' | 'portrait') {
+    const standing = rankFor(image.id)
+    const ranked = image.games >= PLACEMENT_GAMES
+    const level = levelOf(image.elo)
+    const progress = ranked ? levelProgress(image.elo) : Math.min(1, image.games / PLACEMENT_GAMES)
+    const closeWins = image.close_wins || 0
+    const closeLosses = image.close_losses || 0
+    const traits = (image.prompt_text || '').split(/[,·|;]/).map(item => item.trim()).filter(Boolean).slice(0, 3)
+    const percent = Math.round(progress * 100)
     return (
-      <div className="brush-caption">
-        <strong>{image.country || 'Untitled'}</strong>
-        {image.games < PLACEMENT_GAMES && <em className="brush-challenger" data-challenger>New</em>}
-        {open && <small data-caption-detail>{image.name} · {Math.round(image.elo)} · {image.games} played</small>}
-        <button className="brush-info" type="button" data-action="info" aria-expanded={open} aria-label={open ? 'Hide filename and rating' : 'Show filename and rating'} onClick={() => toggleInfo(image.id)}>i</button>
+      <div className={`brush-stats is-${layout}`} data-stats={layout}>
+        <div className="brush-strip-id">
+          <strong>{image.country || image.name || 'Untitled'}</strong>
+          <small>{image.name}</small>
+        </div>
+        {ranked ? (
+          <div className={`brush-level-badge is-${levelTier(level)}${celebrateId === image.id ? ' is-rising' : ''}`} data-level={level}>
+            <span>Level</span>
+            <strong className="brush-num">{level}</strong>
+          </div>
+        ) : (
+          <div className={`brush-level-badge is-unranked${celebrateId === image.id ? ' is-rising' : ''}`} data-unranked data-challenger>
+            <strong>Unranked</strong>
+          </div>
+        )}
+        <div className="brush-level-track">
+          <div className="brush-level-meta">
+            <span>{ranked ? 'Next level' : 'Placement'}</span>
+            <span className="brush-num">{ranked ? `${percent}%` : `${image.games}/${PLACEMENT_GAMES}`}</span>
+          </div>
+          <div className="brush-level-bar" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={ranked ? `Progress to level ${level + 1}` : `Placement ${image.games} of ${PLACEMENT_GAMES}`}>
+            <span style={{ width: `${percent}%` }} />
+          </div>
+        </div>
+        <div className="brush-stat-grid">
+          <div className="brush-strip-stat" data-stat="rank">
+            <span>Rank</span>
+            <strong className="brush-num" title={standing ? `#${standing.rank} of ${standing.total} ranked` : 'Unranked'}>{standing ? `#${standing.rank} of ${standing.total}` : '—'}</strong>
+          </div>
+          <div className="brush-strip-stat" data-stat="record">
+            <span>Record</span>
+            <strong className="brush-num">{image.wins}–{image.losses}</strong>
+            {(closeWins > 0 || closeLosses > 0) && <em className="brush-close-mark">{closeWins}–{closeLosses} close</em>}
+          </div>
+          <div className="brush-strip-stat" data-stat="rating">
+            <span>Rating</span>
+            <strong className="brush-num">{Math.round(image.elo)}</strong>
+          </div>
+        </div>
+        {traits.length > 0 && <p className="brush-strip-traits">{traits.join(' · ')}</p>}
       </div>
     )
   }
@@ -393,25 +432,6 @@ export function Matchup({
     onTrash(id)
   }
 
-  function stripInfo(image: BrushImage) {
-    const traits = (image.prompt_text || '').split(/[,·|;]/).map(item => item.trim()).filter(Boolean).slice(0, 3)
-    const rank = rankFor(image.id)
-    return (
-      <div className="brush-strip-body">
-        <div className="brush-strip-id">
-          <strong>{image.country || image.name || 'Untitled'}</strong>
-          <small>{image.name}</small>
-          {image.games < PLACEMENT_GAMES && <em className="brush-challenger" data-challenger>NEW</em>}
-        </div>
-        <div className="brush-strip-stat" data-stat="rating"><span>Rating</span><strong>{Math.round(image.elo)}</strong></div>
-        <div className="brush-strip-stat" data-stat="record"><span>Record</span><strong>{image.wins}–{image.losses}</strong></div>
-        <div className="brush-strip-stat" data-stat="played"><span>Played</span><strong>{image.games}</strong></div>
-        <div className="brush-strip-stat" data-stat="rank"><span>Rank</span><strong>{rank ? `#${rank}` : '—'}</strong></div>
-        {traits.length > 0 && <p className="brush-strip-traits">{traits.join(' · ')}</p>}
-      </div>
-    )
-  }
-
   function swipeCommit(kind: 'pick' | 'close' | 'trash', side: 'left' | 'right') {
     if (Date.now() < lockRef.current) return
     lockRef.current = Date.now() + 450
@@ -425,7 +445,7 @@ export function Matchup({
       {!portrait && (
         <aside className="brush-info-strip is-left" data-strip="left">
           <div className="brush-strip-tools">{leftChrome}</div>
-          {stripInfo(left)}
+          <div className="brush-strip-body">{pictureStats(left, 'strip')}</div>
         </aside>
       )}
       <div className="brush-photos" ref={stageRef}>
@@ -441,7 +461,7 @@ export function Matchup({
                   </div>
                 ) : <div className="brush-photo" />}
               </div>
-              {portrait && captionFor(image)}
+              {portrait && <div className="brush-portrait-stats">{pictureStats(image, 'portrait')}</div>}
             </article>
           )
         })}
@@ -449,12 +469,12 @@ export function Matchup({
       {!portrait && (
         <aside className="brush-info-strip is-right" data-strip="right">
           <div className="brush-strip-tools">{rightChrome}</div>
-          {notice}
-          {stripInfo(right)}
+          <div className="brush-strip-body">{pictureStats(right, 'strip')}</div>
         </aside>
       )}
       {!portrait && (
         <aside className="brush-controls" data-gutter="controls">
+          {notice}
           <div className="brush-gutter-actions">
             <div className="brush-control-row">
               <SwipePad kind="pick" label="WINNER" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} />

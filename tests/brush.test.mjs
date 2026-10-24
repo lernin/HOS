@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { applyDecision, bootDeck, currentMatch, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
+import { levelOf, levelProgress, matchMoments, standingOf } from '../src/experiences/brush/level.ts'
 import { faceBoxFromPixels, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
 import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
@@ -107,8 +108,11 @@ test('qualifying keeps the same model apart and shuffles the next pair', () => {
     margin: 'close',
   }, rng)
   const winner = picked.images.find(item => item.id === deck.queue[0].leftId)
+  const loser = picked.images.find(item => item.id === deck.queue[0].rightId)
   assert.equal(winner.elo, 1508)
   assert.equal(winner.games, 1)
+  assert.equal(winner.close_wins, 1)
+  assert.equal(loser.close_losses, 1)
   const finals = startFinals({
     ...deck,
     images: [
@@ -233,7 +237,8 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   assert.doesNotMatch(ongoing, /files\.delete|addParents|removeParents/)
   const screen = readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8')
   assert.match(screen, /New challengers:/)
-  assert.match(screen, /entered the top 16!/)
+  assert.match(screen, /matchMoments/)
+  assert.match(readFileSync(new URL('../src/experiences/brush/level.ts', import.meta.url), 'utf8'), /entered the top 16!/)
   assert.match(readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8'), /data-challenger/)
 })
 
@@ -457,7 +462,8 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(brush, /data-action="menu"/)
   assert.match(brush, /deck\?\.phase === 'finals' && reason/)
   assert.match(brush, /brush-gutter-toast/)
-  assert.match(brush, /data-moment="top16"/)
+  assert.match(brush, /data-moment=/)
+  assert.match(brush, /top16/)
   assert.match(css, /brush-gutter-actions/)
   assert.match(css, /brush-swipe/)
   assert.match(css, /min-width:\s*84px/)
@@ -479,6 +485,54 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(face, /brush_set_face_box/)
   assert.match(face, /face_box/)
   assert.match(face, /face_scanned/)
+})
+
+test('levels stay open and a fifth placement debuts', () => {
+  assert.equal(levelOf(1500), 1)
+  assert.equal(levelOf(1599), 1)
+  assert.equal(levelOf(1600), 2)
+  assert.equal(levelOf(1490), 1)
+  assert.equal(levelOf(1699), 2)
+  assert.equal(levelOf(1700), 3)
+  assert.equal(levelOf(2600), 12)
+  assert.equal(levelProgress(1550), 0.5)
+  assert.equal(levelProgress(1600), 0)
+  assert.equal(levelProgress(1400), 0)
+  assert.ok(levelProgress(1599) > 0.9 && levelProgress(1599) < 1)
+  const before = [
+    image({ id: 'a', name: 'Philippines_R1_01.jpg', country: 'Philippines', elo: 1590, games: 4, wins: 3, losses: 1 }),
+    image({ id: 'b', name: 'Japan_R2_10.jpg', country: 'Japan', elo: 1680, games: 9, wins: 6, losses: 3 }),
+  ]
+  const after = [
+    { ...before[0], elo: 1620, games: 5, wins: 4 },
+    { ...before[1], elo: 1668, games: 10, losses: 4 },
+  ]
+  const debut = matchMoments(before, after)
+  assert.equal(debut[0].kind, 'placement')
+  assert.match(debut[0].text, /Placement complete: Philippines debuts at Level 2, #2/)
+  const rankedBefore = [
+    image({ id: 'a', name: 'Alpha.jpg', country: 'Alpha', elo: 1590, games: 8, wins: 4, losses: 4 }),
+    image({ id: 'b', name: 'Beta.jpg', country: 'Beta', elo: 1500, games: 8, wins: 4, losses: 4 }),
+  ]
+  const rankedAfter = [
+    { ...rankedBefore[0], elo: 1610, games: 9, wins: 5 },
+    { ...rankedBefore[1], elo: 1488, games: 9, losses: 5 },
+  ]
+  const up = matchMoments(rankedBefore, rankedAfter)
+  assert.equal(up.length, 1)
+  assert.equal(up[0].kind, 'level')
+  assert.match(up[0].text, /^Level up! Alpha · Level 2$/)
+  assert.deepEqual(standingOf(after, 'b'), { rank: 1, total: 2 })
+  assert.equal(standingOf(after, 'a').rank, 2)
+  assert.equal(standingOf([{ ...before[0] }], 'a'), null)
+  const levels = readFileSync(new URL('../supabase/migrations/20261024120000_brush_levels.sql', import.meta.url), 'utf8')
+  assert.match(levels, /close_wins/)
+  assert.match(levels, /close_losses/)
+  assert.match(levels, /brush_tally_close/)
+  const moments = readFileSync(new URL('../src/experiences/brush/level.ts', import.meta.url), 'utf8')
+  assert.match(moments, /Placement complete/)
+  assert.match(moments, /Level up!/)
+  assert.match(moments, /entered the top 16!/)
 })
 
 test('relative api imports use .js so Vercel can resolve the compiled files', () => {

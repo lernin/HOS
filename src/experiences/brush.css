@@ -30,8 +30,9 @@
 .brush.is-portrait .brush-footer .brush-choice{min-height:44px}
 .brush.is-landscape.is-match .brush-stage{flex-direction:row;align-items:stretch;height:100%}
 .brush.is-landscape.is-match .brush-photos{flex:0 0 auto;width:max-content;max-width:calc(100% - 364px);height:100%;gap:8px;overflow:hidden}
-.brush.is-landscape.is-match .brush-card{flex:0 0 auto;width:auto;height:100%;aspect-ratio:9/16;max-width:none;background:transparent}
+.brush.is-landscape.is-match .brush-card{flex:0 0 auto;width:auto;height:100%;aspect-ratio:9/16;max-width:none;background:transparent;border-radius:13px;overflow:hidden;border:1px solid rgba(244,239,230,.16)}
 .brush.is-landscape.is-match .brush-photo-hit{height:100%}
+.brush.is-portrait .brush-photo-hit{margin:0 8px;border-radius:13px;border:1px solid rgba(244,239,230,.16)}
 .brush.is-landscape.is-match .brush-photo{height:100%;width:100%;object-fit:contain}
 .brush-gutter{position:relative;flex:1 1 88px;min-width:88px;height:100%;display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:4px 6px 6px;min-height:0;overflow:visible}
 .brush-gutter-top{flex:0 0 34px;height:34px;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;width:100%;min-width:0}
@@ -56,7 +57,35 @@
 .brush-strip-stat{display:flex;flex-direction:column;min-width:0}
 .brush-strip-stat span{font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:rgba(244,239,230,.55);line-height:1.1}
 .brush-strip-stat strong{font-size:13px;font-weight:700;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.brush-strip-traits{margin:0;font-size:11px;line-height:1.25;color:rgba(244,239,230,.78);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.brush-strip-traits{margin:0;font-size:11px;line-height:1.25;color:rgba(244,239,230,.72);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.brush-num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1}
+.brush-stats{display:flex;flex-direction:column;gap:5px;min-width:0}
+.brush-level-badge{display:flex;align-items:center;justify-content:space-between;gap:6px;min-height:26px;padding:2px 8px;border-radius:999px;border:1px solid rgba(244,239,230,.22);background:rgba(244,239,230,.05);color:#f4efe6}
+.brush-level-badge span{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:rgba(244,239,230,.62);line-height:1}
+.brush-level-badge strong{font-size:15px;font-weight:650;line-height:1}
+.brush-level-badge.is-stone{color:#d9cbb8}
+.brush-level-badge.is-sand{background:rgba(244,239,230,.12);border-color:rgba(244,239,230,.42)}
+.brush-level-badge.is-gold{background:rgba(214,184,122,.16);border-color:rgba(214,184,122,.55);color:#f3e2bf}
+.brush-level-badge.is-amber{background:rgba(196,132,74,.22);border-color:rgba(214,160,96,.7);color:#f6d7b0}
+.brush-level-badge.is-ivory{background:#efe6d6;border-color:#efe6d6;color:#1b1914}
+.brush-level-badge.is-ivory span{color:rgba(27,25,20,.62)}
+.brush-level-badge.is-unranked{border-style:dashed;color:rgba(244,239,230,.78)}
+.brush-level-badge.is-unranked strong{font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.brush-level-badge.is-rising{animation:brush-level-glow 900ms ease}
+@keyframes brush-level-glow{0%,100%{filter:none}40%{filter:brightness(1.45)}}
+.brush-level-track{display:flex;flex-direction:column;gap:3px}
+.brush-level-meta{display:flex;justify-content:space-between;gap:6px;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:rgba(244,239,230,.55);line-height:1.1}
+.brush-level-bar{height:3px;border-radius:99px;background:rgba(244,239,230,.12);overflow:hidden}
+.brush-level-bar>span{display:block;height:100%;width:0;background:#efe6d6;border-radius:99px;transition:width 320ms ease}
+.brush-stat-grid{display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(244,239,230,.12);padding-top:5px}
+.brush-close-mark{font-style:normal;font-size:9px;letter-spacing:.03em;color:rgba(228,201,138,.88);font-variant-numeric:tabular-nums;line-height:1.1}
+.brush-portrait-stats{flex:0 0 auto;padding:8px 12px 10px;background:#12110e;border-top:1px solid rgba(244,239,230,.14)}
+.brush-stats.is-portrait{display:grid;grid-template-columns:minmax(0,1.1fr) auto minmax(0,1.3fr);grid-template-areas:"name badge stats" "track track track" "traits traits traits";gap:6px 12px;align-items:center}
+.brush-stats.is-portrait .brush-strip-id{grid-area:name}
+.brush-stats.is-portrait .brush-level-badge{grid-area:badge;min-width:108px}
+.brush-stats.is-portrait .brush-stat-grid{grid-area:stats;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;border-top:0;padding-top:0}
+.brush-stats.is-portrait .brush-level-track{grid-area:track}
+.brush-stats.is-portrait .brush-strip-traits{grid-area:traits}
 .brush-controls{position:relative;flex:1.35 1 210px;min-width:196px;max-width:340px;height:100%;display:flex;flex-direction:column;padding:4px 6px 6px;min-height:0}
 .brush-controls .brush-gutter-actions{height:100%}
 .brush-control-row{flex:1 1 0;min-height:0;display:flex;gap:6px;align-items:stretch}
@@ -72,7 +101,10 @@
 .brush-pair-name{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:3px;overflow:hidden}
 .brush-pair-name.is-right{justify-content:flex-end}
 .brush-pair-name strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:650;line-height:26px}
-.brush-gutter-toast{flex:0 0 26px;height:26px;width:100%;min-width:0;margin:0;padding:0 10px;border:0;border-radius:999px;background:#efe6d6;color:#1b1914;font-size:12px;line-height:26px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.brush-gutter-toast{flex:0 0 auto;width:100%;min-width:0;margin:0;padding:5px 10px;border:0;border-radius:12px;background:#efe6d6;color:#1b1914;font-size:12px;line-height:1.25;text-align:center;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;max-height:52px;animation:brush-moment-in 280ms ease}
+.brush-moment{animation:brush-moment-in 280ms ease}
+@keyframes brush-moment-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.brush-gutter-toast.is-level,.brush-moment.is-level{background:#f3e2bf}
 .brush-gutter-toast.is-note{background:rgba(231,178,168,.14);color:#e7b2a8}
 .brush-swipe{position:relative;flex:1 1 0;min-height:0;width:100%;overflow:hidden;border:1px solid rgba(244,239,230,.28);border-radius:16px;background:rgba(12,13,11,.82);color:#f4efe6;touch-action:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
 .brush-swipe.is-pick{flex-grow:1.3;background:#efe6d6;color:#1b1914;border-color:#efe6d6}

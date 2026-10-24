@@ -71,11 +71,13 @@ function rate(images: BrushImage[], decision: Decision) {
   return images.map(image => {
     if (image.id === left.id) {
       const won = decision.winnerId === left.id
-      return { ...image, elo: rated.eloA, sigma: nextSigma(image.sigma), games: image.games + 1, wins: image.wins + (won ? 1 : 0), losses: image.losses + (won ? 0 : 1) }
+      const close = decision.margin === 'close'
+      return { ...image, elo: rated.eloA, sigma: nextSigma(image.sigma), games: image.games + 1, wins: image.wins + (won ? 1 : 0), losses: image.losses + (won ? 0 : 1), close_wins: (image.close_wins || 0) + (won && close ? 1 : 0), close_losses: (image.close_losses || 0) + (!won && close ? 1 : 0) }
     }
     if (image.id === right.id) {
       const won = decision.winnerId === right.id
-      return { ...image, elo: rated.eloB, sigma: nextSigma(image.sigma), games: image.games + 1, wins: image.wins + (won ? 1 : 0), losses: image.losses + (won ? 0 : 1) }
+      const close = decision.margin === 'close'
+      return { ...image, elo: rated.eloB, sigma: nextSigma(image.sigma), games: image.games + 1, wins: image.wins + (won ? 1 : 0), losses: image.losses + (won ? 0 : 1), close_wins: (image.close_wins || 0) + (won && close ? 1 : 0), close_losses: (image.close_losses || 0) + (!won && close ? 1 : 0) }
     }
     return image
   })
@@ -223,6 +225,8 @@ export function mergeLibrary(deck: Deck, remote: BrushImage[], rng: () => number
       games: current.games,
       wins: current.wins,
       losses: current.losses,
+      close_wins: current.close_wins,
+      close_losses: current.close_losses,
       trashed: current.trashed || remoteImage.trashed,
       trash_count: Math.max(current.trash_count, remoteImage.trash_count),
       ...face,
