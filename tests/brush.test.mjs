@@ -8,7 +8,7 @@ import { levelOf, levelProgress, matchMoments, standingOf } from '../src/experie
 import { faceBoxFromPixels, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
 import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
-import { challengerCount, extendQueue, finalsFieldSize, hashDistance, newEntrants, pairKey, sameGroup, seedOrder } from '../src/experiences/brush/pair.ts'
+import { challengerCount, CLOSE_ELO, extendQueue, finalsFieldSize, hashDistance, lookOf, newEntrants, nextQualifyingPair, pairKey, RECENT_WINDOW, sameGroup, seedOrder, WILDCARD_RATE } from '../src/experiences/brush/pair.ts'
 import { eloUpdate, nextSigma } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
 import { UPLOAD_BATCH_LIMIT, retryDelayMs, takeBatch } from '../src/experiences/brush/uploads.ts'
@@ -208,8 +208,10 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   const queue = extendQueue([fresh, ...veterans], [], [], 5, rng)
   assert.equal(queue.length, 5)
   const opponents = queue.map(slot => slot.leftId === 'new' ? slot.rightId : slot.leftId)
-  assert.deepEqual(opponents, ['e1600', 'e1800', 'e1400', 'e2000', 'e1200'])
   assert.ok(queue.every(slot => slot.leftId === 'new' || slot.rightId === 'new'))
+  const opponentElos = opponents.map(id => veterans.find(item => item.id === id).elo)
+  assert.ok(Math.max(...opponentElos) - Math.min(...opponentElos) >= 600, opponentElos.join(','))
+  assert.ok(new Set(opponents).size >= 4, opponents.join(','))
 
   const field = [
     ...Array.from({ length: 16 }, (_, index) => image({ id: `v${index}`, name: `Vet_${index}.jpg`, elo: 1505, games: 10, wins: 5 })),
@@ -240,6 +242,92 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   assert.match(screen, /matchMoments/)
   assert.match(readFileSync(new URL('../src/experiences/brush/level.ts', import.meta.url), 'utf8'), /entered the top 16!/)
   assert.match(readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8'), /data-challenger/)
+})
+
+test('pairings prefer a different look, a fresh opponent, and a close rating', () => {
+  assert.equal(CLOSE_ELO, 150)
+  assert.equal(RECENT_WINDOW, 10)
+  assert.equal(WILDCARD_RATE, 0.2)
+  assert.deepEqual(lookOf(image({
+    id: 'look',
+    name: 'Studio_01.jpg',
+    country: 'Japan',
+    prompt_text: 'soft daylight, sage dress, glossy hair',
+  })), { country: 'japan', series: '', setting: 'studio', dress: 'sage' })
+
+  const anchor = image({ id: 'a', name: 'Alpha_01.jpg', country: 'Japan', elo: 1600, games: 10, prompt_text: 'studio, sage dress' })
+  const closeSame = image({ id: 'b', name: 'Beta_01.jpg', country: 'Japan', elo: 1620, games: 12, prompt_text: 'studio, sage dress' })
+  const closeDiff = image({ id: 'c', name: 'Gamma_01.jpg', country: 'Korea', elo: 1680, games: 12, prompt_text: 'beach, red gown' })
+  const far = image({ id: 'd', name: 'Delta_01.jpg', country: 'Sweden', elo: 2100, games: 12, prompt_text: 'park, blue dress' })
+  const steady = () => 0.5
+  const preferred = nextQualifyingPair([anchor, closeSame, closeDiff, far], { rng: steady })
+  assert.equal(preferred.left.id, 'a')
+  assert.equal(preferred.right.id, 'c')
+  const widened = nextQualifyingPair([
+    anchor,
+    image({ id: 'far-a', name: 'Far_A.jpg', country: 'Thailand', elo: 2100, games: 12, prompt_text: 'temple, gold dress' }),
+    image({ id: 'far-b', name: 'Far_B.jpg', country: 'Vietnam', elo: 2300, games: 12, prompt_text: 'alley, navy outfit' }),
+  ], { rng: steady })
+  assert.equal(widened.right.id, 'far-a')
+  const recent = nextQualifyingPair([anchor, closeSame, closeDiff], {
+    rng: steady,
+    recentKeys: [pairKey('a', 'c')],
+  })
+  assert.equal(recent.right.id, 'b')
+  const remembered = bootDeck([anchor, closeSame, closeDiff, far], {
+    phase: 'qualifying', rounds: [], championId: null, recentKeys: [pairKey('a', 'c')],
+  }, steady)
+  assert.notEqual(pairKey(remembered.queue[0].leftId, remembered.queue[0].rightId), pairKey('a', 'c'))
+
+  const portraits = [
+    ['jp1', 'Japan', 'Japan_Model_01.jpg', 'Japan/Models', 1620, 'studio, sage dress'],
+    ['jp2', 'Japan', 'Japan_Model_02.jpg', 'Japan/Models', 1680, 'studio, black dress'],
+    ['kr1', 'Korea', 'Korea_R1_05.jpg', 'Korea/R1', 1710, 'night street, red gown'],
+    ['kr2', 'Korea', 'Korea_Cafe_02.jpg', 'Korea/Cafe', 1590, 'cafe, cream dress'],
+    ['ph', 'Philippines', 'Philippines_Beach_01.jpg', 'Philippines', 1540, 'beach, white dress'],
+    ['th', 'Thailand', 'Thailand_Garden_03.jpg', 'Thailand', 1490, 'garden, gold dress'],
+    ['vn', 'Vietnam', 'Vietnam_Alley_01.jpg', 'Vietnam', 1760, 'alley, navy outfit'],
+    ['id', 'Indonesia', 'Indonesia_Temple_02.jpg', 'Indonesia', 1430, 'temple, emerald dress'],
+    ['cn', 'China', 'China_Studio_04.jpg', 'China', 1660, 'studio, red dress'],
+    ['se', 'Sweden', 'Sweden_Park_01.jpg', 'Sweden', 1510, 'park, blue dress'],
+  ].map(([id, country, name, folder, elo, prompt]) => image({
+    id, country, name, folder_path: folder, elo, games: 12, wins: 6, prompt_text: prompt,
+  }))
+  let seed = 11
+  const rng = () => {
+    seed = (seed * 16807) % 2147483647
+    return (seed - 1) / 2147483646
+  }
+  assert.equal(extendQueue(portraits, [], []).length, 5)
+  const generated = extendQueue(portraits, [], [], 20, rng)
+  assert.equal(generated.length, 20)
+  const byId = new Map(portraits.map(item => [item.id, item]))
+  let sameCountry = 0
+  let sameModel = 0
+  let repeats = 0
+  const seen = new Set()
+  const lines = []
+  for (const slot of generated) {
+    const left = byId.get(slot.leftId)
+    const right = byId.get(slot.rightId)
+    const leftLook = lookOf(left)
+    const rightLook = lookOf(right)
+    if (leftLook.country && leftLook.country === rightLook.country) sameCountry += 1
+    if (sameGroup(left, right)) sameModel += 1
+    const key = pairKey(left.id, right.id)
+    if (seen.has(key)) repeats += 1
+    seen.add(key)
+    lines.push(`${left.country} ${leftLook.setting || '—'} ${leftLook.dress || '—'} ${left.elo} vs ${right.country} ${rightLook.setting || '—'} ${rightLook.dress || '—'} ${right.elo}`)
+  }
+  assert.equal(sameModel, 0)
+  assert.ok(sameCountry <= 6, `same country ${sameCountry}`)
+  assert.ok(repeats <= 2, `repeats ${repeats}`)
+  assert.ok(seen.size >= 16, `unique ${seen.size}`)
+  assert.equal(lines.length, 20)
+  const memory = readFileSync(new URL('../supabase/migrations/20261024143000_brush_pairing_memory.sql', import.meta.url), 'utf8')
+  assert.match(memory, /brush_contest_get/)
+  assert.match(memory, /limit 10/)
+  assert.match(readFileSync(new URL('../src/experiences/brush/client.ts', import.meta.url), 'utf8'), /recentKeys/)
 })
 
 test('folder country and series come from the Drive path', () => {

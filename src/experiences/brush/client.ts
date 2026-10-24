@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase'
 import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights, PairResult, RecordInput, TrashImage } from './types'
+import { pairKey } from './pair'
 import { attachQueue, SessionExpired, UPLOAD_CHUNK_BYTES, UploadQueue, type UploadClaim, type UploadTransport } from './uploads'
 
 export class BrushError extends Error {
@@ -139,8 +140,12 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
       await call('brush_annotate', { ...pinArgs, match_id: matchId, tag_ids: tagIds })
     },
     async contest() {
-      const data = await call<{ phase: ContestState['phase'], rounds: ContestState['rounds'], champion_id: string | null }>('brush_contest_get', pinArgs)
-      return { phase: data?.phase || 'qualifying', rounds: data?.rounds || [], championId: data?.champion_id || null }
+      const data = await call<{ phase: ContestState['phase'], rounds: ContestState['rounds'], champion_id: string | null, recent?: string[][] }>('brush_contest_get', pinArgs)
+      const recent = Array.isArray(data?.recent) ? data.recent : []
+      const recentKeys = recent
+        .filter(pair => Array.isArray(pair) && pair[0] && pair[1])
+        .map(pair => pairKey(String(pair[0]), String(pair[1])))
+      return { phase: data?.phase || 'qualifying', rounds: data?.rounds || [], championId: data?.champion_id || null, recentKeys }
     },
     async saveContest(state) {
       await call('brush_contest_put', { ...pinArgs, phase: state.phase, rounds: state.rounds, champion_id: state.championId })
