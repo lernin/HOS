@@ -190,6 +190,70 @@ export function approach(current: number, target: number, amount: number, epsilo
   return Math.abs(target - next) <= epsilon ? target : next
 }
 
+// Cover the slot. Portrait pictures fill the width and overflow vertically;
+// wider pictures fill the height and overflow sideways. No extra zoom.
+export function coverFrame(input: {
+  elementWidth: number
+  elementHeight: number
+  imageRatio: number
+  eyeX: number
+  eyeY: number
+  targetX?: number
+  targetY?: number
+}) {
+  const width = input.elementWidth
+  const height = input.elementHeight
+  const ratio = input.imageRatio > 0 ? input.imageRatio : 9 / 16
+  const eyeX = clamp(input.eyeX, 0, 1)
+  const eyeY = clamp(input.eyeY, 0, 1)
+  const targetX = input.targetX ?? 0.5
+  const targetY = input.targetY ?? 0.33
+  if (width < 2 || height < 2) {
+    return { positionX: targetX, positionY: targetY, imageWidth: width, imageHeight: height, slackX: 0, slackY: 0 }
+  }
+  const heightIfWidth = width / ratio
+  const imageWidth = heightIfWidth >= height ? width : height * ratio
+  const imageHeight = heightIfWidth >= height ? heightIfWidth : height
+  const position = (container: number, image: number, point: number, target: number) => {
+    if (image <= container + 0.5) return 0.5
+    return clamp((target * container - point * image) / (container - image), 0, 1)
+  }
+  return {
+    positionX: position(width, imageWidth, eyeX, targetX),
+    positionY: position(height, imageHeight, eyeY, targetY),
+    imageWidth,
+    imageHeight,
+    slackX: Math.max(0, imageWidth - width),
+    slackY: Math.max(0, imageHeight - height),
+  }
+}
+
+// s = 0 keeps the cover anchor. +1 shows the bottom or right edge, -1 the top or left.
+export function coverPosition(rest: number, s: number) {
+  const t = clamp(s, -1, 1)
+  if (t > 0) return rest + (1 - rest) * t
+  if (t < 0) return rest * (1 + t)
+  return rest
+}
+
+// The first move past the press dead-zone still has to reach the screen edge.
+export function engageTravel(travel: { left: number, right: number, up: number, down: number }, dx: number, dy: number) {
+  return {
+    left: Math.max(1, travel.left - Math.max(0, -dx)),
+    right: Math.max(1, travel.right - Math.max(0, dx)),
+    up: Math.max(1, travel.up - Math.max(0, -dy)),
+    down: Math.max(1, travel.down - Math.max(0, dy)),
+  }
+}
+
+// Already flush with an edge: keep the anchor on the finger so the reverse moves at once.
+export function coverEdgeHold(input: { s: number, rest: number, point: number }) {
+  const intoStart = input.rest <= 0.001 && input.s < 0
+  const intoEnd = input.rest >= 0.999 && input.s > 0
+  if (!intoStart && !intoEnd) return null
+  return { s: 0, origin: input.point, start: 0 }
+}
+
 // s = 0 is the face rest. Positive s reveals the lower or righter edge (the min pan).
 export function faceRelativePan(s: number, min: number, max: number) {
   if (!(s > 0) && !(s < 0)) return 0

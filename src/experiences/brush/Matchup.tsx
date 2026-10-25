@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { faceShift, faceZoom, focusBox } from './face'
+import { faceEye, faceShift, faceZoom, focusBox } from './face'
 import type { Standing } from './level'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
-import { approach, clampZoom, contentSpan, faceEdgePan, facePanToPoint, faceRelativePan, faceTravelClutch, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround, type Zoom } from './zoom'
+import { approach, clampZoom, contentSpan, coverEdgeHold, coverFrame, coverPosition, engageTravel, faceEdgePan, facePanToPoint, faceRelativePan, faceTravelClutch, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround, type Zoom } from './zoom'
 
 export type { Zoom }
 export { REST_ZOOM }
@@ -94,11 +94,14 @@ export function Matchup({
   const frameRef = useRef<HTMLDivElement>(null)
   const [frame, setFrame] = useState<{ left: number, right: number, scale: number } | null>(null)
   const [faceSide, setFaceSide] = useState<'left' | 'right' | null>(null)
+  const [slots, setSlots] = useState({ left: { w: 0, h: 0 }, right: { w: 0, h: 0 } })
   const [exploreSide, setExploreSide] = useState<'left' | 'right' | null>(null)
   const [faceMotion, setFaceMotion] = useState<false | 'settle'>(false)
   const [facePan, setFacePan] = useState({ sx: 0, sy: 0, scale: 1 })
   const hitRefs = useRef<{ left: HTMLDivElement | null, right: HTMLDivElement | null }>({ left: null, right: null })
   const faceHeldRef = useRef(false)
+  const heldSideRef = useRef<'left' | 'right' | null>(null)
+  const coverRef = useRef({ left: { x: 0.5, y: 0.33 }, right: { x: 0.5, y: 0.33 } })
   const exploreRef = useRef<'left' | 'right' | null>(null)
   const suppressRef = useRef(0)
   const leadRef = useRef<'left' | 'right'>('left')
@@ -357,6 +360,7 @@ export function Matchup({
       shown.sy = 0
       shown.scale = 1
       faceHeldRef.current = false
+      heldSideRef.current = null
       exploreRef.current = null
       setFaceSide(null)
       setExploreSide(null)
@@ -372,7 +376,7 @@ export function Matchup({
       const owner = holdId ?? exploreId
       if (owner === null) return
       const extra = [...pointers.entries()].filter(([id]) => id !== holdId && id !== exploreId)
-      const pinching = exploreId !== null ? extra.length >= 1 : extra.length >= 2
+      const pinching = holdId === null && (exploreId !== null ? extra.length >= 1 : extra.length >= 2)
       if (pinching) {
         drag = null
         const primary = pointers.get(owner)
@@ -436,8 +440,11 @@ export function Matchup({
       const [id, point] = active
       const current = ensureDrag(id, point)
       if (!current.engaged) {
-        if (Math.hypot(point.x - current.originX, point.y - current.originY) < 6) return
+        const dx = point.x - current.originX
+        const dy = point.y - current.originY
+        if (Math.hypot(dx, dy) < 6) return
         current.engaged = true
+        current.travel = engageTravel(current.travel, dx, dy)
         current.originX = point.x
         current.originY = point.y
         current.startSx = target.sx
@@ -455,12 +462,15 @@ export function Matchup({
         up: current.travel.up,
         down: current.travel.down,
       })
-      current.originX = next.originX
-      current.originY = next.originY
-      current.startSx = next.startSx
-      current.startSy = next.startSy
-      target.sx = next.sx
-      target.sy = next.sy
+      const rest = holdId !== null && heldSideRef.current ? coverRef.current[heldSideRef.current] : null
+      const holdX = rest ? coverEdgeHold({ s: next.sx, rest: rest.x, point: point.x }) : null
+      const holdY = rest ? coverEdgeHold({ s: next.sy, rest: rest.y, point: point.y }) : null
+      current.originX = holdX ? holdX.origin : next.originX
+      current.originY = holdY ? holdY.origin : next.originY
+      current.startSx = holdX ? holdX.start : next.startSx
+      current.startSy = holdY ? holdY.start : next.startSy
+      target.sx = holdX ? holdX.s : next.sx
+      target.sy = holdY ? holdY.s : next.sy
       kick()
     }
     const engage = (id: number, x: number, y: number, side: 'left' | 'right') => {
@@ -507,6 +517,7 @@ export function Matchup({
         pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
         ensureDrag(event.pointerId, { x: event.clientX, y: event.clientY })
         faceHeldRef.current = true
+        heldSideRef.current = faceTarget
         setFaceSide(faceTarget)
         setExploreSide(null)
         setFaceMotion('settle')
@@ -586,6 +597,7 @@ export function Matchup({
       window.removeEventListener('pointercancel', up, block)
       if (holdId !== null || exploreId !== null) {
         faceHeldRef.current = false
+        heldSideRef.current = null
         exploreRef.current = null
         setFaceSide(null)
         setExploreSide(null)
@@ -616,6 +628,31 @@ export function Matchup({
     observer.observe(frameNode)
     return () => observer.disconnect()
   }, [portrait, leftRatio, rightRatio])
+
+  useLayoutEffect(() => {
+    const measure = (side: 'left' | 'right') => {
+      const hit = hitRefs.current[side]
+      if (!hit) return { w: 0, h: 0 }
+      const rect = hit.getBoundingClientRect()
+      return { w: rect.width, h: rect.height }
+    }
+    const read = () => {
+      const next = { left: measure('left'), right: measure('right') }
+      setSlots(current => (
+        Math.abs(current.left.w - next.left.w) < 0.5
+        && Math.abs(current.left.h - next.left.h) < 0.5
+        && Math.abs(current.right.w - next.right.w) < 0.5
+        && Math.abs(current.right.h - next.right.h) < 0.5
+      ) ? current : next)
+    }
+    read()
+    const observer = new ResizeObserver(read)
+    const stage = stageRef.current
+    if (stage) observer.observe(stage)
+    if (hitRefs.current.left) observer.observe(hitRefs.current.left)
+    if (hitRefs.current.right) observer.observe(hitRefs.current.right)
+    return () => observer.disconnect()
+  }, [left.id, right.id, portrait, faceSide])
 
   useLayoutEffect(() => {
     const view = {
@@ -694,8 +731,31 @@ export function Matchup({
   const fit = 'contain' as const
   layoutRef.current = { fit, leftRatio, rightRatio }
 
+  function framedCover(image: BrushImage, side: 'left' | 'right') {
+    const eye = faceEye(image.face_box)
+    const framed = coverFrame({
+      elementWidth: slots[side].w,
+      elementHeight: slots[side].h,
+      imageRatio: side === 'left' ? leftRatio : rightRatio,
+      eyeX: eye.x,
+      eyeY: eye.y,
+    })
+    coverRef.current[side] = { x: framed.positionX, y: framed.positionY }
+    return framed
+  }
+
   function photoStyle(image: BrushImage, side: 'left' | 'right') {
-    const focus = faceSide === side || exploreSide === side ? faceShift(faceZoom(focusBox(image.face_box))) : null
+    const framed = framedCover(image, side)
+    if (faceSide === side) {
+      const x = coverPosition(framed.positionX, facePan.sx)
+      const y = coverPosition(framed.positionY, facePan.sy)
+      return {
+        objectFit: 'cover' as const,
+        objectPosition: `${x * 100}% ${y * 100}%`,
+      }
+    }
+    const exploring = exploreSide === side
+    const focus = exploring ? faceShift(faceZoom(focusBox(image.face_box))) : null
     const rested = restTranslate(zoom)
     const scale = focus ? focus.scale * facePan.scale : rested.scale
     const tx = focus ? focus.tx : rested.tx
@@ -705,7 +765,6 @@ export function Matchup({
     const height = hit?.clientHeight || frameRef.current?.clientHeight || 0
     let px = 0
     let py = 0
-    const shownFit = faceSide === side ? 'cover' as const : fit
     if (focus && width > 1 && height > 1) {
       const edge = faceEdgePan({
         faceTx: focus.tx,
@@ -713,16 +772,23 @@ export function Matchup({
         scale,
         width,
         height,
-        span: contentSpan(width, height, side === 'left' ? leftRatio : rightRatio, shownFit),
+        span: contentSpan(width, height, side === 'left' ? leftRatio : rightRatio, fit),
       })
       px = faceRelativePan(facePan.sx, edge.minX, edge.maxX)
       py = faceRelativePan(facePan.sy, edge.minY, edge.maxY)
+    }
+    if (!exploring && !portrait && zoom.scale === 1) {
+      return {
+        objectFit: 'cover' as const,
+        objectPosition: `${framed.positionX * 100}% ${framed.positionY * 100}%`,
+        transition: faceMotion === 'settle' ? 'object-position 250ms ease' : undefined,
+      }
     }
     return {
       transform: `translate(${px}px, ${py}px) translate(${tx}%, ${ty}%) scale(${scale})`,
       transformOrigin: '50% 50%',
       transition: faceMotion === 'settle' ? 'transform 250ms ease' : undefined,
-      objectFit: shownFit,
+      objectFit: exploring || portrait ? fit : 'cover' as const,
     }
   }
 
@@ -808,7 +874,7 @@ export function Matchup({
           const src = side === 'left' ? leftSrc : rightSrc
           const motion = side === 'left' ? push?.left : push?.right
           return (
-            <article key={side} className={`brush-card${front === side ? ' is-front' : ''}`} data-side={side} data-image={image.id} data-name={image.name} data-explore={exploreSide === side ? 'true' : 'false'} data-photo-slot>
+            <article key={side} className={`brush-card${front === side ? ' is-front' : ''}`} data-side={side} data-image={image.id} data-name={image.name} data-face-known={image.face_box ? 'yes' : 'no'} data-explore={exploreSide === side ? 'true' : 'false'} data-photo-slot>
               <div className="brush-photo-hit" ref={node => { hitRefs.current[side] = node }} onClick={onPhotoClick}>
                 {motion ? (
                   <PushFrames late={push?.late === side}>

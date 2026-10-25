@@ -5,14 +5,14 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
 import { levelOf, levelProgress, matchMoments, standingOf } from '../src/experiences/brush/level.ts'
-import { faceBoxFromPixels, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
+import { EYE_LINE, faceBoxFromPixels, faceEye, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
 import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
 import { challengerCount, CLOSE_ELO, COOLDOWN_MATCHES, ESTABLISHED_RATE, extendQueue, finalsFieldSize, hashDistance, lookOf, MATCH_MEMORY, newEntrants, nextContender, nextQualifyingPair, pairKey, PLACEMENT_GAMES, RECENT_WINDOW, retainBuffer, sameGroup, seedOrder, WILDCARD_RATE } from '../src/experiences/brush/pair.ts'
 import { conservativeRating, glickoPeriod, glickoUpdate, INITIAL_RD, INITIAL_VOLATILITY, MIN_RD, rdForGames } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
 import { UPLOAD_BATCH_LIMIT, retryDelayMs, retryLoad, takeBatch } from '../src/experiences/brush/uploads.ts'
-import { approach, clampInRanges, clampZoom, contentSpan, faceAimPan, faceDragGain, faceDragPan, faceEdgePan, facePanRange, facePanToPoint, faceRelativePan, faceTravelClutch, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
+import { approach, clampInRanges, clampZoom, contentSpan, coverEdgeHold, coverFrame, coverPosition, engageTravel, faceAimPan, faceDragGain, faceDragPan, faceEdgePan, facePanRange, facePanToPoint, faceRelativePan, faceTravelClutch, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
 
 test('glicko-2 matches the published example and keeps a close call smaller', () => {
   const paper = glickoPeriod({ rating: 1500, rd: 200, volatility: 0.06 }, [
@@ -860,6 +860,95 @@ function typescriptFiles(dir) {
   }
   return found
 }
+
+test('a face hold fills the picture width and pans to every edge', () => {
+  const canada = { x: 0.3456295366640444, y: 0.0613330785036087, w: 0.1708582348293729, h: 0.18525993740558624 }
+  const eye = faceEye(canada)
+  assert.ok(Math.abs(eye.x - (canada.x + canada.w / 2)) < 1e-9)
+  assert.ok(Math.abs(eye.y - (canada.y + canada.h * 0.36)) < 1e-9)
+  const slotW = 634
+  const slotH = 390
+  const ratio = 720 / 1280
+  const framed = coverFrame({ elementWidth: slotW, elementHeight: slotH, imageRatio: ratio, eyeX: eye.x, eyeY: eye.y })
+  assert.equal(framed.slackX, 0)
+  assert.ok(framed.slackY > 400, `vertical slack ${framed.slackY}`)
+  assert.ok(Math.abs(framed.imageWidth - slotW) < 0.5)
+  const screenY = (frame, point) => ((slotH - frame.imageHeight) * frame.positionY + point * frame.imageHeight) / slotH
+  assert.ok(Math.abs(screenY(framed, eye.y) - 0.33) < 0.01, `eye ${screenY(framed, eye.y)}`)
+  const faceTop = (slotH - framed.imageHeight) * framed.positionY + canada.y * framed.imageHeight
+  const faceBottom = (slotH - framed.imageHeight) * framed.positionY + (canada.y + canada.h) * framed.imageHeight
+  assert.ok(faceTop >= -1 && faceBottom <= slotH + 1, `face ${faceTop}..${faceBottom}`)
+  assert.ok(faceBottom - faceTop > 40 && faceBottom - faceTop < slotH, `face span ${faceBottom - faceTop}`)
+
+  const plain = faceEye(null)
+  assert.deepEqual(plain, { x: 0.5, y: EYE_LINE })
+  assert.deepEqual(faceEye({ x: 0, y: 0, w: 0, h: 0 }), plain)
+  const unboxed = coverFrame({ elementWidth: slotW, elementHeight: slotH, imageRatio: ratio, eyeX: plain.x, eyeY: plain.y })
+  assert.equal(unboxed.slackX, 0)
+  assert.ok(Math.abs(screenY(unboxed, plain.y) - EYE_LINE) < 0.01)
+
+  const half = coverFrame({ elementWidth: 313, elementHeight: 390, imageRatio: ratio, eyeX: eye.x, eyeY: eye.y })
+  assert.equal(half.slackX, 0)
+  assert.ok(Math.abs(half.imageWidth - 313) < 0.5)
+  assert.ok(half.slackY > 0)
+
+  const wide = coverFrame({ elementWidth: slotW, elementHeight: slotH, imageRatio: 1400 / 800, eyeX: 0.5, eyeY: EYE_LINE })
+  assert.ok(wide.slackX > 20, `side slack ${wide.slackX}`)
+  assert.equal(wide.slackY, 0)
+  assert.equal(coverPosition(wide.positionX, 0), wide.positionX)
+  assert.equal(coverPosition(wide.positionX, 1), 1)
+  assert.equal(coverPosition(wide.positionX, -1), 0)
+  assert.equal(coverPosition(framed.positionY, 1), 1)
+  assert.equal(coverPosition(framed.positionY, -1), 0)
+
+  const button = { x: 780, y: 340 }
+  const travel = { left: button.x - 8, right: 844 - button.x - 8, up: button.y - 8, down: 390 - button.y - 8 }
+  const top = faceTravelClutch({ originX: button.x, originY: button.y, x: button.x, y: 8, startSx: 0, startSy: 0, ...travel })
+  assert.equal(top.sy, -1)
+  assert.equal(coverPosition(framed.positionY, top.sy), 0)
+  const leaveTop = faceTravelClutch({ originX: top.originX, originY: top.originY, x: button.x, y: 20, startSx: top.startSx, startSy: top.startSy, ...travel })
+  assert.ok(leaveTop.sy > -1)
+  assert.ok(coverPosition(framed.positionY, leaveTop.sy) > 0)
+  const bottom = faceTravelClutch({ originX: top.originX, originY: top.originY, x: button.x, y: 382, startSx: top.startSx, startSy: top.startSy, ...travel })
+  assert.equal(bottom.sy, 1)
+  assert.equal(coverPosition(framed.positionY, bottom.sy), 1)
+  const leaveBottom = faceTravelClutch({ originX: bottom.originX, originY: bottom.originY, x: button.x, y: 360, startSx: bottom.startSx, startSy: bottom.startSy, ...travel })
+  assert.ok(leaveBottom.sy < 1)
+  const leftEdge = faceTravelClutch({ originX: button.x, originY: button.y, x: 8, y: button.y, startSx: 0, startSy: 0, ...travel })
+  assert.equal(leftEdge.sx, -1)
+  assert.equal(coverPosition(wide.positionX, leftEdge.sx), 0)
+  const leaveLeft = faceTravelClutch({ originX: leftEdge.originX, originY: leftEdge.originY, x: 28, y: button.y, startSx: leftEdge.startSx, startSy: leftEdge.startSy, ...travel })
+  assert.ok(leaveLeft.sx > -1)
+  assert.ok(coverPosition(wide.positionX, leaveLeft.sx) > 0)
+  const rightEdge = faceTravelClutch({ originX: leftEdge.originX, originY: leftEdge.originY, x: 836, y: button.y, startSx: leftEdge.startSx, startSy: leftEdge.startSy, ...travel })
+  assert.equal(rightEdge.sx, 1)
+  assert.equal(coverPosition(wide.positionX, rightEdge.sx), 1)
+  const leaveRight = faceTravelClutch({ originX: rightEdge.originX, originY: rightEdge.originY, x: 820, y: button.y, startSx: rightEdge.startSx, startSy: rightEdge.startSy, ...travel })
+  assert.ok(leaveRight.sx < 1)
+
+  const spent = engageTravel(travel, 0, -40)
+  assert.equal(spent.up, travel.up - 40)
+  assert.equal(spent.down, travel.down)
+  const afterSpend = faceTravelClutch({ originX: button.x, originY: button.y - 40, x: button.x, y: 8, startSx: 0, startSy: 0, ...spent })
+  assert.equal(afterSpend.sy, -1)
+  assert.equal(coverPosition(framed.positionY, afterSpend.sy), 0)
+
+  assert.deepEqual(coverEdgeHold({ s: -0.4, rest: 0, point: 12 }), { s: 0, origin: 12, start: 0 })
+  assert.equal(coverEdgeHold({ s: 0.2, rest: 0, point: 12 }), null)
+  assert.equal(coverEdgeHold({ s: 0.4, rest: 1, point: 40 })?.s, 0)
+
+  const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
+  const hold = matchup.slice(matchup.indexOf('if (faceSide === side)'), matchup.indexOf('const exploring'))
+  assert.match(hold, /coverPosition/)
+  assert.doesNotMatch(hold, /scale\(/)
+  assert.doesNotMatch(hold, /faceZoom/)
+  assert.match(matchup, /coverEdgeHold/)
+  assert.match(matchup, /faceEye/)
+  const css = readFileSync(new URL('../src/experiences/brush.css', import.meta.url), 'utf8')
+  const landscape = css.slice(css.indexOf('.brush.is-landscape.is-match .brush-photo{'), css.indexOf('.brush.is-landscape.is-match .brush-photo{') + 240)
+  assert.match(landscape, /object-fit:cover/)
+  assert.doesNotMatch(landscape, /object-fit:contain/)
+})
 
 test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   const brush = readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8')
