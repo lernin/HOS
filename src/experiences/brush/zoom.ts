@@ -262,6 +262,8 @@ export function faceRelativePan(s: number, min: number, max: number) {
 }
 
 // Past an edge, clamp the picture and move the finger anchor so a reverse moves immediately.
+// invertY is the Face-button hold: the buttons sit at the bottom, so the long upward
+// stroke reveals the feet and a downward stroke reveals the head. Explore leaves it off.
 export function faceTravelClutch(input: {
   originX: number
   originY: number
@@ -273,13 +275,14 @@ export function faceTravelClutch(input: {
   right: number
   up: number
   down: number
+  invertY?: boolean
 }) {
   const dx = input.x - input.originX
   const dy = input.y - input.originY
   const travelX = Math.max(1, dx >= 0 ? input.right : input.left)
   const travelY = Math.max(1, dy >= 0 ? input.down : input.up)
   const rawSx = input.startSx + dx / travelX
-  const rawSy = input.startSy + dy / travelY
+  const rawSy = input.startSy + (input.invertY ? -dy : dy) / travelY
   const sx = clamp(rawSx, -1, 1)
   const sy = clamp(rawSy, -1, 1)
   const clampX = Math.abs(sx - rawSx) > 1e-6
