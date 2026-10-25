@@ -461,6 +461,7 @@ export function Matchup({
         right: current.travel.right,
         up: current.travel.up,
         down: current.travel.down,
+        invertY: holdId !== null,
       })
       const rest = holdId !== null && heldSideRef.current ? coverRef.current[heldSideRef.current] : null
       const holdX = rest ? coverEdgeHold({ s: next.sx, rest: rest.x, point: point.x }) : null
