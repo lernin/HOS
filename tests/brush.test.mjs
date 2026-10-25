@@ -945,9 +945,11 @@ test('a face hold fills the picture width and pans to every edge', () => {
   assert.match(matchup, /coverEdgeHold/)
   assert.match(matchup, /faceEye/)
   const css = readFileSync(new URL('../src/experiences/brush.css', import.meta.url), 'utf8')
-  const landscape = css.slice(css.indexOf('.brush.is-landscape.is-match .brush-photo{'), css.indexOf('.brush.is-landscape.is-match .brush-photo{') + 240)
-  assert.match(landscape, /object-fit:cover/)
-  assert.doesNotMatch(landscape, /object-fit:contain/)
+  const landscape = css.slice(css.indexOf('.brush.is-landscape.is-match .brush-photo{'), css.indexOf('.brush.is-landscape.is-match .brush-photo{') + 320)
+  assert.match(landscape, /object-fit:contain/)
+  assert.doesNotMatch(landscape, /object-fit:cover/)
+  assert.match(hold, /objectFit: 'cover'/)
+  assert.equal((matchup.match(/objectFit: 'cover'/g) || []).length, 1)
 })
 
 test('quick picks keep a gallery chooser and a smaller close-call step', () => {

@@ -777,18 +777,12 @@ export function Matchup({
       px = faceRelativePan(facePan.sx, edge.minX, edge.maxX)
       py = faceRelativePan(facePan.sy, edge.minY, edge.maxY)
     }
-    if (!exploring && !portrait && zoom.scale === 1) {
-      return {
-        objectFit: 'cover' as const,
-        objectPosition: `${framed.positionX * 100}% ${framed.positionY * 100}%`,
-        transition: faceMotion === 'settle' ? 'object-position 250ms ease' : undefined,
-      }
-    }
     return {
       transform: `translate(${px}px, ${py}px) translate(${tx}%, ${ty}%) scale(${scale})`,
       transformOrigin: '50% 50%',
-      transition: faceMotion === 'settle' ? 'transform 250ms ease' : undefined,
-      objectFit: exploring || portrait ? fit : 'cover' as const,
+      transition: faceMotion === 'settle' ? 'transform 250ms ease, object-position 250ms ease' : undefined,
+      objectFit: fit,
+      objectPosition: 'center',
     }
   }
 
