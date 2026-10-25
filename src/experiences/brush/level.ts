@@ -66,6 +66,9 @@ export function matchMoments(before: BrushImage[], after: BrushImage[]): BrushMo
     }
   }
   const arrival = newEntrants(before, after)[0]
-  if (arrival) notes.push({ kind: 'top16', imageId: arrival.id, text: `${arrival.name} entered the top 16!` })
+  if (arrival) {
+    const label = arrival.country || arrival.name || 'A picture'
+    notes.push({ kind: 'top16', imageId: arrival.id, text: `${label} entered the top 16!` })
+  }
   return notes
 }

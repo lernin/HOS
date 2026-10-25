@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { faceShift, faceZoom, focusBox } from './face'
-import { levelOf, levelProgress, levelTier, type Standing } from './level'
+import type { Standing } from './level'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
 import { approach, clampZoom, contentSpan, faceEdgePan, facePanToPoint, faceRelativePan, faceTravelClutch, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround, type Zoom } from './zoom'
@@ -9,7 +9,6 @@ export type { Zoom }
 export { REST_ZOOM }
 
 const PHOTO_GAP = 8
-const INFO_MIN = 84
 const CONTROLS_MIN = 196
 const SWIPE_THRESHOLD = 56
 const SWIPE_TRAVEL = 88
@@ -74,7 +73,7 @@ function screenOn(hit: HTMLElement, x: number, y: number) {
 }
 
 export function Matchup({
-  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, leftChrome = null, rightChrome = null, notice = null, rankFor = () => null, celebrateId = null,
+  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, menu = null, notice = null, rankFor = () => null, celebrateId = null,
 }: {
   left: BrushImage
   right: BrushImage
@@ -86,8 +85,7 @@ export function Matchup({
   onPick: (id: string, margin: Margin) => void
   onTrash: (id: string) => void
   srcFor: (image: BrushImage) => string | null
-  leftChrome?: ReactNode
-  rightChrome?: ReactNode
+  menu?: ReactNode
   notice?: ReactNode
   rankFor?: (id: string) => Standing | null
   celebrateId?: string | null
@@ -95,7 +93,7 @@ export function Matchup({
   const stageRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
   const [frame, setFrame] = useState<{ left: number, right: number, scale: number } | null>(null)
-  const [faceHeld, setFaceHeld] = useState(false)
+  const [faceSide, setFaceSide] = useState<'left' | 'right' | null>(null)
   const [exploreSide, setExploreSide] = useState<'left' | 'right' | null>(null)
   const [faceMotion, setFaceMotion] = useState<false | 'settle'>(false)
   const [facePan, setFacePan] = useState({ sx: 0, sy: 0, scale: 1 })
@@ -105,13 +103,11 @@ export function Matchup({
   const suppressRef = useRef(0)
   const leadRef = useRef<'left' | 'right'>('left')
   const [matchCount, setMatchCount] = useState(1)
-  const [glow, setGlow] = useState<'left' | 'right' | null>(null)
   const [push, setPush] = useState<{
     left: { from: { id: string, src: string | null, image: BrushImage }, to: { id: string, src: string | null, image: BrushImage } } | null
     right: { from: { id: string, src: string | null, image: BrushImage }, to: { id: string, src: string | null, image: BrushImage } } | null
     late: 'left' | 'right' | null
   } | null>(null)
-  const [stripOpen, setStripOpen] = useState({ left: false, right: false })
   const previousView = useRef<{ left: { id: string, src: string | null, image: BrushImage }, right: { id: string, src: string | null, image: BrushImage } } | null>(null)
   const seenSrc = useRef(new Map<string, string>())
   const leftSrc = srcFor(left)
@@ -362,7 +358,7 @@ export function Matchup({
       shown.scale = 1
       faceHeldRef.current = false
       exploreRef.current = null
-      setFaceHeld(false)
+      setFaceSide(null)
       setExploreSide(null)
       setFaceMotion('settle')
       setFacePan({ sx: 0, sy: 0, scale: 1 })
@@ -490,8 +486,11 @@ export function Matchup({
     const down = (event: PointerEvent) => {
       if (event.button !== 0) return
       const targetNode = event.target instanceof Element ? event.target : null
-      const onFace = Boolean(targetNode?.closest('[data-action="face"]'))
-      if (onFace && holdId === null && exploreId === null) {
+        const faceNode = targetNode?.closest('[data-action="face"]')
+      const faceTarget = faceNode instanceof HTMLElement
+        ? (faceNode.dataset.face === 'right' ? 'right' : faceNode.dataset.face === 'left' ? 'left' : null)
+        : null
+      if (faceTarget && holdId === null && exploreId === null) {
         if (Date.now() < lockRef.current) return
         clearArm()
         if (event.cancelable) event.preventDefault()
@@ -508,7 +507,7 @@ export function Matchup({
         pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
         ensureDrag(event.pointerId, { x: event.clientX, y: event.clientY })
         faceHeldRef.current = true
-        setFaceHeld(true)
+        setFaceSide(faceTarget)
         setExploreSide(null)
         setFaceMotion('settle')
         setFacePan({ sx: 0, sy: 0, scale: 1 })
@@ -588,7 +587,7 @@ export function Matchup({
       if (holdId !== null || exploreId !== null) {
         faceHeldRef.current = false
         exploreRef.current = null
-        setFaceHeld(false)
+        setFaceSide(null)
         setExploreSide(null)
       }
     }
@@ -603,7 +602,7 @@ export function Matchup({
       const naturalLeft = rect.height * leftRatio
       const naturalRight = rect.height * rightRatio
       const natural = naturalLeft + naturalRight
-      const budget = rect.width - PHOTO_GAP - INFO_MIN * 2 - CONTROLS_MIN
+      const budget = rect.width - PHOTO_GAP - CONTROLS_MIN
       const scale = natural > budget ? Math.max(0, budget) / natural : 1
       const next = {
         left: scale < 1 ? Math.floor(naturalLeft * scale) : naturalLeft,
@@ -624,11 +623,18 @@ export function Matchup({
       right: { id: right.id, src: rightSrc || seenSrc.current.get(right.id) || null, image: right },
     }
     const previous = previousView.current
-    previousView.current = view
-    if (!previous) return
+    if (!previous) {
+      previousView.current = view
+      return
+    }
     const leftChanged = previous.left.id !== view.left.id
     const rightChanged = previous.right.id !== view.right.id
-    if (!leftChanged && !rightChanged) return
+    if (!leftChanged && !rightChanged) {
+      previousView.current = view
+      return
+    }
+    previousView.current = view
+    if ((frameRef.current?.clientHeight ?? 0) < 8) return
     if (!faceHeldRef.current && !exploreRef.current) {
       setFacePan({ sx: 0, sy: 0, scale: 1 })
       setFaceMotion(false)
@@ -645,7 +651,7 @@ export function Matchup({
       right: pane(rightChanged, previous.right, view.right),
       late,
     })
-    const timer = window.setTimeout(() => setPush(null), 700)
+    const timer = window.setTimeout(() => setPush(null), 760)
     return () => window.clearTimeout(timer)
   }, [left.id, right.id])
 
@@ -689,7 +695,7 @@ export function Matchup({
   layoutRef.current = { fit, leftRatio, rightRatio }
 
   function photoStyle(image: BrushImage, side: 'left' | 'right') {
-    const focus = faceHeld || exploreSide === side ? faceShift(faceZoom(focusBox(image.face_box))) : null
+    const focus = faceSide === side || exploreSide === side ? faceShift(faceZoom(focusBox(image.face_box))) : null
     const rested = restTranslate(zoom)
     const scale = focus ? focus.scale * facePan.scale : rested.scale
     const tx = focus ? focus.tx : rested.tx
@@ -699,6 +705,7 @@ export function Matchup({
     const height = hit?.clientHeight || frameRef.current?.clientHeight || 0
     let px = 0
     let py = 0
+    const shownFit = faceSide === side ? 'cover' as const : fit
     if (focus && width > 1 && height > 1) {
       const edge = faceEdgePan({
         faceTx: focus.tx,
@@ -706,7 +713,7 @@ export function Matchup({
         scale,
         width,
         height,
-        span: contentSpan(width, height, side === 'left' ? leftRatio : rightRatio, fit),
+        span: contentSpan(width, height, side === 'left' ? leftRatio : rightRatio, shownFit),
       })
       px = faceRelativePan(facePan.sx, edge.minX, edge.maxX)
       py = faceRelativePan(facePan.sy, edge.minY, edge.maxY)
@@ -715,115 +722,35 @@ export function Matchup({
       transform: `translate(${px}px, ${py}px) translate(${tx}%, ${ty}%) scale(${scale})`,
       transformOrigin: '50% 50%',
       transition: faceMotion === 'settle' ? 'transform 250ms ease' : undefined,
-      objectFit: fit,
+      objectFit: shownFit,
     }
   }
 
-  function pictureStats(image: BrushImage, layout: 'strip' | 'portrait', side: 'left' | 'right' = 'left') {
+  function portraitLine(image: BrushImage) {
     const standing = rankFor(image.id)
     const ranked = image.games >= PLACEMENT_GAMES
+    const place = image.country || 'Unknown'
     const placementRound = Math.min(image.games + 1, PLACEMENT_GAMES)
-    const placementLabel = `Round ${placementRound}/${PLACEMENT_GAMES}`
-    const level = levelOf(image.elo)
-    const progress = ranked ? levelProgress(image.elo) : Math.min(1, image.games / PLACEMENT_GAMES)
-    const closeWins = image.close_wins || 0
-    const closeLosses = image.close_losses || 0
-    const traits = (image.prompt_text || '').split(/[,·|;]/).map(item => item.trim()).filter(Boolean).slice(0, 3)
-    const percent = Math.round(progress * 100)
-    const badge = ranked ? (
-      <div className={`brush-level-badge is-${levelTier(level)}${celebrateId === image.id ? ' is-rising' : ''}`} data-level={level}>
-        <span>Level</span>
-        <strong className="brush-num">{level}</strong>
-      </div>
-    ) : (
-      <div className={`brush-level-badge is-unranked${celebrateId === image.id ? ' is-rising' : ''}`} data-unranked data-challenger>
-        <strong>Unranked</strong>
-      </div>
-    )
-    const track = (
-      <div className="brush-level-track">
-        <div className="brush-level-meta">
-          <span>{ranked ? 'Next level' : 'Placement'}</span>
-          <span className="brush-num">{ranked ? `${percent}%` : placementLabel}</span>
-        </div>
-        <div className="brush-level-bar" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={ranked ? `Progress to level ${level + 1}` : `Placement round ${placementRound} of ${PLACEMENT_GAMES}`}>
-          <span style={{ width: `${percent}%` }} />
-        </div>
-      </div>
-    )
-    if (layout === 'strip') {
-      const open = stripOpen[side]
+    const rising = celebrateId === image.id ? ' is-rising' : ''
+    if (!ranked) {
       return (
-        <div className="brush-stats is-strip" data-stats="strip" data-open={open ? 'true' : 'false'}>
-          <div className="brush-strip-id">
-            <strong>{image.country || image.name || 'Untitled'}</strong>
-          </div>
-          <button
-            type="button"
-            className="brush-strip-toggle"
-            aria-expanded={open}
-            aria-label={`${image.country || image.name || 'Untitled'}, ${ranked ? `level ${level}` : `unranked, ${placementLabel}`}, ${image.wins} wins, ${image.losses} losses`}
-            onClick={event => {
-              event.stopPropagation()
-              setStripOpen(current => ({ ...current, [side]: !current[side] }))
-            }}
-          >
-            {badge}
-            <span className="brush-strip-glance">
-              <span data-stat="rank" data-placement={ranked ? undefined : 'pending'} title={standing ? `#${standing.rank} of ${standing.total} ranked` : placementLabel}>{standing ? `#${standing.rank}` : placementLabel}</span>
-              <span aria-hidden="true"> · </span>
-              <span className="brush-num">{image.wins}–{image.losses}</span>
-            </span>
-          </button>
-          <div className="brush-strip-more">
-            <small>{image.name}</small>
-            {track}
-            <div className="brush-strip-stat" data-stat="rating">
-              <span>Rating</span>
-              <strong className="brush-num">{Math.round(image.elo)}</strong>
-            </div>
-            <div className="brush-strip-stat" data-stat="close">
-              <span>Close calls</span>
-              <strong className="brush-num">{closeWins}–{closeLosses}</strong>
-            </div>
-            {traits.length > 0 && <p className="brush-strip-traits">{traits.join(' · ')}</p>}
-          </div>
-        </div>
+        <p className={`brush-portrait-line${rising}`} data-portrait-line data-placement="pending" data-challenger>
+          {`${place} · Round ${placementRound}/${PLACEMENT_GAMES} · ${image.wins}–${image.losses}`}
+        </p>
       )
     }
     return (
-      <div className={`brush-stats is-${layout}`} data-stats={layout}>
-        <div className="brush-strip-id">
-          <strong>{image.country || image.name || 'Untitled'}</strong>
-          <small>{image.name}</small>
-        </div>
-        {badge}
-        {track}
-        <div className="brush-stat-grid">
-          <div className="brush-strip-stat" data-stat="rank">
-            <span>Rank</span>
-            <strong className="brush-num" title={standing ? `#${standing.rank} of ${standing.total} ranked` : 'Unranked'}>{standing ? `#${standing.rank} of ${standing.total}` : '—'}</strong>
-          </div>
-          <div className="brush-strip-stat" data-stat="record">
-            <span>Record</span>
-            <strong className="brush-num">{image.wins}–{image.losses}</strong>
-            {(closeWins > 0 || closeLosses > 0) && <em className="brush-close-mark">{closeWins}–{closeLosses} close</em>}
-          </div>
-          <div className="brush-strip-stat" data-stat="rating">
-            <span>Rating</span>
-            <strong className="brush-num">{Math.round(image.elo)}</strong>
-          </div>
-        </div>
-        {traits.length > 0 && <p className="brush-strip-traits">{traits.join(' · ')}</p>}
-      </div>
+      <p className={`brush-portrait-line${rising}`} data-portrait-line>
+        {`${place} · ${standing ? `#${standing.rank}` : 'Ranked'} · ${Math.round(image.elo)}`}
+      </p>
     )
   }
+
 
   function commitNow(side: 'left' | 'right', act: () => void) {
     if (Date.now() < lockRef.current) return
     leadRef.current = side
     lockRef.current = Date.now() + PUSH_MS
-    setGlow(null)
     act()
   }
 
@@ -847,11 +774,6 @@ export function Matchup({
     })
   }
 
-  function onAim(side: 'left' | 'right' | null) {
-    if (Date.now() < lockRef.current) return
-    setGlow(side)
-  }
-
   function restPhotoStyle() {
     const rested = restTranslate(zoom)
     return {
@@ -871,92 +793,101 @@ export function Matchup({
     if (!push) return <p className="brush-match-count" data-match-count>Match {matchCount}</p>
     return (
       <div className="brush-count-clip">
-        <div className="brush-push">
+        <PushFrames late={false}>
           <p className="brush-push-pane is-from brush-match-count" data-match-count aria-hidden="true">Match {Math.max(1, matchCount - 1)}</p>
           <p className="brush-push-pane is-to brush-match-count" data-match-count>Match {matchCount}</p>
-        </div>
-      </div>
-    )
-  }
-
-  function stripBody(side: 'left' | 'right', image: BrushImage) {
-    const motion = side === 'left' ? push?.left : push?.right
-    if (!motion || !push) return pictureStats(image, 'strip', side)
-    return (
-      <div className={`brush-push${push.late === side ? ' is-late' : ''}`}>
-        <div className="brush-push-pane is-from" aria-hidden="true">{pictureStats(motion.from.image, 'strip', side)}</div>
-        <div className="brush-push-pane is-to">{pictureStats(image, 'strip', side)}</div>
+        </PushFrames>
       </div>
     )
   }
 
   return (
     <div className="brush-stage" data-screen="match" ref={frameRef}>
-      {!portrait && (
-        <aside className="brush-info-strip is-left" data-strip="left">
-          <div className="brush-strip-tools">{leftChrome}</div>
-          <div className="brush-strip-body">{stripBody('left', left)}</div>
-        </aside>
-      )}
-      <div className="brush-photos" ref={stageRef}>
+      <div className={`brush-photos${faceSide === 'left' ? ' is-face-left' : ''}${faceSide === 'right' ? ' is-face-right' : ''}`} ref={stageRef}>
         {cards.map(({ image, side }) => {
           const src = side === 'left' ? leftSrc : rightSrc
           const motion = side === 'left' ? push?.left : push?.right
           return (
-            <article key={side} className={`brush-card${front === side ? ' is-front' : ''}${glow === side ? ' is-glow' : ''}${glow && glow !== side ? ' is-dim' : ''}`} data-side={side} data-image={image.id} data-name={image.name} data-explore={exploreSide === side ? 'true' : 'false'} data-photo-slot>
+            <article key={side} className={`brush-card${front === side ? ' is-front' : ''}`} data-side={side} data-image={image.id} data-name={image.name} data-explore={exploreSide === side ? 'true' : 'false'} data-photo-slot>
               <div className="brush-photo-hit" ref={node => { hitRefs.current[side] = node }} onClick={onPhotoClick}>
                 {motion ? (
-                  <div className={`brush-push${push?.late === side ? ' is-late' : ''}`}>
+                  <PushFrames late={push?.late === side}>
                     <div className="brush-push-pane is-from" aria-hidden="true">{framePhoto(motion.from.image, side, motion.from.src, false)}</div>
                     <div className="brush-push-pane is-to">{framePhoto(image, side, motion.to.src || src, true)}</div>
-                  </div>
+                  </PushFrames>
                 ) : (
                   <div className="brush-slide">{framePhoto(image, side, src, true)}</div>
                 )}
-                <div className="brush-photo-glow" />
               </div>
-              {portrait && <div className="brush-portrait-stats">{pictureStats(image, 'portrait')}</div>}
             </article>
           )
         })}
       </div>
       {!portrait && (
-        <aside className="brush-info-strip is-right" data-strip="right">
-          <div className="brush-strip-tools">{rightChrome}</div>
-          <div className="brush-strip-body">{stripBody('right', right)}</div>
-        </aside>
-      )}
-      {!portrait && (
         <aside className="brush-controls" data-gutter="controls">
+          <div className="brush-controls-tools">{menu}</div>
           {matchCountNode()}
           {notice}
           <div className="brush-gutter-actions">
             <div className="brush-control-row">
-              <SwipePad kind="pick" label="WINNER" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} onAim={onAim} />
+              <SwipePad kind="pick" label="WINNER" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} onAim={() => { if (Date.now() < lockRef.current) return }} />
             </div>
             <div className="brush-control-row">
-              <SwipePad kind="trash" label="Trash" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} onAim={onAim} />
-              <SwipePad kind="close" label="Close call" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} onAim={onAim} />
+              <SwipePad kind="trash" label="Trash" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} onAim={() => { if (Date.now() < lockRef.current) return }} />
+              <SwipePad kind="close" label="Close call" leftName={left.country || left.name} rightName={right.country || right.name} onCommit={swipeCommit} onAim={() => { if (Date.now() < lockRef.current) return }} />
             </div>
             <div className="brush-control-row">
-              <FaceHoldButton pressed={faceHeld} />
+              <FaceHoldButton side="left" pressed={faceSide === 'left'} />
+              <FaceHoldButton side="right" pressed={faceSide === 'right'} />
             </div>
           </div>
         </aside>
       )}
-      {portrait && matchCountNode()}
       {portrait && (
-        <div className="brush-footer">
-          <button className="brush-choice" type="button" data-action="pick" onClick={event => choose(event, frontImage.id, 'clear')}>Pick</button>
-          <button className="brush-choice close" type="button" data-action="close" onClick={event => choose(event, frontImage.id, 'close')}>Close</button>
-          <button className="brush-choice danger" type="button" data-action="trash" onClick={event => discard(event, frontImage.id)}>Trash</button>
+        <div className="brush-portrait-dock">
+          {portraitLine(frontImage)}
+          <div className="brush-footer">
+            <button className="brush-choice" type="button" data-action="pick" onClick={event => choose(event, frontImage.id, 'clear')}>Pick</button>
+            <button className="brush-choice close" type="button" data-action="close" onClick={event => choose(event, frontImage.id, 'close')}>Close</button>
+            <button className="brush-choice danger" type="button" data-action="trash" onClick={event => discard(event, frontImage.id)}>Trash</button>
+          </div>
         </div>
       )}
     </div>
   )
 }
 
-function FaceHoldButton({ pressed }: { pressed: boolean }) {
+function PushFrames({ late, children }: { late: boolean, children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [settled, setSettled] = useState(false)
+  useEffect(() => {
+    const node = ref.current
+    if (!node) return
+    let hidden = document.visibilityState === 'hidden'
+    const finish = () => setSettled(true)
+    const onEnd = (event: AnimationEvent) => {
+      if (event.target === node) finish()
+    }
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') hidden = true
+      else if (hidden) finish()
+    }
+    node.addEventListener('animationend', onEnd)
+    node.addEventListener('animationcancel', onEnd)
+    document.addEventListener('visibilitychange', onVis)
+    const timer = window.setTimeout(finish, 700)
+    if (node.getBoundingClientRect().height < 8) finish()
+    return () => {
+      node.removeEventListener('animationend', onEnd)
+      node.removeEventListener('animationcancel', onEnd)
+      document.removeEventListener('visibilitychange', onVis)
+      window.clearTimeout(timer)
+    }
+  }, [])
+  return <div ref={ref} className={`brush-push${late ? ' is-late' : ''}${settled ? ' is-settled' : ''}`}>{children}</div>
+}
+
+function FaceHoldButton({ pressed, side }: { pressed: boolean, side: 'left' | 'right' }) {
   const ref = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     const node = ref.current
@@ -975,8 +906,9 @@ function FaceHoldButton({ pressed }: { pressed: boolean }) {
     }
   }, [])
   return (
-    <button ref={ref} className="brush-face-hold" type="button" data-action="face" data-face="both" aria-pressed={pressed} aria-label="Hold for face">
+    <button ref={ref} className="brush-face-hold" type="button" data-action="face" data-face={side} aria-pressed={pressed} aria-label={side === 'left' ? 'Hold for left face' : 'Hold for right face'}>
       <PadIcon kind="face" />
+      <span>{side === 'left' ? 'Left' : 'Right'}</span>
     </button>
   )
 }

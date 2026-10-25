@@ -1,6 +1,8 @@
 .brush,.brush *{box-sizing:border-box}
 .brush{position:fixed;inset:0;display:flex;flex-direction:column;background:#0c0d0b;color:#f4efe6;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.brush.is-portrait.is-match{padding-top:0;padding-left:0;padding-right:0}
 .brush button,.brush input,.brush textarea{font:inherit;color:inherit}
+.brush button.brush-moment,.brush button.brush-gutter-toast{color:#1b1914}
 .brush-nav{position:relative;z-index:5;flex:0 0 auto;display:flex;gap:6px;align-items:center;padding:4px 8px;background:#0c0d0b}
 .brush-nav-row{display:flex;flex:1;min-width:0;flex-wrap:nowrap;gap:6px;align-items:center;overflow-x:auto;scrollbar-width:none}
 .brush-nav-row::-webkit-scrollbar{display:none}
@@ -15,6 +17,8 @@
 .brush-stage{position:relative;flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;touch-action:none}
 .brush-photos{flex:1;min-height:0;min-width:0;display:flex;gap:4px;touch-action:none}
 .brush.is-landscape .brush-photos{flex-direction:row}
+.brush.is-landscape.is-match .brush-photos.is-face-left{grid-template-columns:minmax(0,1fr) minmax(0,0fr);gap:0}
+.brush.is-landscape.is-match .brush-photos.is-face-right{grid-template-columns:minmax(0,0fr) minmax(0,1fr);gap:0}
 .brush-card{position:relative;flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:#171812}
 .brush.is-portrait .brush-card{display:none}
 .brush.is-portrait .brush-card.is-front{display:flex}
@@ -29,10 +33,12 @@
 .brush-card-bar .brush-choice,.brush-footer .brush-choice{min-height:32px}
 .brush.is-portrait .brush-footer .brush-choice{min-height:44px}
 .brush.is-landscape.is-match .brush-stage{flex-direction:row;align-items:stretch;height:100%}
-.brush.is-landscape.is-match .brush-photos{flex:1 1 auto;width:auto;max-width:none;min-width:0;height:100%;gap:8px;overflow:hidden}
-.brush.is-landscape.is-match .brush-card{flex:1 1 0;width:0;min-width:0;height:100%;aspect-ratio:auto;max-width:none;background:transparent;border:0;border-radius:0;overflow:hidden}
+.brush.is-landscape.is-match .brush-photos{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);flex:1 1 auto;width:auto;max-width:none;min-width:0;height:100%;gap:8px;overflow:hidden;transition:grid-template-columns 250ms ease,gap 250ms ease}
+.brush.is-landscape.is-match .brush-card{flex:1 1 0;width:auto;min-width:0;height:100%;aspect-ratio:auto;max-width:none;background:transparent;border:0;border-radius:0;overflow:hidden}
 .brush.is-landscape.is-match .brush-photo-hit{height:100%;background:transparent;border-radius:13px}
 .brush.is-portrait .brush-photo-hit{margin:0 8px;border-radius:13px;border:1px solid rgba(244,239,230,.16)}
+.brush.is-portrait.is-match .brush-photo-hit{margin:0;border:0;border-radius:0}
+.brush.is-portrait.is-match .brush-photo,.brush.is-portrait.is-match .brush-photo-empty{border-radius:0}
 .brush.is-landscape.is-match .brush-photo{height:100%;width:100%;object-fit:contain;object-position:center;border-radius:13px;background:transparent}
 .brush-gutter{position:relative;flex:1 1 88px;min-width:88px;height:100%;display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:4px 6px 6px;min-height:0;overflow:visible}
 .brush-gutter-top{flex:0 0 34px;height:34px;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;width:100%;min-width:0}
@@ -90,6 +96,8 @@
 .brush-level-bar>span{display:block;height:100%;width:0;background:#efe6d6;border-radius:99px;transition:width 320ms ease}
 .brush-stat-grid{display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(244,239,230,.12);padding-top:5px}
 .brush-close-mark{font-style:normal;font-size:9px;letter-spacing:.03em;color:rgba(228,201,138,.88);font-variant-numeric:tabular-nums;line-height:1.1}
+.brush-portrait-dock{flex:0 0 auto;padding:0 8px max(6px, env(safe-area-inset-bottom));background:#0c0d0b}
+.brush-portrait-line{margin:0 0 15px;min-height:18px;padding:0 8px;text-align:center;font-size:13px;line-height:18px;color:#f4efe6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .brush-portrait-stats{flex:0 0 auto;padding:8px 12px 10px;background:#12110e;border-top:1px solid rgba(244,239,230,.14)}
 .brush-stats.is-portrait{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name badge" "stats stats" "track track" "traits traits";gap:6px 12px;align-items:center}
 .brush-stats.is-portrait .brush-strip-id{grid-area:name}
@@ -98,10 +106,12 @@
 .brush-stats.is-portrait .brush-level-track{grid-area:track}
 .brush-stats.is-portrait .brush-strip-traits{grid-area:traits}
 .brush-controls{position:relative;flex:0 0 210px;width:210px;min-width:196px;max-width:340px;height:100%;display:flex;flex-direction:column;padding:4px 6px 6px;min-height:0}
+.brush-controls-tools{position:relative;flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center;gap:4px;min-height:34px}
+.brush-controls .brush-menu{left:auto;right:0;top:40px;height:auto;max-height:calc(100% - 48px);width:min(260px,70vw);border-radius:16px;z-index:8}
 .brush-controls .brush-gutter-actions{flex:1 1 auto;height:auto;min-height:0}
 .brush-control-row{flex:1 1 0;min-height:0;display:flex;gap:6px;align-items:stretch}
 .brush-control-row>.brush-swipe,.brush-control-row>.brush-face-hold{flex:1 1 0;width:auto;height:100%;min-width:0;min-height:0}
-.brush-control-row>.brush-face-hold{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;border-radius:16px}
+.brush-control-row>.brush-face-hold{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:16px;font-size:12px;font-weight:650;letter-spacing:.04em}
 .brush-control-row>.brush-face-hold svg{width:32px;height:32px}
 .brush-match-count{flex:0 0 16px;height:16px;margin:0;padding:0 4px;overflow:hidden;font-size:11px;letter-spacing:.12em;text-transform:uppercase;line-height:16px;text-align:center;color:rgba(239,230,214,.66);animation:brush-moment-in 280ms ease}
 .brush-control-row .brush-swipe:not(.is-pick) .brush-swipe-face strong{white-space:normal;text-align:center;font-size:13px;line-height:1.15}
@@ -140,7 +150,8 @@
 .brush-card.is-farewell .brush-slide{animation:brush-farewell 280ms ease forwards}
 @keyframes brush-farewell{from{opacity:1;transform:none}to{opacity:0;transform:translateY(16px)}}
 .brush-photo-hit>.brush-push{position:absolute;left:0;right:0;top:0;height:200%}
-.brush-push{height:200%;width:100%;display:flex;flex-direction:column;animation:brush-push 520ms cubic-bezier(0.22,1,0.36,1) both;will-change:transform;pointer-events:none}
+.brush-push{height:200%;width:100%;display:flex;flex-direction:column;transform:translateY(-50%);animation:brush-push 520ms cubic-bezier(0.22,1,0.36,1) both;will-change:transform;pointer-events:none}
+.brush-push.is-settled{animation:none;transform:translateY(-50%)}
 .brush-push.is-late{animation-delay:100ms}
 .brush-push-pane{height:50%;width:100%;min-height:0;overflow:hidden}
 .brush-push-pane>.brush-photo,.brush-push-pane>.brush-slide{width:100%;height:100%}
@@ -152,7 +163,7 @@
 .brush-count-clip .brush-push-pane{height:16px}
 @keyframes brush-push{from{transform:translateY(0)}to{transform:translateY(-50%)}}
 @media (prefers-reduced-motion:reduce){
-  .brush-push{animation:none;transform:none;height:100%}
+  .brush-push,.brush-push.is-settled{animation:none;transform:none;height:100%}
   .brush-push-pane.is-from{display:none}
   .brush-push-pane.is-to{height:100%}
   .brush-photo-hit>.brush-push{height:100%}
@@ -178,6 +189,10 @@
 .brush-challenger{display:block;margin-top:4px;font-style:normal;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#f3d7a1}
 .brush-caption .brush-challenger{display:inline;margin:0;flex:0 0 auto}
 .brush-moment{position:relative;z-index:1;align-self:center;margin:4px auto;max-width:calc(100% - 16px);background:#efe6d6;color:#1b1914;border:0;border-radius:999px;min-height:32px;padding:0 14px}
+.brush.is-portrait.is-match .brush-moment.is-overlay{position:absolute;z-index:6;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));width:max-content;max-width:calc(100% - 24px);margin:0 auto}
+.brush-portrait-menu{position:absolute;z-index:8;inset:0;pointer-events:none}
+.brush-float-menu{pointer-events:auto;position:absolute;top:max(10px, env(safe-area-inset-top));left:10px;width:44px;height:44px;border-radius:999px;border:1px solid rgba(239,230,214,.45);background:rgba(18,17,14,.55);color:#f4efe6;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 rgba(239,230,214,.28), 0 8px 18px rgba(0,0,0,.28);display:grid;place-items:center}
+.brush-menu.is-portrait-menu{pointer-events:auto;left:10px;top:max(62px, calc(env(safe-area-inset-top) + 56px));height:auto;max-height:min(70dvh, 520px);width:min(280px, calc(100vw - 20px));border-radius:18px;border:1px solid rgba(244,239,230,.16);box-shadow:0 16px 40px rgba(0,0,0,.45)}
 .brush-scroll{position:relative;flex:1;min-height:0;overflow:auto;padding:16px 16px max(20px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
 .brush-scroll h2{font-family:Georgia,serif;font-weight:500;font-size:28px;margin:0}
 .brush-panel{border:1px solid rgba(244,239,230,.16);border-radius:18px;padding:14px;background:#141510}
