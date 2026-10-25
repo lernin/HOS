@@ -905,6 +905,19 @@ test('portrait loads are retried and landscape slots stay equal', async () => {
   assert.match(vercel.crons[0].schedule, /^\d+ \d+ \* \* \*$/)
 })
 
+test('sync skips screenshot filenames and does not revive an archive', () => {
+  const source = readFileSync(new URL('../api/_brush/routes/sync.ts', import.meta.url), 'utf8')
+  assert.match(source, /startsWith\('Screenshot_'\)/)
+  const sql = readFileSync(new URL('../supabase/migrations/20261025001000_brush_skip_screenshots.sql', import.meta.url), 'utf8')
+  assert.match(sql, /Screenshot\\_%/)
+  assert.match(sql, /archived_at is null/)
+  assert.match(sql, /name not like 'Screenshot\\_%'/)
+  const drive = readFileSync(new URL('../api/_brush/drive.ts', import.meta.url), 'utf8')
+  assert.match(drive, /moveToDriveTrash/)
+  assert.match(drive, /trashed: true/)
+  assert.doesNotMatch(drive, /files\.delete/)
+})
+
 test('daily sync accepts only a bearer cron secret', () => {
   const source = readFileSync(new URL('../api/_brush/routes/sync-daily.ts', import.meta.url), 'utf8')
   assert.match(source, /const secret = process\.env\.CRON_SECRET\?\.trim\(\)/)

@@ -3,6 +3,7 @@ import image from './_brush/routes/image.js'
 import recipe from './_brush/routes/recipe.js'
 import suggest from './_brush/routes/suggest.js'
 import sync from './_brush/routes/sync.js'
+import retireScreenshots from './_brush/routes/retire-screenshots.js'
 import syncDaily from './_brush/routes/sync-daily.js'
 import thumb from './_brush/routes/thumb.js'
 import faceBackfill from './_brush/routes/face-backfill.js'
@@ -21,6 +22,7 @@ type BrushRoute = {
 const routes: Record<string, BrushRoute> = {
   sync,
   'sync-daily': syncDaily,
+  'retire-screenshots': retireScreenshots,
   upload,
   'upload-session': uploadSession,
   'upload-chunk': uploadChunk,
