@@ -138,14 +138,18 @@ export function rankedActive(pool: Pairable[]) {
   return active(pool).sort(compareConservative)
 }
 
+function rankedPlaced(pool: Pairable[]) {
+  return active(pool).filter(image => image.games >= PLACEMENT_GAMES).sort(compareConservative)
+}
+
 export function newEntrants(before: Pairable[], after: Pairable[]) {
-  const field = active(after)
-  if (field.length <= FINALS_SIZE) return []
-  const previous = new Set(rankedActive(before).slice(0, FINALS_SIZE).map(image => image.id))
+  const field = rankedPlaced(after)
+  if (!field.length) return []
+  const previous = new Set(rankedPlaced(before).slice(0, FINALS_SIZE).map(image => image.id))
   const prior = new Map(before.map(image => [image.id, image]))
-  return rankedActive(after).slice(0, FINALS_SIZE).filter(image => {
+  return field.slice(0, FINALS_SIZE).filter(image => {
     const was = prior.get(image.id)
-    return was && was.games < PLACEMENT_GAMES && !previous.has(image.id)
+    return Boolean(was && was.games < PLACEMENT_GAMES && image.games >= PLACEMENT_GAMES && !previous.has(image.id))
   })
 }
 

@@ -452,19 +452,27 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   return (
     <main className={`brush${portrait ? ' is-portrait' : ' is-landscape'}${showingMatch ? ' is-match' : ''}`}>
       {phase === 'app' && <input id="brush-gallery" className="brush-file-input" data-upload-input type="file" accept="image/*" multiple onChange={onGallery} />}
-      {!landscapeMatch && (
+      {!showingMatch && (
         <nav className="brush-nav" data-nav>
           <div className="brush-nav-row">{navLinks()}</div>
-          {showingMatch && portrait && (
-            <button type="button" data-action="flip" onClick={() => setFront(side => side === 'left' ? 'right' : 'left')}>Flip</button>
-          )}
-          {showingMatch && portrait && zoom.scale > 1 && (
-            <button type="button" data-action="fit" onClick={() => setZoom(REST_ZOOM)}>Fit</button>
-          )}
         </nav>
       )}
       <div className="brush-main">
-      {moment && !landscapeMatch && <button className={`brush-moment is-${moment.kind}`} type="button" data-moment={moment.kind === 'level' ? 'level' : moment.kind === 'placement' ? 'placement' : 'top16'} title={moment.text} onClick={() => setMoments(queue => queue.slice(1))}>{moment.text}</button>}
+      {showingMatch && portrait && (
+        <div className="brush-portrait-menu">
+          <button className="brush-float-menu" type="button" data-action="menu" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(open => !open)}>
+            <MenuIcon />
+          </button>
+          {menuOpen && (
+            <div className="brush-menu is-portrait-menu" data-menu>
+              {navLinks()}
+              <button type="button" data-action="flip" onClick={() => { setMenuOpen(false); setFront(side => side === 'left' ? 'right' : 'left') }}>Flip</button>
+              {zoom.scale > 1 && <button type="button" data-action="fit" onClick={() => { setMenuOpen(false); setZoom(REST_ZOOM) }}>Fit</button>}
+            </div>
+          )}
+        </div>
+      )}
+      {moment && !landscapeMatch && <button className={`brush-moment is-${moment.kind}${showingMatch && portrait ? ' is-overlay' : ''}`} type="button" data-moment={moment.kind === 'level' ? 'level' : moment.kind === 'placement' ? 'placement' : 'top16'} title={moment.text} onClick={() => setMoments(queue => queue.slice(1))}>{moment.text}</button>}
 
       {phase === 'boot' && <div className="brush-gate"><p>Opening Brush…</p></div>}
       {(phase === 'set' || phase === 'enter' || phase === 'change') && (
@@ -518,7 +526,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
               {message && phase === 'app' && <p className="brush-note brush-gutter-toast is-note" data-note>{message}</p>}
             </>
           ) : null}
-          leftChrome={landscapeMatch ? (
+          menu={landscapeMatch ? (
             <>
               <button className="brush-menu-button brush-icon-button" type="button" data-action="menu" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(open => !open)}>
                 <MenuIcon />
@@ -530,26 +538,6 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
                 </button>
               )}
               {menuOpen && <div className="brush-menu" data-menu>{navLinks()}</div>}
-            </>
-          ) : null}
-          rightChrome={landscapeMatch ? (
-            <>
-              {deck?.phase === 'qualifying' && qualify && <span className="brush-progress" data-qualify aria-label={`Qualifying ${qualify.percent}%`}>{`${qualify.percent}%`}</span>}
-              {deck?.phase === 'qualifying' && qualify && qualify.total >= 2 && (
-                <button className="brush-icon-button" type="button" data-action="finals" aria-label="Finals" onClick={() => { setMenuOpen(false); goFinals() }}>
-                  <FlagIcon />
-                </button>
-              )}
-              {deck?.phase === 'finals' && <span className="brush-progress" data-finals aria-label={`Finals round ${deck.rounds.length}`}>{deck.rounds.length}</span>}
-              {challengers > 0 && deck?.focus !== 'placement' && (
-                deck?.phase === 'finals'
-                  ? <button className="brush-icon-button" type="button" data-challengers data-action="challengers" aria-label={`New challengers: ${challengers}`} onClick={() => { setMenuOpen(false); placeChallengers() }}>{challengers}</button>
-                  : <span className="brush-progress" data-challengers aria-label={`New challengers: ${challengers}`}>{challengers}</span>
-              )}
-              {deck?.phase === 'finals' && deck.focus === 'placement' && (
-                <button className="brush-icon-button" type="button" data-action="bracket" aria-label="Back to finals" onClick={() => { setMenuOpen(false); backToBracket() }}>↩</button>
-              )}
-              {uploads.total > uploads.completed && <button className="brush-progress" type="button" data-upload-nav aria-label={`Uploads ${uploads.completed} of ${uploads.total}`} onClick={() => setUploadOpen(true)}>{`${uploads.completed}/${uploads.total}`}</button>}
             </>
           ) : null}
         />
@@ -669,10 +657,6 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
 
 function MenuIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
-}
-
-function FlagIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15M7 5.5h9.2l-2.1 3.4 2.1 3.4H7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round" /></svg>
 }
 
 function ReasonIcon() {

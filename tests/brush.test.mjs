@@ -240,6 +240,21 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   assert.ok(conservativeRating(rose.eloA, rose.sigmaA) < conservativeRating(1505, 80))
   assert.deepEqual(newEntrants(before, after).map(item => item.id), [])
   assert.deepEqual(newEntrants(after, after).map(item => item.id), [])
+  const ladder = Array.from({ length: 20 }, (_, index) => image({
+    id: `placed${index}`,
+    name: `Lane_${index}.jpg`,
+    country: 'Japan',
+    elo: 1700 - index * 10,
+    sigma: 80,
+    games: 8,
+    wins: 4,
+  }))
+  const newbie = image({ id: 'newbie', name: 'Newbie_01.jpg', country: 'Korea', elo: 2000, sigma: 40, games: 4, wins: 4 })
+  const beforeRank = [...ladder, newbie]
+  const afterRank = beforeRank.map(item => item.id === 'newbie' ? { ...item, games: 5, wins: 5, elo: 2020 } : item)
+  assert.deepEqual(newEntrants(beforeRank, afterRank).map(item => item.id), ['newbie'])
+  const stillUnranked = beforeRank.map(item => item.id === 'newbie' ? { ...item, elo: 2400, sigma: 30, games: 4 } : item)
+  assert.deepEqual(newEntrants(beforeRank, stillUnranked).map(item => item.id), [])
 
   const upload = readFileSync(new URL('../supabase/migrations/20261023163000_brush_upload_originals.sql', import.meta.url), 'utf8')
   const conflict = upload.slice(upload.lastIndexOf('on conflict (drive_file_id)'), upload.indexOf('updated_at = pg_catalog.now();', upload.lastIndexOf('on conflict (drive_file_id)')))
@@ -871,9 +886,11 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(matchup, /WINNER →/)
   assert.match(matchup, /← WINNER/)
   assert.match(matchup, /Close call/)
-  assert.match(matchup, /Hold for face/)
+  assert.match(matchup, /Hold for left face/)
+  assert.match(matchup, /Hold for right face/)
   assert.match(matchup, /data-action="face"/)
-  assert.match(matchup, /data-face="both"/)
+  assert.match(matchup, /data-face=\{side\}/)
+  assert.doesNotMatch(matchup, /data-face="both"/)
   assert.match(matchup, /data-swipe=/)
   assert.match(matchup, /navigator\.vibrate/)
   assert.match(matchup, /SWIPE_THRESHOLD/)
@@ -916,7 +933,8 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(matchup, /SwipeHint/)
   assert.match(matchup, /PadIcon/)
   assert.match(matchup, /data-match-count/)
-  assert.match(matchup, /data-open/)
+  assert.match(matchup, /data-portrait-line/)
+  assert.doesNotMatch(matchup, /is-glow/)
   assert.match(css, /backdrop-filter:blur\(14px\)/)
   assert.match(css, /brush-photo-glow/)
   assert.match(css, /min-width:\s*84px/)
@@ -925,7 +943,11 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(css, /brush-control-row/)
   assert.match(css, /justify-content:\s*space-evenly/)
   assert.match(matchup, /facePan/)
-  assert.match(matchup, /data-strip/)
+  assert.doesNotMatch(matchup, /data-strip/)
+  assert.match(matchup, /is-face-left/)
+  assert.match(matchup, /is-settled/)
+  assert.match(matchup, /animationcancel/)
+  assert.match(matchup, /visibilitychange/)
   assert.match(matchup, /rankFor/)
   const sql = readFileSync(new URL('../supabase/migrations/20261023233000_brush_quick_picks.sql', import.meta.url), 'utf8')
   assert.match(sql, /margin text default 'clear'/)
@@ -1257,6 +1279,9 @@ test('buffered matches stay next when they are still legal, including a trash st
   assert.match(matchup, /faceTravelClutch/)
   assert.match(matchup, /faceRelativePan/)
   assert.match(css, /translateY\(-50%\)/)
+  assert.match(css, /button\.brush-moment/)
+  assert.match(css, /is-face-left/)
+  assert.match(css, /is-face-right/)
   assert.match(css, /animation-delay:100ms/)
   assert.match(css, /prefers-reduced-motion:reduce/)
   assert.match(brush, /standbyLeft/)
