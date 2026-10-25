@@ -1,4 +1,4 @@
-import { moveToDriveTrash } from '../drive.js'
+import { driveFileAccess, moveToDriveTrash } from '../drive.js'
 import { json } from '../http.js'
 
 const FILES = [
@@ -32,7 +32,14 @@ export default {
         trashed.push(file.name)
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Drive trash failed.'
-        failed.push({ name: file.name, error: message.slice(0, 180) })
+        let access = 'unknown'
+        try {
+          const info = await driveFileAccess(file.id)
+          access = `canTrash=${info.canTrash} canEdit=${info.canEdit} trashed=${info.trashed}`
+        } catch {
+          access = 'unreadable'
+        }
+        failed.push({ name: file.name, error: `${message.slice(0, 120)} ${access}` })
       }
     }
     return json({ trashed, failed })

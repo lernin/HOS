@@ -242,6 +242,23 @@ export async function forwardUploadChunk(uploadUrl: string, bytes: Uint8Array, r
   return { complete: true as const, file: { id: file.id, name: file.name || '' } }
 }
 
+export async function driveFileAccess(fileId: string) {
+  assertId(fileId)
+  const token = await accessToken(readServiceAccount())
+  const response = await driveFetch(token, `https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true&fields=id,trashed,shared,capabilities`)
+  const file = await response.json() as {
+    trashed?: boolean
+    shared?: boolean
+    capabilities?: { canTrash?: boolean, canEdit?: boolean }
+  }
+  return {
+    trashed: file.trashed === true,
+    shared: file.shared === true,
+    canTrash: file.capabilities?.canTrash === true,
+    canEdit: file.capabilities?.canEdit === true,
+  }
+}
+
 export async function moveToDriveTrash(fileId: string) {
   assertId(fileId)
   const token = await accessToken(readServiceAccount())
