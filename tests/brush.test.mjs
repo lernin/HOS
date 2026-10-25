@@ -8,11 +8,11 @@ import { levelOf, levelProgress, matchMoments, standingOf } from '../src/experie
 import { faceBoxFromPixels, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
 import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
-import { challengerCount, CLOSE_ELO, COOLDOWN_MATCHES, ESTABLISHED_RATE, extendQueue, finalsFieldSize, hashDistance, lookOf, MATCH_MEMORY, newEntrants, nextContender, nextQualifyingPair, pairKey, PLACEMENT_GAMES, RECENT_WINDOW, sameGroup, seedOrder, WILDCARD_RATE } from '../src/experiences/brush/pair.ts'
+import { challengerCount, CLOSE_ELO, COOLDOWN_MATCHES, ESTABLISHED_RATE, extendQueue, finalsFieldSize, hashDistance, lookOf, MATCH_MEMORY, newEntrants, nextContender, nextQualifyingPair, pairKey, PLACEMENT_GAMES, RECENT_WINDOW, retainBuffer, sameGroup, seedOrder, WILDCARD_RATE } from '../src/experiences/brush/pair.ts'
 import { conservativeRating, glickoPeriod, glickoUpdate, INITIAL_RD, INITIAL_VOLATILITY, MIN_RD, rdForGames } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
 import { UPLOAD_BATCH_LIMIT, retryDelayMs, retryLoad, takeBatch } from '../src/experiences/brush/uploads.ts'
-import { approach, clampInRanges, clampZoom, contentSpan, faceAimPan, faceDragGain, faceDragPan, faceEdgePan, facePanRange, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
+import { approach, clampInRanges, clampZoom, contentSpan, faceAimPan, faceDragGain, faceDragPan, faceEdgePan, facePanRange, facePanToPoint, faceRelativePan, faceTravelClutch, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround } from '../src/experiences/brush/zoom.ts'
 
 test('glicko-2 matches the published example and keeps a close call smaller', () => {
   const paper = glickoPeriod({ rating: 1500, rd: 200, volatility: 0.06 }, [
@@ -985,8 +985,29 @@ test('pinch stays under the fingers and Face aim reaches the picture edges', () 
   assert.ok(samples.every((sample, index) => index === 0 || sample <= samples[index - 1] + 1e-9))
   assert.equal(samples.at(-1), -80)
 
+  const clutched = faceTravelClutch({ originX: 20, originY: 100, x: 20, y: 140, startSx: 0, startSy: 0, left: 20, right: 200, up: 100, down: 40 })
+  assert.equal(clutched.sy, 1)
+  const past = faceTravelClutch({ originX: 20, originY: 100, x: 20, y: 180, startSx: 0, startSy: 0, left: 20, right: 200, up: 100, down: 40 })
+  assert.equal(past.sy, 1)
+  assert.equal(past.originY, 180)
+  assert.equal(past.startSy, 1)
+  const reversed = faceTravelClutch({ originX: past.originX, originY: past.originY, x: 20, y: 176, startSx: past.startSx, startSy: past.startSy, left: 20, right: 200, up: 100, down: 40 })
+  assert.ok(reversed.sy < 1, `reverse sy ${reversed.sy}`)
+  const across = faceTravelClutch({ originX: 40, originY: 80, x: 90, y: 80, startSx: 0, startSy: 0, left: 30, right: 50, up: 70, down: 90 })
+  assert.equal(across.sx, 1)
+  const acrossPast = faceTravelClutch({ originX: 40, originY: 80, x: 120, y: 80, startSx: 0, startSy: 0, left: 30, right: 50, up: 70, down: 90 })
+  assert.equal(acrossPast.sx, 1)
+  assert.equal(acrossPast.originX, 120)
+  const acrossBack = faceTravelClutch({ originX: acrossPast.originX, originY: acrossPast.originY, x: 116, y: 80, startSx: acrossPast.startSx, startSy: acrossPast.startSy, left: 30, right: 50, up: 70, down: 90 })
+  assert.ok(acrossBack.sx < 1, `reverse sx ${acrossBack.sx}`)
+  assert.equal(faceRelativePan(1, -400, 200), -400)
+  assert.equal(faceRelativePan(-1, -400, 200), 200)
+  assert.equal(faceRelativePan(0, -400, 200), 0)
+  assert.equal(faceRelativePan(1, -100, 50), -100)
+  assert.equal(faceRelativePan(-1, -100, 50), 50)
+
   const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
-  assert.match(matchup, /faceDragPan/)
+  assert.match(matchup, /faceTravelClutch/)
   assert.match(matchup, /requestAnimationFrame/)
   assert.match(matchup, /holdId/)
   assert.match(matchup, /id !== holdId/)
@@ -1054,6 +1075,71 @@ test('portrait loads are retried and landscape slots stay equal', async () => {
   assert.equal(vercel.crons.length, 1)
   assert.equal(vercel.crons[0].path, '/api/brush-sync-daily')
   assert.match(vercel.crons[0].schedule, /^\d+ \d+ \* \* \*$/)
+})
+
+test('buffered matches stay next when they are still legal, including a trash standby', () => {
+  const pool = Array.from({ length: 12 }, (_, index) => image({
+    id: `p${index}`,
+    name: `p${index}.jpg`,
+    country: ['Japan', 'Korea', 'Sweden', 'Thailand'][index % 4],
+    elo: 1480 + index,
+    games: 0,
+    wins: 0,
+    losses: 0,
+  }))
+  const deck = bootDeck(pool, null, () => 0.5)
+  assert.ok(deck.queue.length >= 4, `depth ${deck.queue.length}`)
+  assert.ok('standbyLeft' in deck.queue[0] && 'standbyRight' in deck.queue[0])
+  const first = deck.queue[0]
+  const second = deck.queue[1]
+  const kept = retainBuffer(deck.queue.slice(1), pairKey(first.leftId, first.rightId), deck.images, [...deck.recentKeys, pairKey(first.leftId, first.rightId)])
+  assert.equal(pairKey(kept[0].leftId, kept[0].rightId), pairKey(second.leftId, second.rightId))
+  const picked = applyDecision(deck, {
+    leftId: first.leftId,
+    rightId: first.rightId,
+    kind: 'pick',
+    winnerId: first.leftId,
+    trashLeft: false,
+    trashRight: false,
+    margin: 'clear',
+  }, () => 0.5)
+  const next = currentMatch(picked)
+  assert.ok(next)
+  assert.equal(pairKey(next.left.id, next.right.id), pairKey(second.leftId, second.rightId))
+  assert.equal([next.left.id, next.right.id].includes(first.leftId), false)
+  assert.equal([next.left.id, next.right.id].includes(first.rightId), false)
+  assert.ok(picked.queue.length >= 4)
+  const trashed = applyDecision(picked, {
+    leftId: next.left.id,
+    rightId: next.right.id,
+    kind: 'trash',
+    winnerId: null,
+    trashLeft: true,
+    trashRight: false,
+    margin: 'clear',
+  }, () => 0.5)
+  const after = currentMatch(trashed)
+  assert.ok(after)
+  assert.equal(after.right.id, next.right.id)
+  assert.notEqual(after.left.id, next.left.id)
+  assert.equal(trashed.images.find(item => item.id === next.left.id).trashed, true)
+  assert.equal(trashed.queue.some(slot => slot.leftId === next.left.id || slot.rightId === next.left.id), false)
+  assert.ok(trashed.queue.length >= 4)
+
+  const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
+  const css = readFileSync(new URL('../src/experiences/brush.css', import.meta.url), 'utf8')
+  const brush = readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8')
+  const deckSource = readFileSync(new URL('../src/experiences/brush/deck.ts', import.meta.url), 'utf8')
+  assert.match(matchup, /brush-push/)
+  assert.match(matchup, /EXPLORE_HOLD_MS = 250/)
+  assert.match(matchup, /faceTravelClutch/)
+  assert.match(matchup, /faceRelativePan/)
+  assert.match(css, /translateY\(-50%\)/)
+  assert.match(css, /animation-delay:100ms/)
+  assert.match(css, /prefers-reduced-motion:reduce/)
+  assert.match(brush, /standbyLeft/)
+  assert.match(brush, /img\.decode/)
+  assert.match(deckSource, /retainBuffer/)
 })
 
 test('sync skips screenshot filenames and does not revive an archive', () => {

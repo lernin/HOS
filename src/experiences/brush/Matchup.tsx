@@ -3,7 +3,7 @@ import { faceShift, faceZoom, focusBox } from './face'
 import { levelOf, levelProgress, levelTier, type Standing } from './level'
 import { PLACEMENT_GAMES } from './pair'
 import type { BrushImage, Margin } from './types'
-import { approach, clampZoom, contentSpan, faceDragGain, faceDragPan, faceEdgePan, facePanToPoint, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround, type Zoom } from './zoom'
+import { approach, clampZoom, contentSpan, faceEdgePan, facePanToPoint, faceRelativePan, faceTravelClutch, imagePointAt, imagePointFromFace, panZoom, REST_ZOOM, restTranslate, zoomAround, type Zoom } from './zoom'
 
 export type { Zoom }
 export { REST_ZOOM }
@@ -13,6 +13,9 @@ const INFO_MIN = 84
 const CONTROLS_MIN = 196
 const SWIPE_THRESHOLD = 56
 const SWIPE_TRAVEL = 88
+const EXPLORE_HOLD_MS = 250
+const EXPLORE_MOVE_PX = 12
+const PUSH_MS = 620
 
 function useImageRatio(src: string | null) {
   const [ratio, setRatio] = useState(9 / 16)
@@ -93,18 +96,28 @@ export function Matchup({
   const frameRef = useRef<HTMLDivElement>(null)
   const [frame, setFrame] = useState<{ left: number, right: number, scale: number } | null>(null)
   const [faceHeld, setFaceHeld] = useState(false)
+  const [exploreSide, setExploreSide] = useState<'left' | 'right' | null>(null)
   const [faceMotion, setFaceMotion] = useState<false | 'settle'>(false)
-  const [facePan, setFacePan] = useState({ x: 0, y: 0, scale: 1 })
+  const [facePan, setFacePan] = useState({ sx: 0, sy: 0, scale: 1 })
   const hitRefs = useRef<{ left: HTMLDivElement | null, right: HTMLDivElement | null }>({ left: null, right: null })
   const faceHeldRef = useRef(false)
-  const [entering, setEntering] = useState<'left' | 'right' | 'both' | null>(null)
+  const exploreRef = useRef<'left' | 'right' | null>(null)
+  const suppressRef = useRef(0)
+  const leadRef = useRef<'left' | 'right'>('left')
   const [matchCount, setMatchCount] = useState(1)
   const [glow, setGlow] = useState<'left' | 'right' | null>(null)
-  const [farewell, setFarewell] = useState<{ winner: 'left' | 'right', loser: 'left' | 'right' } | null>(null)
+  const [push, setPush] = useState<{
+    left: { from: { id: string, src: string | null, image: BrushImage }, to: { id: string, src: string | null, image: BrushImage } } | null
+    right: { from: { id: string, src: string | null, image: BrushImage }, to: { id: string, src: string | null, image: BrushImage } } | null
+    late: 'left' | 'right' | null
+  } | null>(null)
   const [stripOpen, setStripOpen] = useState({ left: false, right: false })
-  const previousIds = useRef<{ left: string, right: string } | null>(null)
+  const previousView = useRef<{ left: { id: string, src: string | null, image: BrushImage }, right: { id: string, src: string | null, image: BrushImage } } | null>(null)
+  const seenSrc = useRef(new Map<string, string>())
   const leftSrc = srcFor(left)
   const rightSrc = srcFor(right)
+  if (leftSrc) seenSrc.current.set(left.id, leftSrc)
+  if (rightSrc) seenSrc.current.set(right.id, rightSrc)
   const leftRatio = useImageRatio(leftSrc)
   const rightRatio = useImageRatio(rightSrc)
   const zoomRef = useRef(zoom)
@@ -135,7 +148,7 @@ export function Matchup({
     let suppressUntil = 0
 
     function onTouchStart(event: TouchEvent) {
-      if (faceHeldRef.current) {
+      if (faceHeldRef.current || exploreRef.current) {
         if (event.cancelable) event.preventDefault()
         return
       }
@@ -162,7 +175,7 @@ export function Matchup({
     }
 
     function onTouchMove(event: TouchEvent) {
-      if (faceHeldRef.current) {
+      if (faceHeldRef.current || exploreRef.current) {
         if (event.cancelable) event.preventDefault()
         return
       }
@@ -190,7 +203,7 @@ export function Matchup({
     }
 
     function onTouchEnd(event: TouchEvent) {
-      if (faceHeldRef.current) return
+      if (faceHeldRef.current || exploreRef.current || Date.now() < suppressRef.current) return
       if (pinching || pinch) {
         if (event.touches.length < 2) {
           pinching = false
@@ -232,10 +245,20 @@ export function Matchup({
   useEffect(() => {
     const pointers = new Map<number, { x: number, y: number }>()
     let holdId: number | null = null
-    let drag: { id: number, originX: number, originY: number, startX: number, startY: number, gainX: number, gainY: number, engaged: boolean } | null = null
+    let exploreId: number | null = null
+    let drag: {
+      id: number
+      originX: number
+      originY: number
+      startSx: number
+      startSy: number
+      travel: { left: number, right: number, up: number, down: number }
+      engaged: boolean
+    } | null = null
     let pinch: { dist: number, scale: number, imageX: number, imageY: number, hit: HTMLElement, side: 'left' | 'right' } | null = null
-    const target = { x: 0, y: 0, scale: 1 }
-    const shown = { x: 0, y: 0, scale: 1 }
+    let arm: { id: number, x: number, y: number, side: 'left' | 'right', timer: number } | null = null
+    const target = { sx: 0, sy: 0, scale: 1 }
+    const shown = { sx: 0, sy: 0, scale: 1 }
     let frame = 0
     let epoch = 0
     const block: AddEventListenerOptions = { passive: false, capture: true }
@@ -252,18 +275,42 @@ export function Matchup({
           frame = 0
           return
         }
-        shown.x = approach(shown.x, target.x, 0.42)
-        shown.y = approach(shown.y, target.y, 0.42)
-        shown.scale = approach(shown.scale, target.scale, 0.42)
+        shown.sx = approach(shown.sx, target.sx, 0.42, 0.0015)
+        shown.sy = approach(shown.sy, target.sy, 0.42, 0.0015)
+        shown.scale = approach(shown.scale, target.scale, 0.42, 0.01)
         setFaceMotion(false)
-        setFacePan({ x: shown.x, y: shown.y, scale: shown.scale })
-        if (shown.x === target.x && shown.y === target.y && shown.scale === target.scale) {
+        setFacePan({ sx: shown.sx, sy: shown.sy, scale: shown.scale })
+        if (shown.sx === target.sx && shown.sy === target.sy && shown.scale === target.scale) {
           frame = 0
           return
         }
         frame = requestAnimationFrame(step)
       }
       frame = requestAnimationFrame(step)
+    }
+    const clearArm = () => {
+      if (!arm) return
+      window.clearTimeout(arm.timer)
+      arm = null
+    }
+    const thumbTravel = (fromX: number, fromY: number) => {
+      const margin = 8
+      const width = window.innerWidth
+      const height = window.innerHeight
+      return {
+        left: Math.max(1, fromX - margin),
+        right: Math.max(1, width - fromX - margin),
+        up: Math.max(1, fromY - margin),
+        down: Math.max(1, height - fromY - margin),
+      }
+    }
+    const relativeFromPan = (px: number, min: number, max: number) => {
+      if (px <= 0) {
+        if (!(min < 0)) return 0
+        return clamp(px / min, 0, 1)
+      }
+      if (!(max > 0)) return 0
+      return -clamp(px / max, 0, 1)
     }
     const edgeOf = (side: 'left' | 'right', pinchScale: number) => {
       const stage = stageRef.current
@@ -284,75 +331,80 @@ export function Matchup({
         span: contentSpan(width, height, ratio, layoutRef.current.fit),
       })
     }
-    const sharedEdge = (pinchScale: number) => {
-      const edges = [edgeOf('left', pinchScale), edgeOf('right', pinchScale)].filter(item => item !== null)
-      if (!edges.length) return { minX: -400, maxX: 400, minY: -800, maxY: 800 }
-      return {
-        minX: Math.min(...edges.map(item => item.minX)),
-        maxX: Math.max(...edges.map(item => item.maxX)),
-        minY: Math.min(...edges.map(item => item.minY)),
-        maxY: Math.max(...edges.map(item => item.maxY)),
-      }
-    }
-    const measure = (point: { x: number, y: number }) => {
-      const stage = stageRef.current
-      const hits = stage ? [...stage.querySelectorAll<HTMLElement>('.brush-photo-hit')] : []
-      let chosen: HTMLElement | null = null
-      for (const hit of hits) {
-        const rect = hit.getBoundingClientRect()
-        if (rect.width < 2 || rect.height < 2) continue
-        const inside = point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
-        if (!chosen || inside) chosen = hit
-        if (inside) break
-      }
-      if (!chosen) return { width: 240, height: 360 }
-      const rect = chosen.getBoundingClientRect()
-      return { width: rect.width, height: rect.height }
-    }
     const ensureDrag = (id: number, point: { x: number, y: number }) => {
       if (drag?.id === id) return drag
-      target.x = shown.x
-      target.y = shown.y
+      target.sx = shown.sx
+      target.sy = shown.sy
       target.scale = shown.scale
-      const size = measure(point)
-      const edge = sharedEdge(target.scale)
       drag = {
         id,
         originX: point.x,
         originY: point.y,
-        startX: target.x,
-        startY: target.y,
-        gainX: faceDragGain(size.width, edge.minX, edge.maxX),
-        gainY: faceDragGain(size.height, edge.minY, edge.maxY),
+        startSx: target.sx,
+        startSy: target.sy,
+        travel: thumbTravel(point.x, point.y),
         engaged: false,
       }
       return drag
     }
+    const releaseGesture = () => {
+      holdId = null
+      exploreId = null
+      drag = null
+      pinch = null
+      pointers.clear()
+      stop()
+      target.sx = 0
+      target.sy = 0
+      target.scale = 1
+      shown.sx = 0
+      shown.sy = 0
+      shown.scale = 1
+      faceHeldRef.current = false
+      exploreRef.current = null
+      setFaceHeld(false)
+      setExploreSide(null)
+      setFaceMotion('settle')
+      setFacePan({ sx: 0, sy: 0, scale: 1 })
+      actions.current.onZoom(REST_ZOOM)
+      window.setTimeout(() => {
+        if (!faceHeldRef.current && !exploreRef.current) setFaceMotion(false)
+      }, 280)
+    }
     const apply = () => {
-      if (holdId === null) return
-      const extra = [...pointers.entries()].filter(([id]) => id !== holdId)
-      if (extra.length >= 2) {
+      if (holdId === null && exploreId === null) return
+      const owner = holdId ?? exploreId
+      if (owner === null) return
+      const extra = [...pointers.entries()].filter(([id]) => id !== holdId && id !== exploreId)
+      const pinching = exploreId !== null ? extra.length >= 1 : extra.length >= 2
+      if (pinching) {
         drag = null
-        const [, a] = extra[0]
-        const [, b] = extra[1]
-        const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1
-        const cx = (a.x + b.x) / 2
-        const cy = (a.y + b.y) / 2
+        const primary = pointers.get(owner)
+        const partner = exploreId !== null ? extra[0]?.[1] : extra[1]?.[1]
+        const first = exploreId !== null ? primary : extra[0]?.[1]
+        if (!first || !partner) return
+        const dist = Math.hypot(first.x - partner.x, first.y - partner.y) || 1
+        const cx = (first.x + partner.x) / 2
+        const cy = (first.y + partner.y) / 2
         const stage = stageRef.current
         if (!pinch && stage) {
-          const hit = hitAt(stage, cx, cy)
+          const preferred = exploreRef.current
+          const hit = preferred
+            ? stage.querySelector<HTMLElement>(`[data-side="${preferred}"] .brush-photo-hit`)
+            : hitAt(stage, cx, cy)
           if (!hit) return
           const side = hit.closest<HTMLElement>('[data-side]')?.dataset.side === 'right' ? 'right' : 'left'
           const focus = faceShift(faceZoom(focusBox(pairRef.current[side].face_box)))
           const screen = screenOn(hit, cx, cy)
           const width = hit.clientWidth || screen.width
           const height = hit.clientHeight || screen.height
+          const edge = edgeOf(side, shown.scale)
           const image = imagePointFromFace({
             faceTx: focus.tx,
             faceTy: focus.ty,
             scale: focus.scale * shown.scale,
-            panX: shown.x,
-            panY: shown.y,
+            panX: edge ? faceRelativePan(shown.sx, edge.minX, edge.maxX) : 0,
+            panY: edge ? faceRelativePan(shown.sy, edge.minY, edge.maxY) : 0,
             width,
             height,
             screenX: screen.x,
@@ -375,121 +427,169 @@ export function Matchup({
           screenX: screen.x,
           screenY: screen.y,
         })
-        const edge = sharedEdge(nextScale)
+        const edge = edgeOf(pinch.side, nextScale) || { minX: -400, maxX: 400, minY: -800, maxY: 800 }
         target.scale = nextScale
-        target.x = clamp(next.x, edge.minX, edge.maxX)
-        target.y = clamp(next.y, edge.minY, edge.maxY)
+        target.sx = relativeFromPan(clamp(next.x, edge.minX, edge.maxX), edge.minX, edge.maxX)
+        target.sy = relativeFromPan(clamp(next.y, edge.minY, edge.maxY), edge.minY, edge.maxY)
         kick()
         return
       }
       pinch = null
-      const active = extra[0] ?? (pointers.get(holdId) ? [holdId, pointers.get(holdId)!] as const : null)
+      const active = extra[0] ?? (pointers.get(owner) ? [owner, pointers.get(owner)!] as const : null)
       if (!active) return
       const [id, point] = active
       const current = ensureDrag(id, point)
-      const dx = point.x - current.originX
-      const dy = point.y - current.originY
-      if (!current.engaged && Math.hypot(dx, dy) < 6) return
-      current.engaged = true
-      const edge = sharedEdge(target.scale)
-      const next = faceDragPan({
+      if (!current.engaged) {
+        if (Math.hypot(point.x - current.originX, point.y - current.originY) < 6) return
+        current.engaged = true
+        current.originX = point.x
+        current.originY = point.y
+        current.startSx = target.sx
+        current.startSy = target.sy
+      }
+      const next = faceTravelClutch({
         originX: current.originX,
         originY: current.originY,
         x: point.x,
         y: point.y,
-        startX: current.startX,
-        startY: current.startY,
-        gainX: current.gainX,
-        gainY: current.gainY,
-        minX: edge.minX,
-        maxX: edge.maxX,
-        minY: edge.minY,
-        maxY: edge.maxY,
+        startSx: current.startSx,
+        startSy: current.startSy,
+        left: current.travel.left,
+        right: current.travel.right,
+        up: current.travel.up,
+        down: current.travel.down,
       })
-      target.x = next.x
-      target.y = next.y
+      current.originX = next.originX
+      current.originY = next.originY
+      current.startSx = next.startSx
+      current.startSy = next.startSy
+      target.sx = next.sx
+      target.sy = next.sy
       kick()
     }
+    const engage = (id: number, x: number, y: number, side: 'left' | 'right') => {
+      clearArm()
+      exploreId = id
+      drag = null
+      pinch = null
+      stop()
+      target.sx = 0
+      target.sy = 0
+      target.scale = 1
+      shown.sx = 0
+      shown.sy = 0
+      shown.scale = 1
+      pointers.set(id, { x, y })
+      ensureDrag(id, { x, y })
+      exploreRef.current = side
+      suppressRef.current = Date.now() + 700
+      setExploreSide(side)
+      setFaceMotion('settle')
+      setFacePan({ sx: 0, sy: 0, scale: 1 })
+    }
     const down = (event: PointerEvent) => {
+      if (event.button !== 0) return
       const targetNode = event.target instanceof Element ? event.target : null
       const onFace = Boolean(targetNode?.closest('[data-action="face"]'))
-      if (onFace && holdId === null) {
+      if (onFace && holdId === null && exploreId === null) {
+        if (Date.now() < lockRef.current) return
+        clearArm()
         if (event.cancelable) event.preventDefault()
         holdId = event.pointerId
         drag = null
         pinch = null
         stop()
-        target.x = 0
-        target.y = 0
+        target.sx = 0
+        target.sy = 0
         target.scale = 1
-        shown.x = 0
-        shown.y = 0
+        shown.sx = 0
+        shown.sy = 0
         shown.scale = 1
         pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
         ensureDrag(event.pointerId, { x: event.clientX, y: event.clientY })
         faceHeldRef.current = true
         setFaceHeld(true)
+        setExploreSide(null)
         setFaceMotion('settle')
-        setFacePan({ x: 0, y: 0, scale: 1 })
+        setFacePan({ sx: 0, sy: 0, scale: 1 })
         return
       }
-      if (holdId === null) return
-      if (event.cancelable) event.preventDefault()
-      event.stopPropagation()
-      pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
-      pinch = null
-      drag = null
-      ensureDrag(event.pointerId, { x: event.clientX, y: event.clientY })
+      if (holdId !== null || exploreId !== null) {
+        if (targetNode?.closest('[data-swipe], button:not([data-action="face"])')) return
+        clearArm()
+        if (event.cancelable) event.preventDefault()
+        event.stopPropagation()
+        pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
+        pinch = null
+        drag = null
+        ensureDrag(event.pointerId, { x: event.clientX, y: event.clientY })
+        return
+      }
+      if (arm && event.pointerId !== arm.id) {
+        clearArm()
+        return
+      }
+      if (Date.now() < lockRef.current) return
+      if (targetNode?.closest('button, [data-swipe]')) return
+      const hit = targetNode?.closest('.brush-photo-hit')
+      if (!hit) return
+      const sideNode = hit.closest('[data-side]')
+      const side = sideNode instanceof HTMLElement && sideNode.dataset.side === 'right' ? 'right' : 'left'
+      clearArm()
+      const timer = window.setTimeout(() => {
+        if (!arm || holdId !== null || exploreId !== null) return
+        engage(arm.id, arm.x, arm.y, arm.side)
+      }, EXPLORE_HOLD_MS)
+      arm = { id: event.pointerId, x: event.clientX, y: event.clientY, side, timer }
     }
     const move = (event: PointerEvent) => {
+      if (arm && event.pointerId === arm.id && exploreId === null && holdId === null) {
+        if (Math.hypot(event.clientX - arm.x, event.clientY - arm.y) > EXPLORE_MOVE_PX) clearArm()
+        return
+      }
       if (!pointers.has(event.pointerId)) return
       if (event.cancelable) event.preventDefault()
       pointers.set(event.pointerId, { x: event.clientX, y: event.clientY })
       apply()
     }
     const up = (event: PointerEvent) => {
+      if (arm && event.pointerId === arm.id && event.pointerId !== holdId && exploreId === null) {
+        clearArm()
+        return
+      }
       if (!pointers.has(event.pointerId)) return
       pointers.delete(event.pointerId)
       pinch = null
       if (event.pointerId !== holdId) {
+        if (exploreId !== null && event.pointerId === exploreId) {
+          releaseGesture()
+          return
+        }
         drag = null
-        const extra = [...pointers.entries()].filter(([id]) => id !== holdId)
-        const next = extra[0] ?? (holdId !== null && pointers.get(holdId) ? [holdId, pointers.get(holdId)!] as const : null)
+        const owner = holdId ?? exploreId
+        const extra = [...pointers.entries()].filter(([id]) => id !== holdId && id !== exploreId)
+        const next = extra[0] ?? (owner !== null && pointers.get(owner) ? [owner, pointers.get(owner)!] as const : null)
         if (next) ensureDrag(next[0], next[1])
         return
       }
-      holdId = null
-      drag = null
-      pointers.clear()
-      stop()
-      target.x = 0
-      target.y = 0
-      target.scale = 1
-      shown.x = 0
-      shown.y = 0
-      shown.scale = 1
-      faceHeldRef.current = false
-      setFaceHeld(false)
-      setFaceMotion('settle')
-      setFacePan({ x: 0, y: 0, scale: 1 })
-      actions.current.onZoom(REST_ZOOM)
-      window.setTimeout(() => {
-        if (!faceHeldRef.current) setFaceMotion(false)
-      }, 280)
+      releaseGesture()
     }
     window.addEventListener('pointerdown', down, block)
     window.addEventListener('pointermove', move, block)
     window.addEventListener('pointerup', up, block)
     window.addEventListener('pointercancel', up, block)
     return () => {
+      clearArm()
       stop()
       window.removeEventListener('pointerdown', down, block)
       window.removeEventListener('pointermove', move, block)
       window.removeEventListener('pointerup', up, block)
       window.removeEventListener('pointercancel', up, block)
-      if (holdId !== null) {
+      if (holdId !== null || exploreId !== null) {
         faceHeldRef.current = false
+        exploreRef.current = null
         setFaceHeld(false)
+        setExploreSide(null)
       }
     }
   }, [])
@@ -519,18 +619,49 @@ export function Matchup({
   }, [portrait, leftRatio, rightRatio])
 
   useLayoutEffect(() => {
-    const previous = previousIds.current
-    previousIds.current = { left: left.id, right: right.id }
+    const view = {
+      left: { id: left.id, src: leftSrc || seenSrc.current.get(left.id) || null, image: left },
+      right: { id: right.id, src: rightSrc || seenSrc.current.get(right.id) || null, image: right },
+    }
+    const previous = previousView.current
+    previousView.current = view
     if (!previous) return
-    const leftChanged = previous.left !== left.id
-    const rightChanged = previous.right !== right.id
+    const leftChanged = previous.left.id !== view.left.id
+    const rightChanged = previous.right.id !== view.right.id
     if (!leftChanged && !rightChanged) return
+    if (!faceHeldRef.current && !exploreRef.current) {
+      setFacePan({ sx: 0, sy: 0, scale: 1 })
+      setFaceMotion(false)
+    }
     setMatchCount(count => count + 1)
-    const side = leftChanged && rightChanged ? 'both' : leftChanged ? 'left' : 'right'
-    setEntering(side)
-    const timer = window.setTimeout(() => setEntering(current => current === side ? null : current), 280)
+    const late = leftChanged && rightChanged ? (leadRef.current === 'right' ? 'left' : 'right') : null
+    const pane = (
+      changed: boolean,
+      from: { id: string, src: string | null, image: BrushImage },
+      to: { id: string, src: string | null, image: BrushImage },
+    ) => changed ? { from, to: { ...to, src: to.src || from.src } } : null
+    setPush({
+      left: pane(leftChanged, previous.left, view.left),
+      right: pane(rightChanged, previous.right, view.right),
+      late,
+    })
+    const timer = window.setTimeout(() => setPush(null), 700)
     return () => window.clearTimeout(timer)
   }, [left.id, right.id])
+
+  useEffect(() => {
+    setPush(current => {
+      if (!current) return current
+      const fill = (motion: NonNullable<typeof push>['left'], src: string | null) => {
+        if (!motion || motion.to.src || !src) return motion
+        return { ...motion, to: { ...motion.to, src } }
+      }
+      const nextLeft = fill(current.left, leftSrc)
+      const nextRight = fill(current.right, rightSrc)
+      if (nextLeft === current.left && nextRight === current.right) return current
+      return { ...current, left: nextLeft, right: nextRight }
+    })
+  }, [leftSrc, rightSrc])
 
   function locked(event: React.MouseEvent) {
     if (Date.now() < lockRef.current) {
@@ -542,7 +673,7 @@ export function Matchup({
   }
 
   function onPhotoClick(event: React.MouseEvent<HTMLDivElement>) {
-    if (locked(event)) return
+    if (locked(event) || Date.now() < suppressRef.current || exploreRef.current) return
     const pointer = event.nativeEvent instanceof PointerEvent ? event.nativeEvent.pointerType : 'mouse'
     if (pointer === 'touch') return
     if (zoomRef.current.scale > 1) return
@@ -557,18 +688,17 @@ export function Matchup({
   const fit = 'contain' as const
   layoutRef.current = { fit, leftRatio, rightRatio }
 
-  function photoStyle(image: BrushImage) {
-    const focus = faceHeld ? faceShift(faceZoom(focusBox(image.face_box))) : null
+  function photoStyle(image: BrushImage, side: 'left' | 'right') {
+    const focus = faceHeld || exploreSide === side ? faceShift(faceZoom(focusBox(image.face_box))) : null
     const rested = restTranslate(zoom)
     const scale = focus ? focus.scale * facePan.scale : rested.scale
     const tx = focus ? focus.tx : rested.tx
     const ty = focus ? focus.ty : rested.ty
-    const side = image.id === right.id ? 'right' : 'left'
     const hit = hitRefs.current[side]
     const width = hit?.clientWidth || (frame ? (side === 'left' ? frame.left : frame.right) : 0)
     const height = hit?.clientHeight || frameRef.current?.clientHeight || 0
-    let px = focus ? facePan.x : 0
-    let py = focus ? facePan.y : 0
+    let px = 0
+    let py = 0
     if (focus && width > 1 && height > 1) {
       const edge = faceEdgePan({
         faceTx: focus.tx,
@@ -578,8 +708,8 @@ export function Matchup({
         height,
         span: contentSpan(width, height, side === 'left' ? leftRatio : rightRatio, fit),
       })
-      px = clamp(px, edge.minX, edge.maxX)
-      py = clamp(py, edge.minY, edge.maxY)
+      px = faceRelativePan(facePan.sx, edge.minX, edge.maxX)
+      py = faceRelativePan(facePan.sy, edge.minY, edge.maxY)
     }
     return {
       transform: `translate(${px}px, ${py}px) translate(${tx}%, ${ty}%) scale(${scale})`,
@@ -689,41 +819,75 @@ export function Matchup({
     )
   }
 
-  function playFarewell(kind: 'pick' | 'close' | 'trash', side: 'left' | 'right', act: () => void) {
+  function commitNow(side: 'left' | 'right', act: () => void) {
     if (Date.now() < lockRef.current) return
-    lockRef.current = Date.now() + 700
-    const other = side === 'left' ? 'right' : 'left'
+    leadRef.current = side
+    lockRef.current = Date.now() + PUSH_MS
     setGlow(null)
-    setFarewell(kind === 'trash' ? { winner: other, loser: side } : { winner: side, loser: other })
-    window.setTimeout(() => {
-      if (aliveRef.current) setFarewell(null)
-      act()
-    }, 280)
+    act()
   }
 
   function choose(event: React.MouseEvent, id: string, margin: Margin) {
     if (locked(event)) return
     const side = id === left.id ? 'left' : 'right'
-    playFarewell(margin === 'close' ? 'close' : 'pick', side, () => onPick(id, margin))
+    commitNow(side, () => onPick(id, margin))
   }
 
   function discard(event: React.MouseEvent, id: string) {
     if (locked(event)) return
     const side = id === left.id ? 'left' : 'right'
-    playFarewell('trash', side, () => onTrash(id))
+    commitNow(side, () => onTrash(id))
   }
 
   function swipeCommit(kind: 'pick' | 'close' | 'trash', side: 'left' | 'right') {
     const image = side === 'left' ? left : right
-    playFarewell(kind, side, () => {
+    commitNow(side, () => {
       if (kind === 'trash') onTrash(image.id)
       else onPick(image.id, kind === 'close' ? 'close' : 'clear')
     })
   }
 
   function onAim(side: 'left' | 'right' | null) {
-    if (farewell) return
+    if (Date.now() < lockRef.current) return
     setGlow(side)
+  }
+
+  function restPhotoStyle() {
+    const rested = restTranslate(zoom)
+    return {
+      transform: `translate(0px, 0px) translate(${rested.tx}%, ${rested.ty}%) scale(${rested.scale})`,
+      transformOrigin: '50% 50%',
+      objectFit: fit,
+    }
+  }
+
+  function framePhoto(image: BrushImage, side: 'left' | 'right', src: string | null, live: boolean) {
+    const shown = src || seenSrc.current.get(image.id) || null
+    if (!shown) return <div className="brush-photo brush-photo-empty" />
+    return <img className="brush-photo" src={shown} alt={image.name} style={live ? photoStyle(image, side) : restPhotoStyle()} draggable={false} />
+  }
+
+  function matchCountNode() {
+    if (!push) return <p className="brush-match-count" data-match-count>Match {matchCount}</p>
+    return (
+      <div className="brush-count-clip">
+        <div className="brush-push">
+          <p className="brush-push-pane is-from brush-match-count" data-match-count aria-hidden="true">Match {Math.max(1, matchCount - 1)}</p>
+          <p className="brush-push-pane is-to brush-match-count" data-match-count>Match {matchCount}</p>
+        </div>
+      </div>
+    )
+  }
+
+  function stripBody(side: 'left' | 'right', image: BrushImage) {
+    const motion = side === 'left' ? push?.left : push?.right
+    if (!motion || !push) return pictureStats(image, 'strip', side)
+    return (
+      <div className={`brush-push${push.late === side ? ' is-late' : ''}`}>
+        <div className="brush-push-pane is-from" aria-hidden="true">{pictureStats(motion.from.image, 'strip', side)}</div>
+        <div className="brush-push-pane is-to">{pictureStats(image, 'strip', side)}</div>
+      </div>
+    )
   }
 
   return (
@@ -731,20 +895,24 @@ export function Matchup({
       {!portrait && (
         <aside className="brush-info-strip is-left" data-strip="left">
           <div className="brush-strip-tools">{leftChrome}</div>
-          <div className="brush-strip-body">{pictureStats(left, 'strip', 'left')}</div>
+          <div className="brush-strip-body">{stripBody('left', left)}</div>
         </aside>
       )}
       <div className="brush-photos" ref={stageRef}>
         {cards.map(({ image, side }) => {
           const src = side === 'left' ? leftSrc : rightSrc
+          const motion = side === 'left' ? push?.left : push?.right
           return (
-            <article key={image.id} className={`brush-card${front === side ? ' is-front' : ''}${glow === side ? ' is-glow' : ''}${glow && glow !== side ? ' is-dim' : ''}${farewell?.winner === side ? ' is-shimmer' : ''}${farewell?.loser === side ? ' is-farewell' : ''}`} data-side={side} data-image={image.id} data-name={image.name} data-photo-slot>
+            <article key={side} className={`brush-card${front === side ? ' is-front' : ''}${glow === side ? ' is-glow' : ''}${glow && glow !== side ? ' is-dim' : ''}`} data-side={side} data-image={image.id} data-name={image.name} data-explore={exploreSide === side ? 'true' : 'false'} data-photo-slot>
               <div className="brush-photo-hit" ref={node => { hitRefs.current[side] = node }} onClick={onPhotoClick}>
-                {src ? (
-                  <div className={`brush-slide${entering === side || entering === 'both' ? ' is-entering' : ''}`}>
-                    <img className="brush-photo" src={src} alt={image.name} style={photoStyle(image)} draggable={false} />
+                {motion ? (
+                  <div className={`brush-push${push?.late === side ? ' is-late' : ''}`}>
+                    <div className="brush-push-pane is-from" aria-hidden="true">{framePhoto(motion.from.image, side, motion.from.src, false)}</div>
+                    <div className="brush-push-pane is-to">{framePhoto(image, side, motion.to.src || src, true)}</div>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="brush-slide">{framePhoto(image, side, src, true)}</div>
+                )}
                 <div className="brush-photo-glow" />
               </div>
               {portrait && <div className="brush-portrait-stats">{pictureStats(image, 'portrait')}</div>}
@@ -755,12 +923,12 @@ export function Matchup({
       {!portrait && (
         <aside className="brush-info-strip is-right" data-strip="right">
           <div className="brush-strip-tools">{rightChrome}</div>
-          <div className="brush-strip-body">{pictureStats(right, 'strip', 'right')}</div>
+          <div className="brush-strip-body">{stripBody('right', right)}</div>
         </aside>
       )}
       {!portrait && (
         <aside className="brush-controls" data-gutter="controls">
-          <p key={matchCount} className="brush-match-count" data-match-count>Match {matchCount}</p>
+          {matchCountNode()}
           {notice}
           <div className="brush-gutter-actions">
             <div className="brush-control-row">
@@ -776,9 +944,7 @@ export function Matchup({
           </div>
         </aside>
       )}
-      {portrait && (
-        <p key={matchCount} className="brush-match-count" data-match-count>Match {matchCount}</p>
-      )}
+      {portrait && matchCountNode()}
       {portrait && (
         <div className="brush-footer">
           <button className="brush-choice" type="button" data-action="pick" onClick={event => choose(event, frontImage.id, 'clear')}>Pick</button>

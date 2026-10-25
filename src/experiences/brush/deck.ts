@@ -1,6 +1,6 @@
 import type { BrushImage, ContestState, Margin } from './types.ts'
 import { glickoUpdate } from './rank.ts'
-import { advanceBracket, extendQueue, MATCH_MEMORY, nextContender, pairKey, qualifyingProgress, rankedActive, seedBracket, type RoundMatch, type Slot } from './pair.ts'
+import { advanceBracket, extendQueue, MATCH_MEMORY, nextContender, pairKey, qualifyingProgress, rankedActive, retainBuffer, sameGroup, seedBracket, type RoundMatch, type Slot } from './pair.ts'
 
 export type Deck = {
   images: BrushImage[]
@@ -56,18 +56,22 @@ export function dropUnreadable(deck: Deck, imageId: string, rng: () => number = 
     })
     return { ...deck, images, rounds }
   }
+  const cleaned = deck.queue.filter(slot => slot.leftId !== imageId && slot.rightId !== imageId)
   const queue: Slot[] = []
   if (before && (before.left.id === imageId || before.right.id === imageId)) {
     const keepId = before.left.id === imageId ? before.right.id : before.left.id
-    const contender = nextContender(images, keepId, { recentKeys: deck.recentKeys, rng })
-    if (contender) {
+    const head = deck.queue[0]
+    const standby = head ? liveStandby(images, keepId, before.left.id === imageId ? head.standbyLeft : head.standbyRight) : null
+    const contenderId = standby || nextContender(images, keepId, { recentKeys: deck.recentKeys, rng })?.id
+    if (contenderId) {
       queue.push(before.left.id === imageId
-        ? { leftId: contender.id, rightId: keepId }
-        : { leftId: keepId, rightId: contender.id })
+        ? { leftId: contenderId, rightId: keepId }
+        : { leftId: keepId, rightId: contenderId })
     }
-  } else {
-    const head = deck.queue.find(slot => slot.leftId !== imageId && slot.rightId !== imageId)
-    if (head) queue.push(head)
+    queue.push(...retainBuffer(cleaned, pairKey(before.left.id, before.right.id), images, deck.recentKeys))
+  } else if (cleaned[0]) {
+    const headKey = pairKey(cleaned[0].leftId, cleaned[0].rightId)
+    queue.push(cleaned[0], ...retainBuffer(cleaned.slice(1), '', images, deck.recentKeys).filter(slot => pairKey(slot.leftId, slot.rightId) !== headKey))
   }
   return { ...deck, images, queue: extendQueue(images, queue, deck.recentKeys, undefined, rng) }
 }
@@ -124,15 +128,28 @@ function trash(images: BrushImage[], decision: Decision) {
   })
 }
 
+function liveStandby(images: BrushImage[], keepId: string, candidate: string | null | undefined) {
+  if (!candidate || candidate === keepId) return null
+  const keep = byId(images, keepId)
+  const next = byId(images, candidate)
+  if (!keep || !next || next.trashed || next.archived || next.unreadable) return null
+  if (sameGroup(keep, next)) return null
+  return candidate
+}
+
 function replaceTrashed(deck: Deck, decision: Decision, rng: () => number): Deck | null {
   const images = trash(deck.images, decision)
   const keepId = decision.trashLeft ? decision.rightId : decision.leftId
   const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-MATCH_MEMORY)
-  const contender = nextContender(images, keepId, { recentKeys, rng })
-  if (!contender) return null
+  const head = deck.queue[0]
+  const standby = head && head.leftId === decision.leftId && head.rightId === decision.rightId
+    ? liveStandby(images, keepId, decision.trashLeft ? head.standbyLeft : head.standbyRight)
+    : null
+  const contenderId = standby || nextContender(images, keepId, { recentKeys, rng })?.id
+  if (!contenderId) return null
   const slot = decision.trashLeft
-    ? { leftId: contender.id, rightId: keepId }
-    : { leftId: keepId, rightId: contender.id }
+    ? { leftId: contenderId, rightId: keepId }
+    : { leftId: keepId, rightId: contenderId }
   if (deck.phase === 'finals' && deck.focus !== 'placement') {
     const rounds = deck.rounds.map((round, index) => {
       if (index !== deck.rounds.length - 1) return round
@@ -143,7 +160,9 @@ function replaceTrashed(deck: Deck, decision: Decision, rng: () => number): Deck
     })
     return { ...deck, images, recentKeys, rounds }
   }
-  return { ...deck, images, recentKeys, queue: extendQueue(images, [slot], recentKeys, undefined, rng) }
+  const playedKey = pairKey(decision.leftId, decision.rightId)
+  const rest = retainBuffer(deck.queue.slice(1), playedKey, images, recentKeys)
+  return { ...deck, images, recentKeys, queue: extendQueue(images, [slot, ...rest], recentKeys, undefined, rng) }
 }
 
 export function applyDecision(deck: Deck, decision: Decision, rng: () => number = Math.random): Deck {
@@ -153,10 +172,7 @@ export function applyDecision(deck: Deck, decision: Decision, rng: () => number 
   }
   const images = decision.kind === 'pick' ? rate(deck.images, decision) : trash(deck.images, decision)
   const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-MATCH_MEMORY)
-  if (deck.phase === 'finals' && deck.focus === 'placement') {
-    return { ...deck, images, recentKeys, queue: extendQueue(images, [], recentKeys, undefined, rng) }
-  }
-  if (deck.phase === 'finals') {
+  if (deck.phase === 'finals' && deck.focus !== 'placement') {
     const winnerId = decision.kind === 'pick'
       ? decision.winnerId
       : decision.trashLeft && !decision.trashRight
@@ -175,7 +191,8 @@ export function applyDecision(deck: Deck, decision: Decision, rng: () => number 
       phase: advanced.championId ? 'champion' : 'finals',
     }
   }
-  return { ...deck, images, recentKeys, queue: extendQueue(images, [], recentKeys, undefined, rng) }
+  const kept = retainBuffer(deck.queue.slice(1), pairKey(decision.leftId, decision.rightId), images, recentKeys)
+  return { ...deck, images, recentKeys, queue: extendQueue(images, kept, recentKeys, undefined, rng) }
 }
 
 export function startFinals(deck: Deck): Deck {

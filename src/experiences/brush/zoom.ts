@@ -183,11 +183,51 @@ export function faceDragPan(input: {
   }
 }
 
-export function approach(current: number, target: number, amount: number) {
+export function approach(current: number, target: number, amount: number, epsilon = 0.35) {
   if (!(amount > 0)) return current
   if (amount >= 1) return target
   const next = current + (target - current) * amount
-  return Math.abs(target - next) <= 0.35 ? target : next
+  return Math.abs(target - next) <= epsilon ? target : next
+}
+
+// s = 0 is the face rest. Positive s reveals the lower or righter edge (the min pan).
+export function faceRelativePan(s: number, min: number, max: number) {
+  if (!(s > 0) && !(s < 0)) return 0
+  if (s > 0) return Math.min(1, s) * min
+  return Math.min(1, -s) * max
+}
+
+// Past an edge, clamp the picture and move the finger anchor so a reverse moves immediately.
+export function faceTravelClutch(input: {
+  originX: number
+  originY: number
+  x: number
+  y: number
+  startSx: number
+  startSy: number
+  left: number
+  right: number
+  up: number
+  down: number
+}) {
+  const dx = input.x - input.originX
+  const dy = input.y - input.originY
+  const travelX = Math.max(1, dx >= 0 ? input.right : input.left)
+  const travelY = Math.max(1, dy >= 0 ? input.down : input.up)
+  const rawSx = input.startSx + dx / travelX
+  const rawSy = input.startSy + dy / travelY
+  const sx = clamp(rawSx, -1, 1)
+  const sy = clamp(rawSy, -1, 1)
+  const clampX = Math.abs(sx - rawSx) > 1e-6
+  const clampY = Math.abs(sy - rawSy) > 1e-6
+  return {
+    sx,
+    sy,
+    originX: clampX ? input.x : input.originX,
+    originY: clampY ? input.y : input.originY,
+    startSx: clampX ? sx : input.startSx,
+    startSy: clampY ? sy : input.startSy,
+  }
 }
 
 export function imagePointFromFace(input: {
