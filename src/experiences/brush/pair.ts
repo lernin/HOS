@@ -411,9 +411,21 @@ export function nextQualifyingPair(pool: Pairable[], options: { avoidIds?: strin
   return null
 }
 
-export function nextContender(pool: Pairable[], keepId: string, options: { recentKeys?: string[], rng?: () => number } = {}) {
+function preferred(candidates: Pairable[], preferId?: string | null) {
+  if (!preferId) return null
+  return candidates.find(image => image.id === preferId) || null
+}
+
+function preferredFresh(anchor: Pairable, candidates: Pairable[], keys: string[], preferId?: string | null) {
+  const faced = recentOpponents(anchor.id, keys.slice(-RECENT_WINDOW))
+  const fresh = candidates.filter(image => !faced.has(image.id))
+  return preferred(fresh.length ? fresh : candidates, preferId)
+}
+
+export function nextContender(pool: Pairable[], keepId: string, options: { recentKeys?: string[], rng?: () => number, preferId?: string | null } = {}) {
   const rng = options.rng || Math.random
   const keys = options.recentKeys || []
+  const preferId = options.preferId
   const images = active(pool)
   const keep = images.find(image => image.id === keepId)
   if (!keep) return null
@@ -423,7 +435,9 @@ export function nextContender(pool: Pairable[], keepId: string, options: { recen
     if (newcomers.length) {
       const minGames = Math.min(...newcomers.map(image => image.games))
       const starved = newcomers.filter(image => image.games === minGames)
-      return pickByVariety(keep, starved, images, keys, rng)
+      const faced = recentOpponents(keep.id, keys)
+      const fresh = starved.filter(image => !faced.has(image.id))
+      return preferred(fresh.length ? fresh : starved, preferId) || pickByVariety(keep, starved, images, keys, rng)
     }
   } else {
     const peers = available.filter(image => image.games < PLACEMENT_GAMES && !sameGroup(keep, image))
@@ -434,13 +448,14 @@ export function nextContender(pool: Pairable[], keepId: string, options: { recen
       const same = poolPeers.filter(image => winsOf(image) === winsOf(keep) && lossesOf(image) === lossesOf(keep))
       const band = same.length ? same : closestRecord(keep, poolPeers)
       const minGames = Math.min(...band.map(image => image.games))
-      return pickByVariety(keep, band.filter(image => image.games === minGames), images, keys, rng)
+      const fewest = band.filter(image => image.games === minGames)
+      return preferred(fewest, preferId) || pickByVariety(keep, fewest, images, keys, rng)
     }
     const established = available.filter(image => image.games >= PLACEMENT_GAMES && !sameGroup(keep, image))
-    if (established.length) return pickNear(keep, established, images, keys, rng)
+    if (established.length) return preferredFresh(keep, established, keys, preferId) || pickNear(keep, established, images, keys, rng)
   }
   const legal = available.filter(image => !sameGroup(keep, image))
-  return pickNear(keep, legal.length ? legal : available, images, keys, rng)
+  return preferredFresh(keep, legal, keys, preferId) || pickNear(keep, legal.length ? legal : available, images, keys, rng)
 }
 
 function recordFair(anchor: Pairable, other: Pairable, unranked: Pairable[], keys: string[]) {

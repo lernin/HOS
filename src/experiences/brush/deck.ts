@@ -137,6 +137,22 @@ function liveStandby(images: BrushImage[], keepId: string, candidate: string | n
   return candidate
 }
 
+function sameSlot(slot: Slot | undefined, leftId: string, rightId: string) {
+  return Boolean(slot && slot.leftId === leftId && slot.rightId === rightId)
+}
+
+/** The survivor stays on its original side even if the buffer would rather roll a fresh pair. */
+function pinReplacement(queue: Slot[], slot: { leftId: string, rightId: string }, images: BrushImage[], recentKeys: string[], rng: () => number) {
+  if (sameSlot(queue[0], slot.leftId, slot.rightId)) return queue
+  const upcoming = [...recentKeys, pairKey(slot.leftId, slot.rightId)].slice(-MATCH_MEMORY)
+  const tail = retainBuffer(queue.filter(item => !sameSlot(item, slot.leftId, slot.rightId)), pairKey(slot.leftId, slot.rightId), images, upcoming)
+  const seeded = extendQueue(images, [slot], recentKeys, 1, rng)
+  const head = sameSlot(seeded[0], slot.leftId, slot.rightId)
+    ? seeded[0]
+    : { leftId: slot.leftId, rightId: slot.rightId, standbyLeft: null, standbyRight: null }
+  return [head, ...tail]
+}
+
 function replaceTrashed(deck: Deck, decision: Decision, rng: () => number): Deck | null {
   const images = trash(deck.images, decision)
   const keepId = decision.trashLeft ? decision.rightId : decision.leftId
@@ -145,7 +161,7 @@ function replaceTrashed(deck: Deck, decision: Decision, rng: () => number): Deck
   const standby = head && head.leftId === decision.leftId && head.rightId === decision.rightId
     ? liveStandby(images, keepId, decision.trashLeft ? head.standbyLeft : head.standbyRight)
     : null
-  const contenderId = standby || nextContender(images, keepId, { recentKeys, rng })?.id
+  const contenderId = nextContender(images, keepId, { recentKeys, rng, preferId: standby })?.id
   if (!contenderId) return null
   const slot = decision.trashLeft
     ? { leftId: contenderId, rightId: keepId }
@@ -162,7 +178,8 @@ function replaceTrashed(deck: Deck, decision: Decision, rng: () => number): Deck
   }
   const playedKey = pairKey(decision.leftId, decision.rightId)
   const rest = retainBuffer(deck.queue.slice(1), playedKey, images, recentKeys)
-  return { ...deck, images, recentKeys, queue: extendQueue(images, [slot, ...rest], recentKeys, undefined, rng) }
+  const queued = extendQueue(images, [slot, ...rest], recentKeys, undefined, rng)
+  return { ...deck, images, recentKeys, queue: pinReplacement(queued, slot, images, recentKeys, rng) }
 }
 
 export function applyDecision(deck: Deck, decision: Decision, rng: () => number = Math.random): Deck {
