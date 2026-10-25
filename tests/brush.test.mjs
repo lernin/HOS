@@ -672,6 +672,128 @@ test('trashing one picture keeps the other and brings a different model', () => 
   assert.equal(next.images.find(item => item.id === match.left.id).elo, match.left.elo)
 })
 
+test('trash keeps the survivor in place and only replaces the trashed side', () => {
+  const keep = image({ id: 'keep', name: 'keep0.jpg', country: 'Keepland' })
+  const drop = image({ id: 'drop', name: 'drop0.jpg', country: 'Dropland' })
+  const fresh = image({ id: 'fresh', name: 'fresh0.jpg', country: 'Freshland' })
+  const fresh2 = image({ id: 'fresh2', name: 'fresh2.jpg', country: 'Fresh2land' })
+  const cooling = image({ id: 'cooling', name: 'cooling0.jpg', country: 'Coolland' })
+  const faced = image({ id: 'faced', name: 'faced0.jpg', country: 'Facedland' })
+  const kin = image({ id: 'kin', name: 'sand-save-2.jpg', country: 'Kinland' })
+  const seriesKeep = image({ id: 'keep', name: 'sand-save-1.jpg', country: 'Keepland' })
+  const bufferedA = image({ id: 'bufferedA', name: 'buffera0.jpg', country: 'BufferA' })
+  const bufferedB = image({ id: 'bufferedB', name: 'bufferb0.jpg', country: 'BufferB' })
+  const old1 = image({ id: 'old1', name: 'old1.jpg', country: 'Old1land' })
+  const old2 = image({ id: 'old2', name: 'old2.jpg', country: 'Old2land' })
+  const old3 = image({ id: 'old3', name: 'old3.jpg', country: 'Old3land' })
+  const old4 = image({ id: 'old4', name: 'old4.jpg', country: 'Old4land' })
+  const ready = (pool, recentKeys, queue) => ({
+    ...bootDeck(pool, { phase: 'qualifying', rounds: [], championId: null, recentKeys }, () => 0),
+    recentKeys,
+    queue,
+  })
+  const trashRight = (deck, leftId, rightId) => applyDecision(deck, {
+    leftId,
+    rightId,
+    kind: 'trash',
+    winnerId: null,
+    trashLeft: false,
+    trashRight: true,
+    margin: 'clear',
+  }, () => 0.99)
+  const kept = trashRight(ready(
+    [keep, drop, fresh, fresh2, bufferedA, bufferedB],
+    [],
+    [
+      { leftId: 'keep', rightId: 'drop', standbyLeft: 'fresh2', standbyRight: 'fresh' },
+      { leftId: 'bufferedA', rightId: 'bufferedB' },
+    ],
+  ), 'keep', 'drop')
+  const keptMatch = currentMatch(kept)
+  assert.ok(keptMatch)
+  assert.equal(keptMatch.left.id, 'keep')
+  assert.equal(keptMatch.right.id, 'fresh')
+  assert.notEqual(pairKey(keptMatch.left.id, keptMatch.right.id), pairKey('bufferedA', 'bufferedB'))
+  assert.equal(sameGroup(keptMatch.left, keptMatch.right), false)
+  assert.equal(kept.images.find(item => item.id === 'drop').trashed, true)
+  assert.equal(kept.queue.some(slot => slot.leftId === 'drop' || slot.rightId === 'drop'), false)
+
+  const trashLeft = applyDecision(ready(
+    [keep, drop, fresh, fresh2],
+    [],
+    [{ leftId: 'keep', rightId: 'drop', standbyLeft: 'fresh2', standbyRight: 'fresh' }],
+  ), {
+    leftId: 'keep',
+    rightId: 'drop',
+    kind: 'trash',
+    winnerId: null,
+    trashLeft: true,
+    trashRight: false,
+    margin: 'clear',
+  }, () => 0.99)
+  const leftKept = currentMatch(trashLeft)
+  assert.ok(leftKept)
+  assert.equal(leftKept.right.id, 'drop')
+  assert.equal(leftKept.left.id, 'fresh2')
+  assert.equal(trashLeft.images.find(item => item.id === 'keep').trashed, true)
+
+  const grouped = trashRight(ready(
+    [seriesKeep, drop, fresh, kin, bufferedA, bufferedB],
+    [],
+    [
+      { leftId: 'keep', rightId: 'drop', standbyLeft: null, standbyRight: 'kin' },
+      { leftId: 'bufferedA', rightId: 'bufferedB' },
+    ],
+  ), 'keep', 'drop')
+  const groupedMatch = currentMatch(grouped)
+  assert.ok(groupedMatch)
+  assert.equal(groupedMatch.left.id, 'keep')
+  assert.notEqual(groupedMatch.right.id, 'kin')
+  assert.notEqual(groupedMatch.right.id, 'drop')
+  assert.equal(sameGroup(groupedMatch.left, groupedMatch.right), false)
+  assert.notEqual(pairKey(groupedMatch.left.id, groupedMatch.right.id), pairKey('bufferedA', 'bufferedB'))
+
+  const cooled = trashRight(ready(
+    [keep, drop, fresh, fresh2, cooling, old1, old2, old3, old4, bufferedA, bufferedB],
+    [pairKey('old1', 'old2'), pairKey('cooling', 'old3'), pairKey('old4', 'old1')],
+    [
+      { leftId: 'keep', rightId: 'drop', standbyLeft: null, standbyRight: 'cooling' },
+      { leftId: 'bufferedA', rightId: 'bufferedB' },
+    ],
+  ), 'keep', 'drop')
+  const cooledMatch = currentMatch(cooled)
+  assert.ok(cooledMatch)
+  assert.equal(cooledMatch.left.id, 'keep')
+  assert.notEqual(cooledMatch.right.id, 'cooling')
+  assert.notEqual(cooledMatch.right.id, 'drop')
+  assert.equal(sameGroup(cooledMatch.left, cooledMatch.right), false)
+  assert.notEqual(pairKey(cooledMatch.left.id, cooledMatch.right.id), pairKey('bufferedA', 'bufferedB'))
+
+  const rematch = trashRight(ready(
+    [keep, drop, fresh, faced, old1, old2, old3, old4],
+    [pairKey('keep', 'faced'), pairKey('old1', 'old2'), pairKey('old3', 'old4'), pairKey('old1', 'old3')],
+    [{ leftId: 'keep', rightId: 'drop', standbyLeft: null, standbyRight: 'faced' }],
+  ), 'keep', 'drop')
+  const rematchMatch = currentMatch(rematch)
+  assert.ok(rematchMatch)
+  assert.equal(rematchMatch.left.id, 'keep')
+  assert.notEqual(rematchMatch.right.id, 'faced')
+  assert.notEqual(rematchMatch.right.id, 'drop')
+
+  const brush = readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8')
+  const commit = brush.slice(brush.indexOf('function commit'), brush.indexOf('function pick'))
+  assert.match(commit, /decision\.trashLeft !== decision\.trashRight/)
+  assert.match(commit, /setFront\(decision\.trashLeft \? 'left' : 'right'\)/)
+  const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
+  assert.match(matchup, /onTrash\(id\)/)
+  assert.match(matchup, /if \(kind === 'trash'\) onTrash\(image\.id\)/)
+  assert.match(matchup, /data-swipe=\{kind\}/)
+  assert.match(matchup, /event\.key === 'ArrowLeft'/)
+  assert.match(matchup, /event\.key === 'ArrowRight'/)
+  assert.match(matchup, /const leftChanged = previous\.left\.id !== view\.left\.id/)
+  assert.match(matchup, /const rightChanged = previous\.right\.id !== view\.right\.id/)
+})
+
 test('a skin-tone blob becomes a normalized face box', () => {
   const width = 40
   const height = 40

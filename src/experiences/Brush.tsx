@@ -254,7 +254,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     setMoments(matchMoments(current.images, next.images))
     setDeck(next)
     setZoom(REST_ZOOM)
-    setFront('left')
+    if (decision.kind === 'trash' && decision.trashLeft !== decision.trashRight) setFront(decision.trashLeft ? 'left' : 'right')
+    else setFront('left')
     const item: OutboxItem = {
       id: crypto.randomUUID(),
       leftId: decision.leftId,
