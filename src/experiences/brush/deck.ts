@@ -1,6 +1,6 @@
 import type { BrushImage, ContestState, Margin } from './types.ts'
 import { glickoUpdate } from './rank.ts'
-import { advanceBracket, extendQueue, nextContender, pairKey, qualifyingProgress, rankedActive, seedBracket, type RoundMatch, type Slot } from './pair.ts'
+import { advanceBracket, extendQueue, MATCH_MEMORY, nextContender, pairKey, qualifyingProgress, rankedActive, seedBracket, type RoundMatch, type Slot } from './pair.ts'
 
 export type Deck = {
   images: BrushImage[]
@@ -30,7 +30,7 @@ export function bootDeck(images: BrushImage[], contest: ContestState | null, rng
   const deck: Deck = {
     images,
     queue: [],
-    recentKeys: (contest?.recentKeys || []).slice(-40),
+    recentKeys: (contest?.recentKeys || []).slice(-MATCH_MEMORY),
     phase: contest?.phase || 'qualifying',
     focus: 'bracket',
     rounds: contest?.rounds || [],
@@ -56,16 +56,18 @@ export function dropUnreadable(deck: Deck, imageId: string, rng: () => number = 
     })
     return { ...deck, images, rounds }
   }
-  let queue = deck.queue.filter(slot => slot.leftId !== imageId && slot.rightId !== imageId)
+  const queue: Slot[] = []
   if (before && (before.left.id === imageId || before.right.id === imageId)) {
     const keepId = before.left.id === imageId ? before.right.id : before.left.id
     const contender = nextContender(images, keepId, { recentKeys: deck.recentKeys, rng })
     if (contender) {
-      const slot = before.left.id === imageId
+      queue.push(before.left.id === imageId
         ? { leftId: contender.id, rightId: keepId }
-        : { leftId: keepId, rightId: contender.id }
-      queue = [slot, ...queue.filter(item => pairKey(item.leftId, item.rightId) !== pairKey(slot.leftId, slot.rightId))]
+        : { leftId: keepId, rightId: contender.id })
     }
+  } else {
+    const head = deck.queue.find(slot => slot.leftId !== imageId && slot.rightId !== imageId)
+    if (head) queue.push(head)
   }
   return { ...deck, images, queue: extendQueue(images, queue, deck.recentKeys, undefined, rng) }
 }
@@ -125,7 +127,7 @@ function trash(images: BrushImage[], decision: Decision) {
 function replaceTrashed(deck: Deck, decision: Decision, rng: () => number): Deck | null {
   const images = trash(deck.images, decision)
   const keepId = decision.trashLeft ? decision.rightId : decision.leftId
-  const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-40)
+  const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-MATCH_MEMORY)
   const contender = nextContender(images, keepId, { recentKeys, rng })
   if (!contender) return null
   const slot = decision.trashLeft
@@ -141,8 +143,7 @@ function replaceTrashed(deck: Deck, decision: Decision, rng: () => number): Deck
     })
     return { ...deck, images, recentKeys, rounds }
   }
-  const rest = deck.queue.slice(1)
-  return { ...deck, images, recentKeys, queue: extendQueue(images, [slot, ...rest], recentKeys, undefined, rng) }
+  return { ...deck, images, recentKeys, queue: extendQueue(images, [slot], recentKeys, undefined, rng) }
 }
 
 export function applyDecision(deck: Deck, decision: Decision, rng: () => number = Math.random): Deck {
@@ -151,10 +152,9 @@ export function applyDecision(deck: Deck, decision: Decision, rng: () => number 
     if (replaced) return replaced
   }
   const images = decision.kind === 'pick' ? rate(deck.images, decision) : trash(deck.images, decision)
-  const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-40)
+  const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-MATCH_MEMORY)
   if (deck.phase === 'finals' && deck.focus === 'placement') {
-    const queue = deck.queue.filter(slot => pairKey(slot.leftId, slot.rightId) !== pairKey(decision.leftId, decision.rightId))
-    return { ...deck, images, recentKeys, queue: extendQueue(images, queue, recentKeys, undefined, rng) }
+    return { ...deck, images, recentKeys, queue: extendQueue(images, [], recentKeys, undefined, rng) }
   }
   if (deck.phase === 'finals') {
     const winnerId = decision.kind === 'pick'
@@ -175,8 +175,7 @@ export function applyDecision(deck: Deck, decision: Decision, rng: () => number 
       phase: advanced.championId ? 'champion' : 'finals',
     }
   }
-  const queue = deck.queue.filter(slot => pairKey(slot.leftId, slot.rightId) !== pairKey(decision.leftId, decision.rightId))
-  return { ...deck, images, recentKeys, queue: extendQueue(images, queue, recentKeys, undefined, rng) }
+  return { ...deck, images, recentKeys, queue: extendQueue(images, [], recentKeys, undefined, rng) }
 }
 
 export function startFinals(deck: Deck): Deck {

@@ -8,7 +8,7 @@ import { levelOf, levelProgress, matchMoments, standingOf } from '../src/experie
 import { faceBoxFromPixels, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
 import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
-import { challengerCount, CLOSE_ELO, extendQueue, finalsFieldSize, hashDistance, lookOf, newEntrants, nextContender, nextQualifyingPair, pairKey, PLACEMENT_GAMES, RECENT_WINDOW, sameGroup, seedOrder, WILDCARD_RATE } from '../src/experiences/brush/pair.ts'
+import { challengerCount, CLOSE_ELO, COOLDOWN_MATCHES, ESTABLISHED_RATE, extendQueue, finalsFieldSize, hashDistance, lookOf, MATCH_MEMORY, newEntrants, nextContender, nextQualifyingPair, pairKey, PLACEMENT_GAMES, RECENT_WINDOW, sameGroup, seedOrder, WILDCARD_RATE } from '../src/experiences/brush/pair.ts'
 import { conservativeRating, glickoPeriod, glickoUpdate, INITIAL_RD, INITIAL_VOLATILITY, MIN_RD, rdForGames } from '../src/experiences/brush/rank.ts'
 import { suggestRecipe } from '../src/experiences/brush/recipe.ts'
 import { UPLOAD_BATCH_LIMIT, retryDelayMs, retryLoad, takeBatch } from '../src/experiences/brush/uploads.ts'
@@ -188,7 +188,7 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
     seed = (seed * 16807) % 2147483647
     return (seed - 1) / 2147483646
   }
-  const placing = openPlacement(merged, rng)
+  const placing = openPlacement(merged, () => 0.5)
   const placed = currentMatch(placing)
   assert.ok([placed.left.id, placed.right.id].includes('new'))
   const kept = applyDecision(placing, {
@@ -215,11 +215,11 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   }))
   const queue = extendQueue([fresh, ...veterans], [], [], 5, rng)
   assert.equal(queue.length, 5)
-  const opponents = queue.map(slot => slot.leftId === 'new' ? slot.rightId : slot.leftId)
-  assert.ok(queue.every(slot => slot.leftId === 'new' || slot.rightId === 'new'))
-  const opponentElos = opponents.map(id => veterans.find(item => item.id === id).elo)
-  assert.ok(Math.min(...opponentElos) <= 1400, opponentElos.join(','))
-  assert.ok(Math.max(...opponentElos) >= 1800, opponentElos.join(','))
+  const debuts = queue.filter(slot => slot.leftId === 'new' || slot.rightId === 'new')
+  assert.ok(debuts.length >= 1)
+  const debutOpponents = debuts.map(slot => slot.leftId === 'new' ? slot.rightId : slot.leftId)
+  assert.equal(new Set(debutOpponents).size, debutOpponents.length)
+  assert.ok(debutOpponents.every(id => veterans.some(item => item.id === id)))
 
   const field = [
     ...Array.from({ length: 16 }, (_, index) => image({ id: `v${index}`, name: `Vet_${index}.jpg`, elo: 1505, sigma: 80, games: 10, wins: 5 })),
@@ -257,13 +257,16 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
   assert.match(matchup, /data-challenger/)
   assert.match(matchup, /data-placement/)
-  assert.match(matchup, /\$\{image\.games\}\/\$\{PLACEMENT_GAMES\}/)
+  assert.match(matchup, /Round \$\{placementRound\}\/\$\{PLACEMENT_GAMES\}/)
 })
 
 test('pairings prefer a different look, a fresh opponent, and a close rating', () => {
   assert.equal(CLOSE_ELO, 150)
   assert.equal(RECENT_WINDOW, 10)
   assert.equal(WILDCARD_RATE, 0.2)
+  assert.equal(COOLDOWN_MATCHES, 3)
+  assert.equal(ESTABLISHED_RATE, 0.22)
+  assert.equal(MATCH_MEMORY, 800)
   assert.deepEqual(lookOf(image({
     id: 'look',
     name: 'Studio_01.jpg',
@@ -343,13 +346,16 @@ test('pairings prefer a different look, a fresh opponent, and a close rating', (
   const memory = readFileSync(new URL('../supabase/migrations/20261024143000_brush_pairing_memory.sql', import.meta.url), 'utf8')
   assert.match(memory, /brush_contest_get/)
   assert.match(memory, /limit 10/)
+  const swissMemory = readFileSync(new URL('../supabase/migrations/20261025030000_brush_match_memory.sql', import.meta.url), 'utf8')
+  assert.match(swissMemory, /brush_contest_get/)
+  assert.match(swissMemory, /limit 800/)
   assert.match(readFileSync(new URL('../src/experiences/brush/client.ts', import.meta.url), 'utf8'), /recentKeys/)
 
   const hungry = image({ id: 'hungry', name: 'Hungry_01.jpg', country: 'Sweden', elo: 1500, games: 0, sigma: 350, prompt_text: 'park, blue dress' })
   const mid = image({ id: 'mid', name: 'Mid_01.jpg', country: 'Korea', elo: 1500, games: 3, sigma: 180, prompt_text: 'cafe, cream dress' })
   const placed = [1200, 1500, 1800].map(elo => image({
     id: `placed-${elo}`,
-    name: `Placed_${elo}.jpg`,
+    name: `p${elo}.jpg`,
     country: elo === 1500 ? 'Japan' : 'Thailand',
     elo,
     games: 12,
@@ -358,12 +364,13 @@ test('pairings prefer a different look, a fresh opponent, and a close rating', (
   }))
   const waiting = extendQueue([hungry, mid, ...placed], [], [], 5, steady)
   assert.equal(waiting.length, 5)
-  assert.ok(waiting[0].leftId === 'hungry' || waiting[0].rightId === 'hungry')
-  const unplaced = new Set(['hungry', 'mid'])
-  assert.ok(waiting.every(slot => unplaced.has(slot.leftId) || unplaced.has(slot.rightId)))
+  const opening = [waiting[0].leftId, waiting[0].rightId].sort()
+  assert.deepEqual(opening, ['hungry', 'mid'])
   const rankedOnly = extendQueue(placed, [], [], 3, steady)
   assert.equal(rankedOnly.length, 3)
-  assert.ok(rankedOnly.every(slot => !unplaced.has(slot.leftId) && !unplaced.has(slot.rightId)))
+  for (let index = 1; index < rankedOnly.length; index += 1) {
+    assert.notEqual(pairKey(rankedOnly[index].leftId, rankedOnly[index].rightId), pairKey(rankedOnly[index - 1].leftId, rankedOnly[index - 1].rightId))
+  }
 
   const sure = image({ id: 'sure', name: 'Sure_01.jpg', country: 'Sweden', elo: 1600, games: 30, sigma: 50, prompt_text: 'garden, gold dress' })
   const shaky = image({ id: 'shaky', name: 'Shaky_01.jpg', country: 'Korea', elo: 1600, games: 8, sigma: 300, prompt_text: 'park, blue dress' })
@@ -378,7 +385,7 @@ test('pairings prefer a different look, a fresh opponent, and a close rating', (
   assert.equal(informative.right.id, 'sure')
   const rungs = [1200, 1400, 1600, 1800, 2000].map(elo => image({
     id: `rung-${elo}`,
-    name: `Rung_${elo}.jpg`,
+    name: `r${elo}.jpg`,
     country: 'Studio',
     elo,
     games: 12,
@@ -386,11 +393,16 @@ test('pairings prefer a different look, a fresh opponent, and a close rating', (
   }))
   const debut = image({ id: 'debut', name: 'Debut_01.jpg', country: 'Uploads', elo: 1500, games: 0, sigma: 350 })
   const walked = extendQueue([debut, ...rungs], [], [], 5, steady)
-  const walkedElos = walked.map(slot => {
-    const id = slot.leftId === 'debut' ? slot.rightId : slot.leftId
-    return rungs.find(item => item.id === id).elo
-  })
-  assert.deepEqual(walkedElos, [1600, 1800, 1400, 1800, 1400])
+  const walkedDebut = walked.filter(slot => slot.leftId === 'debut' || slot.rightId === 'debut')
+  assert.ok(walkedDebut.length >= 1)
+  const walkedIds = walkedDebut.map(slot => slot.leftId === 'debut' ? slot.rightId : slot.leftId)
+  const firstElo = rungs.find(item => item.id === walkedIds[0]).elo
+  assert.ok(Math.abs(firstElo - debut.elo) <= CLOSE_ELO, String(firstElo))
+  for (const id of walkedIds) {
+    const elo = rungs.find(item => item.id === id).elo
+    assert.ok(Math.abs(elo - debut.elo) <= CLOSE_ELO * 2, String(elo))
+  }
+  assert.equal(new Set(walkedIds).size, walkedIds.length)
 
   const keep = image({ id: 'keep', name: 'Keep_01.jpg', country: 'Japan', elo: 1550, games: 12, sigma: 60, prompt_text: 'studio, sage dress' })
   const starved = image({ id: 'starved', name: 'Starved_01.jpg', country: 'Sweden', elo: 1500, games: 1, sigma: 250, prompt_text: 'park, blue dress' })
@@ -401,6 +413,145 @@ test('pairings prefer a different look, a fresh opponent, and a close rating', (
   const keepModel = image({ id: 'model', name: 'Japan_Model_01.jpg', country: 'Japan', folder_path: 'Japan/Models', elo: 1600, games: 12, sigma: 60 })
   assert.equal(nextContender([keepModel, twinModel, later], 'model', { rng: steady }).id, 'later')
   assert.equal(PLACEMENT_GAMES, 5)
+
+  const leaders = ['a', 'b'].map(id => image({
+    id, name: `${id}.jpg`, country: id === 'a' ? 'Japan' : 'Korea', elo: 1600, games: 2, wins: 2, losses: 0,
+  }))
+  const middles = ['c', 'd'].map(id => image({
+    id, name: `${id}.jpg`, country: id === 'c' ? 'Sweden' : 'Thailand', elo: 1500, games: 2, wins: 1, losses: 1,
+  }))
+  const swiss = nextQualifyingPair([...leaders, ...middles], { rng: steady })
+  assert.equal(swiss.left.wins, swiss.right.wins)
+  assert.equal(swiss.left.losses, swiss.right.losses)
+  const rematch = nextQualifyingPair([...leaders, ...middles], {
+    rng: steady,
+    recentKeys: [pairKey(swiss.left.id, swiss.right.id)],
+  })
+  assert.notEqual(pairKey(rematch.left.id, rematch.right.id), pairKey(swiss.left.id, swiss.right.id))
+  assert.equal(rematch.left.wins, rematch.right.wins)
+  const freshRound = nextQualifyingPair([
+    image({ id: 'f', name: 'f.jpg', country: 'Japan', games: 0, wins: 0, losses: 0 }),
+    image({ id: 'e', name: 'e.jpg', country: 'Korea', games: 0, wins: 0, losses: 0 }),
+    ...leaders,
+  ], { rng: () => 0 })
+  assert.deepEqual([freshRound.left.id, freshRound.right.id].sort(), ['e', 'f'])
+})
+
+test('swiss placement spreads 200 matches without overusing a picture', () => {
+  const countries = ['Japan', 'Korea', 'Sweden', 'Thailand', 'Vietnam', 'Philippines', 'Indonesia', 'China']
+  const prompts = ['studio, sage dress', 'beach, red gown', 'park, blue dress', 'cafe, cream dress', 'garden, gold dress', 'alley, navy outfit', 'temple, emerald dress', 'night street, black dress']
+  const newcomers = Array.from({ length: 40 }, (_, index) => image({
+    id: `n${index}`,
+    name: `n${index}.jpg`,
+    country: countries[index % countries.length],
+    elo: 1500,
+    games: 0,
+    wins: 0,
+    losses: 0,
+    sigma: 350,
+    prompt_text: prompts[index % prompts.length],
+  }))
+  const veterans = Array.from({ length: 16 }, (_, index) => image({
+    id: `v${index}`,
+    name: `v${index}.jpg`,
+    country: countries[index % countries.length],
+    elo: 1300 + index * 40,
+    games: 24,
+    wins: 12,
+    losses: 12,
+    sigma: 60,
+    prompt_text: prompts[index % prompts.length],
+  }))
+  let seed = 19
+  const rng = () => {
+    seed = (seed * 16807) % 2147483647
+    return (seed - 1) / 2147483646
+  }
+  let deck = bootDeck([...newcomers, ...veterans], null, rng)
+  const counts = new Map()
+  const played = []
+  const placementPairs = new Set()
+  let ladderWhilePlacing = 0
+  let placingMatches = 0
+  let rated = false
+  for (let index = 0; index < 200; index += 1) {
+    const match = currentMatch(deck)
+    assert.ok(match, `match ${index}`)
+    const key = pairKey(match.left.id, match.right.id)
+    assert.equal(sameGroup(match.left, match.right), false, key)
+    if (played.length) {
+      const previous = played[played.length - 1].split(':')
+      assert.equal(previous.includes(match.left.id) || previous.includes(match.right.id), false, key)
+    }
+    const unranked = deck.images.filter(item => !item.trashed && item.games < PLACEMENT_GAMES)
+    const bothPlacing = match.left.games < PLACEMENT_GAMES && match.right.games < PLACEMENT_GAMES
+    const bothRanked = match.left.games >= PLACEMENT_GAMES && match.right.games >= PLACEMENT_GAMES
+    if (unranked.length >= 2) {
+      placingMatches += 1
+      if (bothRanked) ladderWhilePlacing += 1
+      if (bothPlacing) {
+        assert.equal(placementPairs.has(key), false, key)
+        placementPairs.add(key)
+        const distance = Math.abs(match.left.wins - match.right.wins) + Math.abs(match.left.losses - match.right.losses)
+        const cooling = new Set(deck.recentKeys.slice(-COOLDOWN_MATCHES).flatMap(slot => slot.split(':')))
+        const recordFits = (anchor, other) => {
+          const faced = new Set()
+          for (const slot of deck.recentKeys) {
+            const [leftId, rightId] = slot.split(':')
+            if (leftId === anchor.id) faced.add(rightId)
+            if (rightId === anchor.id) faced.add(leftId)
+          }
+          const legal = unranked.filter(item => item.id !== anchor.id && !sameGroup(anchor, item) && !faced.has(item.id))
+          const pool = legal.length ? legal : unranked.filter(item => item.id !== anchor.id && !sameGroup(anchor, item))
+          if (!pool.some(item => item.id === other.id)) return false
+          const open = pool.filter(item => !cooling.has(item.id))
+          const considered = open.length ? open : pool
+          const same = considered.some(item => item.wins === anchor.wins && item.losses === anchor.losses)
+          if (same) return distance === 0
+          const best = Math.min(...considered.map(item => Math.abs(item.wins - anchor.wins) + Math.abs(item.losses - anchor.losses)))
+          return distance === best
+        }
+        assert.ok(recordFits(match.left, match.right) || recordFits(match.right, match.left), key)
+      } else {
+        assert.equal(bothRanked, true, key)
+      }
+    }
+    if (bothRanked) {
+      for (const image of [match.left, match.right]) {
+        if (image.games === PLACEMENT_GAMES) {
+          const opponent = image.id === match.left.id ? match.right : match.left
+          assert.ok(opponent.games >= PLACEMENT_GAMES)
+        }
+      }
+    }
+    played.push(key)
+    if (played.length >= 4) {
+      const seen = new Map()
+      for (const slot of played.slice(-4)) {
+        for (const id of slot.split(':')) seen.set(id, (seen.get(id) || 0) + 1)
+      }
+      for (const [id, count] of seen) assert.ok(count <= 1, `${id} in ${count} of 4`)
+    }
+    for (const id of [match.left.id, match.right.id]) counts.set(id, (counts.get(id) || 0) + 1)
+    const winnerId = index % 2 === 0 ? match.left.id : match.right.id
+    deck = applyDecision(deck, {
+      leftId: match.left.id,
+      rightId: match.right.id,
+      kind: 'pick',
+      winnerId,
+      trashLeft: false,
+      trashRight: false,
+      margin: 'clear',
+    }, rng)
+    if (deck.images.some(item => item.games > 0 && item.elo !== 1500)) rated = true
+  }
+  const busiest = Math.max(...counts.values())
+  assert.ok(busiest <= 24, `busiest ${busiest}`)
+  assert.ok(placingMatches > 40, `placing matches ${placingMatches}`)
+  const ladderShare = ladderWhilePlacing / placingMatches
+  assert.ok(ladderShare >= 0.1 && ladderShare <= 0.4, `ladder share ${ladderShare}`)
+  assert.equal(rated, true)
+  assert.ok(deck.images.some(item => item.id.startsWith('n') && item.games >= PLACEMENT_GAMES))
 })
 
 test('folder country and series come from the Drive path', () => {

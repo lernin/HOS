@@ -592,6 +592,8 @@ export function Matchup({
   function pictureStats(image: BrushImage, layout: 'strip' | 'portrait', side: 'left' | 'right' = 'left') {
     const standing = rankFor(image.id)
     const ranked = image.games >= PLACEMENT_GAMES
+    const placementRound = Math.min(image.games + 1, PLACEMENT_GAMES)
+    const placementLabel = `Round ${placementRound}/${PLACEMENT_GAMES}`
     const level = levelOf(image.elo)
     const progress = ranked ? levelProgress(image.elo) : Math.min(1, image.games / PLACEMENT_GAMES)
     const closeWins = image.close_wins || 0
@@ -612,9 +614,9 @@ export function Matchup({
       <div className="brush-level-track">
         <div className="brush-level-meta">
           <span>{ranked ? 'Next level' : 'Placement'}</span>
-          <span className="brush-num">{ranked ? `${percent}%` : `${image.games}/${PLACEMENT_GAMES}`}</span>
+          <span className="brush-num">{ranked ? `${percent}%` : placementLabel}</span>
         </div>
-        <div className="brush-level-bar" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={ranked ? `Progress to level ${level + 1}` : `Placement ${image.games} of ${PLACEMENT_GAMES}`}>
+        <div className="brush-level-bar" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={ranked ? `Progress to level ${level + 1}` : `Placement round ${placementRound} of ${PLACEMENT_GAMES}`}>
           <span style={{ width: `${percent}%` }} />
         </div>
       </div>
@@ -630,7 +632,7 @@ export function Matchup({
             type="button"
             className="brush-strip-toggle"
             aria-expanded={open}
-            aria-label={`${image.country || image.name || 'Untitled'}, ${ranked ? `level ${level}` : `unranked, placement ${image.games} of ${PLACEMENT_GAMES}`}, ${image.wins} wins, ${image.losses} losses`}
+            aria-label={`${image.country || image.name || 'Untitled'}, ${ranked ? `level ${level}` : `unranked, ${placementLabel}`}, ${image.wins} wins, ${image.losses} losses`}
             onClick={event => {
               event.stopPropagation()
               setStripOpen(current => ({ ...current, [side]: !current[side] }))
@@ -638,7 +640,7 @@ export function Matchup({
           >
             {badge}
             <span className="brush-strip-glance">
-              <span data-stat="rank" data-placement={ranked ? undefined : 'pending'} title={standing ? `#${standing.rank} of ${standing.total} ranked` : `Placement ${image.games} of ${PLACEMENT_GAMES}`}>{standing ? `#${standing.rank}` : `${image.games}/${PLACEMENT_GAMES}`}</span>
+              <span data-stat="rank" data-placement={ranked ? undefined : 'pending'} title={standing ? `#${standing.rank} of ${standing.total} ranked` : placementLabel}>{standing ? `#${standing.rank}` : placementLabel}</span>
               <span aria-hidden="true"> · </span>
               <span className="brush-num">{image.wins}–{image.losses}</span>
             </span>

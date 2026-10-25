@@ -1,4 +1,4 @@
-import { extendQueue } from './pair.ts'
+import { extendQueue, MATCH_MEMORY } from './pair.ts'
 import { conservativeRating, glickoUpdate, INITIAL_VOLATILITY } from './rank'
 import { suggestRecipe } from './recipe'
 import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights } from './types'
@@ -219,7 +219,7 @@ export function createPreviewClient(): BrushApi {
           badTags.set(image.id, [...existing])
         }
       }
-      recentKeys = [...recentKeys, [left.id, right.id].sort().join(':')].slice(-40)
+      recentKeys = [...recentKeys, [left.id, right.id].sort().join(':')].slice(-MATCH_MEMORY)
       return { match_id: `preview-${crypto.randomUUID()}` }
     },
     async annotate() {},

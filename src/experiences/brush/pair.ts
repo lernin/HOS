@@ -1,20 +1,27 @@
 import { countryFromPath, filenameAttributes, groupKeys, seriesFromName, type GroupSource } from './names.ts'
-import { compareConservative, glickoInformation, rdOf } from './rank.ts'
+import { compareConservative } from './rank.ts'
 
 export const QUALIFY_TARGET = 4
 export const QUEUE_DEPTH = 5
 export const FINALS_SIZE = 16
 export const HASH_DISTANCE = 8
 export const PLACEMENT_GAMES = 5
-export const PLACEMENT_QUANTILES = [0.5, 0.8, 0.2, 0.65, 0.35]
 export const RECENT_WINDOW = 10
 export const CLOSE_ELO = 150
 export const WILDCARD_RATE = 0.2
+/** At most one appearance in any four consecutive matches, for either picture. */
+export const COOLDOWN_MATCHES = 3
+/** Share of matches that stay on the ranked ladder while newcomers are still placing. */
+export const ESTABLISHED_RATE = 0.22
+/** Match keys kept so a placement series can refuse rematches across a visit. */
+export const MATCH_MEMORY = 800
 
 export type Pairable = GroupSource & {
   id: string
   elo: number
   games: number
+  wins?: number
+  losses?: number
   sigma?: number
   perceptual_hash?: string | null
   trashed?: boolean
@@ -142,11 +149,12 @@ export function newEntrants(before: Pairable[], after: Pairable[]) {
   })
 }
 
-function placementTarget(games: number, established: Pairable[]) {
-  const sorted = [...established].sort((a, b) => a.elo - b.elo || a.id.localeCompare(b.id))
-  const quantile = PLACEMENT_QUANTILES[Math.min(Math.max(games, 0), PLACEMENT_QUANTILES.length - 1)]
-  const index = Math.round(quantile * (sorted.length - 1))
-  return sorted[Math.min(sorted.length - 1, Math.max(0, index))].elo
+function winsOf(image: Pairable) {
+  return image.wins ?? 0
+}
+
+function lossesOf(image: Pairable) {
+  return image.losses ?? Math.max(0, image.games - winsOf(image))
 }
 
 function recentOpponents(id: string, keys: string[]) {
@@ -157,6 +165,56 @@ function recentOpponents(id: string, keys: string[]) {
     else if (right === id) found.add(left)
   }
   return found
+}
+
+function coolingIds(keys: string[], avoidIds: string[] = []) {
+  const ids = new Set(avoidIds)
+  for (const key of keys.slice(-COOLDOWN_MATCHES)) {
+    const [left, right] = key.split(':')
+    if (left) ids.add(left)
+    if (right) ids.add(right)
+  }
+  return ids
+}
+
+function lastIds(keys: string[]) {
+  const ids = new Set<string>()
+  const key = keys[keys.length - 1]
+  if (!key) return ids
+  const [left, right] = key.split(':')
+  if (left) ids.add(left)
+  if (right) ids.add(right)
+  return ids
+}
+
+function candidateFields(images: Pairable[], keys: string[], avoidIds: string[]) {
+  const cooling = coolingIds(keys, avoidIds)
+  const last = lastIds(keys)
+  const tiers = [
+    images.filter(image => !cooling.has(image.id)),
+    images.filter(image => !last.has(image.id)),
+    images,
+  ]
+  const fields: Pairable[][] = []
+  const seen = new Set<string>()
+  for (const field of tiers) {
+    if (field.length < 2) continue
+    const mark = field.map(image => image.id).sort().join(',')
+    if (seen.has(mark)) continue
+    seen.add(mark)
+    fields.push(field)
+  }
+  return fields
+}
+
+function restingOpponents(others: Pairable[], keys: string[]) {
+  const cooling = coolingIds(keys)
+  const outside = others.filter(image => !cooling.has(image.id))
+  if (outside.length) return outside
+  const last = lastIds(keys)
+  const notLast = others.filter(image => !last.has(image.id))
+  if (notLast.length) return notLast
+  return others
 }
 
 function lookTraits(image: Pairable | undefined) {
@@ -175,16 +233,12 @@ function traitsOf(ids: Iterable<string>, byId: Map<string, Pairable>) {
   return traits
 }
 
-type Scored = { image: Pairable, hard: boolean, diversity: number, gap: number, info: number }
+type Scored = { image: Pairable, hard: boolean, diversity: number, gap: number }
 
-/** Inside a placement band, this much information offsets a small variety penalty. It does not override a recent repeat. */
-const INFO_WEIGHT = 400
-
-function scoreOpponent(anchor: Pairable, image: Pairable, target: number, keys: string[], avoidIds: string[], byId: Map<string, Pairable>): Scored {
+function scoreOpponent(anchor: Pairable, image: Pairable, target: number, keys: string[], byId: Map<string, Pairable>): Scored {
   const hard = sameGroup(anchor, image)
   const gap = Math.abs(image.elo - target)
-  const info = glickoInformation(anchor.elo, image.elo, rdOf(image))
-  if (hard) return { image, hard, diversity: 0, gap, info: 0 }
+  if (hard) return { image, hard, diversity: 0, gap }
   const recent = keys.slice(-RECENT_WINDOW)
   const older = keys.slice(0, -RECENT_WINDOW)
   const anchorLook = lookOf(anchor)
@@ -193,7 +247,7 @@ function scoreOpponent(anchor: Pairable, image: Pairable, target: number, keys: 
   const facedEarlier = recentOpponents(anchor.id, older)
   const recentLooks = traitsOf(faced, byId)
   const candidateLooks = traitsOf(recentOpponents(image.id, recent), byId)
-  let diversity = avoidIds.includes(image.id) ? 3000 : 0
+  let diversity = appearances(image.id, keys.slice(-RECENT_WINDOW)) * 220
   if (faced.has(image.id)) diversity += 1600
   else if (facedEarlier.has(image.id)) diversity += 400
   if (anchorLook.country && look.country && anchorLook.country === look.country) diversity += 240
@@ -206,146 +260,212 @@ function scoreOpponent(anchor: Pairable, image: Pairable, target: number, keys: 
   for (const trait of lookTraits(anchor)) {
     if (candidateLooks.has(trait) && !lookTraits(image).includes(trait)) diversity += 120
   }
-  return { image, hard, diversity, gap, info }
+  return { image, hard, diversity, gap }
 }
 
 function pickFrom(items: Scored[], rng: () => number) {
-  return items[Math.floor(rng() * items.length)].image
+  if (!items.length) return null
+  const index = Math.min(items.length - 1, Math.floor(rng() * items.length))
+  return items[index].image
 }
 
-function pickOpponent(anchor: Pairable, images: Pairable[], target: number, placingAnchor: boolean, keys: string[], avoidIds: string[], rng: () => number) {
-  const byId = new Map(images.map(image => [image.id, image]))
-  const scored = images
-    .filter(image => image.id !== anchor.id)
-    .map(image => scoreOpponent(anchor, image, target, keys, avoidIds, byId))
-  const legal = scored.filter(item => !item.hard)
-  const source = legal.length ? legal : scored
-  if (!source.length) return null
-  const established = source.filter(item => item.image.games >= PLACEMENT_GAMES)
-  const wildcard = rng() < WILDCARD_RATE
-  if (placingAnchor) {
-    const field = established.length ? established : source
-    if (wildcard) return pickFrom(field, rng)
-    const widths = [CLOSE_ELO, CLOSE_ELO * 2, CLOSE_ELO * 4, Number.POSITIVE_INFINITY]
-    let near = field
-    for (const width of widths) {
-      const within = field.filter(item => item.gap <= width)
-      if (within.length) {
-        near = within
-        break
-      }
-    }
-    const value = (item: Scored) => item.diversity - item.info * INFO_WEIGHT
-    const ranked = [...near].sort((a, b) => value(a) - value(b) || a.gap - b.gap || a.image.id.localeCompare(b.image.id))
-    const best = value(ranked[0])
-    const band = ranked.filter(item => value(item) <= best + 40)
-    return pickFrom(band, rng)
+function fewest(images: Pairable[]) {
+  const minGames = Math.min(...images.map(image => image.games))
+  return images.filter(image => image.games === minGames).sort((a, b) => a.id.localeCompare(b.id))
+}
+
+function appearances(id: string, keys: string[]) {
+  let count = 0
+  for (const key of keys) {
+    const [left, right] = key.split(':')
+    if (left === id || right === id) count += 1
   }
-  if (anchor.games >= PLACEMENT_GAMES) {
-    const field = established.length ? established : source
-    if (wildcard) return pickFrom(field, rng)
-    const widths = [CLOSE_ELO, CLOSE_ELO * 2, CLOSE_ELO * 4, Number.POSITIVE_INFINITY]
-    let band = field
-    for (const width of widths) {
-      const within = field.filter(item => item.gap <= width)
-      if (within.length) {
-        band = within
-        break
-      }
+  return count
+}
+
+function pickAnchor(candidates: Pairable[], keys: string[], rng: () => number) {
+  const recent = keys.slice(-RECENT_WINDOW)
+  const load = (image: Pairable) => appearances(image.id, recent)
+  const minLoad = Math.min(...candidates.map(load))
+  const quiet = candidates.filter(image => load(image) === minLoad).sort((a, b) => a.id.localeCompare(b.id))
+  const index = Math.min(quiet.length - 1, Math.floor(rng() * quiet.length))
+  return quiet[index]
+}
+
+function recordDistance(left: Pairable, right: Pairable) {
+  return Math.abs(winsOf(left) - winsOf(right)) + Math.abs(lossesOf(left) - lossesOf(right))
+}
+
+function closestRecord(anchor: Pairable, pool: Pairable[]) {
+  const best = Math.min(...pool.map(image => recordDistance(anchor, image)))
+  return pool.filter(image => recordDistance(anchor, image) === best)
+}
+
+function avoidImmediate(anchor: Pairable, scored: Scored[], keys: string[]) {
+  const last = keys[keys.length - 1]
+  if (!last) return scored
+  const next = scored.filter(item => pairKey(anchor.id, item.image.id) !== last)
+  return next.length ? next : scored
+}
+
+function pickByVariety(anchor: Pairable, candidates: Pairable[], context: Pairable[], keys: string[], rng: () => number) {
+  const byId = new Map(context.map(image => [image.id, image]))
+  const scored = avoidImmediate(anchor, candidates.map(image => scoreOpponent(anchor, image, anchor.elo, keys, byId)), keys)
+    .filter(item => !item.hard)
+  if (!scored.length) return null
+  scored.sort((a, b) => a.diversity - b.diversity || a.image.id.localeCompare(b.image.id))
+  const best = scored[0].diversity
+  return pickFrom(scored.filter(item => item.diversity <= best + 40), rng)
+}
+
+function pickNear(anchor: Pairable, candidates: Pairable[], context: Pairable[], keys: string[], rng: () => number) {
+  const byId = new Map(context.map(image => [image.id, image]))
+  const faced = recentOpponents(anchor.id, keys.slice(-RECENT_WINDOW))
+  const fresh = candidates.filter(image => !faced.has(image.id))
+  const pool = fresh.length ? fresh : candidates
+  const scored = avoidImmediate(anchor, pool.map(image => scoreOpponent(anchor, image, anchor.elo, keys, byId)), keys)
+    .filter(item => !item.hard)
+  if (!scored.length) return null
+  if (scored.length > 1 && rng() < WILDCARD_RATE) return pickFrom(scored, rng)
+  const widths = [CLOSE_ELO, CLOSE_ELO * 2, CLOSE_ELO * 4, Number.POSITIVE_INFINITY]
+  let band = scored
+  for (const width of widths) {
+    const within = scored.filter(item => item.gap <= width)
+    if (within.length) {
+      band = within
+      break
     }
-    band.sort((a, b) => a.diversity - b.diversity || a.gap - b.gap || a.image.id.localeCompare(b.image.id))
-    const varied = band.filter(item => item.diversity <= band[0].diversity + 30)
-    varied.sort((a, b) => a.gap - b.gap || a.image.id.localeCompare(b.image.id))
-    const tight = varied.filter(item => item.gap <= varied[0].gap + 40)
-    return pickFrom(tight, rng)
   }
-  if (wildcard) return pickFrom(source, rng)
-  const ordered = [...source].sort((a, b) => a.diversity - b.diversity || a.gap - b.gap || a.image.id.localeCompare(b.image.id))
-  const varied = ordered.filter(item => item.diversity <= ordered[0].diversity + 40)
-  return pickFrom(varied, rng)
+  band.sort((a, b) => a.diversity - b.diversity || a.gap - b.gap || a.image.id.localeCompare(b.image.id))
+  const varied = band.filter(item => item.diversity <= band[0].diversity + 30)
+  varied.sort((a, b) => a.gap - b.gap || a.image.id.localeCompare(b.image.id))
+  const tight = varied.filter(item => item.gap <= varied[0].gap + 40)
+  return pickFrom(tight, rng)
+}
+
+function swissMatch(placing: Pairable[], keys: string[], rng: () => number) {
+  const anchor = pickAnchor(fewest(placing), keys, rng)
+  const others = placing.filter(image => image.id !== anchor.id && !sameGroup(anchor, image))
+  if (!others.length) return null
+  const faced = recentOpponents(anchor.id, keys)
+  const fresh = others.filter(image => !faced.has(image.id))
+  const pool = fresh.length ? fresh : others
+  const same = pool.filter(image => winsOf(image) === winsOf(anchor) && lossesOf(image) === lossesOf(anchor))
+  const band = same.length ? same : closestRecord(anchor, pool)
+  const minGames = Math.min(...band.map(image => image.games))
+  const opponent = pickByVariety(anchor, band.filter(image => image.games === minGames), placing, keys, rng)
+  return opponent ? { left: anchor, right: opponent } : null
+}
+
+function debutMatch(anchor: Pairable, established: Pairable[], keys: string[], rng: () => number) {
+  const opponents = established.filter(image => !sameGroup(anchor, image))
+  const faced = recentOpponents(anchor.id, keys)
+  const fresh = opponents.filter(image => !faced.has(image.id))
+  const pool = fresh.length ? fresh : opponents
+  const opponent = pickNear(anchor, pool, established, keys, rng)
+  return opponent ? { left: anchor, right: opponent } : null
+}
+
+function ladderMatch(established: Pairable[], keys: string[], rng: () => number) {
+  const minGames = Math.min(...established.map(image => image.games))
+  const anchor = pickAnchor(established.filter(image => image.games <= minGames + 1), keys, rng)
+  const opponents = established.filter(image => image.id !== anchor.id && !sameGroup(anchor, image))
+  const opponent = pickNear(anchor, opponents, established, keys, rng)
+  return opponent ? { left: anchor, right: opponent } : null
+}
+
+function selectPair(field: Pairable[], keys: string[], rng: () => number) {
+  const placing = field.filter(image => image.games < PLACEMENT_GAMES)
+  const established = field.filter(image => image.games >= PLACEMENT_GAMES)
+  const swissPossible = placing.length >= 2
+  const debutPossible = placing.length === 1 && established.length >= 1
+  const ladderPossible = established.length >= 2
+  const wantLadder = ladderPossible && (swissPossible || debutPossible) && rng() < ESTABLISHED_RATE
+  if (!wantLadder && swissPossible) {
+    const paired = swissMatch(placing, keys, rng)
+    if (paired) return paired
+  }
+  if (!wantLadder && debutPossible) {
+    const paired = debutMatch(placing[0], established, keys, rng)
+    if (paired) return paired
+  }
+  if (ladderPossible) {
+    const paired = ladderMatch(established, keys, rng)
+    if (paired) return paired
+  }
+  if (swissPossible) return swissMatch(placing, keys, rng)
+  if (debutPossible) return debutMatch(placing[0], established, keys, rng)
+  if (field.length >= 2) return ladderMatch(field, keys, rng)
+  return null
 }
 
 export function nextQualifyingPair(pool: Pairable[], options: { avoidIds?: string[], recentKeys?: string[], rng?: () => number } = {}) {
   const rng = options.rng || Math.random
-  const avoidIds = options.avoidIds || []
-  const recentKeys = options.recentKeys || []
+  const keys = options.recentKeys || []
   const images = active(pool)
   if (images.length < 2) return null
-  const placing = images.filter(image => image.games < PLACEMENT_GAMES)
-  const established = images.filter(image => image.games >= PLACEMENT_GAMES)
-  let anchorPool: Pairable[]
-  if (placing.length) {
-    const minGames = Math.min(...placing.map(image => image.games))
-    anchorPool = placing.filter(image => image.games === minGames)
-  } else {
-    const minGames = Math.min(...images.map(image => image.games))
-    const fresh = images.filter(image => image.games === minGames)
-    anchorPool = rng() < 0.7 ? fresh : images
+  for (const field of candidateFields(images, keys, options.avoidIds || [])) {
+    const pair = selectPair(field, keys, rng)
+    if (pair && !sameGroup(pair.left, pair.right)) return pair
   }
-  const unseen = anchorPool.filter(image => !avoidIds.includes(image.id))
-  if (unseen.length) anchorPool = unseen
-  else if (!placing.length) {
-    const anyUnseen = images.filter(image => !avoidIds.includes(image.id))
-    if (anyUnseen.length) anchorPool = anyUnseen
-  }
-  const anchor = anchorPool[Math.floor(rng() * anchorPool.length)]
-  const placingAnchor = anchor.games < PLACEMENT_GAMES && established.some(image => image.id !== anchor.id)
-  const target = placingAnchor ? placementTarget(anchor.games, established.filter(image => image.id !== anchor.id)) : anchor.elo
-  const opponent = pickOpponent(anchor, images, target, placingAnchor, recentKeys, avoidIds, rng)
-  if (!opponent) return null
-  return { left: anchor, right: opponent }
-}
-
-function starvedNewcomer(keep: Pairable, images: Pairable[], keys: string[], rng: () => number) {
-  const newcomers = images.filter(image => image.id !== keep.id && image.games < PLACEMENT_GAMES && !sameGroup(keep, image))
-  if (!newcomers.length) return null
-  const minGames = Math.min(...newcomers.map(image => image.games))
-  const starved = newcomers.filter(image => image.games === minGames)
-  const byId = new Map(images.map(image => [image.id, image]))
-  const scored = starved.map(image => ({ ...scoreOpponent(image, keep, image.elo, keys, [], byId), image }))
-  const value = (item: Scored) => item.diversity - item.info * INFO_WEIGHT
-  scored.sort((a, b) => value(a) - value(b) || a.image.id.localeCompare(b.image.id))
-  const best = value(scored[0])
-  const band = scored.filter(item => value(item) <= best + 40)
-  return pickFrom(band, rng)
+  return null
 }
 
 export function nextContender(pool: Pairable[], keepId: string, options: { recentKeys?: string[], rng?: () => number } = {}) {
   const rng = options.rng || Math.random
+  const keys = options.recentKeys || []
   const images = active(pool)
   const keep = images.find(image => image.id === keepId)
   if (!keep) return null
+  const available = restingOpponents(images.filter(image => image.id !== keep.id), keys)
   if (keep.games >= PLACEMENT_GAMES) {
-    const challenger = starvedNewcomer(keep, images, options.recentKeys || [], rng)
-    if (challenger) return challenger
+    const newcomers = available.filter(image => image.games < PLACEMENT_GAMES && !sameGroup(keep, image))
+    if (newcomers.length) {
+      const minGames = Math.min(...newcomers.map(image => image.games))
+      const starved = newcomers.filter(image => image.games === minGames)
+      return pickByVariety(keep, starved, images, keys, rng)
+    }
+  } else {
+    const peers = available.filter(image => image.games < PLACEMENT_GAMES && !sameGroup(keep, image))
+    const faced = recentOpponents(keep.id, keys)
+    const fresh = peers.filter(image => !faced.has(image.id))
+    const poolPeers = fresh.length ? fresh : peers
+    if (poolPeers.length) {
+      const same = poolPeers.filter(image => winsOf(image) === winsOf(keep) && lossesOf(image) === lossesOf(keep))
+      const band = same.length ? same : closestRecord(keep, poolPeers)
+      const minGames = Math.min(...band.map(image => image.games))
+      return pickByVariety(keep, band.filter(image => image.games === minGames), images, keys, rng)
+    }
+    const established = available.filter(image => image.games >= PLACEMENT_GAMES && !sameGroup(keep, image))
+    if (established.length) return pickNear(keep, established, images, keys, rng)
   }
-  const established = images.filter(image => image.games >= PLACEMENT_GAMES && image.id !== keep.id)
-  const placingAnchor = keep.games < PLACEMENT_GAMES && established.length > 0
-  const target = placingAnchor ? placementTarget(keep.games, established) : keep.elo
-  return pickOpponent(keep, images, target, placingAnchor, options.recentKeys || [], [], rng)
+  const legal = available.filter(image => !sameGroup(keep, image))
+  return pickNear(keep, legal.length ? legal : available, images, keys, rng)
 }
 
 export function extendQueue(pool: Pairable[], queue: Slot[], recentKeys: string[], depth = QUEUE_DEPTH, rng: () => number = Math.random) {
   const shadow = pool.map(image => ({ ...image }))
-  const next = queue.filter(slot => {
-    const left = shadow.find(image => image.id === slot.leftId)
-    const right = shadow.find(image => image.id === slot.rightId)
-    return left && right && !left.trashed && !right.trashed && !left.archived && !right.archived && !left.unreadable && !right.unreadable
-  })
+  const byId = new Map(shadow.map(image => [image.id, image]))
   const keys = [...recentKeys]
-  for (const slot of next) {
-    keys.push(pairKey(slot.leftId, slot.rightId))
-    const left = shadow.find(image => image.id === slot.leftId)
-    const right = shadow.find(image => image.id === slot.rightId)
-    if (left) left.games += 1
-    if (right) right.games += 1
+  const next: Slot[] = []
+  for (const slot of queue) {
+    const left = byId.get(slot.leftId)
+    const right = byId.get(slot.rightId)
+    if (!left || !right || left.trashed || right.trashed || left.archived || right.archived || left.unreadable || right.unreadable) continue
+    const cooling = coolingIds(keys)
+    if (next.length > 0 && (cooling.has(left.id) || cooling.has(right.id))) continue
+    const key = pairKey(left.id, right.id)
+    if (next.length > 0 && keys[keys.length - 1] === key) continue
+    next.push({ leftId: slot.leftId, rightId: slot.rightId })
+    keys.push(key)
+    left.games += 1
+    right.games += 1
   }
   while (next.length < depth) {
-    const avoidIds = next.length ? [next[next.length - 1].leftId, next[next.length - 1].rightId] : []
-    const pair = nextQualifyingPair(shadow, { avoidIds, recentKeys: keys, rng })
+    const pair = nextQualifyingPair(shadow, { recentKeys: keys, rng })
     if (!pair) break
     const key = pairKey(pair.left.id, pair.right.id)
-    if (next.length && pairKey(next[next.length - 1].leftId, next[next.length - 1].rightId) === key) break
+    if (keys.length && keys[keys.length - 1] === key) break
     const leftId = rng() < 0.5 ? pair.left.id : pair.right.id
     const rightId = leftId === pair.left.id ? pair.right.id : pair.left.id
     next.push({ leftId, rightId })
