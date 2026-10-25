@@ -585,6 +585,11 @@ export function Matchup({
       }
       releaseGesture()
     }
+    const blockMenu = (event: Event) => {
+      event.preventDefault()
+    }
+    const photos = stageRef.current
+    photos?.addEventListener('contextmenu', blockMenu, true)
     window.addEventListener('pointerdown', down, block)
     window.addEventListener('pointermove', move, block)
     window.addEventListener('pointerup', up, block)
@@ -592,6 +597,7 @@ export function Matchup({
     return () => {
       clearArm()
       stop()
+      photos?.removeEventListener('contextmenu', blockMenu, true)
       window.removeEventListener('pointerdown', down, block)
       window.removeEventListener('pointermove', move, block)
       window.removeEventListener('pointerup', up, block)
@@ -847,7 +853,7 @@ export function Matchup({
   function framePhoto(image: BrushImage, side: 'left' | 'right', src: string | null, live: boolean) {
     const shown = src || seenSrc.current.get(image.id) || null
     if (!shown) return <div className="brush-photo brush-photo-empty" />
-    return <img className="brush-photo" src={shown} alt={image.name} style={live ? photoStyle(image, side) : restPhotoStyle()} draggable={false} />
+    return <img className="brush-photo" src={shown} alt={image.name} style={live ? photoStyle(image, side) : restPhotoStyle()} draggable={false} onContextMenu={blockPictureMenu} onDragStart={blockPictureMenu} />
   }
 
   function matchCountNode() {
@@ -870,7 +876,7 @@ export function Matchup({
           const motion = side === 'left' ? push?.left : push?.right
           return (
             <article key={side} className={`brush-card${front === side ? ' is-front' : ''}`} data-side={side} data-image={image.id} data-name={image.name} data-face-known={image.face_box ? 'yes' : 'no'} data-explore={exploreSide === side ? 'true' : 'false'} data-photo-slot>
-              <div className="brush-photo-hit" ref={node => { hitRefs.current[side] = node }} onClick={onPhotoClick}>
+              <div className="brush-photo-hit" ref={node => { hitRefs.current[side] = node }} onClick={onPhotoClick} onContextMenu={blockPictureMenu}>
                 {motion ? (
                   <PushFrames late={push?.late === side}>
                     <div className="brush-push-pane is-from" aria-hidden="true">{framePhoto(motion.from.image, side, motion.from.src, false)}</div>
@@ -916,6 +922,10 @@ export function Matchup({
       )}
     </div>
   )
+}
+
+function blockPictureMenu(event: { preventDefault: () => void }) {
+  event.preventDefault()
 }
 
 function PushFrames({ late, children }: { late: boolean, children: ReactNode }) {

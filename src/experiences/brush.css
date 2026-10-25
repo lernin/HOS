@@ -10,8 +10,19 @@
 .brush-nav button,.brush-text-button,.brush-choice{border:1px solid rgba(244,239,230,.28);background:rgba(12,13,11,.72);border-radius:999px;min-height:32px;padding:0 10px;font-size:13px}
 .brush-nav button[aria-current="page"]{background:#efe6d6;color:#1b1914;border-color:#efe6d6}
 .brush-menu-button{display:none}
-.brush-menu{position:absolute;z-index:2;top:0;left:100%;height:100%;width:min(280px,70vw);background:#16140f;display:flex;flex-direction:column;gap:8px;padding:12px;overflow:auto}
-.brush-menu button,.brush-menu .brush-text-button{width:100%;min-height:40px;text-align:left}
+.brush-menu{position:absolute;z-index:2;top:0;left:100%;height:auto;max-height:min(72dvh,520px);width:min(300px,calc(100vw - 24px));background:#16140f;color:#f6f1e8;display:flex;flex-direction:column;gap:8px;padding:8px 8px 10px;overflow:auto;overscroll-behavior:contain;border:1px solid rgba(244,239,230,.16);border-radius:18px;box-shadow:0 18px 48px rgba(0,0,0,.55)}
+.brush-menu-group{display:flex;flex-direction:column;gap:1px}
+.brush-menu-group+.brush-menu-group{border-top:1px solid rgba(244,239,230,.12);padding-top:6px}
+.brush-menu-label{margin:4px 10px 2px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:rgba(246,241,232,.5);line-height:1.2}
+.brush-menu button,.brush-menu .brush-menu-row,.brush-menu .brush-text-button{appearance:none;-webkit-appearance:none;width:100%;min-height:44px;margin:0;padding:0 10px;border:0;border-radius:12px;background:transparent;background-color:transparent;color:#f6f1e8;font-size:16px;font-weight:600;line-height:1.2;text-align:left;display:flex;align-items:center;gap:10px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.brush-menu .brush-menu-row svg{width:20px;height:20px;flex:0 0 auto}
+.brush-menu .brush-menu-row span{min-width:0}
+.brush-menu .brush-menu-row:active,.brush-menu .brush-menu-row[aria-current="page"]{background:rgba(246,241,232,.12);background-color:rgba(246,241,232,.12)}
+.brush-menu .brush-menu-row:focus-visible{outline:1px solid rgba(246,241,232,.7);outline-offset:1px}
+.brush-menu-note{display:flex;align-items:center;gap:8px;margin:2px 10px 6px;min-height:22px;font-size:13px;line-height:1.3;color:rgba(246,241,232,.86)}
+.brush-menu-note strong,.brush-menu-note span:first-child{font-weight:650;color:#f6f1e8}
+.brush-menu-meter{flex:1 1 56px;height:3px;border-radius:99px;background:rgba(246,241,232,.16);overflow:hidden}
+.brush-menu-meter>span{display:block;height:100%;background:#e4d2b0;border-radius:99px}
 .brush.is-landscape.is-match .brush-menu-button{display:inline-grid}
 .brush-main{flex:1;min-height:0;min-width:0;position:relative;display:flex;flex-direction:column}
 .brush-stage{position:relative;flex:1;min-height:0;min-width:0;display:flex;flex-direction:column;touch-action:none}
@@ -23,7 +34,8 @@
 .brush.is-portrait .brush-card{display:none}
 .brush.is-portrait .brush-card.is-front{display:flex}
 .brush-photo-hit{flex:1;min-height:0;position:relative;overflow:hidden;background:#0c0d0b;touch-action:none}
-.brush-photo{width:100%;height:100%;object-fit:contain;display:block;background:#0c0d0b;transition:filter 180ms ease}
+.brush-photo{width:100%;height:100%;object-fit:contain;display:block;background:#0c0d0b;transition:filter 180ms ease;pointer-events:none;-webkit-user-drag:none}
+.brush-photo,.brush-photo-hit,.brush-slide,.brush-push-pane{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 .brush-caption{flex:0 0 auto;display:flex;align-items:center;gap:6px;min-height:26px;max-height:26px;padding:0 8px;overflow:hidden;background:#141510;font-size:12px;line-height:26px}
 .brush-caption strong,.brush-caption small{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .brush-caption small{flex:1;color:rgba(244,239,230,.72)}
@@ -47,7 +59,7 @@
 .brush-icon-button,.brush-gutter-top>button,.brush-gutter-top>.brush-progress{height:30px;min-height:30px;padding:0 7px;border:1px solid rgba(244,239,230,.28);border-radius:999px;background:rgba(12,13,11,.72);color:#f4efe6;font-size:12px;line-height:30px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent}
 .brush-icon-button{display:inline-grid;place-items:center;width:30px;padding:0}
 .brush-icon-button svg,.brush-face-hold svg{width:18px;height:18px;display:block}
-.brush.is-landscape.is-match .brush-menu-button{display:inline-grid;width:30px;min-height:30px;padding:0}
+.brush.is-landscape.is-match .brush-menu-button{display:inline-grid;width:44px;min-height:44px;padding:0;border:0;background:transparent;box-shadow:none}
 .brush-gutter-name{flex:0 0 24px;height:24px;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;overflow:hidden}
 .brush-gutter-name strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:650;line-height:24px}
 .brush-gutter-actions{flex:1 1 auto;min-height:0;width:100%;display:flex;flex-direction:column;justify-content:space-evenly;align-items:stretch;gap:6px;overflow:hidden}
@@ -108,7 +120,7 @@
 .brush-stats.is-portrait .brush-strip-traits{grid-area:traits}
 .brush-controls{position:relative;flex:0 0 210px;width:210px;min-width:196px;max-width:340px;height:100%;display:flex;flex-direction:column;padding:4px 6px 6px;min-height:0}
 .brush-controls-tools{position:relative;flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center;gap:4px;min-height:34px}
-.brush-controls .brush-menu{left:auto;right:0;top:40px;height:auto;max-height:calc(100% - 48px);width:min(260px,70vw);border-radius:16px;z-index:8}
+.brush-controls .brush-menu{left:auto;right:0;top:48px;height:auto;max-height:min(78dvh,520px);width:min(280px,46vw);border-radius:16px;z-index:8}
 .brush-controls .brush-gutter-actions{flex:1 1 auto;height:auto;min-height:0}
 .brush-control-row{flex:1 1 0;min-height:0;display:flex;gap:6px;align-items:stretch}
 .brush-control-row>.brush-swipe,.brush-control-row>.brush-face-hold{flex:1 1 0;width:auto;height:100%;min-width:0;min-height:0}
@@ -192,8 +204,10 @@
 .brush-moment{position:relative;z-index:1;align-self:center;margin:4px auto;max-width:calc(100% - 16px);background:#efe6d6;color:#1b1914;border:0;border-radius:999px;min-height:32px;padding:0 14px}
 .brush.is-portrait.is-match .brush-moment.is-overlay{position:absolute;z-index:6;left:12px;right:12px;bottom:calc(74px + env(safe-area-inset-bottom));width:max-content;max-width:calc(100% - 24px);margin:0 auto}
 .brush-portrait-menu{position:absolute;z-index:8;inset:0;pointer-events:none}
-.brush-float-menu{pointer-events:auto;position:absolute;top:max(10px, env(safe-area-inset-top));left:10px;width:44px;height:44px;border-radius:999px;border:1px solid rgba(239,230,214,.45);background:rgba(18,17,14,.55);color:#f4efe6;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:inset 0 1px 0 rgba(239,230,214,.28), 0 8px 18px rgba(0,0,0,.28);display:grid;place-items:center}
-.brush-menu.is-portrait-menu{pointer-events:auto;left:10px;top:max(62px, calc(env(safe-area-inset-top) + 56px));height:auto;max-height:min(70dvh, 520px);width:min(280px, calc(100vw - 20px));border-radius:18px;border:1px solid rgba(244,239,230,.16);box-shadow:0 16px 40px rgba(0,0,0,.45)}
+.brush-float-menu{pointer-events:auto;position:absolute;top:max(8px, env(safe-area-inset-top));left:8px;width:44px;height:44px;padding:0;border:0;border-radius:0;background:transparent;background-color:transparent;color:#f7f3ea;box-shadow:none;display:grid;place-items:center;filter:drop-shadow(0 0 1px rgba(12,13,11,1)) drop-shadow(0 1px 2px rgba(12,13,11,.9));-webkit-tap-highlight-color:transparent}
+.brush-float-menu svg,button.brush-menu-button svg{width:28px;height:28px;display:block}
+button.brush-menu-button.brush-icon-button{width:44px;height:44px;min-height:44px;padding:0;border:0;border-radius:0;background:transparent;background-color:transparent;box-shadow:none;color:#f7f3ea;filter:drop-shadow(0 0 1px rgba(12,13,11,1)) drop-shadow(0 1px 2px rgba(12,13,11,.85))}
+.brush-menu.is-portrait-menu{pointer-events:auto;left:10px;top:max(52px, calc(env(safe-area-inset-top) + 46px));height:auto;max-height:min(68dvh, 520px);width:min(300px, calc(100vw - 20px));border-radius:18px}
 .brush-scroll{position:relative;flex:1;min-height:0;overflow:auto;padding:16px 16px max(20px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:16px}
 .brush-scroll h2{font-family:Georgia,serif;font-weight:500;font-size:28px;margin:0}
 .brush-panel{border:1px solid rgba(244,239,230,.16);border-radius:18px;padding:14px;background:#141510}

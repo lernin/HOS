@@ -25,6 +25,39 @@ function messageOf(error: unknown) {
   return error instanceof Error ? error.message : 'Something went wrong.'
 }
 
+function downloadName(name: string) {
+  const cleaned = (name || 'brush-picture').replace(/[\\/:*?"<>|]+/g, '-').trim() || 'brush-picture'
+  return /\.(jpe?g|png|webp|gif|avif)$/i.test(cleaned) ? cleaned : `${cleaned}.jpg`
+}
+
+function dataUrlToBlob(dataUrl: string) {
+  const comma = dataUrl.indexOf(',')
+  const header = dataUrl.slice(0, Math.max(0, comma))
+  const body = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl
+  const mime = /data:([^;,]+)/.exec(header)?.[1] || 'image/jpeg'
+  const binary = atob(body)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  return new Blob([bytes], { type: mime })
+}
+
+function savePictureFile(src: string, name: string) {
+  const fromData = src.startsWith('data:')
+  const href = fromData ? URL.createObjectURL(dataUrlToBlob(src)) : src
+  const anchor = document.createElement('a')
+  anchor.href = href
+  anchor.download = downloadName(name)
+  anchor.rel = 'noopener'
+  anchor.style.position = 'fixed'
+  anchor.style.left = '-9999px'
+  document.body.appendChild(anchor)
+  anchor.click()
+  window.setTimeout(() => {
+    anchor.remove()
+    if (fromData) URL.revokeObjectURL(href)
+  }, 2000)
+}
+
 export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: () => void, preview?: boolean }) {
   const [brushPin, setBrushPin] = useState('')
   const [phase, setPhase] = useState<'boot' | 'set' | 'enter' | 'change' | 'app'>(preview ? 'app' : 'boot')
@@ -422,6 +455,93 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     client.enqueueUploads(files)
   }
 
+  function pictureSrc(image: BrushImage) {
+    return image.preview_url || urls[image.drive_file_id] || srcFor(image)
+  }
+
+  function savePicture(image: BrushImage) {
+    const src = pictureSrc(image)
+    if (!src) {
+      setMessage('That picture is still loading.')
+      return
+    }
+    savePictureFile(src, image.name)
+    setMenuOpen(false)
+  }
+
+  function syncDrive() {
+    setMenuOpen(false)
+    setProgress('Syncing Beauty Contest')
+    client.sync(setProgress).then(() => loadAll()).catch(error => setMessage(messageOf(error))).finally(() => setProgress(''))
+  }
+
+  function menuSheet() {
+    if (!match) return null
+    const open = (item: Screen) => { setMenuOpen(false); setScreen(item) }
+    const focused = front === 'left' ? match.left : match.right
+    return (
+      <>
+        <section className="brush-menu-group" data-menu-group="navigation">
+          <p className="brush-menu-label">Navigation</p>
+          <button className="brush-menu-row" type="button" data-action="board" aria-current={screen === 'board' ? 'page' : undefined} onClick={() => open('board')}><MenuGlyph paths={['M4 19V9', 'M4 19h16', 'M9 19V5h6v14', 'M9 9h6']} /><span>Board</span></button>
+          <button className="brush-menu-row" type="button" data-action="library" aria-current={screen === 'library' ? 'page' : undefined} onClick={() => open('library')}><MenuGlyph paths={['M5 5h6v6H5z', 'M13 5h6v6h-6z', 'M5 13h6v6H5z', 'M13 13h6v6h-6z']} /><span>Library</span></button>
+          <button className="brush-menu-row" type="button" data-action="match" aria-current={screen === 'match' ? 'page' : undefined} onClick={() => open('match')}><MenuGlyph paths={['M4 6h7v12H4z', 'M13 6h7v12h-7z']} /><span>Match</span></button>
+          <button className="brush-menu-row" type="button" data-action="love" aria-current={screen === 'love' ? 'page' : undefined} onClick={() => open('love')}><MenuGlyph paths={['M12 19s-7-4.4-7-9a4 4 0 0 1 7-2 4 4 0 0 1 7 2c0 4.6-7 9-7 9z']} /><span>Love</span></button>
+          <button className="brush-menu-row" type="button" data-action="trash" aria-current={screen === 'trash' ? 'page' : undefined} onClick={() => open('trash')}><MenuGlyph paths={['M5 7.6h14', 'M9.2 7.6V5.6h5.6v2', 'M7.4 7.6l.7 11.2h7.8l.7-11.2']} /><span>Trash</span></button>
+          <button className="brush-menu-row" type="button" data-action="hub" onClick={() => { setMenuOpen(false); onExit() }}><MenuGlyph paths={['M5 12h14', 'M13 6l6 6-6 6']} /><span>Hub</span></button>
+        </section>
+        <section className="brush-menu-group" data-menu-group="contest">
+          <p className="brush-menu-label">Contest</p>
+          {deck?.phase === 'qualifying' && qualify && (
+            <p className="brush-menu-note" data-qualify>
+              <span>{`Qualifying ${qualify.percent}%`}</span>
+              <span className="brush-menu-meter" aria-hidden="true"><span style={{ width: `${qualify.percent}%` }} /></span>
+            </p>
+          )}
+          {deck?.phase === 'qualifying' && qualify && qualify.total >= 2 && (
+            <button className="brush-menu-row" type="button" data-action="finals" onClick={() => { setMenuOpen(false); goFinals() }}><MenuGlyph paths={['M7 4h10v3a5 5 0 0 1-10 0z', 'M12 12v6', 'M8 20h8']} /><span>Finals</span></button>
+          )}
+          {deck?.phase === 'finals' && <p className="brush-menu-note" data-finals>{`Finals · round ${deck.rounds.length}`}</p>}
+          {challengers > 0 && deck?.focus !== 'placement' && (
+            deck?.phase === 'finals'
+              ? <button className="brush-menu-row" type="button" data-challengers data-action="challengers" onClick={() => { setMenuOpen(false); placeChallengers() }}><MenuGlyph paths={['M16 19v-1.2A3.2 3.2 0 0 0 12.8 14.6H8.2A3.2 3.2 0 0 0 5 17.8V19', 'M10.5 11.2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19 8v6', 'M16 11h6']} /><span>{`New challengers: ${challengers}`}</span></button>
+              : <p className="brush-menu-note" data-challengers>{`New challengers: ${challengers}`}</p>
+          )}
+          {deck?.phase === 'finals' && deck.focus === 'placement' && (
+            <button className="brush-menu-row" type="button" data-action="bracket" onClick={() => { setMenuOpen(false); backToBracket() }}><MenuGlyph paths={['M15 6 9 12l6 6']} /><span>Back to finals</span></button>
+          )}
+          {uploads.total > uploads.completed && (
+            <button className="brush-menu-row" type="button" data-upload-nav onClick={() => { setMenuOpen(false); setUploadOpen(true) }}><UploadIcon /><span>{`Uploads ${uploads.completed}/${uploads.total}`}</span></button>
+          )}
+          {progress && <p className="brush-menu-note">{progress}</p>}
+        </section>
+        <section className="brush-menu-group" data-menu-group="pictures">
+          <p className="brush-menu-label">Pictures</p>
+          <button className="brush-menu-row" type="button" data-action="sync" onClick={syncDrive}><MenuGlyph paths={['M20 12a8 8 0 0 1-13.6 5.7L4 16', 'M4 12a8 8 0 0 1 13.6-5.7L20 8', 'M4 16v-3.5h3.5', 'M20 8v3.5h-3.5']} /><span>Sync Drive</span></button>
+          {phase === 'app' && (
+            <label htmlFor="brush-gallery" className="brush-menu-row" data-action="upload">
+              <UploadIcon />
+              <span>Upload</span>
+            </label>
+          )}
+          {portrait ? (
+            <button className="brush-menu-row" type="button" data-action="download" onClick={() => savePicture(focused)}><MenuGlyph paths={['M12 4v11', 'M7.5 11 12 15.5 16.5 11', 'M5 19h14']} /><span>Download</span></button>
+          ) : (
+            <>
+              <button className="brush-menu-row" type="button" data-action="download-left" data-side="left" onClick={() => savePicture(match.left)}><MenuGlyph paths={['M12 4v11', 'M7.5 11 12 15.5 16.5 11', 'M5 19h14']} /><span>Download left</span></button>
+              <button className="brush-menu-row" type="button" data-action="download-right" data-side="right" onClick={() => savePicture(match.right)}><MenuGlyph paths={['M12 4v11', 'M7.5 11 12 15.5 16.5 11', 'M5 19h14']} /><span>Download right</span></button>
+            </>
+          )}
+          {portrait && <button className="brush-menu-row" type="button" data-action="flip" onClick={() => { setMenuOpen(false); setFront(side => side === 'left' ? 'right' : 'left') }}><MenuGlyph paths={['M7 7h6a4 4 0 0 1 0 8H8', 'M7 7 4.5 9.5', 'M17 17H11a4 4 0 0 1 0-8h5', 'M17 17l2.5-2.5']} /><span>Flip</span></button>}
+          {zoom.scale > 1 && <button className="brush-menu-row" type="button" data-action="fit" onClick={() => { setMenuOpen(false); setZoom(REST_ZOOM) }}><MenuGlyph paths={['M9 4H5v4', 'M15 4h4v4', 'M9 20H5v-4', 'M15 20h4v-4']} /><span>Fit</span></button>}
+          {showingMatch && deck?.phase === 'finals' && reason && !reason.open && (
+            <button className="brush-menu-row" type="button" data-action="reason" onClick={() => { setMenuOpen(false); setReason(current => current ? { ...current, open: true } : current) }}><ReasonIcon /><span>Add reason</span></button>
+          )}
+        </section>
+      </>
+    )
+  }
+
   function navLinks() {
     return (
       <>
@@ -465,9 +585,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           </button>
           {menuOpen && (
             <div className="brush-menu is-portrait-menu" data-menu>
-              {navLinks()}
-              <button type="button" data-action="flip" onClick={() => { setMenuOpen(false); setFront(side => side === 'left' ? 'right' : 'left') }}>Flip</button>
-              {zoom.scale > 1 && <button type="button" data-action="fit" onClick={() => { setMenuOpen(false); setZoom(REST_ZOOM) }}>Fit</button>}
+              {menuSheet()}
             </div>
           )}
         </div>
@@ -537,7 +655,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
                   <ReasonIcon />
                 </button>
               )}
-              {menuOpen && <div className="brush-menu" data-menu>{navLinks()}</div>}
+              {menuOpen && <div className="brush-menu" data-menu>{menuSheet()}</div>}
             </>
           ) : null}
         />
@@ -656,7 +774,23 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
 }
 
 function MenuIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <g fill="currentColor" stroke="#14120e" strokeWidth="1.4">
+        <circle cx="12" cy="5" r="1.7" />
+        <circle cx="12" cy="12" r="1.7" />
+        <circle cx="12" cy="19" r="1.7" />
+      </g>
+    </svg>
+  )
+}
+
+function MenuGlyph({ paths }: { paths: string[] }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      {paths.map(d => <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />)}
+    </svg>
+  )
 }
 
 function ReasonIcon() {
