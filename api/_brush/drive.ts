@@ -1,8 +1,8 @@
 import { createSign } from 'node:crypto'
 import { cleanDetail } from './http.js'
 
-// Trash is a database flag. This module lists, reads, and uploads. It does not
-// delete Drive files or change their parents.
+// This module lists, reads, and uploads. It can move a file into Drive trash.
+// It does not permanently delete Drive files or change their parents.
 
 export const BEAUTY_CONTEST_FOLDER_ID = '1_WEDf6e7FCzUw5nelM1pZypaCBRq0s39'
 export const UPLOADS_FOLDER_NAME = 'Brush Uploads'
@@ -240,6 +240,38 @@ export async function forwardUploadChunk(uploadUrl: string, bytes: Uint8Array, r
   const file = await response.json() as { id?: string, name?: string }
   if (!file.id) throw Object.assign(new Error('Drive finished the upload without a file id.'), { status: 502 })
   return { complete: true as const, file: { id: file.id, name: file.name || '' } }
+}
+
+export async function driveFileAccess(fileId: string) {
+  assertId(fileId)
+  const token = await accessToken(readServiceAccount())
+  const response = await driveFetch(token, `https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true&fields=id,trashed,shared,capabilities`)
+  const file = await response.json() as {
+    trashed?: boolean
+    shared?: boolean
+    capabilities?: { canTrash?: boolean, canEdit?: boolean }
+  }
+  return {
+    trashed: file.trashed === true,
+    shared: file.shared === true,
+    canTrash: file.capabilities?.canTrash === true,
+    canEdit: file.capabilities?.canEdit === true,
+  }
+}
+
+export async function moveToDriveTrash(fileId: string) {
+  assertId(fileId)
+  const token = await accessToken(readServiceAccount())
+  const response = await driveFetch(token, `https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true&fields=id,trashed`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ trashed: true }),
+  })
+  const file = await response.json() as { id?: string, trashed?: boolean }
+  if (!file.id || file.trashed !== true) {
+    throw Object.assign(new Error('Drive did not move that file to the trash.'), { status: 502 })
+  }
+  return file
 }
 
 export async function uploadsFile(fileId: string) {

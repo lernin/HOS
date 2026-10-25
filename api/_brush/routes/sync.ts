@@ -65,6 +65,7 @@ export default {
           continue
         }
         if (!isImage(file)) continue
+        if (file.name.startsWith('Screenshot_')) continue
         const prompt = prompts[key] || null
         images.push({
           drive_file_id: file.id,
