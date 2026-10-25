@@ -39,7 +39,7 @@
 .brush.is-portrait .brush-photo-hit{margin:0 8px;border-radius:13px;border:1px solid rgba(244,239,230,.16)}
 .brush.is-portrait.is-match .brush-photo-hit{margin:0;border:0;border-radius:0}
 .brush.is-portrait.is-match .brush-photo,.brush.is-portrait.is-match .brush-photo-empty{border-radius:0}
-.brush.is-landscape.is-match .brush-photo{height:100%;width:100%;object-fit:contain;object-position:center;border-radius:13px;background:transparent}
+.brush.is-landscape.is-match .brush-photo{height:100%;width:100%;object-fit:cover;object-position:center 33%;border-radius:13px;background:transparent}
 .brush-gutter{position:relative;flex:1 1 88px;min-width:88px;height:100%;display:flex;flex-direction:column;align-items:stretch;gap:4px;padding:4px 6px 6px;min-height:0;overflow:visible}
 .brush-gutter-top{flex:0 0 34px;height:34px;display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;width:100%;min-width:0}
 .brush-gutter-top>button,.brush-gutter-top>.brush-progress,.brush-gutter-top>.brush-icon-button{flex:0 1 auto;min-width:0;max-width:100%}

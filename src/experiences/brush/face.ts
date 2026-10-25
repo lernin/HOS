@@ -138,6 +138,20 @@ export function faceZoom(box: FaceBox): FaceFrame {
   }
 }
 
+// Eyes sit about a third of the way down a face box. With no box, assume a
+// centered face on that same line. This is a point on the picture, not a zoom.
+export const EYE_LINE = 0.33
+
+export function faceEye(box: FaceBox | null | undefined) {
+  if (!box || box.w <= 0.02 || box.h <= 0.02 || box.x < -0.02 || box.y < -0.02 || box.x + box.w > 1.05 || box.y + box.h > 1.05) {
+    return { x: 0.5, y: EYE_LINE }
+  }
+  return {
+    x: clamp(box.x + box.w * 0.5, 0, 1),
+    y: clamp(box.y + box.h * 0.36, 0, 1),
+  }
+}
+
 // Same framing, written as translate+scale around the center so a pinch zoom
 // and a face zoom can ease into each other.
 export function faceShift(frame: FaceFrame) {
