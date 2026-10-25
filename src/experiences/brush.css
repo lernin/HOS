@@ -120,7 +120,7 @@
 .brush-stats.is-portrait .brush-strip-traits{grid-area:traits}
 .brush-controls{position:relative;flex:0 0 210px;width:210px;min-width:196px;max-width:340px;height:100%;display:flex;flex-direction:column;padding:4px 6px 6px;min-height:0}
 .brush-controls-tools{position:relative;flex:0 0 auto;display:flex;justify-content:flex-end;align-items:center;gap:4px;min-height:34px}
-.brush-controls .brush-menu{left:auto;right:0;top:40px;height:auto;max-height:calc(100% - 48px);width:min(260px,70vw);border-radius:16px;z-index:8}
+.brush-controls .brush-menu{left:auto;right:0;top:48px;height:auto;max-height:min(78dvh,520px);width:min(280px,46vw);border-radius:16px;z-index:8}
 .brush-controls .brush-gutter-actions{flex:1 1 auto;height:auto;min-height:0}
 .brush-control-row{flex:1 1 0;min-height:0;display:flex;gap:6px;align-items:stretch}
 .brush-control-row>.brush-swipe,.brush-control-row>.brush-face-hold{flex:1 1 0;width:auto;height:100%;min-width:0;min-height:0}

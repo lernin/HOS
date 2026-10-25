@@ -589,7 +589,7 @@ export function Matchup({
       event.preventDefault()
     }
     const photos = stageRef.current
-    photos?.addEventListener('contextmenu', blockMenu)
+    photos?.addEventListener('contextmenu', blockMenu, true)
     window.addEventListener('pointerdown', down, block)
     window.addEventListener('pointermove', move, block)
     window.addEventListener('pointerup', up, block)
@@ -597,7 +597,7 @@ export function Matchup({
     return () => {
       clearArm()
       stop()
-      photos?.removeEventListener('contextmenu', blockMenu)
+      photos?.removeEventListener('contextmenu', blockMenu, true)
       window.removeEventListener('pointerdown', down, block)
       window.removeEventListener('pointermove', move, block)
       window.removeEventListener('pointerup', up, block)
