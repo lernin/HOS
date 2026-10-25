@@ -70,7 +70,7 @@ export function lookOf(image: Pairable): Look {
   }
 }
 
-export type Slot = { leftId: string, rightId: string }
+export type Slot = { leftId: string, rightId: string, standbyLeft?: string | null, standbyRight?: string | null }
 
 export function pairKey(leftId: string, rightId: string) {
   return [leftId, rightId].sort().join(':')
@@ -443,6 +443,72 @@ export function nextContender(pool: Pairable[], keepId: string, options: { recen
   return pickNear(keep, legal.length ? legal : available, images, keys, rng)
 }
 
+function recordFair(anchor: Pairable, other: Pairable, unranked: Pairable[], keys: string[]) {
+  const distance = recordDistance(anchor, other)
+  const faced = recentOpponents(anchor.id, keys)
+  const legal = unranked.filter(image => image.id !== anchor.id && !sameGroup(anchor, image) && !faced.has(image.id))
+  const openPool = legal.length ? legal : unranked.filter(image => image.id !== anchor.id && !sameGroup(anchor, image))
+  if (!openPool.some(image => image.id === other.id)) return false
+  const cooling = coolingIds(keys)
+  const open = openPool.filter(image => !cooling.has(image.id))
+  const considered = open.length ? open : openPool
+  const same = considered.some(image => winsOf(image) === winsOf(anchor) && lossesOf(image) === lossesOf(anchor))
+  if (same) return distance === 0
+  const best = Math.min(...considered.map(image => recordDistance(anchor, image)))
+  return distance === best
+}
+
+function placementStillFair(left: Pairable, right: Pairable, pool: Pairable[], keys: string[]) {
+  const placing = active(pool).filter(image => image.games < PLACEMENT_GAMES)
+  const bothPlacing = left.games < PLACEMENT_GAMES && right.games < PLACEMENT_GAMES
+  const bothRanked = left.games >= PLACEMENT_GAMES && right.games >= PLACEMENT_GAMES
+  if (placing.length < 2) return true
+  if (!bothPlacing && !bothRanked) return false
+  if (!bothPlacing) return true
+  return recordFair(left, right, placing, keys) || recordFair(right, left, placing, keys)
+}
+
+/** Keep buffered slots that are still a legal next match after a result. */
+export function retainBuffer(queue: Slot[], playedKey: string, pool: Pairable[], recentKeys: string[]) {
+  const byId = new Map(pool.map(image => [image.id, image]))
+  const keys = [...recentKeys]
+  const kept: Slot[] = []
+  const playedIds = new Set(playedKey.split(':').filter(Boolean))
+  for (const slot of queue) {
+    const key = pairKey(slot.leftId, slot.rightId)
+    if (playedKey && key === playedKey) continue
+    const left = byId.get(slot.leftId)
+    const right = byId.get(slot.rightId)
+    if (!left || !right || left.trashed || right.trashed || left.archived || right.archived || left.unreadable || right.unreadable) continue
+    if (playedIds.has(left.id) || playedIds.has(right.id)) continue
+    if (keys.includes(key)) continue
+    if (sameGroup(left, right)) continue
+    const cooling = coolingIds(keys)
+    if (cooling.has(left.id) || cooling.has(right.id)) continue
+    if (!placementStillFair(left, right, pool, keys)) continue
+    kept.push({ leftId: slot.leftId, rightId: slot.rightId })
+    keys.push(key)
+  }
+  return kept
+}
+
+function standbyPick(pool: Pairable[], keepId: string, dropId: string, recentKeys: string[]) {
+  const marked = pool.map(image => image.id === dropId ? { ...image, trashed: true } : image)
+  return nextContender(marked, keepId, { recentKeys, rng: () => 0 })
+}
+
+function withStandbys(pool: Pairable[], slots: Slot[], recentKeys: string[]) {
+  const keys = [...recentKeys]
+  return slots.map(slot => {
+    const key = pairKey(slot.leftId, slot.rightId)
+    const recent = [...keys, key]
+    const standbyLeft = standbyPick(pool, slot.rightId, slot.leftId, recent)?.id ?? null
+    const standbyRight = standbyPick(pool, slot.leftId, slot.rightId, recent)?.id ?? null
+    keys.push(key)
+    return { leftId: slot.leftId, rightId: slot.rightId, standbyLeft, standbyRight }
+  })
+}
+
 export function extendQueue(pool: Pairable[], queue: Slot[], recentKeys: string[], depth = QUEUE_DEPTH, rng: () => number = Math.random) {
   const shadow = pool.map(image => ({ ...image }))
   const byId = new Map(shadow.map(image => [image.id, image]))
@@ -473,7 +539,7 @@ export function extendQueue(pool: Pairable[], queue: Slot[], recentKeys: string[
     pair.left.games += 1
     pair.right.games += 1
   }
-  return next
+  return withStandbys(pool, next, recentKeys)
 }
 
 export function qualifyingProgress(pool: Pairable[]) {

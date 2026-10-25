@@ -170,7 +170,14 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
 
   useEffect(() => {
     if (preview || !deck) return
-    const queued = deck.queue.slice(0, 5).flatMap(slot => deck.images.filter(image => image.id === slot.leftId || image.id === slot.rightId))
+    const bufferedIds = new Set<string>()
+    for (const slot of deck.queue.slice(0, 5)) {
+      bufferedIds.add(slot.leftId)
+      bufferedIds.add(slot.rightId)
+      if (slot.standbyLeft) bufferedIds.add(slot.standbyLeft)
+      if (slot.standbyRight) bufferedIds.add(slot.standbyRight)
+    }
+    const queued = deck.images.filter(image => bufferedIds.has(image.id))
     const finals = deck.rounds.flatMap(round => round.flatMap(slot => deck.images.filter(image => image.id === slot.leftId || image.id === slot.rightId)))
     const wanted = [...(match ? [match.left, match.right] : []), ...queued, ...finals.slice(0, 8), ...library.slice(0, 24), ...trashed.slice(0, 8)]
     for (const image of wanted) {
@@ -197,7 +204,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     if (match) { wanted.set(match.left.id, match.left); wanted.set(match.right.id, match.right) }
     for (const slot of deck.queue.slice(0, 5)) {
       for (const image of deck.images) {
-        if (image.id === slot.leftId || image.id === slot.rightId) wanted.set(image.id, image)
+        if (image.id === slot.leftId || image.id === slot.rightId || image.id === slot.standbyLeft || image.id === slot.standbyRight) wanted.set(image.id, image)
       }
     }
     for (const image of wanted.values()) {
