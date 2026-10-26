@@ -108,6 +108,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const matchKey = match ? `${match.left.id}:${match.right.id}` : ''
   const qualify = deck ? progressOf(deck) : null
   const showingMatch = phase === 'app' && screen === 'match' && deck?.phase !== 'champion' && !!match
+  const matchFailed = phase === 'app' && screen === 'match' && !deck
   const landscapeMatch = showingMatch && !portrait
 
   useEffect(() => {
@@ -550,9 +551,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   }
 
   function menuSheet() {
-    if (!match) return null
     const open = (item: Screen) => { setMenuOpen(false); setScreen(item) }
-    const focused = front === 'left' ? match.left : match.right
+    const focused = match ? (front === 'left' ? match.left : match.right) : null
     return (
       <>
         <section className="brush-menu-group" data-menu-group="navigation">
@@ -596,7 +596,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           )}
           {progress && <p className="brush-menu-note">{progress}</p>}
         </section>
-        <section className="brush-menu-group" data-menu-group="pictures">
+        {match && focused && <section className="brush-menu-group" data-menu-group="pictures">
           <p className="brush-menu-label">Pictures</p>
           <button className="brush-menu-row" type="button" data-action="sync" onClick={syncDrive}><MenuGlyph paths={['M20 12a8 8 0 0 1-13.6 5.7L4 16', 'M4 12a8 8 0 0 1 13.6-5.7L20 8', 'M4 16v-3.5h3.5', 'M20 8v3.5h-3.5']} /><span>Sync Drive</span></button>
           {phase === 'app' && (
@@ -618,7 +618,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           {showingMatch && deck?.phase === 'finals' && reason && !reason.open && (
             <button className="brush-menu-row" type="button" data-action="reason" onClick={() => { setMenuOpen(false); setReason(current => current ? { ...current, open: true } : current) }}><ReasonIcon /><span>Add reason</span></button>
           )}
-        </section>
+        </section>}
       </>
     )
   }
@@ -653,13 +653,13 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   return (
     <main className={`brush${portrait ? ' is-portrait' : ' is-landscape'}${showingMatch ? ' is-match' : ''}`}>
       {phase === 'app' && <input id="brush-gallery" className="brush-file-input" data-upload-input type="file" accept="image/*" multiple onChange={onGallery} />}
-      {!showingMatch && (
+      {!showingMatch && !matchFailed && (
         <nav className="brush-nav" data-nav>
           <div className="brush-nav-row">{navLinks()}</div>
         </nav>
       )}
       <div className="brush-main">
-      {showingMatch && portrait && (
+      {(showingMatch && portrait || matchFailed) && (
         <div className="brush-portrait-menu">
           <button className="brush-float-menu" type="button" data-action="menu" aria-expanded={menuOpen} aria-label={menuOpen ? 'Close menu' : 'Open menu'} onClick={() => setMenuOpen(open => !open)}>
             <MenuIcon />
@@ -673,6 +673,11 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       )}
       {moment && !landscapeMatch && <button className={`brush-moment is-${moment.kind}${showingMatch && portrait ? ' is-overlay' : ''}`} type="button" data-moment={moment.kind === 'level' ? 'level' : moment.kind === 'placement' ? 'placement' : 'top16'} title={moment.text} onClick={() => setMoments(queue => queue.slice(1))}>{moment.text}</button>}
 
+      {matchFailed && (
+        <div className="brush-scroll" data-screen="match">
+          <p className="brush-note" data-note>{message || 'Opening the contest…'}</p>
+        </div>
+      )}
       {phase === 'boot' && <div className="brush-gate"><p>Opening Brush…</p></div>}
       {(phase === 'set' || phase === 'enter' || phase === 'change') && (
         <PinScreen
@@ -826,7 +831,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         />
       )}
 
-      {message && phase === 'app' && !landscapeMatch && <p className="brush-note">{message}</p>}
+      {message && phase === 'app' && !landscapeMatch && !matchFailed && <p className="brush-note">{message}</p>}
       </div>
       {reason?.open && (
         <ReasonSheet
