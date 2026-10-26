@@ -1,7 +1,8 @@
 import { extendQueue, MATCH_MEMORY } from './pair.ts'
+import { DEFAULT_CATEGORIES, freshRating, ratingFromImage, scopeImages, type CategoryRating } from './ranking.ts'
 import { conservativeRating, glickoUpdate, INITIAL_VOLATILITY } from './rank'
 import { suggestRecipe } from './recipe'
-import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights } from './types'
+import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights, Margin } from './types'
 import { attachQueue, UploadQueue, type UploadTransport } from './uploads'
 
 function portrait(title: string, country: string, ink: string, paper: string, accent: string, width = 540, height = 960) {
@@ -80,9 +81,65 @@ export function createPreviewClient(): BrushApi {
     ['jp', [{ trait: 'hair shine', value: 'glossy', source: 'vision', confidence: 0.8, wins: 0, games: 0, trashes: 0 }]],
   ])
   let savedRecipe: string | null = null
-  let recentKeys: string[] = []
-  let contest: ContestState = { phase: 'qualifying', rounds: [], championId: null }
+  const faceSeed: Record<string, Partial<CategoryRating>> = {
+    jp: { elo: 1720, sigma: 70, games: 12, wins: 9, losses: 3 },
+    jp2: { elo: 1600, sigma: 90, games: 8, wins: 5, losses: 3 },
+    kr: { elo: 1510, sigma: 140, games: 6, wins: 3, losses: 3 },
+    st: { elo: 1490, sigma: 200, games: 2, wins: 1, losses: 1 },
+  }
+  const ratingRows: CategoryRating[] = images.flatMap(image => [
+    ratingFromImage(image, 'overall'),
+    { ...freshRating('face', image.id), ...faceSeed[image.id], imageId: image.id, category: 'face' },
+    freshRating('hair', image.id),
+  ])
+  const contests = new Map<string, ContestState>(DEFAULT_CATEGORIES.map(item => [item.id, { phase: 'qualifying', rounds: [], championId: null }]))
+  const recentByCategory = new Map<string, string[]>(DEFAULT_CATEGORIES.map(item => [item.id, []]))
   const known = new Set<string>()
+
+  function categoryOf(category?: string) {
+    return category && DEFAULT_CATEGORIES.some(item => item.id === category) ? category : 'overall'
+  }
+
+  function replaceRating(category: string, imageId: string, next: CategoryRating) {
+    const index = ratingRows.findIndex(row => row.category === category && row.imageId === imageId)
+    if (index >= 0) ratingRows[index] = next
+    else ratingRows.push(next)
+  }
+
+  function ensureRating(category: string, image: BrushImage) {
+    const found = ratingRows.find(row => row.category === category && row.imageId === image.id)
+    if (found) return found
+    const next = category === 'overall' ? ratingFromImage(image, 'overall') : freshRating(category, image.id)
+    ratingRows.push(next)
+    return next
+  }
+
+  function applyPick(left: CategoryRating, right: CategoryRating, winnerId: string, margin: Margin) {
+    const rated = glickoUpdate(
+      { rating: left.elo, rd: left.sigma, volatility: left.volatility },
+      { rating: right.elo, rd: right.sigma, volatility: right.volatility },
+      winnerId === left.imageId,
+      margin,
+    )
+    const close = margin === 'close'
+    left.elo = rated.eloA
+    right.elo = rated.eloB
+    left.sigma = rated.sigmaA
+    right.sigma = rated.sigmaB
+    left.volatility = rated.volatilityA
+    right.volatility = rated.volatilityB
+    left.games += 1
+    right.games += 1
+    if (winnerId === left.imageId) {
+      left.wins += 1
+      right.losses += 1
+      if (close) { left.close_wins += 1; right.close_losses += 1 }
+    } else {
+      right.wins += 1
+      left.losses += 1
+      if (close) { right.close_wins += 1; left.close_losses += 1 }
+    }
+  }
 
   function wait(ms: number, signal?: AbortSignal) {
     return new Promise<void>((resolve, reject) => {
@@ -118,7 +175,7 @@ export function createPreviewClient(): BrushApi {
     async finish({ hash, name, driveFileId, thumbnail }) {
       if (known.has(hash)) return { duplicate: true }
       known.add(hash)
-      images.push(blank({
+      const uploaded = blank({
         id: driveFileId,
         name,
         country: 'Uploads',
@@ -128,7 +185,9 @@ export function createPreviewClient(): BrushApi {
         createdAt: Date.now(),
         has_thumbnail: Boolean(thumbnail),
         preview_url: thumbnail ? URL.createObjectURL(thumbnail) : portrait(name, 'Uploads', '#241c18', '#d9c7ae', '#8d735c'),
-      }))
+      })
+      images.push(uploaded)
+      for (const item of DEFAULT_CATEGORIES) ratingRows.push(item.id === 'overall' ? ratingFromImage(uploaded, 'overall') : freshRating(item.id, uploaded.id))
       return { duplicate: false }
     },
   }
@@ -141,7 +200,7 @@ export function createPreviewClient(): BrushApi {
   function pair() {
     const pool = active()
     if (pool.length < 2) return { ready: false as const, reason: 'need_images', active: pool.length, total: images.length }
-    const [slot] = extendQueue(pool, [], recentKeys, 1)
+    const [slot] = extendQueue(pool, [], recentByCategory.get('overall') || [], 1)
     if (!slot) return { ready: false as const, reason: 'need_images', active: pool.length, total: images.length }
     const left = pool.find(image => image.id === slot.leftId) || pool[0]
     const right = pool.find(image => image.id === slot.rightId) || pool[1]
@@ -184,30 +243,37 @@ export function createPreviewClient(): BrushApi {
       const left = images.find(image => image.id === input.leftId)
       const right = images.find(image => image.id === input.rightId)
       if (!left || !right) return { match_id: null }
+      const category = categoryOf(input.category)
       if (input.decision === 'pick' && input.winnerId) {
-        const rated = glickoUpdate(
-          { rating: left.elo, rd: left.sigma, volatility: left.volatility },
-          { rating: right.elo, rd: right.sigma, volatility: right.volatility },
-          input.winnerId === left.id,
-          input.margin || 'clear',
-        )
-        left.elo = rated.eloA
-        right.elo = rated.eloB
-        left.sigma = rated.sigmaA
-        right.sigma = rated.sigmaB
-        left.volatility = rated.volatilityA
-        right.volatility = rated.volatilityB
-        left.games += 1
-        right.games += 1
-        const close = (input.margin || 'clear') === 'close'
-        if (input.winnerId === left.id) {
-          left.wins += 1
-          right.losses += 1
-          if (close) { left.close_wins = (left.close_wins || 0) + 1; right.close_losses = (right.close_losses || 0) + 1 }
+        if (category === 'overall') {
+          const rated = glickoUpdate(
+            { rating: left.elo, rd: left.sigma, volatility: left.volatility },
+            { rating: right.elo, rd: right.sigma, volatility: right.volatility },
+            input.winnerId === left.id,
+            input.margin || 'clear',
+          )
+          left.elo = rated.eloA
+          right.elo = rated.eloB
+          left.sigma = rated.sigmaA
+          right.sigma = rated.sigmaB
+          left.volatility = rated.volatilityA
+          right.volatility = rated.volatilityB
+          left.games += 1
+          right.games += 1
+          const close = (input.margin || 'clear') === 'close'
+          if (input.winnerId === left.id) {
+            left.wins += 1
+            right.losses += 1
+            if (close) { left.close_wins = (left.close_wins || 0) + 1; right.close_losses = (right.close_losses || 0) + 1 }
+          } else {
+            right.wins += 1
+            left.losses += 1
+            if (close) { right.close_wins = (right.close_wins || 0) + 1; left.close_losses = (left.close_losses || 0) + 1 }
+          }
+          replaceRating('overall', left.id, ratingFromImage(left, 'overall'))
+          replaceRating('overall', right.id, ratingFromImage(right, 'overall'))
         } else {
-          right.wins += 1
-          left.losses += 1
-          if (close) { right.close_wins = (right.close_wins || 0) + 1; left.close_losses = (left.close_losses || 0) + 1 }
+          applyPick(ensureRating(category, left), ensureRating(category, right), input.winnerId, input.margin || 'clear')
         }
       } else {
         if (input.trashLeft) { left.trashed = true; left.trash_count += 1 }
@@ -219,12 +285,19 @@ export function createPreviewClient(): BrushApi {
           badTags.set(image.id, [...existing])
         }
       }
-      recentKeys = [...recentKeys, [left.id, right.id].sort().join(':')].slice(-MATCH_MEMORY)
+      const recent = recentByCategory.get(category) || []
+      recentByCategory.set(category, [...recent, [left.id, right.id].sort().join(':')].slice(-MATCH_MEMORY))
       return { match_id: `preview-${crypto.randomUUID()}` }
     },
     async annotate() {},
-    async contest() { return contest },
-    async saveContest(next) { contest = next },
+    async contest(category) {
+      const id = categoryOf(category)
+      return { ...(contests.get(id) || { phase: 'qualifying' as const, rounds: [], championId: null }), recentKeys: recentByCategory.get(id) || [] }
+    },
+    async saveContest(next, category) {
+      const id = categoryOf(category)
+      contests.set(id, { phase: next.phase, rounds: next.rounds, championId: next.championId })
+    },
     async setPhash(imageId, hash) {
       const image = images.find(item => item.id === imageId)
       if (image) image.perceptual_hash = hash
@@ -240,8 +313,12 @@ export function createPreviewClient(): BrushApi {
       const image = images.find(item => item.id === imageId)
       if (image) image.unreadable = true
     },
-    async leaderboard() { return [...images].sort((a, b) => conservativeRating(b.elo, b.sigma) - conservativeRating(a.elo, a.sigma)) },
+    async leaderboard(category) {
+      return scopeImages(images, categoryOf(category), ratingRows).sort((a, b) => conservativeRating(b.elo, b.sigma) - conservativeRating(a.elo, a.sigma))
+    },
     async library() { return [...images] },
+    async categories() { return DEFAULT_CATEGORIES.map(item => ({ ...item })) },
+    async ratings() { return ratingRows.map(row => ({ ...row })) },
     async tags() { return tags.filter(item => item.status !== 'rejected') },
     async insights() { return insights() },
     async trashed() {

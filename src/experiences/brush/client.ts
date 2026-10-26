@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase'
-import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights, PairResult, RecordInput, TrashImage } from './types'
+import type { BrushApi, BrushAttribute, BrushCategory, BrushImage, BrushTag, CategoryRating, ContestState, Insights, PairResult, RecordInput, TrashImage } from './types'
 import { pairKey } from './pair'
 import { attachQueue, SessionExpired, UPLOAD_CHUNK_BYTES, UploadQueue, type UploadClaim, type UploadTransport } from './uploads'
 
@@ -133,22 +133,23 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
         tag_ids: input.tagIds,
         decided_ms: input.decidedMs ?? null,
         margin: input.margin || 'clear',
+        category: input.category || 'overall',
       })
       return { match_id: data?.match_id ?? null }
     },
     async annotate(matchId, tagIds) {
       await call('brush_annotate', { ...pinArgs, match_id: matchId, tag_ids: tagIds })
     },
-    async contest() {
-      const data = await call<{ phase: ContestState['phase'], rounds: ContestState['rounds'], champion_id: string | null, recent?: string[][] }>('brush_contest_get', pinArgs)
+    async contest(category = 'overall') {
+      const data = await call<{ phase: ContestState['phase'], rounds: ContestState['rounds'], champion_id: string | null, recent?: string[][] }>('brush_contest_get', { ...pinArgs, category })
       const recent = Array.isArray(data?.recent) ? data.recent : []
       const recentKeys = recent
         .filter(pair => Array.isArray(pair) && pair[0] && pair[1])
         .map(pair => pairKey(String(pair[0]), String(pair[1])))
       return { phase: data?.phase || 'qualifying', rounds: data?.rounds || [], championId: data?.champion_id || null, recentKeys }
     },
-    async saveContest(state) {
-      await call('brush_contest_put', { ...pinArgs, phase: state.phase, rounds: state.rounds, champion_id: state.championId })
+    async saveContest(state, category = 'overall') {
+      await call('brush_contest_put', { ...pinArgs, phase: state.phase, rounds: state.rounds, champion_id: state.championId, category })
     },
     async setPhash(imageId, hash) {
       await call('brush_set_phash', { ...pinArgs, image_id: imageId, perceptual_hash: hash })
@@ -159,8 +160,10 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
     async flagUnreadable(imageId) {
       await call('brush_flag_unreadable', { ...pinArgs, image_id: imageId })
     },
-    leaderboard: () => call<BrushImage[]>('brush_leaderboard', pinArgs),
+    leaderboard: (category = 'overall') => call<BrushImage[]>('brush_leaderboard', { ...pinArgs, category }),
     library: () => call<BrushImage[]>('brush_library', pinArgs),
+    categories: () => call<BrushCategory[]>('brush_categories', pinArgs),
+    ratings: () => call<CategoryRating[]>('brush_rating_rows', pinArgs),
     tags: () => call<BrushTag[]>('brush_tags', pinArgs),
     insights: () => call<Insights>('brush_insights', pinArgs),
     trashed: () => call<TrashImage[]>('brush_trashed', pinArgs),
