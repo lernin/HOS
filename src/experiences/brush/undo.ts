@@ -1,3 +1,4 @@
+import type { Gauntlet, SearchTrail, ShowBanner } from './contend'
 import type { ContestPhase, RoundMatch } from './types'
 
 export type RatingSnap = {
@@ -34,6 +35,9 @@ export type UndoFrame = {
   focus: 'bracket' | 'placement'
   rounds: RoundMatch[][]
   championId: string | null
+  gauntlet?: Gauntlet | null
+  banner?: ShowBanner | null
+  trail?: SearchTrail | null
 }
 
 function key(preview: boolean) {

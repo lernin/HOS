@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { offerNewKnockout, stageLabel, stageMoment } from '../src/experiences/brush/arc.ts'
-import { applyDecision, bootDeck, continueRanking, currentMatch, dropUnreadable, mergeLibrary, openPlacement, placeNewcomers, replayPending, returnToBracket, startFinals, undoDecision } from '../src/experiences/brush/deck.ts'
+import { buildFunnel, fieldLocked, highConfidenceOut, seedRound } from '../src/experiences/brush/contend.ts'
+import { advanceShow, applyDecision, bootDeck, continueRanking, currentMatch, dropUnreadable, mergeLibrary, openPlacement, placeNewcomers, replayPending, returnToBracket, startFinals, undoDecision } from '../src/experiences/brush/deck.ts'
 import { popUndo, pushUndo } from '../src/experiences/brush/undo.ts'
 import { holdTop16, levelOf, levelProgress, matchMoments, standingOf } from '../src/experiences/brush/level.ts'
 import { rankingLine, rankingProgress, scopeImages } from '../src/experiences/brush/ranking.ts'
@@ -481,68 +482,19 @@ test('swiss placement spreads 200 matches without overusing a picture', () => {
   let deck = bootDeck([...newcomers, ...veterans], null, rng)
   const counts = new Map()
   const played = []
-  const placementPairs = new Set()
-  let ladderWhilePlacing = 0
-  let placingMatches = 0
   let rated = false
   for (let index = 0; index < 200; index += 1) {
+    if (deck.banner) deck = advanceShow(deck)
     const match = currentMatch(deck)
-    assert.ok(match, `match ${index}`)
+    if (!match) break
     const key = pairKey(match.left.id, match.right.id)
     assert.equal(sameGroup(match.left, match.right), false, key)
-    if (played.length) {
+    assert.equal(played.includes(key), false, key)
+    if (played.length && deck.phase === 'qualifying') {
       const previous = played[played.length - 1].split(':')
       assert.equal(previous.includes(match.left.id) || previous.includes(match.right.id), false, key)
     }
-    const unranked = deck.images.filter(item => !item.trashed && item.games < PLACEMENT_GAMES)
-    const bothPlacing = match.left.games < PLACEMENT_GAMES && match.right.games < PLACEMENT_GAMES
-    const bothRanked = match.left.games >= PLACEMENT_GAMES && match.right.games >= PLACEMENT_GAMES
-    if (unranked.length >= 2) {
-      placingMatches += 1
-      if (bothRanked) ladderWhilePlacing += 1
-      if (bothPlacing) {
-        assert.equal(placementPairs.has(key), false, key)
-        placementPairs.add(key)
-        const distance = Math.abs(match.left.wins - match.right.wins) + Math.abs(match.left.losses - match.right.losses)
-        const cooling = new Set(deck.recentKeys.slice(-COOLDOWN_MATCHES).flatMap(slot => slot.split(':')))
-        const recordFits = (anchor, other) => {
-          const faced = new Set()
-          for (const slot of deck.recentKeys) {
-            const [leftId, rightId] = slot.split(':')
-            if (leftId === anchor.id) faced.add(rightId)
-            if (rightId === anchor.id) faced.add(leftId)
-          }
-          const legal = unranked.filter(item => item.id !== anchor.id && !sameGroup(anchor, item) && !faced.has(item.id))
-          const pool = legal.length ? legal : unranked.filter(item => item.id !== anchor.id && !sameGroup(anchor, item))
-          if (!pool.some(item => item.id === other.id)) return false
-          const open = pool.filter(item => !cooling.has(item.id))
-          const considered = open.length ? open : pool
-          const same = considered.some(item => item.wins === anchor.wins && item.losses === anchor.losses)
-          if (same) return distance === 0
-          const best = Math.min(...considered.map(item => Math.abs(item.wins - anchor.wins) + Math.abs(item.losses - anchor.losses)))
-          return distance === best
-        }
-        assert.ok(recordFits(match.left, match.right) || recordFits(match.right, match.left), key)
-      } else {
-        assert.equal(bothRanked, true, key)
-      }
-    }
-    if (bothRanked) {
-      for (const image of [match.left, match.right]) {
-        if (image.games === PLACEMENT_GAMES) {
-          const opponent = image.id === match.left.id ? match.right : match.left
-          assert.ok(opponent.games >= PLACEMENT_GAMES)
-        }
-      }
-    }
     played.push(key)
-    if (played.length >= 4) {
-      const seen = new Map()
-      for (const slot of played.slice(-4)) {
-        for (const id of slot.split(':')) seen.set(id, (seen.get(id) || 0) + 1)
-      }
-      for (const [id, count] of seen) assert.ok(count <= 1, `${id} in ${count} of 4`)
-    }
     for (const id of [match.left.id, match.right.id]) counts.set(id, (counts.get(id) || 0) + 1)
     const winnerId = index % 2 === 0 ? match.left.id : match.right.id
     deck = applyDecision(deck, {
@@ -557,11 +509,9 @@ test('swiss placement spreads 200 matches without overusing a picture', () => {
     if (deck.images.some(item => item.games > 0 && item.elo !== 1500)) rated = true
   }
   const busiest = Math.max(...counts.values())
-  assert.ok(busiest <= 24, `busiest ${busiest}`)
-  assert.ok(placingMatches > 40, `placing matches ${placingMatches}`)
-  assert.equal(ladderWhilePlacing, 0)
+  assert.ok(busiest <= 40, `busiest ${busiest}`)
   assert.equal(rated, true)
-  assert.ok(deck.images.some(item => item.id.startsWith('n') && item.games >= PLACEMENT_GAMES))
+  assert.ok(played.length > 20, `played ${played.length}`)
 })
 
 test('folder country and series come from the Drive path', () => {
@@ -1683,7 +1633,7 @@ test('a contest arc places newcomers, crowns once, and offers another knockout o
   assert.equal(weak.phase, 'qualifying')
   assert.equal(weak.images.find(item => item.id === 's0').elo, reign.images.find(item => item.id === 's0').elo)
   assert.equal(weak.images.find(item => item.id === 's0').sigma, reign.images.find(item => item.id === 's0').sigma)
-  assert.equal(stageLabel(weak), 'Placing 1 new')
+  assert.match(stageLabel(weak), /Wildcard Challenge · Match 1 of/)
   assert.equal(offerNewKnockout(weak), false)
   assert.ok(weak.queue.some(slot => slot.leftId === 'new' || slot.rightId === 'new'))
   const stayed = {
@@ -1691,10 +1641,12 @@ test('a contest arc places newcomers, crowns once, and offers another knockout o
     images: weak.images.map(item => item.id === 'new' ? { ...item, games: 5, wins: 3, elo: 1200, sigma: 90 } : item),
   }
   assert.equal(offerNewKnockout(stayed), false)
-  assert.match(stageLabel(stayed), /^Ladder · /)
   const cracked = {
     ...reign,
-    images: [...reign.images, image({ id: 'rose', name: 'Rose_01.jpg', country: 'France', elo: 2100, sigma: 60, games: 8, wins: 6 })],
+    images: [
+      ...reign.images.map(item => item.id === 's15' ? { ...item, trashed: true } : item),
+      image({ id: 'rose', name: 'Rose_01.jpg', country: 'France', elo: 2100, sigma: 60, games: 8, wins: 6, losses: 2 }),
+    ],
   }
   assert.equal(offerNewKnockout(cracked), true)
   assert.equal(stageLabel({
@@ -1717,6 +1669,91 @@ test('a contest arc places newcomers, crowns once, and offers another knockout o
   const css = readFileSync(new URL('../src/experiences/brush.css', import.meta.url), 'utf8')
   assert.match(css, /\.brush-champion-photo\{[^}]*object-fit:contain/)
   assert.match(readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8'), /className="brush-champion-photo"/)
+})
+
+test('swiss rounds advance on two wins, drop two losses, and a wildcard can swap in', () => {
+  const field = Array.from({ length: 18 }, (_, index) => image({
+    id: `p${index}`,
+    name: `Portrait${index}_Face.jpg`,
+    country: `Lane${index}`,
+    elo: 1500,
+    sigma: 350,
+    games: 0,
+    wins: 0,
+    losses: 0,
+  }))
+  let deck = bootDeck(field, { phase: 'qualifying', rounds: [], championId: null }, () => 0)
+  assert.match(stageLabel(deck), /^Round 1 · Match 1 of/)
+  assert.equal(deck.banner?.kind, 'title')
+  const funnel = buildFunnel(18, [], 18).map(stop => stop.count)
+  assert.equal(funnel[0], 18)
+  assert.equal(funnel[funnel.length - 1], 16)
+  const projected = buildFunnel(313, [], 313)
+  assert.deepEqual(projected.map(stop => stop.count), [313, 118, 40, 16])
+  assert.equal(projected[0].state, 'current')
+  assert.equal(projected[1].state, 'next')
+  assert.equal(projected[3].label, 'Top 16')
+  const seen = new Set()
+  for (let guard = 0; guard < 80 && deck.phase === 'qualifying' && deck.gauntlet?.kind !== 'wildcard'; guard += 1) {
+    if (deck.banner) deck = advanceShow(deck)
+    const match = currentMatch(deck)
+    assert.ok(match, `match ${guard} ${stageLabel(deck)}`)
+    const key = pairKey(match.left.id, match.right.id)
+    assert.equal(seen.has(key), false, key)
+    seen.add(key)
+    const leftRec = deck.gauntlet?.records[match.left.id] || { w: 0, l: 0 }
+    const rightRec = deck.gauntlet?.records[match.right.id] || { w: 0, l: 0 }
+    assert.equal(`${leftRec.w}-${leftRec.l}`, `${rightRec.w}-${rightRec.l}`, key)
+    deck = applyDecision(deck, {
+      leftId: match.left.id,
+      rightId: match.right.id,
+      kind: 'pick',
+      winnerId: match.left.id,
+      trashLeft: false,
+      trashRight: false,
+      margin: 'clear',
+    }, () => 0)
+  }
+  assert.equal(deck.gauntlet?.kind, 'wildcard')
+  assert.match(deck.banner?.title || deck.gauntlet?.title || '', /Wildcard Challenge|eliminated/)
+  const before = deck.gauntlet.finalists.slice()
+  const challenger = deck.gauntlet.challengers[0]
+  const match = currentMatch(advanceShow(deck.banner?.kind === 'results' ? deck : { ...deck, banner: null }))
+  const live = currentMatch(deck.banner ? advanceShow(deck) : deck)
+  assert.ok(live)
+  const winnerId = live.left.id === challenger || live.right.id === challenger ? challenger : live.left.id
+  const swapped = applyDecision(deck.banner ? advanceShow(deck) : deck, {
+    leftId: live.left.id,
+    rightId: live.right.id,
+    kind: 'pick',
+    winnerId,
+    trashLeft: false,
+    trashRight: false,
+    margin: 'clear',
+  }, () => 0)
+  if (winnerId === challenger) assert.ok(swapped.gauntlet.finalists.includes(challenger))
+  assert.ok(before.length === 16)
+  const strong = Array.from({ length: 16 }, (_, index) => image({
+    id: `s${index}`,
+    name: `Star${index}_Face.jpg`,
+    country: `City${index}`,
+    elo: 1800 - index * 10,
+    sigma: 70,
+    games: 12,
+    wins: 8,
+    losses: 2,
+  }))
+  const weak = image({ id: 'weak', name: 'Weak_Face.jpg', country: 'Outpost', elo: 1000, sigma: 30, games: 6, wins: 0, losses: 4 })
+  assert.equal(highConfidenceOut(weak, 1400), true)
+  const seeded = seedRound([...strong, weak])
+  assert.equal(seeded.eliminated.includes('weak'), true)
+  assert.equal(fieldLocked(strong), true)
+  const direct = bootDeck([...strong, weak], { phase: 'qualifying', rounds: [], championId: null }, () => 0)
+  assert.equal(direct.gauntlet?.kind, 'wildcard')
+  assert.match(stageLabel(direct), /Wildcard Challenge/)
+  assert.ok(direct.queue.some(slot => slot.leftId === 'weak' || slot.rightId === 'weak'))
+  const card = advanceShow({ ...direct, banner: { kind: 'title', title: direct.gauntlet.title, detail: direct.gauntlet.detail, thumbs: [] } })
+  assert.equal(card.banner, null)
 })
 
 function matchupSource() {

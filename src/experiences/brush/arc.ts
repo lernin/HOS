@@ -1,6 +1,7 @@
+import { fieldLocked, nearMisses } from './contend.ts'
 import { FINALS_SIZE, PLACEMENT_GAMES, type RoundMatch } from './pair.ts'
-import { compareConservative, rdOf } from './rank.ts'
-import { activePool, rankingProgress, SETTLED_RD } from './ranking.ts'
+import { compareConservative } from './rank.ts'
+import { activePool, rankingProgress } from './ranking.ts'
 import type { BrushImage, ContestPhase } from './types.ts'
 
 type ArcDeck = {
@@ -10,6 +11,7 @@ type ArcDeck = {
   championId: string | null
   field?: string[]
   images: Rankable[]
+  gauntlet?: { kind: 'swiss' | 'wildcard', pairs: number, index: number, round: number } | null
 }
 
 type Rankable = Pick<BrushImage, 'id' | 'name' | 'elo' | 'games'> & {
@@ -28,11 +30,9 @@ export function topIds(images: Rankable[]) {
   return [...activePool(images)].sort(compareConservative).slice(0, FINALS_SIZE).map(image => image.id)
 }
 
+/** Locked when the top 16 are confident and nobody outside them still has a way in. Near misses take the wildcard first. */
 export function readyForKnockout(images: Rankable[]) {
-  const active = activePool(images)
-  if (active.length < FINALS_SIZE) return false
-  const top = [...active].sort(compareConservative).slice(0, FINALS_SIZE)
-  return top.length === FINALS_SIZE && top.every(image => rdOf(image) <= SETTLED_RD) && rankingProgress(images).settled === 100
+  return fieldLocked(images) && nearMisses(images).length === 0
 }
 
 export function sameField(left: string[], right: string[]) {
@@ -46,7 +46,6 @@ export function sameField(left: string[], right: string[]) {
  *  Rating movement inside the same sixteen does not offer one, and nobody is re-settled from scratch. */
 export function offerNewKnockout(deck: ArcDeck) {
   if (!deck.championId || deck.phase === 'finals') return false
-  if (unplacedCount(deck.images) > 0) return false
   if (!deck.field?.length) return false
   if (!readyForKnockout(deck.images)) return false
   return !sameField(topIds(deck.images), deck.field)
@@ -74,6 +73,12 @@ export function stageLabel(deck: ArcDeck) {
     if (total === 1) return 'Final'
     if (total > 1) return `Knockout ${current} of ${total}`
     return 'Final'
+  }
+  if (deck.phase === 'qualifying' && deck.gauntlet && deck.gauntlet.pairs > 0) {
+    const total = deck.gauntlet.pairs
+    const current = Math.min(total, (deck.gauntlet.index || 0) + 1)
+    if (deck.gauntlet.kind === 'wildcard') return `Wildcard Challenge · Match ${current} of ${total}`
+    return `Round ${deck.gauntlet.round || 1} · Match ${current} of ${total}`
   }
   const active = activePool(deck.images)
   const fresh = active.filter(image => image.games < PLACEMENT_GAMES).length
