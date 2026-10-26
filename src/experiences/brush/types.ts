@@ -48,11 +48,20 @@ export type RoundMatch = {
   winnerId: string | null
 }
 
+export type ChampionRecord = {
+  id: string
+  category: string
+  imageId: string
+  crownedAt: string
+}
+
 export type ContestState = {
   phase: ContestPhase
   rounds: RoundMatch[][]
   championId: string | null
   recentKeys?: string[]
+  field?: string[]
+  champions?: ChampionRecord[]
 }
 
 export type BrushTag = {
@@ -123,6 +132,7 @@ export type BrushApi = {
   annotate: (matchId: string, tagIds: string[]) => Promise<void>
   contest: (category?: string) => Promise<ContestState>
   saveContest: (state: ContestState, category?: string) => Promise<void>
+  noteContest: (input: { category?: string, note: 'crown' | 'uncrown' | 'park', imageId?: string | null, field?: string[], rounds?: RoundMatch[][] }) => Promise<ChampionRecord | null>
   setPhash: (imageId: string, hash: string) => Promise<void>
   setFaceBox: (imageId: string, faceBox: FaceBox | null) => Promise<void>
   flagUnreadable: (imageId: string) => Promise<void>

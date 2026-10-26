@@ -2,7 +2,7 @@ import { extendQueue, MATCH_MEMORY } from './pair.ts'
 import { DEFAULT_CATEGORIES, freshRating, ratingFromImage, scopeImages, type CategoryRating } from './ranking.ts'
 import { conservativeRating, glickoUpdate, INITIAL_VOLATILITY } from './rank'
 import { suggestRecipe } from './recipe'
-import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ContestState, Insights, Margin } from './types'
+import type { BrushApi, BrushAttribute, BrushImage, BrushTag, ChampionRecord, ContestState, Insights, Margin } from './types'
 import { attachQueue, UploadQueue, type UploadTransport } from './uploads'
 
 function portrait(title: string, country: string, ink: string, paper: string, accent: string, width = 540, height = 960) {
@@ -69,10 +69,10 @@ function blank(partial: Pick<BrushImage, 'id' | 'name' | 'country' | 'preview_ur
 
 export function createPreviewClient(): BrushApi {
   const images: BrushImage[] = [
-    blank({ id: 'jp', name: 'Japan_Model_01.jpg', country: 'Japan', folder_path: 'Japan/Models', perceptual_hash: '0000000000000000', preview_url: portrait('Japan 01', 'Japan', '#2a2118', '#d7c4a1', '#7f8f78'), createdAt: 1 }),
-    blank({ id: 'jp2', name: 'Japan_Model_02.jpg', country: 'Japan', folder_path: 'Japan/Models', perceptual_hash: '00000000000000ff', preview_url: portrait('Japan 02', 'Japan', '#3a2a22', '#e4d2b4', '#8f7358'), createdAt: 2 }),
-    blank({ id: 'kr', name: 'Korea_02.jpg', country: 'Korea', perceptual_hash: 'ffffffffffffffff', preview_url: portrait('Korea 02', 'Korea', '#1c2430', '#c5d0dc', '#6e88a8', 1400, 800), createdAt: 3, face_box: null, face_scanned: false }),
-    blank({ id: 'st', name: 'Studio_03.jpg', country: 'Studio', perceptual_hash: '0f0f0f0f0f0f0f0f', preview_url: portrait('Studio 03', 'Studio', '#241c22', '#e6d5cf', '#c4a394'), createdAt: 4, face_box: null, face_scanned: false }),
+    blank({ id: 'jp', name: 'Japan_Model_01.jpg', country: 'Japan', folder_path: 'Japan/Models', perceptual_hash: '0000000000000000', preview_url: portrait('Japan 01', 'Japan', '#2a2118', '#d7c4a1', '#7f8f78'), createdAt: 1, elo: 1680, sigma: 90, games: 8, wins: 5, losses: 3 }),
+    blank({ id: 'jp2', name: 'Japan_Model_02.jpg', country: 'Japan', folder_path: 'Japan/Models', perceptual_hash: '00000000000000ff', preview_url: portrait('Japan 02', 'Japan', '#3a2a22', '#e4d2b4', '#8f7358'), createdAt: 2, elo: 1600, sigma: 95, games: 8, wins: 4, losses: 4 }),
+    blank({ id: 'kr', name: 'Korea_02.jpg', country: 'Korea', perceptual_hash: 'ffffffffffffffff', preview_url: portrait('Korea 02', 'Korea', '#1c2430', '#c5d0dc', '#6e88a8', 1400, 800), createdAt: 3, face_box: null, face_scanned: false, elo: 1540, sigma: 110, games: 8, wins: 4, losses: 4 }),
+    blank({ id: 'st', name: 'Studio_03.jpg', country: 'Studio', perceptual_hash: '0f0f0f0f0f0f0f0f', preview_url: portrait('Studio 03', 'Studio', '#241c22', '#e6d5cf', '#c4a394'), createdAt: 4, face_box: null, face_scanned: false, elo: 1500, sigma: 220, games: 2, wins: 1, losses: 1 }),
     blank({ id: 'nt', name: 'Night_04.jpg', country: 'Night', perceptual_hash: '3333333333333333', preview_url: portrait('Night 04', 'Night', '#101114', '#9aa0a8', '#3d4450'), trashed: true, trash_count: 1, elo: 1464, games: 1, losses: 1, createdAt: 5 }),
   ]
   const tags = SEED.map(item => ({ ...item }))
@@ -92,7 +92,34 @@ export function createPreviewClient(): BrushApi {
     { ...freshRating('face', image.id), ...faceSeed[image.id], imageId: image.id, category: 'face' },
     freshRating('hair', image.id),
   ])
-  const contests = new Map<string, ContestState>(DEFAULT_CATEGORIES.map(item => [item.id, { phase: 'qualifying', rounds: [], championId: null }]))
+  const contests = new Map<string, ContestState>(DEFAULT_CATEGORIES.map(item => [item.id, { phase: 'qualifying', rounds: [], championId: null, field: [], champions: [] }]))
+  const history = new Map<string, ChampionRecord[]>(DEFAULT_CATEGORIES.map(item => [item.id, []]))
+  let demo = ''
+  try { demo = sessionStorage.getItem('brush-arc-demo') || '' } catch { demo = '' }
+  if (demo === 'final' || demo === 'champion') {
+    const studio = images.find(image => image.id === 'st')
+    if (studio) {
+      studio.games = 8
+      studio.wins = 4
+      studio.losses = 4
+      studio.sigma = 100
+    }
+    const row = ratingRows.find(item => item.category === 'overall' && item.imageId === 'st')
+    if (row) {
+      row.games = 8
+      row.wins = 4
+      row.losses = 4
+      row.sigma = 100
+    }
+  }
+  if (demo === 'final') {
+    contests.set('overall', { phase: 'finals', rounds: [[{ leftId: 'jp', rightId: 'kr', winnerId: null }]], championId: null, field: [] })
+  }
+  if (demo === 'champion') {
+    const crownedAt = '2026-10-26T12:00:00.000Z'
+    contests.set('overall', { phase: 'champion', rounds: [], championId: 'jp', field: ['jp', 'jp2', 'kr', 'st'] })
+    history.set('overall', [{ id: 'crown-preview', category: 'overall', imageId: 'jp', crownedAt }])
+  }
   const recentByCategory = new Map<string, string[]>(DEFAULT_CATEGORIES.map(item => [item.id, []]))
   const known = new Set<string>()
   const undoable = new Map<string, { category: string, leftId: string, rightId: string, left: BrushImage, right: BrushImage, leftRating: CategoryRating | null, rightRating: CategoryRating | null }>()
@@ -319,11 +346,30 @@ export function createPreviewClient(): BrushApi {
     async annotate() {},
     async contest(category) {
       const id = categoryOf(category)
-      return { ...(contests.get(id) || { phase: 'qualifying' as const, rounds: [], championId: null }), recentKeys: recentByCategory.get(id) || [] }
+      const saved = contests.get(id) || { phase: 'qualifying' as const, rounds: [], championId: null, field: [], champions: [] }
+      return { ...saved, champions: history.get(id) || [], recentKeys: recentByCategory.get(id) || [] }
     },
     async saveContest(next, category) {
       const id = categoryOf(category)
-      contests.set(id, { phase: next.phase, rounds: next.rounds, championId: next.championId })
+      const prev = contests.get(id)
+      contests.set(id, { phase: next.phase, rounds: next.rounds, championId: next.championId, field: next.field || prev?.field || [] })
+    },
+    async noteContest(input) {
+      const id = categoryOf(input.category)
+      if (input.note === 'crown' && input.imageId) {
+        const record = { id: `crown-${crypto.randomUUID()}`, category: id, imageId: input.imageId, crownedAt: new Date().toISOString() }
+        history.set(id, [record, ...(history.get(id) || [])])
+        const prev = contests.get(id)
+        contests.set(id, { phase: prev?.phase || 'champion', rounds: prev?.rounds || [], championId: input.imageId, field: input.field || prev?.field || [] })
+        return record
+      }
+      if (input.note === 'uncrown' && input.imageId) {
+        const rows = history.get(id) || []
+        const index = rows.findIndex(item => item.imageId === input.imageId)
+        if (index >= 0) rows.splice(index, 1)
+        history.set(id, rows)
+      }
+      return null
     },
     async setPhash(imageId, hash) {
       const image = images.find(item => item.id === imageId)

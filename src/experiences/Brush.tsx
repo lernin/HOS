@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import './brush.css'
 import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush/client'
-import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, undoDecision, type Deck, type Decision } from './brush/deck'
+import { offerNewKnockout, stageKey, stageLabel, stageMoment } from './brush/arc'
+import { applyDecision, bootDeck, continueRanking, currentMatch, dropUnreadable, mergeLibrary, progressOf, rememberHash, replayPending, startFinals, undoDecision, type Deck, type Decision } from './brush/deck'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
 import { cancelPending, enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
 import { attachUndoMatch, popUndo, pushUndo, readUndo, writeUndo, type RatingSnap, type UndoFrame } from './brush/undo'
 import { holdTop16, matchMoments, standingOf, type BrushMoment } from './brush/level'
 import { DEFAULT_CATEGORIES, OVERALL_CATEGORY, preferLocalRatings, rankingLine, rankingProgress, readPlayingCategory, rememberRatings, scopeImages, writePlayingCategory, type BrushCategory, type CategoryRating } from './brush/ranking'
-import { challengerCount, hashImage } from './brush/pair'
+import { hashImage } from './brush/pair'
 import { createPreviewClient } from './brush/preview'
 import { BackfillOffer, DetailSheet, InsightsScreen, Leaderboard, LibraryScreen, PinScreen, ReasonSheet, UploadIcon, UploadProgressSheet } from './brush/Sheets'
 import { TrashReview } from './brush/TrashReview'
-import type { BrushApi, BrushImage, BrushTag, Insights, Margin, TrashImage, UploadSnapshot } from './brush/types'
+import type { BrushApi, BrushImage, BrushTag, ChampionRecord, Insights, Margin, TrashImage, UploadSnapshot } from './brush/types'
 import { EMPTY_UPLOADS, retryLoad } from './brush/uploads'
 
-type Screen = 'match' | 'board' | 'love' | 'library' | 'trash'
+type Screen = 'match' | 'board' | 'love' | 'library' | 'trash' | 'champions'
 type Reason = { id: string, kind: 'like' | 'bad', open: boolean }
 
 const EMPTY_INSIGHTS: Insights = {
@@ -93,6 +94,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [undoFrames, setUndoFrames] = useState<UndoFrame[]>(() => readUndo(preview))
   const undoRef = useRef(undoFrames)
   undoRef.current = undoFrames
+  const [champions, setChampions] = useState<ChampionRecord[]>([])
   const [category, setCategory] = useState(readPlayingCategory)
   const [categories, setCategories] = useState<BrushCategory[]>(DEFAULT_CATEGORIES)
   const addedRef = useRef(0)
@@ -174,11 +176,13 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     ratingRowsRef.current = withDeck
     const scoped = scopeImages(nextLibrary, cat, withDeck)
     setBoard(scoped)
-    setDeck(current => {
-      const base = current ? mergeLibrary(current, scoped) : bootDeck(scoped, contest)
-      const pending = readOutbox(preview).filter(item => (item.category || OVERALL_CATEGORY) === cat)
-      return current ? base : replayPending(base, pending)
-    })
+    setChampions(contest.champions || [])
+    const previous = deckRef.current
+    const pending = readOutbox(preview).filter(item => (item.category || OVERALL_CATEGORY) === cat)
+    const base = previous ? mergeLibrary(previous, scoped) : replayPending(bootDeck(scoped, contest), pending)
+    publishDeck(base, previous)
+    persistIfDrifted(base, previous ? { phase: previous.phase, rounds: previous.rounds, championId: previous.championId } : contest)
+    setDeck(base)
   }
 
   async function openCategory(id: string) {
@@ -190,7 +194,11 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     ratingRowsRef.current = merged
     const scoped = scopeLibrary(id, merged)
     setBoard(scoped)
-    setDeck(bootDeck(scoped, contest))
+    setChampions(contest.champions || [])
+    const next = bootDeck(scoped, contest)
+    publishDeck(next, null)
+    persistIfDrifted(next, contest)
+    setDeck(next)
     setFront('left')
     setZoom(REST_ZOOM)
   }
@@ -218,6 +226,24 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     undoRef.current = frames
     setUndoFrames(frames)
     writeUndo(preview, frames)
+  }
+
+  function publishDeck(next: Deck, previous: Deck | null) {
+    if (next.archive.length > (previous?.archive.length || 0)) {
+      const parked = next.archive[next.archive.length - 1]
+      void client.noteContest({ category: categoryRef.current, note: 'park', rounds: parked }).catch(() => {})
+    }
+    if (previous && next.phase === 'champion' && previous.phase !== 'champion' && next.championId) {
+      void client.noteContest({ category: categoryRef.current, note: 'crown', imageId: next.championId, field: next.field }).then(record => {
+        if (!record) return
+        setChampions(list => [record, ...list.filter(item => item.id !== record.id)])
+      }).catch(() => {})
+    }
+  }
+
+  function momentKind(kind: BrushMoment['kind']) {
+    if (kind === 'level' || kind === 'placement' || kind === 'stage') return kind
+    return 'top16'
   }
 
   function sendResult(item: OutboxItem) {
@@ -364,6 +390,10 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     void client.saveContest({ phase: next.phase, rounds: next.rounds, championId: next.championId }, categoryRef.current).catch(error => setMessage(messageOf(error)))
   }
 
+  function persistIfDrifted(next: Deck, saved: { phase: Deck['phase'], rounds: Deck['rounds'], championId: string | null }) {
+    if (next.phase !== saved.phase || next.championId !== saved.championId || JSON.stringify(next.rounds) !== JSON.stringify(saved.rounds || [])) persistContest(next)
+  }
+
   function ratingSnap(image: BrushImage): RatingSnap {
     return {
       elo: image.elo,
@@ -388,7 +418,9 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     const cat = categoryRef.current
     const release = holdTop16({ before: current.images, after: next.images, held: heldTop.current[cat] || [] })
     heldTop.current[cat] = release.held
-    setMoments([...matchMoments(current.images, next.images), ...release.moments])
+    const toast = stageMoment(stageKey(current), stageKey(next))
+    setMoments([...matchMoments(current.images, next.images), ...release.moments, ...(toast ? [{ kind: 'stage' as const, text: toast }] : [])])
+    publishDeck(next, current)
     setDeck(next)
     setZoom(REST_ZOOM)
     if (decision.kind === 'trash' && decision.trashLeft !== decision.trashRight) setFront(decision.trashLeft ? 'left' : 'right')
@@ -449,6 +481,14 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     const matchId = frame.matchId || pending?.matchId || null
     if (!matchId) cancelPending(preview, frame.id)
     const restored = undoDecision(current, frame)
+    if (current.phase === 'champion' && restored.phase !== 'champion' && current.championId) {
+      void client.noteContest({ category: categoryRef.current, note: 'uncrown', imageId: current.championId }).then(() => {
+        setChampions(list => {
+          const index = list.findIndex(item => item.imageId === current.championId && item.category === categoryRef.current)
+          return index < 0 ? list : list.filter((_, itemIndex) => itemIndex !== index)
+        })
+      }).catch(() => {})
+    }
     setDeck(restored)
     if (restored.phase !== current.phase || restored.championId !== current.championId || JSON.stringify(restored.rounds) !== JSON.stringify(current.rounds)) persistContest(restored)
     if (!matchId) return
@@ -485,45 +525,31 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     })
   }
 
-  function goFinals() {
+  function startKnockout() {
     const current = deckRef.current
     if (!current) return
     const next = startFinals(current)
     if (next === current) {
-      setMessage('Need two active portraits before a final.')
+      setMessage('The top 16 are not ready for a knockout.')
       return
     }
+    const toast = stageMoment(stageKey(current), stageKey(next))
+    if (toast) setMoments(queue => [...queue, { kind: 'stage', text: toast }])
     setDeck(next)
+    setScreen('match')
     setZoom(REST_ZOOM)
     setFront('left')
     setReason(null)
     persistContest(next)
   }
 
-  function placeChallengers() {
+  function keepRanking() {
     const current = deckRef.current
     if (!current) return
-    setDeck(openPlacement(current))
-    setScreen('match')
-    setZoom(REST_ZOOM)
-    setFront('left')
-    setReason(null)
-  }
-
-  function backToBracket() {
-    const current = deckRef.current
-    if (!current) return
-    setDeck(returnToBracket(current))
-    setZoom(REST_ZOOM)
-    setFront('left')
-    setReason(null)
-  }
-
-  function keepQualifying() {
-    const current = deckRef.current
-    if (!current) return
-    const next = resumeQualifying(current)
+    const next = continueRanking(current)
+    publishDeck(next, current)
     setDeck(next)
+    setScreen('match')
     setReason(null)
     persistContest(next)
   }
@@ -574,20 +600,17 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
 
   const countries = [...new Set(library.map(image => image.country).filter(Boolean))]
   const champion = deck?.championId ? deck.images.find(image => image.id === deck.championId) || null : null
-  const challengers = deck ? challengerCount(deck.images) : 0
+  const stageText = deck && deck.phase !== 'champion' ? stageLabel(deck) : ''
+  const canStartKnockout = deck ? offerNewKnockout(deck) : false
+  const crown = champions.find(item => item.imageId === deck?.championId && item.category === category)
+  const crownDate = crown ? new Date(crown.crownedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
 
   function statusChrome() {
     return (
       <>
-        {deck?.phase === 'qualifying' && qualify && <span className="brush-progress" data-qualify>{`Qualifying ${qualify.percent}%`}</span>}
-        {deck?.phase === 'qualifying' && qualify && qualify.total >= 2 && <button type="button" data-action="finals" onClick={() => { setMenuOpen(false); goFinals() }}>Finals</button>}
-        {deck?.phase === 'finals' && <span className="brush-progress" data-finals>{`Finals · round ${deck.rounds.length}`}</span>}
-        {challengers > 0 && deck?.focus !== 'placement' && (
-          deck?.phase === 'finals'
-            ? <button type="button" data-challengers data-action="challengers" onClick={() => { setMenuOpen(false); placeChallengers() }}>{`New challengers: ${challengers}`}</button>
-            : <span className="brush-progress" data-challengers>{`New challengers: ${challengers}`}</span>
-        )}
-        {deck?.phase === 'finals' && deck.focus === 'placement' && <button type="button" data-action="bracket" onClick={() => { setMenuOpen(false); backToBracket() }}>Back to finals</button>}
+        {stageText && <span className="brush-progress" data-stage>{stageText}</span>}
+        {champion && <span className="brush-progress" data-champion>{`Champion · ${champion.country || champion.name}`}</span>}
+        {canStartKnockout && <button type="button" data-action="knockout" onClick={() => { setMenuOpen(false); startKnockout() }}>Start a new knockout</button>}
         {uploads.total > uploads.completed && <button type="button" className="brush-progress" data-upload-nav onClick={() => { setMenuOpen(false); setUploadOpen(true) }}>{`Uploads ${uploads.completed}/${uploads.total}`}</button>}
         {progress && <span className="brush-progress">{progress}</span>}
       </>
@@ -647,24 +670,12 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
             ))}
           </div>
           <p className="brush-menu-note" data-ranking>{rankingText}</p>
-          {deck?.phase === 'qualifying' && qualify && (
-            <p className="brush-menu-note" data-qualify>
-              <span>{`Qualifying ${qualify.percent}%`}</span>
-              <span className="brush-menu-meter" aria-hidden="true"><span style={{ width: `${qualify.percent}%` }} /></span>
-            </p>
+          {stageText && <p className="brush-menu-note" data-stage>{stageText}</p>}
+          {champion && <p className="brush-menu-note" data-champion>{`Champion · ${champion.country || champion.name}`}</p>}
+          {canStartKnockout && (
+            <button className="brush-menu-row" type="button" data-action="knockout" onClick={() => { setMenuOpen(false); startKnockout() }}><MenuGlyph paths={['M7 4h10v3a5 5 0 0 1-10 0z', 'M12 12v6', 'M8 20h8']} /><span>Start a new knockout</span></button>
           )}
-          {deck?.phase === 'qualifying' && qualify && qualify.total >= 2 && (
-            <button className="brush-menu-row" type="button" data-action="finals" onClick={() => { setMenuOpen(false); goFinals() }}><MenuGlyph paths={['M7 4h10v3a5 5 0 0 1-10 0z', 'M12 12v6', 'M8 20h8']} /><span>Finals</span></button>
-          )}
-          {deck?.phase === 'finals' && <p className="brush-menu-note" data-finals>{`Finals · round ${deck.rounds.length}`}</p>}
-          {challengers > 0 && deck?.focus !== 'placement' && (
-            deck?.phase === 'finals'
-              ? <button className="brush-menu-row" type="button" data-challengers data-action="challengers" onClick={() => { setMenuOpen(false); placeChallengers() }}><MenuGlyph paths={['M16 19v-1.2A3.2 3.2 0 0 0 12.8 14.6H8.2A3.2 3.2 0 0 0 5 17.8V19', 'M10.5 11.2a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M19 8v6', 'M16 11h6']} /><span>{`New challengers: ${challengers}`}</span></button>
-              : <p className="brush-menu-note" data-challengers>{`New challengers: ${challengers}`}</p>
-          )}
-          {deck?.phase === 'finals' && deck.focus === 'placement' && (
-            <button className="brush-menu-row" type="button" data-action="bracket" onClick={() => { setMenuOpen(false); backToBracket() }}><MenuGlyph paths={['M15 6 9 12l6 6']} /><span>Back to finals</span></button>
-          )}
+          <button className="brush-menu-row" type="button" data-action="champions" aria-current={screen === 'champions' ? 'page' : undefined} onClick={() => open('champions')}><MenuGlyph paths={['M7 4h10v3a5 5 0 0 1-10 0z', 'M12 12v6', 'M8 20h8']} /><span>Champions</span></button>
           {uploads.total > uploads.completed && (
             <button className="brush-menu-row" type="button" data-upload-nav onClick={() => { setMenuOpen(false); setUploadOpen(true) }}><UploadIcon /><span>{`Uploads ${uploads.completed}/${uploads.total}`}</span></button>
           )}
@@ -714,6 +725,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
                 {item === 'match' ? 'Match' : item === 'board' ? 'Board' : item === 'love' ? 'Love' : item === 'trash' ? 'Trash' : 'Library'}
               </button>
             ))}
+            <button type="button" data-action="champions" aria-current={screen === 'champions' ? 'page' : undefined} onClick={() => { setMenuOpen(false); setScreen('champions') }}>Champions</button>
             {showingMatch && deck?.phase === 'finals' && reason && !reason.open && (
               <button className="brush-text-button" type="button" data-action="reason" onClick={() => { setMenuOpen(false); setReason(current => current ? { ...current, open: true } : current) }}>Add reason</button>
             )}
@@ -745,7 +757,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           )}
         </div>
       )}
-      {moment && !landscapeMatch && <button className={`brush-moment is-${moment.kind}${showingMatch && portrait ? ' is-overlay' : ''}`} type="button" data-moment={moment.kind === 'level' ? 'level' : moment.kind === 'placement' ? 'placement' : 'top16'} title={moment.text} onClick={() => setMoments(queue => queue.slice(1))}>{moment.text}</button>}
+      {moment && !landscapeMatch && <button className={`brush-moment is-${momentKind(moment.kind)}${showingMatch && portrait ? ' is-overlay' : ''}`} type="button" data-moment={momentKind(moment.kind)} title={moment.text} onClick={() => setMoments(queue => queue.slice(1))}>{moment.text}</button>}
 
       {matchFailed && (
         <div className="brush-scroll" data-screen="match">
@@ -777,11 +789,29 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       )}
 
       {phase === 'app' && screen === 'match' && deck?.phase === 'champion' && (
-        <div className="brush-scroll" data-screen="champion">
+        <div className="brush-champion" data-screen="champion">
+          {champion && srcFor(champion) && <img className="brush-champion-photo" src={srcFor(champion) || ''} alt={champion.name} />}
           <h2>Champion</h2>
-          {champion && srcFor(champion) && <img src={srcFor(champion) || ''} alt={champion.name} style={{ width: 'min(100%, 280px)', aspectRatio: '9 / 16', objectFit: 'cover', borderRadius: 18 }} />}
-          <p>{champion?.name || 'The bracket is finished.'} {champion ? `· ${Math.round(champion.elo)}` : ''}</p>
-          <button className="brush-upload" type="button" data-action="requalify" onClick={keepQualifying}>Keep qualifying</button>
+          <p>{`${playingName} · ${crownDate}`}</p>
+          <button className="brush-upload" type="button" data-action="ladder" onClick={keepRanking}>Keep ranking</button>
+        </div>
+      )}
+      {phase === 'app' && screen === 'champions' && (
+        <div className="brush-scroll" data-screen="champions">
+          <h2>Champions</h2>
+          <div className="brush-champion-list">
+            {champions.length === 0 && <p className="brush-note">No champion in {playingName} yet.</p>}
+            {champions.map(item => {
+              const picture = library.find(image => image.id === item.imageId) || deck?.images.find(image => image.id === item.imageId)
+              const when = new Date(item.crownedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
+              return (
+                <article key={item.id} data-champion-row>
+                  <strong>{picture?.country || picture?.name || 'Champion'}</strong>
+                  <span>{`${categories.find(entry => entry.id === item.category)?.label || playingName} · ${when}`}</span>
+                </article>
+              )
+            })}
+          </div>
         </div>
       )}
       {phase === 'app' && screen === 'match' && deck?.phase !== 'champion' && match && (
@@ -797,13 +827,14 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           onTrash={trashOne}
           srcFor={srcFor}
           playing={`Playing for ${playingName}`}
+          stage={stageText}
           canUndo={undoFrames.some(frame => frame.category === category)}
           onUndo={undoLast}
           rankFor={id => standingOf(deck?.images || [], id)}
           celebrateId={moment && moment.kind !== 'top16' ? moment.imageId || null : null}
           notice={landscapeMatch ? (
             <>
-              {moment && <button className={`brush-gutter-toast is-${moment.kind}`} type="button" data-moment={moment.kind === 'level' ? 'level' : moment.kind === 'placement' ? 'placement' : 'top16'} title={moment.text} onClick={() => setMoments(queue => queue.slice(1))}>{moment.text}</button>}
+              {moment && <button className={`brush-gutter-toast is-${momentKind(moment.kind)}`} type="button" data-moment={momentKind(moment.kind)} title={moment.text} onClick={() => setMoments(queue => queue.slice(1))}>{moment.text}</button>}
               {message && phase === 'app' && <p className="brush-note brush-gutter-toast is-note" data-note>{message}</p>}
             </>
           ) : null}

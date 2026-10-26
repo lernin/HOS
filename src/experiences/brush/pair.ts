@@ -11,7 +11,7 @@ export const CLOSE_ELO = 150
 export const WILDCARD_RATE = 0.2
 /** At most one appearance in any four consecutive matches, for either picture. */
 export const COOLDOWN_MATCHES = 3
-/** Share of matches that stay on the ranked ladder while newcomers are still placing. */
+/** Kept for the older mix. Newcomers now take the pairing until their five games are done. */
 export const ESTABLISHED_RATE = 0.22
 /** Match keys kept so a placement series can refuse rematches across a visit. */
 export const MATCH_MEMORY = 800
@@ -382,23 +382,27 @@ function selectPair(field: Pairable[], keys: string[], rng: () => number) {
   const placing = field.filter(image => image.games < PLACEMENT_GAMES)
   const established = field.filter(image => image.games >= PLACEMENT_GAMES)
   const swissPossible = placing.length >= 2
-  const debutPossible = placing.length === 1 && established.length >= 1
+  const debutPossible = placing.length >= 1 && established.length >= 1
   const ladderPossible = established.length >= 2
-  const wantLadder = ladderPossible && (swissPossible || debutPossible) && rng() < ESTABLISHED_RATE
-  if (!wantLadder && swissPossible) {
+  if (swissPossible) {
     const paired = swissMatch(placing, keys, rng)
     if (paired) return paired
   }
-  if (!wantLadder && debutPossible) {
-    const paired = debutMatch(placing[0], established, keys, rng)
+  if (debutPossible && !swissPossible) {
+    const open = placing.filter(image => established.some(veteran => !sameGroup(image, veteran)))
+    const anchor = open[0] || placing[0]
+    const paired = debutMatch(anchor, established, keys, rng)
     if (paired) return paired
   }
-  if (ladderPossible) {
+  if (ladderPossible && !placing.length) {
     const paired = ladderMatch(established, keys, rng)
     if (paired) return paired
   }
   if (swissPossible) return swissMatch(placing, keys, rng)
-  if (debutPossible) return debutMatch(placing[0], established, keys, rng)
+  if (debutPossible) {
+    const paired = debutMatch(placing[0], established, keys, rng)
+    if (paired) return paired
+  }
   if (field.length >= 2) return ladderMatch(field, keys, rng)
   return null
 }

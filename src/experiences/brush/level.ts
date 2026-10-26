@@ -10,7 +10,7 @@ export type Standing = { rank: number, total: number }
 
 export type BrushMoment = {
   text: string
-  kind: 'level' | 'placement' | 'top16'
+  kind: 'level' | 'placement' | 'top16' | 'stage'
   imageId?: string
 }
 

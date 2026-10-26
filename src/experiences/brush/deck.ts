@@ -1,6 +1,7 @@
+import { readyForKnockout, topIds, unplacedCount } from './arc.ts'
 import type { BrushImage, ContestState, Margin } from './types.ts'
 import { glickoUpdate } from './rank.ts'
-import { advanceBracket, extendQueue, MATCH_MEMORY, nextContender, pairKey, qualifyingProgress, rankedActive, retainBuffer, sameGroup, seedBracket, type RoundMatch, type Slot } from './pair.ts'
+import { advanceBracket, extendQueue, MATCH_MEMORY, nextContender, pairKey, PLACEMENT_GAMES, qualifyingProgress, rankedActive, retainBuffer, sameGroup, seedBracket, type RoundMatch, type Slot } from './pair.ts'
 
 export type Deck = {
   images: BrushImage[]
@@ -10,6 +11,10 @@ export type Deck = {
   focus: 'bracket' | 'placement'
   rounds: RoundMatch[][]
   championId: string | null
+  /** Top 16 ids at the last crowning. Empty until a champion is kept. */
+  field: string[]
+  /** Abandoned or finished brackets, newest last, capped. */
+  archive: RoundMatch[][][]
 }
 
 export type Decision = {
@@ -35,9 +40,42 @@ export function bootDeck(images: BrushImage[], contest: ContestState | null, rng
     focus: 'bracket',
     rounds: contest?.rounds || [],
     championId: contest?.championId || null,
+    field: contest?.field || [],
+    archive: [],
   }
-  if (deck.phase !== 'qualifying') return deck
-  return { ...deck, queue: extendQueue(images, [], deck.recentKeys, undefined, rng) }
+  const queued = deck.phase === 'qualifying' ? { ...deck, queue: extendQueue(images, [], deck.recentKeys, undefined, rng) } : deck
+  return settleArc(queued, rng)
+}
+
+/** New pictures send an open knockout back to placement. Ratings and the reigning champion stay. */
+export function placeNewcomers(deck: Deck, rng: () => number = Math.random): Deck {
+  if (unplacedCount(deck.images) === 0) return deck
+  if (deck.phase !== 'finals' && deck.phase !== 'champion') return deck
+  const archive = deck.rounds.length ? [...deck.archive, deck.rounds].slice(-8) : deck.archive
+  const next: Deck = { ...deck, phase: 'qualifying', focus: 'bracket', rounds: [], archive, queue: [] }
+  return { ...next, queue: extendQueue(next.images, [], next.recentKeys, undefined, rng) }
+}
+
+export function settleArc(deck: Deck, rng: () => number = Math.random): Deck {
+  const opened = placeNewcomers(deck, rng)
+  if (opened.phase === 'qualifying' && !opened.championId && unplacedCount(opened.images) === 0 && readyForKnockout(opened.images)) {
+    return startFinals(opened)
+  }
+  return opened
+}
+
+export function continueRanking(deck: Deck, rng: () => number = Math.random): Deck {
+  const archive = deck.rounds.length ? [...deck.archive, deck.rounds].slice(-8) : deck.archive
+  const next: Deck = {
+    ...deck,
+    phase: 'qualifying',
+    focus: 'bracket',
+    rounds: [],
+    field: deck.field.length ? deck.field : topIds(deck.images),
+    archive,
+    queue: [],
+  }
+  return { ...next, queue: extendQueue(next.images, [], next.recentKeys, undefined, rng) }
 }
 
 export function dropUnreadable(deck: Deck, imageId: string, rng: () => number = Math.random): Deck {
@@ -200,6 +238,7 @@ export function undoDecision(deck: Deck, prior: {
     return image
   })
   return {
+    ...deck,
     images,
     queue: prior.queue,
     recentKeys: prior.recentKeys,
@@ -211,13 +250,14 @@ export function undoDecision(deck: Deck, prior: {
 }
 
 export function applyDecision(deck: Deck, decision: Decision, rng: () => number = Math.random): Deck {
-  if (decision.kind === 'trash' && decision.trashLeft !== decision.trashRight) {
+  const inBracket = deck.phase === 'finals' && deck.focus !== 'placement'
+  if (decision.kind === 'trash' && decision.trashLeft !== decision.trashRight && !inBracket) {
     const replaced = replaceTrashed(deck, decision, rng)
-    if (replaced) return replaced
+    if (replaced) return settleArc(replaced, rng)
   }
   const images = decision.kind === 'pick' ? rate(deck.images, decision) : trash(deck.images, decision)
   const recentKeys = [...deck.recentKeys, pairKey(decision.leftId, decision.rightId)].slice(-MATCH_MEMORY)
-  if (deck.phase === 'finals' && deck.focus !== 'placement') {
+  if (inBracket) {
     const winnerId = decision.kind === 'pick'
       ? decision.winnerId
       : decision.trashLeft && !decision.trashRight
@@ -226,18 +266,19 @@ export function applyDecision(deck: Deck, decision: Decision, rng: () => number 
           ? decision.leftId
           : null
     const advanced = advanceBracket(deck.rounds, winnerId)
-    return {
+    return settleArc({
       ...deck,
       images,
       recentKeys,
       queue: [],
       rounds: advanced.rounds,
-      championId: advanced.championId,
+      championId: advanced.championId || deck.championId,
+      field: advanced.championId ? topIds(images) : deck.field,
       phase: advanced.championId ? 'champion' : 'finals',
-    }
+    }, rng)
   }
   const kept = retainBuffer(deck.queue.slice(1), pairKey(decision.leftId, decision.rightId), images, recentKeys)
-  return { ...deck, images, recentKeys, queue: extendQueue(images, kept, recentKeys, undefined, rng) }
+  return settleArc({ ...deck, images, recentKeys, queue: extendQueue(images, kept, recentKeys, undefined, rng) }, rng)
 }
 
 export function startFinals(deck: Deck): Deck {
@@ -245,7 +286,7 @@ export function startFinals(deck: Deck): Deck {
   const ranked = rankedActive(deck.images)
   const round = seedBracket(ranked.map(image => image.id))
   if (!round.length) return deck
-  return { ...deck, phase: 'finals', focus: 'bracket', rounds: [round], championId: null, queue: [] }
+  return { ...deck, phase: 'finals', focus: 'bracket', rounds: [round], queue: [] }
 }
 
 export function openPlacement(deck: Deck, rng: () => number = Math.random): Deck {
@@ -326,6 +367,11 @@ export function mergeLibrary(deck: Deck, remote: BrushImage[], rng: () => number
       ...face,
     }
   })
+  const previous = new Set(deck.images.map(image => image.id))
+  const arrivals = images.filter(image => !previous.has(image.id) && image.games < PLACEMENT_GAMES && !image.trashed && !image.archived && !image.unreadable)
+  if (arrivals.length && (deck.phase === 'finals' || deck.phase === 'champion')) {
+    return placeNewcomers({ ...deck, images }, rng)
+  }
   if (deck.phase !== 'qualifying') return { ...deck, images }
   const head = deck.queue[0] ? [deck.queue[0]] : []
   return { ...deck, images, queue: extendQueue(images, head, deck.recentKeys, undefined, rng) }
