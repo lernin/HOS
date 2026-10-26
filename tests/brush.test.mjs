@@ -3,7 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
+import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals, undoDecision } from '../src/experiences/brush/deck.ts'
+import { popUndo, pushUndo } from '../src/experiences/brush/undo.ts'
 import { holdTop16, levelOf, levelProgress, matchMoments, standingOf } from '../src/experiences/brush/level.ts'
 import { rankingLine, rankingProgress, scopeImages } from '../src/experiences/brush/ranking.ts'
 import { EYE_LINE, faceBoxFromPixels, faceEye, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
@@ -1519,3 +1520,84 @@ test('a category paints its own ratings and the migration leaves overall on the 
   assert.match(brush, /const matchFailed = phase === 'app' && screen === 'match' && !deck/)
   assert.match(brush, /!showingMatch && !matchFailed/)
 })
+
+test('undo restores the pair and the exact ratings from before the decision', () => {
+  const pictures = ['a', 'b', 'c', 'd'].map((id, index) => image({
+    id,
+    name: `Lane_${id}.jpg`,
+    country: index % 2 ? 'Korea' : 'Japan',
+    elo: 1500 + index * 20,
+    sigma: 120,
+    volatility: 0.06,
+    games: 4,
+    wins: 2,
+    losses: 2,
+    trash_count: 1,
+  }))
+  const deck = bootDeck(pictures, { phase: 'qualifying', rounds: [], championId: null }, () => 0.1)
+  const match = currentMatch(deck)
+  assert.ok(match)
+  const prior = {
+    leftId: match.left.id,
+    rightId: match.right.id,
+    left: { elo: match.left.elo, sigma: match.left.sigma, volatility: match.left.volatility, games: match.left.games, wins: match.left.wins, losses: match.left.losses, close_wins: 0, close_losses: 0, trash_count: match.left.trash_count, trashed: false },
+    right: { elo: match.right.elo, sigma: match.right.sigma, volatility: match.right.volatility, games: match.right.games, wins: match.right.wins, losses: match.right.losses, close_wins: 0, close_losses: 0, trash_count: match.right.trash_count, trashed: false },
+    queue: deck.queue.map(slot => ({ ...slot })),
+    recentKeys: [...deck.recentKeys],
+    phase: deck.phase,
+    focus: deck.focus,
+    rounds: deck.rounds,
+    championId: deck.championId,
+  }
+  const picked = applyDecision(deck, {
+    leftId: match.left.id,
+    rightId: match.right.id,
+    kind: 'pick',
+    winnerId: match.right.id,
+    trashLeft: false,
+    trashRight: false,
+    margin: 'clear',
+  }, () => 0.1)
+  assert.notEqual(picked.images.find(item => item.id === match.left.id).elo, match.left.elo)
+  const restored = undoDecision(picked, prior)
+  const again = currentMatch(restored)
+  assert.equal(again.left.id, match.left.id)
+  assert.equal(again.right.id, match.right.id)
+  assert.equal(again.left.elo, match.left.elo)
+  assert.equal(again.left.games, match.left.games)
+  assert.equal(again.right.wins, match.right.wins)
+  const trashed = applyDecision(restored, {
+    leftId: match.left.id,
+    rightId: match.right.id,
+    kind: 'trash',
+    winnerId: null,
+    trashLeft: true,
+    trashRight: false,
+    margin: 'clear',
+  }, () => 0.1)
+  assert.equal(trashed.images.find(item => item.id === match.left.id).trashed, true)
+  const untrashed = undoDecision(trashed, prior)
+  assert.equal(untrashed.images.find(item => item.id === match.left.id).trashed, false)
+  assert.equal(untrashed.images.find(item => item.id === match.left.id).trash_count, match.left.trash_count)
+  const stacked = pushUndo(pushUndo([], {
+    id: '1', category: 'overall', matchId: null, leftId: 'a', rightId: 'b', left: prior.left, right: prior.right, queue: [], recentKeys: [], phase: 'qualifying', focus: 'bracket', rounds: [], championId: null,
+  }), {
+    id: '2', category: 'face', matchId: 'face-match', leftId: 'c', rightId: 'd', left: prior.left, right: prior.right, queue: [], recentKeys: [], phase: 'qualifying', focus: 'bracket', rounds: [], championId: null,
+  })
+  const face = popUndo(stacked, 'face')
+  assert.equal(face.frame.id, '2')
+  assert.equal(face.frames.length, 1)
+  const overall = popUndo(face.frames, 'overall')
+  assert.equal(overall.frame.id, '1')
+  assert.equal(popUndo(overall.frames, 'overall').frame, null)
+  const sql = readFileSync(new URL('../supabase/migrations/20261026073000_brush_undo.sql', import.meta.url), 'utf8')
+  assert.match(sql, /before_state jsonb/)
+  assert.match(sql, /public\.brush_undo/)
+  assert.match(sql, /on conflict on constraint brush_ratings_pkey/)
+  assert.match(matchupSource(), /data-action="undo"/)
+  assert.match(readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8'), /data-action="undo"/)
+})
+
+function matchupSource() {
+  return readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
+}

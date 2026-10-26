@@ -18,7 +18,19 @@ export type OutboxItem = {
 
 const memory = new Map<string, OutboxItem[]>()
 const sent = new Map<string, string>()
+const cancelled = new Set<string>()
 let chain = Promise.resolve()
+
+export function cancelPending(preview: boolean, id: string) {
+  cancelled.add(id)
+  writeOutbox(preview, readOutbox(preview).filter(item => item.id !== id))
+}
+
+function takeCancelled(id: string) {
+  const marked = cancelled.has(id)
+  if (marked) cancelled.delete(id)
+  return marked
+}
 
 export function sentMatch(id: string) {
   return sent.get(id) || null
@@ -57,6 +69,7 @@ export function flushOutbox(
   preview: boolean,
   send: (item: OutboxItem) => Promise<{ match_id: string | null }>,
   annotate: (matchId: string, tagIds: string[]) => Promise<void>,
+  revert?: (matchId: string) => Promise<void>,
 ) {
   const run = async () => {
     for (let guard = 0; guard < 30; guard += 1) {
@@ -70,6 +83,11 @@ export function flushOutbox(
           const result = await send(item)
           matchId = result.match_id
           if (matchId) sent.set(item.id, matchId)
+          if (takeCancelled(item.id)) {
+            writeOutbox(preview, readOutbox(preview).filter(entry => entry.id !== item.id))
+            if (matchId && revert) await revert(matchId)
+            continue
+          }
           writeOutbox(preview, readOutbox(preview).map(entry => entry.id === item.id ? { ...entry, matchId } : entry))
         }
         const current = readOutbox(preview).find(entry => entry.id === item.id)

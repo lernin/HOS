@@ -182,6 +182,34 @@ function replaceTrashed(deck: Deck, decision: Decision, rng: () => number): Deck
   return { ...deck, images, recentKeys, queue: pinReplacement(queued, slot, images, recentKeys, rng) }
 }
 
+export function undoDecision(deck: Deck, prior: {
+  leftId: string
+  rightId: string
+  left: Pick<BrushImage, 'elo' | 'sigma' | 'volatility' | 'games' | 'wins' | 'losses' | 'close_wins' | 'close_losses' | 'trash_count' | 'trashed'>
+  right: Pick<BrushImage, 'elo' | 'sigma' | 'volatility' | 'games' | 'wins' | 'losses' | 'close_wins' | 'close_losses' | 'trash_count' | 'trashed'>
+  queue: Slot[]
+  recentKeys: string[]
+  phase: Deck['phase']
+  focus: Deck['focus']
+  rounds: RoundMatch[][]
+  championId: string | null
+}): Deck {
+  const images = deck.images.map(image => {
+    if (image.id === prior.leftId) return { ...image, ...prior.left }
+    if (image.id === prior.rightId) return { ...image, ...prior.right }
+    return image
+  })
+  return {
+    images,
+    queue: prior.queue,
+    recentKeys: prior.recentKeys,
+    phase: prior.phase,
+    focus: prior.focus,
+    rounds: prior.rounds,
+    championId: prior.championId,
+  }
+}
+
 export function applyDecision(deck: Deck, decision: Decision, rng: () => number = Math.random): Deck {
   if (decision.kind === 'trash' && decision.trashLeft !== decision.trashRight) {
     const replaced = replaceTrashed(deck, decision, rng)

@@ -73,7 +73,7 @@ function screenOn(hit: HTMLElement, x: number, y: number) {
 }
 
 export function Matchup({
-  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, menu = null, notice = null, playing = '', rankFor = () => null, celebrateId = null,
+  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, menu = null, notice = null, playing = '', rankFor = () => null, celebrateId = null, canUndo = false, onUndo,
 }: {
   left: BrushImage
   right: BrushImage
@@ -90,6 +90,8 @@ export function Matchup({
   playing?: string
   rankFor?: (id: string) => Standing | null
   celebrateId?: string | null
+  canUndo?: boolean
+  onUndo?: () => void
 }) {
   const stageRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -893,7 +895,10 @@ export function Matchup({
       </div>
       {!portrait && (
         <aside className="brush-controls" data-gutter="controls">
-          <div className="brush-controls-tools">{menu}</div>
+          <div className="brush-controls-tools">
+            {canUndo && <button className="brush-icon-button brush-undo" type="button" data-action="undo" aria-label="Undo" onClick={onUndo}><UndoIcon /></button>}
+            {menu}
+          </div>
           {playing && <p className="brush-playing" data-playing>{playing}</p>}
           {matchCountNode()}
           {notice}
@@ -914,7 +919,10 @@ export function Matchup({
       )}
       {portrait && (
         <div className="brush-portrait-dock">
-          {playing && <p className="brush-playing" data-playing>{playing}</p>}
+          <div className="brush-dock-head">
+            {playing && <p className="brush-playing" data-playing>{playing}</p>}
+            {canUndo && <button className="brush-undo" type="button" data-action="undo" onClick={onUndo}>Undo</button>}
+          </div>
           {portraitLine(frontImage)}
           <div className="brush-footer">
             <button className="brush-choice" type="button" data-action="pick" onClick={event => choose(event, frontImage.id, 'clear')}>Pick</button>
@@ -925,6 +933,10 @@ export function Matchup({
       )}
     </div>
   )
+}
+
+function UndoIcon() {
+  return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8 7v4H4" /><path d="M5 9a7 7 0 1 1-1 4" /></svg>
 }
 
 function blockPictureMenu(event: { preventDefault: () => void }) {
