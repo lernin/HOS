@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import './brush.css'
 import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush/client'
 import { offerNewKnockout, stageKey, stageLabel, stageMoment } from './brush/arc'
-import { applyDecision, bootDeck, continueRanking, currentMatch, dropUnreadable, mergeLibrary, progressOf, rememberHash, replayPending, startFinals, undoDecision, type Deck, type Decision } from './brush/deck'
+import { viewSearch } from './brush/contend'
+import { advanceShow, applyDecision, bootDeck, continueRanking, currentMatch, dropUnreadable, mergeLibrary, progressOf, rememberHash, replayPending, startFinals, undoDecision, type Deck, type Decision } from './brush/deck'
+import { Confetti, ShowCard } from './brush/Show'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
 import { cancelPending, enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
 import { attachUndoMatch, popUndo, pushUndo, readUndo, writeUndo, type RatingSnap, type UndoFrame } from './brush/undo'
@@ -129,6 +131,20 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     const timer = window.setTimeout(() => setMoments(queue => queue.slice(1)), 3600)
     return () => window.clearTimeout(timer)
   }, [moment])
+
+  useEffect(() => {
+    const banner = deck?.banner
+    if (!banner) return
+    const wait = banner.kind === 'title' ? 1500 : banner.kind === 'results' ? 2200 : 2800
+    const timer = window.setTimeout(() => setDeck(current => current?.banner ? advanceShow(current) : current), wait)
+    return () => window.clearTimeout(timer)
+  }, [deck?.banner])
+
+  useEffect(() => {
+    const celebrate = deck?.banner?.kind === 'reveal' || (deck?.phase === 'champion' && deck.celebrate)
+    if (!celebrate) return
+    try { navigator.vibrate?.(20) } catch { /* this browser has no vibration */ }
+  }, [deck?.banner, deck?.phase, deck?.celebrate, deck?.championId])
 
   useEffect(() => {
     setMenuOpen(false)
@@ -418,7 +434,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     const cat = categoryRef.current
     const release = holdTop16({ before: current.images, after: next.images, held: heldTop.current[cat] || [] })
     heldTop.current[cat] = release.held
-    const toast = stageMoment(stageKey(current), stageKey(next))
+    const toast = next.banner ? null : stageMoment(stageKey(current), stageKey(next))
     setMoments([...matchMoments(current.images, next.images), ...release.moments, ...(toast ? [{ kind: 'stage' as const, text: toast }] : [])])
     publishDeck(next, current)
     setDeck(next)
@@ -456,6 +472,9 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         focus: current.focus,
         rounds: current.rounds.map(round => round.map(match => ({ ...match }))),
         championId: current.championId,
+        gauntlet: current.gauntlet,
+        banner: current.banner,
+        trail: current.trail,
       }))
     }
     setPickedTags([])
@@ -601,6 +620,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const countries = [...new Set(library.map(image => image.country).filter(Boolean))]
   const champion = deck?.championId ? deck.images.find(image => image.id === deck.championId) || null : null
   const stageText = deck && deck.phase !== 'champion' ? stageLabel(deck) : ''
+  const search = deck && deck.phase !== 'champion' ? viewSearch(deck.images, deck.gauntlet, deck.trail) : null
   const canStartKnockout = deck ? offerNewKnockout(deck) : false
   const crown = champions.find(item => item.imageId === deck?.championId && item.category === category)
   const crownDate = crown ? new Date(crown.crownedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
@@ -789,7 +809,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       )}
 
       {phase === 'app' && screen === 'match' && deck?.phase === 'champion' && (
-        <div className="brush-champion" data-screen="champion">
+        <div className={`brush-champion${deck.celebrate ? ' is-celebrate' : ''}`} data-screen="champion">
+          {deck.celebrate && <Confetti />}
           {champion && srcFor(champion) && <img className="brush-champion-photo" src={srcFor(champion) || ''} alt={champion.name} />}
           <h2>Champion</h2>
           <p>{`${playingName} · ${crownDate}`}</p>
@@ -814,7 +835,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           </div>
         </div>
       )}
-      {phase === 'app' && screen === 'match' && deck?.phase !== 'champion' && match && (
+      {phase === 'app' && screen === 'match' && deck && deck.phase !== 'champion' && match && (
         <Matchup
           left={match.left}
           right={match.right}
@@ -828,6 +849,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           srcFor={srcFor}
           playing={`Playing for ${playingName}`}
           stage={stageText}
+          search={search}
+          roster={deck.images}
           canUndo={undoFrames.some(frame => frame.category === category)}
           onUndo={undoLast}
           rankFor={id => standingOf(deck?.images || [], id)}
@@ -853,6 +876,9 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
             </>
           ) : null}
         />
+      )}
+      {phase === 'app' && screen === 'match' && deck?.banner && (
+        <ShowCard banner={deck.banner} roster={deck.images} srcFor={srcFor} onAdvance={() => setDeck(current => current ? advanceShow(current) : current)} />
       )}
       {phase === 'app' && screen === 'match' && deck && deck.phase !== 'champion' && !match && (
         <div className="brush-scroll" data-screen="match">

@@ -75,6 +75,22 @@ export function createPreviewClient(): BrushApi {
     blank({ id: 'st', name: 'Studio_03.jpg', country: 'Studio', perceptual_hash: '0f0f0f0f0f0f0f0f', preview_url: portrait('Studio 03', 'Studio', '#241c22', '#e6d5cf', '#c4a394'), createdAt: 4, face_box: null, face_scanned: false, elo: 1500, sigma: 220, games: 2, wins: 1, losses: 1 }),
     blank({ id: 'nt', name: 'Night_04.jpg', country: 'Night', perceptual_hash: '3333333333333333', preview_url: portrait('Night 04', 'Night', '#101114', '#9aa0a8', '#3d4450'), trashed: true, trash_count: 1, elo: 1464, games: 1, losses: 1, createdAt: 5 }),
   ]
+  const laneCities = ['Oslo', 'Lisbon', 'Madrid', 'Vienna', 'Prague', 'Dublin', 'Bruges', 'Athens', 'Naples', 'Geneva', 'Bergen', 'Porto', 'Seville', 'Florence', 'Krakow', 'Helsinki', 'Riga', 'Split', 'Lyon', 'Bordeaux', 'Nice', 'Malmo', 'Gdansk', 'Tallinn', 'Vilnius', 'Zagreb', 'Salzburg', 'Innsbruck', 'Antwerp', 'Ghent']
+  laneCities.forEach((city, index) => {
+    images.push(blank({
+      id: `lane-${index}`,
+      name: `${city}_Portrait.jpg`,
+      country: city,
+      folder_path: city,
+      preview_url: portrait(city, city, '#2c241c', '#d7c4a1', index % 2 ? '#8f7358' : '#7f8f78'),
+      createdAt: 20 + index,
+      elo: 1500,
+      sigma: 350,
+      games: 0,
+      wins: 0,
+      losses: 0,
+    }))
+  })
   const tags = SEED.map(item => ({ ...item }))
   const badTags = new Map<string, string[]>([['nt', ['t-light']]])
   const attributes = new Map<string, BrushAttribute[]>([
@@ -111,6 +127,12 @@ export function createPreviewClient(): BrushApi {
       row.losses = 4
       row.sigma = 100
     }
+    for (const image of images) {
+      if (!image.id.startsWith('lane-')) continue
+      image.trashed = true
+      const lane = ratingRows.find(item => item.category === 'overall' && item.imageId === image.id)
+      if (lane) lane.games = image.games
+    }
   }
   if (demo === 'final') {
     contests.set('overall', { phase: 'finals', rounds: [[{ leftId: 'jp', rightId: 'kr', winnerId: null }]], championId: null, field: [] })
@@ -119,6 +141,38 @@ export function createPreviewClient(): BrushApi {
     const crownedAt = '2026-10-26T12:00:00.000Z'
     contests.set('overall', { phase: 'champion', rounds: [], championId: 'jp', field: ['jp', 'jp2', 'kr', 'st'] })
     history.set('overall', [{ id: 'crown-preview', category: 'overall', imageId: 'jp', crownedAt }])
+  }
+  if (demo === 'reveal' || demo === 'wildcard') {
+    const keep = 16
+    const weak = demo === 'wildcard' ? 8 : 0
+    let seen = 0
+    for (const image of images) {
+      if (image.id === 'nt') continue
+      const row = ratingRows.find(item => item.category === 'overall' && item.imageId === image.id)
+      if (seen < keep) {
+        image.elo = 1900 - seen * 20
+        image.sigma = 70
+        image.games = 12
+        image.wins = 8
+        image.losses = 4
+      } else if (seen < keep + weak) {
+        image.elo = 1200
+        image.sigma = 40
+        image.games = 4
+        image.wins = 0
+        image.losses = 2
+      } else {
+        image.trashed = true
+      }
+      if (row) {
+        row.elo = image.elo
+        row.sigma = image.sigma
+        row.games = image.games
+        row.wins = image.wins
+        row.losses = image.losses
+      }
+      seen += 1
+    }
   }
   const recentByCategory = new Map<string, string[]>(DEFAULT_CATEGORIES.map(item => [item.id, []]))
   const known = new Set<string>()

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { SearchStrip, type SearchModel } from './Search'
 import { faceEye, faceShift, faceZoom, focusBox } from './face'
 import type { Standing } from './level'
 import { PLACEMENT_GAMES } from './pair'
@@ -73,7 +74,7 @@ function screenOn(hit: HTMLElement, x: number, y: number) {
 }
 
 export function Matchup({
-  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, menu = null, notice = null, playing = '', stage = '', rankFor = () => null, celebrateId = null, canUndo = false, onUndo,
+  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, menu = null, notice = null, playing = '', stage = '', search = null, roster = [], rankFor = () => null, celebrateId = null, canUndo = false, onUndo,
 }: {
   left: BrushImage
   right: BrushImage
@@ -89,6 +90,8 @@ export function Matchup({
   notice?: ReactNode
   playing?: string
   stage?: string
+  search?: SearchModel | null
+  roster?: BrushImage[]
   rankFor?: (id: string) => Standing | null
   celebrateId?: string | null
   canUndo?: boolean
@@ -901,7 +904,7 @@ export function Matchup({
             {menu}
           </div>
           {playing && <p className="brush-playing" data-playing>{playing}</p>}
-          {stage && <p className="brush-stage-line" data-stage>{stage}</p>}
+          {search ? <SearchStrip stage={stage} model={search} roster={roster} srcFor={srcFor} /> : stage ? <p className="brush-stage-line" data-stage>{stage}</p> : null}
           {matchCountNode()}
           {notice}
           <div className="brush-gutter-actions">
@@ -925,7 +928,7 @@ export function Matchup({
             {playing && <p className="brush-playing" data-playing>{playing}</p>}
             {canUndo && <button className="brush-undo" type="button" data-action="undo" onClick={onUndo}>Undo</button>}
           </div>
-          {stage && <p className="brush-stage-line" data-stage>{stage}</p>}
+          {search ? <SearchStrip stage={stage} model={search} roster={roster} srcFor={srcFor} /> : stage ? <p className="brush-stage-line" data-stage>{stage}</p> : null}
           {portraitLine(frontImage)}
           <div className="brush-footer">
             <button className="brush-choice" type="button" data-action="pick" onClick={event => choose(event, frontImage.id, 'clear')}>Pick</button>
