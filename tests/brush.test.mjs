@@ -3,7 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
-import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals, undoDecision } from '../src/experiences/brush/deck.ts'
+import { offerNewKnockout, stageLabel, stageMoment } from '../src/experiences/brush/arc.ts'
+import { applyDecision, bootDeck, continueRanking, currentMatch, dropUnreadable, mergeLibrary, openPlacement, placeNewcomers, replayPending, returnToBracket, startFinals, undoDecision } from '../src/experiences/brush/deck.ts'
 import { popUndo, pushUndo } from '../src/experiences/brush/undo.ts'
 import { holdTop16, levelOf, levelProgress, matchMoments, standingOf } from '../src/experiences/brush/level.ts'
 import { rankingLine, rankingProgress, scopeImages } from '../src/experiences/brush/ranking.ts'
@@ -181,33 +182,25 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   const merged = mergeLibrary(resumed, [...stale, fresh])
   assert.equal(merged.images.find(item => item.id === 'a').elo, resumed.images.find(item => item.id === 'a').elo)
   assert.equal(merged.images.find(item => item.id === 'a').games, resumed.images.find(item => item.id === 'a').games)
-  assert.equal(merged.phase, 'finals')
-  assert.equal(merged.rounds.flat().some(slot => slot.leftId === 'new' || slot.rightId === 'new'), false)
+  assert.equal(merged.phase, 'qualifying')
+  assert.equal(merged.archive.length, 1)
+  assert.equal(merged.rounds.length, 0)
   assert.equal(challengerCount(merged.images), 1)
+  const placed = currentMatch(merged)
+  assert.ok(placed)
+  assert.ok([placed.left.id, placed.right.id].includes('new'))
+  assert.equal(merged.images.find(item => item.id === 'a').sigma, resumed.images.find(item => item.id === 'a').sigma)
+
+  const placing = openPlacement(resumed, () => 0.5)
+  assert.equal(placing.focus, 'placement')
+  assert.equal(returnToBracket(placing).focus, 'bracket')
+  assert.equal(currentMatch(returnToBracket(placing)).left.id, resumedMatch.left.id)
 
   let seed = 3
   const rng = () => {
     seed = (seed * 16807) % 2147483647
     return (seed - 1) / 2147483646
   }
-  const placing = openPlacement(merged, () => 0.5)
-  const placed = currentMatch(placing)
-  assert.ok([placed.left.id, placed.right.id].includes('new'))
-  const kept = applyDecision(placing, {
-    leftId: placed.left.id,
-    rightId: placed.right.id,
-    kind: 'pick',
-    winnerId: 'new',
-    trashLeft: false,
-    trashRight: false,
-    margin: 'clear',
-  }, rng)
-  assert.equal(kept.phase, 'finals')
-  assert.deepEqual(kept.rounds, placing.rounds)
-  assert.equal(kept.images.find(item => item.id === 'new').games, 1)
-  assert.equal(returnToBracket(kept).focus, 'bracket')
-  assert.equal(currentMatch(returnToBracket(kept)).left.id, resumedMatch.left.id)
-
   const veterans = [1200, 1400, 1600, 1800, 2000].map(elo => image({
     id: `e${elo}`,
     name: `Lane_${elo}.jpg`,
@@ -268,7 +261,8 @@ test('a visit resumes the bracket and newcomers place without resetting ratings'
   assert.match(ongoing, /percentile_cont/)
   assert.doesNotMatch(ongoing, /files\.delete|addParents|removeParents/)
   const screen = readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8')
-  assert.match(screen, /New challengers:/)
+  assert.match(screen, /Start a new knockout/)
+  assert.match(screen, /data-stage/)
   assert.match(screen, /matchMoments/)
   assert.match(readFileSync(new URL('../src/experiences/brush/level.ts', import.meta.url), 'utf8'), /entered the top 16!/)
   const matchup = readFileSync(new URL('../src/experiences/brush/Matchup.tsx', import.meta.url), 'utf8')
@@ -565,8 +559,7 @@ test('swiss placement spreads 200 matches without overusing a picture', () => {
   const busiest = Math.max(...counts.values())
   assert.ok(busiest <= 24, `busiest ${busiest}`)
   assert.ok(placingMatches > 40, `placing matches ${placingMatches}`)
-  const ladderShare = ladderWhilePlacing / placingMatches
-  assert.ok(ladderShare >= 0.1 && ladderShare <= 0.4, `ladder share ${ladderShare}`)
+  assert.equal(ladderWhilePlacing, 0)
   assert.equal(rated, true)
   assert.ok(deck.images.some(item => item.id.startsWith('n') && item.games >= PLACEMENT_GAMES))
 })
@@ -1026,7 +1019,7 @@ test('quick picks keep a gallery chooser and a smaller close-call step', () => {
   assert.match(brush, /Download left/)
   assert.match(brush, /Download right/)
   assert.match(brush, /data-action="download"/)
-  assert.match(brush, /Qualifying \$\{qualify\.percent\}%/)
+  assert.match(brush, /data-stage>\{stageText\}/)
   assert.match(brush, /brush-menu-note/)
   assert.match(brush, /circle cx="12" cy="5"/)
   assert.doesNotMatch(brush, /M5 7h14M5 12h14M5 17h14/)
@@ -1596,6 +1589,134 @@ test('undo restores the pair and the exact ratings from before the decision', ()
   assert.match(sql, /on conflict on constraint brush_ratings_pkey/)
   assert.match(matchupSource(), /data-action="undo"/)
   assert.match(readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8'), /data-action="undo"/)
+})
+
+test('a contest arc places newcomers, crowns once, and offers another knockout only when the top 16 change', () => {
+  const settled = Array.from({ length: 16 }, (_, index) => image({
+    id: `s${index}`,
+    name: `Lane_${index}.jpg`,
+    country: index % 2 ? 'Japan' : 'Korea',
+    elo: 1800 - index * 10,
+    sigma: 80,
+    games: 12,
+    wins: 8,
+  }))
+  const opened = bootDeck(settled, { phase: 'qualifying', rounds: [], championId: null }, () => 0.2)
+  assert.equal(opened.phase, 'finals')
+  assert.equal(stageLabel(opened), 'Round of 16 · 1 of 8')
+  assert.equal(opened.rounds[0].length, 8)
+  assert.equal(opened.rounds[0][0].leftId, settled[0].id)
+  assert.equal(opened.rounds[0][0].rightId, settled[15].id)
+  const finalists = [
+    image({ id: 'left', name: 'Final_Left.jpg', country: 'Japan', elo: 1900, sigma: 70, games: 20, wins: 14 }),
+    image({ id: 'right', name: 'Final_Right.jpg', country: 'Korea', elo: 1880, sigma: 70, games: 20, wins: 13 }),
+  ]
+  const final = startFinals(bootDeck(finalists, { phase: 'qualifying', rounds: [], championId: null }))
+  assert.equal(stageLabel(final), 'Final')
+  const live = currentMatch(final)
+  const beforeElo = live.left.elo
+  const picked = applyDecision(final, {
+    leftId: live.left.id,
+    rightId: live.right.id,
+    kind: 'pick',
+    winnerId: live.left.id,
+    trashLeft: false,
+    trashRight: false,
+    margin: 'clear',
+  })
+  assert.equal(picked.phase, 'champion')
+  assert.equal(picked.championId, live.left.id)
+  assert.ok(picked.images.find(item => item.id === live.left.id).elo !== beforeElo)
+  assert.equal(stageMoment('knockout:2', 'knockout:1'), 'Final!')
+  assert.equal(stageMoment('knockout:4', 'knockout:2'), 'Semifinals!')
+  const bracket = undoDecision(picked, {
+    leftId: live.left.id,
+    rightId: live.right.id,
+    left: live.left,
+    right: live.right,
+    queue: final.queue,
+    recentKeys: final.recentKeys,
+    phase: final.phase,
+    focus: final.focus,
+    rounds: final.rounds,
+    championId: final.championId,
+  })
+  assert.equal(bracket.phase, 'finals')
+  assert.equal(currentMatch(bracket).left.id, live.left.id)
+  assert.equal(bracket.rounds.at(-1).some(slot => slot.winnerId), false)
+  const trashed = applyDecision(final, {
+    leftId: live.left.id,
+    rightId: live.right.id,
+    kind: 'trash',
+    winnerId: null,
+    trashLeft: true,
+    trashRight: false,
+    margin: 'clear',
+  })
+  assert.equal(trashed.images.find(item => item.id === live.left.id).trashed, true)
+  assert.equal(trashed.championId, live.right.id)
+  assert.equal(trashed.images.find(item => item.id === live.right.id).elo, live.right.elo)
+  const ranked = continueRanking(picked)
+  assert.equal(ranked.phase, 'qualifying')
+  assert.equal(ranked.championId, live.left.id)
+  assert.equal(offerNewKnockout(ranked), false)
+  assert.match(stageLabel(ranked), /^Ladder · /)
+  const newbie = image({ id: 'new', name: 'New_01.jpg', country: 'Studio', elo: 1500, sigma: 350, games: 0, wins: 0 })
+  const placing = placeNewcomers({ ...ranked, phase: 'champion', images: [...ranked.images, newbie] })
+  assert.equal(placing.phase, 'qualifying')
+  assert.equal(placing.images.find(item => item.id === live.left.id).elo, picked.images.find(item => item.id === live.left.id).elo)
+  assert.equal(placing.images.find(item => item.id === live.left.id).sigma, picked.images.find(item => item.id === live.left.id).sigma)
+  assert.equal(stageLabel(placing), 'Placing 1 new')
+  assert.ok([placing.queue[0].leftId, placing.queue[0].rightId].includes('new'))
+  const reign = bootDeck(settled, {
+    phase: 'qualifying',
+    rounds: [],
+    championId: settled[0].id,
+    field: settled.map(item => item.id),
+  }, () => 0.2)
+  assert.equal(reign.phase, 'qualifying')
+  assert.equal(offerNewKnockout(reign), false)
+  assert.match(stageLabel(reign), /^Ladder · 100% settled/)
+  const drifted = { ...reign, images: reign.images.map(item => item.id === 's15' ? { ...item, elo: item.elo + 8 } : item) }
+  assert.equal(offerNewKnockout(drifted), false)
+  const weak = mergeLibrary(reign, [...reign.images, newbie])
+  assert.equal(weak.phase, 'qualifying')
+  assert.equal(weak.images.find(item => item.id === 's0').elo, reign.images.find(item => item.id === 's0').elo)
+  assert.equal(weak.images.find(item => item.id === 's0').sigma, reign.images.find(item => item.id === 's0').sigma)
+  assert.equal(stageLabel(weak), 'Placing 1 new')
+  assert.equal(offerNewKnockout(weak), false)
+  assert.ok(weak.queue.some(slot => slot.leftId === 'new' || slot.rightId === 'new'))
+  const stayed = {
+    ...weak,
+    images: weak.images.map(item => item.id === 'new' ? { ...item, games: 5, wins: 3, elo: 1200, sigma: 90 } : item),
+  }
+  assert.equal(offerNewKnockout(stayed), false)
+  assert.match(stageLabel(stayed), /^Ladder · /)
+  const cracked = {
+    ...reign,
+    images: [...reign.images, image({ id: 'rose', name: 'Rose_01.jpg', country: 'France', elo: 2100, sigma: 60, games: 8, wins: 6 })],
+  }
+  assert.equal(offerNewKnockout(cracked), true)
+  assert.equal(stageLabel({
+    phase: 'finals',
+    focus: 'bracket',
+    rounds: [[
+      { leftId: 'a', rightId: 'b', winnerId: 'a' },
+      { leftId: 'c', rightId: 'd', winnerId: null },
+      { leftId: 'e', rightId: 'f', winnerId: null },
+      { leftId: 'g', rightId: 'h', winnerId: null },
+    ]],
+    championId: null,
+    images: [],
+  }), 'Quarterfinal 2 of 4')
+  const arc = readFileSync(new URL('../supabase/migrations/20261026090000_brush_contest_arc.sql', import.meta.url), 'utf8')
+  assert.match(arc, /create table if not exists public\.brush_champions/)
+  assert.match(arc, /brush_contest_note/)
+  assert.doesNotMatch(arc, /update public\.brush_images/)
+  assert.match(matchupSource(), /data-stage/)
+  const css = readFileSync(new URL('../src/experiences/brush.css', import.meta.url), 'utf8')
+  assert.match(css, /\.brush-champion-photo\{[^}]*object-fit:contain/)
+  assert.match(readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8'), /className="brush-champion-photo"/)
 })
 
 function matchupSource() {

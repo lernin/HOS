@@ -144,12 +144,31 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
       await call('brush_annotate', { ...pinArgs, match_id: matchId, tag_ids: tagIds })
     },
     async contest(category = 'overall') {
-      const data = await call<{ phase: ContestState['phase'], rounds: ContestState['rounds'], champion_id: string | null, recent?: string[][] }>('brush_contest_get', { ...pinArgs, category })
+      const data = await call<{ phase: ContestState['phase'], rounds: ContestState['rounds'], champion_id: string | null, recent?: string[][], field?: string[], champions?: { id: string, category: string, image_id: string, crowned_at: string }[] }>('brush_contest_get', { ...pinArgs, category })
       const recent = Array.isArray(data?.recent) ? data.recent : []
       const recentKeys = recent
         .filter(pair => Array.isArray(pair) && pair[0] && pair[1])
         .map(pair => pairKey(String(pair[0]), String(pair[1])))
-      return { phase: data?.phase || 'qualifying', rounds: data?.rounds || [], championId: data?.champion_id || null, recentKeys }
+      const champions = Array.isArray(data?.champions) ? data.champions.map(item => ({
+        id: String(item.id),
+        category: String(item.category || category),
+        imageId: String(item.image_id),
+        crownedAt: String(item.crowned_at),
+      })) : []
+      const field = Array.isArray(data?.field) ? data.field.map(id => String(id)) : []
+      return { phase: data?.phase || 'qualifying', rounds: data?.rounds || [], championId: data?.champion_id || null, recentKeys, field, champions }
+    },
+    async noteContest(input) {
+      const data = await call<{ id?: string, category?: string, image_id?: string, crowned_at?: string } | null>('brush_contest_note', {
+        ...pinArgs,
+        category: input.category || 'overall',
+        note: input.note,
+        image_id: input.imageId || null,
+        field: input.field || [],
+        rounds: input.rounds || [],
+      })
+      if (!data?.id || !data.image_id) return null
+      return { id: String(data.id), category: String(data.category || input.category || 'overall'), imageId: String(data.image_id), crownedAt: String(data.crowned_at) }
     },
     async saveContest(state, category = 'overall') {
       await call('brush_contest_put', { ...pinArgs, phase: state.phase, rounds: state.rounds, champion_id: state.championId, category })
