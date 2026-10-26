@@ -725,6 +725,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
                 {item === 'match' ? 'Match' : item === 'board' ? 'Board' : item === 'love' ? 'Love' : item === 'trash' ? 'Trash' : 'Library'}
               </button>
             ))}
+            <button type="button" data-action="champions" aria-current={screen === 'champions' ? 'page' : undefined} onClick={() => { setMenuOpen(false); setScreen('champions') }}>Champions</button>
             {showingMatch && deck?.phase === 'finals' && reason && !reason.open && (
               <button className="brush-text-button" type="button" data-action="reason" onClick={() => { setMenuOpen(false); setReason(current => current ? { ...current, open: true } : current) }}>Add reason</button>
             )}
