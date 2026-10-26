@@ -2,7 +2,8 @@
 -- The parameter is still named category so the client JSON key stays the same.
 -- An unqualified category next to brush_contest.category, brush_matches.category,
 -- or brush_ratings.category made Postgres raise "column reference \"category\" is ambiguous"
--- and the match screen could not load.
+-- and the match screen could not load. ON CONFLICT (image_id, category) hits the same
+-- clash, so the rating insert names the primary key instead.
 
 create or replace function public.brush_record(
   lab_pin text,
@@ -82,7 +83,7 @@ begin
     case when v_category = 'overall' then i.close_losses else 0 end
   from public.brush_images i
   where i.id in (left_id, right_id)
-  on conflict (image_id, category) do nothing;
+  on conflict on constraint brush_ratings_pkey do nothing;
 
   select * into v_left_rating from public.brush_ratings where image_id = left_id and brush_ratings.category = v_category;
   select * into v_right_rating from public.brush_ratings where image_id = right_id and brush_ratings.category = v_category;
