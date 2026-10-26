@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import './brush.css'
 import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush/client'
-import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, type Deck, type Decision } from './brush/deck'
+import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, undoDecision, type Deck, type Decision } from './brush/deck'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
-import { enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
+import { cancelPending, enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
+import { attachUndoMatch, popUndo, pushUndo, readUndo, writeUndo, type RatingSnap, type UndoFrame } from './brush/undo'
 import { holdTop16, matchMoments, standingOf, type BrushMoment } from './brush/level'
 import { DEFAULT_CATEGORIES, OVERALL_CATEGORY, preferLocalRatings, rankingLine, rankingProgress, readPlayingCategory, rememberRatings, scopeImages, writePlayingCategory, type BrushCategory, type CategoryRating } from './brush/ranking'
 import { challengerCount, hashImage } from './brush/pair'
@@ -89,6 +90,9 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [uploads, setUploads] = useState<UploadSnapshot>(EMPTY_UPLOADS)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [undoFrames, setUndoFrames] = useState<UndoFrame[]>(() => readUndo(preview))
+  const undoRef = useRef(undoFrames)
+  undoRef.current = undoFrames
   const [category, setCategory] = useState(readPlayingCategory)
   const [categories, setCategories] = useState<BrushCategory[]>(DEFAULT_CATEGORIES)
   const addedRef = useRef(0)
@@ -210,6 +214,12 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     void openCategory(id).catch(error => setMessage(messageOf(error)))
   }
 
+  function rememberUndo(frames: UndoFrame[]) {
+    undoRef.current = frames
+    setUndoFrames(frames)
+    writeUndo(preview, frames)
+  }
+
   function sendResult(item: OutboxItem) {
     return client.record({
       leftId: item.leftId,
@@ -222,6 +232,9 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       decidedMs: item.decidedMs ?? undefined,
       margin: item.margin,
       category: item.category || OVERALL_CATEGORY,
+    }).then(result => {
+      if (result.match_id) rememberUndo(attachUndoMatch(undoRef.current, item.id, result.match_id))
+      return result
     })
   }
 
@@ -241,7 +254,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     let gone = false
     loadAll(client).catch(error => { if (!gone) setMessage(messageOf(error)) })
     if (readOutbox(preview).length) {
-      void flushOutbox(preview, sendResult, (matchId, tagIds) => client.annotate(matchId, tagIds)).catch(error => {
+      void flushOutbox(preview, sendResult, (matchId, tagIds) => client.annotate(matchId, tagIds), matchId => client.undo(matchId)).catch(error => {
         if (!gone) setMessage(messageOf(error))
       })
     }
@@ -351,9 +364,26 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     void client.saveContest({ phase: next.phase, rounds: next.rounds, championId: next.championId }, categoryRef.current).catch(error => setMessage(messageOf(error)))
   }
 
+  function ratingSnap(image: BrushImage): RatingSnap {
+    return {
+      elo: image.elo,
+      sigma: image.sigma,
+      volatility: image.volatility,
+      games: image.games,
+      wins: image.wins,
+      losses: image.losses,
+      close_wins: image.close_wins || 0,
+      close_losses: image.close_losses || 0,
+      trash_count: image.trash_count,
+      trashed: Boolean(image.trashed),
+    }
+  }
+
   function commit(decision: Decision) {
     const current = deckRef.current
     if (!current) return
+    const left = current.images.find(image => image.id === decision.leftId)
+    const right = current.images.find(image => image.id === decision.rightId)
     const next = applyDecision(current, decision)
     const cat = categoryRef.current
     const release = holdTop16({ before: current.images, after: next.images, held: heldTop.current[cat] || [] })
@@ -379,11 +409,54 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       category: categoryRef.current,
     }
     enqueueResult(preview, item)
+    if (left && right) {
+      rememberUndo(pushUndo(undoRef.current, {
+        id: item.id,
+        category: cat,
+        matchId: null,
+        leftId: left.id,
+        rightId: right.id,
+        left: ratingSnap(left),
+        right: ratingSnap(right),
+        queue: current.queue.map(slot => ({ ...slot })),
+        recentKeys: [...current.recentKeys],
+        phase: current.phase,
+        focus: current.focus,
+        rounds: current.rounds.map(round => round.map(match => ({ ...match }))),
+        championId: current.championId,
+      }))
+    }
     setPickedTags([])
     setReason({ id: item.id, kind: decision.kind === 'pick' ? 'like' : 'bad', open: current.phase === 'finals' })
     if (next.phase !== current.phase || next.championId !== current.championId || JSON.stringify(next.rounds) !== JSON.stringify(current.rounds)) persistContest(next)
     startedRef.current = Date.now()
-    void flushOutbox(preview, sendResult, (matchId, tagIds) => client.annotate(matchId, tagIds)).catch(error => setMessage(messageOf(error)))
+    void flushOutbox(preview, sendResult, (matchId, tagIds) => client.annotate(matchId, tagIds), matchId => client.undo(matchId)).catch(error => setMessage(messageOf(error)))
+  }
+
+  function undoLast() {
+    const current = deckRef.current
+    if (!current) return
+    const popped = popUndo(undoRef.current, categoryRef.current)
+    if (!popped.frame) return
+    const frame = popped.frame
+    rememberUndo(popped.frames)
+    setMenuOpen(false)
+    setReason(null)
+    setZoom(REST_ZOOM)
+    setFront('left')
+    setScreen('match')
+    const pending = readOutbox(preview).find(item => item.id === frame.id)
+    const matchId = frame.matchId || pending?.matchId || null
+    if (!matchId) cancelPending(preview, frame.id)
+    const restored = undoDecision(current, frame)
+    setDeck(restored)
+    if (restored.phase !== current.phase || restored.championId !== current.championId || JSON.stringify(restored.rounds) !== JSON.stringify(current.rounds)) persistContest(restored)
+    if (!matchId) return
+    void client.undo(matchId).catch(error => {
+      rememberUndo(pushUndo(undoRef.current, frame))
+      setDeck(current)
+      setMessage(messageOf(error))
+    })
   }
 
   function pick(id: string, margin: Margin) {
@@ -460,7 +533,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     const pending = readOutbox(preview).some(item => item.id === reason.id)
     if (pending) {
       tagOutbox(preview, reason.id, tagIds)
-      void flushOutbox(preview, sendResult, (matchId, ids) => client.annotate(matchId, ids)).catch(error => setMessage(messageOf(error)))
+      void flushOutbox(preview, sendResult, (matchId, ids) => client.annotate(matchId, ids), matchId => client.undo(matchId)).catch(error => setMessage(messageOf(error)))
     } else {
       const matchId = sentMatch(reason.id)
       if (matchId && tagIds.length) void client.annotate(matchId, tagIds).catch(error => setMessage(messageOf(error)))
@@ -566,6 +639,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         </section>
         <section className="brush-menu-group" data-menu-group="contest">
           <p className="brush-menu-label">Contest</p>
+          <button className="brush-menu-row" type="button" data-action="undo" disabled={!undoFrames.some(frame => frame.category === category)} onClick={undoLast}><MenuGlyph paths={['M8 7v4H4', 'M5 9a7 7 0 1 1-1 4']} /><span>Undo</span></button>
           <p className="brush-menu-label">Playing for</p>
           <div className="brush-menu-picks">
             {categories.map(item => (
@@ -723,6 +797,8 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           onTrash={trashOne}
           srcFor={srcFor}
           playing={`Playing for ${playingName}`}
+          canUndo={undoFrames.some(frame => frame.category === category)}
+          onUndo={undoLast}
           rankFor={id => standingOf(deck?.images || [], id)}
           celebrateId={moment && moment.kind !== 'top16' ? moment.imageId || null : null}
           notice={landscapeMatch ? (

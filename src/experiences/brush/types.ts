@@ -119,6 +119,7 @@ export type BrushApi = {
   unlock: (brushPin: string) => Promise<void>
   nextPair: () => Promise<PairResult>
   record: (input: RecordInput) => Promise<{ match_id: string | null }>
+  undo: (matchId: string) => Promise<void>
   annotate: (matchId: string, tagIds: string[]) => Promise<void>
   contest: (category?: string) => Promise<ContestState>
   saveContest: (state: ContestState, category?: string) => Promise<void>

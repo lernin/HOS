@@ -95,6 +95,7 @@ export function createPreviewClient(): BrushApi {
   const contests = new Map<string, ContestState>(DEFAULT_CATEGORIES.map(item => [item.id, { phase: 'qualifying', rounds: [], championId: null }]))
   const recentByCategory = new Map<string, string[]>(DEFAULT_CATEGORIES.map(item => [item.id, []]))
   const known = new Set<string>()
+  const undoable = new Map<string, { category: string, leftId: string, rightId: string, left: BrushImage, right: BrushImage, leftRating: CategoryRating | null, rightRating: CategoryRating | null }>()
 
   function categoryOf(category?: string) {
     return category && DEFAULT_CATEGORIES.some(item => item.id === category) ? category : 'overall'
@@ -244,6 +245,16 @@ export function createPreviewClient(): BrushApi {
       const right = images.find(image => image.id === input.rightId)
       if (!left || !right) return { match_id: null }
       const category = categoryOf(input.category)
+      const matchId = `preview-${crypto.randomUUID()}`
+      undoable.set(matchId, {
+        category,
+        leftId: left.id,
+        rightId: right.id,
+        left: { ...left },
+        right: { ...right },
+        leftRating: { ...(ratingRows.find(row => row.category === category && row.imageId === left.id) || freshRating(category, left.id)) },
+        rightRating: { ...(ratingRows.find(row => row.category === category && row.imageId === right.id) || freshRating(category, right.id)) },
+      })
       if (input.decision === 'pick' && input.winnerId) {
         if (category === 'overall') {
           const rated = glickoUpdate(
@@ -287,7 +298,23 @@ export function createPreviewClient(): BrushApi {
       }
       const recent = recentByCategory.get(category) || []
       recentByCategory.set(category, [...recent, [left.id, right.id].sort().join(':')].slice(-MATCH_MEMORY))
-      return { match_id: `preview-${crypto.randomUUID()}` }
+      return { match_id: matchId }
+    },
+    async undo(matchId) {
+      const prior = undoable.get(matchId)
+      if (!prior) return
+      undoable.delete(matchId)
+      const left = images.find(image => image.id === prior.leftId)
+      const right = images.find(image => image.id === prior.rightId)
+      if (left) Object.assign(left, prior.left)
+      if (right) Object.assign(right, prior.right)
+      if (prior.leftRating) replaceRating(prior.category, prior.leftId, prior.leftRating)
+      if (prior.rightRating) replaceRating(prior.category, prior.rightId, prior.rightRating)
+      const recent = recentByCategory.get(prior.category) || []
+      const pair = [prior.leftId, prior.rightId].sort().join(':')
+      const index = recent.lastIndexOf(pair)
+      if (index >= 0) recent.splice(index, 1)
+      recentByCategory.set(prior.category, recent)
     },
     async annotate() {},
     async contest(category) {

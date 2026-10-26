@@ -137,6 +137,9 @@ export function createLiveClient(labPin: string, brushPin: string): BrushApi {
       })
       return { match_id: data?.match_id ?? null }
     },
+    async undo(matchId) {
+      await call('brush_undo', { ...pinArgs, match_id: matchId })
+    },
     async annotate(matchId, tagIds) {
       await call('brush_annotate', { ...pinArgs, match_id: matchId, tag_ids: tagIds })
     },
