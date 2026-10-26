@@ -73,7 +73,7 @@ function screenOn(hit: HTMLElement, x: number, y: number) {
 }
 
 export function Matchup({
-  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, menu = null, notice = null, rankFor = () => null, celebrateId = null,
+  left, right, front, portrait, zoom, onZoom, onFlip, onPick, onTrash, srcFor, menu = null, notice = null, playing = '', rankFor = () => null, celebrateId = null,
 }: {
   left: BrushImage
   right: BrushImage
@@ -87,6 +87,7 @@ export function Matchup({
   srcFor: (image: BrushImage) => string | null
   menu?: ReactNode
   notice?: ReactNode
+  playing?: string
   rankFor?: (id: string) => Standing | null
   celebrateId?: string | null
 }) {
@@ -893,6 +894,7 @@ export function Matchup({
       {!portrait && (
         <aside className="brush-controls" data-gutter="controls">
           <div className="brush-controls-tools">{menu}</div>
+          {playing && <p className="brush-playing" data-playing>{playing}</p>}
           {matchCountNode()}
           {notice}
           <div className="brush-gutter-actions">
@@ -912,6 +914,7 @@ export function Matchup({
       )}
       {portrait && (
         <div className="brush-portrait-dock">
+          {playing && <p className="brush-playing" data-playing>{playing}</p>}
           {portraitLine(frontImage)}
           <div className="brush-footer">
             <button className="brush-choice" type="button" data-action="pick" onClick={event => choose(event, frontImage.id, 'clear')}>Pick</button>

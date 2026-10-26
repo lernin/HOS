@@ -1,5 +1,6 @@
-import { newEntrants, PLACEMENT_GAMES } from './pair.ts'
+import { FINALS_SIZE, newEntrants, PLACEMENT_GAMES } from './pair.ts'
 import { compareConservative } from './rank.ts'
+import { rankingProgress } from './ranking.ts'
 import type { BrushImage } from './types.ts'
 
 export const LEVEL_ORIGIN = 1500
@@ -65,10 +66,22 @@ export function matchMoments(before: BrushImage[], after: BrushImage[]): BrushMo
       notes.push({ kind: 'level', imageId: image.id, text: `Level up! ${label} · Level ${nextLevel}` })
     }
   }
-  const arrival = newEntrants(before, after)[0]
-  if (arrival) {
-    const label = arrival.country || arrival.name || 'A picture'
-    notes.push({ kind: 'top16', imageId: arrival.id, text: `${label} entered the top 16!` })
-  }
   return notes
+}
+
+export function holdTop16(input: { before: BrushImage[], after: BrushImage[], held: string[] }): { moments: BrushMoment[], held: string[] } {
+  const arrivals = newEntrants(input.before, input.after).map(image => image.id)
+  const field = input.after
+    .filter(image => !image.trashed && !image.archived && image.games >= PLACEMENT_GAMES)
+    .sort(compareConservative)
+    .slice(0, FINALS_SIZE)
+  const shown = new Set(field.map(image => image.id))
+  const pending = [...new Set([...input.held, ...arrivals])].filter(id => shown.has(id))
+  if (!pending.length || rankingProgress(input.after).settled < 100) return { moments: [], held: pending }
+  const moments = pending.map(id => {
+    const image = input.after.find(item => item.id === id)
+    const label = image?.country || image?.name || 'A picture'
+    return { kind: 'top16' as const, imageId: id, text: `${label} entered the top 16!` }
+  })
+  return { moments, held: [] }
 }

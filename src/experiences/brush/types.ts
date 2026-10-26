@@ -1,6 +1,8 @@
+import type { BrushCategory, CategoryRating } from './ranking'
 import type { UploadJobView, UploadSnapshot, UploadStatus } from './uploads'
 
 export type { UploadJobView, UploadSnapshot, UploadStatus }
+export type { BrushCategory, CategoryRating }
 
 export type FaceBox = { x: number, y: number, w: number, h: number }
 
@@ -108,6 +110,7 @@ export type RecordInput = {
   tagIds: string[]
   decidedMs?: number
   margin?: Margin
+  category?: string
 }
 
 export type BrushApi = {
@@ -117,13 +120,15 @@ export type BrushApi = {
   nextPair: () => Promise<PairResult>
   record: (input: RecordInput) => Promise<{ match_id: string | null }>
   annotate: (matchId: string, tagIds: string[]) => Promise<void>
-  contest: () => Promise<ContestState>
-  saveContest: (state: ContestState) => Promise<void>
+  contest: (category?: string) => Promise<ContestState>
+  saveContest: (state: ContestState, category?: string) => Promise<void>
   setPhash: (imageId: string, hash: string) => Promise<void>
   setFaceBox: (imageId: string, faceBox: FaceBox | null) => Promise<void>
   flagUnreadable: (imageId: string) => Promise<void>
-  leaderboard: () => Promise<BrushImage[]>
+  leaderboard: (category?: string) => Promise<BrushImage[]>
   library: () => Promise<BrushImage[]>
+  categories: () => Promise<BrushCategory[]>
+  ratings: () => Promise<CategoryRating[]>
   tags: () => Promise<BrushTag[]>
   insights: () => Promise<Insights>
   trashed: () => Promise<TrashImage[]>

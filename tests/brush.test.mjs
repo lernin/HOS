@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, replayPending, returnToBracket, startFinals } from '../src/experiences/brush/deck.ts'
-import { levelOf, levelProgress, matchMoments, standingOf } from '../src/experiences/brush/level.ts'
+import { holdTop16, levelOf, levelProgress, matchMoments, standingOf } from '../src/experiences/brush/level.ts'
+import { rankingLine, rankingProgress, scopeImages } from '../src/experiences/brush/ranking.ts'
 import { EYE_LINE, faceBoxFromPixels, faceEye, faceShift, faceZoom } from '../src/experiences/brush/face.ts'
 import { boxFromPixels, focusBox, UPPER_FACE } from '../src/experiences/brush/face-box.ts'
 import { countryFromPath, fileStem, groupKeys, seriesFromName } from '../src/experiences/brush/names.ts'
@@ -1428,4 +1429,84 @@ test('daily sync accepts only a bearer cron secret', () => {
   assert.doesNotMatch(source, /vercel-cron/i)
   assert.doesNotMatch(source, /user-agent/i)
   assert.doesNotMatch(source, /3476/)
+})
+
+test('ranking progress counts placed pictures and how settled the top 16 are', () => {
+  const settled = Array.from({ length: 16 }, (_, index) => image({ id: `s${index}`, name: `S${index}.jpg`, elo: 1800 - index, sigma: 90, games: 8 }))
+  const full = rankingProgress(settled)
+  assert.equal(full.placed, 16)
+  assert.equal(full.active, 16)
+  assert.equal(full.settled, 100)
+  assert.equal(rankingLine(full), 'Top 16: 100% settled · 16 of 16 placed')
+  const few = rankingProgress(settled.slice(0, 4))
+  assert.equal(few.settled, 25)
+  assert.notEqual(few.settled, 100)
+  const mixed = [
+    ...Array.from({ length: 10 }, (_, index) => image({ id: `t${index}`, name: `T${index}.jpg`, elo: 1700 - index, sigma: 80, games: 6 })),
+    ...Array.from({ length: 6 }, (_, index) => image({ id: `u${index}`, name: `U${index}.jpg`, elo: 1600 - index, sigma: 140, games: 6 })),
+    image({ id: 'new', name: 'New.jpg', elo: 1500, sigma: 350, games: 1 }),
+    image({ id: 'gone', name: 'Gone.jpg', elo: 1900, sigma: 40, games: 9, trashed: true }),
+  ]
+  const progress = rankingProgress(mixed)
+  assert.equal(progress.active, 17)
+  assert.equal(progress.placed, 16)
+  assert.equal(progress.settled, 63)
+  assert.equal(rankingLine({ placed: 140, active: 300, settled: 70 }), 'Top 16: 70% settled · 140 of 300 placed')
+})
+
+test('the top 16 toast waits until that field is settled', () => {
+  const field = Array.from({ length: 20 }, (_, index) => image({
+    id: `p${index}`,
+    name: `Lane_${index}.jpg`,
+    country: 'Japan',
+    elo: 1700 - index * 10,
+    sigma: 180,
+    games: 8,
+  }))
+  const newbie = image({ id: 'newbie', name: 'Newbie_01.jpg', country: 'Korea', elo: 2000, sigma: 40, games: 4 })
+  const before = [...field, newbie]
+  const after = before.map(item => item.id === 'newbie' ? { ...item, games: 5, wins: 5, elo: 2020 } : item)
+  const held = holdTop16({ before, after, held: [] })
+  assert.deepEqual(held.moments, [])
+  assert.deepEqual(held.held, ['newbie'])
+  const fell = after.map(item => item.id === 'newbie' ? { ...item, elo: 1000 } : item)
+  assert.deepEqual(holdTop16({ before: after, after: fell, held: held.held }), { moments: [], held: [] })
+  const settled = after.map(item => item.games >= 5 ? { ...item, sigma: 60 } : item)
+  const released = holdTop16({ before: after, after: settled, held: held.held })
+  assert.equal(released.moments.length, 1)
+  assert.equal(released.moments[0].text, 'Korea entered the top 16!')
+  assert.deepEqual(released.held, [])
+  const already = after.map(item => ({ ...item, sigma: 60 }))
+  const immediate = holdTop16({ before, after: already, held: [] })
+  assert.equal(immediate.moments[0].text, 'Korea entered the top 16!')
+  assert.deepEqual(immediate.held, [])
+})
+
+test('a category paints its own ratings and the migration leaves overall on the picture', () => {
+  const picture = image({ id: 'jp', name: 'Japan.jpg', elo: 1510, sigma: 200, games: 3, wins: 2, losses: 1 })
+  const face = { imageId: 'jp', category: 'face', elo: 1720, sigma: 70, volatility: 0.06, games: 12, wins: 9, losses: 3, close_wins: 0, close_losses: 0 }
+  const [scoped] = scopeImages([picture], 'face', [face])
+  assert.equal(scoped.elo, 1720)
+  assert.equal(scoped.games, 12)
+  assert.equal(picture.elo, 1510)
+  const [fresh] = scopeImages([picture], 'face', [])
+  assert.equal(fresh.elo, 1500)
+  assert.equal(fresh.games, 0)
+  const [overall] = scopeImages([picture], 'overall', [])
+  assert.equal(overall.elo, 1510)
+  assert.equal(overall.games, 3)
+  const sql = readFileSync(new URL('../supabase/migrations/20261026043000_brush_ranking_categories.sql', import.meta.url), 'utf8')
+  assert.match(sql, /brush_ratings/)
+  assert.match(sql, /brush_categories/)
+  assert.match(sql, /default 'overall'/)
+  assert.match(sql, /r\.category = 'overall'/)
+  assert.match(sql, /trashed_at = pg_catalog\.now\(\)/)
+  const backfill = sql.slice(0, sql.indexOf('create or replace function private.brush_seed_image_ratings'))
+  assert.doesNotMatch(backfill, /update public\.brush_images/)
+  assert.match(backfill, /update public\.brush_ratings/)
+  const brush = readFileSync(new URL('../src/experiences/Brush.tsx', import.meta.url), 'utf8')
+  assert.match(brush, /data-playing-for/)
+  assert.match(brush, /data-ranking/)
+  assert.match(brush, /Playing for/)
+  assert.match(readFileSync(new URL('../src/experiences/brush/level.ts', import.meta.url), 'utf8'), /entered the top 16!/)
 })

@@ -13,6 +13,7 @@ export type OutboxItem = {
   decidedMs: number | null
   matchId: string | null
   attempts: number
+  category?: string
 }
 
 const memory = new Map<string, OutboxItem[]>()

@@ -4,7 +4,8 @@ import { BrushError, createLiveClient, loadDriveImage, loadThumb } from './brush
 import { applyDecision, bootDeck, currentMatch, dropUnreadable, mergeLibrary, openPlacement, progressOf, rememberHash, replayPending, resumeQualifying, returnToBracket, startFinals, type Deck, type Decision } from './brush/deck'
 import { Matchup, REST_ZOOM, type Zoom } from './brush/Matchup'
 import { enqueueResult, flushOutbox, readOutbox, sentMatch, tagOutbox, type OutboxItem } from './brush/outbox'
-import { matchMoments, standingOf, type BrushMoment } from './brush/level'
+import { holdTop16, matchMoments, standingOf, type BrushMoment } from './brush/level'
+import { DEFAULT_CATEGORIES, OVERALL_CATEGORY, preferLocalRatings, rankingLine, rankingProgress, readPlayingCategory, rememberRatings, scopeImages, writePlayingCategory, type BrushCategory, type CategoryRating } from './brush/ranking'
 import { challengerCount, hashImage } from './brush/pair'
 import { createPreviewClient } from './brush/preview'
 import { BackfillOffer, DetailSheet, InsightsScreen, Leaderboard, LibraryScreen, PinScreen, ReasonSheet, UploadIcon, UploadProgressSheet } from './brush/Sheets'
@@ -88,11 +89,21 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   const [uploads, setUploads] = useState<UploadSnapshot>(EMPTY_UPLOADS)
   const [uploadOpen, setUploadOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [category, setCategory] = useState(readPlayingCategory)
+  const [categories, setCategories] = useState<BrushCategory[]>(DEFAULT_CATEGORIES)
   const addedRef = useRef(0)
   const startedRef = useRef(Date.now())
   const hashedRef = useRef(new Set<string>())
   const deckRef = useRef<Deck | null>(null)
   deckRef.current = deck
+  const libraryRef = useRef<BrushImage[]>([])
+  const ratingRowsRef = useRef<CategoryRating[]>([])
+  const categoryRef = useRef(category)
+  categoryRef.current = category
+  const heldTop = useRef<Record<string, string[]>>({})
+  const categoryToken = useRef(0)
+  const playingName = categories.find(item => item.id === category)?.label || 'Overall'
+  const rankingText = rankingLine(rankingProgress(deck?.images || board))
   const match = deck ? currentMatch(deck) : null
   const matchKey = match ? `${match.left.id}:${match.right.id}` : ''
   const qualify = deck ? progressOf(deck) : null
@@ -125,19 +136,77 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
     return () => { gone = true }
   }, [preview, pin])
 
+  function scopeLibrary(categoryId: string, rows: CategoryRating[]) {
+    const local = new Map((deckRef.current?.images || []).map(image => [image.id, image]))
+    const base = libraryRef.current.map(image => {
+      const current = local.get(image.id)
+      if (!current) return image
+      return {
+        ...image,
+        trashed: current.trashed || image.trashed,
+        trash_count: Math.max(current.trash_count, image.trash_count),
+        unreadable: current.unreadable || image.unreadable,
+        perceptual_hash: current.perceptual_hash || image.perceptual_hash,
+        face_box: image.face_box || current.face_box,
+        face_scanned: image.face_scanned || current.face_scanned,
+      }
+    })
+    return scopeImages(base, categoryId, rows)
+  }
+
   async function loadAll(api = client) {
-    const [nextTags, nextBoard, nextLibrary, nextInsights, nextTrashed, contest] = await Promise.all([
-      api.tags(), api.leaderboard(), api.library(), api.insights(), api.trashed(), api.contest(),
+    const cat = categoryRef.current
+    const [nextTags, nextLibrary, nextInsights, nextTrashed, contest, nextCategories, nextRatings] = await Promise.all([
+      api.tags(), api.library(), api.insights(), api.trashed(), api.contest(cat), api.categories(), api.ratings(),
     ])
     setTags(nextTags)
-    setBoard(nextBoard)
+    libraryRef.current = nextLibrary
     setLibrary(nextLibrary)
     setInsights(nextInsights)
     setTrashed(nextTrashed)
+    setCategories(nextCategories.length ? [...nextCategories].sort((a, b) => a.sort - b.sort) : DEFAULT_CATEGORIES)
+    const withDeck = deckRef.current ? rememberRatings(preferLocalRatings(ratingRowsRef.current, nextRatings), cat, deckRef.current.images) : preferLocalRatings(ratingRowsRef.current, nextRatings)
+    ratingRowsRef.current = withDeck
+    const scoped = scopeImages(nextLibrary, cat, withDeck)
+    setBoard(scoped)
     setDeck(current => {
-      const base = current ? mergeLibrary(current, nextLibrary) : bootDeck(nextLibrary, contest)
-      return current ? base : replayPending(base, readOutbox(preview))
+      const base = current ? mergeLibrary(current, scoped) : bootDeck(scoped, contest)
+      const pending = readOutbox(preview).filter(item => (item.category || OVERALL_CATEGORY) === cat)
+      return current ? base : replayPending(base, pending)
     })
+  }
+
+  async function openCategory(id: string) {
+    const token = categoryToken.current + 1
+    categoryToken.current = token
+    const [contest, remote] = await Promise.all([client.contest(id), client.ratings()])
+    if (token !== categoryToken.current || categoryRef.current !== id) return
+    const merged = preferLocalRatings(ratingRowsRef.current, remote)
+    ratingRowsRef.current = merged
+    const scoped = scopeLibrary(id, merged)
+    setBoard(scoped)
+    setDeck(bootDeck(scoped, contest))
+    setFront('left')
+    setZoom(REST_ZOOM)
+  }
+
+  function chooseCategory(id: string) {
+    if (id === categoryRef.current) {
+      setMenuOpen(false)
+      return
+    }
+    const current = deckRef.current
+    if (current) {
+      ratingRowsRef.current = rememberRatings(ratingRowsRef.current, categoryRef.current, current.images)
+      void client.saveContest({ phase: current.phase, rounds: current.rounds, championId: current.championId }, categoryRef.current).catch(error => setMessage(messageOf(error)))
+    }
+    writePlayingCategory(id)
+    categoryRef.current = id
+    setCategory(id)
+    setMenuOpen(false)
+    setZoom(REST_ZOOM)
+    setFront('left')
+    void openCategory(id).catch(error => setMessage(messageOf(error)))
   }
 
   function sendResult(item: OutboxItem) {
@@ -151,6 +220,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       tagIds: [],
       decidedMs: item.decidedMs ?? undefined,
       margin: item.margin,
+      category: item.category || OVERALL_CATEGORY,
     })
   }
 
@@ -277,14 +347,17 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
   }
 
   function persistContest(next: Deck) {
-    void client.saveContest({ phase: next.phase, rounds: next.rounds, championId: next.championId }).catch(error => setMessage(messageOf(error)))
+    void client.saveContest({ phase: next.phase, rounds: next.rounds, championId: next.championId }, categoryRef.current).catch(error => setMessage(messageOf(error)))
   }
 
   function commit(decision: Decision) {
     const current = deckRef.current
     if (!current) return
     const next = applyDecision(current, decision)
-    setMoments(matchMoments(current.images, next.images))
+    const cat = categoryRef.current
+    const release = holdTop16({ before: current.images, after: next.images, held: heldTop.current[cat] || [] })
+    heldTop.current[cat] = release.held
+    setMoments([...matchMoments(current.images, next.images), ...release.moments])
     setDeck(next)
     setZoom(REST_ZOOM)
     if (decision.kind === 'trash' && decision.trashLeft !== decision.trashRight) setFront(decision.trashLeft ? 'left' : 'right')
@@ -302,6 +375,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
       decidedMs: Date.now() - startedRef.current,
       matchId: null,
       attempts: 0,
+      category: categoryRef.current,
     }
     enqueueResult(preview, item)
     setPickedTags([])
@@ -492,6 +566,13 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
         </section>
         <section className="brush-menu-group" data-menu-group="contest">
           <p className="brush-menu-label">Contest</p>
+          <p className="brush-menu-label">Playing for</p>
+          <div className="brush-menu-picks">
+            {categories.map(item => (
+              <button key={item.id} type="button" data-playing-for data-category={item.id} aria-pressed={item.id === category} onClick={() => chooseCategory(item.id)}>{item.label}</button>
+            ))}
+          </div>
+          <p className="brush-menu-note" data-ranking>{rankingText}</p>
           {deck?.phase === 'qualifying' && qualify && (
             <p className="brush-menu-note" data-qualify>
               <span>{`Qualifying ${qualify.percent}%`}</span>
@@ -636,6 +717,7 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           onPick={pick}
           onTrash={trashOne}
           srcFor={srcFor}
+          playing={`Playing for ${playingName}`}
           rankFor={id => standingOf(deck?.images || [], id)}
           celebrateId={moment && moment.kind !== 'top16' ? moment.imageId || null : null}
           notice={landscapeMatch ? (
@@ -667,7 +749,16 @@ export function Brush({ pin, onExit, preview = false }: { pin: string, onExit: (
           <button className="brush-upload" type="button" onClick={() => setScreen('library')}>Open library</button>
         </div>
       )}
-      {phase === 'app' && screen === 'board' && <Leaderboard images={deck?.images || board} srcFor={srcFor} />}
+      {phase === 'app' && screen === 'board' && (
+        <Leaderboard
+          images={deck?.images || board}
+          srcFor={srcFor}
+          categories={categories}
+          category={category}
+          ranking={rankingText}
+          onCategory={chooseCategory}
+        />
+      )}
       {phase === 'app' && screen === 'love' && (
         <InsightsScreen
           insights={insights}

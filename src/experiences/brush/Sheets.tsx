@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { levelOf } from './level'
 import { PLACEMENT_GAMES } from './pair'
 import { compareConservative } from './rank'
-import type { BrushAttribute, BrushImage, BrushTag, Insights, TurnOffs, UploadSnapshot } from './types'
+import type { BrushAttribute, BrushCategory, BrushImage, BrushTag, Insights, TurnOffs, UploadSnapshot } from './types'
 import { suggestRecipe } from './recipe'
 
 export function ReasonSheet({
@@ -69,11 +69,28 @@ export function BackfillOffer({ label, onSkip, onRun }: { label: string, onSkip:
   )
 }
 
-export function Leaderboard({ images, srcFor }: { images: BrushImage[], srcFor: (image: BrushImage) => string | null }) {
+export function Leaderboard({
+  images, srcFor, categories = [], category = 'overall', ranking = '', onCategory,
+}: {
+  images: BrushImage[]
+  srcFor: (image: BrushImage) => string | null
+  categories?: BrushCategory[]
+  category?: string
+  ranking?: string
+  onCategory?: (id: string) => void
+}) {
   const ranked = [...images].sort(compareConservative)
   return (
-    <div className="brush-scroll" data-screen="board">
+    <div className="brush-scroll" data-screen="board" data-category={category}>
       <h2>Leaderboard</h2>
+      {categories.length > 0 && (
+        <div className="brush-board-picks">
+          {categories.map(item => (
+            <button key={item.id} type="button" data-playing-for data-category={item.id} aria-pressed={item.id === category} onClick={() => onCategory?.(item.id)}>{item.label}</button>
+          ))}
+        </div>
+      )}
+      {ranking && <p className="brush-ranking" data-ranking>{ranking}</p>}
       {ranked.map((image, index) => (
         <div className="brush-row" key={image.id}>
           <span>{index + 1}. {image.name}<br /><small className="brush-muted">{image.country || 'No country'}{image.trashed ? ' · trashed' : ''}</small></span>
