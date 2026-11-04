@@ -1,4 +1,4 @@
-import { ATRIUM, PLAYER_RADIUS, colliders, glazing, partitions, pools, outlines, levels,
+import { ATRIUM, PLAYER_RADIUS, colliders, glazing, partitions, pools, outlines, levels, insideWestCourt,
   contains, segmentDistance, supportedHeight, stairHeight, stairPoint, groundHeight, structuralColumns, supports, palms,
   type WorldPoint, type PointXZ } from './layout'
 
@@ -37,7 +37,7 @@ function solid(p: WorldPoint, radius: number): boolean {
   return false
 }
 export function isWalkable(p: WorldPoint, radius=PLAYER_RADIUS): boolean {
-  if(!finite(p)||solid(p,radius))return false
+  if(!finite(p)||solid(p,radius)||(p.y>19.7&&insideWestCourt(p)))return false
   const y=supportedHeight(p,p.y)
   if(y===null||Math.abs(y-p.y)>.28)return false
   for(const [dx,dz] of [[radius,0],[-radius,0],[0,radius],[0,-radius]]) {

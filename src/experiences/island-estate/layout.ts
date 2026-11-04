@@ -52,10 +52,24 @@ export const groundAnchors = [
   [31,24],[25,31],[14,30],[5,23],[-5,22],[-18,30],[-31,28],
   [-40,18],[-39,8],[-44,-1],[-42,-15],[-29,-26],[-14,-31],
 ].map(pt)
+// The section and plans show two projecting wings around a deep front atrium.
+// Reusing the ground footprint upstairs made three identical stacked plates.
+const galleryAnchors = [
+  [0,-34],[18,-32],[35,-25],[44,-15],[45,-3],[42,8],
+  [35,19],[27,25],[18,20],[13,11],[9,7],[0,9],[-9,6],
+  [-14,14],[-23,23],[-32,26],[-41,17],[-41,7],
+  [-45,-1],[-42,-15],[-29,-26],[-14,-31],
+].map(pt)
+const roofAnchors = [
+  [0,-35],[20,-32],[38,-25],[47,-15],[48,0],[47,18],
+  [39,25],[29,27],[19,23],[13,13],[10,8],[6,5],
+  [0,4],[-7,6],[-13,11],[-21,22],[-34,25],[-44,18],
+  [-47,4],[-47,-12],[-34,-26],[-17,-33],
+].map(pt)
 export const outlines: PointXZ[][] = [
   curve(groundAnchors.map(p=>({x:p.x*.9,z:(p.z+7)*.9-7}))),
-  curve(groundAnchors.map(p=>({x:p.x*.96,z:(p.z+7)*.96-7}))),
-  curve(groundAnchors.map(p=>({x:p.x*(p.x>0?1.03:.99),z:(p.z+7)*.99-7}))),
+  curve(galleryAnchors),
+  curve(roofAnchors),
 ]
 export const islandOutline = curve([
   [-38,-52],[10,-56],[46,-38],[61,-13],[52,8],[42,27],
@@ -82,10 +96,16 @@ export const pools: Pool[] = [
   {id:'atrium-basin',y:8,outline:circle(ATRIUM,2.6),center:ATRIUM,depth:.45},
   {id:'garden-pool',y:8,outline:circle({x:-26,z:17},4.8,6.6),center:{x:-26,z:17},depth:1.1},
   {id:'infinity-pool',y:20,outline:curve([
-    [18,-4],[31,-4],[37,2],[36,11],[28,20],[15,22],[6,18],
-    [5,13],[8,11],[14,14],[22,13],[27,7],[25,2],[17,0],
-  ].map(pt),128),center:{x:31,z:7},depth:1.2},
+    [18,-4],[31,-4],[40,0],[43,9],[41,18],[36,24],[28,25],
+    [20,22],[16,17],[19,13],[26,13],[32,9],[29,3],[20,1],
+  ].map(pt),128),center:{x:36,z:12},depth:1.2},
 ]
+// Open-air west court: a lower garden visible through the upper wing roof.
+export const westCourt = {center:{x:-28,z:-10},rx:8.4,rz:6.5}
+export const westCourtOpening = circle(westCourt.center,westCourt.rx,westCourt.rz)
+export function insideWestCourt(p:PointXZ) {
+  return Math.hypot((p.x-westCourt.center.x)/westCourt.rx,(p.z-westCourt.center.z)/westCourt.rz)<1
+}
 export const stair = { radius:7.8, width:2.8, start:-Math.PI*.7, sweep:Math.PI, risers:36 }
 export function stairPoint(flight: 0 | 1,t: number,r=stair.radius): WorldPoint {
   const a=stair.start+flight*stair.sweep+clamp(t,0,1)*stair.sweep
@@ -132,7 +152,7 @@ export function groundHeight(p: PointXZ): number | null {
 
 export type Collider = {id:string; y:number;height:number;center:PointXZ;radius?:number;outline?:PointXZ[]}
 export const planters: Collider[] = [
-  {id:'west-roof-garden',y:20,height:.7,center:{x:-26,z:-12},radius:5.5},
+  {id:'west-roof-garden',y:14,height:.7,center:westCourt.center,radius:5.2},
   {id:'north-roof-garden',y:20,height:.65,center:{x:-16,z:-24},radius:2.1},
   {id:'east-pool-island',y:20,height:.65,center:{x:17,z:7},radius:2.3},
   {id:'west-arrival-garden',y:8,height:.6,center:{x:-15,z:16},radius:2.3},
@@ -140,7 +160,7 @@ export const planters: Collider[] = [
   ...[[-27,-25,20],[-35,-15,20],[-19,-28,20],[23,-23,20],[33,-17,20],[-36,18,8],[35,19,8]].map(([x,z,y],i)=>({id:`terrace-planter-${i}`,y,height:.45,center:{x,z},radius:1.12})),
 ]
 export const roofBeds:Collider[]=[
-  {id:'west-sky-garden-bed',y:20,height:.55,center:{x:-29,z:-19},outline:curve([[-41,-13],[-33,-25],[-20,-27],[-15,-24],[-20,-19],[-30,-18],[-35,-8],[-40,-5]].map(pt),72)},
+  {id:'west-sky-garden-bed',y:20,height:.55,center:{x:-29,z:-25},outline:curve([[-42,-20],[-35,-28],[-20,-30],[-14,-25],[-20,-23],[-29,-25],[-36,-19],[-41,-17]].map(pt),72)},
   {id:'east-sky-garden-bed',y:20,height:.55,center:{x:29,z:-20},outline:curve([[18,-28],[31,-25],[39,-15],[39,-9],[34,-8],[30,-17],[23,-20],[17,-23]].map(pt),72)},
   {id:'south-sky-garden-bed',y:20,height:.55,center:{x:-26,z:22},outline:circle({x:-26,z:22},5.1,3.6,48)},
 ]
@@ -209,7 +229,7 @@ export function floorCandidates(p: PointXZ): number[] {
   const candidates:number[]=[]
   const y=groundHeight(p);if(y!==null)candidates.push(y)
   for(const level of [1,2] as const) {
-    if(contains(p,outlines[level])&&Math.hypot(p.x,p.z+7)>=ATRIUM.radius) candidates.push(levels[level].y)
+    if(contains(p,outlines[level])&&Math.hypot(p.x,p.z+7)>=ATRIUM.radius&&!(level===2&&insideWestCourt(p))) candidates.push(levels[level].y)
   }
   for(const landing of landings)if(contains(p,landing.outline))candidates.push(landing.y)
   for(const flight of [0,1] as const){const h=stairHeight(p,flight);if(h!==null)candidates.push(h)}
@@ -225,7 +245,7 @@ export function supportedHeight(p: PointXZ, nearY:number): number | null {
   let best:number|null=null
   const accept=(h:number)=>{if(h<=nearY+.25&&h>=nearY-.4&&(best===null||h>best))best=h}
   // Avoid testing the island and other storeys for every step on an upper deck.
-  for(const level of [1,2] as const)if(levels[level].y<=nearY+.25&&levels[level].y>=nearY-.4&&Math.hypot(p.x,p.z+7)>=ATRIUM.radius&&contains(p,outlines[level]))accept(levels[level].y)
+  for(const level of [1,2] as const)if(levels[level].y<=nearY+.25&&levels[level].y>=nearY-.4&&Math.hypot(p.x,p.z+7)>=ATRIUM.radius&&contains(p,outlines[level])&&!(level===2&&insideWestCourt(p)))accept(levels[level].y)
   for(const landing of landings)if(landing.y<=nearY+.25&&landing.y>=nearY-.4&&contains(p,landing.outline))accept(landing.y)
   if(nearY<=8.4){const h=groundHeight(p);if(h!==null)accept(h)}
   return best
@@ -240,13 +260,13 @@ export const destinations: {id:string;label:string;level:Level;position:WorldPoi
   {id:'first-gallery',label:'Atrium gallery',level:1,position:{x:3,y:14,z:5},yaw:Math.PI},
   {id:'primary-suite',label:'Primary suite',level:1,position:{x:-27,y:14,z:-4},yaw:-1.8},
   {id:'sky-garden',label:'Rooftop sky garden',level:2,position:{x:-14,y:20,z:-14},yaw:-1.6},
-  {id:'rooftop-pool',label:'Infinity pool terrace',level:2,position:{x:18,y:20,z:25},yaw:Math.PI},
+  {id:'rooftop-pool',label:'Infinity pool terrace',level:2,position:{x:38,y:20,z:24},yaw:Math.PI},
   {id:'observation',label:'Observation pavilion',level:2,position:{x:0,y:20,z:-18},yaw:Math.PI},
   {id:'beach',label:'Private beach',level:0,position:{x:-32,y:terrainHeight({x:-32,z:41}),z:41},yaw:1.8},
   {id:'dock',label:'Yacht dock',level:0,position:{x:62,y:dock.y,z:108},yaw:0},
 ]
 export const viewpoints = [
-  {id:'aerial',label:'Island aerial',position:{x:78,y:68,z:108},target:{x:0,y:11,z:5}},
+  {id:'aerial',label:'Island aerial',position:{x:78,y:49,z:108},target:{x:0,y:13,z:5}},
   {id:'front',label:'Front elevation',position:{x:13,y:21,z:109},target:{x:0,y:14,z:-3}},
   {id:'roof',label:'Rooftop sky garden',position:{x:63,y:49,z:56},target:{x:8,y:20,z:0}},
   {id:'wing',label:'Floating ocean wing',position:{x:65,y:26,z:25},target:{x:20,y:15,z:-5}},

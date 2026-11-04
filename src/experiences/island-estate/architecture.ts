@@ -1,5 +1,5 @@
 import * as T from 'three'
-import { ATRIUM, levels, outlines, pools, circle, stair, stairPoint, landings, glazing, partitions, planters, roofBeds, supports, structuralColumns, pavilionCenter, crownHeight, crownProfile, type PointXZ } from './layout'
+import { ATRIUM, levels, outlines, pools, circle, stair, stairPoint, landings, glazing, partitions, planters, roofBeds, supports, structuralColumns, pavilionCenter, westCourtOpening, type PointXZ } from './layout'
 import { type Kit, slabGeometry, surface } from './geometry'
 import { sculpturalShell } from './sculpture'
 
@@ -13,13 +13,23 @@ function perimeter(kit:Kit,p:PointXZ[],y:number,height=1.12,gaps:(p:PointXZ)=>bo
   }
 }
 function crown(kit:Kit) {
-  const v:number[]=[],idx:number[]=[],n=128
-  for(let i=0;i<=n;i++) {
-    const a=i/n*Math.PI*2,y=crownHeight(a)
-    for(const [r,h] of crownProfile)v.push(Math.sin(a)*r,y+h,ATRIUM.z+Math.cos(a)*r)
-    if(i){const k=i*5;for(let j=0;j<5;j++){const next=(j+1)%5;idx.push(k+j-5,k+next-5,k+j,k+j,k+next-5,k+next)}}
+  // The roof skin forms the oculus itself. Its inner lip is lifted and its
+  // tall curved glazing stays visible from the ocean-facing elevation.
+  const n=96,lip=[]
+  for(let i=0;i<n;i++) {
+    const a=i/n*Math.PI*2
+    const crest=5.6+1.5*Math.cos(a-Math.PI)+.6*Math.sin(3*a+.2)
+    lip.push({x:ATRIUM.x+Math.sin(a)*(ATRIUM.radius+.35),y:20+crest,z:ATRIUM.z+Math.cos(a)*(ATRIUM.radius+.35)})
   }
-  kit.add(surface(v,idx),'shell')
+  kit.tube(lip,.07,'shell',true,192,8)
+  for(let i=0;i<n;i++) {
+    const a=i/n*Math.PI*2
+    const front=Math.abs(Math.atan2(Math.sin(a),Math.cos(a)))<1.2
+    if(!front||Math.abs(Math.atan2(Math.sin(a),Math.cos(a)))<.18)continue
+    const p=lip[i],q=lip[(i+1)%n]
+    kit.add(surface([p.x,8.1,p.z,q.x,8.1,q.z,p.x,p.y-.18,p.z,q.x,q.y-.18,q.z],[0,1,2,1,3,2]),'glass')
+    if(i%4===0)kit.cylinder({x:p.x,y:8.1,z:p.z},{x:p.x,y:p.y-.15,z:p.z},.045,.035,'bronze',6)
+  }
   const cap=circle(pavilionCenter,14.6,7.6,96)
   kit.add(slabGeometry(cap,[],.24,.18),'shell',{x:0,y:23.8,z:0})
   kit.tube(cap.map(p=>({...p,y:23.65})),.028,'glow',true)
@@ -112,6 +122,7 @@ export function architecture(kit:Kit) {
   for(const level of levels) {
     const holes=pools.filter(p=>p.y===level.y).map(p=>p.outline)
     if(level.id>0)holes.push(circle(ATRIUM,ATRIUM.radius))
+    if(level.id===2)holes.push(westCourtOpening)
     kit.floor(outlines[level.id],holes,level.y,.58,level.id===2?'stone':'stone')
     shellEdges(kit,outlines[level.id],level.y,level.id)
   }

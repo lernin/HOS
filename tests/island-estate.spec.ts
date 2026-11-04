@@ -44,9 +44,10 @@ test('entrance, both wings, first-floor gallery, roof and dock are connected', (
     }
   }
 })
-test('upper floors cannot fall into the atrium or enter the rooftop pool', () => {
+test('upper floors cannot fall into the atrium or garden court or enter the rooftop pool', () => {
   assert.equal(isWalkable({x:0,y:14,z:-7}), false)
   assert.equal(isWalkable({x:0,y:20,z:-7}), false)
+  assert.equal(isWalkable({x:-28,y:20,z:-10}), false)
   for(const pool of pools) assert.equal(isWalkable({x:pool.center.x,y:pool.y,z:pool.center.z}),false)
   const edge = {x:42,y:20,z:1}
   if(isWalkable(edge)) {
@@ -78,16 +79,16 @@ test('the real-time follower reaches all ordered destinations at 16 ms frames',(
     assert.ok(distance(p,b.position)<.2,`${a.id} → ${b.id} arrives on the correct floor`)
   }
 })
-test('the rooftop crown clears a standing visitor and faces outward',()=>{
+test('the connected shell clears the upper gallery and its roof faces skyward',()=>{
   const scene=new T.Scene(),kit=createKit(scene)
   try {
     architecture(kit);kit.finish();scene.updateMatrixWorld(true)
     kit.material('shell').side=T.DoubleSide
-    const up=new T.Raycaster(new T.Vector3(0,20.04,6),new T.Vector3(0,1,0))
+    const up=new T.Raycaster(new T.Vector3(10.8,20.04,-7),new T.Vector3(0,1,0))
     const hit=up.intersectObjects(kit.root.children,false).find(h=>(h.object as T.Mesh).material===kit.material('shell'))
-    assert.ok(hit,'crown is present above the rooftop')
+    assert.ok(hit,'canopy spans the glazed atrium beside its open centre')
     assert.ok(hit.point.y-20>2.35,`standing clearance is ${hit.point.y-20} m`)
-    const down=new T.Raycaster(new T.Vector3(0,35,6),new T.Vector3(0,-1,0))
+    const down=new T.Raycaster(new T.Vector3(10.8,35,-7),new T.Vector3(0,-1,0))
     const top=down.intersectObjects(kit.root.children,false).find(h=>(h.object as T.Mesh).material===kit.material('shell'))
     assert.ok(top.face.normal.y>0,'crown top faces the sky')
   }finally{kit.dispose()}
