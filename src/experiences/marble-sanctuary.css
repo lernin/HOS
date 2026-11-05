@@ -1,0 +1,56 @@
+.ms{position:fixed;inset:0;z-index:20;overflow:hidden;background:#bedac8;color:#19382c;font-family:ui-sans-serif,system-ui,-apple-system,sans-serif;isolation:isolate}
+.ms *{box-sizing:border-box}
+.ms button,.ms input,.ms textarea{font:inherit}
+.ms button{cursor:pointer}
+.ms-canvas{position:absolute;inset:0;z-index:0}
+.ms-canvas canvas{display:block;width:100%;height:100%}
+.ms-sky{position:absolute;inset:0;pointer-events:none;z-index:1;background:linear-gradient(180deg,rgba(15,61,49,.18),transparent 32%,transparent 70%,rgba(15,46,36,.19))}
+.ms-header{position:absolute;left:clamp(12px,3vw,36px);right:clamp(12px,3vw,36px);top:max(12px,env(safe-area-inset-top));z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;color:#f9fff4;text-shadow:0 1px 14px #26483a80}
+.ms-header>div{display:grid;gap:2px}
+.ms-header span{font-size:10px;letter-spacing:.18em;font-weight:700}
+.ms-header strong{font-family:Georgia,serif;font-size:clamp(16px,2vw,23px);font-weight:400}
+.ms-header button{color:inherit;border:1px solid #ffffff7d;background:#193d3385;backdrop-filter:blur(12px);border-radius:99px;padding:10px 15px;white-space:nowrap;text-shadow:none}
+.ms-header button:disabled{opacity:.45}
+.ms-welcome,.ms-start,.ms-dialog{z-index:4;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,calc(100vw - 32px));border-radius:28px;background:linear-gradient(145deg,rgba(252,255,247,.98),rgba(239,249,236,.94));border:1px solid #ffffffea;box-shadow:0 30px 100px #183b3b5e;padding:clamp(25px,5vw,45px);text-align:center;max-height:calc(100dvh - 115px);overflow:auto}
+.ms-welcome .ms-kicker{font-size:11px;letter-spacing:.18em;color:#537664;font-weight:800}
+.ms-welcome h1{font-family:Georgia,serif;font-weight:400;font-size:clamp(34px,5vw,55px);line-height:1.07;letter-spacing:-.03em;margin:20px 0}
+.ms-welcome p,.ms-start p,.ms-dialog p{line-height:1.6;font-size:15px;color:#4c675a}
+.ms-welcome a{display:block;color:#377a60;text-decoration:underline;margin:17px auto}
+.ms-welcome small{display:block;font-size:12px;line-height:1.5;color:#6d8378}
+.ms-primary{display:inline-flex;align-items:center;justify-content:center;position:relative;border:0;border-radius:99px;background:#2f715c;color:white;min-height:48px;padding:12px 25px;font-weight:650;text-decoration:none;cursor:pointer;box-shadow:0 7px 24px #224c3840}
+.ms-primary input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.ms-topnote{position:absolute;z-index:3;top:77px;left:clamp(15px,3vw,36px);display:flex;gap:10px;align-items:center;font-size:12px;color:white;background:#244b398e;border-radius:20px;padding:7px 12px;max-width:calc(100vw - 30px)}
+.ms-topnote span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45vw}
+.ms-topnote button{background:none;border:0;color:white;text-decoration:underline}
+.ms-start h2,.ms-dialog h2,.ms-editor h2{font-family:Georgia,serif;font-size:28px;font-weight:400;margin:0 0 12px}
+.ms-start button{margin:5px}
+.ms-start button:not(.ms-primary){border:1px solid #9fb6a5;color:#35634f;background:transparent;border-radius:50px;padding:12px 22px}
+.ms-controls{position:absolute;inset:0;z-index:3;pointer-events:none}
+.ms-help{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(25px + env(safe-area-inset-bottom));color:#fafff8;background:#1f483ab3;border-radius:15px;padding:10px 17px;text-align:center;font-size:12px;line-height:1.5;pointer-events:none}
+.ms-talk{position:absolute;left:50%;transform:translateX(-50%);bottom:115px;min-width:180px;max-width:80vw;border:1px solid #fff9;background:#fffef3ed;color:#2e654e;border-radius:50px;padding:12px 20px;font-weight:700;pointer-events:auto}
+.ms-pad{position:absolute;left:clamp(20px,5vw,70px);bottom:calc(24px + env(safe-area-inset-bottom));width:114px;height:114px;border-radius:50%;border:2px solid #ffffffad;background:#1c52405e;backdrop-filter:blur(4px);color:#fffbe0;display:grid;place-items:center;font-size:30px;touch-action:none;user-select:none;pointer-events:auto}
+.ms-pad span{pointer-events:none}
+.ms-pause{position:absolute;right:clamp(20px,5vw,70px);bottom:calc(28px + env(safe-area-inset-bottom));border:1px solid #fff9;border-radius:50px;padding:11px 18px;background:#1c5240bb;color:white;pointer-events:auto}
+.ms-editor{position:absolute;z-index:4;right:12px;top:76px;bottom:12px;width:min(350px,calc(100vw - 24px));overflow:auto;border-radius:22px;background:#f5fbf0f5;color:#29473a;box-shadow:0 15px 65px #20412c77;padding:22px}
+.ms-editor p{font-size:13px;line-height:1.55;color:#587365}
+.ms-editor h3{font-size:13px;text-transform:uppercase;letter-spacing:.13em;margin:20px 0 10px}
+.ms-row{display:flex;gap:8px}
+.ms-row button,.ms-entries button,.ms-fields button{background:#fff;border:1px solid #bfcfc0;border-radius:12px;color:#315a49;padding:10px}
+.ms-row button[aria-pressed=true],.ms-entries button.chosen{background:#d9ecda;border-color:#448467}
+.ms-entries{display:grid;gap:7px;max-height:144px;overflow:auto}
+.ms-entries button{text-align:left}
+.ms-fields{display:grid;gap:12px;margin-top:18px}
+.ms-fields label,.ms-dialog label{display:grid;gap:6px;text-align:left;font-size:12px;font-weight:700}
+.ms-fields input,.ms-fields textarea,.ms-dialog input{border-radius:10px;border:1px solid #b5cbbb;background:#fff;color:#254839;padding:10px;width:100%}
+.ms-hint{font-weight:700;color:#2e7255!important}
+.ms-notice{border-top:1px solid #d4dfd5;padding-top:15px}
+.ms-editor>.ms-primary{width:100%;margin-top:15px}
+.ms-dialog{max-width:450px}
+.ms-dialog span{font-size:10px;font-weight:700;letter-spacing:.16em;color:#6c8f6c}
+.ms-dialog label{margin:20px 0 14px}
+.ms-dialog button{margin:5px}
+.ms-dialog button:not(.ms-primary){background:none;border:0;text-decoration:underline;color:#527562}
+.ms-error{position:absolute;z-index:7;left:50%;bottom:24px;transform:translateX(-50%);background:#fff6ed;border:1px solid #ca8e77;color:#6d2a26;border-radius:15px;padding:12px 15px;max-width:90vw;font-size:13px}
+.ms-error button{border:0;background:none;text-decoration:underline;color:inherit;margin-left:10px}
+@media(max-width:640px){.ms-header{top:max(8px,env(safe-area-inset-top))}.ms-header strong{font-size:15px}.ms-header span{font-size:9px}.ms-header button{padding:8px 11px;font-size:12px}.ms-topnote{top:64px}.ms-help{left:auto;right:15px;bottom:86px;transform:none;text-align:right;font-size:10px;max-width:48vw}.ms-editor{top:66px}.ms-welcome{padding:25px}.ms-welcome h1{font-size:37px}.ms-pad{width:106px;height:106px}.ms-talk{bottom:160px}}
+@media(prefers-reduced-motion:reduce){.ms *{animation:none!important;transition:none!important}}
