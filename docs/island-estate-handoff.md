@@ -68,3 +68,13 @@ Next: compare the new viewpoints side by side with the original image, then tune
 the primary silhouette. Finish the known terrain-route/follower issue and real-phone
 controls verification after massing is approved. Merge and production release
 require separate approval. Preview URL and exact commit belong in draft PR #204.
+
+## November 5 — atrium and island iteration
+
+New isolated branch: `feat/island-estate-atrium-20261104`, based on the reference-shell branch, with no production or database work. Ashley set a roughly 85% visual target for the **major forms**; the review gate and current misses are recorded in `docs/island-estate-fidelity-target.md`.
+
+The hall opening now flares toward the ocean in plan. Its front glazing reaches from the ground to the lifted roof edge, and the front roof fascia/guardrail is interrupted so the volume reads from outside. Floor collision and route graph use the same enlarged opening; the first-floor gallery destination was moved to real floor. The island shore recedes below the east wing, the beach cove is smaller, and a connected broken cliff face sits below the house. The broad smooth roof and wing section profiles still visibly miss the reference. Do not call this 85% complete.
+
+The portable GLB export now includes the actual island terrain, palms, rocks, paths and dock, along with the architecture. A Blender import of that GLB is an editable mesh handoff. The browser scene's separate animated ocean surface is not in the GLB.
+
+`npm run build` passed; `node --test tests/island-estate.test.mjs` passed 7/7 after the beach-ramp height seam was corrected, including all ordered route followers. Final visual-only canopy/camera changes were built and rendered; no second all-route run is claimed. The matched aerial/front/atrium/full-island screenshots were inspected locally. Next: sculpt the roof folds and both wing profiles, check the same views again, and verify the resulting navigation before advancing to detail work.

@@ -56,12 +56,13 @@ function rock(kit:Kit,p:WorldPoint,rx:number,ry:number,rz:number,seed:number) {
 }
 export function landscape(kit:Kit) {
   const vertices:number[]=[],indices:number[]=[],colors:number[]=[],nx=108,nz=118
-  const green=new T.Color('#76805a'),stone=new T.Color('#8c8874'),sand=new T.Color('#dfcfaa')
+  const green=new T.Color('#526c4e'),stone=new T.Color('#827e6e'),sand=new T.Color('#dfcfaa')
   for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++) {
     const p={x:-68+i/nx*146,z:-59+j/nz*164},inside=contains(p,islandOutline),height=contains(p,outlines[0])?7.32:inside?terrainHeight(p):-.45
     vertices.push(p.x,height,p.z)
-    const d=boundaryDistance(p,islandOutline),beach=p.x<-10&&p.z>28&&height<2.2
-    const color=(beach?sand:d<9?stone:green).clone().multiplyScalar(.88+rand(i*143+j)*.24)
+    const d=boundaryDistance(p,islandOutline),beach=p.x>-49&&p.x<-9&&p.z>29&&p.z<53&&height<2.2
+    const cliff=d<12||(!contains(p,outlines[0])&&p.z<35&&p.z>-31&&d<25&&height<7.7)
+    const color=(beach?sand:cliff?stone:green).clone().multiplyScalar(.88+rand(i*143+j)*.24)
     colors.push(color.r,color.g,color.b)
     if(i&&j) {
       const k=j*(nx+1)+i
@@ -81,12 +82,45 @@ export function landscape(kit:Kit) {
   kit.keep(terrain)
   // Dispose the terrain's independent vertex-color material with its owner.
   const original=kit.dispose;kit.dispose=()=>{mat.dispose();original()}
+  // A connected, broken cliff face under the mansion. The earlier shoreline
+  // was a smooth green slope with separate rocks sitting at sea level.
+  const cliffV:number[]=[],cliffI:number[]=[]
+  for(let i=0;i<islandOutline.length;i++) {
+    const a=islandOutline[i],b=islandOutline[(i+1)%islandOutline.length]
+    if(a.z>42||b.z>42||(a.x<-18&&a.z>26))continue
+    const section=(p:{x:number;z:number},seed:number)=>{
+      const toward={x:-p.x,z:3-p.z},length=Math.hypot(toward.x,toward.z)||1
+      const inward=(d:number)=>({x:p.x+toward.x/length*d,z:p.z+toward.z/length*d})
+      const crest=inward(5),top=terrainHeight(crest),ridge=inward(2.7),toe=inward(-.8)
+      return [
+        {x:crest.x,y:top-.12,z:crest.z},
+        {x:ridge.x+(rand(seed)*2-1)*.7,y:Math.max(1.3,top*.64+(rand(seed+31)*2-1)*1.1),z:ridge.z},
+        {x:toe.x,y:.25+rand(seed+57)*.65,z:toe.z},
+      ]
+    }
+    const left=section(a,i*17),right=section(b,(i+1)*17)
+    const start=cliffV.length/3
+    for(const p of [...left,...right])cliffV.push(p.x,p.y,p.z)
+    for(let j=0;j<2;j++)cliffI.push(start+j,start+j+3,start+j+1,start+j+1,start+j+3,start+j+4)
+  }
+  kit.material('rock').side=T.DoubleSide
+  kit.add(surface(cliffV,cliffI),'rock')
   for(let i=0;i<islandOutline.length;i+=3) {
     const p=islandOutline[i],inset={x:p.x*.98,z:(p.z-12)*.98+12},h=terrainHeight(inset)
     if(inset.x<-12&&inset.z>25)continue
     const r=1.2+rand(i+1)*2.8
     rock(kit,{...inset,y:Math.max(.15,h*.45)},r,r*.9+1,r*.8,i)
     if(i%6===0)rock(kit,{x:p.x*1.05,y:.35,z:(p.z-12)*1.05+12},r*.7,1.1,r*.65,i+71)
+  }
+  // Irregular rock shelves grow from the mansion's landward edge so the
+  // floating wings sit above a crag, as in the reference elevation.
+  for(const [i,x,z] of [[0,-45,-9],[1,-42,10],[2,-37,25],[3,-23,29],[4,19,29],[5,37,23],[6,45,4],[7,39,-19],[8,-29,-29]] as const) {
+    const base=terrainHeight({x,z})
+    rock(kit,{x,y:Math.max(2,base-2.4),z},3.1+rand(i+81)*1.5,4.2+rand(i+19)*2,2.7+rand(i+57),2500+i)
+    for(let j=0;j<3;j++) {
+      const px=x+(rand(i*13+j)*2-1)*4,pz=z+(rand(i*17+j)*2-1)*3
+      rock(kit,{x:px,y:Math.max(1,terrainHeight({x:px,z:pz})-1.5),z:pz},1.5+rand(i+j)*1.4,2.2+rand(i+j+33)*1.5,1.3+rand(i+j+4),2550+i*3+j)
+    }
   }
   const cliffSpine=new T.CatmullRomCurve3(paths[1].map(p=>new T.Vector3(p.x,0,p.z)),false,'centripetal')
   for(let i=0;i<15;i++) {

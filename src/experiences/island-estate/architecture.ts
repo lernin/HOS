@@ -1,5 +1,5 @@
 import * as T from 'three'
-import { ATRIUM, levels, outlines, pools, circle, stair, stairPoint, landings, glazing, partitions, planters, roofBeds, supports, structuralColumns, pavilionCenter, westCourtOpening, type PointXZ } from './layout'
+import { ATRIUM, atriumOpening, atriumRadius, levels, outlines, pools, circle, stair, stairPoint, landings, glazing, partitions, planters, roofBeds, supports, structuralColumns, pavilionCenter, westCourtOpening, type PointXZ } from './layout'
 import { type Kit, slabGeometry, surface } from './geometry'
 import { sculpturalShell } from './sculpture'
 
@@ -18,8 +18,10 @@ function crown(kit:Kit) {
   const n=96,lip=[]
   for(let i=0;i<n;i++) {
     const a=i/n*Math.PI*2
-    const crest=5.6+1.5*Math.cos(a-Math.PI)+.6*Math.sin(3*a+.2)
-    lip.push({x:ATRIUM.x+Math.sin(a)*(ATRIUM.radius+.35),y:20+crest,z:ATRIUM.z+Math.cos(a)*(ATRIUM.radius+.35)})
+    const front=Math.exp(-Math.pow(Math.atan2(Math.sin(a),Math.cos(a))/.58,2))
+    const crest=5.6+1.5*Math.cos(a-Math.PI)+.6*Math.sin(3*a+.2)+4.4*front
+    const radius=atriumRadius(a,true)+.35
+    lip.push({x:ATRIUM.x+Math.sin(a)*radius,y:20+crest,z:ATRIUM.z+Math.cos(a)*radius})
   }
   kit.tube(lip,.07,'shell',true,192,8)
   for(let i=0;i<n;i++) {
@@ -27,7 +29,7 @@ function crown(kit:Kit) {
     const front=Math.abs(Math.atan2(Math.sin(a),Math.cos(a)))<1.2
     if(!front||Math.abs(Math.atan2(Math.sin(a),Math.cos(a)))<.18)continue
     const p=lip[i],q=lip[(i+1)%n]
-    kit.add(surface([p.x,8.1,p.z,q.x,8.1,q.z,p.x,p.y-.18,p.z,q.x,q.y-.18,q.z],[0,1,2,1,3,2]),'glass')
+    kit.add(surface([p.x,8.1,p.z,q.x,8.1,q.z,p.x,p.y-.18,p.z,q.x,q.y-.18,q.z],[0,1,2,1,3,2]),'atriumGlass')
     if(i%4===0)kit.cylinder({x:p.x,y:8.1,z:p.z},{x:p.x,y:p.y-.15,z:p.z},.045,.035,'bronze',6)
   }
   const cap=circle(pavilionCenter,14.6,7.6,96)
@@ -41,10 +43,13 @@ function shellEdges(kit:Kit,points:PointXZ[],y:number,level:number) {
     const dip=level===2?.85+1.35*(.5+.5*Math.sin(a*3+.4)):level===1?.55:.3
     const profile=[[.65,y+.07],[.06,y-.04],[-.16,y-.35],[.38,y-.55-dip],[1.25,y-.63]]
     for(const [inset,h] of profile)vertices.push(p.x-dx/len*inset,h,p.z-dz/len*inset)
-    if(i){const k=i*5;for(let j=0;j<4;j++)indices.push(k+j-5,k+j,k+j-4,k+j,k+j+1,k+j-4)}
+    // Leave the tall ocean-facing central bay free of a horizontal fascia.
+    if(i&&!(level===2&&p.z>7&&Math.abs(p.x)<18)){
+      const k=i*5;for(let j=0;j<4;j++)indices.push(k+j-5,k+j,k+j-4,k+j,k+j+1,k+j-4)
+    }
   }
   kit.add(surface(vertices,indices),'shell')
-  kit.tube(points.map(p=>({...p,y:y-.19})),.027,'glow',true)
+  if(level!==2)kit.tube(points.map(p=>({...p,y:y-.19})),.027,'glow',true)
 }
 function flowingSupport(kit:Kit,sections:typeof supports[number]) {
   const vertices:number[]=[],indices:number[]=[],n=48
@@ -121,7 +126,7 @@ function chaise(kit:Kit,x:number,z:number,y:number,yaw:number) {
 export function architecture(kit:Kit) {
   for(const level of levels) {
     const holes=pools.filter(p=>p.y===level.y).map(p=>p.outline)
-    if(level.id>0)holes.push(circle(ATRIUM,ATRIUM.radius))
+    if(level.id>0)holes.push(atriumOpening(level.id===2))
     if(level.id===2)holes.push(westCourtOpening)
     kit.floor(outlines[level.id],holes,level.y,.58,level.id===2?'stone':'stone')
     shellEdges(kit,outlines[level.id],level.y,level.id)
@@ -141,9 +146,11 @@ export function architecture(kit:Kit) {
   for(const p of partitions)kit.wall(p.a,p.b,p.y,p.height,'shell',.22)
   stairs(kit);crown(kit)
   for(const level of [1,2] as const) {
-    perimeter(kit,outlines[level].map(p=>({x:p.x*.991,z:(p.z+7)*.991-7})),levels[level].y)
+    perimeter(kit,outlines[level].map(p=>({x:p.x*.991,z:(p.z+7)*.991-7})),levels[level].y,1.1,
+      p=>level===2&&p.z>7&&Math.abs(p.x)<18)
     const ends=landings.filter(l=>l.level===level)
-    perimeter(kit,circle(ATRIUM,ATRIUM.radius+.08),levels[level].y,1.1,p=>ends.some(l=>l.outline.some(q=>Math.hypot(p.x-q.x,p.z-q.z)<1.9)))
+    const hallEdge=atriumOpening(level===2).map(p=>({x:ATRIUM.x+(p.x-ATRIUM.x)*1.008,z:ATRIUM.z+(p.z-ATRIUM.z)*1.008}))
+    perimeter(kit,hallEdge,levels[level].y,1.1,p=>ends.some(l=>l.outline.some(q=>Math.hypot(p.x-q.x,p.z-q.z)<1.9)))
   }
   for(const pool of pools) {
     kit.floor(pool.outline,[],pool.y-pool.depth,.18,'waterTile')

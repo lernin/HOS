@@ -1,4 +1,4 @@
-import { ATRIUM, PLAYER_RADIUS, colliders, glazing, partitions, pools, outlines, levels, insideWestCourt,
+import { PLAYER_RADIUS, colliders, glazing, partitions, pools, outlines, levels, insideAtrium, insideWestCourt,
   contains, segmentDistance, supportedHeight, stairHeight, stairPoint, groundHeight, structuralColumns, supports, palms,
   type WorldPoint, type PointXZ } from './layout'
 
@@ -54,7 +54,9 @@ export function moveSafely(p: WorldPoint,dx:number,dz:number): WorldPoint {
     for(const [sx,sz] of [[x,z],[x,0],[0,z]]) {
       if(sx===0&&sz===0)continue
       const a={x:q.x+sx,z:q.z+sz},y=supportedHeight(a,q.y)
-      if(y!==null&&Math.abs(y-q.y)<=Math.max(.10,Math.hypot(sx,sz)*.75)&&isWalkable({...a,y})) {
+      // The beach ramp meets the terrain with a sub-step height difference
+      // across its boundary; allow that small seam without admitting ledges.
+      if(y!==null&&Math.abs(y-q.y)<=Math.max(.20,Math.hypot(sx,sz)*.75)&&isWalkable({...a,y})) {
         q={...a,y};break
       }
     }
@@ -101,7 +103,7 @@ export function createNavigator() {
   for(const level of [0,1,2] as const) {
     for(let z=0;z<ROWS;z++)for(let x=0;x<COLS;x++) {
       const c=coord(x,z)
-      if(level>0 && (!contains(c,outlines[level])||Math.hypot(c.x,c.z+7)<ATRIUM.radius-1.7))continue
+      if(level>0 && (!contains(c,outlines[level])||insideAtrium(c,level===2,-1.7)))continue
       const y=level===0?groundHeight(c):levels[level].y
       if(y===null)continue
       const p={...c,y};if(!isWalkable(p,PLAYER_RADIUS+.03))continue

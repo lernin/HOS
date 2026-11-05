@@ -20,7 +20,7 @@ export function slabGeometry(outline:PointXZ[], holes:PointXZ[][], depth:number,
 const colors:Record<string,string>={
   shell:'#f2f0e7',stone:'#dcd3bd',stoneDark:'#b4a486',wood:'#986e46',teak:'#b99466',
   linen:'#f1e7d0',sand:'#c2a57d',clay:'#ba8164',sage:'#929c7b',bronze:'#69543b',
-  metal:'#404640',glass:'#c0eee4',glow:'#fff2cb',soil:'#413c29',grass:'#66784b',
+  metal:'#404640',glass:'#c0eee4',atriumGlass:'#8abcc1',glow:'#fff2cb',soil:'#413c29',grass:'#66784b',
   leaf:'#426439',leafLight:'#6d8a44',leafDark:'#233d2b',bark:'#746047',rock:'#746e5f',
   rockLight:'#9d9885',rockDark:'#464e48',ceramic:'#e5dec5',paper:'#ebe3c8',waterTile:'#417d79',
 }
@@ -32,11 +32,11 @@ export function createKit(scene:T.Scene) {
     if(mats.has(name))return mats.get(name)!
     const color=colors[name]||name
     let m:T.MeshStandardMaterial
-    if(name==='glass')m=new T.MeshPhysicalMaterial({color,transparent:true,opacity:.15,roughness:.045,metalness:.25,clearcoat:1,side:T.DoubleSide,depthWrite:false})
+    if(name==='glass'||name==='atriumGlass')m=new T.MeshPhysicalMaterial({color,transparent:true,opacity:name==='atriumGlass'?.27:.15,roughness:.045,metalness:.25,clearcoat:1,side:T.DoubleSide,depthWrite:false})
     else if(name==='shell')m=new T.MeshPhysicalMaterial({color,roughness:.36,metalness:.01,clearcoat:.38,clearcoatRoughness:.28})
     else m=new T.MeshStandardMaterial({color,roughness:['bronze','metal'].includes(name)?.32:.78,metalness:['bronze','metal'].includes(name)?.75:0})
     if(name==='glow'){m.emissive=new T.Color('#ffdfa5');m.emissiveIntensity=1.8;m.toneMapped=false}
-    if(name!=='glass'&&name!=='glow') {
+    if(name!=='glass'&&name!=='atriumGlass'&&name!=='glow') {
       const wood=name==='wood'||name==='teak'||name==='bark'
       const scale=name==='shell'?28:wood?12:4
       m.onBeforeCompile=s=>{
