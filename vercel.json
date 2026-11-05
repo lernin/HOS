@@ -6,53 +6,162 @@
   },
   "ignoreCommand": "test \"$VERCEL_PROJECT_PRODUCTION_URL\" != \"hos-t7r8.vercel.app\"",
   "crons": [
-    { "path": "/api/brush-sync-daily", "schedule": "0 16 * * *" }
+    {
+      "path": "/api/brush-sync-daily",
+      "schedule": "0 16 * * *"
+    }
   ],
   "rewrites": [
-    { "source": "/api/brush-sync", "destination": "/api/brush?action=sync" },
-    { "source": "/api/brush-sync-daily", "destination": "/api/brush?action=sync-daily" },
-    { "source": "/api/brush-upload-session", "destination": "/api/brush?action=upload-session" },
-    { "source": "/api/brush-upload-chunk", "destination": "/api/brush?action=upload-chunk" },
-    { "source": "/api/brush-upload-finish", "destination": "/api/brush?action=upload-finish" },
-    { "source": "/api/brush-upload", "destination": "/api/brush?action=upload" },
-    { "source": "/api/brush-image", "destination": "/api/brush?action=image" },
-    { "source": "/api/brush-thumb", "destination": "/api/brush?action=thumb" },
-    { "source": "/api/brush-vision", "destination": "/api/brush?action=vision" },
-    { "source": "/api/brush-suggest", "destination": "/api/brush?action=suggest" },
-    { "source": "/api/brush-recipe", "destination": "/api/brush?action=recipe" },
-    { "source": "/materials-studio", "destination": "/materials-studio/app.html" },
-    { "source": "/ocean-estate", "destination": "/" },
-    { "source": "/ocean-estate-plan", "destination": "/" },
-    { "source": "/waterfall-village-v2", "destination": "/" },
-    { "source": "/waterfall-village", "destination": "/" },
-    { "source": "/woodland-walk", "destination": "/" },
-    { "source": "/liquid-orb", "destination": "/" },
-    { "source": "/music-discovery", "destination": "/" },
-    { "source": "/brush", "destination": "/" },
-    { "source": "/water-garden", "destination": "/" },
-    { "source": "/thekonym-viewer", "destination": "/" },
-    { "source": "/fluency", "destination": "/" },
-    { "source": "/concept-interactions", "destination": "/" },
-    { "source": "/thekonym", "destination": "/" },
-    { "source": "/world-3d", "destination": "/" },
-    { "source": "/roy", "destination": "/" },
-    { "source": "/book-vocab", "destination": "/" },
-    { "source": "/phonics-swipe", "destination": "/" }
+    {
+      "source": "/api/brush-sync",
+      "destination": "/api/brush?action=sync"
+    },
+    {
+      "source": "/api/brush-sync-daily",
+      "destination": "/api/brush?action=sync-daily"
+    },
+    {
+      "source": "/api/brush-upload-session",
+      "destination": "/api/brush?action=upload-session"
+    },
+    {
+      "source": "/api/brush-upload-chunk",
+      "destination": "/api/brush?action=upload-chunk"
+    },
+    {
+      "source": "/api/brush-upload-finish",
+      "destination": "/api/brush?action=upload-finish"
+    },
+    {
+      "source": "/api/brush-upload",
+      "destination": "/api/brush?action=upload"
+    },
+    {
+      "source": "/api/brush-image",
+      "destination": "/api/brush?action=image"
+    },
+    {
+      "source": "/api/brush-thumb",
+      "destination": "/api/brush?action=thumb"
+    },
+    {
+      "source": "/api/brush-vision",
+      "destination": "/api/brush?action=vision"
+    },
+    {
+      "source": "/api/brush-suggest",
+      "destination": "/api/brush?action=suggest"
+    },
+    {
+      "source": "/api/brush-recipe",
+      "destination": "/api/brush?action=recipe"
+    },
+    {
+      "source": "/materials-studio",
+      "destination": "/materials-studio/app.html"
+    },
+    {
+      "source": "/ocean-estate",
+      "destination": "/"
+    },
+    {
+      "source": "/ocean-estate-plan",
+      "destination": "/"
+    },
+    {
+      "source": "/waterfall-village-v2",
+      "destination": "/"
+    },
+    {
+      "source": "/waterfall-village",
+      "destination": "/"
+    },
+    {
+      "source": "/woodland-walk",
+      "destination": "/"
+    },
+    {
+      "source": "/liquid-orb",
+      "destination": "/"
+    },
+    {
+      "source": "/music-discovery",
+      "destination": "/"
+    },
+    {
+      "source": "/brush",
+      "destination": "/"
+    },
+    {
+      "source": "/marble-sanctuary",
+      "destination": "/"
+    },
+    {
+      "source": "/water-garden",
+      "destination": "/"
+    },
+    {
+      "source": "/thekonym-viewer",
+      "destination": "/"
+    },
+    {
+      "source": "/fluency",
+      "destination": "/"
+    },
+    {
+      "source": "/concept-interactions",
+      "destination": "/"
+    },
+    {
+      "source": "/thekonym",
+      "destination": "/"
+    },
+    {
+      "source": "/world-3d",
+      "destination": "/"
+    },
+    {
+      "source": "/roy",
+      "destination": "/"
+    },
+    {
+      "source": "/book-vocab",
+      "destination": "/"
+    },
+    {
+      "source": "/phonics-swipe",
+      "destination": "/"
+    }
   ],
   "headers": [
     {
       "source": "/manifest.webmanifest",
       "headers": [
-        { "key": "Content-Type", "value": "application/manifest+json" },
-        { "key": "Cache-Control", "value": "no-cache" }
+        {
+          "key": "Content-Type",
+          "value": "application/manifest+json"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
       ]
     },
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" },
-        { "key": "Cache-Control", "value": "no-cache" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
+        {
+          "key": "Content-Type",
+          "value": "application/javascript; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        },
+        {
+          "key": "Service-Worker-Allowed",
+          "value": "/"
+        }
       ]
     }
   ]
