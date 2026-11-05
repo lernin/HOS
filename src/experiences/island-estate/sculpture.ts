@@ -1,6 +1,6 @@
 import * as T from 'three'
 import { type Kit, surface } from './geometry'
-import { ATRIUM, contains, outlines, terrainHeight, westCourt, type WorldPoint } from './layout'
+import { ATRIUM, atriumRadius, contains, outlines, terrainHeight, westCourt, type WorldPoint } from './layout'
 
 /** Editable spines of the continuous white shell. Coordinates are metres. */
 type Section = WorldPoint & { width: number; depth: number }
@@ -49,7 +49,8 @@ function westGardenCanopy(kit:Kit) {
   for(const bottom of [false,true])for(let i=0;i<segments;i++)for(let j=0;j<=bands;j++){
     const a=i/segments*Math.PI*2,t=j/bands
     const rx=westCourt.rx+(12.3-westCourt.rx)*t,rz=westCourt.rz+(9.2-westCourt.rz)*t
-    const height=20+.08+1.7*Math.pow(1-t,1.7)+.3*Math.sin(a*2)*Math.sin(t*Math.PI)
+    const crest=2.1+.5*Math.sin(a*2+.5)+.35*Math.cos(a*3-.4)
+    const height=20+.08+crest*Math.pow(1-t,1.7)+.45*Math.sin(a*2)*Math.sin(t*Math.PI)
     v.push(westCourt.center.x+rx*Math.sin(a),height-(bottom?.42:0),westCourt.center.z+rz*Math.cos(a))
   }
   for(let i=0;i<segments;i++)for(let j=0;j<bands;j++){
@@ -71,7 +72,7 @@ function westGardenCanopy(kit:Kit) {
  */
 export function sculpturalShell(kit: Kit) {
   westGardenCanopy(kit)
-  const sectors=192, bands=28, inner=ATRIUM.radius+.35, depth=.72
+  const sectors=192, bands=28, depth=.72
   const vertices:number[]=[], indices:number[]=[], radii:number[]=[]
   const smooth=(lo:number,hi:number,v:number)=>{const t=T.MathUtils.clamp((v-lo)/(hi-lo),0,1);return t*t*(3-2*t)}
   const angleDistance=(a:number,b:number)=>Math.abs(Math.atan2(Math.sin(a-b),Math.cos(a-b)))
@@ -84,6 +85,7 @@ export function sculpturalShell(kit: Kit) {
     {theta:Math.PI*2-.90,spread:.34,foot:{x:-18,z:17},edge:'inner'},
   ]
   const shellRadius=(a:number)=>{
+    const inner=atriumRadius(a,true)+.35
     let lo=inner,hi=61
     for(let k=0;k<13;k++) {
       const r=(lo+hi)/2,p={x:ATRIUM.x+Math.sin(a)*r,z:ATRIUM.z+Math.cos(a)*r}
@@ -96,13 +98,16 @@ export function sculpturalShell(kit: Kit) {
     return Math.max(inner+.65,Math.min(lo-.18,lo-(lo-16)*pool*.94-(lo-16)*garden*.99))
   }
   const top=(a:number,u:number)=>{
-    const crest=5.6+1.5*Math.cos(a-Math.PI)+.6*Math.sin(3*a+.2)
+    const front=Math.exp(-Math.pow(angleDistance(a,0)/.58,2))
+    const crest=5.6+1.5*Math.cos(a-Math.PI)+.6*Math.sin(3*a+.2)+4.4*front
     const westRim=1.6*(1-smooth(.4,.9,angleDistance(a,4.75)))
     const eastRim=1.2*(1-smooth(.3,.8,angleDistance(a,2.35)))
-    return 20+crest*Math.pow(1-u,1.8)+.75*Math.sin(u*Math.PI)+(westRim+eastRim)*u*u
+    // At the ocean-facing bay the roof stays high over the glazing, then
+    // sweeps into the two lower terraces. The side wings stay walkable at 20m.
+    return 20+crest*Math.pow(1-u,1.8)+.75*Math.sin(u*Math.PI)+(westRim+eastRim)*u*u+5.8*front*u*u
   }
   const at=(i:number,j:number,below=false)=>{
-    const a=i/sectors*Math.PI*2,u=j/bands,r=inner+(radii[i]-inner)*u
+    const a=i/sectors*Math.PI*2,u=j/bands,inner=atriumRadius(a,true)+.35,r=inner+(radii[i]-inner)*u
     return {x:ATRIUM.x+Math.sin(a)*r,y:top(a,u)-(below?depth:0),z:ATRIUM.z+Math.cos(a)*r}
   }
   for(let i=0;i<sectors;i++)radii.push(shellRadius(i/sectors*Math.PI*2))

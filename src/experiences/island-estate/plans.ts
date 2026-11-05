@@ -1,4 +1,4 @@
-import { ATRIUM, levels, outlines, pools, glazing, partitions, planters, roofBeds, furnitureSolids,
+import { ATRIUM, atriumOpening, levels, outlines, pools, glazing, partitions, planters, roofBeds, furnitureSolids,
   stair, stairPoint, landings, structuralColumns, islandOutline, paths, dock, westCourtOpening, type PointXZ, type Level } from './layout'
 
 export type Drawing = 'all' | 'island' | 'ground' | 'first' | 'roof' | 'section'
@@ -13,7 +13,7 @@ function dimension(a:PointXZ,b:PointXZ,label:string,horizontal=true) {
 }
 function floor(level:Level) {
   let s=poly(outlines[level],'#efece1','#455f56',.38)
-  if(level>0)s+=ring(ATRIUM,ATRIUM.radius,'#faf9f4','#8c9a92')
+  if(level>0)s+=poly(atriumOpening(level===2),'#faf9f4','#8c9a92')
   if(level===2)s+=poly(westCourtOpening,'#d6e3ce','#879c82',.22)
   for(const p of pools.filter(p=>p.y===levels[level].y))s+=poly(p.outline,'#afdad8','#488b8f',.25)
   for(const p of planters.filter(p=>p.y===levels[level].y))s+=ring(p.center,p.radius!,'#d5ddc5')
@@ -77,7 +77,7 @@ function section() {
 function master() {
   let s=poly(islandOutline,'#dfe3ce','#788d76',.35)+poly(outlines[2],'#faf8ef','#526c63',.4)
   for(const p of pools.filter(p=>p.y===20))s+=poly(p.outline,'#acd6d6','#628f90',.3)
-  s+=ring(ATRIUM,ATRIUM.radius,'#e4e7d9')
+  s+=poly(atriumOpening(true),'#e4e7d9')
   s+=poly(westCourtOpening,'#d6e3ce','#879c82',.22)
   for(const path of paths)s+=`<polyline points="${points(path)}" fill="none" stroke="#b6a789" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`
   s+=poly(dock.outline,'#c7af89')+line({x:47,z:86},{x:57,z:107},'#b49d7f',2.4)

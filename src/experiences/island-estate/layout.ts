@@ -4,6 +4,23 @@ export type WorldPoint = PointXZ & { y: number }
 export type Level = 0 | 1 | 2
 export const SEA = 0
 export const ATRIUM = { x: 0, z: -7, radius: 9.8 }
+// The grand hall is a deep three-storey space, not a circular light well.
+// Its southern end opens toward the arrival terrace, while the northern end
+// remains round enough to carry the two gallery landings and spiral stair.
+export function atriumRadius(angle:number,roof=false) {
+  const front=Math.exp(-Math.pow(Math.atan2(Math.sin(angle),Math.cos(angle))/.52,2))
+  return ATRIUM.radius+(roof?9.1:3.6)*front
+}
+export function atriumOpening(roof=false,count=128):PointXZ[] {
+  return Array.from({length:count},(_,i)=>{
+    const angle=i/count*Math.PI*2,r=atriumRadius(angle,roof)
+    return {x:ATRIUM.x+Math.sin(angle)*r,z:ATRIUM.z+Math.cos(angle)*r}
+  })
+}
+export function insideAtrium(p:PointXZ,roof=false,margin=0) {
+  const dx=p.x-ATRIUM.x,dz=p.z-ATRIUM.z
+  return Math.hypot(dx,dz)<atriumRadius(Math.atan2(dx,dz),roof)+margin
+}
 export const PLAYER_RADIUS = .3
 export const EYE_HEIGHT = 1.68
 export const crownHeight=(angle:number)=>23.25+(1-Math.cos(angle))*.7
@@ -62,8 +79,8 @@ const galleryAnchors = [
 ].map(pt)
 const roofAnchors = [
   [0,-35],[20,-32],[38,-25],[47,-15],[48,0],[47,18],
-  [39,25],[29,27],[19,23],[13,13],[10,8],[6,5],
-  [0,4],[-7,6],[-13,11],[-21,22],[-34,25],[-44,18],
+  [39,25],[29,27],[19,23],[14,17],[10,15],[6,15],
+  [0,15],[-6,15],[-10,15],[-14,17],[-21,22],[-34,25],[-44,18],
   [-47,4],[-47,-12],[-34,-26],[-17,-33],
 ].map(pt)
 export const outlines: PointXZ[][] = [
@@ -72,7 +89,7 @@ export const outlines: PointXZ[][] = [
   curve(roofAnchors),
 ]
 export const islandOutline = curve([
-  [-38,-52],[10,-56],[46,-38],[61,-13],[52,8],[42,27],
+  [-38,-52],[10,-56],[41,-38],[38,-18],[33,2],[38,25],
   [48,40],[54,65],[54,88],[53,102],[37,101],[41,84],[36,67],[24,54],
   [0,57],[-23,56],[-47,42],[-64,20],[-60,-1],[-64,-22],[-55,-39],
 ].map(pt),192)
@@ -81,12 +98,13 @@ export function terrainHeight(p: PointXZ): number {
   const ratio=Math.hypot(p.x/52,(p.z+5)/46)
   let h=8-Math.max(0,ratio-1)*13
   if(p.z>24 && p.x>12) h=8-(p.z-24)*.072
-  const beach=smooth(18,43,p.z)*(1-smooth(-23,-9,p.x))
+  // A small crescent below the western cliffs, not an island-wide sand apron.
+  const beach=smooth(24,38,p.z)*(1-smooth(45,58,p.z))*smooth(-51,-42,p.x)*(1-smooth(-10,2,p.x))
   h=h*(1-beach)+1.2*beach
   h=Math.max(1.05,h)
   const d=boundaryDistance(p,islandOutline)
   // Gentle on the beach; dramatic rock faces elsewhere.
-  const shoreBlend=smooth(18,34,p.z)*(1-smooth(-18,-4,p.x))
+  const shoreBlend=smooth(29,41,p.z)*(1-smooth(50,63,p.z))*smooth(-51,-40,p.x)*(1-smooth(-10,0,p.x))
   const shoreline=1.4+(.16-1.4)*shoreBlend
   return Math.min(h,.25+d*shoreline)
 }
@@ -229,7 +247,7 @@ export function floorCandidates(p: PointXZ): number[] {
   const candidates:number[]=[]
   const y=groundHeight(p);if(y!==null)candidates.push(y)
   for(const level of [1,2] as const) {
-    if(contains(p,outlines[level])&&Math.hypot(p.x,p.z+7)>=ATRIUM.radius&&!(level===2&&insideWestCourt(p))) candidates.push(levels[level].y)
+    if(contains(p,outlines[level])&&!insideAtrium(p,level===2)&&!(level===2&&insideWestCourt(p))) candidates.push(levels[level].y)
   }
   for(const landing of landings)if(contains(p,landing.outline))candidates.push(landing.y)
   for(const flight of [0,1] as const){const h=stairHeight(p,flight);if(h!==null)candidates.push(h)}
@@ -245,7 +263,7 @@ export function supportedHeight(p: PointXZ, nearY:number): number | null {
   let best:number|null=null
   const accept=(h:number)=>{if(h<=nearY+.25&&h>=nearY-.4&&(best===null||h>best))best=h}
   // Avoid testing the island and other storeys for every step on an upper deck.
-  for(const level of [1,2] as const)if(levels[level].y<=nearY+.25&&levels[level].y>=nearY-.4&&Math.hypot(p.x,p.z+7)>=ATRIUM.radius&&contains(p,outlines[level])&&!(level===2&&insideWestCourt(p)))accept(levels[level].y)
+  for(const level of [1,2] as const)if(levels[level].y<=nearY+.25&&levels[level].y>=nearY-.4&&!insideAtrium(p,level===2)&&contains(p,outlines[level])&&!(level===2&&insideWestCourt(p)))accept(levels[level].y)
   for(const landing of landings)if(landing.y<=nearY+.25&&landing.y>=nearY-.4&&contains(p,landing.outline))accept(landing.y)
   if(nearY<=8.4){const h=groundHeight(p);if(h!==null)accept(h)}
   return best
@@ -257,7 +275,7 @@ export const destinations: {id:string;label:string;level:Level;position:WorldPoi
   {id:'west-wing',label:'Floating west wing',level:0,position:{x:-32,y:8,z:1},yaw:-1.4},
   {id:'east-wing',label:'Ocean living room',level:0,position:{x:34,y:8,z:0},yaw:1.6},
   {id:'dining',label:'Dining pavilion',level:0,position:{x:-20,y:8,z:-16},yaw:-2.5},
-  {id:'first-gallery',label:'Atrium gallery',level:1,position:{x:3,y:14,z:5},yaw:Math.PI},
+  {id:'first-gallery',label:'Atrium gallery',level:1,position:{x:13,y:14,z:5},yaw:Math.PI},
   {id:'primary-suite',label:'Primary suite',level:1,position:{x:-27,y:14,z:-4},yaw:-1.8},
   {id:'sky-garden',label:'Rooftop sky garden',level:2,position:{x:-14,y:20,z:-14},yaw:-1.6},
   {id:'rooftop-pool',label:'Infinity pool terrace',level:2,position:{x:38,y:20,z:24},yaw:Math.PI},
@@ -267,16 +285,16 @@ export const destinations: {id:string;label:string;level:Level;position:WorldPoi
 ]
 export const viewpoints = [
   {id:'aerial',label:'Island aerial',position:{x:78,y:49,z:108},target:{x:0,y:13,z:5}},
-  {id:'front',label:'Front elevation',position:{x:13,y:21,z:109},target:{x:0,y:14,z:-3}},
+  {id:'front',label:'Front elevation',position:{x:9,y:30,z:88},target:{x:0,y:16,z:-3}},
   {id:'roof',label:'Rooftop sky garden',position:{x:63,y:49,z:56},target:{x:8,y:20,z:0}},
   {id:'wing',label:'Floating ocean wing',position:{x:65,y:26,z:25},target:{x:20,y:15,z:-5}},
   {id:'atrium',label:'Grand atrium',position:{x:3,y:10.4,z:13},target:{x:0,y:13.6,z:-9}},
   {id:'cliff',label:'Cliff promenade',position:{x:94,y:47,z:122},target:{x:36,y:9,z:53}},
-  {id:'island',label:'Full island',position:{x:142,y:112,z:185},target:{x:0,y:5,z:25}},
+  {id:'island',label:'Full island',position:{x:150,y:120,z:200},target:{x:20,y:6,z:55}},
 ] as const
 export const paths: PointXZ[][] = [
   [{x:0,z:22},...beachRamp,{x:-38,z:41}],
   [{x:0,z:26},{x:12,z:34},{x:25,z:42},{x:31,z:56},{x:46,z:68},{x:47,z:86}],
   [{x:-38,z:2},{x:-45,z:14},{x:-43,z:25},{x:-38,z:39}],
-  [{x:35,z:1},{x:41,z:13},{x:35,z:25},{x:25,z:42}],
+  [{x:31,z:1},{x:34,z:13},{x:32,z:25},{x:25,z:42}],
 ]
