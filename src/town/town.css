@@ -1,0 +1,119 @@
+html, body, #root { margin: 0; width: 100%; height: 100%; min-height: 100%; background: #071522; overflow: hidden; }
+* { box-sizing: border-box; }
+button, input, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: .56; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #f9c35d; outline-offset: 2px; }
+.town { font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif; color: #fff; }
+.town-tv { position: relative; width: 100vw; height: 100dvh; min-height: 500px; overflow: hidden; background: #79c3d6; }
+.town-city-visual { position: absolute; inset: -8% -5%; background: radial-gradient(ellipse at 50% 48%, #c4ecf0 10%, #79c3d6 85%), url('/town/city.webp') center center / cover no-repeat; background-image: url('/town/city.webp'); background-size: 100% 100%; background-position: center center; filter: saturate(1.18) contrast(1.06); }
+.town-tv-vignette { pointer-events: none; position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(7,25,40,.76) 0%, rgba(7,25,40,.18) 24%, transparent 48%, rgba(3,18,36,.14) 71%, rgba(4,15,27,.83) 100%), linear-gradient(to right,rgba(5,27,45,.10),transparent 20%,transparent 80%,rgba(5,27,45,.10)); }
+.town-tv-header { display: flex; justify-content: space-between; align-items: flex-start; position: relative; z-index: 6; padding: 22px 30px; gap: 22px; }
+.town-brand { display: flex; flex-direction: column; align-items: flex-start; gap: 0; text-shadow: 0 3px 15px #0b273a77; }
+.town-brand small { font-size: clamp(10px,1vw,13px); letter-spacing: .22em; font-weight: 900; color: #dafff6; }
+.town-brand h1 { font-size: clamp(52px,7.6vw,120px); letter-spacing: -.09em; font-weight: 1000; line-height: .9; margin: 4px 0; color: #fff; }
+.town-brand > span { font-size: clamp(9px,.95vw,15px); font-weight: 800; letter-spacing: .09em; color: #e7fffb; }
+.town-tv-top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding-right: 248px; }
+.town-link-status { display: inline-flex; align-items: center; min-width: 110px; padding: 9px 12px; background: rgba(12,42,58,.66); border: 1px solid rgba(218,253,255,.3); border-radius: 11px; color: #fff; font-size: 12px; font-weight: 800; }
+.town-link-status.on { background: #064d3fcc; border-color: #76ecd5aa; color: #ceffef; }
+.town-tv button { background: #ffffffd9; border: 1px solid #ffffffc0; border-radius: 10px; color: #17324a; font-weight: 900; padding: 10px 14px; box-shadow: 0 5px 18px #172f3b33; }
+.town-tv button:hover { background: #fff; }
+.town-tv-locations { position: absolute; z-index: 3; inset: 0; pointer-events: none; }
+.town-pin { position: absolute; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; filter: drop-shadow(0 3px 8px #071e30aa); transition: transform .3s; }
+.town-pin > span { height: clamp(36px,4vw,56px); min-width: clamp(36px,4vw,56px); padding: 0 7px; display: grid; place-items: center; font-size: clamp(19px,2.35vw,31px); border: 3px solid #fff; border-radius: 17px; background: #ebfaf0; box-shadow: 0 5px 0 #ffffff50; }
+.town-pin > b { padding: 4px 10px; font-size: clamp(10px,.9vw,15px); white-space: nowrap; border: 1px solid #a2bcb6; background: #fffdf9f2; border-radius: 7px; color: #1a3843; box-shadow: 0 3px 10px #172f3b45; }
+.town-pin.selected { transform: translate(-50%,-60%) scale(1.14); z-index: 2; }
+.town-pin.selected > span { background: #ffe477; box-shadow: 0 0 0 5px #f8c54ca0; }
+.town-pin.selected > b { background: #fff0b0; border-color: #e2ba58; }
+.town-avatar { position: absolute; width: clamp(32px,3.4vw,50px); height: clamp(32px,3.4vw,50px); transform: translate(-50%,-50%); border: 4px solid white; border-radius: 50%; display: grid; place-items: center; font-size: clamp(15px,1.7vw,23px); font-weight: 1000; color: #fff; text-shadow: 0 1px 3px #0008; box-shadow: 0 3px 13px #001c30aa; transition: left .85s ease, top .85s ease; }
+.town-avatar.current { outline: 4px solid #fce68e; outline-offset: 3px; z-index: 5; }
+.town-tv-bottom { position: absolute; z-index: 8; bottom: 0; left: 0; right: 0; min-height: clamp(108px,13vh,155px); background: linear-gradient(90deg,rgba(3,20,34,.94),rgba(9,32,46,.89)); display: flex; align-items: center; justify-content: flex-start; gap: clamp(18px,3vw,48px); padding: 18px clamp(26px,4vw,60px); backdrop-filter: blur(14px); border-top: 1px solid #ffffff40; }
+.town-current-turn { display: flex; flex-direction: column; min-width: 240px; }
+.town-current-turn small { letter-spacing: .15em; color: #a5cece; font-weight: 800; font-size: 12px; }
+.town-current-turn strong { font-size: clamp(23px,3vw,39px); line-height: 1.1; letter-spacing: -.03em; }
+.town-current-turn div { color: #cee6e9; font-size: 15px; margin-top: 3px; }
+.town-tv-dice { display: flex; align-items: center; gap: 12px; }
+.town-tv-dice > span { display: grid; place-items: center; width: clamp(53px,5vw,84px); height: clamp(53px,5vw,84px); border-radius: 16px; background: #fdfcf6; color: #203b50; font-size: clamp(35px,4vw,63px); font-weight: 1000; box-shadow: inset 0 -5px 0 #b6d2d6; }
+.town-tv-dice > b { font-size: clamp(40px,5vw,72px); min-width: 60px; color: #ffe6a2; text-align: center; }
+.town-turn-hint { color: #e5fbf5; font-size: clamp(13px,1.15vw,17px); font-weight: 700; max-width: 300px; }
+.town-pair-card { position: absolute; z-index: 20; right: 22px; top: 18px; width: 230px; border: 1px solid #f2ffff9c; border-radius: 18px; padding: 15px; background: rgba(255,255,255,.96); box-shadow: 0 12px 35px #19374765; color: #193347; display: flex; flex-direction: column; align-items: center; gap: 9px; text-align: center; }
+.town-pair-card strong { color: #0a7767; font-size: 14px; letter-spacing: .07em; }
+.town-pair-card > span { font-size: 12px; font-weight: 700; }
+.town-pair-card > small { font-size: 10px; color: #63818b; }
+.town-pair-card button { font-size: 11px; padding: 8px; width: 100%; }
+.town-pair-card.paired { right: 24px; width: 190px; }
+.town-pair-card p { font-size: 12px; line-height: 1.4; color: #55717e; margin: 0; }
+.town-qr { background: white; padding: 4px; min-height: 195px; min-width: 196px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; }
+.town-qr img { max-width: 188px; }
+.town-qr small { color: #48616c; font-size: 10px; }
+.town-leave { position: absolute; z-index: 21; left: 22px; bottom: calc(clamp(108px,13vh,155px) + 15px); font-size: 12px; font-weight: 700; color: white; padding: 8px 11px; background: #102c40ad; border-radius: 9px; text-decoration: none; }
+.town-tv-message { position: absolute; z-index: 25; top: 145px; left: 26px; background: #f0ffed; color: #175f5c; border-radius: 8px; padding: 10px; font-weight: 700; }
+
+.town-phone { width: 100vw; height: 100dvh; background: #f2f6f6; color: #193b50; display: flex; flex-direction: column; }
+.town-phone-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 17px 17px 12px; color: #fff; background: linear-gradient(130deg,#113748,#225e67); flex-shrink: 0; }
+.town-phone-head h1 { font-size: 33px; font-weight: 1000; margin: 1px 0 0; letter-spacing: -.06em; }
+.town-phone-head h1 span { font-size: 18px; vertical-align: 4px; }
+.town-phone-head small { color: #add9d4; font-size: 9px; font-weight: 900; letter-spacing: .14em; }
+.town-phone-head .town-link-status { font-size: 10px; min-width: auto; padding: 8px; max-width: 40%; line-height: 1.25; }
+.town-phone-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px 13px 40px; }
+.town-card { border: 1px solid #d8e5e6; border-radius: 17px; background: #fff; padding: 16px; box-shadow: 0 5px 20px #29414a0d; margin-bottom: 13px; }
+.town-card h2 { font-size: 22px; letter-spacing: -.03em; margin: 0 0 12px; }
+.town-card h2 small { font-size: 12px; color: #7c939e; font-weight: 700; float: right; }
+.town-card > small { display: block; font-size: 11px; font-weight: 900; letter-spacing: .12em; color: #4f9690; margin-bottom: 5px; }
+.town-muted { font-size: 13px; color: #6c858d; }
+.town-wait p { line-height: 1.5; }
+.town-wait button, .town-card button { border: 1px solid #d9e4e8; border-radius: 11px; padding: 11px 13px; font-size: 13px; font-weight: 900; background: #f6fafb; color: #315365; }
+.town-roster { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
+.town-person { display: flex; gap: 6px; align-items: center; min-height: 39px; }
+.town-person b { width: 22px; height: 22px; border-radius: 50%; color: white; display: grid; place-items: center; font-size: 13px; }
+.town-person strong { font-size: 9px; color: #178c78; }
+.town-person.chosen { background: #e5f7f1; border-color: #6cc3ac; }
+.town-add { display: flex; gap: 8px; }
+.town-add input, .town-prompt-card input:not([type=checkbox]), .town-prompt-card textarea { flex: 1; min-width: 0; width: 100%; border: 1px solid #ccdade; border-radius: 10px; background: #f8fafb; padding: 12px; color: #17384a; font-size: 14px; }
+.town-add button { white-space: nowrap; background: #20596b; color: #fff; border: none; }
+.town-roll-card { background: linear-gradient(155deg,#fff,#f7fbf1); }
+.town-roll-card h2 { margin-bottom: 6px; }
+.town-big-dice { display: flex; gap: 9px; align-items: center; margin-bottom: 14px; }
+.town-big-dice span { display: grid; place-items: center; width: 65px; height: 65px; border-radius: 14px; background: #fff; border: 2px solid #dce7e2; border-bottom: 4px solid #bdd1d6; font-size: 40px; font-weight: 900; box-shadow: 0 2px 9px #001d2917; }
+.town-big-dice strong { font-size: 27px; color: #0b766d; }
+.town-card button.town-primary { display: block; width: 100%; padding: 16px; background: #e68440; border: none; color: #fff; border-bottom: 4px solid #b76432; font-size: 19px; border-radius: 12px; }
+.town-prompt-card h2 { font-size: 26px; }
+.town-prompt { font-size: 20px; font-weight: 800; line-height: 1.48; padding: 14px; background: #eaf8f4; border-left: 5px solid #2fb59e; border-radius: 8px; margin: 8px 0 13px; }
+.town-phone-actions { display: flex; gap: 8px; margin: 9px 0; }
+.town-phone-actions button { flex: 1; }
+.town-consent { margin: 13px 0 9px; display: flex; gap: 9px; align-items: flex-start; font-size: 12px; line-height: 1.3; color: #486776; }
+.town-consent input { width: 18px; height: 18px; margin: 0; accent-color: #118e86; flex-shrink: 0; }
+.town-prompt-card textarea { margin: 13px 0 6px; resize: vertical; min-height: 76px; }
+.town-card button.town-rec-btn { background: #fff2ee; color: #ad3148; border-color: #e5b3bd; width: 100%; }
+.town-card button.town-rec-btn.recording { background: #cc294b; color: #fff; animation: town-pulse 1s ease-in-out infinite alternate; }
+@keyframes town-pulse { from { box-shadow: 0 0 0 0 #ff415260; } to { box-shadow: 0 0 0 6px #ff415226; } }
+.town-card button.town-next { width: 100%; background: #0b897c; color: #fff; border: none; font-size: 16px; padding: 14px; margin-top: 9px; }
+.town-foot-card p { color: #728791; font-size: 11px; line-height: 1.4; }
+.town-download { display: block; color: #168b76; font-weight: 850; font-size: 13px; margin-bottom: 12px; }
+.town-card button.town-reset { padding: 0; background: transparent; border: none; color: #88949a; font-size: 12px; text-decoration: underline; }
+.town-toast { background: #0c796c; color: white; padding: 12px; border-radius: 12px; font-size: 12px; font-weight: 800; }
+@media (max-width: 1000px) {
+  .town-tv-top-actions { padding-right: 0; }
+  .town-pair-card { transform: scale(.8); transform-origin: top right; }
+  .town-turn-hint { display: none; }
+}
+@media (max-width: 650px) {
+  .town-tv-header { padding: 10px; }
+  .town-brand h1 { font-size: 45px; }
+  .town-brand small { font-size: 8px; }
+  .town-brand > span { display: none; }
+  .town-tv-top-actions { margin-right: 100px; gap: 4px; }
+  .town-tv-top-actions .town-link-status { display: none; }
+  .town-tv-top-actions button { font-size: 11px; padding: 7px; }
+  .town-pair-card { right: 5px; top: 5px; transform: scale(.47); }
+  .town-tv-bottom { min-height: 82px; padding: 10px; gap: 9px; }
+  .town-current-turn { min-width: 80px; }
+  .town-current-turn strong { font-size: 21px; }
+  .town-current-turn div { font-size: 10px; }
+  .town-tv-dice { gap: 5px; }
+  .town-tv-dice > span { width: 31px; height: 31px; border-radius: 7px; font-size: 20px; }
+  .town-tv-dice > b { font-size: 20px; min-width: 20px; }
+  .town-pin > span { min-width: 27px; height: 27px; font-size: 16px; border-width: 2px; border-radius: 8px; }
+  .town-pin > b { font-size: 8px; padding: 2px 4px; }
+  .town-avatar { width: 25px; height: 25px; font-size: 10px; border-width: 2px; }
+}
