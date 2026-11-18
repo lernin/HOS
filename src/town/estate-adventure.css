@@ -1,0 +1,12 @@
+.estate-adventure-scene { position:absolute;inset:0;overflow:hidden;background:#1a3b4c;z-index:0 }
+.estate-adventure-scene canvas { width:100%;height:100%;display:block;touch-action:none }
+.estate-adventure-loading { position:absolute;left:50%;top:48%;transform:translate(-50%,-50%);padding:25px 36px;background:#0c253be8;color:white;border:1px solid #9bc9ca;border-radius:15px;text-align:center;font-weight:850;z-index:3;max-width:80vw }
+.estate-adventure-loading small {display:block;font-size:12px;font-weight:500;margin-top:9px;color:#b7d8da}
+.estate-adventure-location {position:absolute;left:25px;top:150px;z-index:3;border-radius:11px;padding:11px 14px;background:#072b3bd9;color:#e2faf0;font-size:13px;font-weight:900;pointer-events:none}
+.estate-adventure-location span{opacity:.5;margin:0 6px}
+.estate-adventure-location small{display:block;margin-top:4px;font-size:10px;font-weight:500;color:#b8d4d8}
+.estate-adventure-controls { position:absolute;bottom:165px;left:28px;padding:10px 13px;border-radius:11px;background:#102f40c4;color:#d1e9e9;z-index:3;font-size:11px;pointer-events:none }
+.town-tv .town-brand h1 { font-size:clamp(28px,4vw,66px);letter-spacing:-.06em;white-space:nowrap; }
+.town-tv-question { pointer-events:none;z-index:14; }
+.town-tv-vignette,.town-tv-header,.town-tv-bottom,.town-pair-card,.town-leave,.town-dice-event,.town-walking-event,.town-tv-question{position:absolute}
+@media(max-width:800px){.estate-adventure-location{top:103px;font-size:10px;padding:7px 9px}.estate-adventure-controls{bottom:95px;max-width:45vw;font-size:9px}.town-tv .town-brand h1{font-size:clamp(24px,4vw,44px)}}
