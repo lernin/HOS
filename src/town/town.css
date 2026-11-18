@@ -117,3 +117,46 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .town-pin > b { font-size: 8px; padding: 2px 4px; }
   .town-avatar { width: 25px; height: 25px; font-size: 10px; border-width: 2px; }
 }
+
+
+/* Actual WebGL scene, replacing the former stretched city wallpaper. */
+.town-world { position:absolute; inset:0; z-index:0; background:#a9d5e7; touch-action:none; }
+.town-world canvas { display:block; width:100%; height:100%; }
+.town-tv-vignette { z-index:1; background:linear-gradient(180deg,rgba(7,26,42,.82),rgba(6,25,42,.10) 27%, transparent 62%,rgba(2,17,29,.53) 100%); }
+.town-tv-header { z-index:7; }
+.town-brand h1 { font-size:clamp(48px,6.5vw,91px); }
+.town-pair-card { z-index:30; }
+.town-tv-bottom { min-height:95px; padding:12px clamp(20px,3vw,48px); }
+.town-leave { z-index:32; }
+.town-explore-tip { position:absolute; z-index:9; bottom:calc(clamp(108px,13vh,155px) + 11px); left:50%; transform:translateX(-50%); border:1px solid #ffffff60; border-radius:24px; background:#092f44c9; padding:9px 16px; font-size:12px; font-weight:800; color:#dcfffd; text-align:center; text-shadow:0 1px 4px #0008; pointer-events:none; white-space:nowrap; }
+.town-dice-event { position:absolute; z-index:15; top:30%; left:50%; transform:translate(-50%,-25%); text-align:center; pointer-events:none; padding:18px 44px 25px; background:radial-gradient(ellipse,#17354fe8,#092537c7); box-shadow:0 0 0 300vmax #0c24382a,0 20px 85px #0822356b; border:2px solid #fff7; border-radius:28px; min-width:390px; }
+.town-dice-event h2 { margin:9px 0 0; font-size:clamp(22px,2.3vw,36px); color:#fff; text-shadow:0 2px 8px #0009; }
+.town-dice-spinners { display:flex; gap:27px; justify-content:center; perspective:750px; }
+.town-dice-spinners span { background:linear-gradient(130deg,#fff,#dcebea); box-shadow:inset -7px -7px 10px #adc8cb,0 16px 22px #051f3299; color:#183851; width:clamp(94px,9vw,155px); height:clamp(94px,9vw,155px); border-radius:20px; border:4px solid white; display:grid; place-items:center; font-size:clamp(75px,8vw,140px); animation:town-tumble .45s linear infinite; }
+.town-dice-spinners span:nth-child(2) { animation-duration:.55s; animation-direction:reverse; }
+.town-confetti { color:#ffda75; letter-spacing:1em; font-size:29px; animation:town-sparks .3s ease-in-out infinite alternate; white-space:nowrap; }
+@keyframes town-tumble { 0%{ transform:rotate(-20deg) rotateY(0deg) scale(.93) } 50%{ transform:rotate(17deg) rotateY(180deg) scale(1.08) } 100%{ transform:rotate(-20deg) rotateY(360deg) scale(.93) } }
+@keyframes town-sparks { to { transform:translateY(-12px) scale(1.12); opacity:.72; } }
+.town-walking-event { position:absolute; z-index:16; top:15%; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:5px; background:#133c51e8; border:1px solid #d2fff0; border-radius:17px; padding:13px 30px; box-shadow:0 9px 40px #102a3b7c; text-align:center; pointer-events:none; }
+.town-walking-event strong { font-size:23px; color:#ffdf83; }
+.town-walking-event span { font-size:15px; color:#ebfffa; font-weight:750; white-space:nowrap; }
+.town-tv-question { z-index:13; position:absolute; top:58%; left:50%; transform:translate(-50%,-50%); width:min(760px,calc(100vw - 500px)); min-width:360px; border-radius:24px; border:2px solid #e5fff8; background:#fffdf7ef; color:#183548; padding:20px 27px; text-align:center; box-shadow:0 16px 65px #061e34ad; backdrop-filter:blur(15px); animation:town-question-in .6s ease-out both; pointer-events:none; }
+.town-tv-question > span { display:block; color:#097c75; font-size:14px; font-weight:950; letter-spacing:.09em; }
+.town-tv-question p { font-size:clamp(23px,2.8vw,42px); line-height:1.3; font-weight:850; margin:12px 0; }
+.town-tv-question small { display:block; font-size:14px; color:#697e87; }
+@keyframes town-question-in { from { opacity:0; transform:translate(-50%,-35%) scale(.87) } to {opacity:1; transform:translate(-50%,-50%) scale(1)} }
+.town-live-draft { font-size:13px; color:#176f79; background:#e9f8f6; border:1px dashed #7dc9c3; padding:10px; border-radius:9px; line-height:1.45; }
+@media(max-width:1000px) {
+ .town-tv-question { width:min(70vw,640px); min-width:0; top:55%; padding:15px; }
+ .town-tv-question p { font-size:clamp(16px,3vw,28px); }
+ .town-explore-tip { bottom:calc(95px + 10px); font-size:10px; }
+}
+@media(max-width:650px) {
+ .town-dice-event { min-width:0; width:88vw; padding:10px; }
+ .town-dice-spinners span { height:95px; width:95px; font-size:83px; }
+ .town-tv-question { top:54%; width:86vw; }
+ .town-tv-question p { font-size:19px; }
+ .town-walking-event { top:20%; width:74vw; }
+ .town-walking-event span { white-space:normal; }
+ .town-explore-tip { display:none; }
+}
