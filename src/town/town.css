@@ -160,3 +160,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
  .town-walking-event span { white-space:normal; }
  .town-explore-tip { display:none; }
 }
+
+/* Authentic 3D material import. Uses the original GLB's embedded textures + UVs. */
+.town-texture-loader { position:absolute;z-index:8;left:18px;top:185px;width:min(295px,32vw);padding:11px;background:rgba(8,36,52,.9);border:1px solid rgba(190,238,236,.55);border-radius:13px;box-shadow:0 6px 22px #00263460;color:#fff;display:flex;flex-direction:column;gap:6px; }
+.town-texture-loader label {background:#fff;color:#174d5d;padding:9px 11px;border-radius:8px;font-size:12px;font-weight:900;text-align:center;cursor:pointer;position:relative;}
+.town-texture-loader input {position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+.town-texture-loader small {font-size:10px;line-height:1.35;color:#e5f8ec;}
+@media(max-width:650px){.town-texture-loader{top:92px;left:8px;width:min(190px,50vw);padding:6px}.town-texture-loader label{font-size:9px;padding:6px}.town-texture-loader small{font-size:8px}}
