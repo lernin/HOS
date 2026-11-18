@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { TownWorld } from './TownWorld'
 
 type Stop = { id: number; name: string; icon: string; x: number; y: number; prompts: string[] }
 type Player = { id: number; name: string; color: string; at: number }
@@ -14,7 +15,7 @@ type Command =
   | { kind: 'ask'; value: string }
   | { kind: 'select'; id: number }
   | { kind: 'reset' }
-type EventPayload = { state?: State; command?: Command; key?: string }
+type EventPayload = { state?: State; command?: Command; key?: string; phase?: 'dice' | 'walking' | 'arrived' | 'idle' }
 type Recording = { id: number; filename: string; url: string; name: string }
 const COLORS = ['#ff6266','#1ca4d9','#f5b84b','#a58eff','#62c870','#f086c3','#e5985c','#7a9dec']
 const STOPS: Stop[] = [
@@ -116,6 +117,9 @@ export default function Town() {
   const [state, setState] = useState<State>(blank)
   const stateRef = useRef(state)
   const [connection, setConnection] = useState('Connecting…')
+  const [phase,setPhase] = useState<'dice'|'walking'|'arrived'|'idle'>('idle')
+  const [walkNumber,setWalkNumber]=useState(0)
+  const turnRef=useRef(-1)
   const [paired, setPaired] = useState(false)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const [message, setMessage] = useState('')
@@ -163,6 +167,9 @@ export default function Town() {
       setConnection('Paired with Town TV')
       setPaired(true)
     })
+    channel.on('broadcast', { event: 'phase' }, ({ payload }: { payload: EventPayload }) => {
+      if(isPhone && payload.phase) setPhase(payload.phase)
+    })
     channel.on('broadcast', { event: 'command' }, ({ payload }: { payload: EventPayload }) => {
       if (isPhone || !payload.command) return
       const result = apply(stateRef.current, payload.command)
@@ -188,6 +195,24 @@ export default function Town() {
     audioUrls.current.forEach(u => URL.revokeObjectURL(u))
   }, [])
 
+  useEffect(()=>{
+    if(isPhone)return
+    if(!state.roll){setPhase('idle');send('phase',{phase:'idle'});return}
+    if(turnRef.current===state.round)return
+    turnRef.current=state.round
+    setPhase('dice')
+    send('phase',{phase:'dice'})
+    const timer=window.setTimeout(()=>{
+      setPhase('walking')
+      send('phase',{phase:'walking'})
+      setWalkNumber(n=>n+1)
+    },1600)
+    return ()=>window.clearTimeout(timer)
+  },[state.roll,state.round,isPhone,send])
+  const arrived=useCallback(()=>{
+    setPhase('arrived')
+    send('phase',{phase:'arrived'})
+  },[send])
   const speak = () => {
     if (!window.speechSynthesis) { setMessage('Speech playback is unavailable on this device.'); return }
     window.speechSynthesis.cancel()
@@ -278,6 +303,7 @@ export default function Town() {
             <button type="button" className="town-primary" disabled={Boolean(state.roll) || recording} onClick={() => run({ kind: 'roll' })}>{state.roll ? 'Dice rolled — answer below' : '🎲 ROLL TWO DICE'}</button>
           </section>
           {state.roll && <section className="town-card town-prompt-card">
+            {phase !== 'arrived' && <p className="town-muted">{phase === 'dice' ? 'Dice rolling on the TV…' : phase === 'walking' ? 'Walking through town…' : 'Waiting for arrival…'}</p>}
             <small>DESTINATION {total}</small><h2>{stop.icon} {stop.name}</h2>
             <p className="town-prompt">{question}</p>
             <div className="town-phone-actions"><button type="button" onClick={speak}>▶ Play question</button><button type="button" onClick={() => run({ kind: 'changePrompt' })}>↻ New question</button></div>
@@ -302,7 +328,7 @@ export default function Town() {
 
   return (
     <div className="town town-tv">
-      <div className="town-city-visual" aria-hidden="true" />
+      <TownWorld destination={state.stop} moveNumber={walkNumber} onArrive={arrived} />
       <div className="town-tv-vignette" />
       <header className="town-tv-header">
         <div className="town-brand"><small>THE LAB · CLASSROOM ADVENTURE</small><h1>TOWN</h1><span>THE WHOLE CITY IS YOUR CLASSROOM</span></div>
@@ -312,25 +338,14 @@ export default function Town() {
         </div>
       </header>
 
-      <div className="town-tv-locations">
-        {STOPS.slice(1).map(s => (
-          <div key={s.id} className={'town-pin' + (state.roll && state.stop === s.id ? ' selected' : '')}
-            style={{ left: s.x + '%', top: s.y + '%' }} title={s.name}>
-            <span>{s.icon}</span><b>{s.name}</b>
-          </div>
-        ))}
-        {state.players.map((p, i) => {
-          const site = place(p.at)
-          const x = site.x + ((i % 3) - 1) * 1.25
-          const y = site.y + 6 + Math.floor(i / 3) * 4
-          return <div key={p.id} className={'town-avatar' + (p.id === state.active ? ' current' : '')} style={{ left: x + '%', top: y + '%', background: p.color }} title={p.name}>{p.name[0].toUpperCase()}</div>
-        })}
-      </div>
+      {phase==='dice' && <div className="town-dice-event" aria-live="polite"><strong>🎲 ROLLING!</strong><div className="town-dice-bounce"><span>{state.roll?.[0]}</span><span>{state.roll?.[1]}</span></div><p>Where will we go?</p></div>}
+      {phase==='walking' && <div className="town-walk-event"><strong>{activePlayer.name} is exploring Town!</strong><span>Walking to {stop.name}…</span></div>}
+      {phase==='arrived' && state.roll && <div className="town-question-overlay"><small>WELCOME TO {stop.name.toUpperCase()}</small><h2>{stop.icon} {stop.name}</h2><p>{question}</p></div>}
 
       <section className="town-tv-bottom">
-        <div className="town-current-turn"><small>NOW PLAYING</small><strong>{activePlayer.name}</strong><div>{state.roll ? 'Arrived at ' + stop.name : 'Ready to roll!'}</div></div>
+        <div className="town-current-turn"><small>NOW PLAYING</small><strong>{activePlayer.name}</strong><div>{phase==='walking' ? 'Walking to '+stop.name : state.roll ? 'At '+stop.name : 'Ready to roll!'}</div></div>
         <div className="town-tv-dice"><span>{state.roll?.[0] ?? '⚀'}</span><span>{state.roll?.[1] ?? '⚀'}</span><b>{total ?? '—'}</b></div>
-        <div className="town-turn-hint">{state.roll ? stop.icon + '  ' + stop.name : 'Scan the QR code, then roll from your phone.'}</div>
+        <div className="town-turn-hint">{state.roll ? (phase==='arrived'?'Question on TV and phone':'Enjoy the journey through town…') : 'Scan the QR code, then roll from your phone.'}</div>
       </section>
 
       <aside className={'town-pair-card' + (paired ? ' paired' : '')}>
