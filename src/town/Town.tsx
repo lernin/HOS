@@ -51,6 +51,10 @@ function apply(state: State, action: Command): State {
   if (action.kind === 'add') {
     const name = safeName(action.name)
     if (!name || state.players.length >= 8) return state
+    // The first child replaces the demo slot instead of creating a ghost Player 1 turn.
+    if (state.players.length === 1 && state.players[0].name === 'Player 1' && state.round === 0) {
+      return { ...state, players: [{ ...state.players[0], name }] }
+    }
     const nextId = Math.max(...state.players.map(p => p.id)) + 1
     return { ...state, players: [...state.players, { id: nextId, name, color: COLORS[(nextId - 1) % COLORS.length], at: 1 }] }
   }
@@ -92,7 +96,7 @@ function QR({ value }: { value: string }) {
     }
     if (window.QRCode) { render(); return }
     const script = document.createElement('script')
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js'
+    script.src = '/town/vendor/qrcode.min.js'
     script.async = true
     script.onload = render
     script.onerror = () => setStatus('QR library unavailable. Use the link below.')
