@@ -12,7 +12,7 @@ type Status = 'canonical' | 'provisional' | 'contested' | 'unclear' | 'retired' 
 type DefinitionStatus = 'good' | 'needs_work'
 type Filter = 'all' | 'unlabeled' | Status
 type Theme = 'terminal-cream' | 'terminal-green' | 'ocean-blue' | 'cyberpunk' | 'holographic' | 'neural' | 'deep-space' | 'orbital'
-type View = 'hub' | 'thekonym-viewer' | 'fluency' | 'thekonym' | 'concept-interactions' | 'world3d' | 'water-garden' | 'woodland-walk' | 'waterfall-village' | 'ocean-estate' | 'ocean-estate-plan' | 'liquid-orb' | 'music-discovery' | 'knock-knock' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab' | 'brush'
+type View = 'hub' | 'thekonym-viewer' | 'fluency' | 'thekonym' | 'concept-interactions' | 'world3d' | 'water-garden' | 'woodland-walk' | 'waterfall-village' | 'ocean-estate' | 'ocean-estate-plan' | 'liquid-orb' | 'music-discovery' | 'knock-knock' | 'roy' | 'ekpronym' | 'library' | 'scroller' | 'bookvocab' | 'brush' | 'stax-shape-lab'
 type FontPrefs = { definition: number; thoughts: number; rail: number; judgment: number }
 type SyncState = 'synced' | 'syncing' | 'offline'
 type Term = {
@@ -72,6 +72,7 @@ const Library = lazy(() => import('./experiences/Library').then(module => ({ def
 const Scroller = lazy(() => import('./experiences/Scroller').then(module => ({ default: module.Scroller })))
 const BookVocab = lazy(() => import('./experiences/BookVocab').then(module => ({ default: module.BookVocab })))
 const Brush = lazy(() => import('./experiences/Brush').then(module => ({ default: module.Brush })))
+const StaxLab = lazy(() => import('./experiences/StaxLab').then(module => ({ default: module.StaxLab })))
 const ThekonymReader = lazy(() => import('./experiences/ThekonymReader').then(module => ({ default: module.ThekonymReader })))
 const ConceptInteractionReview = lazy(() => import('./experiences/ConceptInteractionReview').then(module => ({ default: module.ConceptInteractionReview })))
 const ThekonymFluency = lazy(() => import('./experiences/ThekonymFluency'))
@@ -101,7 +102,7 @@ function applyPendingChanges(source: Term[], changes = readOutbox()) {
 }
 
 function App() {
-  const [view, setView] = useState<View>(() => window.location.pathname === '/brush' ? 'brush' : window.location.pathname === '/concept-interactions' ? 'concept-interactions' : window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/ocean-estate-plan' ? 'ocean-estate-plan' : window.location.pathname === '/ocean-estate' ? 'ocean-estate' : window.location.pathname === '/waterfall-village' ? 'waterfall-village' : window.location.pathname === '/liquid-orb' ? 'liquid-orb' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/knock-knock' ? 'knock-knock' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/fluency' ? 'fluency' : 'hub')
+  const [view, setView] = useState<View>(() => window.location.pathname === '/stax-shape-lab' ? 'stax-shape-lab' : window.location.pathname === '/brush' ? 'brush' : window.location.pathname === '/concept-interactions' ? 'concept-interactions' : window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/ocean-estate-plan' ? 'ocean-estate-plan' : window.location.pathname === '/ocean-estate' ? 'ocean-estate' : window.location.pathname === '/waterfall-village' ? 'waterfall-village' : window.location.pathname === '/liquid-orb' ? 'liquid-orb' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/knock-knock' ? 'knock-knock' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/fluency' ? 'fluency' : 'hub')
   const [pin, setPin] = useState('')
   const [pinInput, setPinInput] = useState('')
   const [terms, setTerms] = useState<Term[]>([])
@@ -129,14 +130,14 @@ function App() {
   const flushingRef = useRef(false)
 
   useEffect(() => {
-    if (!['/brush', '/thekonym-viewer', '/fluency', '/concept-interactions', '/water-garden', '/woodland-walk', '/waterfall-village', '/ocean-estate', '/ocean-estate-plan', '/liquid-orb', '/music-discovery', '/knock-knock'].includes(window.location.pathname)) window.history.replaceState({}, '', '/')
-    const syncView = () => setView(window.location.pathname === '/brush' ? 'brush' : window.location.pathname === '/concept-interactions' ? 'concept-interactions' : window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/ocean-estate-plan' ? 'ocean-estate-plan' : window.location.pathname === '/ocean-estate' ? 'ocean-estate' : window.location.pathname === '/waterfall-village' ? 'waterfall-village' : window.location.pathname === '/liquid-orb' ? 'liquid-orb' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/knock-knock' ? 'knock-knock' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/fluency' ? 'fluency' : window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
+    if (!['/stax-shape-lab', '/brush', '/thekonym-viewer', '/fluency', '/concept-interactions', '/water-garden', '/woodland-walk', '/waterfall-village', '/ocean-estate', '/ocean-estate-plan', '/liquid-orb', '/music-discovery', '/knock-knock'].includes(window.location.pathname)) window.history.replaceState({}, '', '/')
+    const syncView = () => setView(window.location.pathname === '/stax-shape-lab' ? 'stax-shape-lab' : window.location.pathname === '/brush' ? 'brush' : window.location.pathname === '/concept-interactions' ? 'concept-interactions' : window.location.pathname === '/woodland-walk' ? 'woodland-walk' : window.location.pathname === '/ocean-estate-plan' ? 'ocean-estate-plan' : window.location.pathname === '/ocean-estate' ? 'ocean-estate' : window.location.pathname === '/waterfall-village' ? 'waterfall-village' : window.location.pathname === '/liquid-orb' ? 'liquid-orb' : window.location.pathname === '/music-discovery' ? 'music-discovery' : window.location.pathname === '/knock-knock' ? 'knock-knock' : window.location.pathname === '/water-garden' ? 'water-garden' : window.location.pathname === '/thekonym-viewer' ? 'thekonym-viewer' : window.location.pathname === '/fluency' ? 'fluency' : window.location.pathname === '/thekonym' ? 'thekonym' : window.location.pathname === '/world-3d' ? 'world3d' : window.location.pathname === '/roy' ? 'roy' : window.location.pathname === '/ekpronym' ? 'ekpronym' : window.location.pathname === '/library' ? 'library' : window.location.pathname === '/scroller' ? 'scroller' : window.location.pathname === '/book-vocab' ? 'bookvocab' : 'hub')
     window.addEventListener('popstate', syncView)
     return () => window.removeEventListener('popstate', syncView)
   }, [])
 
   function navigate(next: View) {
-    const path = next === 'brush' ? '/brush' : next === 'concept-interactions' ? '/concept-interactions' : next === 'woodland-walk' ? '/woodland-walk' : next === 'ocean-estate-plan' ? '/ocean-estate-plan' : next === 'ocean-estate' ? '/ocean-estate' : next === 'waterfall-village' ? '/waterfall-village' : next === 'liquid-orb' ? '/liquid-orb' : next === 'music-discovery' ? '/music-discovery' : next === 'knock-knock' ? '/knock-knock' : next === 'water-garden' ? '/water-garden' : next === 'thekonym-viewer' ? '/thekonym-viewer' : next === 'fluency' ? '/fluency' : next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
+    const path = next === 'stax-shape-lab' ? '/stax-shape-lab' : next === 'brush' ? '/brush' : next === 'concept-interactions' ? '/concept-interactions' : next === 'woodland-walk' ? '/woodland-walk' : next === 'ocean-estate-plan' ? '/ocean-estate-plan' : next === 'ocean-estate' ? '/ocean-estate' : next === 'waterfall-village' ? '/waterfall-village' : next === 'liquid-orb' ? '/liquid-orb' : next === 'music-discovery' ? '/music-discovery' : next === 'knock-knock' ? '/knock-knock' : next === 'water-garden' ? '/water-garden' : next === 'thekonym-viewer' ? '/thekonym-viewer' : next === 'fluency' ? '/fluency' : next === 'thekonym' ? '/thekonym' : next === 'world3d' ? '/world-3d' : next === 'roy' ? '/roy' : next === 'ekpronym' ? '/ekpronym' : next === 'library' ? '/library' : next === 'scroller' ? '/scroller' : next === 'bookvocab' ? '/book-vocab' : '/'
     window.history.pushState({}, '', path)
     setView(next)
     window.scrollTo(0, 0)
@@ -459,6 +460,7 @@ function App() {
       </section>
       <section className="experience-grid">
         <article className="experience-card"><span className="experience-icon">Br</span><span className="experience-copy"><strong>Brush</strong><small>Portraits compete head to head, so the Lab can learn which traits you find beautiful.</small></span><button className="experience-go" onClick={() => navigate('brush')}>Go</button></article>
+        <article className="experience-card"><span className="experience-icon">St</span><span className="experience-copy"><strong>STAX Shape Lab</strong><small>Experiment with the recovered shape-only grammar board: drag, arrange, save, and export compositions.</small></span><button className="experience-go" onClick={() => navigate('stax-shape-lab')}>Go</button></article>
         <article className="experience-card"><span className="experience-icon">Oe</span><span className="experience-copy"><strong>Ocean Estate</strong><small>A warm modern home above the ocean. Tap to walk through the house, gardens, and terraces.</small></span><button className="experience-go" onClick={() => navigate('ocean-estate')}>Go</button></article>
         <article className="experience-card"><span className="experience-icon">Wv</span><span className="experience-copy"><strong>Waterfall Village</strong><small>Climb a treehouse, step inside cosy cottages, and row through the valley to the lake.</small></span><button className="experience-go" onClick={() => navigate('waterfall-village')}>Go</button></article>
         <article className="experience-card">
@@ -541,6 +543,7 @@ function App() {
     </main>
   )
 
+  if (view === 'stax-shape-lab') return <Suspense fallback={<main className="shell"><div className="center">Opening STAX Shape Lab…</div></main>}><StaxLab onExit={() => navigate('hub')} /></Suspense>
   if (view === 'concept-interactions') return <Suspense fallback={<main className="shell"><div className="center">Opening Concept Interactions…</div></main>}><ConceptInteractionReview pin={pin} onExit={() => navigate('hub')} /></Suspense>
   if (view === 'water-garden') return <Suspense fallback={<main className="shell"><div className="center">Opening Water Garden…</div></main>}><WaterGarden onExit={() => navigate('hub')} /></Suspense>
   if (view === 'woodland-walk') return <Suspense fallback={<main className="shell"><div className="center">Opening Woodland Walk…</div></main>}><WoodlandWalk onBack={() => navigate('hub')} /></Suspense>
