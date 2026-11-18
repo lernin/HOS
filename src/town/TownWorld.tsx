@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 import { loadPackShapes, type AssetShape } from './assetGeometry'
+import { makePavingTexture } from './textureAtlas'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { useState, type ChangeEvent } from 'react'
 
 export const LOCATIONS = [
   { x: 0, z: 5 },
@@ -68,7 +71,7 @@ function tree(parent: THREE.Scene, x: number, z: number, height = 7) {
   canopy.position.set(x, height * .68, z)
   parent.add(canopy)
 }
-function makePerson(parent: THREE.Group, color: string, label: string) {
+function makePerson(parent: THREE.Group | THREE.Scene, color: string, label: string) {
   const actor = new THREE.Group()
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.3, 2.1, 4, 8), new THREE.MeshStandardMaterial({ color }))
   body.position.y = 3.1; body.castShadow = true; actor.add(body)
@@ -85,6 +88,8 @@ function makePerson(parent: THREE.Group, color: string, label: string) {
 }
 
 export function TownWorld({ players, active, target, stage, stageTime }: Props) {
+  const [assetStatus,setAssetStatus]=useState('Preview paving texture loaded · select original GLB for all embedded building textures')
+  const loadOriginalRef = useRef<((file: File)=>void)|null>(null)
   const mount = useRef<HTMLDivElement>(null)
   const data = useRef({ players, active, target, stage, stageTime })
   data.current = { players, active, target, stage, stageTime }
@@ -108,6 +113,8 @@ export function TownWorld({ players, active, target, stage, stageTime }: Props) 
     renderer.domElement.style.display = 'block'
     host.appendChild(renderer.domElement)
     scene.add(new THREE.HemisphereLight('#ffffff', '#628c65', 2.25))
+    const pavingTexture = makePavingTexture()
+    const pavingMaterial = new THREE.MeshStandardMaterial({map:pavingTexture,roughness:.9,color:'#ffffff'})
     const sun = new THREE.DirectionalLight('#fff4dc', 3.15)
     sun.position.set(-65, 140, 65); scene.add(sun)
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(450, 450), new THREE.MeshStandardMaterial({ color: '#80bc9f', roughness: 1 }))
@@ -117,7 +124,7 @@ export function TownWorld({ players, active, target, stage, stageTime }: Props) 
     const ring = LOCATIONS.slice(1).map(p => new THREE.Vector3(p.x, .02, p.z))
     ring.push(ring[0].clone())
     const roadMat = new THREE.MeshStandardMaterial({ color: '#4c606b', roughness: .95 })
-    const pavementMat = new THREE.MeshStandardMaterial({ color: '#d9e4df' })
+    const pavementMat = pavingMaterial
     for (let i = 0; i < LOCATIONS.length - 1; i++) {
       const p = LOCATIONS[i], q = LOCATIONS[i + 1]
       const distance = Math.hypot(q.x - p.x, q.z - p.z)
@@ -134,7 +141,7 @@ export function TownWorld({ players, active, target, stage, stageTime }: Props) 
       }
     }
     // Square promenade joins the centre to the roads.
-    const plaza = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, .35, 24), new THREE.MeshStandardMaterial({ color: '#e3cba9' }))
+    const plaza = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, .35, 24), pavingMaterial)
     plaza.position.set(0, .15, 5); scene.add(plaza)
     const fountain = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, 1.2, 22), new THREE.MeshStandardMaterial({ color: '#e3e9f0' }))
     fountain.position.set(0, .9, 5); scene.add(fountain)
@@ -144,13 +151,39 @@ export function TownWorld({ players, active, target, stage, stageTime }: Props) 
     // Immediate environment while pack geometry decodes asynchronously.
     const assets = new THREE.Group()
     scene.add(assets)
+    let imported: THREE.Group | null = null
+    let importVersion = 0
+    loadOriginalRef.current = (file:File) => {
+      if (!/\.glb$/i.test(file.name)) {setAssetStatus('Please extract Cartoon_City_Free.glb from the ZIP first.');return}
+      const currentVersion=++importVersion
+      setAssetStatus('Loading original full-resolution 3D models and embedded textures…')
+      const objectURL=URL.createObjectURL(file)
+      void new GLTFLoader().loadAsync(objectURL).then(gltf=>{
+        if (disposed || currentVersion!==importVersion) return
+        if (imported) scene.remove(imported)
+        const original=gltf.scene
+        const bounds=new THREE.Box3().setFromObject(original)
+        const size=bounds.getSize(new THREE.Vector3())
+        const center=bounds.getCenter(new THREE.Vector3())
+        if (!size.x || !size.z || !Number.isFinite(size.x)) throw Error('Invalid city geometry')
+        const scale=190/Math.max(size.x,size.z)
+        original.scale.setScalar(scale)
+        original.position.set(-center.x*scale,-bounds.min.y*scale,-center.z*scale)
+        const group=new THREE.Group()
+        group.add(original)
+        scene.add(group)
+        imported=group
+        assets.visible=false // Replace reduced proxy buildings with authentic textured 3D geometry.
+        setAssetStatus('Original Cartoon City GLB loaded with its embedded material maps and UVs.')
+      }).catch(()=>{setAssetStatus('Could not read this GLB. Try the extracted Cartoon_City_Free.glb.')} ).finally(()=>URL.revokeObjectURL(objectURL))
+    }
     const iconNames = ['TOWN SQUARE','BAKERY','LIBRARY','FIRE STATION','HOSPITAL','PET SHOP','SCHOOL','POLICE','CINEMA','MUSEUM','RESTAURANT','TOY SHOP']
     LOCATIONS.forEach((p, i) => {
       const board = sign((i + 1) + ' · ' + iconNames[i])
       board.position.set(p.x, 10, p.z)
       scene.add(board)
       if (i > 0) {
-        const pad = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, .3, 18), new THREE.MeshStandardMaterial({ color: '#f9d57c' }))
+        const pad = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 3.2, .3, 18), new THREE.MeshStandardMaterial({ map:pavingTexture, color:'#f1d790', roughness:.9 }))
         pad.position.set(p.x, .4, p.z); scene.add(pad)
       }
     })
@@ -280,6 +313,8 @@ export function TownWorld({ players, active, target, stage, stageTime }: Props) 
     raf=requestAnimationFrame(tick)
     return ()=>{
       disposed=true
+      loadOriginalRef.current=null
+      importVersion++
       cancelAnimationFrame(raf)
       observer.disconnect()
       window.removeEventListener('keydown',onKeyDown)
@@ -299,8 +334,19 @@ export function TownWorld({ players, active, target, stage, stageTime }: Props) 
           item.material.map?.dispose();item.material.dispose()
         }
       })
+      pavingTexture.dispose()
       renderer.dispose()
     }
   }, [])
-  return <div className="town-world" ref={mount} aria-label="Interactive 3D town. Drag to rotate the camera, scroll to zoom, or press WASD to explore."/>
+  const importGlb=(event:ChangeEvent<HTMLInputElement>)=>{
+    const file=event.target.files?.[0]
+    if(file)loadOriginalRef.current?.(file)
+    event.target.value=''
+  }
+  return <div className="town-world" ref={mount} aria-label="Interactive 3D town. Drag to rotate the camera, scroll to zoom, or press WASD to explore.">
+    <div className="town-texture-loader">
+      <label>Load original textured city GLB <input type="file" accept=".glb" onChange={importGlb}/></label>
+      <small role="status">{assetStatus}</small>
+    </div>
+  </div>
 }
