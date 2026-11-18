@@ -68,7 +68,7 @@ function tree(parent: THREE.Scene, x: number, z: number, height = 7) {
   canopy.position.set(x, height * .68, z)
   parent.add(canopy)
 }
-function makePerson(parent: THREE.Group, color: string, label: string) {
+function makePerson(parent: THREE.Group | THREE.Scene, color: string, label: string) {
   const actor = new THREE.Group()
   const body = new THREE.Mesh(new THREE.CapsuleGeometry(1.3, 2.1, 4, 8), new THREE.MeshStandardMaterial({ color }))
   body.position.y = 3.1; body.castShadow = true; actor.add(body)
