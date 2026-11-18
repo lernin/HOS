@@ -13,6 +13,10 @@
   ],
   "rewrites": [
     {
+      "source": "/estate-adventure",
+      "destination": "/"
+    },
+    {
       "source": "/town",
       "destination": "/"
     },
