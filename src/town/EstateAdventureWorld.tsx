@@ -35,13 +35,15 @@ const initialInput = (): EstateInput => ({
   x: 0,
   z: 0,
   paused: false,
-  speed: 2.0,
+  // Fast classroom travel: long routes should be a brief event, not a 60-second wait.
+  // This affects Estate Adventure only; standard Ocean Estate speed is unchanged.
+  speed: 13.5,
   quality: 1,
   lighting: 'daylight',
   lookedAt: 0,
   looking: false,
   fast: false,
-  maxTurnSpeed: 28 * Math.PI / 180,
+  maxTurnSpeed: 150 * Math.PI / 180,
 })
 
 export default function EstateAdventureWorld({target,stage,stageTime,onArrival,onRouteError}: Props) {
