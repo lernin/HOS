@@ -165,5 +165,24 @@
         setTimeout(addPhonicsCard, 0);
       })();
     </script>
+    <script>
+      // Town is a standalone classroom experiment. Link to its TV route from the Lab hub.
+      (() => {
+        const addTownCard = () => {
+          const grid = document.querySelector('.experience-grid');
+          if (!grid || document.getElementById('town-hub-card')) return;
+          const card = document.createElement('article');
+          card.className = 'experience-card';
+          card.id = 'town-hub-card';
+          card.innerHTML = '<span class="experience-icon">🏙</span><span class="experience-copy"><strong>Town</strong><small>Full-screen city adventure. Scan the QR to roll dice, ask questions and record responses on your phone.</small></span><button class="experience-go" type="button">Go</button>';
+          card.querySelector('button')?.addEventListener('click', () => { window.location.href = '/town'; });
+          grid.prepend(card);
+        };
+        const root = document.getElementById('root');
+        if (root) new MutationObserver(addTownCard).observe(root, { childList: true, subtree: true });
+        window.addEventListener('popstate', () => setTimeout(addTownCard, 0));
+        setTimeout(addTownCard, 0);
+      })();
+    </script>
   </body>
 </html>
