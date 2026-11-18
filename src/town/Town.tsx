@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { TownWorld } from './TownWorld'
 
 type Stop = { id: number; name: string; icon: string; x: number; y: number; prompts: string[] }
 type Player = { id: number; name: string; color: string; at: number }
 type Round = { name: string; location: string; roll: number; question: string; notes: string }
-type State = { players: Player[]; active: number; roll: [number, number] | null; stop: number; prompt: number; custom: string; round: number }
+type Stage = 'ready' | 'rolling' | 'walking' | 'question'
+type State = { players: Player[]; active: number; roll: [number, number] | null; stop: number; prompt: number; custom: string; round: number; stage: Stage; stageTime: number }
 type Command =
   | { kind: 'add'; name: string }
   | { kind: 'roll' }
@@ -14,6 +16,7 @@ type Command =
   | { kind: 'ask'; value: string }
   | { kind: 'select'; id: number }
   | { kind: 'reset' }
+  | { kind: 'stage'; stage: Stage }
 type EventPayload = { state?: State; command?: Command; key?: string }
 type Recording = { id: number; filename: string; url: string; name: string }
 const COLORS = ['#ff6266','#1ca4d9','#f5b84b','#a58eff','#62c870','#f086c3','#e5985c','#7a9dec']
@@ -31,7 +34,7 @@ const STOPS: Stop[] = [
   { id: 11, name: 'Restaurant', icon: '🍜', x: 33, y: 67, prompts: ['The chef only serves invisible spaghetti. Complain politely.', 'Order dinner for a very picky monster.', 'The waiter is a robot that misunderstands everything. What do you say?'] },
   { id: 12, name: 'Toy Shop', icon: '🧸', x: 19, y: 67, prompts: ['All the toys wake up at midnight. Tell their story.', 'Invent a toy that teaches children English.', 'Choose one magical toy and explain what it does.'] },
 ]
-const blank = (): State => ({ players: [{ id: 1, name: 'Player 1', color: COLORS[0], at: 1 }], active: 1, roll: null, stop: 1, prompt: 0, custom: '', round: 0 })
+const blank = (): State => ({ players: [{ id: 1, name: 'Player 1', color: COLORS[0], at: 1 }], active: 1, roll: null, stop: 1, prompt: 0, custom: '', round: 0, stage: 'ready', stageTime: 0 })
 const dice = (): number => {
   const a = new Uint32Array(1)
   crypto.getRandomValues(a)
@@ -48,6 +51,10 @@ const save = (file: string, text: string) => {
 }
 function apply(state: State, action: Command): State {
   if (action.kind === 'reset') return blank()
+  if (action.kind === 'stage') {
+    if (!state.roll || (action.stage === 'walking' && state.stage !== 'rolling') || (action.stage === 'question' && state.stage !== 'walking')) return state
+    return { ...state, stage: action.stage, stageTime: performance.now() }
+  }
   if (action.kind === 'add') {
     const name = safeName(action.name)
     if (!name || state.players.length >= 8) return state
@@ -64,7 +71,7 @@ function apply(state: State, action: Command): State {
     const result: [number, number] = [dice(), dice()]
     const at = result[0] + result[1]
     return {
-      ...state, roll: result, stop: at, prompt: dice() % place(at).prompts.length, custom: '',
+      ...state, roll: result, stop: at, prompt: dice() % place(at).prompts.length, custom: '', stage: 'rolling', stageTime: performance.now(),
       players: state.players.map(p => p.id === state.active ? { ...p, at } : p),
     }
   }
@@ -73,7 +80,7 @@ function apply(state: State, action: Command): State {
   if (action.kind === 'next') {
     if (!state.roll) return state
     const idx = state.players.findIndex(p => p.id === state.active)
-    return { ...state, roll: null, active: state.players[(idx + 1) % state.players.length].id, round: state.round + 1, custom: '' }
+    return { ...state, roll: null, active: state.players[(idx + 1) % state.players.length].id, round: state.round + 1, custom: '', stage: 'ready', stageTime: 0 }
   }
   return state
 }
@@ -127,6 +134,8 @@ export default function Town() {
   const recorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [recording, setRecording] = useState(false)
+  const [liveDraft, setLiveDraft] = useState('')
+  const recognitionRef = useRef<{ stop: () => void } | null>(null)
   const [consent, setConsent] = useState(false)
   const pairUrl = location.origin + '/town?controller=' + room
   const activePlayer = state.players.find(p => p.id === state.active) ?? state.players[0]
@@ -183,10 +192,23 @@ export default function Town() {
   }, [room, isPhone, send])
 
   useEffect(() => () => {
+    recognitionRef.current?.stop()
     recorderRef.current?.state === 'recording' && recorderRef.current.stop()
     streamRef.current?.getTracks().forEach(t => t.stop())
     audioUrls.current.forEach(u => URL.revokeObjectURL(u))
   }, [])
+
+  useEffect(() => {
+    if (isPhone || !state.roll) return
+    if (state.stage === 'rolling') {
+      const timer = window.setTimeout(() => run({ kind: 'stage', stage: 'walking' }), 2150)
+      return () => window.clearTimeout(timer)
+    }
+    if (state.stage === 'walking') {
+      const timer = window.setTimeout(() => run({ kind: 'stage', stage: 'question' }), 6400)
+      return () => window.clearTimeout(timer)
+    }
+  }, [isPhone, state.stage, state.stageTime, state.roll, run])
 
   const speak = () => {
     if (!window.speechSynthesis) { setMessage('Speech playback is unavailable on this device.'); return }
@@ -198,6 +220,9 @@ export default function Town() {
   const record = async () => {
     if (recorderRef.current?.state === 'recording') {
       recorderRef.current.stop()
+      recognitionRef.current?.stop()
+      recognitionRef.current = null
+      setLiveDraft('')
       setRecording(false)
       return
     }
@@ -228,12 +253,42 @@ export default function Town() {
       rec.start(400)
       recorderRef.current = rec
       setRecording(true)
-      setMessage('Recording on this phone only.')
+      setLiveDraft('')
+      // SpeechRecognition is only available in some browsers; it may use the
+      // browser provider's online speech service. Our app receives text only.
+      type RecognitionEvent = { resultIndex: number; results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }
+      type RecognitionInstance = { lang: string; continuous: boolean; interimResults: boolean; onresult: ((event: RecognitionEvent) => void) | null; onerror: (() => void) | null; start: () => void; stop: () => void }
+      const browser = window as Window & { SpeechRecognition?: new () => RecognitionInstance; webkitSpeechRecognition?: new () => RecognitionInstance }
+      const Recognition = browser.SpeechRecognition ?? browser.webkitSpeechRecognition
+      if (Recognition) {
+        try {
+          const live = new Recognition()
+          live.lang = 'en-US'; live.continuous = true; live.interimResults = true
+          live.onresult = (event) => {
+            const finalized: string[] = []; const interim: string[] = []
+            for (let i=event.resultIndex;i<event.results.length;i++) {
+              const text = event.results[i][0]?.transcript.trim()
+              if (!text) continue
+              if (event.results[i].isFinal) finalized.push(text)
+              else interim.push(text)
+            }
+            if (finalized.length) setNotes(old => (old.trim() + ' ' + finalized.join(' ')).trim())
+            setLiveDraft(interim.join(' '))
+          }
+          live.onerror = () => setMessage('Automatic transcription was interrupted. Your audio recording is still being saved.')
+          live.start()
+          recognitionRef.current = live
+          setMessage('Recording and transcribing on this phone (browser speech service).')
+        } catch {
+          setMessage('Recording audio. Automatic transcription is unavailable; enter notes or download audio.')
+        }
+      } else setMessage('Recording audio. This browser has no automatic speech recognition; download audio for transcription.')
+
     } catch { setMessage('Microphone permission not granted.'); setRecording(false) }
   }
 
   const finish = () => {
-    if (recording || !state.roll) return
+    if (recording || !state.roll || state.stage !== 'question') return
     setRounds(old => [...old, { name: activePlayer.name, location: stop.name, roll: total!, question, notes: notes.trim() || '(No written response)' }])
     setNotes('')
     run({ kind: 'next' })
@@ -275,23 +330,24 @@ export default function Town() {
           <section className="town-card town-roll-card">
             <small>WHOSE TURN?</small><h2>{activePlayer.name}</h2>
             <div className="town-big-dice"><span>{state.roll?.[0] ?? '⚀'}</span><span>{state.roll?.[1] ?? '⚀'}</span><strong>{total === null ? 'Ready!' : '→ ' + total}</strong></div>
-            <button type="button" className="town-primary" disabled={Boolean(state.roll) || recording} onClick={() => run({ kind: 'roll' })}>{state.roll ? 'Dice rolled — answer below' : '🎲 ROLL TWO DICE'}</button>
+            <button type="button" className="town-primary" disabled={Boolean(state.roll) || recording} onClick={() => run({ kind: 'roll' })}>{state.stage === 'rolling' ? 'Dice rolling on TV…' : state.stage === 'walking' ? 'Walking through town…' : state.roll ? 'Answer the question below' : '🎲 ROLL TWO DICE'}</button>
           </section>
-          {state.roll && <section className="town-card town-prompt-card">
+          {state.roll && state.stage === 'question' && <section className="town-card town-prompt-card">
             <small>DESTINATION {total}</small><h2>{stop.icon} {stop.name}</h2>
             <p className="town-prompt">{question}</p>
             <div className="town-phone-actions"><button type="button" onClick={speak}>▶ Play question</button><button type="button" onClick={() => run({ kind: 'changePrompt' })}>↻ New question</button></div>
             <input value={state.custom} onChange={e => run({ kind: 'ask', value: e.target.value })} maxLength={300} aria-label="Teacher custom question" placeholder="Or write your own question…" />
-            <label className="town-consent"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} /> I have permission to record this child's voice.</label>
+            <label className="town-consent"><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} /> I have permission to record this child's voice and use the browser's speech recognition (which may process audio through its provider).</label>
             <button type="button" className={'town-rec-btn' + (recording ? ' recording' : '')} onClick={() => void record()}>{recording ? '■ STOP RECORDING' : '● Record spoken answer'}</button>
-            <textarea aria-label="Child transcript or teacher notes" value={notes} onChange={e => setNotes(e.target.value)} rows={3} placeholder="Optional: type the child's response or teacher notes here." />
+            {liveDraft && <p className="town-live-draft">Hearing: {liveDraft}</p>}
+            <textarea aria-label="Child transcript or teacher notes" value={notes} onChange={e => setNotes(e.target.value)} rows={4} placeholder="Automatic transcript appears here on supported browsers. You can correct it or add notes." />
             <button type="button" className="town-next" onClick={finish} disabled={recording}>✓ Complete turn · Next player</button>
           </section>}
           <section className="town-card town-foot-card">
-            <h2>Lesson notes <small>{rounds.length} turns</small></h2>
+            <h2>Lesson evidence <small>{rounds.length} completed turns</small></h2>
             {clips.map(c => <a className="town-download" key={c.id} href={c.url} download={c.filename}>↓ Download audio · {c.name}</a>)}
             <div className="town-phone-actions"><button type="button" onClick={() => save('town-lesson.txt', transcript())}>↓ Export notes</button><button type="button" onClick={() => void copy(prompt()).then(() => setMessage('ChatGPT learning prompt copied.')).catch(() => save('town-chatgpt-prompt.txt', prompt()))}>Copy ChatGPT prompt</button></div>
-            <p>Voice recordings remain only in this phone browser until downloaded. No automatic transcription or cloud audio upload.</p>
+            <p>Audio stays in this phone browser until downloaded. The browser may use its speech service for transcription; we do not upload audio to the Lab backend. Check transcripts before exporting.</p>
             <button type="button" className="town-reset" onClick={() => { if (window.confirm('Reset the game? Download audio and notes first.')) { run({ kind: 'reset' }); setRounds([]); setNotes('') } }}>Reset game</button>
           </section>
         </>}
@@ -302,7 +358,7 @@ export default function Town() {
 
   return (
     <div className="town town-tv">
-      <div className="town-city-visual" aria-hidden="true" />
+      <TownWorld players={state.players} active={state.active} target={state.stop} stage={state.stage} stageTime={state.stageTime} />
       <div className="town-tv-vignette" />
       <header className="town-tv-header">
         <div className="town-brand"><small>THE LAB · CLASSROOM ADVENTURE</small><h1>TOWN</h1><span>THE WHOLE CITY IS YOUR CLASSROOM</span></div>
@@ -312,20 +368,10 @@ export default function Town() {
         </div>
       </header>
 
-      <div className="town-tv-locations">
-        {STOPS.slice(1).map(s => (
-          <div key={s.id} className={'town-pin' + (state.roll && state.stop === s.id ? ' selected' : '')}
-            style={{ left: s.x + '%', top: s.y + '%' }} title={s.name}>
-            <span>{s.icon}</span><b>{s.name}</b>
-          </div>
-        ))}
-        {state.players.map((p, i) => {
-          const site = place(p.at)
-          const x = site.x + ((i % 3) - 1) * 1.25
-          const y = site.y + 6 + Math.floor(i / 3) * 4
-          return <div key={p.id} className={'town-avatar' + (p.id === state.active ? ' current' : '')} style={{ left: x + '%', top: y + '%', background: p.color }} title={p.name}>{p.name[0].toUpperCase()}</div>
-        })}
-      </div>
+      <div className="town-explore-tip">3D TOWN · Drag to rotate · Scroll to zoom · WASD to explore</div>
+      {state.stage === 'rolling' && <div className="town-dice-event" aria-live="polite"><div className="town-confetti">✦ ✧ ★ ✦ ✧</div><div className="town-dice-spinners"><span>⚄</span><span>⚅</span></div><h2>{activePlayer.name} rolls the dice!</h2></div>}
+      {state.stage === 'walking' && <div className="town-walking-event" role="status"><strong>Off we go!</strong><span>{activePlayer.name} is walking to {stop.name}…</span></div>}
+      {state.stage === 'question' && <section className="town-tv-question" aria-label="Speaking challenge"><span>MISSION {total} · {stop.icon} {stop.name}</span><p>{question}</p><small>Answer and record on the phone</small></section>}
 
       <section className="town-tv-bottom">
         <div className="town-current-turn"><small>NOW PLAYING</small><strong>{activePlayer.name}</strong><div>{state.roll ? 'Arrived at ' + stop.name : 'Ready to roll!'}</div></div>
