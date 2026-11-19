@@ -230,8 +230,18 @@ export function MoleculeBoard(){
   if(currentDoc.current.atoms.length>=80){setHint('Maximum 80 shapes in this experiment.');return}
   const p=client?fromClient(client.x,client.y):null
   const camera=currentView.current
-  const x=(p?.x??camera.x+camera.width/2)-width(kind)/2
-  const y=(p?.y??camera.y+camera.height/2)-height(kind)/2
+  let x=(p?.x??camera.x+camera.width/2)-width(kind)/2
+  let y=(p?.y??camera.y+camera.height/2)-height(kind)/2
+  // Palette taps find an empty parking spot, but never connect or move existing pieces.
+  if(!p){
+   const occupied=(xx:number,yy:number)=>currentDoc.current.atoms.some(a=>xx<a.x+width(a.kind)+14&&xx+width(kind)+14>a.x&&yy<a.y+height(a.kind)+14&&yy+height(kind)+14>a.y)
+   const step=Math.max(width(kind),height(kind))+24
+   for(let n=0;n<30&&occupied(x,y);n++){
+    const ring=Math.floor(n/8)+1,dir=n%8
+    const xx=x+Math.cos(dir*Math.PI/4)*step*ring,yy=y+Math.sin(dir*Math.PI/4)*step*ring
+    if(!occupied(xx,yy)){x=xx;y=yy;break}
+   }
+  }
   save(spawn(currentDoc.current,kind,x,y));setHint('New shape is FREE. Drag it around; it will only snap when close to a matching attachment.')
  }
  function paletteDown(e:ReactPointerEvent<HTMLButtonElement>,kind:Kind){
