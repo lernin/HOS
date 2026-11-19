@@ -24,7 +24,7 @@ const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=66, TAP=9, DOUBLE_MS
 const KEY='stax-free-molecules-v2'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
-const choices:Choice[]=[{kind:'circle',label:'Noun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',variant:'large',label:'Orange · large'},{kind:'hexagon',variant:'small',label:'Orange · small'},{kind:'oval',variant:'large',label:'Green · complement'},{kind:'oval',variant:'small',label:'Green · modifier'}]
+const choices:Choice[]=[{kind:'circle',label:'Noun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',variant:'large',label:'Orange · gate'},{kind:'hexagon',variant:'small',label:'Orange · adverb'},{kind:'oval',variant:'large',label:'Green · complement'},{kind:'oval',variant:'small',label:'Green · modifier'}]
 const width=(k:Kind)=>SYMBOLS[k].w*SCALE
 const height=(k:Kind)=>SYMBOLS[k].h*SCALE
 const variantFactor=(kind:Kind,variant?:Atom['variant'])=>variant==='small'&&(kind==='oval'||kind==='hexagon')?(kind==='oval' ? .86 : .9):1
@@ -34,6 +34,7 @@ const empty=():Draft=>({atoms:[],bonds:[]})
 const defaultView:View={x:0,y:0,width:W,height:H}
 const byId=(d:Draft,id:string)=>d.atoms.find(a=>a.id===id)!
 const supports=(k:Kind)=>k==='square'||k==='rectangle'
+const nounSupport=(a:Atom)=>supports(a.kind)||(a.kind==='oval'&&a.variant==='small')
 function load():Draft {
  try {
   const d=JSON.parse(localStorage.getItem(KEY)||'null') as Draft|null
@@ -89,19 +90,26 @@ function alignSupporters(doc:Draft,blueId:string):Draft {
  for(const id of [...supportIds]){const other=otherInPair(doc,id);if(other)supportIds.add(other)}
  const pink=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='square')
  const purple=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='rectangle')
- if(!pink&&!purple)return doc
+ const modifier=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='oval'&&a.variant==='small')
+ if(!pink&&!purple&&!modifier)return doc
  const both=!!pink&&!!purple,cx=blue.x+width('circle')/2
- const rowWidth=both?width('square')+GAP+width('rectangle'):width((pink||purple)!.kind)
+ const rowWidth=both?width('square')+GAP+width('rectangle'):(pink||purple)?width((pink||purple)!.kind):0
  const startX=both?cx-rowWidth/2:cx-rowWidth
  const y=blue.y+height('circle')+VERTICAL
  const pinkPos=pink?{x:startX,y}:null
  const purplePos=purple?{x:both?startX+width('square')+GAP:startX,y:both?y+(height('square')-height('rectangle'))/2:y}:null
- return {...doc,atoms:doc.atoms.map(a=>a.id===pink?.id?{...a,...pinkPos}:a.id===purple?.id?{...a,...purplePos}:a)}
+ const greenPos=modifier?{x:cx-atomWidth(modifier)/2,y:y+(pink||purple?Math.max(height('square'),height('rectangle'))+GAP:0)}:null
+ return {...doc,atoms:doc.atoms.map(a=>a.id===pink?.id?{...a,...pinkPos}:a.id===purple?.id?{...a,...purplePos}:a.id===modifier?.id?{...a,...greenPos}:a)}
 }
 function supportPosition(blue:Atom,support:Atom,d:Draft) {
  const otherId=otherInPair(d,support.id)
  const other=otherId?byId(d,otherId):null
  const cx=blue.x+width('circle')/2
+ if(support.kind==='oval'&&support.variant==='small'){
+  const siblings=d.bonds.filter(b=>b.relation==='support'&&b.parent===blue.id).map(b=>byId(d,b.child))
+  const row=siblings.some(a=>supports(a.kind))
+  return {x:cx-atomWidth(support)/2,y:blue.y+height('circle')+VERTICAL+(row?height('square')+GAP:0)}
+ }
  if(other){
   const left=cx-(width('square')+GAP+width('rectangle'))/2
   return {x:support.kind==='square'?left:left+width('square')+GAP,y:blue.y+height('circle')+VERTICAL+(support.kind==='rectangle'?(height('square')-height('rectangle'))/2:0)}
@@ -132,7 +140,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    }
    // A support (or bonded pair) attaches under blue. Never attach it to a second blue.
    const blue=a.kind==='circle'?a:b.kind==='circle'?b:null
-   const sup=supports(a.kind)?a:supports(b.kind)?b:null
+   const sup=nounSupport(a)?a:nounSupport(b)?b:null
    if(blue&&sup&&!parentOfSupport(d,sup.id)){
     const supGroup=molecule(d,sup.id)
     if(![...supGroup].some(id=>byId(d,id).kind==='circle')){
@@ -186,9 +194,14 @@ function newFamilyAfterBlue(d:Draft,moving:Set<string>):boolean {
  // A rectangle explicitly to the RIGHT of a blue captain at its head level
  // is starting a different family (the source circle→rectangle n rule).
  // Never magnetically pull it underneath the earlier noun.
- return d.atoms.some(a=>moving.has(a.id)&&a.kind==='rectangle'&&
-   d.atoms.some(b=>!moving.has(b.id)&&b.kind==='circle'&&
-     a.x>=b.x+atomWidth(b)*.7&&a.y>=b.y-atomHeight(b)*.4&&a.y<=b.y+atomHeight(b)*.7))
+ return d.atoms.some(a=>{
+  if(!moving.has(a.id)||a.kind!=='rectangle')return false
+  const blue=d.atoms.filter(b=>!moving.has(b.id)&&b.kind==='circle')
+   .sort((b,c)=>Math.hypot(a.x-b.x,a.y-b.y)-Math.hypot(a.x-c.x,a.y-c.y))[0]
+  if(!blue)return false
+  return a.x>=blue.x+atomWidth(blue)*.7&&a.x<=blue.x+atomWidth(blue)*2.3&&
+   a.y>=blue.y-atomHeight(blue)*.4&&a.y<=blue.y+atomHeight(blue)*.7
+ })
 }
 /**
  * Reconstructs an editable *illustrative* molecule scene from the exact
@@ -481,6 +494,7 @@ export function MoleculeBoard(){
   <div className="stax-molecule-palette">{choices.map(({kind,variant,label})=><button key={`${kind}-${variant||'default'}`} title={label} aria-label={`Add ${label}`}
    onPointerDown={e=>paletteDown(e,kind,variant)} onPointerMove={paletteMove} onPointerUp={paletteUp} onPointerCancel={paletteCancel}>
    <svg viewBox={`-4 -4 ${width(kind)*variantFactor(kind,variant)+8} ${height(kind)*variantFactor(kind,variant)+8}`} aria-hidden="true"><Glyph kind={kind} w={width(kind)*variantFactor(kind,variant)} h={height(kind)*variantFactor(kind,variant)} stroke={SYMBOLS[kind].color} fill={SYMBOLS[kind].color+'14'} strokeWidth={3}/></svg>
+   {variant&&<span className="stax-palette-kind">{kind==='oval'?(variant==='small'?'Modifier':'Complement'):(variant==='small'?'Adverb':'Gate')}</span>}
   </button>)}</div>
   {paletteHover&&<div className={`stax-lifted-ghost${paletteHover.snap?' is-eligible':''}`} style={{left:paletteHover.screenX,top:paletteHover.screenY}} aria-hidden="true">
     <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
