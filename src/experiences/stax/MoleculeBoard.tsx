@@ -217,6 +217,13 @@ function miniFamilyPosition(doc:Draft,green:Atom,orange:Atom) {
  const proposed:Draft={...doc,bonds:[...doc.bonds,{parent:green.id,child:orange.id,relation:'support'}]}
  return blueSupportPositions(normalizeRoles(proposed),blueId).get(orange.id)!
 }
+function hoveringBelowGreen(doc:Draft,blueId:string,orange:Atom):boolean {
+ return greenSiblings(doc,blueId).some(green=>{
+  const x=green.x+(atomWidth(green)-smallWidth('hexagon'))/2
+  const y=green.y+atomHeight(green)+VERTICAL
+  return Math.hypot(orange.x-x,orange.y-y)<=SNAP_RADIUS
+ })
+}
 /** Returns only plausible near-drop join geometry; does NOT move anything itself. */
 function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  let best:Snap|null=null
@@ -236,7 +243,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    // A support (or bonded pair) attaches under blue. Never attach it to a second blue.
    const blue=a.kind==='circle'?a:b.kind==='circle'?b:null
    const sup=(nounSupport(a)||a.kind==='hexagon')?a:(nounSupport(b)||b.kind==='hexagon')?b:null
-   if(blue&&sup&&MAGNET_PORTS.blueSupport.includes(sup.kind as 'square'|'rectangle'|'oval'|'hexagon')&&!parentOfSupport(d,sup.id)){
+   if(blue&&sup&&MAGNET_PORTS.blueSupport.includes(sup.kind as 'square'|'rectangle'|'oval'|'hexagon')&&!parentOfSupport(d,sup.id)&&!(sup.kind==='hexagon'&&a.id===sup.id&&hoveringBelowGreen(d,blue.id,sup))){
     const supGroup=molecule(d,sup.id)
     if(![...supGroup].some(id=>byId(d,id).kind==='circle')){
      const already=blueSupportAtoms(d,blue.id)
