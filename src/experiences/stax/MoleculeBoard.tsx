@@ -251,7 +251,7 @@ function quest21():Draft {
  ]
  return {atoms,bonds}
 }
-export function MoleculeBoard(){
+export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const [doc,setDoc]=useState<Draft>(()=>normalizeRoles(load()))
  const [view,setView]=useState<View>(defaultView)
  const [history,setHistory]=useState<Draft[]>([])
@@ -491,7 +491,7 @@ export function MoleculeBoard(){
  function undo(){const prev=history.at(-1);if(prev){update(prev);setHistory(v=>v.slice(0,-1));setHint('Undone.')}}
  function remove(){if(!selected)return;save({atoms:doc.atoms.filter(a=>a.id!==selected),bonds:doc.bonds.filter(b=>b.parent!==selected&&b.child!==selected)});setSelected(null)}
  return <div ref={rootRef} className="stax-molecule-ui">
-  <div className="stax-molecule-tools"><strong>STAX · Magnetic Workspace</strong>
+  <div className="stax-molecule-tools"><button className="stax-molecule-back" onClick={onBack} title="Return to Classic Shape Lab" aria-label="Back to Classic Shape Lab">←</button><strong>STAX · Magnetic Workspace</strong>
    <div className="stax-molecule-buttons"><button onClick={toggleFullscreen} aria-label={fullscreen?"Exit full screen":"Go full screen"}>{fullscreen?"Exit full screen":"⛶ Full screen"}</button><button onClick={loadQuest} title="Load the 14-shape Level 21 source sentence" >Load Quest 21</button><button onClick={undo} disabled={!history.length}>Undo</button><button onClick={remove} disabled={!selected}>Remove</button><button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}}>Clear</button></div>
   </div>
   {questActive&&<p className="stax-molecule-example">STAX QUEST · Level 21 — She’s buying a present for her best friend because her birthday is tomorrow. <small>Illustrative mapping; original slide does not label each shape with its individual word.</small></p>}
