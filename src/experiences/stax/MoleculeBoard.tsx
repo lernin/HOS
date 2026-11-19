@@ -293,7 +293,7 @@ export function MoleculeBoard(){
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill="#faf9f6"/>
     {preview&&<g aria-hidden="true" pointerEvents="none">
-      {doc.atoms.filter(a=>molecule(doc,preview.child).has(a.id)||molecule(doc,preview.parent).has(a.id)).filter(a=>a.id===preview.child||a.id===preview.parent).map(a=><g key={a.id} transform={`translate(${a.x+(molecule(doc,preview.child).has(a.id)?preview.dx:0)} ${a.y+(molecule(doc,preview.child).has(a.id)?preview.dy:0)})`}>
+      {doc.atoms.filter(a=>dragging.current&&molecule(doc,dragging.current.id).has(a.id)).map(a=><g key={a.id} transform={`translate(${a.x+preview.dx} ${a.y+preview.dy})`}>
        <Glyph kind={a.kind} w={width(a.kind)} h={height(a.kind)} fill="none" stroke="#2ca39a" strokeDasharray="8 5" strokeWidth={3}/>
       </g>)}
      </g>}
