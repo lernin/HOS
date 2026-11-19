@@ -131,9 +131,6 @@ function zoom(v:View,factor:number):View {
  const w=Math.max(300,Math.min(4000,v.width*factor)),h=w*(v.height/v.width)
  return {x:v.x+(v.width-w)/2,y:v.y+(v.height-h)/2,width:w,height:h}
 }
-function linked(d:Draft,id:string,relation:Relation) {
- return d.bonds.some(b=>(b.parent===id||b.child===id)&&b.relation===relation)
-}
 function parentOfSupport(d:Draft,id:string){
  return d.bonds.find(b=>b.relation==='support'&&b.child===id)?.parent
 }
