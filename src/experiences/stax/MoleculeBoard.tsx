@@ -72,16 +72,16 @@ function box(d:Draft) {
  if(!d.atoms.length)return null
  return d.atoms.reduce((r,a)=>({l:Math.min(r.l,a.x),t:Math.min(r.t,a.y),r:Math.max(r.r,a.x+atomWidth(a)),b:Math.max(r.b,a.y+atomHeight(a))}),{l:Infinity,t:Infinity,r:-Infinity,b:-Infinity})
 }
-function fit(d:Draft):View {
+function fit(d:Draft,aspect=ASPECT):View {
  const b=box(d);if(!b)return defaultView
- const w=Math.max(300,Math.min(4000,Math.max(b.r-b.l+180,(b.b-b.t+180)*ASPECT))),h=w/ASPECT
+ const w=Math.max(300,Math.min(4000,Math.max(b.r-b.l+180,(b.b-b.t+180)*aspect))),h=w/aspect
  return {x:(b.l+b.r-w)/2,y:(b.t+b.b-h)/2,width:w,height:h}
 }
 function centre(d:Draft,v:View):View {
  const b=box(d);return b?{...v,x:(b.l+b.r-v.width)/2,y:(b.t+b.b-v.height)/2}:v
 }
 function zoom(v:View,factor:number):View {
- const w=Math.max(300,Math.min(4000,v.width*factor)),h=w/ASPECT
+ const w=Math.max(300,Math.min(4000,v.width*factor)),h=w*(v.height/v.width)
  return {x:v.x+(v.width-w)/2,y:v.y+(v.height-h)/2,width:w,height:h}
 }
 function linked(d:Draft,id:string,relation:Relation) {
@@ -272,7 +272,17 @@ export function MoleculeBoard(){
  useEffect(()=>()=>{if(fallTimer.current)clearTimeout(fallTimer.current)},[])
  function update(d:Draft){const resolved=normalizeRoles(d);currentDoc.current=resolved;setDoc(resolved)}
  function save(d:Draft,prev=currentDoc.current){setHistory(v=>[...v,prev].slice(-40));update(d)}
- function setCamera(v:View){currentView.current=v;setView(v)}
+ function aspect(){const rect=svg.current?.getBoundingClientRect();return rect?.height?rect.width/rect.height:ASPECT}
+ function setCamera(v:View){
+  const h=v.width/aspect(),adjusted={...v,y:v.y+(v.height-h)/2,height:h}
+  currentView.current=adjusted;setView(adjusted)
+ }
+ useEffect(()=>{
+  if(!rootRef.current||typeof ResizeObserver==='undefined')return
+  const ro=new ResizeObserver(()=>setCamera(currentView.current))
+  ro.observe(rootRef.current)
+  return ()=>ro.disconnect()
+ },[])
  function pointer(e:ReactPointerEvent<SVGSVGElement|SVGGElement>){
   const matrix=svg.current?.getScreenCTM();if(!matrix)return {x:0,y:0}
   const pt=svg.current!.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY
@@ -468,7 +478,7 @@ export function MoleculeBoard(){
  }
  function paletteCancel(){paletteDrag.current=null;setPaletteHover(null)}
   function loadQuest(){
-  const next=quest21();save(next);setCamera(fit(next));setSelected(null);setQuestActive(true)
+  const next=quest21();save(next);setCamera(fit(next,aspect()));setSelected(null);setQuestActive(true)
   setHint('Blueprint Level 21 loaded as a movable demonstration. Word roles are provisional; all shapes and bonds remain editable.')
  }
  async function toggleFullscreen(){
@@ -481,7 +491,7 @@ export function MoleculeBoard(){
    <div className="stax-molecule-buttons"><button onClick={toggleFullscreen} aria-label={fullscreen?"Exit full screen":"Go full screen"}>{fullscreen?"Exit full screen":"⛶ Full screen"}</button><button onClick={loadQuest} title="Load the 14-shape Level 21 source sentence" >Load Quest 21</button><button onClick={undo} disabled={!history.length}>Undo</button><button onClick={remove} disabled={!selected}>Remove</button><button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}}>Clear</button></div>
   </div>
   {questActive&&<p className="stax-molecule-example">STAX QUEST · Level 21 — She’s buying a present for her best friend because her birthday is tomorrow. <small>Illustrative mapping; original slide does not label each shape with its individual word.</small></p>}
-  <div className="stax-molecule-view-controls"><button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))}>Center</button><button onClick={()=>setCamera(fit(currentDoc.current))}>Fit all</button><button aria-label="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}>−</button><span>{Math.round(100*W/view.width)}%</span><button aria-label="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}>+</button></div>
+  <div className="stax-molecule-view-controls"><button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))}>Center</button><button onClick={()=>setCamera(fit(currentDoc.current,aspect()))}>Fit all</button><button aria-label="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}>−</button><span>{Math.round(100*W/view.width)}%</span><button aria-label="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}>+</button></div>
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill="#faf9f6"/>
