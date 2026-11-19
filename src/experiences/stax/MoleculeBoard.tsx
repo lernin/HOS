@@ -140,15 +140,20 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      }
     }
    }
-   // Whole headed families connect by a horizontal or diagonal step.
-   if((a.kind==='circle'||a.kind==='triangle')&&(b.kind==='circle'||b.kind==='triangle')&&!(a.kind==='triangle'&&b.kind==='triangle')){
+   // Sequence ports accept noun ↔ conjunction in either order.
+   // Yellow diamonds share the blue head's row; they are not noun supporters.
+   const structural=a.kind==='circle'||a.kind==='triangle'
+   const otherStructural=b.kind==='circle'||b.kind==='triangle'
+   const blueYellow=(a.kind==='circle'&&b.kind==='diamond')||(a.kind==='diamond'&&b.kind==='circle')
+   if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow){
     const left=a.x<=b.x?a:b,right=left.id===a.id?b:a
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
     if(!occupiedRight&&!occupiedLeft) {
-     // Consecutive circle/triangle heads step by prior head height plus Blueprint clearance.
-     const diagonal=left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
-     const gap=left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
+     // Conjunctions sit horizontally beside blue; blue/red retain their Blueprint staircase.
+     const conjunction=left.kind==='diamond'||right.kind==='diamond'
+     const diagonal=conjunction||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
+     const gap=conjunction?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
      const desired={x:left.x+width(left.kind)+gap,y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
      const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-gap-a.x,y:b.y-diagonal-a.y}
@@ -416,6 +421,6 @@ export function MoleculeBoard(){
     </svg>
    </div>}
   <p className="stax-molecule-hint" role="status">{hint}</p>
-  <p className="stax-molecule-note">Shapes lift above your finger during touch-drag; eligible magnets glow. Each new shape starts loose, wherever placed. One finger moves atoms or pans; pinch with two fingers to zoom. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Only known pink/purple/blue and blue/red relationships are provisionally magnetic.</p>
+  <p className="stax-molecule-note">Shapes lift above your finger during touch-drag; eligible magnets glow. Each new shape starts loose, wherever placed. One finger moves atoms or pans; pinch with two fingers to zoom. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Pink/purple support blue; blue/yellow connect horizontally in either order; red/blue keep the staircase.</p>
  </div>
 }
