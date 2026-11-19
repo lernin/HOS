@@ -288,17 +288,18 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    const blueYellow=(a.kind==='circle'&&b.kind==='diamond')||(a.kind==='diamond'&&b.kind==='circle')
    const left=a.x<=b.x?a:b,right=left.id===a.id?b:a
    // A green or orange changes visual role after attachment; no palette subtype.
-   const complement=right.kind==='oval'&&(left.kind==='circle'||left.kind==='triangle')
+   // A noun- or verb-adjacent green with an n-coded following relationship
+   // must NOT become a predecessor bond; green connects to a known parent port.
    // An orange gate/adverb attaches only through its actual parent port,
    // not through a left-neighbor sequence bond.
-   if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow||complement){
+   if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow){
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
     if(!occupiedRight&&!occupiedLeft) {
      // Conjunctions sit horizontally beside blue; blue/red retain their Blueprint staircase.
      const conjunction=left.kind==='diamond'||right.kind==='diamond'
-     const diagonal=conjunction||complement||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
-     const gap=conjunction||complement?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
+     const diagonal=conjunction||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
+     const gap=conjunction?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
      const desired={x:left.x+width(left.kind)+gap,y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
      const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-gap-a.x,y:b.y-diagonal-a.y}
@@ -619,7 +620,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const p=inside?fromClient(screenX,screenY):null
   const worldX=(p?.x??0)-width(kind)*variantWidthFactor(kind,variant)/2,worldY=(p?.y??0)-height(kind)*variantHeightFactor(kind,variant)/2
   let snap:Snap|null=null
-  if(p&&currentDoc.current.atoms.length<80){
+  if(p&&currentDoc.current.atoms.length<80&&(!(kind==='square'||kind==='rectangle'||kind==='oval')||currentDoc.current.atoms.some(a=>a.kind==='circle'))){
    const ghost:Atom={id:'__palette_preview__',kind,x:worldX,y:worldY,variant}
    const trial={...currentDoc.current,atoms:[...currentDoc.current.atoms,ghost]}
    snap=eligibleMagnet(trial,new Set([ghost.id]))
