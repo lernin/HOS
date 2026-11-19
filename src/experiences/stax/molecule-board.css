@@ -6,3 +6,8 @@
 .stax-molecule-view-controls span{min-width:47px;text-align:center;color:#465967;font-size:13px;font-variant-numeric:tabular-nums}
 .stax-molecule-canvas svg g.stax-molecule-dropping{transition:transform .28s cubic-bezier(.23,.78,.34,1)}
 @media(max-width:700px){.stax-molecule-view-controls{justify-content:center}.stax-molecule-view-controls button{padding:8px 10px}}
+
+/* Mobile pointer capture must win over browser scrolling when pulling atoms from palette. */
+.stax-molecule-palette button{touch-action:none;user-select:none;-webkit-user-select:none}
+.stax-molecule-canvas svg{touch-action:none;user-select:none}
+.stax-molecule-canvas [data-kind]{touch-action:none}
