@@ -15,7 +15,9 @@ type View = { x:number;y:number;width:number;height:number }
 type Drag = { id:string;pointer:number;sx:number;sy:number;before:Draft;moved:boolean }
 type Pan = { pointer:number;startX:number;startY:number;before:View;moved:boolean }
 type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number }
-const W=960,H=570,ASPECT=W/H, GAP=8, VERTICAL=12, SNAP_RADIUS=62, DROP_DISTANCE=66, TAP=9, DOUBLE_MS=350
+// Blueprint's seven-based spacing vocabulary: 0.07, 0.28, 0.49, 0.98 and 2.03 design units.
+const UNIT=.07*SCALE, ATTACH=4*UNIT, GROUP=7*UNIT, ROW=29*UNIT
+const W=960,H=570,ASPECT=W/H, GAP=ATTACH, VERTICAL=ATTACH, SNAP_RADIUS=98, DROP_DISTANCE=ROW, TAP=9, DOUBLE_MS=350
 const KEY='stax-free-molecules-v2'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 const width=(k:Kind)=>SYMBOLS[k].w*SCALE
@@ -65,8 +67,50 @@ function zoom(v:View,factor:number):View {
 function linked(d:Draft,id:string,relation:Relation) {
  return d.bonds.some(b=>(b.parent===id||b.child===id)&&b.relation===relation)
 }
-function parentOfSupport(d:Draft,id:string){
- return d.bonds.find(b=>b.relation==='support'&&b.child===id)?.parent
+function pairCluster(d:Draft,id:string):Set<string> {
+ const ids=new Set([id]);let change=true
+ while(change){change=false;for(const b of d.bonds)if(b.relation==='pair'){
+  if(ids.has(b.parent)&&!ids.has(b.child)){ids.add(b.child);change=true}
+  if(ids.has(b.child)&&!ids.has(b.parent)){ids.add(b.parent);change=true}
+ }}return ids
+}
+function supportOwner(d:Draft,id:string):string|undefined {
+ const paired=pairCluster(d,id)
+ return d.bonds.find(b=>b.relation==='support'&&paired.has(b.child))?.parent
+}
+function circleHasKind(d:Draft,blueId:string,kind:Kind) {
+ return d.bonds.some(edge=>edge.relation==='support'&&edge.parent===blueId &&
+  [...pairCluster(d,edge.child)].some(id=>byId(d,id).kind===kind))
+}
+/** Relayout ONLY the direct supporter children of this noun; never reposition its sequenced heads. */
+function alignSupporters(d:Draft,blueId:string):Draft {
+ const blue=byId(d,blueId)
+ if(!blue||blue.kind!=='circle')return d
+ const edges=d.bonds.filter(b=>b.relation==='support'&&b.parent===blueId)
+ if(!edges.length)return d
+ const branches=new Map<string,Set<string>>()
+ for(const edge of edges){
+  const ids=pairCluster(d,edge.child)
+  const k=[...ids].sort().join('|')
+  branches.set(k,ids)
+ }
+ const kindsPresent=new Set([...branches.values()].flatMap(ids=>[...ids].map(id=>byId(d,id).kind)))
+ const pair=kindsPresent.has('square')&&kindsPresent.has('rectangle')
+ const cx=blue.x+width('circle')/2, rowY=blue.y+height('circle')+VERTICAL
+ const left=cx-(width('square')+GAP+width('rectangle'))/2
+ let next=d
+ for(const ids of branches.values()){
+  const pink=[...ids].map(id=>byId(next,id)).find(a=>a.kind==='square')
+  const purple=[...ids].map(id=>byId(next,id)).find(a=>a.kind==='rectangle')
+  const anchor=pink||purple
+  if(!anchor)continue
+  const target=pair ? anchor.kind==='square'
+   ?{x:left,y:rowY}
+   :{x:left+width('square')+GAP,y:rowY+(height('square')-height('rectangle'))/2}
+   :{x:cx-width(anchor.kind),y:rowY}
+  next=translate(next,ids,target.x-anchor.x,target.y-anchor.y)
+ }
+ return next
 }
 function otherInPair(d:Draft,id:string){
  const pair=d.bonds.find(b=>b.relation==='pair'&&(b.parent===id||b.child===id))
@@ -78,7 +122,8 @@ function supportPosition(blue:Atom,support:Atom,d:Draft) {
  const cx=blue.x+width('circle')/2
  if(other){
   const left=cx-(width('square')+GAP+width('rectangle'))/2
-  return {x:support.kind==='square'?left:left+width('square')+GAP,y:blue.y+height('circle')+VERTICAL}
+  return {x:support.kind==='square'?left:left+width('square')+GAP,
+   y:blue.y+height('circle')+VERTICAL+(support.kind==='rectangle'?(height('square')-height('rectangle'))/2:0)}
  }
  const sibling=d.bonds.find(b=>b.relation==='support'&&b.parent===blue.id&&b.child!==support.id)
  if(sibling){
@@ -97,7 +142,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
   for(const b of d.atoms) {
    if(moving.has(b.id))continue
    // Pink + purple can bond while freely floating, before either meets blue.
-   if(supports(a.kind)&&supports(b.kind)&&a.kind!==b.kind&&!linked(d,a.id,'pair')&&!linked(d,b.id,'pair')&&!parentOfSupport(d,a.id)&&!parentOfSupport(d,b.id)){
+   if(supports(a.kind)&&supports(b.kind)&&a.kind!==b.kind&&!linked(d,a.id,'pair')&&!linked(d,b.id,'pair')&&!supportOwner(d,a.id)&&!supportOwner(d,b.id)){
     const parent=a.kind==='square'?a:b,child=a.kind==='rectangle'?a:b
     const target=a.kind==='square'?{x:b.x-width('square')-GAP,y:b.y-(height('square')-height('rectangle'))/2}:{x:b.x+width('square')+GAP,y:b.y+(height('square')-height('rectangle'))/2}
     // The moving atom's target is in world coordinates.
@@ -107,16 +152,16 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    // A support (or bonded pair) attaches under blue. Never attach it to a second blue.
    const blue=a.kind==='circle'?a:b.kind==='circle'?b:null
    const sup=supports(a.kind)?a:supports(b.kind)?b:null
-   if(blue&&sup&&!parentOfSupport(d,sup.id)){
-    const supGroup=molecule(d,sup.id)
-    if(![...supGroup].some(id=>byId(d,id).kind==='circle')){
-     const duplicate=d.bonds.some(edge=>edge.relation==='support'&&edge.parent===blue.id&&byId(d,edge.child).kind===sup.kind)
-     if(!duplicate) {
+   if(blue&&sup&&!supportOwner(d,sup.id)){
+    // A circle can already belong to any Red–Blue–Red sequence.
+    // Restrict ownership testing to the *supporter pair*, not the full sentence molecule.
+    const pair=pairCluster(d,sup.id)
+    if(![...pair].some(id=>byId(d,id).kind==='circle') &&
+       ![...pair].some(id=>circleHasKind(d,blue.id,byId(d,id).kind))) {
       const desired=supportPosition(blue,sup,d)
       const dx=a.id===sup.id?desired.x-sup.x:sup.x-desired.x
       const dy=a.id===sup.id?desired.y-sup.y:sup.y-desired.y
       offered({parent:blue.id,child:sup.id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)})
-     }
     }
    }
    // Whole headed families connect by a horizontal or diagonal step.
@@ -125,10 +170,10 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
     if(!occupiedRight&&!occupiedLeft) {
-     const diagonal=(left.kind==='triangle'||right.kind==='triangle')?65:0
-     const desired={x:left.x+width(left.kind)+GAP*3,y:left.y+diagonal}
+     const diagonal=(left.kind==='triangle'||right.kind==='triangle')?ROW:0
+     const desired={x:left.x+width(left.kind)+GROUP,y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
-     const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-GAP*3-a.x,y:b.y-diagonal-a.y}
+     const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-GROUP-a.x,y:b.y-diagonal-a.y}
      offered({parent:left.id,child:right.id,relation:'sequence',dx:delta.x,dy:delta.y,distance:Math.hypot(delta.x,delta.y)})
     }
    }
@@ -146,6 +191,7 @@ export function MoleculeBoard(){
  const [selected,setSelected]=useState<string|null>(null)
  const [hint,setHint]=useState('Drag any shape anywhere. Only compatible pieces brought close together will snap.')
  const [fall,setFall]=useState<Set<string>>(new Set())
+ const [preview,setPreview]=useState<Snap|null>(null)
  const svg=useRef<SVGSVGElement>(null),currentDoc=useRef(doc),currentView=useRef(view)
  const dragging=useRef<Drag|null>(null),panning=useRef<Pan|null>(null)
  const lastTap=useRef<{id:string;time:number}|null>(null)
@@ -170,7 +216,7 @@ export function MoleculeBoard(){
   if(e.pointerType==='mouse'&&e.button!==0)return
   e.stopPropagation();const p=pointer(e)
   if(fallTimer.current)clearTimeout(fallTimer.current)
-  setFall(new Set())
+  setFall(new Set());setPreview(null)
   dragging.current={id,pointer:e.pointerId,sx:p.x,sy:p.y,before:currentDoc.current,moved:false}
   e.currentTarget.setPointerCapture(e.pointerId)
   setSelected(id)
@@ -179,12 +225,16 @@ export function MoleculeBoard(){
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
   const pt=pointer(e),dx=pt.x-d.sx,dy=pt.y-d.sy
   if(Math.hypot(dx,dy)>TAP)d.moved=true
-  if(d.moved)update(translate(d.before,molecule(d.before,d.id),dx,dy))
+  if(d.moved){
+   const draft=translate(d.before,molecule(d.before,d.id),dx,dy)
+   update(draft)
+   setPreview(bestSnap(draft,molecule(draft,d.id)))
+  }
   e.stopPropagation()
  }
  function releaseShape(e:ReactPointerEvent<SVGGElement>){
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
-  dragging.current=null;e.stopPropagation()
+  dragging.current=null;setPreview(null);e.stopPropagation()
   if(!d.moved){
    const t=Date.now()
    if(lastTap.current?.id===d.id&&t-lastTap.current.time<DOUBLE_MS){
@@ -204,8 +254,10 @@ export function MoleculeBoard(){
   const actual=currentDoc.current,moving=molecule(actual,d.id),snap=bestSnap(actual,moving)
   if(snap){
    const adjusted=translate(actual,moving,snap.dx,snap.dy)
-   save({...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]},d.before)
-   setHint('Magnetic snap! Connected pieces now drag together. Double-tap a child to drop its branch.')
+   let joined={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
+   if(snap.relation==='support')joined=alignSupporters(joined,snap.parent)
+   save(joined,d.before)
+   setHint(snap.relation==='support'?'Support attached under blue, even within a longer sequence.':'Magnetic snap! Connected pieces drag together.')
   }else{
    setHistory(h=>[...h,d.before].slice(-40))
    setHint('Free placement. The shape stays exactly where you released it.')
@@ -265,6 +317,10 @@ export function MoleculeBoard(){
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill="#faf9f6"/>
+    {preview&&dragging.current&&<g aria-hidden="true" pointerEvents="none" opacity=".48">
+      {doc.atoms.filter(a=>molecule(doc,dragging.current!.id).has(a.id)).map(a=><g key={a.id} transform={`translate(${a.x+preview.dx} ${a.y+preview.dy})`}><Glyph kind={a.kind} w={width(a.kind)} h={height(a.kind)} fill="none" stroke="#2c9e84" strokeWidth={4} strokeDasharray="8 5"/></g>)}
+      <text x={byId(doc,preview.parent).x} y={byId(doc,preview.parent).y-12} fill="#167461" fontSize="20" fontWeight="700">{preview.relation==='support'?'Snap beneath blue':preview.relation==='pair'?'Pair magnets':'Sequence magnet'}</text>
+    </g>}
     {doc.atoms.map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`} data-kind={a.kind} data-id={a.id} className={fall.has(a.id)?'stax-molecule-dropping':undefined}
       onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}>
       {selected===a.id&&<rect x="-7" y="-7" width={width(a.kind)+14} height={height(a.kind)+14} rx="5" fill="none" stroke="#7b8795" strokeDasharray="4 5" pointerEvents="none"/>}
