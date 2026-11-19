@@ -1,13 +1,17 @@
-/** STAX visual grammar v1. All values are relative design units, on a .07 grid. */
+/** STAX visual grammar v1. Shape proportions measured from staxBLUEPRINT
+ * Google Slide 24 intrinsic sizes × transforms (EMU), normalized to the
+ * full blue circle at 3.5 design units. Do not independently eyeball ratios.
+ * Rounded to 0.001 design units; orange/green small sizes are handled
+ * separately in MoleculeBoard via independently measured x and y scales. */
 export const RULES = Object.freeze({ unit: .07, attachment: .28, group: .49, connector: .98, row: 2.03 })
 export const SYMBOLS = {
   circle: { label: 'Circle', role: 'Noun / pronoun', w: 3.5, h: 3.5, color: '#3379dc' },
-  triangle: { label: 'Triangle', role: 'Verb / predicate', w: 4.62, h: 3.5, color: '#e45450' },
-  square: { label: 'Square', role: 'Preposition', w: 2.24, h: 2.24, color: '#d549a1' },
-  rectangle: { label: 'Rectangle', role: 'Determiner', w: 2.52, h: 1.54, color: '#9763cc' },
-  diamond: { label: 'Diamond', role: 'Conjunction / interjection', w: 2.38, h: 3.5, color: '#ba930e' },
-  hexagon: { label: 'Hexagon', role: 'Supporting verb element', w: 2.8, h: 1.54, color: '#e69131' },
-  oval: { label: 'Oval', role: 'Adjective / complement', w: 3.78, h: 2.1, color: '#53844a' },
+  triangle: { label: 'Triangle', role: 'Verb / predicate', w: 4.600, h: 3.548, color: '#e45450' },
+  square: { label: 'Square', role: 'Preposition', w: 2.251, h: 2.251, color: '#d549a1' },
+  rectangle: { label: 'Rectangle', role: 'Determiner', w: 2.521, h: 1.566, color: '#9763cc' },
+  diamond: { label: 'Diamond', role: 'Conjunction / interjection', w: 2.374, h: 3.498, color: '#ba930e' },
+  hexagon: { label: 'Hexagon', role: 'Supporting verb element', w: 2.775, h: 1.566, color: '#e69131' },
+  oval: { label: 'Oval', role: 'Adjective / complement', w: 3.786, h: 2.070, color: '#53844a' },
 } as const
 export type Kind = keyof typeof SYMBOLS
 export type SymbolNode = { id: string; kind: Kind; omitted: boolean; below: SymbolNode[]; next?: SymbolNode }
