@@ -58,7 +58,7 @@ function redOrangePosition(red:Atom,doc:Draft){
  const existing=orangeChildren(doc,red.id)
  const cx=red.x+width('triangle')/2
  // One orange centers; a second enters at the right and the pair is recentered together.
- const x=existing.length?cx+GAP/2:cx-smallWidth('hexagon')/2
+ const x=existing.length?cx+(GAP+smallWidth('hexagon'))/2:cx-smallWidth('hexagon')/2
  return {x,y:red.y+height('triangle')+VERTICAL}
 }
 function alignRedSupporters(doc:Draft,redId:string):Draft {
@@ -246,6 +246,24 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  }
  return best
 }
+/**
+ * ONE resolver for all magnetic engagements. Used by both preview and release.
+ * Relations are explicit: a support can bind under an already occupied sentence
+ * head without consuming that head's sequence port.
+ * A second under-red orange reflows its sibling locally; no head is relocated.
+ */
+function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
+ const translated=translate(d,moving,snap.dx,snap.dy)
+ const joined={...translated,bonds:[...translated.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
+ const typed=normalizeRoles(joined)
+ if(snap.relation!=='support')return typed
+ const owner=byId(typed,snap.parent)
+ return owner.kind==='circle'?alignSupporters(typed,snap.parent):
+  owner.kind==='triangle'?alignRedSupporters(typed,snap.parent):typed
+}
+function eligibleMagnet(d:Draft,moving:Set<string>):Snap|null {
+ return newFamilyAfterBlue(d,moving)?null:bestSnap(d,moving)
+}
 /** STAX POS source grid codes are directional, not generic shape-to-shape bonds:
  * n = a NEW family follows (owner-confirmed); o is retained as a source code,
  * not presumed to mean a supporter. These representative entries are source values.
@@ -414,7 +432,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    const lift=raised&&finger?raised.y-finger.y:0
    const proposed=translate(d.before,molecule(d.before,d.id),dx,dy+lift)
    update(proposed)
-   setPreview(bestSnap(proposed,molecule(proposed,d.id)))
+   setPreview(eligibleMagnet(proposed,molecule(proposed,d.id)))
   }
   e.stopPropagation()
  }
@@ -441,18 +459,11 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const actual=currentDoc.current,moving=molecule(actual,d.id)
   // POS-grid n indicates a follower begins another family. A rectangle to the
   // right of blue stays loose instead of being misread as its subordinate.
-  const snap=newFamilyAfterBlue(actual,moving)?null:bestSnap(actual,moving)
+  const snap=eligibleMagnet(actual,moving)
   if(snap){
-   const adjusted=translate(actual,moving,snap.dx,snap.dy)
-   const bonded={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
-   // Adding a determiner/preposition to a sequence is a local supporter layout change,
-   // not a change to any of the red/blue sequence coordinates.
-   const resolved=normalizeRoles(bonded)
-   const result=snap.relation==='support'
-    ?byId(resolved,snap.parent)?.kind==='circle'?alignSupporters(resolved,snap.parent):alignRedSupporters(resolved,snap.parent)
-    :resolved
+   const result=resolveMagnet(actual,moving,snap)
    save(result,d.before)
-   setHint(snap.relation==='support'?(byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red. The existing sequence stayed intact.':'Support attached precisely beneath blue. The sequence stayed intact.'):'Magnetic snap! Connected pieces now move together.')
+   setHint(snap.relation==='support'?(byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red. The sequence stayed intact.':'Support attached precisely beneath blue. The sequence stayed intact.'):'Magnetic snap! Connected pieces now move together.')
   }else{
    setHistory(h=>[...h,d.before].slice(-40))
    setHint(newFamilyAfterBlue(actual,moving)?'New family: circle → rectangle is marked n in STAX POS. It stays loose until attached appropriately.':'Free placement. The shape stays exactly where you released it.')
@@ -493,13 +504,11 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const previous=currentDoc.current,id=crypto.randomUUID()
   const next:Draft={...previous,atoms:[...previous.atoms,{id,kind,x,y,variant}]}
   // A deliberate palette DRAG can join on release, while a TAP remains loose.
-  const snap=client&&!newFamilyAfterBlue(next,new Set([id]))?bestSnap(next,new Set([id])):null
+  const snap=client?eligibleMagnet(next,new Set([id])):null
   if(snap){
-   const adjusted=translate(next,new Set([id]),snap.dx,snap.dy)
-   const joined={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
-   const resolved=normalizeRoles(joined)
-   save(snap.relation==='support'?(byId(resolved,snap.parent)?.kind==='circle'?alignSupporters(resolved,snap.parent):alignRedSupporters(resolved,snap.parent)):resolved,previous)
-   setHint(snap.relation==='support'&&byId(joined,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected: this shape is now part of the molecule.')
+   const result=resolveMagnet(next,new Set([id]),snap)
+   save(result,previous)
+   setHint(snap.relation==='support'&&byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected: this shape is now part of the molecule.')
   }else{
    save(next,previous)
    setHint('Placed freely. The shape stays there until you move it.')
@@ -515,7 +524,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   if(p&&currentDoc.current.atoms.length<80){
    const ghost:Atom={id:'__palette_preview__',kind,x:worldX,y:worldY,variant}
    const trial={...currentDoc.current,atoms:[...currentDoc.current.atoms,ghost]}
-   snap=newFamilyAfterBlue(trial,new Set([ghost.id]))?null:bestSnap(trial,new Set([ghost.id]))
+   snap=eligibleMagnet(trial,new Set([ghost.id]))
   }
   return {kind,variant,screenX,screenY,worldX,worldY,snap}
  }
