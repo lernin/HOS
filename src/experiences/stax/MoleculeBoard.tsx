@@ -4,7 +4,7 @@ import { SYMBOLS, type Kind } from './model'
 import './molecule-board.css'
 
 type Atom = { id: string; kind: Kind; x: number; y: number }
-type Bond = { a: string; b: string; port: 'pink'|'purple'|'pair'|'next' }
+type Bond = { a: string; b: string; port: 'pink'|'purple'|'pair'|'next-left'|'next-right' }
 type Draft = { atoms: Atom[]; bonds: Bond[] }
 type Gesture = { id: string; pointerId: number; x: number; y: number; originX: number; originY: number; initial: Draft; detached: boolean }
 const KEY = 'stax-free-molecules-v1'
@@ -17,7 +17,7 @@ function load(): Draft {
   const raw = JSON.parse(localStorage.getItem(KEY)||'null') as Draft|null
   if(raw && Array.isArray(raw.atoms) && Array.isArray(raw.bonds) && raw.atoms.length<=60 &&
    raw.atoms.every(a=>typeof a.id==='string' && Object.hasOwn(SYMBOLS,a.kind) && Number.isFinite(a.x) && Number.isFinite(a.y)) &&
-   raw.bonds.every(b=>raw.atoms.some(a=>a.id===b.a) && raw.atoms.some(a=>a.id===b.b) && ['pink','purple','pair','next'].includes(b.port))) return raw
+   raw.bonds.every(b=>raw.atoms.some(a=>a.id===b.a) && raw.atoms.some(a=>a.id===b.b) && ['pink','purple','pair','next-left','next-right'].includes(b.port))) return raw
  }catch{/* invalid local draft */}
  return blank()
 }
@@ -33,7 +33,7 @@ function moveGroup(doc:Draft,ids:Set<string>,dx:number,dy:number):Draft {
  return {...doc,atoms:doc.atoms.map(a=>ids.has(a.id)?{...a,x:a.x+dx,y:a.y+dy}:a)}
 }
 function occupied(doc:Draft,id:string,port:Bond['port']):boolean {
- return doc.bonds.some(b=>b.a===id&&b.port===port || b.b===id&&b.port===port && port==='pair')
+ return doc.bonds.some(b=>(b.a===id || b.b===id) && b.port===port)
 }
 function hasSupport(doc:Draft,blue:string,kind:'square'|'rectangle'):boolean {
  const connected=group(doc,blue)
@@ -51,6 +51,8 @@ function candidate(doc:Draft,moving:Set<string>,stationary:Set<string>) {
   const supporter=a.kind==='square'||a.kind==='rectangle'?a:b.kind==='square'||b.kind==='rectangle'?b:null
   if(blue&&supporter){
    const k=supporter.kind==='square'?'pink':'purple'
+   // A component already owned by another circle cannot bridge two nouns.
+   if([...group(doc,supporter.id)].some(id=>atoms.get(id)?.kind==='circle'))continue
    if(hasSupport(doc,blue.id,supporter.kind) || occupied(doc,blue.id,k))continue
    // A single supporter ends at the blue centreline. A pair sits centred below.
    const otherKind=supporter.kind==='square'?'rectangle':'square'
@@ -61,7 +63,7 @@ function candidate(doc:Draft,moving:Set<string>,stationary:Set<string>) {
    if(a.id===supporter.id){port=k} else {port=k}
    // move a's component so the target supporter/blue reaches its assigned location
    if(a.id===supporter.id){x-=a.x;y-=a.y}
-   else {x=a.x-(b.x+w('circle')/2+sx);y=a.y-(b.y+h('circle')+RULE_GAP)}
+   else {x=b.x-(a.x+w('circle')/2+sx);y=b.y-(a.y+h('circle')+RULE_GAP)}
   }else if((a.kind==='square'&&b.kind==='rectangle')||(a.kind==='rectangle'&&b.kind==='square')){
    if(occupied(doc,a.id,'pair')||occupied(doc,b.id,'pair'))continue
    if(a.kind==='square'){x=b.x-w('square')-GAP-a.x;y=b.y-a.y}
@@ -69,13 +71,15 @@ function candidate(doc:Draft,moving:Set<string>,stationary:Set<string>) {
    port='pair'
   }else if((a.kind==='circle'||a.kind==='triangle')&&(b.kind==='circle'||b.kind==='triangle')){
    if(a.kind==='triangle'&&b.kind==='triangle')continue
-   if(occupied(doc,a.id,'next')||occupied(doc,b.id,'next'))continue
-   // Family-to-family: blue/blue horizontal, any red connection diagonal.
-   const step=(a.kind==='triangle'||b.kind==='triangle')?70:0
-   const right=b.x+w(b.kind)+25, left=b.x-w(a.kind)-25
-   const possibilities=[{x:right-a.x,y:b.y+step-a.y},{x:left-a.x,y:b.y-step-a.y}]
-   const best=possibilities.sort((u,v)=>Math.hypot(u.x,u.y)-Math.hypot(v.x,v.y))[0]
-   x=best.x;y=best.y;port='next'
+   // Each family has a distinct left and right port. One use per port.
+   const diagonal=(a.kind==='triangle'||b.kind==='triangle')?70:0
+   const opts=[
+    {x:b.x+w(b.kind)+25-a.x,y:b.y+diagonal-a.y,port:'next-right' as const},
+    {x:b.x-w(a.kind)-25-a.x,y:b.y-diagonal-a.y,port:'next-left' as const},
+   ].filter(p=>!occupied(doc,a.id,p.port) && !occupied(doc,b.id,p.port==='next-right'?'next-left':'next-right'))
+   if(!opts.length)continue
+   const best=opts.sort((u,v)=>Math.hypot(u.x,u.y)-Math.hypot(v.x,v.y))[0]
+   x=best.x;y=best.y;port=best.port
   }
   if(port){const score=Math.hypot(x,y);if(score<SNAP)choices.push({a:a.id,b:b.id,port,x,y,score})}
  }
@@ -114,10 +118,10 @@ export function MoleculeBoard() {
   const raw=g.initial,dist=Math.hypot(dx,dy)
   let base=raw
   if(dist>DETACH && !g.detached && raw.bonds.some(b=>b.a===g.id||b.b===g.id)){
-   // A member may be pulled free. Detach only its own immediate bonds;
-   // all remaining bonded atoms retain their relative arrangement.
-   base={...raw,bonds:raw.bonds.filter(b=>b.a!==g.id&&b.b!==g.id)}
+   // Detach from the currently translated assembly (no jump to its former location).
+   base={...doc,bonds:doc.bonds.filter(b=>b.a!==g.id&&b.b!==g.id)}
    g.detached=true;g.initial=base;g.x=p.x;g.y=p.y
+   setHint('Magnetic resistance overcome. This atom is detached.')
   }
   const ids=group(g.initial,g.id)
   setDoc(moveGroup(g.initial,ids,p.x-g.x,p.y-g.y))
@@ -136,8 +140,8 @@ export function MoleculeBoard() {
   }
   if(best){
    const next=moveGroup(doc,moving,best.x,best.y)
-   // The port is exclusive, and a bond never joins atoms already connected.
-   if(!sameGroup(next,best.a,best.b)){
+   // A bond never joins atoms already connected; each endpoint is exclusive.
+   if(!sameGroup(next,best.a,best.b)) {
     const edge:Bond={a:best.a,b:best.b,port:best.port}
     commit({...next,bonds:[...next.bonds,edge]})
     setHint('Snap! The molecule now moves as one. Pull a member away to separate it.')
