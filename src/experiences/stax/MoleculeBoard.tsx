@@ -296,8 +296,8 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    const left=a.x<=b.x?a:b,right=left.id===a.id?b:a
    // A green or orange changes visual role after attachment; no palette subtype.
    const complement=right.kind==='oval'&&(left.kind==='circle'||left.kind==='triangle')
-   // Orange after red is NOT a sequence bond: it requires its actual under-shape parent.
-   const orangeFollower=false
+   // An orange gate/adverb attaches only through its actual parent port,
+   // not through a left-neighbor sequence bond.
    if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow||complement){
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
