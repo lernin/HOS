@@ -27,9 +27,13 @@ type Choice={kind:Kind;variant?:'small'|'large';label:string}
 const choices:Choice[]=[{kind:'circle',label:'Noun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
 const width=(k:Kind)=>SYMBOLS[k].w*SCALE
 const height=(k:Kind)=>SYMBOLS[k].h*SCALE
-const variantFactor=(kind:Kind,variant?:Atom['variant'])=>variant==='small'&&(kind==='oval'||kind==='hexagon')?(kind==='oval' ? .86 : .9):1
-const atomWidth=(a:Atom)=>width(a.kind)*variantFactor(a.kind,a.variant)
-const atomHeight=(a:Atom)=>height(a.kind)*variantFactor(a.kind,a.variant)
+/** Small Blueprint variants use different x/y ratios, not uniform scaling. */
+const variantWidthFactor=(kind:Kind,variant?:Atom['variant'])=>variant==='small'
+ ?kind==='oval'?0.4056/0.4716:kind==='hexagon'?3787.2/4147.2:1:1
+const variantHeightFactor=(kind:Kind,variant?:Atom['variant'])=>variant==='small'
+ ?kind==='oval'?0.2196/0.258:kind==='hexagon'?2332.8/2340.864:1:1
+const atomWidth=(a:Atom)=>width(a.kind)*variantWidthFactor(a.kind,a.variant)
+const atomHeight=(a:Atom)=>height(a.kind)*variantHeightFactor(a.kind,a.variant)
 const empty=():Draft=>({atoms:[],bonds:[]})
 const defaultView:View={x:0,y:0,width:W,height:H}
 const byId=(d:Draft,id:string)=>d.atoms.find(a=>a.id===id)!
@@ -49,11 +53,12 @@ const MAGNET_PORTS = {
  blueYellow:['circle','diamond'],
  complementAfter:['circle','triangle'],
 } as const
-const SMALL_GREEN=.86,SMALL_ORANGE=.9
+const SMALL_GREEN_X=0.4056/0.4716,SMALL_GREEN_Y=0.2196/0.258
+const SMALL_ORANGE_X=3787.2/4147.2,SMALL_ORANGE_Y=2332.8/2340.864
 /** Global single-child under-port: child's RIGHT edge meets parent's midpoint. */
 const underSingleX=(parentX:number,parentWidth:number,childWidth:number)=>parentX+parentWidth/2-childWidth
 
-const smallWidth=(kind:Kind)=>width(kind)*(kind==='oval'?SMALL_GREEN:kind==='hexagon'?SMALL_ORANGE:1)
+const smallWidth=(kind:Kind)=>width(kind)*(kind==='oval'?SMALL_GREEN_X:kind==='hexagon'?SMALL_ORANGE_X:1)
 function orangeChildren(doc:Draft,redId:string){
  return doc.bonds.filter(b=>b.relation==='support'&&b.parent===redId).map(b=>byId(doc,b.child)).filter(a=>a.kind==='hexagon')
 }
@@ -173,7 +178,7 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
  const result=new Map<string,{x:number;y:number}>()
  if(!blue||!items.length)return result
  const itemWidth=(a:Atom)=>a.kind==='oval'?smallWidth('oval'):a.kind==='hexagon'?smallWidth('hexagon'):width(a.kind)
- const itemHeight=(a:Atom)=>a.kind==='oval'?height('oval')*SMALL_GREEN:a.kind==='hexagon'?height('hexagon')*SMALL_ORANGE:height(a.kind)
+ const itemHeight=(a:Atom)=>a.kind==='oval'?height('oval')*SMALL_GREEN_Y:a.kind==='hexagon'?height('hexagon')*SMALL_ORANGE_Y:height(a.kind)
  const total=items.reduce((sum,a)=>sum+itemWidth(a),0)+(items.length-1)*GAP
  const maxH=Math.max(...items.map(itemHeight))
  let x=items.length===1?underSingleX(blue.x,width('circle'),itemWidth(items[0])):blue.x+(width('circle')-total)/2
@@ -187,7 +192,7 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
 function miniFamilyPosition(_doc:Draft,green:Atom,_orange:Atom) {
  // n = DOWN into a new family: orange is the dependent below its green parent.
  return {x:underSingleX(green.x,smallWidth('oval'),smallWidth('hexagon')),
-  y:green.y+height('oval')*SMALL_GREEN+VERTICAL}
+  y:green.y+height('oval')*SMALL_GREEN_Y+VERTICAL}
 }
 function alignSupporters(doc:Draft,blueId:string):Draft {
  const positions=blueSupportPositions(doc,blueId)
@@ -291,15 +296,16 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    const left=a.x<=b.x?a:b,right=left.id===a.id?b:a
    // A green or orange changes visual role after attachment; no palette subtype.
    const complement=right.kind==='oval'&&(left.kind==='circle'||left.kind==='triangle')
-   const orangeFollower=right.kind==='hexagon'&&left.kind==='triangle'
-   if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow||complement||orangeFollower){
+   // An orange gate/adverb attaches only through its actual parent port,
+   // not through a left-neighbor sequence bond.
+   if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow||complement){
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
     if(!occupiedRight&&!occupiedLeft) {
      // Conjunctions sit horizontally beside blue; blue/red retain their Blueprint staircase.
      const conjunction=left.kind==='diamond'||right.kind==='diamond'
-     const diagonal=conjunction||complement||orangeFollower||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
-     const gap=conjunction||complement||orangeFollower?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
+     const diagonal=conjunction||complement||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
+     const gap=conjunction||complement?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
      const desired={x:left.x+width(left.kind)+gap,y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
      const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-gap-a.x,y:b.y-diagonal-a.y}
@@ -571,8 +577,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  function addAt(kind:Kind,client?:{x:number;y:number},variant?:Atom['variant']){
   if(currentDoc.current.atoms.length>=80){setHint('Maximum 80 shapes in this experiment.');return}
   const p=client?fromClient(client.x,client.y):null,camera=currentView.current
-  let x=(p?.x??camera.x+camera.width/2)-width(kind)*variantFactor(kind,variant)/2
-  let y=(p?.y??camera.y+camera.height/2)-height(kind)*variantFactor(kind,variant)/2
+  let x=(p?.x??camera.x+camera.width/2)-width(kind)*variantWidthFactor(kind,variant)/2
+  let y=(p?.y??camera.y+camera.height/2)-height(kind)*variantHeightFactor(kind,variant)/2
   if(!client){
    // Palette taps park freely in a vacant spot; no hidden attachment.
    const occupied=(xx:number,yy:number)=>currentDoc.current.atoms.some(a=>xx<a.x+width(a.kind)+14&&xx+width(kind)+14>a.x&&yy<a.y+height(a.kind)+14&&yy+height(kind)+14>a.y)
@@ -601,7 +607,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const rect=svg.current?.getBoundingClientRect()
   const inside=!!rect&&screenX>=rect.left&&screenX<=rect.right&&screenY>=rect.top&&screenY<=rect.bottom
   const p=inside?fromClient(screenX,screenY):null
-  const worldX=(p?.x??0)-width(kind)*variantFactor(kind,variant)/2,worldY=(p?.y??0)-height(kind)*variantFactor(kind,variant)/2
+  const worldX=(p?.x??0)-width(kind)*variantWidthFactor(kind,variant)/2,worldY=(p?.y??0)-height(kind)*variantHeightFactor(kind,variant)/2
   let snap:Snap|null=null
   if(p&&currentDoc.current.atoms.length<80){
    const ghost:Atom={id:'__palette_preview__',kind,x:worldX,y:worldY,variant}
@@ -698,13 +704,13 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   </div>
   <div className="stax-molecule-palette">{choices.map(({kind,variant,label})=><button key={`${kind}-${variant||'default'}`} title={label} aria-label={`Add ${label}`}
    onPointerDown={e=>paletteDown(e,kind,variant)} onPointerMove={paletteMove} onPointerUp={paletteUp} onPointerCancel={paletteCancel}>
-   <svg viewBox={`-4 -4 ${width(kind)*variantFactor(kind,variant)+8} ${height(kind)*variantFactor(kind,variant)+8}`} aria-hidden="true"><Glyph kind={kind} w={width(kind)*variantFactor(kind,variant)} h={height(kind)*variantFactor(kind,variant)} stroke={SYMBOLS[kind].color} fill={SYMBOLS[kind].color+'14'} strokeWidth={3}/></svg>
+   <svg viewBox={`-4 -4 ${width(kind)*variantWidthFactor(kind,variant)+8} ${height(kind)*variantHeightFactor(kind,variant)+8}`} aria-hidden="true"><Glyph kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} stroke={SYMBOLS[kind].color} fill={SYMBOLS[kind].color+'14'} strokeWidth={3}/></svg>
   </button>)}</div>
   {paletteHover&&<div className={`stax-lifted-ghost${paletteHover.snap?' is-eligible':''}`} style={{left:paletteHover.screenX,top:paletteHover.screenY}} aria-hidden="true">
-    <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
-      height={Math.max(28,Math.min(130,height(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
-      viewBox={`0 0 ${width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)} ${height(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)}`}>
-     <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)} h={height(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)}
+    <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
+      height={Math.max(28,Math.min(130,height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
+      viewBox={`0 0 ${width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)} ${height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)}`}>
+     <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)} h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)}
        fill={SYMBOLS[paletteHover.kind].color+'18'} stroke={paletteHover.snap?'#12a981':SYMBOLS[paletteHover.kind].color} strokeWidth={4}/>
     </svg>
    </div>}
