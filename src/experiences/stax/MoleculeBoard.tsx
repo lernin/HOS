@@ -12,12 +12,13 @@ type Relation = 'pair'|'support'|'sequence'
 type Bond = { parent:string; child:string; relation:Relation }
 type Draft = { atoms:Atom[]; bonds:Bond[] }
 type View = { x:number;y:number;width:number;height:number }
-type Drag = { id:string;pointer:number;sx:number;sy:number;before:Draft;moved:boolean }
+type Drag = { id:string;pointer:number;sx:number;sy:number;before:Draft;moved:boolean;fingerLift:number }
 type Pan = { pointer:number;startX:number;startY:number;before:View;moved:boolean }
 type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number }
+type PaletteHover = { kind:Kind;screenX:number;screenY:number;worldX:number;worldY:number;snap:Snap|null }
 // Distances from the STAX Blueprint's .07-unit design grid; only snap geometry is quantised.
-const UNIT=SCALE*.07, GAP=4*UNIT, VERTICAL=4*UNIT, SEQUENCE_GAP=7*UNIT
-const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=62, DROP_DISTANCE=66, TAP=9, DOUBLE_MS=350
+const UNIT=SCALE*.07, GAP=4*UNIT, VERTICAL=4*UNIT, BLUE_RED_GAP=7*UNIT, RED_BLUE_GAP=29*UNIT
+const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=66, TAP=9, DOUBLE_MS=350, FINGER_LIFT=42
 const KEY='stax-free-molecules-v2'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 const width=(k:Kind)=>SYMBOLS[k].w*SCALE
@@ -145,9 +146,10 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
     if(!occupiedRight&&!occupiedLeft) {
      // Consecutive circle/triangle heads step by prior head height plus Blueprint clearance.
      const diagonal=left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
-     const desired={x:left.x+width(left.kind)+SEQUENCE_GAP,y:left.y+diagonal}
+     const gap=left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
+     const desired={x:left.x+width(left.kind)+gap,y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
-     const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-SEQUENCE_GAP-a.x,y:b.y-diagonal-a.y}
+     const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-gap-a.x,y:b.y-diagonal-a.y}
      offered({parent:left.id,child:right.id,relation:'sequence',dx:delta.x,dy:delta.y,distance:Math.hypot(delta.x,delta.y)})
     }
    }
@@ -166,6 +168,7 @@ export function MoleculeBoard(){
  const [hint,setHint]=useState('Drag any shape anywhere. Only compatible pieces brought close together will snap.')
  const [fall,setFall]=useState<Set<string>>(new Set())
  const [preview,setPreview]=useState<Snap|null>(null)
+ const [paletteHover,setPaletteHover]=useState<PaletteHover|null>(null)
  const svg=useRef<SVGSVGElement>(null),currentDoc=useRef(doc),currentView=useRef(view)
  const dragging=useRef<Drag|null>(null),panning=useRef<Pan|null>(null)
  const lastTap=useRef<{id:string;time:number}|null>(null)
@@ -191,7 +194,7 @@ export function MoleculeBoard(){
   e.stopPropagation();const p=pointer(e)
   if(fallTimer.current)clearTimeout(fallTimer.current)
   setFall(new Set())
-  dragging.current={id,pointer:e.pointerId,sx:p.x,sy:p.y,before:currentDoc.current,moved:false}
+  dragging.current={id,pointer:e.pointerId,sx:p.x,sy:p.y,before:currentDoc.current,moved:false,fingerLift:e.pointerType==='touch'?FINGER_LIFT:0}
   e.currentTarget.setPointerCapture(e.pointerId)
   setSelected(id)
  }
@@ -200,7 +203,10 @@ export function MoleculeBoard(){
   const pt=pointer(e),dx=pt.x-d.sx,dy=pt.y-d.sy
   if(Math.hypot(dx,dy)>TAP)d.moved=true
   if(d.moved){
-   const proposed=translate(d.before,molecule(d.before,d.id),dx,dy)
+   const raised=d.fingerLift?fromClient(e.clientX,e.clientY-d.fingerLift):null
+   const finger=d.fingerLift?fromClient(e.clientX,e.clientY):null
+   const lift=raised&&finger?raised.y-finger.y:0
+   const proposed=translate(d.before,molecule(d.before,d.id),dx,dy+lift)
    update(proposed)
    setPreview(bestSnap(proposed,molecule(proposed,d.id)))
   }
