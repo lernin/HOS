@@ -35,6 +35,26 @@ const defaultView:View={x:0,y:0,width:W,height:H}
 const byId=(d:Draft,id:string)=>d.atoms.find(a=>a.id===id)!
 const supports=(k:Kind)=>k==='square'||k==='rectangle'
 const nounSupport=(a:Atom)=>supports(a.kind)||a.kind==='oval'
+/**
+ * Explicit geometrical ports. The original STAX POS sheet is directional
+ * succession data, NOT a magnet topology table: n = new family, o unresolved.
+ * Implement only under-head and sequence relationships with known coordinates.
+ * A red triangle may take an orange adverb/gate below it; this support port is
+ * distinct from red -> orange in reading order.
+ */
+const MAGNET_PORTS = {
+ blueSupport:['square','rectangle','oval'],
+ redBelow:['hexagon'],
+ peerPair:['square','rectangle'],
+ blueYellow:['circle','diamond'],
+ complementAfter:['circle','triangle'],
+} as const
+const SMALL_GREEN=.86,SMALL_ORANGE=.9
+const smallWidth=(kind:Kind)=>width(kind)*(kind==='oval'?SMALL_GREEN:kind==='hexagon'?SMALL_ORANGE:1)
+const redOrangePosition=(red:Atom)=>({
+ x:red.x+(width('triangle')-smallWidth('hexagon'))/2,
+ y:red.y+height('triangle')+VERTICAL,
+})
 /** Visual size follows its current structural position, not the palette choice. */
 function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
  if(a.kind!=='oval'&&a.kind!=='hexagon')return undefined
@@ -120,7 +140,7 @@ function supportPosition(blue:Atom,support:Atom,d:Draft) {
  if(support.kind==='oval'){
   const siblings=d.bonds.filter(b=>b.relation==='support'&&b.parent===blue.id).map(b=>byId(d,b.child))
   const row=siblings.some(a=>supports(a.kind))
-  return {x:cx-atomWidth(support)/2,y:blue.y+height('circle')+VERTICAL+(row?height('square')+GAP:0)}
+  return {x:cx-smallWidth('oval')/2,y:blue.y+height('circle')+VERTICAL+(row?height('square')+GAP:0)}
  }
  if(other){
   const left=cx-(width('square')+GAP+width('rectangle'))/2
@@ -163,6 +183,21 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
       const dy=a.id===sup.id?desired.y-sup.y:sup.y-desired.y
       offered({parent:blue.id,child:sup.id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)})
      }
+    }
+   }
+   // Orange is an under-verb supporter on the Blueprint; allow either
+   // dragging orange to a stationary red or moving a free red to orange.
+   const red=a.kind==='triangle'?a:b.kind==='triangle'?b:null
+   const orange=a.kind==='hexagon'?a:b.kind==='hexagon'?b:null
+   if(red&&orange&&MAGNET_PORTS.redBelow.includes('hexagon')&&!parentOfSupport(d,orange.id)){
+    const orangeGroup=molecule(d,orange.id)
+    const duplicate=d.bonds.some(edge=>edge.relation==='support'&&edge.parent===red.id&&byId(d,edge.child).kind==='hexagon')
+    if(!orangeGroup.has(red.id)&&!duplicate){
+     const destination=redOrangePosition(red)
+     // One world-space anchor for both the glowing preview and exact release.
+     const dx=a.id===orange.id?destination.x-orange.x:orange.x-(width('triangle')-smallWidth('hexagon'))/2-red.x
+     const dy=a.id===orange.id?destination.y-orange.y:orange.y-height('triangle')-VERTICAL-red.y
+     offered({parent:red.id,child:orange.id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)})
     }
    }
    // Sequence ports accept noun ↔ conjunction in either order.
@@ -393,9 +428,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    const bonded={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
    // Adding a determiner/preposition to a sequence is a local supporter layout change,
    // not a change to any of the red/blue sequence coordinates.
-   const result=snap.relation==='support'?alignSupporters(normalizeRoles(bonded),snap.parent):bonded
+   const result=snap.relation==='support'&&byId(bonded,snap.parent)?.kind==='circle'?alignSupporters(normalizeRoles(bonded),snap.parent):normalizeRoles(bonded)
    save(result,d.before)
-   setHint(snap.relation==='support'?'Support attached beneath its blue head. The red/blue sequence stayed intact.':'Magnetic snap! Connected pieces now move together.')
+   setHint(snap.relation==='support'?(byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red. The existing sequence stayed intact.':'Support attached precisely beneath blue. The sequence stayed intact.'):'Magnetic snap! Connected pieces now move together.')
   }else{
    setHistory(h=>[...h,d.before].slice(-40))
    setHint(newFamilyAfterBlue(actual,moving)?'New family: circle → rectangle is marked n in STAX POS. It stays loose until attached appropriately.':'Free placement. The shape stays exactly where you released it.')
@@ -440,8 +475,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   if(snap){
    const adjusted=translate(next,new Set([id]),snap.dx,snap.dy)
    const joined={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
-   save(snap.relation==='support'?alignSupporters(normalizeRoles(joined),snap.parent):joined,previous)
-   setHint('Magnet connected: this shape is now part of the molecule.')
+   save(snap.relation==='support'&&byId(joined,snap.parent)?.kind==='circle'?alignSupporters(normalizeRoles(joined),snap.parent):normalizeRoles(joined),previous)
+   setHint(snap.relation==='support'&&byId(joined,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected: this shape is now part of the molecule.')
   }else{
    save(next,previous)
    setHint('Placed freely. The shape stays there until you move it.')
