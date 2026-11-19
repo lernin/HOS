@@ -164,20 +164,9 @@ function eligibleAdverbHost(doc:Draft,greenId:string):boolean {
  return greens.findIndex(a=>a.id===greenId)>0 &&
    !doc.bonds.some(b=>b.parent===greenId&&b.relation==='support'&&byId(doc,b.child).kind==='hexagon')
 }
-/** Flatten the green+orange mini-family for row geometry, while keeping the BOND orange→green. */
-function blueRowAtoms(doc:Draft,blueId:string):Atom[] {
- const row:Atom[]=[]
- for(const a of blueSupportAtoms(doc,blueId)){
-  if(a.kind==='oval'){
-   const adverb=doc.bonds.find(b=>b.relation==='support'&&b.parent===a.id&&byId(doc,b.child).kind==='hexagon')
-   if(adverb)row.push(byId(doc,adverb.child))
-  }
-  row.push(a)
- }
- return row
-}
+/** Direct noun supporters stay side by side; nested adverbs are NEVER row members. */
 function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:number}> {
- const blue=byId(doc,blueId),items=blueRowAtoms(doc,blueId)
+ const blue=byId(doc,blueId),items=blueSupportAtoms(doc,blueId)
  const result=new Map<string,{x:number;y:number}>()
  if(!blue||!items.length)return result
  const itemWidth=(a:Atom)=>a.kind==='oval'?smallWidth('oval'):a.kind==='hexagon'?smallWidth('hexagon'):width(a.kind)
@@ -192,17 +181,27 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
  }
  return result
 }
+function miniFamilyPosition(_doc:Draft,green:Atom,_orange:Atom) {
+ // n = DOWN into a new family: orange is the dependent below its green parent.
+ return {x:green.x+(smallWidth('oval')-smallWidth('hexagon'))/2,
+  y:green.y+height('oval')*SMALL_GREEN+VERTICAL}
+}
 function alignSupporters(doc:Draft,blueId:string):Draft {
  const positions=blueSupportPositions(doc,blueId)
  let next=doc
- // Parents move before their children; a nested adverb gets its own exact final slot.
- const items=blueRowAtoms(doc,blueId)
- const order=[...items.filter(a=>!(a.kind==='hexagon'&&byId(doc,parentOfSupport(doc,a.id)||'')?.kind==='oval')),
-  ...items.filter(a=>a.kind==='hexagon'&&byId(doc,parentOfSupport(doc,a.id)||'')?.kind==='oval')]
- for(const atom of order){
+ // Moving a parent carries its children rigidly, before precision-aligning them.
+ for(const atom of blueSupportAtoms(doc,blueId)){
   const target=positions.get(atom.id)!
   const current=byId(next,atom.id)
   next=translate(next,descendants(next,atom.id),target.x-current.x,target.y-current.y)
+ }
+ // Nested orange depends on the following GREEN, positioned directly BELOW it.
+ // It does not widen the blue-level row or shift the preceding adjective.
+ for(const green of greenSiblings(next,blueId)){
+  const dependent=next.bonds.find(b=>b.relation==='support'&&b.parent===green.id&&byId(next,b.child).kind==='hexagon')
+  if(!dependent)continue
+  const orange=byId(next,dependent.child),target=miniFamilyPosition(next,green,orange)
+  next=translate(next,descendants(next,orange.id),target.x-orange.x,target.y-orange.y)
  }
  return next
 }
@@ -210,13 +209,7 @@ function supportPosition(blue:Atom,support:Atom,d:Draft) {
  const proposed:Draft={...d,bonds:[...d.bonds,{parent:blue.id,child:support.id,relation:'support'}]}
  return blueSupportPositions(normalizeRoles(proposed),blue.id).get(support.id)!
 }
-/** Orange must join the FOLLOWING green in a valid two-adjective noun family.
-    No direct green→orange continuation is allowed with only one green. */
-function miniFamilyPosition(doc:Draft,green:Atom,orange:Atom) {
- const blueId=blueHeadOfAdjective(doc,green.id)!
- const proposed:Draft={...doc,bonds:[...doc.bonds,{parent:green.id,child:orange.id,relation:'support'}]}
- return blueSupportPositions(normalizeRoles(proposed),blueId).get(orange.id)!
-}
+/** The orange adverb is nested directly UNDER the second green sibling. */
 function hoveringBelowGreen(doc:Draft,blueId:string,orange:Atom):boolean {
  return greenSiblings(doc,blueId).some(green=>{
   const x=green.x+(atomWidth(green)-smallWidth('hexagon'))/2
@@ -345,7 +338,7 @@ function magnetLabel(d:Draft,s:Snap):string {
  const parent=byId(d,s.parent),child=byId(d,s.child)
  if(s.relation==='support'&&parent.kind==='triangle')return 'Orange under red'
  if(s.relation==='support'&&parent.kind==='circle')return 'Support under blue'
- if(s.relation==='support'&&parent.kind==='oval')return 'Nested adverb → next adjective'
+ if(s.relation==='support'&&parent.kind==='oval')return 'Adverb underneath green (n)'
  if(s.relation==='pair')return 'Support pair'
  if(child.kind==='oval')return 'Green complement'
  return 'Sequence snap'
