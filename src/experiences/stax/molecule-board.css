@@ -37,3 +37,73 @@
 .stax-molecule-palette button:has(.stax-palette-kind) svg{height:31px}
 .stax-palette-kind{display:block;font-size:9px;line-height:1.1;color:#526676;white-space:nowrap;pointer-events:none}
 @media(max-width:700px){.stax-molecule-palette button:has(.stax-palette-kind){height:62px}}
+
+/* Magnetic-only immersive tabletop. The classic STAX editor remains unchanged. */
+.stax-molecule-ui{
+ position:fixed;inset:0;z-index:1000;width:100vw;height:100dvh;max-width:none;max-height:100dvh;
+ display:block;overflow:hidden;background:#faf9f6;padding:0;margin:0;isolation:isolate;
+}
+.stax-molecule-canvas{position:absolute;inset:0;min-height:0;width:100%;height:100%;border:0;border-radius:0;background:#faf9f6}
+.stax-molecule-canvas svg,.stax-molecule-canvas svg:fullscreen{
+ width:100%;height:100%;min-height:0;max-height:none;display:block;touch-action:none;
+}
+.stax-molecule-tools{
+ position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(env(safe-area-inset-left,0px) + 10px);
+ z-index:5;display:flex;align-items:center;gap:5px;padding:7px 9px;
+ max-width:min(66vw,650px);border:1px solid #d6dfe4;border-radius:12px;
+ background:rgba(255,255,255,.92);box-shadow:0 3px 16px #16324817;backdrop-filter:blur(12px);
+}
+.stax-molecule-tools strong{font-size:12px;white-space:nowrap;letter-spacing:.02em}
+.stax-molecule-buttons{display:flex;align-items:center;gap:4px;margin-left:4px;flex-wrap:wrap}
+.stax-molecule-buttons button{padding:7px 8px;min-height:33px;font-size:11px}
+.stax-molecule-view-controls{
+ position:absolute;left:calc(env(safe-area-inset-left,0px) + 10px);bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
+ z-index:5;display:flex;gap:4px;justify-content:flex-start;align-items:center;
+ padding:6px;border:1px solid #d6dfe4;background:rgba(255,255,255,.94);
+ border-radius:11px;box-shadow:0 3px 16px #16324812;backdrop-filter:blur(10px);
+}
+.stax-molecule-view-controls button{font-size:11px;min-height:32px;padding:5px 8px}
+.stax-molecule-palette{
+ position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);right:calc(env(safe-area-inset-right,0px) + 10px);
+ z-index:6;display:grid;grid-template-columns:repeat(4,44px);gap:4px;
+ padding:6px;border-radius:12px;border:1px solid #d6dfe4;
+ background:rgba(255,255,255,.94);box-shadow:0 3px 16px #16324817;backdrop-filter:blur(12px);
+}
+.stax-molecule-palette button,.stax-molecule-palette button:has(.stax-palette-kind){
+ width:44px;height:44px;min-width:44px;min-height:44px;margin:0;padding:3px;
+ display:flex;align-items:center;justify-content:center;touch-action:none
+}
+.stax-molecule-palette button svg{height:36px;width:100%}
+.stax-molecule-hint{
+ position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 69px);
+ left:calc(env(safe-area-inset-left,0px) + 10px);z-index:4;
+ max-width:min(480px,80vw);padding:6px 10px;font-size:11px;line-height:1.4;
+ background:#ffffffdf;border-radius:9px;border:1px solid #e1e6e7;pointer-events:none;
+}
+.stax-molecule-note{display:none}
+.stax-molecule-empty{top:50%;transform:translateY(-50%)}
+.stax-molecule-example{
+ position:absolute;z-index:4;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 66px);
+ max-width:45vw;width:max-content;padding:4px 9px;font-size:11px;background:rgba(239,247,253,.93);
+}
+.stax-molecule-example small{display:none}
+@media(max-width:850px){
+ .stax-molecule-tools{max-width:calc(100vw - 205px);gap:4px;flex-wrap:wrap}
+ .stax-molecule-tools strong{font-size:11px}
+ .stax-molecule-buttons{gap:3px;margin-left:0}
+ .stax-molecule-buttons button{font-size:10px;padding:5px 6px;min-height:28px}
+ .stax-molecule-palette{grid-template-columns:repeat(3,40px);gap:3px}
+ .stax-molecule-palette button,.stax-molecule-palette button:has(.stax-palette-kind){width:40px;height:40px;min-width:40px;min-height:40px}
+ .stax-molecule-palette button svg{height:34px}
+ .stax-molecule-view-controls{justify-content:flex-start;max-width:72vw;flex-wrap:nowrap}
+ .stax-molecule-hint{bottom:calc(env(safe-area-inset-bottom,0px) + 62px);font-size:10px}
+ .stax-molecule-example{max-width:80vw;bottom:calc(env(safe-area-inset-bottom,0px) + 110px)}
+}
+@media(max-width:520px){
+ .stax-molecule-tools{max-width:calc(100vw - 162px);padding:5px;top:calc(env(safe-area-inset-top,0px) + 5px);left:5px}
+ .stax-molecule-palette{right:5px;top:calc(env(safe-area-inset-top,0px) + 5px);grid-template-columns:repeat(3,38px);padding:4px}
+ .stax-molecule-palette button,.stax-molecule-palette button:has(.stax-palette-kind){width:38px;height:38px;min-width:38px;min-height:38px}
+ .stax-molecule-view-controls{left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);padding:4px}
+ .stax-molecule-view-controls button{font-size:10px;padding:4px 6px;min-height:30px}
+ .stax-molecule-hint{left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 52px)}
+}
