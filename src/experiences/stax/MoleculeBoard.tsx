@@ -58,7 +58,7 @@ function candidate(doc:Draft,moving:Set<string>,stationary:Set<string>) {
    const k=supporter.kind==='square'?'pink':'purple'
    // A component already owned by another circle cannot bridge two nouns.
    if([...group(doc,supporter.id)].some(id=>atoms.get(id)?.kind==='circle'))continue
-   if(hasSupport(doc,blue.id,supporter.kind) || occupied(doc,blue.id,k))continue
+   if(hasSupport(doc,blue.id,supporter.kind as 'square'|'rectangle') || occupied(doc,blue.id,k))continue
    // A single supporter ends at the blue centreline. A pair sits centred below.
    const otherKind=supporter.kind==='square'?'rectangle':'square'
    const paired=hasSupport(doc,blue.id,otherKind) || [...group(doc,supporter.id)].some(id=>atoms.get(id)?.kind===otherKind)
@@ -136,7 +136,7 @@ export function MoleculeBoard() {
   const g=gesture.current;if(!g||g.pointerId!==e.pointerId)return
   gesture.current=null
   const moving=group(doc,g.id)
-  let best:ReturnType<typeof candidate>=undefined
+  let best:ReturnType<typeof candidate>|undefined=undefined
   const others=doc.atoms.filter(a=>!moving.has(a.id))
   for(const a of others){
    const station=group(doc,a.id)
