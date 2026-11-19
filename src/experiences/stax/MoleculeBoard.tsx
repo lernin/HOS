@@ -15,7 +15,9 @@ type View = { x:number;y:number;width:number;height:number }
 type Drag = { id:string;pointer:number;sx:number;sy:number;before:Draft;moved:boolean }
 type Pan = { pointer:number;startX:number;startY:number;before:View;moved:boolean }
 type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number }
-const W=960,H=570,ASPECT=W/H, GAP=8, VERTICAL=12, SNAP_RADIUS=62, DROP_DISTANCE=66, TAP=9, DOUBLE_MS=350
+// Distances from the STAX Blueprint's .07-unit design grid; only snap geometry is quantised.
+const UNIT=SCALE*.07, GAP=4*UNIT, VERTICAL=4*UNIT, SEQUENCE_GAP=7*UNIT
+const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=62, DROP_DISTANCE=66, TAP=9, DOUBLE_MS=350
 const KEY='stax-free-molecules-v2'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 const width=(k:Kind)=>SYMBOLS[k].w*SCALE
@@ -72,13 +74,29 @@ function otherInPair(d:Draft,id:string){
  const pair=d.bonds.find(b=>b.relation==='pair'&&(b.parent===id||b.child===id))
  return pair?pair.parent===id?pair.child:pair.parent:null
 }
+/** Reposition only a blue head's immediate supporters. Sequence heads are NEVER reflowed. */
+function alignSupporters(doc:Draft,blueId:string):Draft {
+ const blue=byId(doc,blueId),supportIds=new Set(doc.bonds.filter(b=>b.relation==='support'&&b.parent===blueId).map(b=>b.child))
+ // A pink-purple pair may use only one support bond; recover its sibling.
+ for(const id of [...supportIds]){const other=otherInPair(doc,id);if(other)supportIds.add(other)}
+ const pink=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='square')
+ const purple=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='rectangle')
+ if(!pink&&!purple)return doc
+ const both=!!pink&&!!purple,cx=blue.x+width('circle')/2
+ const rowWidth=both?width('square')+GAP+width('rectangle'):width((pink||purple)!.kind)
+ const startX=both?cx-rowWidth/2:cx-rowWidth
+ const y=blue.y+height('circle')+VERTICAL
+ const pinkPos=pink?{x:startX,y}:null
+ const purplePos=purple?{x:both?startX+width('square')+GAP:startX,y:both?y+(height('square')-height('rectangle'))/2:y}:null
+ return {...doc,atoms:doc.atoms.map(a=>a.id===pink?.id?{...a,...pinkPos}:a.id===purple?.id?{...a,...purplePos}:a)}
+}
 function supportPosition(blue:Atom,support:Atom,d:Draft) {
  const otherId=otherInPair(d,support.id)
  const other=otherId?byId(d,otherId):null
  const cx=blue.x+width('circle')/2
  if(other){
   const left=cx-(width('square')+GAP+width('rectangle'))/2
-  return {x:support.kind==='square'?left:left+width('square')+GAP,y:blue.y+height('circle')+VERTICAL}
+  return {x:support.kind==='square'?left:left+width('square')+GAP,y:blue.y+height('circle')+VERTICAL+(support.kind==='rectangle'?(height('square')-height('rectangle'))/2:0)}
  }
  const sibling=d.bonds.find(b=>b.relation==='support'&&b.parent===blue.id&&b.child!==support.id)
  if(sibling){
@@ -125,10 +143,11 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
     if(!occupiedRight&&!occupiedLeft) {
-     const diagonal=(left.kind==='triangle'||right.kind==='triangle')?65:0
-     const desired={x:left.x+width(left.kind)+GAP*3,y:left.y+diagonal}
+     // Consecutive circle/triangle heads step by prior head height plus Blueprint clearance.
+     const diagonal=left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
+     const desired={x:left.x+width(left.kind)+SEQUENCE_GAP,y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
-     const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-GAP*3-a.x,y:b.y-diagonal-a.y}
+     const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-SEQUENCE_GAP-a.x,y:b.y-diagonal-a.y}
      offered({parent:left.id,child:right.id,relation:'sequence',dx:delta.x,dy:delta.y,distance:Math.hypot(delta.x,delta.y)})
     }
    }
@@ -146,6 +165,7 @@ export function MoleculeBoard(){
  const [selected,setSelected]=useState<string|null>(null)
  const [hint,setHint]=useState('Drag any shape anywhere. Only compatible pieces brought close together will snap.')
  const [fall,setFall]=useState<Set<string>>(new Set())
+ const [preview,setPreview]=useState<Snap|null>(null)
  const svg=useRef<SVGSVGElement>(null),currentDoc=useRef(doc),currentView=useRef(view)
  const dragging=useRef<Drag|null>(null),panning=useRef<Pan|null>(null)
  const lastTap=useRef<{id:string;time:number}|null>(null)
@@ -179,12 +199,16 @@ export function MoleculeBoard(){
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
   const pt=pointer(e),dx=pt.x-d.sx,dy=pt.y-d.sy
   if(Math.hypot(dx,dy)>TAP)d.moved=true
-  if(d.moved)update(translate(d.before,molecule(d.before,d.id),dx,dy))
+  if(d.moved){
+   const proposed=translate(d.before,molecule(d.before,d.id),dx,dy)
+   update(proposed)
+   setPreview(bestSnap(proposed,molecule(proposed,d.id)))
+  }
   e.stopPropagation()
  }
  function releaseShape(e:ReactPointerEvent<SVGGElement>){
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
-  dragging.current=null;e.stopPropagation()
+  dragging.current=null;setPreview(null);e.stopPropagation()
   if(!d.moved){
    const t=Date.now()
    if(lastTap.current?.id===d.id&&t-lastTap.current.time<DOUBLE_MS){
@@ -204,8 +228,12 @@ export function MoleculeBoard(){
   const actual=currentDoc.current,moving=molecule(actual,d.id),snap=bestSnap(actual,moving)
   if(snap){
    const adjusted=translate(actual,moving,snap.dx,snap.dy)
-   save({...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]},d.before)
-   setHint('Magnetic snap! Connected pieces now drag together. Double-tap a child to drop its branch.')
+   const bonded={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
+   // Adding a determiner/preposition to a sequence is a local supporter layout change,
+   // not a change to any of the red/blue sequence coordinates.
+   const result=snap.relation==='support'?alignSupporters(bonded,snap.parent):bonded
+   save(result,d.before)
+   setHint(snap.relation==='support'?'Support attached beneath its blue head. The red/blue sequence stayed intact.':'Magnetic snap! Connected pieces now move together.')
   }else{
    setHistory(h=>[...h,d.before].slice(-40))
    setHint('Free placement. The shape stays exactly where you released it.')
@@ -265,6 +293,11 @@ export function MoleculeBoard(){
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill="#faf9f6"/>
+    {preview&&<g aria-hidden="true" pointerEvents="none">
+      {doc.atoms.filter(a=>dragging.current&&molecule(doc,dragging.current.id).has(a.id)).map(a=><g key={a.id} transform={`translate(${a.x+preview.dx} ${a.y+preview.dy})`}>
+       <Glyph kind={a.kind} w={width(a.kind)} h={height(a.kind)} fill="none" stroke="#2ca39a" strokeDasharray="8 5" strokeWidth={3}/>
+      </g>)}
+     </g>}
     {doc.atoms.map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`} data-kind={a.kind} data-id={a.id} className={fall.has(a.id)?'stax-molecule-dropping':undefined}
       onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}>
       {selected===a.id&&<rect x="-7" y="-7" width={width(a.kind)+14} height={height(a.kind)+14} rx="5" fill="none" stroke="#7b8795" strokeDasharray="4 5" pointerEvents="none"/>}
