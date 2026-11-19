@@ -51,10 +51,28 @@ const MAGNET_PORTS = {
 } as const
 const SMALL_GREEN=.86,SMALL_ORANGE=.9
 const smallWidth=(kind:Kind)=>width(kind)*(kind==='oval'?SMALL_GREEN:kind==='hexagon'?SMALL_ORANGE:1)
-const redOrangePosition=(red:Atom)=>({
- x:red.x+(width('triangle')-smallWidth('hexagon'))/2,
- y:red.y+height('triangle')+VERTICAL,
-})
+function orangeChildren(doc:Draft,redId:string){
+ return doc.bonds.filter(b=>b.relation==='support'&&b.parent===redId).map(b=>byId(doc,b.child)).filter(a=>a.kind==='hexagon')
+}
+function redOrangePosition(red:Atom,doc:Draft){
+ const existing=orangeChildren(doc,red.id)
+ const cx=red.x+width('triangle')/2
+ // One orange centers; a second enters at the right and the pair is recentered together.
+ const x=existing.length?cx+GAP/2:cx-smallWidth('hexagon')/2
+ return {x,y:red.y+height('triangle')+VERTICAL}
+}
+function alignRedSupporters(doc:Draft,redId:string):Draft {
+ const red=byId(doc,redId),orange=orangeChildren(doc,redId)
+ if(!red||orange.length<1)return doc
+ const total=orange.length*smallWidth('hexagon')+(orange.length-1)*GAP
+ const start=red.x+(width('triangle')-total)/2
+ let next=doc
+ for(let i=0;i<orange.length;i++){
+  const a=byId(next,orange[i].id)
+  next=translate(next,descendants(next,a.id),start+i*(smallWidth('hexagon')+GAP)-a.x,red.y+height('triangle')+VERTICAL-a.y)
+ }
+ return next
+}
 /** Visual size follows its current structural position, not the palette choice. */
 function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
  if(a.kind!=='oval'&&a.kind!=='hexagon')return undefined
@@ -191,11 +209,12 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    const orange=a.kind==='hexagon'?a:b.kind==='hexagon'?b:null
    if(red&&orange&&MAGNET_PORTS.redBelow.includes('hexagon')&&!parentOfSupport(d,orange.id)){
     const orangeGroup=molecule(d,orange.id)
-    const duplicate=d.bonds.some(edge=>edge.relation==='support'&&edge.parent===red.id&&byId(d,edge.child).kind==='hexagon')
-    if(!orangeGroup.has(red.id)&&!duplicate){
-     const destination=redOrangePosition(red)
-     // One world-space anchor for both the glowing preview and exact release.
-     const dx=a.id===orange.id?destination.x-orange.x:orange.x-(width('triangle')-smallWidth('hexagon'))/2-red.x
+    const occupied=orangeChildren(d,red.id).length
+    // Blueprint Quest 21 shows two orange shapes beneath a red verb.
+    if(!orangeGroup.has(red.id)&&occupied<2){
+     const destination=redOrangePosition(red,d)
+     // One canonical world-space anchor drives eligibility, glow and release.
+     const dx=a.id===orange.id?destination.x-orange.x:orange.x-(destination.x-red.x)-red.x
      const dy=a.id===orange.id?destination.y-orange.y:orange.y-height('triangle')-VERTICAL-red.y
      offered({parent:red.id,child:orange.id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)})
     }
@@ -428,7 +447,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    const bonded={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
    // Adding a determiner/preposition to a sequence is a local supporter layout change,
    // not a change to any of the red/blue sequence coordinates.
-   const result=snap.relation==='support'&&byId(bonded,snap.parent)?.kind==='circle'?alignSupporters(normalizeRoles(bonded),snap.parent):normalizeRoles(bonded)
+   const resolved=normalizeRoles(bonded)
+   const result=snap.relation==='support'
+    ?byId(resolved,snap.parent)?.kind==='circle'?alignSupporters(resolved,snap.parent):alignRedSupporters(resolved,snap.parent)
+    :resolved
    save(result,d.before)
    setHint(snap.relation==='support'?(byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red. The existing sequence stayed intact.':'Support attached precisely beneath blue. The sequence stayed intact.'):'Magnetic snap! Connected pieces now move together.')
   }else{
@@ -475,7 +497,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   if(snap){
    const adjusted=translate(next,new Set([id]),snap.dx,snap.dy)
    const joined={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
-   save(snap.relation==='support'&&byId(joined,snap.parent)?.kind==='circle'?alignSupporters(normalizeRoles(joined),snap.parent):normalizeRoles(joined),previous)
+   const resolved=normalizeRoles(joined)
+   save(snap.relation==='support'?(byId(resolved,snap.parent)?.kind==='circle'?alignSupporters(resolved,snap.parent):alignRedSupporters(resolved,snap.parent)):resolved,previous)
    setHint(snap.relation==='support'&&byId(joined,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected: this shape is now part of the molecule.')
   }else{
    save(next,previous)
