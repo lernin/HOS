@@ -14,6 +14,8 @@ type Draft = { atoms:Atom[]; bonds:Bond[] }
 type View = { x:number;y:number;width:number;height:number }
 type Drag = { id:string;pointer:number;sx:number;sy:number;before:Draft;moved:boolean;fingerLift:number }
 type Pan = { pointer:number;startX:number;startY:number;before:View;moved:boolean }
+type TouchPoint = {x:number;y:number}
+type Pinch = {pointers:[number,number];startDistance:number;startView:View;anchor:{x:number;y:number}}
 type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number }
 type PaletteHover = { kind:Kind;screenX:number;screenY:number;worldX:number;worldY:number;snap:Snap|null }
 // Distances from the STAX Blueprint's .07-unit design grid; only snap geometry is quantised.
@@ -171,6 +173,9 @@ export function MoleculeBoard(){
  const lastTap=useRef<{id:string;time:number}|null>(null)
  const fallTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
  const paletteDrag=useRef<{kind:Kind;pointer:number;startX:number;startY:number}|null>(null)
+ const activeTouches=useRef<Map<number,TouchPoint>>(new Map())
+ const pinch=useRef<Pinch|null>(null)
+ const blockRelease=useRef<Set<number>>(new Set())
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc])
  useEffect(()=>()=>{if(fallTimer.current)clearTimeout(fallTimer.current)},[])
  function update(d:Draft){currentDoc.current=d;setDoc(d)}
@@ -186,8 +191,51 @@ export function MoleculeBoard(){
   const pt=svg.current!.createSVGPoint();pt.x=x;pt.y=y
   return pt.matrixTransform(matrix.inverse())
  }
+ // Root capture handlers track all touches, including those beginning directly on a shape.
+ // A second touch cancels drag and starts a camera-only pinch. Model coordinates never scale.
+ function downTouch(e:ReactPointerEvent<SVGSVGElement>){
+  if(e.pointerType!=='touch')return
+  activeTouches.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+  blockRelease.current.delete(e.pointerId)
+  if(activeTouches.current.size!==2)return
+  const ids=[...activeTouches.current.keys()] as [number,number]
+  const a=activeTouches.current.get(ids[0])!,b=activeTouches.current.get(ids[1])!
+  if(dragging.current){update(dragging.current.before);dragging.current=null;setPreview(null)}
+  panning.current=null;lastTap.current=null
+  blockRelease.current.add(ids[0]);blockRelease.current.add(ids[1])
+  const midX=(a.x+b.x)/2,midY=(a.y+b.y)/2
+  const world=fromClient(midX,midY)
+  if(!world)return
+  pinch.current={pointers:ids,startDistance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),startView:currentView.current,anchor:world}
+  setHint('Pinch to zoom. Shapes keep their positions and connections.')
+ }
+ function moveTouch(e:ReactPointerEvent<SVGSVGElement>){
+  if(e.pointerType!=='touch'||!activeTouches.current.has(e.pointerId))return
+  activeTouches.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+  const p=pinch.current;if(!p)return
+  const a=activeTouches.current.get(p.pointers[0]),b=activeTouches.current.get(p.pointers[1])
+  if(!a||!b)return
+  const distance=Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))
+  const w=Math.max(300,Math.min(4000,p.startView.width*p.startDistance/distance)),h=w/ASPECT
+  const midX=(a.x+b.x)/2,midY=(a.y+b.y)/2
+  const rect=svg.current?.getBoundingClientRect()
+  if(!rect||!rect.width||!rect.height)return
+  // Pinch midpoint anchors the same world-space point while fingers spread and move.
+  const x=p.anchor.x-(midX-rect.left)*w/rect.width
+  const y=p.anchor.y-(midY-rect.top)*h/rect.height
+  setCamera({x,y,width:w,height:h})
+ }
+ function endTouch(e:ReactPointerEvent<SVGSVGElement>){
+  if(e.pointerType!=='touch')return
+  activeTouches.current.delete(e.pointerId)
+  if(pinch.current?.pointers.includes(e.pointerId)){
+   pinch.current=null
+   panning.current=null
+  }
+ }
  function onShapeDown(e:ReactPointerEvent<SVGGElement>,id:string){
   if(e.pointerType==='mouse'&&e.button!==0)return
+  if(pinch.current)return
   e.stopPropagation();const p=pointer(e)
   if(fallTimer.current)clearTimeout(fallTimer.current)
   setFall(new Set())
@@ -196,6 +244,7 @@ export function MoleculeBoard(){
   setSelected(id)
  }
  function onShapeMove(e:ReactPointerEvent<SVGGElement>){
+  if(pinch.current)return
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
   const pt=pointer(e),dx=pt.x-d.sx,dy=pt.y-d.sy
   if(Math.hypot(dx,dy)>TAP)d.moved=true
@@ -210,6 +259,7 @@ export function MoleculeBoard(){
   e.stopPropagation()
  }
  function releaseShape(e:ReactPointerEvent<SVGGElement>){
+  if(blockRelease.current.has(e.pointerId)){blockRelease.current.delete(e.pointerId);dragging.current=null;setPreview(null);return}
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
   dragging.current=null;setPreview(null);e.stopPropagation()
   if(!d.moved){
@@ -243,6 +293,7 @@ export function MoleculeBoard(){
   }
  }
  function downBackground(e:ReactPointerEvent<SVGSVGElement>){
+  if(pinch.current)return
   if(e.target!==e.currentTarget&&!(e.target as Element).hasAttribute('data-board-background'))return
   if(e.pointerType==='mouse'&&e.button!==0)return
   panning.current={pointer:e.pointerId,startX:e.clientX,startY:e.clientY,before:currentView.current,moved:false}
@@ -250,6 +301,7 @@ export function MoleculeBoard(){
   setSelected(null)
  }
  function moveBackground(e:ReactPointerEvent<SVGSVGElement>){
+  if(pinch.current)return
   const p=panning.current;if(!p||p.pointer!==e.pointerId)return
   const start=p.before,deltaX=(e.clientX-p.startX)*start.width/(svg.current?.getBoundingClientRect().width||1)
   const deltaY=(e.clientY-p.startY)*start.height/(svg.current?.getBoundingClientRect().height||1)
@@ -327,7 +379,7 @@ export function MoleculeBoard(){
   </div>
   <div className="stax-molecule-view-controls"><button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))}>Center</button><button onClick={()=>setCamera(fit(currentDoc.current))}>Fit all</button><button aria-label="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}>−</button><span>{Math.round(100*W/view.width)}%</span><button aria-label="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}>+</button></div>
   <div className="stax-molecule-canvas">
-   <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
+   <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill="#faf9f6"/>
     {paletteHover?.snap&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
       <g transform={`translate(${paletteHover.worldX+paletteHover.snap.dx} ${paletteHover.worldY+paletteHover.snap.dy})`}>
@@ -364,6 +416,6 @@ export function MoleculeBoard(){
     </svg>
    </div>}
   <p className="stax-molecule-hint" role="status">{hint}</p>
-  <p className="stax-molecule-note">Shapes lift above your finger during touch-drag; eligible magnets glow. Each new shape starts loose, wherever placed. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Only known pink/purple/blue and blue/red relationships are provisionally magnetic.</p>
+  <p className="stax-molecule-note">Shapes lift above your finger during touch-drag; eligible magnets glow. Each new shape starts loose, wherever placed. One finger moves atoms or pans; pinch with two fingers to zoom. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Only known pink/purple/blue and blue/red relationships are provisionally magnetic.</p>
  </div>
 }
