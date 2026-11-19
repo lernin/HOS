@@ -109,3 +109,48 @@
 }
 
 .stax-molecule-back{border:1px solid #d1dce0;background:#fff;padding:3px 9px;min-height:32px;font-size:20px!important;line-height:1;color:#27475a!important;touch-action:manipulation}
+
+
+/* STAX directional clear-zone layout: top-left and bottom-right reserved for content.
+   Only the top-right shape dock and bottom-left tool cluster obscure the canvas. */
+.stax-molecule-tools{
+ top:auto;right:auto;
+ bottom:calc(env(safe-area-inset-bottom,0px) + 70px);
+ left:calc(env(safe-area-inset-left,0px) + 10px);
+ max-width:min(650px,calc(100vw - 22px));
+ padding:5px 7px;gap:4px;
+}
+.stax-molecule-tools strong{display:none}
+.stax-molecule-buttons{margin-left:0;gap:4px}
+.stax-molecule-hint{
+ position:absolute;left:-9999px;top:auto;bottom:auto;max-width:1px;
+ width:1px;height:1px;overflow:hidden;clip-path:inset(50%);
+}
+.stax-molecule-example{
+ left:50%;right:auto;top:calc(env(safe-area-inset-top,0px) + 14px);bottom:auto;
+ transform:translateX(-50%);max-width:min(430px,48vw);pointer-events:none;
+}
+.stax-molecule-view-controls{
+ bottom:calc(env(safe-area-inset-bottom,0px) + 10px);
+ left:calc(env(safe-area-inset-left,0px) + 10px);
+ max-width:calc(100vw - 22px);
+}
+@media(max-width:850px){
+ .stax-molecule-tools{
+  top:auto;left:calc(env(safe-area-inset-left,0px) + 8px);
+  bottom:calc(env(safe-area-inset-bottom,0px) + 62px);
+  max-width:calc(100vw - 16px);flex-wrap:nowrap;
+ }
+ .stax-molecule-example{top:calc(env(safe-area-inset-top,0px) + 10px);bottom:auto;max-width:42vw;}
+}
+@media(max-width:520px){
+ .stax-molecule-tools{
+  top:auto;left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 51px);
+  max-width:calc(100vw - 10px);padding:4px 5px;
+ }
+ .stax-molecule-buttons{gap:2px;flex-wrap:nowrap}
+ .stax-molecule-buttons button{font-size:9px;padding:4px 5px;min-height:29px}
+ .stax-molecule-back{font-size:18px!important;min-height:29px;padding:3px 7px}
+ .stax-molecule-view-controls{left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 5px)}
+ .stax-molecule-example{left:46%;max-width:45vw;top:calc(env(safe-area-inset-top,0px) + 6px)}
+}
