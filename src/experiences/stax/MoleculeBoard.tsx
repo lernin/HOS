@@ -565,7 +565,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  }
  function paletteCancel(){paletteDrag.current=null;setPaletteHover(null)}
   function loadQuest(){
-  const next=quest21();save(next);setCamera(fit(next,aspect()));setSelected(null);setQuestActive(true)
+  // The example's under-red ports use the same exact positions as live magnets.
+  const example=normalizeRoles(quest21())
+  const next=alignRedSupporters(alignRedSupporters(example,'q21-buy'),'q21-is')
+  save(next);setCamera(fit(next,aspect()));setSelected(null);setQuestActive(true)
   setHint('Blueprint Level 21 loaded as a movable demonstration. Word roles are provisional; all shapes and bonds remain editable.')
  }
  async function toggleFullscreen(){
