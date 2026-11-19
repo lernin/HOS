@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { addBasicPair, addSymbol, findNode, findSupportingCircle, locateDropTarget, countSymbols, KINDS, layoutMap, MAX_SYMBOLS, parseDraft, preset, removeSymbol, RULES, setOmitted, studyScene, SYMBOLS, type Kind, type MapDraft, type Placement, type DropSide } from './stax/model'
 import { SymbolCanvas, SymbolIcon } from './stax/SymbolCanvas'
+import { MoleculeBoard } from './stax/MoleculeBoard'
 import './stax/stax.css'
 
 const STORAGE='stax-visual-grammar-v1'
@@ -15,6 +16,7 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
  const [selected,setSelected]=useState<string|null>(null),[blueprint,setBlueprint]=useState(false),[mode,setMode]=useState<Mode>('compose')
  const [placement,setPlacement]=useState<Placement>('auto'),[zoom,setZoom]=useState(1),[rulesOpen,setRulesOpen]=useState(false)
  const [notice,setNotice]=useState(''),[saveError,setSaveError]=useState(false)
+ const [freeBoard,setFreeBoard]=useState(false)
  const svgRef=useRef<SVGSVGElement>(null), doc=history.present
  const dragRef=useRef<DragGesture|null>(null), suppressClickRef=useRef<Kind|null>(null)
  const [dragPreview,setDragPreview]=useState<DragPreview|null>(null)
@@ -85,6 +87,14 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
   copy.removeAttribute('style');copy.setAttribute('width',String(scene.width*32));copy.setAttribute('height',String(scene.height*32))
   download(new XMLSerializer().serializeToString(copy),'image/svg+xml',`stax-${mode}-${blueprint?'blueprint':'clean'}.svg`)
  }
+ if(freeBoard)return <main className="stax-lab">
+  <header className="stax-header"><div className="stax-identity"><button className="stax-back" onClick={onExit} aria-label="Back to The Lab">←</button><div><h1>STAX <span>Magnetic Molecules</span></h1><p>Free shape assembly · experimental</p></div></div>
+   <div className="stax-header-actions"><button className="stax-text-button" onClick={()=>setFreeBoard(false)}>Classic Shape Lab ↗</button></div>
+  </header>
+  <section className="stax-main" style={{maxWidth:1200,margin:'0 auto',width:'100%'}}>
+    <MoleculeBoard/>
+  </section>
+ </main>
  return <main className={`stax-lab${blueprint?' is-blueprint':''}`}>
   <header className="stax-header">
    <div className="stax-identity"><button className="stax-back" onClick={onExit} aria-label="Back to The Lab">←</button><div className="stax-mark" aria-hidden="true">△<span>○</span></div><div><h1>STAX <span>Shape Lab</span></h1><p>Visual grammar · Study 01</p></div></div>
@@ -103,6 +113,7 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
    </aside>
    <section className="stax-main" aria-label="Visual grammar workbench">
     <div className="stax-toolbar">
+     <button className="stax-export" onClick={()=>setFreeBoard(true)}>Magnetic Molecules ↗</button>
      <nav className="stax-tabs" aria-label="Study view">{(['compose','symbols','construction'] as Mode[]).map(v=><button key={v} aria-pressed={mode===v} onClick={()=>changeMode(v)}>{v==='compose'?'Compose':v==='symbols'?'Symbol set':'Construction'}</button>)}</nav>
      <div className="stax-mode-switch" aria-label="Display mode"><button aria-pressed={!blueprint} onClick={()=>setBlueprint(false)}>Clean</button><button aria-pressed={blueprint} onClick={()=>setBlueprint(true)}>Blueprint</button></div>
     </div>
@@ -129,7 +140,7 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
     <div className="stax-status" role="status" aria-live="polite">{notice}</div>
    </section>
   </div>
-  {dragPreview&&<div className="stax-drag-ghost" aria-hidden="true" style={{left:dragPreview.x,top:dragPreview.y}}><SymbolIcon kind={dragPreview.kind}/></div>}
+  {dragPreview&&<div className="stax-drag-ghost" aria-hidden="true" style={{left:dragPreview.x,top:dragPreview.y,background:'transparent',border:'none',boxShadow:'none',padding:0}}><SymbolIcon kind={dragPreview.kind}/></div>}
   {rulesOpen&&<div className="stax-rules-shade" onClick={()=>setRulesOpen(false)}><section className="stax-rules" role="dialog" aria-modal="true" aria-label="Visual grammar rules" onClick={e=>e.stopPropagation()}>
    <button className="stax-rules-close" onClick={()=>setRulesOpen(false)} aria-label="Close rules">×</button><div className="stax-section-label">STAX / WORKING STANDARD V1</div><h2>The same rules,<br/>every time.</h2><p>One chosen system for this experiment. The original slides are inspiration; these values govern the canvas.</p>
    <dl>{[[RULES.attachment,'Attachments','Within a supporting row, and below a parent.'],[RULES.group,'Main groups','Between the bounds of neighbouring groups.'],[RULES.connector,'Connectors','On either side of a diamond.'],[RULES.row,'Independent rows','Between the full bounds of separate rows.']].map(([value,label,detail])=><div key={label}><dt>{Number(value).toFixed(2)}</dt><dd><strong>{label}</strong><span>{detail}</span></dd></div>)}</dl>
