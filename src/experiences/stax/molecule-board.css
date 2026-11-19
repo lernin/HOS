@@ -20,3 +20,20 @@
 .stax-molecule-canvas svg .stax-resonance-ghost{filter:drop-shadow(0 0 7px #10b88f);animation:stax-magnet-pulse .7s ease-in-out infinite alternate}
 @keyframes stax-magnet-pulse{from{opacity:.55}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.stax-lifted-ghost.is-eligible,.stax-molecule-canvas svg .stax-resonant-target,.stax-molecule-canvas svg .stax-resonance-ghost{animation:none;opacity:1}}
+
+/* Blueprint page 24: separate green complement/modifier and orange size options. */
+.stax-molecule-palette{grid-template-columns:repeat(9,minmax(0,1fr))}
+.stax-molecule-palette button{min-width:0}
+.stax-molecule-example{margin:0;border-left:3px solid #3381b6;padding:7px 10px;background:#eef6fb;border-radius:5px;color:#2b4962;font-size:12px;line-height:1.55}
+.stax-molecule-example small{display:block;color:#657b8b;font-size:10px}
+@media(max-width:700px){
+ .stax-molecule-palette{grid-template-columns:repeat(5,minmax(0,1fr))}
+ .stax-molecule-palette button{height:51px}
+ .stax-molecule-tools{gap:7px}
+ .stax-molecule-buttons{flex-wrap:wrap}
+}
+
+.stax-molecule-palette button:has(.stax-palette-kind){flex-direction:column;gap:1px;padding:3px 2px}
+.stax-molecule-palette button:has(.stax-palette-kind) svg{height:31px}
+.stax-palette-kind{display:block;font-size:9px;line-height:1.1;color:#526676;white-space:nowrap;pointer-events:none}
+@media(max-width:700px){.stax-molecule-palette button:has(.stax-palette-kind){height:62px}}
