@@ -143,7 +143,8 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
     if(!occupiedRight&&!occupiedLeft) {
-     const diagonal=(left.kind==='triangle'||right.kind==='triangle')?65:0
+     // Consecutive circle/triangle heads step by prior head height plus Blueprint clearance.
+     const diagonal=left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
      const desired={x:left.x+width(left.kind)+SEQUENCE_GAP,y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
      const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-SEQUENCE_GAP-a.x,y:b.y-diagonal-a.y}
