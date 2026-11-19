@@ -262,12 +262,11 @@ export function MoleculeBoard(){
  function upBackground(e:ReactPointerEvent<SVGSVGElement>){if(panning.current?.pointer===e.pointerId)panning.current=null}
  function addAt(kind:Kind,client?:{x:number;y:number}){
   if(currentDoc.current.atoms.length>=80){setHint('Maximum 80 shapes in this experiment.');return}
-  const p=client?fromClient(client.x,client.y):null
-  const camera=currentView.current
+  const p=client?fromClient(client.x,client.y):null,camera=currentView.current
   let x=(p?.x??camera.x+camera.width/2)-width(kind)/2
   let y=(p?.y??camera.y+camera.height/2)-height(kind)/2
-  // Palette taps find an empty parking spot, but never connect or move existing pieces.
-  if(!p){
+  if(!client){
+   // Palette taps park freely in a vacant spot; no hidden attachment.
    const occupied=(xx:number,yy:number)=>currentDoc.current.atoms.some(a=>xx<a.x+width(a.kind)+14&&xx+width(kind)+14>a.x&&yy<a.y+height(a.kind)+14&&yy+height(kind)+14>a.y)
    const step=Math.max(width(kind),height(kind))+24
    for(let n=0;n<30&&occupied(x,y);n++){
@@ -276,20 +275,54 @@ export function MoleculeBoard(){
     if(!occupied(xx,yy)){x=xx;y=yy;break}
    }
   }
-  save(spawn(currentDoc.current,kind,x,y));setHint('New shape is FREE. Drag it around; it will only snap when close to a matching attachment.')
+  const previous=currentDoc.current,id=crypto.randomUUID()
+  const next:Draft={...previous,atoms:[...previous.atoms,{id,kind,x,y}]}
+  // A deliberate palette DRAG can join on release, while a TAP remains loose.
+  const snap=client?bestSnap(next,new Set([id])):null
+  if(snap){
+   const adjusted=translate(next,new Set([id]),snap.dx,snap.dy)
+   const joined={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
+   save(snap.relation==='support'?alignSupporters(joined,snap.parent):joined,previous)
+   setHint('Magnet connected: this shape is now part of the molecule.')
+  }else{
+   save(next,previous)
+   setHint('Placed freely. The shape stays there until you move it.')
+  }
+ }
+ function palettePosition(kind:Kind,clientX:number,clientY:number):PaletteHover {
+  const screenX=clientX,screenY=clientY-FINGER_LIFT
+  const rect=svg.current?.getBoundingClientRect()
+  const inside=!!rect&&screenX>=rect.left&&screenX<=rect.right&&screenY>=rect.top&&screenY<=rect.bottom
+  const p=inside?fromClient(screenX,screenY):null
+  const worldX=(p?.x??0)-width(kind)/2,worldY=(p?.y??0)-height(kind)/2
+  let snap:Snap|null=null
+  if(p&&currentDoc.current.atoms.length<80){
+   const ghost:Atom={id:'__palette_preview__',kind,x:worldX,y:worldY}
+   snap=bestSnap({...currentDoc.current,atoms:[...currentDoc.current.atoms,ghost]},new Set([ghost.id]))
+  }
+  return {kind,screenX,screenY,worldX,worldY,snap}
  }
  function paletteDown(e:ReactPointerEvent<HTMLButtonElement>,kind:Kind){
   if(e.pointerType==='mouse'&&e.button!==0)return
   paletteDrag.current={kind,pointer:e.pointerId,startX:e.clientX,startY:e.clientY}
   e.currentTarget.setPointerCapture(e.pointerId)
+  setPaletteHover(palettePosition(kind,e.clientX,e.clientY))
+ }
+ function paletteMove(e:ReactPointerEvent<HTMLButtonElement>){
+  const p=paletteDrag.current;if(!p||p.pointer!==e.pointerId)return
+  setPaletteHover(palettePosition(p.kind,e.clientX,e.clientY))
  }
  function paletteUp(e:ReactPointerEvent<HTMLButtonElement>){
   const p=paletteDrag.current;if(!p||p.pointer!==e.pointerId)return
-  paletteDrag.current=null
+  paletteDrag.current=null;setPaletteHover(null)
   const moved=Math.hypot(e.clientX-p.startX,e.clientY-p.startY)>10
-  addAt(p.kind,moved?{x:e.clientX,y:e.clientY}:undefined)
+  const liftedY=e.clientY-FINGER_LIFT,rect=svg.current?.getBoundingClientRect()
+  const inside=!!rect&&e.clientX>=rect.left&&e.clientX<=rect.right&&liftedY>=rect.top&&liftedY<=rect.bottom
+  if(moved&&!inside){setHint('Drop the lifted shape inside the workspace.');return}
+  addAt(p.kind,moved?{x:e.clientX,y:liftedY}:undefined)
  }
- function undo(){const prev=history.at(-1);if(prev){update(prev);setHistory(v=>v.slice(0,-1));setHint('Undone.')}}
+ function paletteCancel(){paletteDrag.current=null;setPaletteHover(null)}
+  function undo(){const prev=history.at(-1);if(prev){update(prev);setHistory(v=>v.slice(0,-1));setHint('Undone.')}}
  function remove(){if(!selected)return;save({atoms:doc.atoms.filter(a=>a.id!==selected),bonds:doc.bonds.filter(b=>b.parent!==selected&&b.child!==selected)});setSelected(null)}
  return <div className="stax-molecule-ui">
   <div className="stax-molecule-tools"><strong>Free magnetic workspace</strong><span>Move independently · snap only near compatible pieces</span>
