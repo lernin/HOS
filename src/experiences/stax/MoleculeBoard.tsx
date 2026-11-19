@@ -27,7 +27,7 @@ type Choice={kind:Kind;variant?:'small'|'large';label:string}
 const choices:Choice[]=[{kind:'circle',label:'Noun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',variant:'large',label:'Orange · large'},{kind:'hexagon',variant:'small',label:'Orange · small'},{kind:'oval',variant:'large',label:'Green · complement'},{kind:'oval',variant:'small',label:'Green · modifier'}]
 const width=(k:Kind)=>SYMBOLS[k].w*SCALE
 const height=(k:Kind)=>SYMBOLS[k].h*SCALE
-const variantFactor=(kind:Kind,variant?:Atom['variant'])=>variant==='small'&&(kind==='oval'||kind==='hexagon')?(kind==='oval'?.86:.9):1
+const variantFactor=(kind:Kind,variant?:Atom['variant'])=>variant==='small'&&(kind==='oval'||kind==='hexagon')?(kind==='oval' ? .86 : .9):1
 const atomWidth=(a:Atom)=>width(a.kind)*variantFactor(a.kind,a.variant)
 const atomHeight=(a:Atom)=>height(a.kind)*variantFactor(a.kind,a.variant)
 const empty=():Draft=>({atoms:[],bonds:[]})
@@ -182,6 +182,7 @@ const STAX_POS_SAMPLES = {
  'triangle>circle':'n',
 } as const
 function newFamilyAfterBlue(d:Draft,moving:Set<string>):boolean {
+ if(STAX_POS_SAMPLES['circle>rectangle']!=='n')return false
  // A rectangle explicitly to the RIGHT of a blue captain at its head level
  // is starting a different family (the source circle→rectangle n rule).
  // Never magnetically pull it underneath the earlier noun.
