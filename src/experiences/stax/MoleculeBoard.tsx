@@ -578,12 +578,6 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    setHint('Parent first: place a blue noun before adding pink, purple, or green supporters.')
    return
   }
-  if((isNounSupport||kind==='hexagon')&&!client){
-   setHint(kind==='hexagon'
-    ?'Drag orange underneath its real parent (for “very big”, first attach big to car).'
-    :'Drag this supporter onto an eligible parent; it cannot start an unattached mini-family.')
-   return
-  }
   const p=client?fromClient(client.x,client.y):null,camera=currentView.current
   let x=(p?.x??camera.x+camera.width/2)-width(kind)*variantWidthFactor(kind,variant)/2
   let y=(p?.y??camera.y+camera.height/2)-height(kind)*variantHeightFactor(kind,variant)/2
@@ -599,15 +593,48 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   }
   const previous=currentDoc.current,id=crypto.randomUUID()
   const next:Draft={...previous,atoms:[...previous.atoms,{id,kind,x,y,variant}]}
-  // A deliberate palette DRAG can join on release, while a TAP remains loose.
-  const snap=client?eligibleMagnet(next,new Set([id])):null
+  // Drag uses spatial magnets. Tap is a shortcut ONLY when the real parent is
+  // unambiguous. Neither method may create a loose dependent or an n predecessor bond.
+  let snap:Snap|null=client?eligibleMagnet(next,new Set([id])):null
+  if(!client&&(isNounSupport||kind==='hexagon')){
+   const created=byId(next,id)
+   let parent:Atom|undefined
+   let target:{x:number;y:number}|undefined
+   if(isNounSupport){
+    const blues=next.atoms.filter(a=>a.kind==='circle')
+    const blue=blues.length===1?blues[0]:blues.find(a=>a.id===selected)
+    if(blue&&!blueSupportAtoms(next,blue.id).some(a=>a.kind===kind&&kind!=='oval')){
+     parent=blue
+     target=supportPosition(blue,created,next)
+    }
+   }else{
+    const greens=next.atoms.filter(a=>a.kind==='oval'&&eligibleAdverbHost(next,a.id))
+    const green=greens.find(a=>a.id===selected)||(greens.length===1?greens[0]:undefined)
+    if(green){parent=green;target=miniFamilyPosition(next,green,created)}
+    else if(!greens.length){
+     const reds=next.atoms.filter(a=>a.kind==='triangle'&&orangeChildren(next,a.id).length<2)
+     const red=reds.length===1?reds[0]:reds.find(a=>a.id===selected)
+     if(red){parent=red;target=redOrangePosition(red,next)}
+     else if(!reds.length){
+      const blues=next.atoms.filter(a=>a.kind==='circle'&&!blueSupportAtoms(next,a.id).some(child=>child.kind==='hexagon'))
+      const blue=blues.length===1?blues[0]:blues.find(a=>a.id===selected)
+      if(blue){parent=blue;target=supportPosition(blue,created,next)}
+     }
+    }
+   }
+   if(parent&&target){
+    const dx=target.x-created.x,dy=target.y-created.y
+    snap={parent:parent.id,child:id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)}
+   }
+  }
   if(snap){
    const result=resolveMagnet(next,new Set([id]),snap)
    save(result,previous)
-   setHint(snap.relation==='support'&&byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected to its parent.')
+   setSelected(id)
+   setHint(snap.relation==='support'&&byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected to its actual parent.')
   }else if(isNounSupport||kind==='hexagon'){
    // Reject incomplete families, but leave the rest of the existing board intact.
-   setHint('Not placed: release this dependent near its eligible grammatical parent. An n never attaches to the preceding word.')
+   setHint('Parent required: attach to an existing blue noun or green/verb parent. With multiple possible parents, drag to the intended one.')
   }else{
    save(next,previous)
    setHint('Placed freely. The shape stays there until you move it.')
