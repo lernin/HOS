@@ -50,6 +50,9 @@ const MAGNET_PORTS = {
  complementAfter:['circle','triangle'],
 } as const
 const SMALL_GREEN=.86,SMALL_ORANGE=.9
+/** Global single-child under-port: child's RIGHT edge meets parent's midpoint. */
+const underSingleX=(parentX:number,parentWidth:number,childWidth:number)=>parentX+parentWidth/2-childWidth
+
 const smallWidth=(kind:Kind)=>width(kind)*(kind==='oval'?SMALL_GREEN:kind==='hexagon'?SMALL_ORANGE:1)
 function orangeChildren(doc:Draft,redId:string){
  return doc.bonds.filter(b=>b.relation==='support'&&b.parent===redId).map(b=>byId(doc,b.child)).filter(a=>a.kind==='hexagon')
@@ -58,14 +61,14 @@ function redOrangePosition(red:Atom,doc:Draft){
  const existing=orangeChildren(doc,red.id)
  const cx=red.x+width('triangle')/2
  // One orange centers; a second enters at the right and the pair is recentered together.
- const x=existing.length?cx+(GAP+smallWidth('hexagon'))/2:cx-smallWidth('hexagon')/2
+ const x=existing.length?cx+(GAP+smallWidth('hexagon'))/2:underSingleX(red.x,width('triangle'),smallWidth('hexagon'))
  return {x,y:red.y+height('triangle')+VERTICAL}
 }
 function alignRedSupporters(doc:Draft,redId:string):Draft {
  const red=byId(doc,redId),orange=orangeChildren(doc,redId)
  if(!red||orange.length<1)return doc
  const total=orange.length*smallWidth('hexagon')+(orange.length-1)*GAP
- const start=red.x+(width('triangle')-total)/2
+ const start=orange.length===1?underSingleX(red.x,width('triangle'),smallWidth('hexagon')):red.x+(width('triangle')-total)/2
  let next=doc
  for(let i=0;i<orange.length;i++){
   const a=byId(next,orange[i].id)
@@ -173,7 +176,7 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
  const itemHeight=(a:Atom)=>a.kind==='oval'?height('oval')*SMALL_GREEN:a.kind==='hexagon'?height('hexagon')*SMALL_ORANGE:height(a.kind)
  const total=items.reduce((sum,a)=>sum+itemWidth(a),0)+(items.length-1)*GAP
  const maxH=Math.max(...items.map(itemHeight))
- let x=blue.x+(width('circle')-total)/2
+ let x=items.length===1?underSingleX(blue.x,width('circle'),itemWidth(items[0])):blue.x+(width('circle')-total)/2
  const top=blue.y+height('circle')+VERTICAL
  for(const a of items){
   result.set(a.id,{x,y:top+(maxH-itemHeight(a))/2})
@@ -183,7 +186,7 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
 }
 function miniFamilyPosition(_doc:Draft,green:Atom,_orange:Atom) {
  // n = DOWN into a new family: orange is the dependent below its green parent.
- return {x:green.x+(smallWidth('oval')-smallWidth('hexagon'))/2,
+ return {x:underSingleX(green.x,smallWidth('oval'),smallWidth('hexagon')),
   y:green.y+height('oval')*SMALL_GREEN+VERTICAL}
 }
 function alignSupporters(doc:Draft,blueId:string):Draft {
@@ -212,7 +215,7 @@ function supportPosition(blue:Atom,support:Atom,d:Draft) {
 /** The orange adverb is nested directly UNDER the second green sibling. */
 function hoveringBelowGreen(doc:Draft,blueId:string,orange:Atom):boolean {
  return greenSiblings(doc,blueId).some(green=>{
-  const x=green.x+(atomWidth(green)-smallWidth('hexagon'))/2
+  const x=underSingleX(green.x,atomWidth(green),smallWidth('hexagon'))
   const y=green.y+atomHeight(green)+VERTICAL
   return Math.hypot(orange.x-x,orange.y-y)<=SNAP_RADIUS
  })
@@ -255,7 +258,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    const green=a.kind==='oval'?a:b.kind==='oval'?b:null
    const nestedOrange=a.kind==='hexagon'?a:b.kind==='hexagon'?b:null
    if(green&&nestedOrange&&a.id===nestedOrange.id&&!parentOfSupport(d,nestedOrange.id)&&eligibleAdverbHost(d,green.id)){
-    const dropZone={x:green.x+(atomWidth(green)-smallWidth('hexagon'))/2,
+    const dropZone={x:underSingleX(green.x,atomWidth(green),smallWidth('hexagon')),
      y:green.y+atomHeight(green)+VERTICAL}
     const proximity=Math.hypot(nestedOrange.x-dropZone.x,nestedOrange.y-dropZone.y)
     if(proximity<=SNAP_RADIUS){
@@ -640,11 +643,26 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  function undo(){const prev=history.at(-1);if(prev){update(prev);setHistory(v=>v.slice(0,-1));setHint('Undone.')}}
  function remove(){if(!selected)return;save({atoms:doc.atoms.filter(a=>a.id!==selected),bonds:doc.bonds.filter(b=>b.parent!==selected&&b.child!==selected)});setSelected(null)}
  return <div ref={rootRef} className="stax-molecule-ui">
-  <div className="stax-molecule-tools"><button className="stax-molecule-back" onClick={onBack} title="Return to Classic Shape Lab" aria-label="Back to Classic Shape Lab">←</button><strong>STAX · Magnetic Workspace</strong>
-   <div className="stax-molecule-buttons"><button onClick={toggleFullscreen} aria-label={fullscreen?"Exit full screen":"Go full screen"}>{fullscreen?"Exit full screen":"⛶ Full screen"}</button><button onClick={loadQuest} title="Load the 14-shape Level 21 source sentence" >Load Quest 21</button><button onClick={undo} disabled={!history.length}>Undo</button><button onClick={remove} disabled={!selected}>Remove</button><button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}}>Clear</button></div>
+  <div className="stax-molecule-dock" aria-label="STAX workspace controls">
+   <div className="stax-molecule-tools">
+    <button className="stax-molecule-back" onClick={onBack} title="Back to Classic Shape Lab" aria-label="Back to Classic Shape Lab">←</button>
+    <div className="stax-molecule-buttons">
+     <button onClick={toggleFullscreen} title={fullscreen?"Exit full screen":"Full screen"} aria-label={fullscreen?"Exit full screen":"Go full screen"}>{fullscreen?"⤢":"⛶"}</button>
+     <button onClick={loadQuest} title="Load Quest Level 21" aria-label="Load Quest 21">Q21</button>
+     <button onClick={undo} disabled={!history.length} title="Undo" aria-label="Undo">↶</button>
+     <button onClick={remove} disabled={!selected} title="Remove selected shape" aria-label="Remove selected shape">⌫</button>
+     <button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}} title="Clear all shapes" aria-label="Clear all shapes">×</button>
+    </div>
+   </div>
+   <div className="stax-molecule-view-controls">
+    <button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))} title="Center" aria-label="Center">◎</button>
+    <button onClick={()=>setCamera(fit(currentDoc.current,aspect()))} title="Fit all" aria-label="Fit all">⊞</button>
+    <button aria-label="Zoom out" title="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}>−</button>
+    <span>{Math.round(100*W/view.width)}%</span>
+    <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}>+</button>
+   </div>
   </div>
   {questActive&&<p className="stax-molecule-example">STAX QUEST · Level 21 — She’s buying a present for her best friend because her birthday is tomorrow. <small>Illustrative mapping; original slide does not label each shape with its individual word.</small></p>}
-  <div className="stax-molecule-view-controls"><button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))}>Center</button><button onClick={()=>setCamera(fit(currentDoc.current,aspect()))}>Fit all</button><button aria-label="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}>−</button><span>{Math.round(100*W/view.width)}%</span><button aria-label="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}>+</button></div>
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill="#faf9f6"/>
