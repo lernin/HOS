@@ -43,7 +43,7 @@ const nounSupport=(a:Atom)=>supports(a.kind)||a.kind==='oval'
  * distinct from red -> orange in reading order.
  */
 const MAGNET_PORTS = {
- blueSupport:['square','rectangle','oval'],
+ blueSupport:['square','rectangle','oval','hexagon'],
  redBelow:['hexagon'],
  peerPair:['square','rectangle'],
  blueYellow:['circle','diamond'],
@@ -134,43 +134,57 @@ function otherInPair(d:Draft,id:string){
  return pair?pair.parent===id?pair.child:pair.parent:null
 }
 /** Reposition only a blue head's immediate supporters. Sequence heads are NEVER reflowed. */
+/**
+ * A blue noun owns one horizontal supporter row. Individual colors are slots,
+ * ordered pink → purple → green → orange, regardless of assembly order.
+ * A pink-purple pair is still one connection group but occupies two slots.
+ * All direct children stay free until a genuine support bond is created.
+ */
+const BLUE_SUPPORT_ORDER:Kind[]=['square','rectangle','oval','hexagon']
+function blueSupportAtoms(doc:Draft,blueId:string):Atom[] {
+ const ids=new Set(doc.bonds.filter(b=>b.relation==='support'&&b.parent===blueId).map(b=>b.child))
+ // A preassembled pink-purple pair may be attached via either member.
+ for(const id of [...ids]){const other=otherInPair(doc,id);if(other)ids.add(other)}
+ return [...ids].map(id=>byId(doc,id)).filter(a=>BLUE_SUPPORT_ORDER.includes(a.kind))
+  .sort((a,b)=>BLUE_SUPPORT_ORDER.indexOf(a.kind)-BLUE_SUPPORT_ORDER.indexOf(b.kind))
+}
+function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:number}> {
+ const blue=byId(doc,blueId),items=blueSupportAtoms(doc,blueId)
+ const result=new Map<string,{x:number;y:number}>()
+ if(!blue||!items.length)return result
+ // The modifier green is small only in the under-blue supporter position.
+ const itemWidth=(a:Atom)=>a.kind==='oval'?smallWidth('oval'):a.kind==='hexagon'?smallWidth('hexagon'):width(a.kind)
+ const itemHeight=(a:Atom)=>a.kind==='oval'?height('oval')*SMALL_GREEN:a.kind==='hexagon'?height('hexagon')*SMALL_ORANGE:height(a.kind)
+ const total=items.reduce((sum,a)=>sum+itemWidth(a),0)+(items.length-1)*GAP
+ const maxH=Math.max(...items.map(itemHeight))
+ let x=blue.x+(width('circle')-total)/2
+ const top=blue.y+height('circle')+VERTICAL
+ for(const a of items){
+  result.set(a.id,{x,y:top+(maxH-itemHeight(a))/2})
+  x+=itemWidth(a)+GAP
+ }
+ return result
+}
 function alignSupporters(doc:Draft,blueId:string):Draft {
- const blue=byId(doc,blueId),supportIds=new Set(doc.bonds.filter(b=>b.relation==='support'&&b.parent===blueId).map(b=>b.child))
- // A pink-purple pair may use only one support bond; recover its sibling.
- for(const id of [...supportIds]){const other=otherInPair(doc,id);if(other)supportIds.add(other)}
- const pink=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='square')
- const purple=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='rectangle')
- const modifier=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='oval')
- if(!pink&&!purple&&!modifier)return doc
- const both=!!pink&&!!purple,cx=blue.x+width('circle')/2
- const rowWidth=both?width('square')+GAP+width('rectangle'):(pink||purple)?width((pink||purple)!.kind):0
- const startX=both?cx-rowWidth/2:cx-rowWidth
- const y=blue.y+height('circle')+VERTICAL
- const pinkPos=pink?{x:startX,y}:null
- const purplePos=purple?{x:both?startX+width('square')+GAP:startX,y:both?y+(height('square')-height('rectangle'))/2:y}:null
- const greenPos=modifier?{x:cx-atomWidth(modifier)/2,y:y+(pink||purple?Math.max(height('square'),height('rectangle'))+GAP:0)}:null
- return {...doc,atoms:doc.atoms.map(a=>a.id===pink?.id?{...a,...pinkPos}:a.id===purple?.id?{...a,...purplePos}:a.id===modifier?.id?{...a,...greenPos}:a)}
+ const positions=blueSupportPositions(doc,blueId)
+ // Only reposition direct supporter groups, NEVER a sequence head.
+ // Existing descendants of a supporter travel rigidly with it.
+ let next=doc,done=new Set<string>()
+ for(const atom of blueSupportAtoms(doc,blueId)){
+  if(done.has(atom.id))continue
+  const target=positions.get(atom.id)!
+  const moving=descendants(next,atom.id)
+  const pair=otherInPair(next,atom.id)
+  if(pair)moving.add(pair)
+  for(const id of moving)done.add(id)
+  const current=byId(next,atom.id)
+  next=translate(next,moving,target.x-current.x,target.y-current.y)
+ }
+ return next
 }
 function supportPosition(blue:Atom,support:Atom,d:Draft) {
- const otherId=otherInPair(d,support.id)
- const other=otherId?byId(d,otherId):null
- const cx=blue.x+width('circle')/2
- if(support.kind==='oval'){
-  const siblings=d.bonds.filter(b=>b.relation==='support'&&b.parent===blue.id).map(b=>byId(d,b.child))
-  const row=siblings.some(a=>supports(a.kind))
-  return {x:cx-smallWidth('oval')/2,y:blue.y+height('circle')+VERTICAL+(row?height('square')+GAP:0)}
- }
- if(other){
-  const left=cx-(width('square')+GAP+width('rectangle'))/2
-  return {x:support.kind==='square'?left:left+width('square')+GAP,y:blue.y+height('circle')+VERTICAL+(support.kind==='rectangle'?(height('square')-height('rectangle'))/2:0)}
- }
- const sibling=d.bonds.find(b=>b.relation==='support'&&b.parent===blue.id&&b.child!==support.id)
- if(sibling){
-  const otherSupport=byId(d,sibling.child)
-  if(support.kind==='rectangle'&&otherSupport.kind==='square')return{x:otherSupport.x+width('square')+GAP,y:otherSupport.y+(height('square')-height('rectangle'))/2}
-  if(support.kind==='square'&&otherSupport.kind==='rectangle')return{x:otherSupport.x-width('square')-GAP,y:otherSupport.y-(height('square')-height('rectangle'))/2}
- }
- return {x:cx-width(support.kind),y:blue.y+height('circle')+VERTICAL}
+ const proposed:Draft={...d,bonds:[...d.bonds,{parent:blue.id,child:support.id,relation:'support'}]}
+ return blueSupportPositions(normalizeRoles(proposed),blue.id).get(support.id)!
 }
 /** Returns only plausible near-drop join geometry; does NOT move anything itself. */
 function bestSnap(d:Draft,moving:Set<string>):Snap|null {
@@ -190,11 +204,13 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    }
    // A support (or bonded pair) attaches under blue. Never attach it to a second blue.
    const blue=a.kind==='circle'?a:b.kind==='circle'?b:null
-   const sup=nounSupport(a)?a:nounSupport(b)?b:null
-   if(blue&&sup&&!parentOfSupport(d,sup.id)){
+   const sup=(nounSupport(a)||a.kind==='hexagon')?a:(nounSupport(b)||b.kind==='hexagon')?b:null
+   if(blue&&sup&&MAGNET_PORTS.blueSupport.includes(sup.kind as 'square'|'rectangle'|'oval'|'hexagon')&&!parentOfSupport(d,sup.id)){
     const supGroup=molecule(d,sup.id)
     if(![...supGroup].some(id=>byId(d,id).kind==='circle')){
-     const duplicate=d.bonds.some(edge=>edge.relation==='support'&&edge.parent===blue.id&&byId(d,edge.child).kind===sup.kind)
+     const already=blueSupportAtoms(d,blue.id)
+     const attaching=[sup,...(otherInPair(d,sup.id)?[byId(d,otherInPair(d,sup.id)!)]:[])]
+     const duplicate=attaching.some(part=>already.some(existing=>existing.kind===part.kind))
      if(!duplicate) {
       const desired=supportPosition(blue,sup,d)
       const dx=a.id===sup.id?desired.x-sup.x:sup.x-desired.x
@@ -479,7 +495,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   if(snap){
    const result=resolveMagnet(actual,moving,snap)
    save(result,d.before)
-   setHint(snap.relation==='support'?(byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red. The sequence stayed intact.':'Support attached precisely beneath blue. The sequence stayed intact.'):'Magnetic snap! Connected pieces now move together.')
+   setHint(snap.relation==='support'?(byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red. The sequence stayed intact.':'Pink, purple, green and orange arrange in one precise row beneath blue.'):'Magnetic snap! Connected pieces now move together.')
   }else{
    setHistory(h=>[...h,d.before].slice(-40))
    setHint(newFamilyAfterBlue(actual,moving)?'New family: circle → rectangle is marked n in STAX POS. It stays loose until attached appropriately.':'Free placement. The shape stays exactly where you released it.')
