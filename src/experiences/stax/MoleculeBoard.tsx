@@ -24,7 +24,7 @@ const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=66, TAP=9, DOUBLE_MS
 const KEY='stax-free-molecules-v2'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
-const choices:Choice[]=[{kind:'circle',label:'Noun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',variant:'large',label:'Orange · gate'},{kind:'hexagon',variant:'small',label:'Orange · adverb'},{kind:'oval',variant:'large',label:'Green · complement'},{kind:'oval',variant:'small',label:'Green · modifier'}]
+const choices:Choice[]=[{kind:'circle',label:'Noun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
 const width=(k:Kind)=>SYMBOLS[k].w*SCALE
 const height=(k:Kind)=>SYMBOLS[k].h*SCALE
 const variantFactor=(kind:Kind,variant?:Atom['variant'])=>variant==='small'&&(kind==='oval'||kind==='hexagon')?(kind==='oval' ? .86 : .9):1
@@ -34,7 +34,18 @@ const empty=():Draft=>({atoms:[],bonds:[]})
 const defaultView:View={x:0,y:0,width:W,height:H}
 const byId=(d:Draft,id:string)=>d.atoms.find(a=>a.id===id)!
 const supports=(k:Kind)=>k==='square'||k==='rectangle'
-const nounSupport=(a:Atom)=>supports(a.kind)||(a.kind==='oval'&&a.variant==='small')
+const nounSupport=(a:Atom)=>supports(a.kind)||a.kind==='oval'
+/** Visual size follows its current structural position, not the palette choice. */
+function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
+ if(a.kind!=='oval'&&a.kind!=='hexagon')return undefined
+ const owner=d.bonds.find(b=>b.relation==='support'&&b.child===a.id)
+ if(a.kind==='oval')return owner&&byId(d,owner.parent)?.kind==='circle'?'small':'large'
+ // Orange follows its host-role instead of being selected as 'little' or 'big'.
+ return owner&&byId(d,owner.parent)?.kind==='triangle'?'small':'large'
+}
+function normalizeRoles(d:Draft):Draft {
+ return {...d,atoms:d.atoms.map(a=>a.kind==='oval'||a.kind==='hexagon'?{...a,variant:contextualVariant(d,a)}:a)}
+}
 function load():Draft {
  try {
   const d=JSON.parse(localStorage.getItem(KEY)||'null') as Draft|null
@@ -90,7 +101,7 @@ function alignSupporters(doc:Draft,blueId:string):Draft {
  for(const id of [...supportIds]){const other=otherInPair(doc,id);if(other)supportIds.add(other)}
  const pink=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='square')
  const purple=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='rectangle')
- const modifier=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='oval'&&a.variant==='small')
+ const modifier=[...supportIds].map(id=>byId(doc,id)).find(a=>a.kind==='oval')
  if(!pink&&!purple&&!modifier)return doc
  const both=!!pink&&!!purple,cx=blue.x+width('circle')/2
  const rowWidth=both?width('square')+GAP+width('rectangle'):(pink||purple)?width((pink||purple)!.kind):0
@@ -105,7 +116,7 @@ function supportPosition(blue:Atom,support:Atom,d:Draft) {
  const otherId=otherInPair(d,support.id)
  const other=otherId?byId(d,otherId):null
  const cx=blue.x+width('circle')/2
- if(support.kind==='oval'&&support.variant==='small'){
+ if(support.kind==='oval'){
   const siblings=d.bonds.filter(b=>b.relation==='support'&&b.parent===blue.id).map(b=>byId(d,b.child))
   const row=siblings.some(a=>supports(a.kind))
   return {x:cx-atomWidth(support)/2,y:blue.y+height('circle')+VERTICAL+(row?height('square')+GAP:0)}
@@ -237,10 +248,13 @@ function quest21():Draft {
  return {atoms,bonds}
 }
 export function MoleculeBoard(){
- const [doc,setDoc]=useState<Draft>(load)
+ const [doc,setDoc]=useState<Draft>(()=>normalizeRoles(load()))
  const [view,setView]=useState<View>(defaultView)
  const [history,setHistory]=useState<Draft[]>([])
  const [questActive,setQuestActive]=useState(false)
+ const [fullscreen,setFullscreen]=useState(false)
+ const rootRef=useRef<HTMLDivElement>(null)
+ useEffect(()=>{const sync=()=>setFullscreen(document.fullscreenElement===rootRef.current);document.addEventListener('fullscreenchange',sync);return()=>document.removeEventListener('fullscreenchange',sync)},[])
  const [selected,setSelected]=useState<string|null>(null)
  const [hint,setHint]=useState('Drag any shape anywhere. Only compatible pieces brought close together will snap.')
  const [fall,setFall]=useState<Set<string>>(new Set())
@@ -256,7 +270,7 @@ export function MoleculeBoard(){
  const blockRelease=useRef<Set<number>>(new Set())
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc])
  useEffect(()=>()=>{if(fallTimer.current)clearTimeout(fallTimer.current)},[])
- function update(d:Draft){currentDoc.current=d;setDoc(d)}
+ function update(d:Draft){const resolved=normalizeRoles(d);currentDoc.current=resolved;setDoc(resolved)}
  function save(d:Draft,prev=currentDoc.current){setHistory(v=>[...v,prev].slice(-40));update(d)}
  function setCamera(v:View){currentView.current=v;setView(v)}
  function pointer(e:ReactPointerEvent<SVGSVGElement|SVGGElement>){
@@ -457,11 +471,14 @@ export function MoleculeBoard(){
   const next=quest21();save(next);setCamera(fit(next));setSelected(null);setQuestActive(true)
   setHint('Blueprint Level 21 loaded as a movable demonstration. Word roles are provisional; all shapes and bonds remain editable.')
  }
+ async function toggleFullscreen(){
+  try{if(document.fullscreenElement===rootRef.current){await document.exitFullscreen()}else if(rootRef.current?.requestFullscreen){await rootRef.current.requestFullscreen()}}catch{setHint('Full-screen mode is restricted in this browser; the canvas still fills the available window.')}
+ }
  function undo(){const prev=history.at(-1);if(prev){update(prev);setHistory(v=>v.slice(0,-1));setHint('Undone.')}}
  function remove(){if(!selected)return;save({atoms:doc.atoms.filter(a=>a.id!==selected),bonds:doc.bonds.filter(b=>b.parent!==selected&&b.child!==selected)});setSelected(null)}
- return <div className="stax-molecule-ui">
-  <div className="stax-molecule-tools"><strong>Free magnetic workspace</strong><span>Move independently · snap only near compatible pieces</span>
-   <div className="stax-molecule-buttons"><button onClick={loadQuest} title="Load the 14-shape Level 21 source sentence" >Load Quest 21</button><button onClick={undo} disabled={!history.length}>Undo</button><button onClick={remove} disabled={!selected}>Remove</button><button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}}>Clear</button></div>
+ return <div ref={rootRef} className="stax-molecule-ui">
+  <div className="stax-molecule-tools"><strong>STAX · Magnetic Workspace</strong>
+   <div className="stax-molecule-buttons"><button onClick={toggleFullscreen} aria-label={fullscreen?"Exit full screen":"Go full screen"}>{fullscreen?"Exit full screen":"⛶ Full screen"}</button><button onClick={loadQuest} title="Load the 14-shape Level 21 source sentence" >Load Quest 21</button><button onClick={undo} disabled={!history.length}>Undo</button><button onClick={remove} disabled={!selected}>Remove</button><button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}}>Clear</button></div>
   </div>
   {questActive&&<p className="stax-molecule-example">STAX QUEST · Level 21 — She’s buying a present for her best friend because her birthday is tomorrow. <small>Illustrative mapping; original slide does not label each shape with its individual word.</small></p>}
   <div className="stax-molecule-view-controls"><button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))}>Center</button><button onClick={()=>setCamera(fit(currentDoc.current))}>Fit all</button><button aria-label="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}>−</button><span>{Math.round(100*W/view.width)}%</span><button aria-label="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}>+</button></div>
@@ -494,7 +511,6 @@ export function MoleculeBoard(){
   <div className="stax-molecule-palette">{choices.map(({kind,variant,label})=><button key={`${kind}-${variant||'default'}`} title={label} aria-label={`Add ${label}`}
    onPointerDown={e=>paletteDown(e,kind,variant)} onPointerMove={paletteMove} onPointerUp={paletteUp} onPointerCancel={paletteCancel}>
    <svg viewBox={`-4 -4 ${width(kind)*variantFactor(kind,variant)+8} ${height(kind)*variantFactor(kind,variant)+8}`} aria-hidden="true"><Glyph kind={kind} w={width(kind)*variantFactor(kind,variant)} h={height(kind)*variantFactor(kind,variant)} stroke={SYMBOLS[kind].color} fill={SYMBOLS[kind].color+'14'} strokeWidth={3}/></svg>
-   {variant&&<span className="stax-palette-kind">{kind==='oval'?(variant==='small'?'Modifier':'Complement'):(variant==='small'?'Adverb':'Gate')}</span>}
   </button>)}</div>
   {paletteHover&&<div className={`stax-lifted-ghost${paletteHover.snap?' is-eligible':''}`} style={{left:paletteHover.screenX,top:paletteHover.screenY}} aria-hidden="true">
     <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
@@ -505,6 +521,6 @@ export function MoleculeBoard(){
     </svg>
    </div>}
   <p className="stax-molecule-hint" role="status">{hint}</p>
-  <p className="stax-molecule-note">Shapes lift above your finger during touch-drag; eligible magnets glow. Each new shape starts loose, wherever placed. One finger moves atoms or pans; pinch with two fingers to zoom. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Pink/purple support blue; blue/yellow connect horizontally in either order; red/blue keep the staircase.</p>
+  <p className="stax-molecule-note">Single green and orange shapes adapt size to their attachment. Shapes lift above your finger during touch-drag; eligible magnets glow. Each new shape starts loose, wherever placed. One finger moves atoms or pans; pinch with two fingers to zoom. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Pink/purple support blue; blue/yellow connect horizontally in either order; red/blue keep the staircase.</p>
  </div>
 }
