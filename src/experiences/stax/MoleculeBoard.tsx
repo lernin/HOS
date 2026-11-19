@@ -80,7 +80,7 @@ function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
  if(a.kind==='oval')return owner&&byId(d,owner.parent)?.kind==='circle'?'small':'large'
  // Orange follows its host-role instead of being selected as 'little' or 'big'.
  const previous=d.bonds.find(b=>b.relation==='sequence'&&b.child===a.id)
- return (owner||previous)&&byId(d,(owner||previous)!.parent)?.kind==='triangle'?'small':'large'
+ return (owner&&['triangle','circle'].includes(byId(d,owner.parent)?.kind))||(previous&&byId(d,previous.parent)?.kind==='triangle')?'small':'large'
 }
 function normalizeRoles(d:Draft):Draft {
  return {...d,atoms:d.atoms.map(a=>a.kind==='oval'||a.kind==='hexagon'?{...a,variant:contextualVariant(d,a)}:a)}
