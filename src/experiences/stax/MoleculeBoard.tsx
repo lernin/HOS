@@ -131,9 +131,6 @@ function zoom(v:View,factor:number):View {
  const w=Math.max(300,Math.min(4000,v.width*factor)),h=w*(v.height/v.width)
  return {x:v.x+(v.width-w)/2,y:v.y+(v.height-h)/2,width:w,height:h}
 }
-function linked(d:Draft,id:string,relation:Relation) {
- return d.bonds.some(b=>(b.parent===id||b.child===id)&&b.relation===relation)
-}
 function parentOfSupport(d:Draft,id:string){
  return d.bonds.find(b=>b.relation==='support'&&b.child===id)?.parent
 }
@@ -167,10 +164,9 @@ function greenSiblings(doc:Draft,blueId:string):Atom[] {
 function eligibleAdverbHost(doc:Draft,greenId:string):boolean {
  const blueId=blueHeadOfAdjective(doc,greenId)
  if(!blueId)return false
- const greens=greenSiblings(doc,blueId)
- // "big slightly used truck": there must already be a prior sibling adjective.
- return greens.findIndex(a=>a.id===greenId)>0 &&
-   !doc.bonds.some(b=>b.parent===greenId&&b.relation==='support'&&byId(doc,b.child).kind==='hexagon')
+ // A single green modifier such as "big" can parent an orange ("very").
+ // The preceding determiner and any other adjectives are NOT the adverb's parent.
+ return !doc.bonds.some(b=>b.parent===greenId&&b.relation==='support'&&byId(doc,b.child).kind==='hexagon')
 }
 /** Direct noun supporters stay side by side; nested adverbs are NEVER row members. */
 function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:number}> {
@@ -233,14 +229,8 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
   if(!moving.has(a.id))continue
   for(const b of d.atoms) {
    if(moving.has(b.id))continue
-   // Pink + purple can bond while freely floating, before either meets blue.
-   if(supports(a.kind)&&supports(b.kind)&&a.kind!==b.kind&&!linked(d,a.id,'pair')&&!linked(d,b.id,'pair')&&!parentOfSupport(d,a.id)&&!parentOfSupport(d,b.id)){
-    const parent=a.kind==='square'?a:b,child=a.kind==='rectangle'?a:b
-    const target=a.kind==='square'?{x:b.x-width('square')-GAP,y:b.y-(height('square')-height('rectangle'))/2}:{x:b.x+width('square')+GAP,y:b.y+(height('square')-height('rectangle'))/2}
-    // The moving atom's target is in world coordinates.
-    const dx=target.x-a.x,dy=target.y-a.y
-    offered({parent:parent.id,child:child.id,relation:'pair',dx,dy,distance:Math.hypot(dx,dy)})
-   }
+   // Parent-first STAX: pink and purple are siblings under a BLUE noun.
+   // Never create a self-contained pink-purple magnet before the blue parent.
    // A support (or bonded pair) attaches under blue. Never attach it to a second blue.
    const blue=a.kind==='circle'?a:b.kind==='circle'?b:null
    const sup=(nounSupport(a)||a.kind==='hexagon')?a:(nounSupport(b)||b.kind==='hexagon')?b:null
@@ -258,8 +248,8 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      }
     }
    }
-   // Nested adverb: green+green must already belong to the same blue noun family.
-   // Drag orange BELOW the second green; on release it interposes BEFORE that green.
+   // New-family n: orange attaches below its REAL green adjective parent.
+   // It never bonds to the purple determiner just because it precedes orange.
    const green=a.kind==='oval'?a:b.kind==='oval'?b:null
    const nestedOrange=a.kind==='hexagon'?a:b.kind==='hexagon'?b:null
    if(green&&nestedOrange&&a.id===nestedOrange.id&&!parentOfSupport(d,nestedOrange.id)&&eligibleAdverbHost(d,green.id)){
@@ -295,17 +285,18 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    const blueYellow=(a.kind==='circle'&&b.kind==='diamond')||(a.kind==='diamond'&&b.kind==='circle')
    const left=a.x<=b.x?a:b,right=left.id===a.id?b:a
    // A green or orange changes visual role after attachment; no palette subtype.
-   const complement=right.kind==='oval'&&(left.kind==='circle'||left.kind==='triangle')
+   // A noun- or verb-adjacent green with an n-coded following relationship
+   // must NOT become a predecessor bond; green connects to a known parent port.
    // An orange gate/adverb attaches only through its actual parent port,
    // not through a left-neighbor sequence bond.
-   if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow||complement){
+   if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow){
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
     if(!occupiedRight&&!occupiedLeft) {
      // Conjunctions sit horizontally beside blue; blue/red retain their Blueprint staircase.
      const conjunction=left.kind==='diamond'||right.kind==='diamond'
-     const diagonal=conjunction||complement||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
-     const gap=conjunction||complement?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
+     const diagonal=conjunction||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
+     const gap=conjunction?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
      const desired={x:left.x+width(left.kind)+gap,y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
      const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-gap-a.x,y:b.y-diagonal-a.y}
@@ -356,6 +347,8 @@ function magnetLabel(d:Draft,s:Snap):string {
  * n = a NEW family follows (owner-confirmed); o is retained as a source code,
  * not presumed to mean a supporter. These representative entries are source values.
  */
+// STAX POS: rectangle→adverb is x; adjective (Oval)→adverb is n.
+ // Do not convert a skipped n token into a sequential/predecessor bond.
 const STAX_POS_SAMPLES = {
  'circle>rectangle':'n',
  'rectangle>circle':'o',
@@ -576,6 +569,12 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  function upBackground(e:ReactPointerEvent<SVGSVGElement>){if(panning.current?.pointer===e.pointerId)panning.current=null}
  function addAt(kind:Kind,client?:{x:number;y:number},variant?:Atom['variant']){
   if(currentDoc.current.atoms.length>=80){setHint('Maximum 80 shapes in this experiment.');return}
+  const isNounSupport=kind==='square'||kind==='rectangle'||kind==='oval'
+  const hasNoun=currentDoc.current.atoms.some(a=>a.kind==='circle')
+  if(isNounSupport&&!hasNoun){
+   setHint('Parent first: place a blue noun before adding pink, purple, or green supporters.')
+   return
+  }
   const p=client?fromClient(client.x,client.y):null,camera=currentView.current
   let x=(p?.x??camera.x+camera.width/2)-width(kind)*variantWidthFactor(kind,variant)/2
   let y=(p?.y??camera.y+camera.height/2)-height(kind)*variantHeightFactor(kind,variant)/2
@@ -591,12 +590,48 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   }
   const previous=currentDoc.current,id=crypto.randomUUID()
   const next:Draft={...previous,atoms:[...previous.atoms,{id,kind,x,y,variant}]}
-  // A deliberate palette DRAG can join on release, while a TAP remains loose.
-  const snap=client?eligibleMagnet(next,new Set([id])):null
+  // Drag uses spatial magnets. Tap is a shortcut ONLY when the real parent is
+  // unambiguous. Neither method may create a loose dependent or an n predecessor bond.
+  let snap:Snap|null=client?eligibleMagnet(next,new Set([id])):null
+  if(!client&&(isNounSupport||kind==='hexagon')){
+   const created=byId(next,id)
+   let parent:Atom|undefined
+   let target:{x:number;y:number}|undefined
+   if(isNounSupport){
+    const blues=next.atoms.filter(a=>a.kind==='circle')
+    const blue=blues.length===1?blues[0]:blues.find(a=>a.id===selected)
+    if(blue&&!blueSupportAtoms(next,blue.id).some(a=>a.kind===kind&&kind!=='oval')){
+     parent=blue
+     target=supportPosition(blue,created,next)
+    }
+   }else{
+    const greens=next.atoms.filter(a=>a.kind==='oval'&&eligibleAdverbHost(next,a.id))
+    const green=greens.find(a=>a.id===selected)||(greens.length===1?greens[0]:undefined)
+    if(green){parent=green;target=miniFamilyPosition(next,green,created)}
+    else if(!greens.length){
+     const reds=next.atoms.filter(a=>a.kind==='triangle'&&orangeChildren(next,a.id).length<2)
+     const red=reds.length===1?reds[0]:reds.find(a=>a.id===selected)
+     if(red){parent=red;target=redOrangePosition(red,next)}
+     else if(!reds.length){
+      const blues=next.atoms.filter(a=>a.kind==='circle'&&!blueSupportAtoms(next,a.id).some(child=>child.kind==='hexagon'))
+      const blue=blues.length===1?blues[0]:blues.find(a=>a.id===selected)
+      if(blue){parent=blue;target=supportPosition(blue,created,next)}
+     }
+    }
+   }
+   if(parent&&target){
+    const dx=target.x-created.x,dy=target.y-created.y
+    snap={parent:parent.id,child:id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)}
+   }
+  }
   if(snap){
    const result=resolveMagnet(next,new Set([id]),snap)
    save(result,previous)
-   setHint(snap.relation==='support'&&byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected: this shape is now part of the molecule.')
+   setSelected(id)
+   setHint(snap.relation==='support'&&byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected to its actual parent.')
+  }else if(isNounSupport||kind==='hexagon'){
+   // Reject incomplete families, but leave the rest of the existing board intact.
+   setHint('Parent required: attach to an existing blue noun or green/verb parent. With multiple possible parents, drag to the intended one.')
   }else{
    save(next,previous)
    setHint('Placed freely. The shape stays there until you move it.')
@@ -609,7 +644,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const p=inside?fromClient(screenX,screenY):null
   const worldX=(p?.x??0)-width(kind)*variantWidthFactor(kind,variant)/2,worldY=(p?.y??0)-height(kind)*variantHeightFactor(kind,variant)/2
   let snap:Snap|null=null
-  if(p&&currentDoc.current.atoms.length<80){
+  if(p&&currentDoc.current.atoms.length<80&&(!(kind==='square'||kind==='rectangle'||kind==='oval')||currentDoc.current.atoms.some(a=>a.kind==='circle'))){
    const ghost:Atom={id:'__palette_preview__',kind,x:worldX,y:worldY,variant}
    const trial={...currentDoc.current,atoms:[...currentDoc.current.atoms,ghost]}
    snap=eligibleMagnet(trial,new Set([ghost.id]))
