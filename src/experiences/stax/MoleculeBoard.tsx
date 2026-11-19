@@ -264,6 +264,22 @@ function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
 function eligibleMagnet(d:Draft,moving:Set<string>):Snap|null {
  return newFamilyAfterBlue(d,moving)?null:bestSnap(d,moving)
 }
+/** Project every changed atom to its exact post-bond coordinates and rendered size. */
+function magneticProjection(before:Draft,after:Draft):Atom[] {
+ return after.atoms.filter(atom=>{
+  const prior=before.atoms.find(a=>a.id===atom.id)
+  return !prior||Math.abs(atom.x-prior.x)>.01||Math.abs(atom.y-prior.y)>.01||
+   atomWidth(atom)!==atomWidth(prior)||atomHeight(atom)!==atomHeight(prior)
+ })
+}
+function magnetLabel(d:Draft,s:Snap):string {
+ const parent=byId(d,s.parent),child=byId(d,s.child)
+ if(s.relation==='support'&&parent.kind==='triangle')return 'Orange under red'
+ if(s.relation==='support'&&parent.kind==='circle')return 'Support under blue'
+ if(s.relation==='pair')return 'Support pair'
+ if(child.kind==='oval')return 'Green complement'
+ return 'Sequence snap'
+}
 /** STAX POS source grid codes are directional, not generic shape-to-shape bonds:
  * n = a NEW family follows (owner-confirmed); o is retained as a source code,
  * not presumed to mean a supporter. These representative entries are source values.
@@ -567,14 +583,21 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill="#faf9f6"/>
     {paletteHover?.snap&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
-      <g transform={`translate(${paletteHover.worldX+paletteHover.snap.dx} ${paletteHover.worldY+paletteHover.snap.dy})`}>
-       <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)} h={height(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)} fill="none" stroke="#13af8b" strokeWidth={4} strokeDasharray="8 5"/>
-      </g>
+      {(()=>{
+       const phantom:Atom={id:'__palette_preview__',kind:paletteHover.kind,x:paletteHover.worldX,y:paletteHover.worldY,variant:paletteHover.variant}
+       const staged:Draft={...doc,atoms:[...doc.atoms,phantom]}
+       const projected=resolveMagnet(staged,new Set([phantom.id]),paletteHover.snap!)
+       return magneticProjection(staged,projected).map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`}>
+         <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} fill="none" stroke="#13af8b" strokeWidth={4} strokeDasharray="8 5"/>
+       </g>)
+      })()}
+      <text x={byId(doc,paletteHover.snap.parent)?.x??0} y={(byId(doc,paletteHover.snap.parent)?.y??0)-13} fontSize="15" fontWeight="700" fill="#168569">{magnetLabel({...doc,atoms:[...doc.atoms,{id:'__palette_preview__',kind:paletteHover.kind,x:paletteHover.worldX,y:paletteHover.worldY}]},paletteHover.snap)}</text>
      </g>}
-    {preview&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
-      {doc.atoms.filter(a=>dragging.current&&molecule(doc,dragging.current.id).has(a.id)).map(a=><g key={a.id} transform={`translate(${a.x+preview.dx} ${a.y+preview.dy})`}>
-       <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} fill="none" stroke="#2ca39a" strokeDasharray="8 5" strokeWidth={3}/>
+    {preview&&dragging.current&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
+      {magneticProjection(doc,resolveMagnet(doc,molecule(doc,dragging.current.id),preview)).map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`}>
+        <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} fill="none" stroke="#2ca39a" strokeDasharray="8 5" strokeWidth={3}/>
       </g>)}
+      <text x={byId(doc,preview.parent).x} y={byId(doc,preview.parent).y-13} fontSize="15" fontWeight="700" fill="#168569">{magnetLabel(doc,preview)}</text>
      </g>}
     {doc.atoms.map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`} data-kind={a.kind} data-id={a.id} className={[
        fall.has(a.id)?'stax-molecule-dropping':'',
