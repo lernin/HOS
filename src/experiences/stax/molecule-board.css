@@ -107,3 +107,5 @@
  .stax-molecule-view-controls button{font-size:10px;padding:4px 6px;min-height:30px}
  .stax-molecule-hint{left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 52px)}
 }
+
+.stax-molecule-back{border:1px solid #d1dce0;background:#fff;padding:3px 9px;min-height:32px;font-size:20px!important;line-height:1;color:#27475a!important;touch-action:manipulation}
