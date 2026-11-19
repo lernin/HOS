@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
+import { STAX_SPACING, positionChildren, horizontalFollower, type FamilyChild } from './geometry'
 import './molecule-board.css'
 
 /**
@@ -19,7 +20,10 @@ type Pinch = {pointers:[number,number];startDistance:number;startView:View;ancho
 type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number }
 type PaletteHover = { kind:Kind;variant?:'small'|'large';screenX:number;screenY:number;worldX:number;worldY:number;snap:Snap|null }
 // Distances from the STAX Blueprint's .07-unit design grid; only snap geometry is quantised.
-const UNIT=SCALE*.07, GAP=4*UNIT, VERTICAL=4*UNIT, BLUE_RED_GAP=7*UNIT, RED_BLUE_GAP=29*UNIT
+const UNIT=SCALE*STAX_SPACING.unit
+const GAP=SCALE*STAX_SPACING.attachment, VERTICAL=SCALE*STAX_SPACING.attachment
+const BLUE_RED_GAP=SCALE*STAX_SPACING.group, RED_BLUE_GAP=SCALE*STAX_SPACING.row
+const CONNECTOR_GAP=SCALE*STAX_SPACING.connector
 const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=66, TAP=9, DOUBLE_MS=350, FINGER_LIFT=42
 const KEY='stax-free-molecules-v2'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
@@ -64,20 +68,27 @@ function orangeChildren(doc:Draft,redId:string){
 }
 function redOrangePosition(red:Atom,doc:Draft){
  const existing=orangeChildren(doc,red.id)
- const cx=red.x+width('triangle')/2
- // One orange centers; a second enters at the right and the pair is recentered together.
- const x=existing.length?cx+(GAP+smallWidth('hexagon'))/2:underSingleX(red.x,width('triangle'),smallWidth('hexagon'))
- return {x,y:red.y+height('triangle')+VERTICAL}
+ const items:FamilyChild[]=[
+  ...existing.map(a=>({id:a.id,width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y})),
+  {id:'__incoming_orange',width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y},
+ ]
+ return positionChildren(
+  {x:red.x,y:red.y,width:width('triangle'),height:height('triangle')},
+  items,{gap:GAP,belowGap:VERTICAL}
+ ).get('__incoming_orange')!
 }
 function alignRedSupporters(doc:Draft,redId:string):Draft {
  const red=byId(doc,redId),orange=orangeChildren(doc,redId)
  if(!red||orange.length<1)return doc
- const total=orange.length*smallWidth('hexagon')+(orange.length-1)*GAP
- const start=orange.length===1?underSingleX(red.x,width('triangle'),smallWidth('hexagon')):red.x+(width('triangle')-total)/2
+ const positions=positionChildren(
+  {x:red.x,y:red.y,width:width('triangle'),height:height('triangle')},
+  orange.map(a=>({id:a.id,width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y})),
+  {gap:GAP,belowGap:VERTICAL}
+ )
  let next=doc
- for(let i=0;i<orange.length;i++){
-  const a=byId(next,orange[i].id)
-  next=translate(next,descendants(next,a.id),start+i*(smallWidth('hexagon')+GAP)-a.x,red.y+height('triangle')+VERTICAL-a.y)
+ for(const child of orange){
+  const a=byId(next,child.id),target=positions.get(child.id)!
+  next=translate(next,descendants(next,a.id),target.x-a.x,target.y-a.y)
  }
  return next
 }
@@ -171,24 +182,28 @@ function eligibleAdverbHost(doc:Draft,greenId:string):boolean {
 /** Direct noun supporters stay side by side; nested adverbs are NEVER row members. */
 function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:number}> {
  const blue=byId(doc,blueId),items=blueSupportAtoms(doc,blueId)
- const result=new Map<string,{x:number;y:number}>()
- if(!blue||!items.length)return result
- const itemWidth=(a:Atom)=>a.kind==='oval'?smallWidth('oval'):a.kind==='hexagon'?smallWidth('hexagon'):width(a.kind)
- const itemHeight=(a:Atom)=>a.kind==='oval'?height('oval')*SMALL_GREEN_Y:a.kind==='hexagon'?height('hexagon')*SMALL_ORANGE_Y:height(a.kind)
- const total=items.reduce((sum,a)=>sum+itemWidth(a),0)+(items.length-1)*GAP
- const maxH=Math.max(...items.map(itemHeight))
- let x=items.length===1?underSingleX(blue.x,width('circle'),itemWidth(items[0])):blue.x+(width('circle')-total)/2
- const top=blue.y+height('circle')+VERTICAL
- for(const a of items){
-  result.set(a.id,{x,y:top+(maxH-itemHeight(a))/2})
-  x+=itemWidth(a)+GAP
- }
- return result
+ if(!blue||!items.length)return new Map()
+ const specs:FamilyChild[]=items.map(a=>{
+  const w=a.kind==='oval'?smallWidth('oval'):a.kind==='hexagon'?smallWidth('hexagon'):width(a.kind)
+  const h=a.kind==='oval'?height('oval')*SMALL_GREEN_Y:a.kind==='hexagon'?height('hexagon')*SMALL_ORANGE_Y:height(a.kind)
+  // Consider descendants when centering a ROW of sibling families. An adverb
+  // under a green adjective extends left of the green's own silhouette.
+  // This is a structural extent, not an arbitrary on-screen drag position.
+  const nestedOrange=a.kind==='oval'&&doc.bonds.some(b=>
+   b.relation==='support'&&b.parent===a.id&&byId(doc,b.child)?.kind==='hexagon')
+  const nestedLeft=nestedOrange?underSingleX(0,w,smallWidth('hexagon')):0
+  return {id:a.id,width:w,height:h,extentLeft:Math.min(0,nestedLeft),extentRight:w}
+ })
+ return positionChildren({x:blue.x,y:blue.y,width:width('circle'),height:height('circle')},
+  specs,{gap:GAP,belowGap:VERTICAL})
 }
-function miniFamilyPosition(_doc:Draft,green:Atom,_orange:Atom) {
- // n = DOWN into a new family: orange is the dependent below its green parent.
- return {x:underSingleX(green.x,smallWidth('oval'),smallWidth('hexagon')),
-  y:green.y+height('oval')*SMALL_GREEN_Y+VERTICAL}
+function miniFamilyPosition(_doc:Draft,green:Atom,orange:Atom) {
+ // n moves downward to the real parent, never into the horizontal word row.
+ return positionChildren(
+  {x:green.x,y:green.y,width:smallWidth('oval'),height:height('oval')*SMALL_GREEN_Y},
+  [{id:orange.id,width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y}],
+  {gap:GAP,belowGap:VERTICAL}
+ ).get(orange.id)!
 }
 function alignSupporters(doc:Draft,blueId:string):Draft {
  const positions=blueSupportPositions(doc,blueId)
@@ -296,10 +311,14 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      // Conjunctions sit horizontally beside blue; blue/red retain their Blueprint staircase.
      const conjunction=left.kind==='diamond'||right.kind==='diamond'
      const diagonal=conjunction||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
-     const gap=conjunction?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
-     const desired={x:left.x+width(left.kind)+gap,y:left.y+diagonal}
+     const gap=conjunction?CONNECTOR_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
+     const horizontal=horizontalFollower(
+      {x:left.x,y:left.y,width:width(left.kind),height:height(left.kind)},
+      {width:width(right.kind),height:height(right.kind)},gap)
+     const desired={x:horizontal.x,y:conjunction?horizontal.y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
-     const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-gap-a.x,y:b.y-diagonal-a.y}
+     const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:
+      {x:b.x-width(a.kind)-gap-a.x,y:conjunction?b.y+(height(b.kind)-height(a.kind))/2-a.y:b.y-diagonal-a.y}
      offered({parent:left.id,child:right.id,relation:'sequence',dx:delta.x,dy:delta.y,distance:Math.hypot(delta.x,delta.y)})
     }
    }
