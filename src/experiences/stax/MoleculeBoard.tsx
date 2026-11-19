@@ -16,7 +16,7 @@ type Drag = { id:string;pointer:number;sx:number;sy:number;before:Draft;moved:bo
 type Pan = { pointer:number;startX:number;startY:number;before:View;moved:boolean }
 type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number }
 // Blueprint's seven-based spacing vocabulary: 0.07, 0.28, 0.49, 0.98 and 2.03 design units.
-const UNIT=.07*SCALE, ATTACH=4*UNIT, GROUP=7*UNIT, CONNECTOR=14*UNIT, ROW=29*UNIT
+const UNIT=.07*SCALE, ATTACH=4*UNIT, GROUP=7*UNIT, ROW=29*UNIT
 const W=960,H=570,ASPECT=W/H, GAP=ATTACH, VERTICAL=ATTACH, SNAP_RADIUS=98, DROP_DISTANCE=ROW, TAP=9, DOUBLE_MS=350
 const KEY='stax-free-molecules-v2'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
