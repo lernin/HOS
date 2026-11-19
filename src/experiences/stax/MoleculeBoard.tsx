@@ -167,10 +167,9 @@ function greenSiblings(doc:Draft,blueId:string):Atom[] {
 function eligibleAdverbHost(doc:Draft,greenId:string):boolean {
  const blueId=blueHeadOfAdjective(doc,greenId)
  if(!blueId)return false
- const greens=greenSiblings(doc,blueId)
- // "big slightly used truck": there must already be a prior sibling adjective.
- return greens.findIndex(a=>a.id===greenId)>0 &&
-   !doc.bonds.some(b=>b.parent===greenId&&b.relation==='support'&&byId(doc,b.child).kind==='hexagon')
+ // A single green modifier such as "big" can parent an orange ("very").
+ // The preceding determiner and any other adjectives are NOT the adverb's parent.
+ return !doc.bonds.some(b=>b.parent===greenId&&b.relation==='support'&&byId(doc,b.child).kind==='hexagon')
 }
 /** Direct noun supporters stay side by side; nested adverbs are NEVER row members. */
 function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:number}> {
@@ -233,14 +232,8 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
   if(!moving.has(a.id))continue
   for(const b of d.atoms) {
    if(moving.has(b.id))continue
-   // Pink + purple can bond while freely floating, before either meets blue.
-   if(supports(a.kind)&&supports(b.kind)&&a.kind!==b.kind&&!linked(d,a.id,'pair')&&!linked(d,b.id,'pair')&&!parentOfSupport(d,a.id)&&!parentOfSupport(d,b.id)){
-    const parent=a.kind==='square'?a:b,child=a.kind==='rectangle'?a:b
-    const target=a.kind==='square'?{x:b.x-width('square')-GAP,y:b.y-(height('square')-height('rectangle'))/2}:{x:b.x+width('square')+GAP,y:b.y+(height('square')-height('rectangle'))/2}
-    // The moving atom's target is in world coordinates.
-    const dx=target.x-a.x,dy=target.y-a.y
-    offered({parent:parent.id,child:child.id,relation:'pair',dx,dy,distance:Math.hypot(dx,dy)})
-   }
+   // Parent-first STAX: pink and purple are siblings under a BLUE noun.
+   // Never create a self-contained pink-purple magnet before the blue parent.
    // A support (or bonded pair) attaches under blue. Never attach it to a second blue.
    const blue=a.kind==='circle'?a:b.kind==='circle'?b:null
    const sup=(nounSupport(a)||a.kind==='hexagon')?a:(nounSupport(b)||b.kind==='hexagon')?b:null
@@ -258,8 +251,8 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      }
     }
    }
-   // Nested adverb: green+green must already belong to the same blue noun family.
-   // Drag orange BELOW the second green; on release it interposes BEFORE that green.
+   // New-family n: orange attaches below its REAL green adjective parent.
+   // It never bonds to the purple determiner just because it precedes orange.
    const green=a.kind==='oval'?a:b.kind==='oval'?b:null
    const nestedOrange=a.kind==='hexagon'?a:b.kind==='hexagon'?b:null
    if(green&&nestedOrange&&a.id===nestedOrange.id&&!parentOfSupport(d,nestedOrange.id)&&eligibleAdverbHost(d,green.id)){
@@ -356,6 +349,8 @@ function magnetLabel(d:Draft,s:Snap):string {
  * n = a NEW family follows (owner-confirmed); o is retained as a source code,
  * not presumed to mean a supporter. These representative entries are source values.
  */
+// STAX POS: rectangle→adverb is x; adjective (Oval)→adverb is n.
+ // Do not convert a skipped n token into a sequential/predecessor bond.
 const STAX_POS_SAMPLES = {
  'circle>rectangle':'n',
  'rectangle>circle':'o',
@@ -576,6 +571,18 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  function upBackground(e:ReactPointerEvent<SVGSVGElement>){if(panning.current?.pointer===e.pointerId)panning.current=null}
  function addAt(kind:Kind,client?:{x:number;y:number},variant?:Atom['variant']){
   if(currentDoc.current.atoms.length>=80){setHint('Maximum 80 shapes in this experiment.');return}
+  const isNounSupport=kind==='square'||kind==='rectangle'||kind==='oval'
+  const hasNoun=currentDoc.current.atoms.some(a=>a.kind==='circle')
+  if(isNounSupport&&!hasNoun){
+   setHint('Parent first: place a blue noun before adding pink, purple, or green supporters.')
+   return
+  }
+  if((isNounSupport||kind==='hexagon')&&!client){
+   setHint(kind==='hexagon'
+    ?'Drag orange underneath its real parent (for “very big”, first attach big to car).'
+    :'Drag this supporter onto an eligible parent; it cannot start an unattached mini-family.')
+   return
+  }
   const p=client?fromClient(client.x,client.y):null,camera=currentView.current
   let x=(p?.x??camera.x+camera.width/2)-width(kind)*variantWidthFactor(kind,variant)/2
   let y=(p?.y??camera.y+camera.height/2)-height(kind)*variantHeightFactor(kind,variant)/2
@@ -596,7 +603,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   if(snap){
    const result=resolveMagnet(next,new Set([id]),snap)
    save(result,previous)
-   setHint(snap.relation==='support'&&byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected: this shape is now part of the molecule.')
+   setHint(snap.relation==='support'&&byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected to its parent.')
+  }else if(isNounSupport||kind==='hexagon'){
+   // Reject incomplete families, but leave the rest of the existing board intact.
+   setHint('Not placed: release this dependent near its eligible grammatical parent. An n never attaches to the preceding word.')
   }else{
    save(next,previous)
    setHint('Placed freely. The shape stays there until you move it.')
