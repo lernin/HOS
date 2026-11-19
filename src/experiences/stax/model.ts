@@ -1,9 +1,11 @@
+import { STAX_SPACING, positionChildren } from './geometry'
+
 /** STAX visual grammar v1. Shape proportions measured from staxBLUEPRINT
  * Google Slide 24 intrinsic sizes × transforms (EMU), normalized to the
  * full blue circle at 3.5 design units. Do not independently eyeball ratios.
  * Rounded to 0.001 design units; orange/green small sizes are handled
  * separately in MoleculeBoard via independently measured x and y scales. */
-export const RULES = Object.freeze({ unit: .07, attachment: .28, group: .49, connector: .98, row: 2.03 })
+export const RULES = STAX_SPACING
 export const SYMBOLS = {
   circle: { label: 'Circle', role: 'Noun / pronoun', w: 3.5, h: 3.5, color: '#3379dc' },
   triangle: { label: 'Triangle', role: 'Verb / predicate', w: 4.600, h: 3.548, color: '#e45450' },
@@ -177,22 +179,36 @@ function arrange(n: SymbolNode): Group {
   const own: PlacedNode = {...n,x:0,y:0,w,h}
   let nodes = [own], dimensions: Dimension[] = []
   if (n.below.length) {
-    const groups = n.below.map(arrange)
-    const total = groups.reduce((s,g)=>s+g.bounds.right-g.bounds.left,0) + RULES.attachment * (groups.length-1)
-    // A single noun supporter is right-edge-aligned at the parent's centreline.
-    // With two or more, centre the combined width below the noun instead.
-    const loneSupport = n.kind === 'circle' && n.below.length === 1
-    const rowHeight = Math.max(...groups.map(g => g.bounds.bottom - g.bounds.top))
-    const rowTop = h + RULES.attachment
-    let x = loneSupport ? w / 2 - total : (w - total) / 2
-    for (let i=0;i<groups.length;i++) {
-      const groupHeight = groups[i].bounds.bottom - groups[i].bounds.top
-      const g = translate(groups[i],x-groups[i].bounds.left,rowTop+(rowHeight-groupHeight)/2-groups[i].bounds.top)
-      if (i) dimensions.push({axis:'x',a:{x:x-RULES.attachment,y:h+RULES.attachment},b:{x,y:h+RULES.attachment},at:h+RULES.attachment+Math.max(...groups.map(g=>g.bounds.bottom-g.bounds.top))+.65,value:RULES.attachment,rule:'attachment-row'})
-      nodes.push(...g.nodes); dimensions.push(...g.dimensions)
-      x = g.bounds.right + RULES.attachment
+    const groups=n.below.map(arrange)
+    // Account for full descendant widths before centering a family of 2+.
+    // But for a singleton align the CHILD SHAPE's right edge to the parent
+    // midpoint, even if that child's descendants overhang its silhouette.
+    const children=groups.map((g,i)=>{
+      const root=g.nodes[0]
+      return {
+        id:n.below[i].id,width:root.w,height:root.h,
+        extentLeft:g.bounds.left-root.x,extentRight:g.bounds.right-root.x,
+      }
+    })
+    const placements=positionChildren({x:0,y:0,width:w,height:h},children,
+      {gap:RULES.attachment,belowGap:RULES.attachment})
+    const rowTop=h+RULES.attachment
+    const rowHeight=Math.max(...groups.map(g=>g.bounds.bottom-g.bounds.top))
+    let previousRight:number|undefined
+    for(let i=0;i<groups.length;i++) {
+      const root=groups[i].nodes[0],target=placements.get(n.below[i].id)!
+      const g=translate(groups[i],target.x-root.x,target.y-root.y)
+      if(previousRight!==undefined)dimensions.push({
+        axis:'x',a:{x:previousRight,y:rowTop},b:{x:g.bounds.left,y:rowTop},
+        at:rowTop+rowHeight+.65,value:RULES.attachment,rule:'attachment-row'
+      })
+      nodes.push(...g.nodes);dimensions.push(...g.dimensions)
+      previousRight=g.bounds.right
     }
-    dimensions.push({axis:'y',a:{x:0,y:h},b:{x:(w-total)/2,y:h+RULES.attachment},at:Math.min(0,(w-total)/2)-.7,value:RULES.attachment,rule:'attachment'})
+    dimensions.push({
+      axis:'y',a:{x:0,y:h},b:{x:0,y:rowTop},
+      at:-.7,value:RULES.attachment,rule:'attachment'
+    })
   }
   let box = bounds(nodes)
   if (n.next) {
