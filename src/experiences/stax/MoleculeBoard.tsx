@@ -33,7 +33,12 @@ function moveGroup(doc:Draft,ids:Set<string>,dx:number,dy:number):Draft {
  return {...doc,atoms:doc.atoms.map(a=>ids.has(a.id)?{...a,x:a.x+dx,y:a.y+dy}:a)}
 }
 function occupied(doc:Draft,id:string,port:Bond['port']):boolean {
- return doc.bonds.some(b=>(b.a===id || b.b===id) && b.port===port)
+ return doc.bonds.some(b=>{
+  if(b.a!==id && b.b!==id)return false
+  if(b.port==='next-right')return port===(b.a===id?'next-left':'next-right')
+  if(b.port==='next-left')return port===(b.a===id?'next-right':'next-left')
+  return b.port===port
+ })
 }
 function hasSupport(doc:Draft,blue:string,kind:'square'|'rectangle'):boolean {
  const connected=group(doc,blue)
@@ -76,7 +81,7 @@ function candidate(doc:Draft,moving:Set<string>,stationary:Set<string>) {
    const opts=[
     {x:b.x+w(b.kind)+25-a.x,y:b.y+diagonal-a.y,port:'next-right' as const},
     {x:b.x-w(a.kind)-25-a.x,y:b.y-diagonal-a.y,port:'next-left' as const},
-   ].filter(p=>!occupied(doc,a.id,p.port) && !occupied(doc,b.id,p.port==='next-right'?'next-left':'next-right'))
+   ].filter(p=>!occupied(doc,a.id,p.port==='next-right'?'next-left':'next-right') && !occupied(doc,b.id,p.port))
    if(!opts.length)continue
    const best=opts.sort((u,v)=>Math.hypot(u.x,u.y)-Math.hypot(v.x,v.y))[0]
    x=best.x;y=best.y;port=best.port
