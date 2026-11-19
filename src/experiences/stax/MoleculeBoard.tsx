@@ -157,9 +157,6 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  }
  return best
 }
-function spawn(d:Draft,kind:Kind,x:number,y:number):Draft {
- return {...d,atoms:[...d.atoms,{id:crypto.randomUUID(),kind,x,y}]}
-}
 export function MoleculeBoard(){
  const [doc,setDoc]=useState<Draft>(load)
  const [view,setView]=useState<View>(defaultView)
