@@ -85,7 +85,9 @@ export type DropSide = 'left' | 'right'
 export function locateDropTarget(scene: Scene, kind: Kind, x: number, y: number): {target: string; side?: DropSide} | null {
   // A drop *on* an unrelated shape must not borrow a nearby noun's anchor.
   const directlyUnder = scene.nodes.find(n => x >= n.x && x <= n.x+n.w && y >= n.y && y <= n.y+n.h)
-  const nounSupport = kind === 'rectangle' || kind === 'oval'
+  // Any support shape can join a blue circle already embedded in a sequence.
+  // This is an orthogonal under-head relationship, never another next item.
+  const nounSupport = kind === 'square' || kind === 'rectangle' || kind === 'oval'
   if (nounSupport && directlyUnder && directlyUnder.kind !== 'circle') {
     const owner = scene.nodes.find(n => n.kind === 'circle' && n.below.some(b => b.id === directlyUnder.id))
     return owner ? {target:owner.id} : null
