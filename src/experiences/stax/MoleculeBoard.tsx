@@ -41,7 +41,8 @@ function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
  const owner=d.bonds.find(b=>b.relation==='support'&&b.child===a.id)
  if(a.kind==='oval')return owner&&byId(d,owner.parent)?.kind==='circle'?'small':'large'
  // Orange follows its host-role instead of being selected as 'little' or 'big'.
- return owner&&byId(d,owner.parent)?.kind==='triangle'?'small':'large'
+ const previous=d.bonds.find(b=>b.relation==='sequence'&&b.child===a.id)
+ return (owner||previous)&&byId(d,(owner||previous)!.parent)?.kind==='triangle'?'small':'large'
 }
 function normalizeRoles(d:Draft):Draft {
  return {...d,atoms:d.atoms.map(a=>a.kind==='oval'||a.kind==='hexagon'?{...a,variant:contextualVariant(d,a)}:a)}
@@ -169,15 +170,18 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    const structural=a.kind==='circle'||a.kind==='triangle'
    const otherStructural=b.kind==='circle'||b.kind==='triangle'
    const blueYellow=(a.kind==='circle'&&b.kind==='diamond')||(a.kind==='diamond'&&b.kind==='circle')
-   if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow){
-    const left=a.x<=b.x?a:b,right=left.id===a.id?b:a
+   const left=a.x<=b.x?a:b,right=left.id===a.id?b:a
+   // A green or orange changes visual role after attachment; no palette subtype.
+   const complement=right.kind==='oval'&&(left.kind==='circle'||left.kind==='triangle')
+   const orangeFollower=right.kind==='hexagon'&&left.kind==='triangle'
+   if(((structural&&otherStructural)&&!(a.kind==='triangle'&&b.kind==='triangle'))||blueYellow||complement||orangeFollower){
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
     if(!occupiedRight&&!occupiedLeft) {
      // Conjunctions sit horizontally beside blue; blue/red retain their Blueprint staircase.
      const conjunction=left.kind==='diamond'||right.kind==='diamond'
-     const diagonal=conjunction||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
-     const gap=conjunction?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
+     const diagonal=conjunction||complement||orangeFollower||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
+     const gap=conjunction||complement||orangeFollower?BLUE_RED_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
      const desired={x:left.x+width(left.kind)+gap,y:left.y+diagonal}
      // Only the moving component shifts; orientation is from spatial order.
      const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:{x:b.x-width(a.kind)-gap-a.x,y:b.y-diagonal-a.y}
