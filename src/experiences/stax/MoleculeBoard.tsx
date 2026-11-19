@@ -6,9 +6,42 @@ import './molecule-board.css'
 type Atom = { id: string; kind: Kind; x: number; y: number }
 type Bond = { a: string; b: string; port: 'pink'|'purple'|'pair'|'next-left'|'next-right' }
 type Draft = { atoms: Atom[]; bonds: Bond[] }
-type Gesture = { id: string; pointerId: number; x: number; y: number; originX: number; originY: number; initial: Draft; detached: boolean }
+type Gesture = { id: string; pointerId: number; x: number; y: number; initial: Draft; moved: boolean }
 const KEY = 'stax-free-molecules-v1'
 const W = 960, H = 570
+const ASPECT = W/H, MIN_WIDTH=300,MAX_WIDTH=3000, DROP_DISTANCE=66, TAP_DISTANCE=12, DOUBLE_TAP_MS=350
+type View = {x:number;y:number;width:number;height:number}
+const defaultView:View={x:0,y:0,width:W,height:H}
+function bounds(doc:Draft) {
+ if(!doc.atoms.length)return null
+ return doc.atoms.reduce((r,a)=>({left:Math.min(r.left,a.x),top:Math.min(r.top,a.y),right:Math.max(r.right,a.x+w(a.kind)),bottom:Math.max(r.bottom,a.y+h(a.kind))}),{left:Infinity,top:Infinity,right:-Infinity,bottom:-Infinity})
+}
+function fit(doc:Draft):View {
+ const b=bounds(doc);if(!b)return defaultView
+ const width=Math.min(MAX_WIDTH,Math.max(MIN_WIDTH,b.right-b.left+140,(b.bottom-b.top+140)*ASPECT)),height=width/ASPECT
+ return {x:(b.left+b.right-width)/2,y:(b.top+b.bottom-height)/2,width,height}
+}
+function center(doc:Draft,v:View):View {
+ const b=bounds(doc);return b?{...v,x:(b.left+b.right-v.width)/2,y:(b.top+b.bottom-v.height)/2}:v
+}
+function zoom(v:View,factor:number):View {
+ const width=Math.max(MIN_WIDTH,Math.min(MAX_WIDTH,v.width*factor)),height=width/ASPECT
+ return {x:v.x+(v.width-width)/2,y:v.y+(v.height-height)/2,width,height}
+}
+/** Treat support bonds as head to child; sequence bonds as left family to right. */
+function directed(doc:Draft,b:Bond):[string,string] {
+ const a=doc.atoms.find(x=>x.id===b.a)!,z=doc.atoms.find(x=>x.id===b.b)!
+ if(b.port==='pair')return a.kind==='square'?[a.id,z.id]:z.kind==='square'?[z.id,a.id]:[a.id,z.id]
+ if(b.port==='pink'||b.port==='purple')return a.kind==='circle'?[a.id,z.id]:z.kind==='circle'?[z.id,a.id]:[a.id,z.id]
+ return a.x<=z.x?[a.id,z.id]:[z.id,a.id]
+}
+function descendants(doc:Draft,id:string):Set<string> {
+ const byParent=new Map<string,string[]>()
+ for(const b of doc.bonds){const [parent,child]=directed(doc,b);byParent.set(parent,[...(byParent.get(parent)||[]),child])}
+ const set=new Set([id]),queue=[id]
+ for(let i=0;i<queue.length;i++)for(const next of byParent.get(queue[i])||[])if(!set.has(next)){set.add(next);queue.push(next)}
+ return set
+}
 const w = (kind: Kind) => SYMBOLS[kind].w * SCALE
 const h = (kind: Kind) => SYMBOLS[kind].h * SCALE
 const blank = (): Draft => ({atoms:[],bonds:[]})
@@ -90,7 +123,7 @@ function candidate(doc:Draft,moving:Set<string>,stationary:Set<string>) {
  }
  return choices.sort((a,b)=>a.score-b.score)[0]
 }
-const GAP=6,RULE_GAP=10,SNAP=56,DETACH=48
+const GAP=6,RULE_GAP=10,SNAP=56
 function add(doc:Draft,kind:Kind):Draft {
  const n=doc.atoms.length
  const a:Atom={id:crypto.randomUUID(),kind,x:130+(n%5)*140,y:115+Math.floor(n/5)*120}
@@ -101,10 +134,29 @@ export function MoleculeBoard() {
  const [selected,setSelected]=useState<string|null>(null)
  const [hint,setHint]=useState('Drag pieces freely. Bring compatible shapes close to snap; pull away to separate.')
  const [history,setHistory]=useState<Draft[]>([])
+ const [view,setView]=useState<View>(defaultView)
+ const [dropping,setDropping]=useState<Set<string>>(new Set())
  const svg=useRef<SVGSVGElement>(null)
  const gesture=useRef<Gesture|null>(null)
+ const latest=useRef(doc)
+ const lastTap=useRef<{id:string;at:number}|null>(null)
+ const dropTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
+ useEffect(()=>()=>{if(dropTimer.current)clearTimeout(dropTimer.current)},[])
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* quota */}},[doc])
- function commit(next:Draft){setHistory(v=>[...v,doc].slice(-30));setDoc(next)}
+ function current(next:Draft){latest.current=next;setDoc(next)}
+ function commit(next:Draft,previous=latest.current){setHistory(v=>[...v,previous].slice(-30));current(next)}
+ function drop(id:string){
+  const before=latest.current,ids=descendants(before,id)
+  if(!before.bonds.some(b=>ids.has(b.a)!==ids.has(b.b))){
+   setHint('No parent connection to release. You can still drag the whole molecule.');return
+  }
+  // Preserve every internal child bond, removing only edges into the dropped branch.
+  const after=moveGroup({...before,bonds:before.bonds.filter(b=>ids.has(b.a)===ids.has(b.b))},ids,0,DROP_DISTANCE)
+  if(dropTimer.current)clearTimeout(dropTimer.current)
+  setDropping(new Set(ids));commit(after,before)
+  dropTimer.current=setTimeout(()=>setDropping(new Set()),320)
+  setHint(ids.size>1?'Branch dropped with all its descendants.':'Shape dropped and detached.')
+ }
  function point(e:ReactPointerEvent<SVGSVGElement|SVGGElement>){
   const m=svg.current?.getScreenCTM()
   if(!m)return {x:0,y:0}
@@ -113,63 +165,65 @@ export function MoleculeBoard() {
  }
  function down(e:ReactPointerEvent<SVGGElement>,id:string){
   if(e.pointerType==='mouse'&&e.button!==0)return
-  const p=point(e),a=doc.atoms.find(a=>a.id===id)!
-  gesture.current={id,pointerId:e.pointerId,x:p.x,y:p.y,originX:a.x,originY:a.y,initial:doc,detached:false}
+  const p=point(e)
+  if(dropTimer.current)clearTimeout(dropTimer.current)
+  setDropping(new Set())
+  gesture.current={id,pointerId:e.pointerId,x:p.x,y:p.y,initial:latest.current,moved:false}
   e.currentTarget.setPointerCapture(e.pointerId);setSelected(id);e.stopPropagation()
  }
  function drag(e:ReactPointerEvent<SVGGElement>){
   const g=gesture.current;if(!g||g.pointerId!==e.pointerId)return
   const p=point(e),dx=p.x-g.x,dy=p.y-g.y
-  const raw=g.initial,dist=Math.hypot(dx,dy)
-  let base=raw
-  if(dist>DETACH && !g.detached && raw.bonds.some(b=>b.a===g.id||b.b===g.id)){
-   // Detach from the currently translated assembly (no jump to its former location).
-   base={...doc,bonds:doc.bonds.filter(b=>b.a!==g.id&&b.b!==g.id)}
-   g.detached=true;g.initial=base;g.x=p.x;g.y=p.y
-   setHint('Magnetic resistance overcome. This atom is detached.')
-  }
-  const ids=group(g.initial,g.id)
-  setDoc(moveGroup(g.initial,ids,p.x-g.x,p.y-g.y))
+  if(Math.hypot(dx,dy)>TAP_DISTANCE)g.moved=true
+  if(!g.moved)return
+  // The entire connected component moves; dragging never detaches anything.
+  current(moveGroup(g.initial,group(g.initial,g.id),dx,dy))
   e.stopPropagation()
  }
  function up(e:ReactPointerEvent<SVGGElement>){
   const g=gesture.current;if(!g||g.pointerId!==e.pointerId)return
   gesture.current=null
-  const moving=group(doc,g.id)
+  const now=Date.now()
+  if(!g.moved){
+   if(lastTap.current?.id===g.id&&now-lastTap.current.at<=DOUBLE_TAP_MS){
+    lastTap.current=null;drop(g.id)
+   }else{lastTap.current={id:g.id,at:now};setHint('Double-tap to drop this branch, or drag to move its whole molecule.')}
+   e.stopPropagation();return
+  }
+  lastTap.current=null
+  const doc=latest.current,moving=group(doc,g.id)
   let best:ReturnType<typeof candidate>|undefined=undefined
-  const others=doc.atoms.filter(a=>!moving.has(a.id))
-  for(const a of others){
-   const station=group(doc,a.id)
-   const found=candidate(doc,moving,station)
+  for(const atom of doc.atoms){
+   if(moving.has(atom.id))continue
+   const found=candidate(doc,moving,group(doc,atom.id))
    if(found&&(!best||found.score<best.score))best=found
   }
   if(best){
-   const next=moveGroup(doc,moving,best.x,best.y)
-   // A bond never joins atoms already connected; each endpoint is exclusive.
-   if(!sameGroup(next,best.a,best.b)) {
-    const edge:Bond={a:best.a,b:best.b,port:best.port}
-    commit({...next,bonds:[...next.bonds,edge]})
-    setHint('Snap! The molecule now moves as one. Pull a member away to separate it.')
+   const aligned=moveGroup(doc,moving,best.x,best.y)
+   if(!sameGroup(aligned,best.a,best.b)){
+    commit({...aligned,bonds:[...aligned.bonds,{a:best.a,b:best.b,port:best.port}]},g.initial)
+    setHint('Snap! Drag the molecule as one, or double-tap a child to drop its branch.')
    }
   }else{
    setHistory(v=>[...v,g.initial].slice(-30))
-   setHint('Released. The piece stays where you dropped it.')
+   setHint('Released. The pieces stay exactly where you placed them.')
   }
   e.stopPropagation()
  }
- function remove(){
+  function remove(){
   if(!selected)return
   commit({atoms:doc.atoms.filter(a=>a.id!==selected),bonds:doc.bonds.filter(b=>b.a!==selected&&b.b!==selected)});setSelected(null)
  }
  return <div className="stax-molecule-ui">
   <div className="stax-molecule-tools"><strong>Free molecule board</strong><span>Experimental magnetic assembly · local-only save</span>
-   <div className="stax-molecule-buttons"><button onClick={()=>{if(history.length){setDoc(history[history.length-1]);setHistory(h=>h.slice(0,-1))}}} disabled={!history.length}>Undo</button><button onClick={remove} disabled={!selected}>Remove</button><button onClick={()=>{commit(blank());setSelected(null)}}>Clear</button></div>
+   <div className="stax-molecule-buttons"><button onClick={()=>{if(history.length){current(history[history.length-1]);setHistory(h=>h.slice(0,-1))}}} disabled={!history.length}>Undo</button><button onClick={remove} disabled={!selected}>Remove</button><button onClick={()=>{commit(blank());setSelected(null)}}>Clear</button></div>
   </div>
+  <div className="stax-molecule-view-controls"><button onClick={()=>setView(v=>center(latest.current,v))}>Center</button><button onClick={()=>setView(fit(latest.current))}>Fit all</button><button aria-label="Zoom out" onClick={()=>setView(v=>zoom(v,1.25))}>−</button><span>{Math.round(100*W/view.width)}%</span><button aria-label="Zoom in" onClick={()=>setView(v=>zoom(v,.8))}>+</button></div>
   <div className="stax-molecule-canvas">
-   <svg ref={svg} viewBox={`0 0 ${W} ${H}`} aria-label="Freely movable grammar molecules" onClick={()=>setSelected(null)}>
+   <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="Freely movable grammar molecules" onClick={()=>setSelected(null)}>
     <rect width={W} height={H} fill="#faf9f6"/>
     {doc.bonds.map((b,i)=>{const a=doc.atoms.find(n=>n.id===b.a),z=doc.atoms.find(n=>n.id===b.b);if(!a||!z)return null;return <line key={i} x1={a.x+w(a.kind)/2} y1={a.y+h(a.kind)/2} x2={z.x+w(z.kind)/2} y2={z.y+h(z.kind)/2} stroke="#a8b5c0" strokeWidth="4" strokeLinecap="round"/>})}
-    {doc.atoms.map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`} data-kind={a.kind} data-id={a.id}
+    {doc.atoms.map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`} data-kind={a.kind} data-id={a.id} className={dropping.has(a.id)?'stax-molecule-dropping':undefined}
      onPointerDown={e=>down(e,a.id)} onPointerMove={drag} onPointerUp={up} onPointerCancel={()=>{gesture.current=null}}
      style={{touchAction:'none',cursor:'grab'}}>
      {selected===a.id&&<rect x="-10" y="-10" width={w(a.kind)+20} height={h(a.kind)+20} rx="7" fill="none" stroke="#34495c" strokeDasharray="5 5"/>}
@@ -182,6 +236,6 @@ export function MoleculeBoard() {
    <svg viewBox={`-4 -4 ${w(kind)+8} ${h(kind)+8}`}><Glyph kind={kind} w={w(kind)} h={h(kind)} stroke={SYMBOLS[kind].color} fill={SYMBOLS[kind].color+'20'} strokeWidth={3}/></svg>
   </button>)}</div>
   <p className="stax-molecule-hint" role="status">{hint}</p>
-  <p className="stax-molecule-note">Prototype connections: pink–purple, blue–pink, blue–purple, blue–blue, blue–red and red–blue. Other connections remain unverified. One port per bond; no forced assembly.</p>
+  <p className="stax-molecule-note">Double-tap a child to drop its branch with descendants; drag moves connected pieces together. Prototype connections: pink–purple, blue–pink, blue–purple, blue–blue, blue–red and red–blue. Other connections remain unverified. One port per bond; no forced assembly.</p>
  </div>
 }
