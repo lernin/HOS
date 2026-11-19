@@ -190,7 +190,7 @@ export function MoleculeBoard(){
    if(lastTap.current?.id===d.id&&t-lastTap.current.time<DOUBLE_MS){
     lastTap.current=null
     const old=currentDoc.current,ids=descendants(old,d.id)
-    if(!old.bonds.some(b=>ids.has(b.parent)!==ids.has(b.child))){setHint('No parent to detach. Drag this free molecule.');return}
+    // Root molecules and standalone atoms also fall; only external parent bonds detach.
     const stripped={...old,bonds:old.bonds.filter(b=>ids.has(b.parent)===ids.has(b.child))}
     const moved=translate(stripped,ids,0,DROP_DISTANCE)
     if(fallTimer.current)clearTimeout(fallTimer.current)
