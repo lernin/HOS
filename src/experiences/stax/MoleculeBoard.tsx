@@ -393,7 +393,7 @@ export function MoleculeBoard(){
    const bonded={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
    // Adding a determiner/preposition to a sequence is a local supporter layout change,
    // not a change to any of the red/blue sequence coordinates.
-   const result=snap.relation==='support'?alignSupporters(bonded,snap.parent):bonded
+   const result=snap.relation==='support'?alignSupporters(normalizeRoles(bonded),snap.parent):bonded
    save(result,d.before)
    setHint(snap.relation==='support'?'Support attached beneath its blue head. The red/blue sequence stayed intact.':'Magnetic snap! Connected pieces now move together.')
   }else{
@@ -440,7 +440,7 @@ export function MoleculeBoard(){
   if(snap){
    const adjusted=translate(next,new Set([id]),snap.dx,snap.dy)
    const joined={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
-   save(snap.relation==='support'?alignSupporters(joined,snap.parent):joined,previous)
+   save(snap.relation==='support'?alignSupporters(normalizeRoles(joined),snap.parent):joined,previous)
    setHint('Magnet connected: this shape is now part of the molecule.')
   }else{
    save(next,previous)
