@@ -332,12 +332,21 @@ export function MoleculeBoard(){
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill="#faf9f6"/>
-    {preview&&<g aria-hidden="true" pointerEvents="none">
+    {paletteHover?.snap&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
+      <g transform={`translate(${paletteHover.worldX+paletteHover.snap.dx} ${paletteHover.worldY+paletteHover.snap.dy})`}>
+       <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)} h={height(paletteHover.kind)} fill="none" stroke="#13af8b" strokeWidth={4} strokeDasharray="8 5"/>
+      </g>
+     </g>}
+    {preview&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
       {doc.atoms.filter(a=>dragging.current&&molecule(doc,dragging.current.id).has(a.id)).map(a=><g key={a.id} transform={`translate(${a.x+preview.dx} ${a.y+preview.dy})`}>
        <Glyph kind={a.kind} w={width(a.kind)} h={height(a.kind)} fill="none" stroke="#2ca39a" strokeDasharray="8 5" strokeWidth={3}/>
       </g>)}
      </g>}
-    {doc.atoms.map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`} data-kind={a.kind} data-id={a.id} className={fall.has(a.id)?'stax-molecule-dropping':undefined}
+    {doc.atoms.map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`} data-kind={a.kind} data-id={a.id} className={[
+       fall.has(a.id)?'stax-molecule-dropping':'',
+       (paletteHover?.snap&&(paletteHover.snap.parent===a.id||paletteHover.snap.child===a.id))||
+       (preview&&dragging.current&&!molecule(doc,dragging.current.id).has(a.id)&&(preview.parent===a.id||preview.child===a.id))?'stax-resonant-target':''
+      ].filter(Boolean).join(' ')}
       onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}>
       {selected===a.id&&<rect x="-7" y="-7" width={width(a.kind)+14} height={height(a.kind)+14} rx="5" fill="none" stroke="#7b8795" strokeDasharray="4 5" pointerEvents="none"/>}
       <Glyph kind={a.kind} w={width(a.kind)} h={height(a.kind)} fill={SYMBOLS[a.kind].color+'14'} stroke={SYMBOLS[a.kind].color} strokeWidth={3}/>
@@ -346,10 +355,18 @@ export function MoleculeBoard(){
    {!doc.atoms.length&&<p className="stax-molecule-empty">Tap a shape below, or drag one into the workspace.</p>}
   </div>
   <div className="stax-molecule-palette">{kinds.map(kind=><button key={kind} title={SYMBOLS[kind].role} aria-label={`Add ${SYMBOLS[kind].label}`}
-   onPointerDown={e=>paletteDown(e,kind)} onPointerUp={paletteUp} onPointerCancel={()=>{paletteDrag.current=null}}>
+   onPointerDown={e=>paletteDown(e,kind)} onPointerMove={paletteMove} onPointerUp={paletteUp} onPointerCancel={paletteCancel}>
    <svg viewBox={`-4 -4 ${width(kind)+8} ${height(kind)+8}`} aria-hidden="true"><Glyph kind={kind} w={width(kind)} h={height(kind)} stroke={SYMBOLS[kind].color} fill={SYMBOLS[kind].color+'14'} strokeWidth={3}/></svg>
   </button>)}</div>
+  {paletteHover&&<div className={`stax-lifted-ghost${paletteHover.snap?' is-eligible':''}`} style={{left:paletteHover.screenX,top:paletteHover.screenY}} aria-hidden="true">
+    <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
+      height={Math.max(28,Math.min(130,height(paletteHover.kind)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
+      viewBox={`0 0 ${width(paletteHover.kind)} ${height(paletteHover.kind)}`}>
+     <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)} h={height(paletteHover.kind)}
+       fill={SYMBOLS[paletteHover.kind].color+'18'} stroke={paletteHover.snap?'#12a981':SYMBOLS[paletteHover.kind].color} strokeWidth={4}/>
+    </svg>
+   </div>}
   <p className="stax-molecule-hint" role="status">{hint}</p>
-  <p className="stax-molecule-note">Each new shape starts loose, wherever placed. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Only known pink/purple/blue and blue/red relationships are provisionally magnetic.</p>
+  <p className="stax-molecule-note">Shapes lift above your finger during touch-drag; eligible magnets glow. Each new shape starts loose, wherever placed. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Only known pink/purple/blue and blue/red relationships are provisionally magnetic.</p>
  </div>
 }
