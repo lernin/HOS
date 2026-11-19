@@ -7,7 +7,7 @@ import './molecule-board.css'
  * Free-form STAX assembly. No grid, global autolayout, or implicit attachment on creation.
  * Bonds are the ONLY source of molecule membership. Coordinates are always world-space.
  */
-type Atom = { id:string; kind:Kind; x:number; y:number }
+type Atom = { id:string; kind:Kind; x:number; y:number; word?:string; variant?:'small'|'large' }
 type Relation = 'pair'|'support'|'sequence'
 type Bond = { parent:string; child:string; relation:Relation }
 type Draft = { atoms:Atom[]; bonds:Bond[] }
@@ -17,14 +17,19 @@ type Pan = { pointer:number;startX:number;startY:number;before:View;moved:boolea
 type TouchPoint = {x:number;y:number}
 type Pinch = {pointers:[number,number];startDistance:number;startView:View;anchor:{x:number;y:number}}
 type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number }
-type PaletteHover = { kind:Kind;screenX:number;screenY:number;worldX:number;worldY:number;snap:Snap|null }
+type PaletteHover = { kind:Kind;variant?:'small'|'large';screenX:number;screenY:number;worldX:number;worldY:number;snap:Snap|null }
 // Distances from the STAX Blueprint's .07-unit design grid; only snap geometry is quantised.
 const UNIT=SCALE*.07, GAP=4*UNIT, VERTICAL=4*UNIT, BLUE_RED_GAP=7*UNIT, RED_BLUE_GAP=29*UNIT
 const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=66, TAP=9, DOUBLE_MS=350, FINGER_LIFT=42
 const KEY='stax-free-molecules-v2'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
+type Choice={kind:Kind;variant?:'small'|'large';label:string}
+const choices:Choice[]=[{kind:'circle',label:'Noun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',variant:'large',label:'Orange · large'},{kind:'hexagon',variant:'small',label:'Orange · small'},{kind:'oval',variant:'large',label:'Green · complement'},{kind:'oval',variant:'small',label:'Green · modifier'}]
 const width=(k:Kind)=>SYMBOLS[k].w*SCALE
 const height=(k:Kind)=>SYMBOLS[k].h*SCALE
+const variantFactor=(kind:Kind,variant?:Atom['variant'])=>variant==='small'&&(kind==='oval'||kind==='hexagon')?(kind==='oval'?.86:.9):1
+const atomWidth=(a:Atom)=>width(a.kind)*variantFactor(a.kind,a.variant)
+const atomHeight=(a:Atom)=>height(a.kind)*variantFactor(a.kind,a.variant)
 const empty=():Draft=>({atoms:[],bonds:[]})
 const defaultView:View={x:0,y:0,width:W,height:H}
 const byId=(d:Draft,id:string)=>d.atoms.find(a=>a.id===id)!
@@ -32,7 +37,7 @@ const supports=(k:Kind)=>k==='square'||k==='rectangle'
 function load():Draft {
  try {
   const d=JSON.parse(localStorage.getItem(KEY)||'null') as Draft|null
-  if(d&&Array.isArray(d.atoms)&&Array.isArray(d.bonds)&&d.atoms.length<=80&&d.atoms.every(a=>a&&typeof a.id==='string'&&kinds.includes(a.kind)&&Number.isFinite(a.x)&&Number.isFinite(a.y))&&d.bonds.every(b=>b&&['pair','support','sequence'].includes(b.relation)&&d.atoms.some(a=>a.id===b.parent)&&d.atoms.some(a=>a.id===b.child)))return d
+  if(d&&Array.isArray(d.atoms)&&Array.isArray(d.bonds)&&d.atoms.length<=80&&d.atoms.every(a=>a&&typeof a.id==='string'&&kinds.includes(a.kind)&&Number.isFinite(a.x)&&Number.isFinite(a.y)&&(a.variant===undefined||a.variant==='small'||a.variant==='large')&&(a.word===undefined||(typeof a.word==='string'&&a.word.length<=36)))&&d.bonds.every(b=>b&&['pair','support','sequence'].includes(b.relation)&&d.atoms.some(a=>a.id===b.parent)&&d.atoms.some(a=>a.id===b.child)))return d
  }catch{/* invalid or unavailable local storage */}
  return empty()
 }
@@ -53,7 +58,7 @@ function translate(d:Draft,ids:Set<string>,dx:number,dy:number):Draft {
 }
 function box(d:Draft) {
  if(!d.atoms.length)return null
- return d.atoms.reduce((r,a)=>({l:Math.min(r.l,a.x),t:Math.min(r.t,a.y),r:Math.max(r.r,a.x+width(a.kind)),b:Math.max(r.b,a.y+height(a.kind))}),{l:Infinity,t:Infinity,r:-Infinity,b:-Infinity})
+ return d.atoms.reduce((r,a)=>({l:Math.min(r.l,a.x),t:Math.min(r.t,a.y),r:Math.max(r.r,a.x+atomWidth(a)),b:Math.max(r.b,a.y+atomHeight(a))}),{l:Infinity,t:Infinity,r:-Infinity,b:-Infinity})
 }
 function fit(d:Draft):View {
  const b=box(d);if(!b)return defaultView
@@ -177,7 +182,7 @@ export function MoleculeBoard(){
  const dragging=useRef<Drag|null>(null),panning=useRef<Pan|null>(null)
  const lastTap=useRef<{id:string;time:number}|null>(null)
  const fallTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
- const paletteDrag=useRef<{kind:Kind;pointer:number;startX:number;startY:number}|null>(null)
+ const paletteDrag=useRef<{kind:Kind;variant?:'small'|'large';pointer:number;startX:number;startY:number}|null>(null)
  const activeTouches=useRef<Map<number,TouchPoint>>(new Map())
  const pinch=useRef<Pinch|null>(null)
  const blockRelease=useRef<Set<number>>(new Set())
@@ -314,11 +319,11 @@ export function MoleculeBoard(){
   if(p.moved)setCamera({...start,x:start.x-deltaX,y:start.y-deltaY})
  }
  function upBackground(e:ReactPointerEvent<SVGSVGElement>){if(panning.current?.pointer===e.pointerId)panning.current=null}
- function addAt(kind:Kind,client?:{x:number;y:number}){
+ function addAt(kind:Kind,client?:{x:number;y:number},variant?:Atom['variant']){
   if(currentDoc.current.atoms.length>=80){setHint('Maximum 80 shapes in this experiment.');return}
   const p=client?fromClient(client.x,client.y):null,camera=currentView.current
-  let x=(p?.x??camera.x+camera.width/2)-width(kind)/2
-  let y=(p?.y??camera.y+camera.height/2)-height(kind)/2
+  let x=(p?.x??camera.x+camera.width/2)-width(kind)*variantFactor(kind,variant)/2
+  let y=(p?.y??camera.y+camera.height/2)-height(kind)*variantFactor(kind,variant)/2
   if(!client){
    // Palette taps park freely in a vacant spot; no hidden attachment.
    const occupied=(xx:number,yy:number)=>currentDoc.current.atoms.some(a=>xx<a.x+width(a.kind)+14&&xx+width(kind)+14>a.x&&yy<a.y+height(a.kind)+14&&yy+height(kind)+14>a.y)
@@ -330,7 +335,7 @@ export function MoleculeBoard(){
    }
   }
   const previous=currentDoc.current,id=crypto.randomUUID()
-  const next:Draft={...previous,atoms:[...previous.atoms,{id,kind,x,y}]}
+  const next:Draft={...previous,atoms:[...previous.atoms,{id,kind,x,y,variant}]}
   // A deliberate palette DRAG can join on release, while a TAP remains loose.
   const snap=client?bestSnap(next,new Set([id])):null
   if(snap){
@@ -343,28 +348,28 @@ export function MoleculeBoard(){
    setHint('Placed freely. The shape stays there until you move it.')
   }
  }
- function palettePosition(kind:Kind,clientX:number,clientY:number):PaletteHover {
+ function palettePosition(kind:Kind,clientX:number,clientY:number,variant?:Atom['variant']):PaletteHover {
   const screenX=clientX,screenY=clientY-FINGER_LIFT
   const rect=svg.current?.getBoundingClientRect()
   const inside=!!rect&&screenX>=rect.left&&screenX<=rect.right&&screenY>=rect.top&&screenY<=rect.bottom
   const p=inside?fromClient(screenX,screenY):null
-  const worldX=(p?.x??0)-width(kind)/2,worldY=(p?.y??0)-height(kind)/2
+  const worldX=(p?.x??0)-width(kind)*variantFactor(kind,variant)/2,worldY=(p?.y??0)-height(kind)*variantFactor(kind,variant)/2
   let snap:Snap|null=null
   if(p&&currentDoc.current.atoms.length<80){
-   const ghost:Atom={id:'__palette_preview__',kind,x:worldX,y:worldY}
+   const ghost:Atom={id:'__palette_preview__',kind,x:worldX,y:worldY,variant}
    snap=bestSnap({...currentDoc.current,atoms:[...currentDoc.current.atoms,ghost]},new Set([ghost.id]))
   }
-  return {kind,screenX,screenY,worldX,worldY,snap}
+  return {kind,variant,screenX,screenY,worldX,worldY,snap}
  }
- function paletteDown(e:ReactPointerEvent<HTMLButtonElement>,kind:Kind){
+ function paletteDown(e:ReactPointerEvent<HTMLButtonElement>,kind:Kind,variant?:Atom['variant']){
   if(e.pointerType==='mouse'&&e.button!==0)return
-  paletteDrag.current={kind,pointer:e.pointerId,startX:e.clientX,startY:e.clientY}
+  paletteDrag.current={kind,variant,pointer:e.pointerId,startX:e.clientX,startY:e.clientY}
   e.currentTarget.setPointerCapture(e.pointerId)
-  setPaletteHover(palettePosition(kind,e.clientX,e.clientY))
+  setPaletteHover(palettePosition(kind,e.clientX,e.clientY,variant))
  }
  function paletteMove(e:ReactPointerEvent<HTMLButtonElement>){
   const p=paletteDrag.current;if(!p||p.pointer!==e.pointerId)return
-  setPaletteHover(palettePosition(p.kind,e.clientX,e.clientY))
+  setPaletteHover(palettePosition(p.kind,e.clientX,e.clientY,p.variant))
  }
  function paletteUp(e:ReactPointerEvent<HTMLButtonElement>){
   const p=paletteDrag.current;if(!p||p.pointer!==e.pointerId)return
@@ -373,7 +378,7 @@ export function MoleculeBoard(){
   const liftedY=e.clientY-FINGER_LIFT,rect=svg.current?.getBoundingClientRect()
   const inside=!!rect&&e.clientX>=rect.left&&e.clientX<=rect.right&&liftedY>=rect.top&&liftedY<=rect.bottom
   if(moved&&!inside){setHint('Drop the lifted shape inside the workspace.');return}
-  addAt(p.kind,moved?{x:e.clientX,y:liftedY}:undefined)
+  addAt(p.kind,moved?{x:e.clientX,y:liftedY}:undefined,p.variant)
  }
  function paletteCancel(){paletteDrag.current=null;setPaletteHover(null)}
   function undo(){const prev=history.at(-1);if(prev){update(prev);setHistory(v=>v.slice(0,-1));setHint('Undone.')}}
@@ -388,12 +393,12 @@ export function MoleculeBoard(){
     <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill="#faf9f6"/>
     {paletteHover?.snap&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
       <g transform={`translate(${paletteHover.worldX+paletteHover.snap.dx} ${paletteHover.worldY+paletteHover.snap.dy})`}>
-       <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)} h={height(paletteHover.kind)} fill="none" stroke="#13af8b" strokeWidth={4} strokeDasharray="8 5"/>
+       <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)} h={height(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)} fill="none" stroke="#13af8b" strokeWidth={4} strokeDasharray="8 5"/>
       </g>
      </g>}
     {preview&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
       {doc.atoms.filter(a=>dragging.current&&molecule(doc,dragging.current.id).has(a.id)).map(a=><g key={a.id} transform={`translate(${a.x+preview.dx} ${a.y+preview.dy})`}>
-       <Glyph kind={a.kind} w={width(a.kind)} h={height(a.kind)} fill="none" stroke="#2ca39a" strokeDasharray="8 5" strokeWidth={3}/>
+       <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} fill="none" stroke="#2ca39a" strokeDasharray="8 5" strokeWidth={3}/>
       </g>)}
      </g>}
     {doc.atoms.map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`} data-kind={a.kind} data-id={a.id} className={[
@@ -402,21 +407,22 @@ export function MoleculeBoard(){
        (preview&&dragging.current&&!molecule(doc,dragging.current.id).has(a.id)&&(preview.parent===a.id||preview.child===a.id))?'stax-resonant-target':''
       ].filter(Boolean).join(' ')}
       onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}>
-      {selected===a.id&&<rect x="-7" y="-7" width={width(a.kind)+14} height={height(a.kind)+14} rx="5" fill="none" stroke="#7b8795" strokeDasharray="4 5" pointerEvents="none"/>}
-      <Glyph kind={a.kind} w={width(a.kind)} h={height(a.kind)} fill={SYMBOLS[a.kind].color+'14'} stroke={SYMBOLS[a.kind].color} strokeWidth={3}/>
+      {selected===a.id&&<rect x="-7" y="-7" width={atomWidth(a)+14} height={atomHeight(a)+14} rx="5" fill="none" stroke="#7b8795" strokeDasharray="4 5" pointerEvents="none"/>}
+      <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} fill={SYMBOLS[a.kind].color+'14'} stroke={SYMBOLS[a.kind].color} strokeWidth={3}/>
+      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill="#253c55" fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
     </g>)}
    </svg>
    {!doc.atoms.length&&<p className="stax-molecule-empty">Tap a shape below, or drag one into the workspace.</p>}
   </div>
-  <div className="stax-molecule-palette">{kinds.map(kind=><button key={kind} title={SYMBOLS[kind].role} aria-label={`Add ${SYMBOLS[kind].label}`}
-   onPointerDown={e=>paletteDown(e,kind)} onPointerMove={paletteMove} onPointerUp={paletteUp} onPointerCancel={paletteCancel}>
-   <svg viewBox={`-4 -4 ${width(kind)+8} ${height(kind)+8}`} aria-hidden="true"><Glyph kind={kind} w={width(kind)} h={height(kind)} stroke={SYMBOLS[kind].color} fill={SYMBOLS[kind].color+'14'} strokeWidth={3}/></svg>
+  <div className="stax-molecule-palette">{choices.map(({kind,variant,label})=><button key={`${kind}-${variant||'default'}`} title={label} aria-label={`Add ${label}`}
+   onPointerDown={e=>paletteDown(e,kind,variant)} onPointerMove={paletteMove} onPointerUp={paletteUp} onPointerCancel={paletteCancel}>
+   <svg viewBox={`-4 -4 ${width(kind)*variantFactor(kind,variant)+8} ${height(kind)*variantFactor(kind,variant)+8}`} aria-hidden="true"><Glyph kind={kind} w={width(kind)*variantFactor(kind,variant)} h={height(kind)*variantFactor(kind,variant)} stroke={SYMBOLS[kind].color} fill={SYMBOLS[kind].color+'14'} strokeWidth={3}/></svg>
   </button>)}</div>
   {paletteHover&&<div className={`stax-lifted-ghost${paletteHover.snap?' is-eligible':''}`} style={{left:paletteHover.screenX,top:paletteHover.screenY}} aria-hidden="true">
-    <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
-      height={Math.max(28,Math.min(130,height(paletteHover.kind)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
-      viewBox={`0 0 ${width(paletteHover.kind)} ${height(paletteHover.kind)}`}>
-     <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)} h={height(paletteHover.kind)}
+    <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
+      height={Math.max(28,Math.min(130,height(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
+      viewBox={`0 0 ${width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)} ${height(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)}`}>
+     <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)} h={height(paletteHover.kind)*variantFactor(paletteHover.kind,paletteHover.variant)}
        fill={SYMBOLS[paletteHover.kind].color+'18'} stroke={paletteHover.snap?'#12a981':SYMBOLS[paletteHover.kind].color} strokeWidth={4}/>
     </svg>
    </div>}
