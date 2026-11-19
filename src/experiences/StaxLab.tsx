@@ -92,7 +92,7 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
    <div className="stax-header-actions"><button className="stax-text-button" onClick={()=>setFreeBoard(false)}>Classic Shape Lab ↗</button></div>
   </header>
   <section className="stax-main" style={{maxWidth:1200,margin:'0 auto',width:'100%'}}>
-    <MoleculeBoard/>
+    <MoleculeBoard onBack={()=>setFreeBoard(false)}/>
   </section>
  </main>
  return <main className={`stax-lab${blueprint?' is-blueprint':''}`}>
