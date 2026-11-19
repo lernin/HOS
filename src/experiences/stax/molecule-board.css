@@ -32,3 +32,8 @@
  .stax-molecule-tools{gap:7px}
  .stax-molecule-buttons{flex-wrap:wrap}
 }
+
+.stax-molecule-palette button:has(.stax-palette-kind){flex-direction:column;gap:1px;padding:3px 2px}
+.stax-molecule-palette button:has(.stax-palette-kind) svg{height:31px}
+.stax-palette-kind{display:block;font-size:9px;line-height:1.1;color:#526676;white-space:nowrap;pointer-events:none}
+@media(max-width:700px){.stax-molecule-palette button:has(.stax-palette-kind){height:62px}}
