@@ -154,3 +154,42 @@
  .stax-molecule-view-controls{left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 5px)}
  .stax-molecule-example{left:46%;max-width:45vw;top:calc(env(safe-area-inset-top,0px) + 6px)}
 }
+
+/* One compact bottom-left dock; top-left and bottom-right remain entirely clear. */
+.stax-molecule-ui .stax-molecule-dock {
+ position:absolute;z-index:8;
+ left:calc(env(safe-area-inset-left,0px) + 8px);
+ bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
+ width:206px;max-width:calc(100vw - 16px);
+ display:flex;flex-direction:column;gap:5px;
+ padding:6px;border:1px solid #d6dfe4;border-radius:13px;
+ background:rgba(255,255,255,.94);box-shadow:0 3px 16px #16324817;
+ backdrop-filter:blur(12px);
+}
+.stax-molecule-ui .stax-molecule-dock .stax-molecule-tools,
+.stax-molecule-ui .stax-molecule-dock .stax-molecule-view-controls {
+ position:static;inset:auto;top:auto;left:auto;right:auto;bottom:auto;
+ margin:0;padding:0;border:0;border-radius:0;box-shadow:none;
+ background:transparent;backdrop-filter:none;width:100%;max-width:none;
+ display:flex;align-items:center;flex-wrap:nowrap;justify-content:flex-start;gap:4px;
+}
+.stax-molecule-ui .stax-molecule-dock .stax-molecule-buttons{display:flex;gap:3px;margin:0;flex-wrap:nowrap;flex:1}
+.stax-molecule-ui .stax-molecule-dock button {
+ display:flex;align-items:center;justify-content:center;
+ padding:0;min-width:29px;width:29px;height:32px;min-height:32px;
+ background:#fff;border:1px solid #cbd6dc;border-radius:7px;
+ font-size:15px!important;line-height:1;flex:0 0 auto;touch-action:manipulation;
+}
+.stax-molecule-ui .stax-molecule-dock .stax-molecule-back{width:32px;font-size:19px!important}
+.stax-molecule-ui .stax-molecule-dock .stax-molecule-buttons button:nth-child(2){font-size:10px!important;font-weight:700}
+.stax-molecule-ui .stax-molecule-dock .stax-molecule-view-controls button{width:32px;height:32px}
+.stax-molecule-ui .stax-molecule-dock .stax-molecule-view-controls span{font-size:10px;min-width:35px;flex:1}
+.stax-molecule-ui .stax-molecule-dock button:focus-visible{outline:3px solid #4389c7;outline-offset:1px}
+@media(max-width:700px) {
+ .stax-molecule-ui .stax-molecule-dock {
+  left:calc(env(safe-area-inset-left,0px) + 6px);
+  bottom:calc(env(safe-area-inset-bottom,0px) + 6px);
+  padding:5px;gap:4px;
+ }
+ .stax-molecule-ui .stax-molecule-dock button{min-width:29px;min-height:32px}
+}
