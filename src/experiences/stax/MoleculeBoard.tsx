@@ -169,10 +169,64 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  }
  return best
 }
+/** STAX POS source grid codes are directional, not generic shape-to-shape bonds:
+ * n = a NEW family follows (owner-confirmed); o is retained as a source code,
+ * not presumed to mean a supporter. These representative entries are source values.
+ */
+const STAX_POS_SAMPLES = {
+ 'circle>rectangle':'n',
+ 'rectangle>circle':'o',
+ 'circle>diamond':'n',
+ 'diamond>circle':'n',
+ 'circle>triangle':'n',
+ 'triangle>circle':'n',
+} as const
+function newFamilyAfterBlue(d:Draft,moving:Set<string>):boolean {
+ // A rectangle explicitly to the RIGHT of a blue captain at its head level
+ // is starting a different family (the source circle→rectangle n rule).
+ // Never magnetically pull it underneath the earlier noun.
+ return d.atoms.some(a=>moving.has(a.id)&&a.kind==='rectangle'&&
+   d.atoms.some(b=>!moving.has(b.id)&&b.kind==='circle'&&
+     a.x>=b.x+atomWidth(b)*.7&&a.y>=b.y-atomHeight(b)*.4&&a.y<=b.y+atomHeight(b)*.7))
+}
+/**
+ * Reconstructs an editable *illustrative* molecule scene from the exact
+ * sentence on STAX Blueprint slide 13 (Level 21). Source slide does not
+ * encode the lexical identity of every colored shape, so assignments of
+ * individual word roles and bond orientations below are proposals.
+ */
+function quest21():Draft {
+ type Spec=[id:string,kind:Kind,word:string,x:number,y:number,variant?:Atom['variant']]
+ const specs:Spec[]=[
+  ['she','circle','She',65,55],['aux','hexagon',"'s",220,420,'large'],
+  ['buy','triangle','buying',223,205],['a','rectangle','a',580,635],
+  ['present','circle','present',522,365],
+  ['for','square','for',748,875],['herfriend','rectangle','her',824,880],
+  ['best','oval','best',940,880,'small'],['friend','circle','friend',814,720],
+  ['because','diamond','because',967,369],
+  ['herbirthday','rectangle','her',1170,645],
+  ['birthday','circle','birthday',1190,371],
+  ['is','triangle','is',1425,555],
+  ['tomorrow','hexagon','tomorrow',1628,766,'small'],
+ ]
+ const atoms=specs.map(([id,kind,word,x,y,variant]):Atom=>({id:'q21-'+id,kind,word,x,y,variant}))
+ const bond=(parent:string,child:string,relation:Relation):Bond=>({parent:'q21-'+parent,child:'q21-'+child,relation})
+ const bonds:Bond[]=[
+  bond('she','buy','sequence'),bond('buy','present','sequence'),
+  bond('present','because','sequence'),bond('because','birthday','sequence'),
+  bond('birthday','is','sequence'),
+  bond('buy','aux','support'),bond('present','a','support'),
+  bond('present','friend','support'),
+  bond('friend','for','support'),bond('friend','herfriend','support'),bond('friend','best','support'),
+  bond('birthday','herbirthday','support'),bond('is','tomorrow','support')
+ ]
+ return {atoms,bonds}
+}
 export function MoleculeBoard(){
  const [doc,setDoc]=useState<Draft>(load)
  const [view,setView]=useState<View>(defaultView)
  const [history,setHistory]=useState<Draft[]>([])
+ const [questActive,setQuestActive]=useState(false)
  const [selected,setSelected]=useState<string|null>(null)
  const [hint,setHint]=useState('Drag any shape anywhere. Only compatible pieces brought close together will snap.')
  const [fall,setFall]=useState<Set<string>>(new Set())
@@ -288,7 +342,10 @@ export function MoleculeBoard(){
    return
   }
   lastTap.current=null
-  const actual=currentDoc.current,moving=molecule(actual,d.id),snap=bestSnap(actual,moving)
+  const actual=currentDoc.current,moving=molecule(actual,d.id)
+  // POS-grid n indicates a follower begins another family. A rectangle to the
+  // right of blue stays loose instead of being misread as its subordinate.
+  const snap=newFamilyAfterBlue(actual,moving)?null:bestSnap(actual,moving)
   if(snap){
    const adjusted=translate(actual,moving,snap.dx,snap.dy)
    const bonded={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
@@ -299,7 +356,7 @@ export function MoleculeBoard(){
    setHint(snap.relation==='support'?'Support attached beneath its blue head. The red/blue sequence stayed intact.':'Magnetic snap! Connected pieces now move together.')
   }else{
    setHistory(h=>[...h,d.before].slice(-40))
-   setHint('Free placement. The shape stays exactly where you released it.')
+   setHint(newFamilyAfterBlue(actual,moving)?'New family: circle → rectangle is marked n in STAX POS. It stays loose until attached appropriately.':'Free placement. The shape stays exactly where you released it.')
   }
  }
  function downBackground(e:ReactPointerEvent<SVGSVGElement>){
@@ -337,7 +394,7 @@ export function MoleculeBoard(){
   const previous=currentDoc.current,id=crypto.randomUUID()
   const next:Draft={...previous,atoms:[...previous.atoms,{id,kind,x,y,variant}]}
   // A deliberate palette DRAG can join on release, while a TAP remains loose.
-  const snap=client?bestSnap(next,new Set([id])):null
+  const snap=client&&!newFamilyAfterBlue(next,new Set([id]))?bestSnap(next,new Set([id])):null
   if(snap){
    const adjusted=translate(next,new Set([id]),snap.dx,snap.dy)
    const joined={...adjusted,bonds:[...adjusted.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
@@ -357,7 +414,8 @@ export function MoleculeBoard(){
   let snap:Snap|null=null
   if(p&&currentDoc.current.atoms.length<80){
    const ghost:Atom={id:'__palette_preview__',kind,x:worldX,y:worldY,variant}
-   snap=bestSnap({...currentDoc.current,atoms:[...currentDoc.current.atoms,ghost]},new Set([ghost.id]))
+   const trial={...currentDoc.current,atoms:[...currentDoc.current.atoms,ghost]}
+   snap=newFamilyAfterBlue(trial,new Set([ghost.id]))?null:bestSnap(trial,new Set([ghost.id]))
   }
   return {kind,variant,screenX,screenY,worldX,worldY,snap}
  }
@@ -381,12 +439,17 @@ export function MoleculeBoard(){
   addAt(p.kind,moved?{x:e.clientX,y:liftedY}:undefined,p.variant)
  }
  function paletteCancel(){paletteDrag.current=null;setPaletteHover(null)}
-  function undo(){const prev=history.at(-1);if(prev){update(prev);setHistory(v=>v.slice(0,-1));setHint('Undone.')}}
+  function loadQuest(){
+  const next=quest21();save(next);setCamera(fit(next));setSelected(null);setQuestActive(true)
+  setHint('Blueprint Level 21 loaded as a movable demonstration. Word roles are provisional; all shapes and bonds remain editable.')
+ }
+ function undo(){const prev=history.at(-1);if(prev){update(prev);setHistory(v=>v.slice(0,-1));setHint('Undone.')}}
  function remove(){if(!selected)return;save({atoms:doc.atoms.filter(a=>a.id!==selected),bonds:doc.bonds.filter(b=>b.parent!==selected&&b.child!==selected)});setSelected(null)}
  return <div className="stax-molecule-ui">
   <div className="stax-molecule-tools"><strong>Free magnetic workspace</strong><span>Move independently · snap only near compatible pieces</span>
-   <div className="stax-molecule-buttons"><button onClick={undo} disabled={!history.length}>Undo</button><button onClick={remove} disabled={!selected}>Remove</button><button onClick={()=>{save(empty());setSelected(null)}}>Clear</button></div>
+   <div className="stax-molecule-buttons"><button onClick={loadQuest} title="Load the 14-shape Level 21 source sentence" >Load Quest 21</button><button onClick={undo} disabled={!history.length}>Undo</button><button onClick={remove} disabled={!selected}>Remove</button><button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}}>Clear</button></div>
   </div>
+  {questActive&&<p className="stax-molecule-example">STAX QUEST · Level 21 — She’s buying a present for her best friend because her birthday is tomorrow. <small>Illustrative mapping; original slide does not label each shape with its individual word.</small></p>}
   <div className="stax-molecule-view-controls"><button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))}>Center</button><button onClick={()=>setCamera(fit(currentDoc.current))}>Fit all</button><button aria-label="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}>−</button><span>{Math.round(100*W/view.width)}%</span><button aria-label="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}>+</button></div>
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
