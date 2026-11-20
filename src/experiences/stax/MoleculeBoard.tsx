@@ -23,7 +23,7 @@ type Drag = { id:string;pointer:number;sx:number;sy:number;before:Draft;moved:bo
 type Pan = { pointer:number;startX:number;startY:number;before:View;moved:boolean }
 type TouchPoint = {x:number;y:number}
 type Pinch = {pointers:[number,number];startDistance:number;startView:View;anchor:{x:number;y:number}}
-type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number }
+type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number;insertBefore?:string }
 type PaletteHover = { kind:Kind;variant?:'small'|'large';screenX:number;screenY:number;worldX:number;worldY:number;snap:Snap|null }
 // Distances from the STAX Blueprint's .07-unit design grid; only snap geometry is quantised.
 const UNIT=SCALE*STAX_SPACING.unit
@@ -412,6 +412,34 @@ function hoveringBelowGreen(doc:Draft,blueId:string,orange:Atom):boolean {
   return Math.hypot(orange.x-x,orange.y-y)<=SNAP_RADIUS
  })
 }
+/** A red may be inserted into an existing BLUE → BLUE sequence without
+ * destroying either noun's support family. Only a free red is eligible.
+ * Match the space BETWEEN the blue heads, rather than whichever blue is closest.
+ */
+function redBetweenBlues(d:Draft,moving:Set<string>):Snap|null {
+ const red=d.atoms.find(a=>moving.has(a.id)&&a.kind==='triangle')
+ if(!red||molecule(d,red.id).size!==1)return null
+ let best:Snap|null=null
+ for(const bond of d.bonds.filter(b=>b.relation==='sequence')){
+  const left=byId(d,bond.parent),right=byId(d,bond.child)
+  if(left?.kind!=='circle'||right?.kind!=='circle'||moving.has(left.id)||moving.has(right.id))continue
+  if(right.x<=left.x)continue
+  const gapCentre=(left.x+atomWidth(left)+right.x)/2
+  const midY=(left.y+right.y)/2
+  const centreX=red.x+atomWidth(red)/2,centreY=red.y+atomHeight(red)/2
+  const dx=centreX-gapCentre,dy=centreY-midY
+  // A generous gesture zone: forgive an imperfect finger position in both axes.
+  if(Math.abs(dx)>SNAP_RADIUS+atomWidth(red)/2||
+     Math.abs(dy)>SNAP_RADIUS+atomHeight(red)/2)continue
+  const desiredX=left.x+atomWidth(left)+BLUE_RED_GAP
+  const desiredY=left.y+atomHeight(left)+4*UNIT
+  const score=Math.hypot(dx,dy)
+  const candidate:Snap={parent:left.id,child:red.id,relation:'sequence',
+   dx:desiredX-red.x,dy:desiredY-red.y,distance:score,insertBefore:right.id}
+  if(!best||candidate.distance<best.distance)best=candidate
+ }
+ return best
+}
 /** Returns only plausible near-drop join geometry; does NOT move anything itself. */
 function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  let best:Snap|null=null
@@ -624,6 +652,21 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  * A second under-red orange reflows its sibling locally; no head is relocated.
  */
 function resolveMagnetBase(d:Draft,moving:Set<string>,snap:Snap):Draft {
+ if(snap.insertBefore){
+  const redMoved=translate(d,moving,snap.dx,snap.dy)
+  const red=byId(redMoved,snap.child),right=byId(redMoved,snap.insertBefore)
+  // The old blue successor (and its entire downstream molecule) becomes
+  // the successor of red, preserving attached supporters and later sequence.
+  const destinationX=red.x+atomWidth(red)+RED_BLUE_GAP
+  const destinationY=red.y+atomHeight(red)+7*UNIT
+  const repositioned=translate(redMoved,descendants(redMoved,right.id),
+   destinationX-right.x,destinationY-right.y)
+  return {...repositioned,bonds:[
+   ...repositioned.bonds.filter(b=>!(b.relation==='sequence'&&b.parent===snap.parent&&b.child===snap.insertBefore)),
+   {parent:snap.parent,child:snap.child,relation:'sequence'},
+   {parent:snap.child,child:snap.insertBefore,relation:'sequence'}
+  ]}
+ }
  const translated=translate(d,moving,snap.dx,snap.dy)
  const host=byId(d,snap.parent)
  const slot=snap.relation==='support'&&host?.kind==='hexagon'&&byId(d,snap.child)?.kind==='hexagon'
@@ -696,7 +739,7 @@ function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
  return alignSequenceFamilyClearance(resolveMagnetBase(d,moving,snap))
 }
 function eligibleMagnet(d:Draft,moving:Set<string>):Snap|null {
- return newFamilyAfterBlue(d,moving)?null:bestSnap(d,moving)
+ return newFamilyAfterBlue(d,moving)?null:redBetweenBlues(d,moving)??bestSnap(d,moving)
 }
 /** Project every changed atom to its exact post-bond coordinates and rendered size. */
 function magneticProjection(before:Draft,after:Draft):Atom[] {
