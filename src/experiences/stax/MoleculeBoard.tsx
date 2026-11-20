@@ -164,6 +164,36 @@ function ensureFourOrangeBlueprint(d:Draft):Draft {
   })
   if(stale)next=alignRedSupporters(next,red.id)
  }
+ // Existing six/seven-piece drafts kept the old touching middle pair in
+ // localStorage. Reflow those only; never disturb approved three/four layouts.
+ for(const red of d.atoms.filter(a=>a.kind==='triangle')){
+  if(redOrangeFamilySize(next,red.id)<6)continue
+  const top=orangeChildren(next,red.id)
+  if(top.length!==2)continue
+  const middle=orangeChildren(next,top[0].id)
+  if(middle.length!==2||orangeChildren(next,middle[0].id).length!==2)continue
+  const topLeft=byId(next,top[0].id)
+  const correct=positionChildren(
+   {x:topLeft.x,y:topLeft.y,width:atomWidth(topLeft),height:atomHeight(topLeft)},
+   middle.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)})),
+   {gap:GAP,belowGap:VERTICAL}
+  )
+  const bottom=orangeChildren(next,middle[0].id)
+  const staleMiddle=middle.some(a=>Math.abs(a.x-correct.get(a.id)!.x)>SCALE*.05||
+   Math.abs(a.y-correct.get(a.id)!.y)>SCALE*.05)
+  let staleBottom=false
+  if(redOrangeFamilySize(next,red.id)>=7&&bottom.length===2){
+   const lowerParent=byId(next,middle[0].id)
+   const expected=positionChildren(
+    {x:lowerParent.x,y:lowerParent.y,width:atomWidth(lowerParent),height:atomHeight(lowerParent)},
+    bottom.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)})),
+    {gap:GAP,belowGap:VERTICAL}
+   )
+   staleBottom=bottom.some(a=>Math.abs(a.x-expected.get(a.id)!.x)>SCALE*.05||
+    Math.abs(a.y-expected.get(a.id)!.y)>SCALE*.05)
+  }
+  if(staleMiddle||staleBottom)next=alignRedSupporters(next,red.id)
+ }
  return next
 }
 /** Visual size follows its current structural position, not the palette choice. */
@@ -373,14 +403,31 @@ function alignOrangeTierChildren(doc:Draft,parentId:string,seen=new Set<string>(
  const parentBox={x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)}
  const ownerId=parentOfSupport(doc,parentId)
  const owner=ownerId?byId(doc,ownerId):undefined
- const siblings=owner?.kind==='triangle'?orangeChildren(doc,owner.id):[]
- const rightDirectRedOrange=siblings.length===2&&siblings[1].id===parentId
+ const siblings=owner&&(owner.kind==='triangle'||owner.kind==='hexagon')?orangeChildren(doc,owner.id):[]
+ const rightDirectRedOrange=owner?.kind==='triangle'&&siblings.length===2&&siblings[1].id===parentId
+ // The seventh orange beneath the RIGHT member of the second paired row
+ // uses the same staggered right-side port as the third orange. The older
+ // generic single-child port shifts it too far left toward the bottom pair.
+ const rightPairedOrange=rightDirectRedOrange||(
+  owner?.kind==='hexagon'&&siblings.length===2&&siblings[1].id===parentId)
+ // Blueprint: at six or seven, the MIDDLE pair is separated by .28;
+ // only the BOTTOM pair touches at its inner tips. Leave four-orange X intact.
+ const rootId=orangeRedRoot(doc,parentId)
+ const familySize=rootId?redOrangeFamilySize(doc,rootId):0
+ const middleOfDeepFamily=owner?.kind==='triangle'&&
+  familySize>=6&&children.length===2&&
+  orangeChildren(doc,children[0].id).length===2
+ // On SEVEN, the lower pair opens the same small gap as the middle pair.
+ // On SIX, preserve its approved touching inner corners.
+ const bottomOfSeven=owner?.kind==='hexagon'&&
+  familySize>=7&&children.length===2
+ const pair=[{id:children[0]?.id,width:smallW,height:smallH},
+  {id:children[1]?.id,width:smallW,height:smallH}]
  const positions:Map<string,{x:number;y:number}>=children.length===2
-  ?positionRedOrangeCrossPair(parentBox,[
-    {id:children[0].id,width:smallW,height:smallH},
-    {id:children[1].id,width:smallW,height:smallH}
-   ],VERTICAL)
-  :new Map([[children[0].id,rightDirectRedOrange
+  ?middleOfDeepFamily||bottomOfSeven
+   ?positionChildren(parentBox,pair,{gap:GAP,belowGap:VERTICAL})
+   :positionRedOrangeCrossPair(parentBox,[pair[0],pair[1]],VERTICAL)
+  :new Map([[children[0].id,rightPairedOrange
     ?redRightModifierPosition(parent):nestedChildPosition(parent,children[0])]])
  let next=doc
  for(const child of children){

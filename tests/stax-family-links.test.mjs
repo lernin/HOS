@@ -503,3 +503,48 @@ test('saved four-orange arrangement is reflowed at load; approved three-orange l
  assert.match(rule,/gap:11\*UNIT,belowGap:VERTICAL/)
  assert.match(rule,/if\(stale\)next=alignRedSupporters\(next,red.id\)/)
 })
+
+
+test('six red-rooted oranges extend as three paired tiers; seventh nests under middle-right',()=>{
+ const atoms=['red','topL','topR','middleL','middleR','bottomL','bottomR','seventh'].map(id=>({id,kind:id==='red'?'triangle':'hexagon'}))
+ const bonds=[
+  ['red','topL'],['red','topR'],
+  ['topL','middleL'],['topL','middleR'],
+  ['middleL','bottomL'],['middleL','bottomR']
+ ].map(([parent,child])=>({parent,child,relation:'support'}))
+ const graph={atoms,bonds}
+ assert.deepEqual(orangeTierChildren(graph,'topL'),['middleL','middleR'])
+ assert.deepEqual(orangeTierChildren(graph,'middleL'),['bottomL','bottomR'])
+ assert.equal(eligibleOrangeTierSlot(graph,'seventh','middleR'),'right-modifier')
+ assert.equal(eligibleOrangeTierSlot(graph,'seventh','middleL'),null,'bottom pair already occupies left tier')
+ assert.equal(eligibleOrangeTierSlot(graph,'seventh','topR'),'right-modifier')
+})
+
+test('six-orange bottom pair is crossed/touching and seventh uses right paired stagger',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const tier=board.slice(board.indexOf('function alignOrangeTierChildren('),board.indexOf('function miniFamilyPosition('))
+ assert.ok(tier.includes('children.length===2'))
+ assert.ok(tier.includes('middleOfDeepFamily'))
+ assert.ok(tier.includes('?positionChildren(parentBox,pair,{gap:GAP,belowGap:VERTICAL})'))
+ assert.ok(tier.includes(':positionRedOrangeCrossPair(parentBox,[pair[0],pair[1]],VERTICAL)'))
+ assert.ok(tier.includes("owner?.kind==='hexagon'&&siblings.length===2&&siblings[1].id===parentId"))
+ assert.ok(tier.includes('?redRightModifierPosition(parent):nestedChildPosition(parent,children[0])'))
+ assert.ok(board.includes("slot==='right-modifier'?redRightModifierPosition(b):nestedChildPosition(b,a)"))
+})
+
+test('six has touching bottom; seven opens bottom gap while both separate middle',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const tier=board.slice(board.indexOf('function alignOrangeTierChildren('),board.indexOf('function miniFamilyPosition('))
+ assert.ok(tier.includes('familySize>=6'))
+ assert.ok(tier.includes('familySize>=7&&children.length===2'))
+ assert.ok(tier.includes('middleOfDeepFamily||bottomOfSeven'))
+ assert.ok(tier.includes("owner?.kind==='triangle'"))
+ assert.ok(tier.includes('orangeChildren(doc,children[0].id).length===2'))
+ assert.ok(tier.includes('gap:GAP,belowGap:VERTICAL'))
+ assert.ok(tier.includes('positionRedOrangeCrossPair(parentBox,[pair[0],pair[1]],VERTICAL)'))
+ const reflow=board.slice(board.indexOf('function ensureFourOrangeBlueprint('),board.indexOf('/** Visual size follows'))
+ assert.ok(reflow.includes('if(redOrangeFamilySize(next,red.id)<6)continue'))
+ assert.ok(reflow.includes('middle.some('))
+ assert.ok(reflow.includes('staleBottom=bottom.some('))
+ assert.ok(reflow.includes('next=alignRedSupporters(next,red.id)'))
+})
