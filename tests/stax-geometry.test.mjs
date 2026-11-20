@@ -193,21 +193,28 @@ test('right red orange third is staggered but not as far left as pink-style anch
  close(result.y,parent.y+parent.height+STAX_SPACING.attachment)
 })
 
-test('four compact red oranges: lower children form an X with room for the right uncle',()=>{
+test('four compact red oranges: centered upper pair with .77 gap and touching lower X',()=>{
  const w=2.775*(3787.2/4147.2),h=1.566*(2332.8/2340.864)
  const red={x:0,y:0,width:4.6,height:3.548}
  const bottom=[{id:'grandchild1',width:w,height:h},{id:'grandchild2',width:w,height:h}]
  const lower=positionRedOrangeCrossPair({x:0,y:0,width:w,height:h},bottom,.28)
  const first=lower.get('grandchild1'),second=lower.get('grandchild2')
  close(first.x+w-second.x,w*.025)
- const overhang=(2*w-w*.025-w)/2
+ // Blueprint: the two upper compact oranges have their own .77 gap.
+ // The lower pair hangs under LEFT, and MUST NOT push the upper-right uncle away.
  const top=positionChildren(red,[
-  {id:'parent',width:w,height:h,extentLeft:-overhang,extentRight:w+overhang},
-  {id:'uncle',width:w,height:h}
- ],{gap:.28,belowGap:.28})
+  {id:'parent',width:w,height:h},{id:'uncle',width:w,height:h}
+ ],{gap:.77,belowGap:.28})
  const parent=top.get('parent'),uncle=top.get('uncle')
- const rightmostDescendant=parent.x+(second.x+w)
- assert.ok(uncle.x>rightmostDescendant,'the right uncle clears the entire lower paired X')
- close(uncle.x-rightmostDescendant,.28)
- close(first.x+w-second.x,w*.025)
+ close(uncle.x-(parent.x+w),.77)
+ close((parent.x+uncle.x+w)/2,red.x+red.width/2)
+ const lowerRightmost=parent.x+second.x+w
+ assert.ok(lowerRightmost>uncle.x,'lower-right tip can extend horizontally beneath uncle')
+ assert.ok(lowerRightmost<uncle.x+w,'lower X should not overrun the complete uncle')
+ // Despite horizontal extent overlap, their vertical bands are separate.
+ assert.ok(parent.y+parent.height+.28>=uncle.y+ h)
+ const three=positionChildren(red,[{id:'left',width:w,height:h},{id:'right',width:w,height:h}],{
+  gap:.28,belowGap:.28
+ })
+ close(three.get('right').x-(three.get('left').x+w),.28)
 })
