@@ -331,29 +331,6 @@ function eligibleAdverbHost(doc:Draft,greenId:string):boolean {
  // The preceding determiner and any other adjectives are NOT the adverb's parent.
  return !doc.bonds.some(b=>b.parent===greenId&&b.relation==='support'&&byId(doc,b.child).kind==='hexagon')
 }
-/** Descendant orange chains can project left of a green modifier.
- * Compute their structural extent from the source-derived single-child rule.
- * A chain changes family bounds, never the word-order predecessor bond.
- */
-function nestedFamilyLeftExtent(doc:Draft,rootId:string,rootWidth:number):number {
- let currentId=rootId,parentWidth=rootWidth,offset=0,leftmost=0
- const seen=new Set<string>()
- while(!seen.has(currentId)){
-  seen.add(currentId)
-  const current=byId(doc,currentId)
-  // Purple supports purple; green and orange support orange.
-  const childKind=current.kind==='rectangle'?'rectangle':'hexagon'
-  const childId=supportChildOfKind(doc,currentId,childKind)
-  if(!childId)break
-  const child=byId(doc,childId)
-  const childWidth=child.kind==='hexagon'?smallWidth('hexagon'):atomWidth(child)
-  offset+=parentWidth/2-childWidth
-  leftmost=Math.min(leftmost,offset)
-  currentId=childId
-  parentWidth=childWidth
- }
- return leftmost
-}
 /** Direct noun supporters stay side by side; nested adverbs are NEVER row members. */
 function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:number}> {
  const blue=byId(doc,blueId),items=blueSupportAtoms(doc,blueId)
@@ -361,11 +338,10 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
  const specs:FamilyChild[]=items.map(a=>{
   const w=a.kind==='oval'?smallWidth('oval'):a.kind==='hexagon'?smallWidth('hexagon'):width(a.kind)
   const h=a.kind==='oval'?height('oval')*SMALL_GREEN_Y:a.kind==='hexagon'?height('hexagon')*SMALL_ORANGE_Y:height(a.kind)
-  // Consider descendants when centering a ROW of sibling families. An adverb
-  // under a green adjective extends left of the green's own silhouette.
-  // This is a structural extent, not an arbitrary on-screen drag position.
-  const nestedLeft=a.kind==='oval'||a.kind==='rectangle'?nestedFamilyLeftExtent(doc,a.id,w):0
-  return {id:a.id,width:w,height:h,extentLeft:nestedLeft,extentRight:w}
+  // Only immediate supporters determine this row's center.
+  // A deep purple/orange chain is carried with its direct parent but cannot
+  // shift the circle or its sibling supporters when a new descendant joins.
+  return {id:a.id,width:w,height:h}
  })
  return positionChildren({x:blue.x,y:blue.y,width:width('circle'),height:height('circle')},
   specs,{gap:GAP,belowGap:VERTICAL})

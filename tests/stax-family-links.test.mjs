@@ -548,3 +548,17 @@ test('six has touching bottom; seven opens bottom gap while both separate middle
  assert.ok(reflow.includes('staleBottom=bottom.some('))
  assert.ok(reflow.includes('next=alignRedSupporters(next,red.id)'))
 })
+
+
+test('blue circle centers its immediate supporters, never the recursive descendant chain',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const row=board.slice(board.indexOf('function blueSupportPositions('),board.indexOf('/** A single orange beneath'))
+ assert.ok(row.includes('const blue=byId(doc,blueId),items=blueSupportAtoms(doc,blueId)'))
+ assert.ok(row.includes('return {id:a.id,width:w,height:h}'))
+ assert.ok(row.includes('return positionChildren('))
+ assert.doesNotMatch(row,/nestedFamilyLeftExtent|extentLeft|descendants\(/)
+ const align=board.slice(board.indexOf('function alignSupporters('),board.indexOf('function miniFamilyPosition('))
+ // Parent/child bond topology, not the shape chain's rendered bounding box,
+ // is the only source of sibling membership for centering.
+ assert.ok(board.includes("doc.bonds.filter(b=>b.relation==='support'&&b.parent===blueId)"))
+})
