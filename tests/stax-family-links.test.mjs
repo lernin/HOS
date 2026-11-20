@@ -488,6 +488,6 @@ test('direct red two-orange X is isolated from compact tiers and all other famil
  const pair=board.slice(start,end)
  assert.match(pair,/items\.length===2&&!compact[\s\S]*?positionRedOrangeCrossPair\(/)
  assert.match(pair,/orange\.length===2&&redOrangeFamilySize\(doc,redId\)===2[\s\S]*?positionRedOrangeCrossPair\(/)
- assert.match(pair,/positionChildren\(parent,children,\{gap:GAP,belowGap:VERTICAL\}\)/)
+ assert.match(pair,/positionChildren\(parent,children,\{gap:upperGap,belowGap:VERTICAL\}\)/)
  assert.match(board,/if\(redRoot\)return redOrangeFamilySize\(d,redRoot\)>2\?'small':'large'/)
 });
