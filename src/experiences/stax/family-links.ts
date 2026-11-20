@@ -233,6 +233,68 @@ export function canNestRightRedOrange(
  return oranges.length===2&&oranges[1].child===parentId
 }
 
+
+/**
+ * Orange tiers beneath RED verbs are grammatical families, not reading-order
+ * neighbors. A paired tier has exactly two side-by-side orange members:
+ *   - the LEFT member can open the next paired bridge/gate tier;
+ *   - the RIGHT member can hold a single modifier (or insert above one).
+ * An orange below a singleton can continue the same modifier chain.
+ * The caller never guesses labels such as "to", "not" or "really".
+ */
+export type OrangeTierSlot = 'left-pair'|'right-modifier'|'modifier-chain'|'insert' 
+export function orangeTierChildren(graph:FamilyGraph,parentId:string):string[] {
+ return graph.bonds.filter(b=>b.parent===parentId&&b.relation==='support'&&
+  graph.atoms.some(a=>a.id===b.child&&a.kind==='hexagon')).map(b=>b.child)
+}
+export function orangeRootedInRed(graph:FamilyGraph,parentId:string):boolean {
+ if(graph.atoms.find(a=>a.id===parentId)?.kind!=='hexagon')return false
+ const seen=new Set<string>()
+ let current=parentId
+ while(!seen.has(current)){
+  seen.add(current)
+  const ancestor=supportParent(graph,current)
+  const kind=graph.atoms.find(a=>a.id===ancestor)?.kind
+  if(kind==='triangle')return true
+  if(kind!=='hexagon')return false
+  current=ancestor!
+ }
+ return false
+}
+export function eligibleOrangeTierSlot(graph:FamilyGraph,movingId:string,parentId:string):OrangeTierSlot|null {
+ if(graph.atoms.find(a=>a.id===movingId)?.kind!=='hexagon'||
+    graph.atoms.find(a=>a.id===parentId)?.kind!=='hexagon'||
+    movingId===parentId||supportParent(graph,movingId)||
+    !orangeRootedInRed(graph,parentId))return null
+ const owner=supportParent(graph,parentId)!
+ const siblings=orangeTierChildren(graph,owner)
+ const index=siblings.indexOf(parentId)
+ const existing=orangeTierChildren(graph,parentId)
+ if(index<0||existing.length>1)return null
+ // Right-hand member of a pair owns its modifier chain.
+ if(siblings.length===2&&index===1)return existing.length===1?'insert':'right-modifier'
+ // Left-hand member of a pair grows a further pair, provisionally unlabelled.
+ if(siblings.length===2&&index===0)return existing.length===0?'left-pair':null
+ // A single orange nested below a right member may continue indefinitely.
+ if(siblings.length===1&&index===0)return existing.length===1?'insert':'modifier-chain'
+ return null
+}
+/** Insertion retains the previous modifier as the new orange's child.
+ * Never rename old words, move unrelated graph branches or create cycles.
+ */
+export function insertOrangeBeforeExisting<T extends FamilyNode,E extends FamilyEdge>(
+ graph:{atoms:T[];bonds:E[]},parentId:string,movingId:string
+):{atoms:T[];bonds:E[]} {
+ if(eligibleOrangeTierSlot(graph,movingId,parentId)!=='insert')return graph
+ const prior=orangeTierChildren(graph,parentId)[0]
+ if(!prior||prior===movingId)return graph
+ return {...graph,bonds:[
+  ...graph.bonds.filter(b=>!(b.relation==='support'&&b.parent===parentId&&b.child===prior)),
+  {parent:parentId,child:movingId,relation:'support'} as E,
+  {parent:movingId,child:prior,relation:'support'} as E,
+ ]}
+}
+
 /** One direct orange ("not") slot per object blue. Existing green or pink
  * supports do not block late insertion; the row is normalized before them.
  * Orange nested beneath pink/green is a separate grammatical relationship.
