@@ -118,24 +118,20 @@ function alignRedSupporters(doc:Draft,redId:string):Draft {
  const red=byId(doc,redId),orange=orangeChildren(doc,redId)
  if(!red||orange.length<1)return doc
  const parent={x:red.x,y:red.y,width:width('triangle'),height:height('triangle')}
- const children=orange.map(a=>{
-  const w=atomWidth(a),h=atomHeight(a)
-  // When the LEFT direct orange owns a lower pair, reserve the entire X
-  // footprint before placing its sibling (the right-hand "uncle").
-  const lower=orangeChildren(doc,a.id)
-  if(lower.length===2){
-   const lowerW=smallWidth('hexagon')
-   const halfOverhang=Math.max(0,(2*lowerW-lowerW*.025-w)/2)
-   return {id:a.id,width:w,height:h,extentLeft:-halfOverhang,extentRight:w+halfOverhang}
-  }
-  return {id:a.id,width:w,height:h}
- })
+ const children=orange.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)}))
+ // A pair BELOW the LEFT supporter already occupies a lower vertical row.
+ // Do not include those grandchildren in the upper row's horizontal widths:
+ // that previously shoved the right "uncle" far away and shifted the row
+ // off the red's center. The Blueprint calls for a modest .77 upper gap,
+ // with the lower X pair allowed to project underneath the upper-right orange.
+ const hasLeftLowerPair=orange.length===2&&orangeChildren(doc,orange[0].id).length===2
+ const upperGap=hasLeftLowerPair?11*UNIT:GAP
  // Exactly two direct large hexagons cross at their inner tips (Blueprint X).
  // If another orange is added to the red-rooted family, keep existing compact
  // tier spacing; neither purple nor other support rows use this exception.
  const positions=orange.length===2&&redOrangeFamilySize(doc,redId)===2
   ?positionRedOrangeCrossPair(parent,[children[0],children[1]],VERTICAL)
-  :positionChildren(parent,children,{gap:GAP,belowGap:VERTICAL})
+  :positionChildren(parent,children,{gap:upperGap,belowGap:VERTICAL})
  let next=doc
  for(const child of orange){
   const a=byId(next,child.id),target=positions.get(child.id)!
