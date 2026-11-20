@@ -178,9 +178,21 @@ function ensureFourOrangeBlueprint(d:Draft):Draft {
    middle.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)})),
    {gap:GAP,belowGap:VERTICAL}
   )
-  if(middle.some(a=>Math.abs(a.x-correct.get(a.id)!.x)>SCALE*.05||
-   Math.abs(a.y-correct.get(a.id)!.y)>SCALE*.05))
-   next=alignRedSupporters(next,red.id)
+  const bottom=orangeChildren(next,middle[0].id)
+  const staleMiddle=middle.some(a=>Math.abs(a.x-correct.get(a.id)!.x)>SCALE*.05||
+   Math.abs(a.y-correct.get(a.id)!.y)>SCALE*.05)
+  let staleBottom=false
+  if(redOrangeFamilySize(next,red.id)>=7&&bottom.length===2){
+   const lowerParent=byId(next,middle[0].id)
+   const expected=positionChildren(
+    {x:lowerParent.x,y:lowerParent.y,width:atomWidth(lowerParent),height:atomHeight(lowerParent)},
+    bottom.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)})),
+    {gap:GAP,belowGap:VERTICAL}
+   )
+   staleBottom=bottom.some(a=>Math.abs(a.x-expected.get(a.id)!.x)>SCALE*.05||
+    Math.abs(a.y-expected.get(a.id)!.y)>SCALE*.05)
+  }
+  if(staleMiddle||staleBottom)next=alignRedSupporters(next,red.id)
  }
  return next
 }
@@ -401,13 +413,18 @@ function alignOrangeTierChildren(doc:Draft,parentId:string,seen=new Set<string>(
  // Blueprint: at six or seven, the MIDDLE pair is separated by .28;
  // only the BOTTOM pair touches at its inner tips. Leave four-orange X intact.
  const rootId=orangeRedRoot(doc,parentId)
+ const familySize=rootId?redOrangeFamilySize(doc,rootId):0
  const middleOfDeepFamily=owner?.kind==='triangle'&&
-  !!rootId&&redOrangeFamilySize(doc,rootId)>=6&&
-  children.length===2&&orangeChildren(doc,children[0].id).length===2
+  familySize>=6&&children.length===2&&
+  orangeChildren(doc,children[0].id).length===2
+ // On SEVEN, the lower pair opens the same small gap as the middle pair.
+ // On SIX, preserve its approved touching inner corners.
+ const bottomOfSeven=owner?.kind==='hexagon'&&
+  familySize>=7&&children.length===2
  const pair=[{id:children[0]?.id,width:smallW,height:smallH},
   {id:children[1]?.id,width:smallW,height:smallH}]
  const positions:Map<string,{x:number;y:number}>=children.length===2
-  ?middleOfDeepFamily
+  ?middleOfDeepFamily||bottomOfSeven
    ?positionChildren(parentBox,pair,{gap:GAP,belowGap:VERTICAL})
    :positionRedOrangeCrossPair(parentBox,[pair[0],pair[1]],VERTICAL)
   :new Map([[children[0].id,rightPairedOrange
