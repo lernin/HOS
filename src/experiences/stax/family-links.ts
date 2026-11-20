@@ -167,7 +167,9 @@ export function withRedCompanion<T extends FamilyNode, E extends FamilyEdge>(
  if(graph.atoms.find(a=>a.id===redId)?.kind!=='triangle')return graph
  const direct=graph.bonds.filter(b=>b.relation==='support'&&b.parent===redId&&
   graph.atoms.some(a=>a.id===b.child&&a.kind==='hexagon'))
- if(direct.length!==1)return graph
+ // The persisted workspace accepts at most 80 shapes; do not silently
+ // create a partner that makes the saved board invalid on reload.
+ if(direct.length!==1||graph.atoms.length>=80)return graph
  const partnerId='red-companion-'+direct[0].child
  if(graph.atoms.some(a=>a.id===partnerId))return graph
  return {
