@@ -221,7 +221,7 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
 /** A child's right edge meets its parent centerline, with the Blueprint
  * .28 vertical gap; valid for orange and purple nested families alike.
  */
-function redRightChildPosition(parent:Atom,child:Atom) {
+function redRightChildPosition(parent:Atom) {
  return positionRedRightNestedOrange(
   {x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)},
   {width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y},
@@ -253,7 +253,7 @@ function alignNestedChain(doc:Draft,startId:string,childKind:'hexagon'|'rectangl
   const red=redId?byId(next,redId):undefined
   const isRightRedOrange=childKind==='hexagon'&&red?.kind==='triangle'&&
    orangeChildren(next,red!.id).at(-1)?.id===parent.id
-  const target=isRightRedOrange?redRightChildPosition(parent,child):nestedChildPosition(parent,child)
+  const target=isRightRedOrange?redRightChildPosition(parent):nestedChildPosition(parent,child)
   next=translate(next,descendants(next,child.id),target.x-child.x,target.y-child.y)
   parentId=childId
  }
@@ -401,7 +401,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    // This is a nested family, never a third direct red support.
    if(a.kind==='hexagon'&&b.kind==='hexagon'&&
       canNestRightRedOrange(d,a.id,b.id)&&!molecule(d,a.id).has(b.id)){
-    const target=redRightChildPosition(b,a)
+    const target=redRightChildPosition(b)
     offered({parent:b.id,child:a.id,relation:'support',
      dx:target.x-a.x,dy:target.y-a.y,
      distance:Math.hypot(target.x-a.x,target.y-a.y)})
