@@ -297,3 +297,34 @@
 .stax-molecule-ui[data-theme='hologram'] svg g[data-kind] {filter:drop-shadow(0 0 8px #fd98f9a0) drop-shadow(0 0 20px #a36afe75)}
 .stax-molecule-ui[data-theme='cosmic'] svg g[data-kind] {filter:drop-shadow(0 0 9px #8584ffab) drop-shadow(0 0 17px #40d4ed55)}
 @media(prefers-reduced-motion:reduce){.stax-molecule-ui svg g[data-kind]{animation:none!important}}
+
+/* Golden Line — Letterz gold-ink hues on a quiet black lacquer stage.
+   SVG metallic gradient carries the ink; CSS shadows are a cheap static halo. */
+.stax-molecule-ui[data-theme='golden-line'] {
+ --stax-bg:#08090c;--stax-panel:rgba(18,17,16,.95);
+ --stax-button:#211b14;--stax-border:#8a642c;
+ --stax-text:#ffe9b1;--stax-caption:#cba566;
+}
+.stax-molecule-ui[data-theme='golden-line'] .stax-molecule-canvas {
+ background:
+  radial-gradient(ellipse at 48% 38%,rgba(180,119,36,.15) 0%,transparent 56%),
+  radial-gradient(ellipse at 85% 80%,rgba(121,79,29,.10) 0%,transparent 38%),
+  #08090c;
+}
+.stax-molecule-ui[data-theme='golden-line'] .stax-molecule-dock,
+.stax-molecule-ui[data-theme='golden-line'] .stax-molecule-palette {
+ box-shadow:0 4px 24px #00000085,inset 0 1px 0 #d7ae4c20;
+}
+.stax-molecule-ui[data-theme='golden-line'] .stax-molecule-canvas svg g[data-kind] {
+ filter:drop-shadow(0 0 2px #fff1ac86) drop-shadow(0 0 5px #ce921d9f);
+}
+.stax-molecule-ui[data-theme='golden-line'] .stax-molecule-palette button svg {
+ filter:drop-shadow(0 0 2px #fff1ac50) drop-shadow(0 0 4px #ce921d7a);
+}
+.stax-molecule-ui[data-theme='golden-line'] .stax-molecule-canvas svg .stax-resonant-target,
+.stax-molecule-ui[data-theme='golden-line'] .stax-molecule-canvas svg .stax-resonance-ghost {
+ filter:drop-shadow(0 0 4px #fff1ac) drop-shadow(0 0 11px #ce921d);
+}
+.stax-molecule-ui[data-theme='golden-line'] .stax-lifted-ghost svg {
+ filter:drop-shadow(0 0 3px #fff1ac7a) drop-shadow(0 0 8px #ce921d9a);
+}
