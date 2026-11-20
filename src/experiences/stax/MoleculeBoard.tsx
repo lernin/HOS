@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
-import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, type FamilyChild } from './geometry'
+import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -132,6 +132,55 @@ function descendants(d:Draft,id:string) {
 }
 function translate(d:Draft,ids:Set<string>,dx:number,dy:number):Draft {
  return {...d,atoms:d.atoms.map(a=>ids.has(a.id)?{...a,x:a.x+dx,y:a.y+dy}:a)}
+}
+/** A sentence FAMILY is a head and everything attached through support/pair,
+ * excluding ordered sequence followers. Never measure just the head polygon:
+ * a rectangle or adverb can project outside it in either direction. */
+function supportFootprint(d:Draft,headId:string):{x:number;y:number;width:number;height:number}[]{
+ const ids=new Set<string>([headId]),queue=[headId]
+ for(let i=0;i<queue.length;i++)for(const edge of d.bonds){
+  const candidate=edge.relation==='support'&&edge.parent===queue[i]?edge.child:
+   edge.relation==='pair'&&edge.parent===queue[i]?edge.child:
+   edge.relation==='pair'&&edge.child===queue[i]?edge.parent:null
+  if(candidate&&!ids.has(candidate)){ids.add(candidate);queue.push(candidate)}
+ }
+ return [...ids].map(id=>byId(d,id)).filter(Boolean).map(a=>({
+  x:a.x,y:a.y,width:atomWidth(a),height:atomHeight(a)
+ }))
+}
+/** The source distinguishes head-to-head row spacing (2.03), staircase
+ * transitions (.49), and connector spacing (.98). Same-blue family heads use
+ * 2.03, never the .49 staircase rule. */
+function sequenceHeadGap(left:Atom,right:Atom):number {
+ if(left.kind==='diamond'||right.kind==='diamond')return CONNECTOR_GAP
+ if(left.kind==='circle'&&right.kind==='triangle')return BLUE_RED_GAP
+ if(left.kind==='triangle'&&right.kind==='circle')return RED_BLUE_GAP
+ return RED_BLUE_GAP
+}
+/** Expand following family branches to honor both the head port and the
+ * silhouettes of children at intersecting heights. Never change supporter
+ * geometry or the relative coordinates within a family. */
+function alignSequenceFamilyClearance(doc:Draft):Draft {
+ let next=doc
+ const edges=doc.bonds.filter(b=>b.relation==='sequence')
+ for(let pass=0;pass<edges.length;pass++){
+  let changed=false
+  for(const edge of edges){
+   const left=byId(next,edge.parent),right=byId(next,edge.child)
+   if(!left||!right)continue
+   const a=supportFootprint(next,left.id),b=supportFootprint(next,right.id)
+   const shift=requiredFamilyFollowerShift(
+    {x:left.x,y:left.y,width:atomWidth(left),height:atomHeight(left)},
+    {x:right.x,y:right.y,width:atomWidth(right),height:atomHeight(right)},
+    a,b,sequenceHeadGap(left,right),CONNECTOR_GAP)
+   if(shift>.01){
+    next=translate(next,descendants(next,right.id),shift,0)
+    changed=true
+   }
+  }
+  if(!changed)break
+ }
+ return next
 }
 function box(d:Draft) {
  if(!d.atoms.length)return null
@@ -317,7 +366,7 @@ function reflowAfterRemoval(d:Draft):Draft {
   next=alignRedSupporters(next,red.id)
  }
  for(const blue of next.atoms.filter(a=>a.kind==='circle'))next=alignSupporters(next,blue.id)
- return next
+ return alignSequenceFamilyClearance(next)
 }
 function supportPosition(blue:Atom,support:Atom,d:Draft) {
  const proposed:Draft={...d,bonds:[...d.bonds,{parent:blue.id,child:support.id,relation:'support'}]}
@@ -542,7 +591,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  * head without consuming that head's sequence port.
  * A second under-red orange reflows its sibling locally; no head is relocated.
  */
-function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
+function resolveMagnetBase(d:Draft,moving:Set<string>,snap:Snap):Draft {
  const translated=translate(d,moving,snap.dx,snap.dy)
  const host=byId(d,snap.parent)
  const slot=snap.relation==='support'&&host?.kind==='hexagon'&&byId(d,snap.child)?.kind==='hexagon'
@@ -610,6 +659,9 @@ function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
   return typed
  }
  return typed
+}
+function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
+ return alignSequenceFamilyClearance(resolveMagnetBase(d,moving,snap))
 }
 function eligibleMagnet(d:Draft,moving:Set<string>):Snap|null {
  return newFamilyAfterBlue(d,moving)?null:bestSnap(d,moving)
@@ -1020,7 +1072,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   function loadQuest(){
   // The example's under-red ports use the same exact positions as live magnets.
   const example=normalizeRoles(quest21())
-  const next=alignRedSupporters(alignRedSupporters(example,'q21-buy'),'q21-is')
+  const next=alignSequenceFamilyClearance(alignRedSupporters(alignRedSupporters(example,'q21-buy'),'q21-is'))
   save(next);setCamera(fit(next,aspect()));setSelected(null);setQuestActive(true)
   setHint('Blueprint Level 21 loaded as a movable demonstration. Word roles are provisional; all shapes and bonds remain editable.')
  }
