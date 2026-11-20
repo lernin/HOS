@@ -523,8 +523,9 @@ test('six red-rooted oranges extend as three paired tiers; seventh nests under m
 test('six-orange bottom pair is crossed/touching and seventh uses right paired stagger',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const tier=board.slice(board.indexOf('function alignOrangeTierChildren('),board.indexOf('function miniFamilyPosition('))
- assert.match(tier,/children.length===2[\\s\\S]*?positionRedOrangeCrossPair/)
- assert.match(tier,/owner\\?\\.kind==='hexagon'&&siblings.length===2&&siblings\\[1\\]\\.id===parentId/)
- assert.match(tier,/rightPairedOrange[\\s\\S]*?redRightModifierPosition\\(parent\\)/)
- assert.match(board,/slot==='right-modifier'\\?redRightModifierPosition\\(b\\)/)
+ assert.ok(tier.includes('children.length===2'))
+ assert.ok(tier.includes('?positionRedOrangeCrossPair(parentBox,['))
+ assert.ok(tier.includes("owner?.kind==='hexagon'&&siblings.length===2&&siblings[1].id===parentId"))
+ assert.ok(tier.includes('?redRightModifierPosition(parent):nestedChildPosition(parent,children[0])'))
+ assert.ok(board.includes("slot==='right-modifier'?redRightModifierPosition(b):nestedChildPosition(b,a)"))
 })
