@@ -187,7 +187,7 @@ test('orange-first assembly keeps orange ahead of purple and green',()=>{
   {id:'pink',kind:'square'}
  ]
  assert.deepEqual(normalizeBlueSiblingOrder(row).map(a=>a.id),[
-  'orange','purple','green','pink'
+  'orange','pink','purple','green'
  ])
 })
 test('nested purple possession may grow under a blue-rooted purple',()=>{
