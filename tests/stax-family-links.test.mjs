@@ -472,3 +472,14 @@ test('red pair uses large forms until a third orange makes the family compact',a
  assert.match(board,/return alignRedSupporters\(paired,owner\.id\)/)
  assert.match(board,/for\(const child of orange\)next=alignOrangeTierChildren/)
 })
+
+test('direct red two-orange X is isolated from compact tiers and all other families',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const start=board.indexOf('function redOrangePosition(')
+ const end=board.indexOf('/** Visual size follows',start)
+ const pair=board.slice(start,end)
+ assert.match(pair,/items\.length===2&&!compact[\s\S]*?positionRedOrangeCrossPair\(/)
+ assert.match(pair,/orange\.length===2&&redOrangeFamilySize\(doc,redId\)===2[\s\S]*?positionRedOrangeCrossPair\(/)
+ assert.match(pair,/positionChildren\(parent,children,\{gap:GAP,belowGap:VERTICAL\}\)/)
+ assert.match(board,/if\(redRoot\)return redOrangeFamilySize\(d,redRoot\)>2\?'small':'large'/)
+});

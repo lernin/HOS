@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
-import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
+import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -107,19 +107,24 @@ function redOrangePosition(red:Atom,doc:Draft){
   ...existing.map(a=>({id:a.id,width:childW,height:childH})),
   {id:'__incoming_orange',width:childW,height:childH},
  ]
- return positionChildren(
-  {x:red.x,y:red.y,width:width('triangle'),height:height('triangle')},
-  items,{gap:GAP,belowGap:VERTICAL}
+ const parent={x:red.x,y:red.y,width:width('triangle'),height:height('triangle')}
+ // Preview the same X crossing used after the second orange attaches.
+ return (items.length===2&&!compact
+  ?positionRedOrangeCrossPair(parent,[items[0],items[1]],VERTICAL)
+  :positionChildren(parent,items,{gap:GAP,belowGap:VERTICAL})
  ).get('__incoming_orange')!
 }
 function alignRedSupporters(doc:Draft,redId:string):Draft {
  const red=byId(doc,redId),orange=orangeChildren(doc,redId)
  if(!red||orange.length<1)return doc
- const positions=positionChildren(
-  {x:red.x,y:red.y,width:width('triangle'),height:height('triangle')},
-  orange.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)})),
-  {gap:GAP,belowGap:VERTICAL}
- )
+ const parent={x:red.x,y:red.y,width:width('triangle'),height:height('triangle')}
+ const children=orange.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)}))
+ // Exactly two direct large hexagons cross at their inner tips (Blueprint X).
+ // If another orange is added to the red-rooted family, keep existing compact
+ // tier spacing; neither purple nor other support rows use this exception.
+ const positions=orange.length===2&&redOrangeFamilySize(doc,redId)===2
+  ?positionRedOrangeCrossPair(parent,[children[0],children[1]],VERTICAL)
+  :positionChildren(parent,children,{gap:GAP,belowGap:VERTICAL})
  let next=doc
  for(const child of orange){
   const a=byId(next,child.id),target=positions.get(child.id)!

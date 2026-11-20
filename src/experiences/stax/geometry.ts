@@ -79,6 +79,32 @@ export function positionChildren(
  return result
 }
 
+/**
+ * Two LARGE orange hexagons directly under a red verb form an X where
+ * their inner tips meet and cross in Ashley's Blueprint reference.
+ * This is not ordinary sibling spacing: use a slight, symmetric overlap.
+ * The stroke outlines then visibly cross instead of leaving an empty gap.
+ * Only use for exactly two direct red children with no deeper orange tier.
+ */
+export function positionRedOrangeCrossPair(
+ parent:Box, children:readonly [FamilyChild,FamilyChild],belowGap:number
+):Map<string,ChildPosition> {
+ const [left,right]=children
+ if(![parent.x,parent.y,parent.width,parent.height,left.width,left.height,right.width,right.height,belowGap].every(Number.isFinite)||
+   parent.width<=0||parent.height<=0||left.width<=0||right.width<=0||
+   left.height<=0||right.height<=0||belowGap<0||!left.id||!right.id||left.id===right.id)
+  throw new RangeError('Invalid red-orange pair geometry')
+ // A 2.5% inner-tip overlap recreates the reference's X, not a separated gap.
+ const overlap=Math.min(left.width,right.width)*.025
+ const total=left.width+right.width-overlap
+ const leftX=parent.x+(parent.width-total)/2
+ const y=parent.y+parent.height+belowGap
+ return new Map([
+  [left.id,{x:leftX,y:y+(Math.max(left.height,right.height)-left.height)/2}],
+  [right.id,{x:leftX+left.width-overlap,y:y+(Math.max(left.height,right.height)-right.height)/2}],
+ ])
+}
+
 /** Source-specified head-to-next gap (e.g. yellow diamond -> blue = 0.98).
  * Aligns vertical midpoints unless the caller overrides y for a staircase.
  */
