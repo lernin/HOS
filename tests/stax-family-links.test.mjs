@@ -256,3 +256,11 @@ test('right red child accepts one nested orange, never two side by side',()=>{
  assert.equal(canNestRightRedOrange(grown,'fourth','red-companion-left'),false)
  assert.equal(canNestRightRedOrange(grown,'third','red-companion-left'),false)
 })
+
+test('auto-red pair refuses exceeding the 80-shape persisted document limit',()=>{
+ const atoms=[{id:'red',kind:'triangle'},{id:'aux',kind:'hexagon'}]
+ for(let i=0;i<78;i++)atoms.push({id:'loose-'+i,kind:'square'})
+ const doc={atoms,bonds:[sup('red','aux')]}
+ assert.equal(doc.atoms.length,80)
+ assert.equal(withRedCompanion(doc,'red',id=>({id,kind:'hexagon'})),doc)
+})
