@@ -1,26 +1,27 @@
 import type { Kind } from './model'
 
-/** Photo-derived foam sprites, masked from Ashley's seven real classroom chips.
- * One transparent atlas keeps seven mobile images on a single request.
- * Art only: dimensions, drag hit targets and magnetic grammar stay in the model.
+/** Each classroom foam chip has its own transparent photo-derived image.
+ * Never load the seven-piece atlas here: mobile SVG overflow previously
+ * painted adjacent atlas cells beyond the intended silhouette.
+ * Appearance only: STAX's world geometry and magnetic graph are unchanged.
  */
-export const CLASSROOM_FOAM_ATLAS = '/stax-foam/foam-atlas.webp'
-export const CLASSROOM_WOOD_DESK = '/stax-foam/wood-desk.webp'
-const CELL = 192
-const INDEX: Record<Kind,number> = {
- circle:0,triangle:1,square:2,rectangle:3,
- diamond:4,hexagon:5,oval:6
+export const CLASSROOM_FOAM_FILES:Record<Kind,string>={
+ circle:'/stax-foam/chips/circle.webp',
+ triangle:'/stax-foam/chips/triangle.webp',
+ square:'/stax-foam/chips/square.webp',
+ rectangle:'/stax-foam/chips/rectangle.webp',
+ diamond:'/stax-foam/chips/diamond.webp',
+ hexagon:'/stax-foam/chips/hexagon.webp',
+ oval:'/stax-foam/chips/oval.webp',
 }
+
+/** One image, one chip: no nested atlas SVG, clipping, or accidental groups. */
 export function FoamChip({kind,w,h,omitted=false}:{
  kind:Kind;w:number;h:number;omitted?:boolean
 }){
  if(omitted)return null
- const tile=INDEX[kind]
- return <svg x={0} y={0} width={w} height={h}
-  viewBox={`${(tile%4)*CELL} ${Math.floor(tile/4)*CELL} ${CELL} ${CELL}`}
-  preserveAspectRatio="none" overflow="hidden" pointerEvents="none"
-  aria-hidden="true" className="stax-authentic-foam-chip">
-  <image href={CLASSROOM_FOAM_ATLAS} x="0" y="0" width={CELL*4} height={CELL*2}
-   preserveAspectRatio="none" pointerEvents="none"/>
- </svg>
+ return <image href={CLASSROOM_FOAM_FILES[kind]}
+  x={0} y={0} width={w} height={h}
+  preserveAspectRatio="none" pointerEvents="none"
+  aria-hidden="true" className="stax-authentic-foam-chip"/>
 }
