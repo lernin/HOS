@@ -372,3 +372,16 @@ test('large green complements follow red verbs as sequences, never noun supporte
   'a green complement not supported by blue stays large')
  assert.match(src,/if\(snap\.relation!=='support'\)return typed/,'following complement must not enter blue supporter reflow')
 })
+
+test('Blueprint red-to-large-green complement uses 2.03 horizontal and 0.49 vertical offsets in both drag directions',async()=>{
+ const src=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const start=src.indexOf('A large green complement can follow')
+ const end=src.indexOf('Sequence ports accept noun',start)
+ const code=src.slice(start,end)
+ assert.ok(start>=0&&end>start)
+ assert.match(code,/x:b\.x\+atomWidth\(b\)\+RED_BLUE_GAP,\s*y:b\.y\+atomHeight\(b\)\+BLUE_RED_GAP\}/)
+ assert.match(code,/x:b\.x-atomWidth\(a\)-RED_BLUE_GAP,\s*y:b\.y-atomHeight\(a\)-BLUE_RED_GAP\}/)
+ assert.doesNotMatch(code,/y:b\.y\+atomHeight\(b\)\+RED_BLUE_GAP/)
+ assert.doesNotMatch(code,/y:b\.y-atomHeight\(a\)-RED_BLUE_GAP/)
+ assert.match(src,/const BLUE_RED_GAP=SCALE\*STAX_SPACING\.group, RED_BLUE_GAP=SCALE\*STAX_SPACING\.row/)
+})
