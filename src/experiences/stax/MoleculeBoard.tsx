@@ -671,6 +671,16 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  useEffect(()=>{const sync=()=>setFullscreen(document.fullscreenElement===rootRef.current);document.addEventListener('fullscreenchange',sync);return()=>document.removeEventListener('fullscreenchange',sync)},[])
  const [selected,setSelected]=useState<string|null>(null)
  const [hint,setHint]=useState('Drag any shape anywhere. Only compatible pieces brought close together will snap.')
+ // Keep all workspace controls in a horizontal bottom tray. Retract after
+ // 6.5 seconds of inactivity; the left-edge handle remains reachable.
+ const [trayOpen,setTrayOpen]=useState(true)
+ const [trayActivity,setTrayActivity]=useState(0)
+ useEffect(()=>{
+  if(!trayOpen)return
+  const timer=setTimeout(()=>setTrayOpen(false),6500)
+  return ()=>clearTimeout(timer)
+ },[trayOpen,trayActivity])
+ function openTray(){setTrayOpen(true);setTrayActivity(n=>n+1)}
  const [fall,setFall]=useState<Set<string>>(new Set())
  const [preview,setPreview]=useState<Snap|null>(null)
  const [paletteHover,setPaletteHover]=useState<PaletteHover|null>(null)
@@ -973,7 +983,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   setHint('Swept '+discard+' unattached or smaller-map shape'+(discard===1?'':'s')+'. Undo restores everything.')
  }
  return <div ref={rootRef} className="stax-molecule-ui" data-theme={theme} data-original-pollen={pollenAnimated?'true':'false'}>
-  <div className="stax-molecule-dock" aria-label="STAX workspace controls">
+  <button className="stax-tray-handle" type="button" aria-label={trayOpen?'Close workspace controls':'Open workspace controls'} aria-controls="stax-bottom-tray" aria-expanded={trayOpen} onClick={()=>{setTrayOpen(v=>!v);setTrayActivity(n=>n+1)}}>{trayOpen?'‹':'›'}</button>
+  <div id="stax-bottom-tray" className="stax-molecule-dock" data-open={trayOpen?'true':'false'} aria-label="STAX workspace controls" aria-hidden={!trayOpen}
+    onPointerEnter={openTray} onPointerDownCapture={openTray} onFocusCapture={openTray} onWheel={openTray}>
    <div className="stax-molecule-tools">
     <button className="stax-molecule-back" onClick={onBack} title="Back to Classic Shape Lab" aria-label="Back to Classic Shape Lab">←</button>
     <div className="stax-molecule-buttons">

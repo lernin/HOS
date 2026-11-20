@@ -112,30 +112,74 @@
  overflow:visible;
 }
 
-/* Compact 4×3 lower-left control grid. Large touch targets remain 46px,
-   but the dock intrudes only 220px horizontally instead of 366px. */
+/* Horizontal bottom tray, opening from a permanent left-edge handle.
+   No control rearrangement across themes; scroll along bottom on small phones. */
+.stax-tray-handle {
+ position:absolute;
+ z-index:10;
+ left:calc(env(safe-area-inset-left,0px) + 7px);
+ bottom:calc(env(safe-area-inset-bottom,0px) + 10px);
+ width:42px;
+ height:52px;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ border:1px solid var(--stax-border);
+ border-radius:12px;
+ background:var(--stax-panel);
+ color:var(--stax-text);
+ box-shadow:0 4px 20px #16324825;
+ font:700 30px/1 system-ui,sans-serif;
+ cursor:pointer;
+ touch-action:manipulation;
+}
+.stax-tray-handle:focus-visible {outline:3px solid #4389c7;outline-offset:2px;}
 .stax-molecule-dock {
  position:absolute;
  z-index:8;
- left:calc(env(safe-area-inset-left,0px) + 8px);
+ left:calc(env(safe-area-inset-left,0px) + 56px);
  bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
- width:220px;
- max-width:calc(100vw - 16px);
- display:grid;
- grid-template-columns:repeat(4,var(--stax-control-size));
- grid-auto-rows:var(--stax-control-size);
+ display:flex;
+ align-items:center;
  gap:6px;
- padding:8px;
+ box-sizing:border-box;
+ width:max-content;
+ max-width:calc(100vw - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px) - 66px);
+ min-height:64px;
+ padding:7px;
  border:1px solid var(--stax-border);
  border-radius:13px;
  background:var(--stax-panel);
  box-shadow:0 3px 16px #16324817;
  backdrop-filter:blur(12px);
+ overflow-x:auto;
+ overflow-y:hidden;
+ overscroll-behavior-x:contain;
+ scrollbar-width:thin;
+ transition:transform .38s cubic-bezier(.22,.85,.28,1),opacity .32s ease,visibility .38s;
+ transform:translateX(0);
+ opacity:1;
+ visibility:visible;
 }
-/* Unwrap the legacy two toolbar rows into ONE shared grid, not overlays. */
+.stax-molecule-dock[data-open='false'] {
+ transform:translateX(calc(-100% - 56px));
+ opacity:0;
+ visibility:hidden;
+ pointer-events:none;
+}
 .stax-molecule-tools,
 .stax-molecule-buttons,
-.stax-molecule-view-controls {display:contents;}
+.stax-molecule-view-controls {
+ display:flex;
+ flex:none;
+ align-items:center;
+ gap:6px;
+}
+.stax-molecule-tools {padding-right:6px;border-right:1px solid var(--stax-border);}
+.stax-molecule-view-controls {padding-left:2px;}
+@media(prefers-reduced-motion:reduce) {
+ .stax-molecule-dock {transition:none;}
+}
 .stax-molecule-tools button,
 .stax-molecule-view-controls button {
  display:flex;
@@ -264,7 +308,6 @@
  .stax-molecule-palette button > svg {height:33px;}
 }
 @media(max-width:370px) {
- .stax-molecule-dock {left:6px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);}
  .stax-molecule-example {max-width:40vw;}
 }
 
