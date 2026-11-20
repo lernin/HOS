@@ -350,17 +350,22 @@ test('pink-near orange insertion magnet and nested pink reflow have direct rules
  assert.match(src,/if\(child\.kind==='square'\)next=alignNestedChain\(next,child\.id,'hexagon'\)/)
 })
 
-test('purple-style orange chains keep a singleton anchor; paired right orange stays centered',async()=>{
+test('third orange below the right red supporter uses the pink-style offset, not center alignment',async()=>{
  const code=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const nested=code.slice(code.indexOf('function nestedChildPosition('),code.indexOf('function alignOrangeTierChildren('))
  assert.match(nested,/return positionChildren\(/)
  assert.doesNotMatch(nested,/parent\.kind==='hexagon'&&child\.kind==='hexagon'\)return positionRedRightNestedOrange/)
  const tier=code.slice(code.indexOf('function alignOrangeTierChildren('),code.indexOf('function miniFamilyPosition('))
  assert.match(tier,/children\.length===2[\s\S]*?positionChildren\(/)
- assert.match(tier,/rightOfPair\?redRightChildPosition\(parent\):nestedChildPosition\(parent,children\[0\]\)/)
+ assert.match(tier,/new Map\(\[\[children\[0\]\.id,nestedChildPosition\(parent,children\[0\]\)\]\]\)/)
+ assert.doesNotMatch(tier,/redRightChildPosition|rightOfPair/)
  assert.match(tier,/next=alignOrangeTierChildren\(next,child\.id,seen\)/)
  const magnet=code.slice(code.indexOf('function bestSnap('),code.indexOf('function resolveMagnet('))
- assert.match(magnet,/slot==='right-modifier'\?redRightChildPosition\(b\):nestedChildPosition\(b,a\)/)
+ assert.match(magnet,/nestedChildPosition\(b,a\)/)
+ assert.doesNotMatch(magnet,/redRightChildPosition/)
+ const chain=code.slice(code.indexOf('function alignNestedChain('),code.indexOf('function alignSupporters('))
+ assert.match(chain,/const target=nestedChildPosition\(parent,child\)/)
+ assert.doesNotMatch(chain,/isRightRedOrange|redRightChildPosition/)
 })
 test('large green complements follow red verbs as sequences, never noun supporters',async()=>{
  const src=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')

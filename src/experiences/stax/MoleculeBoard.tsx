@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
-import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
+import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -308,21 +308,13 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
  return positionChildren({x:blue.x,y:blue.y,width:width('circle'),height:height('circle')},
   specs,{gap:GAP,belowGap:VERTICAL})
 }
-/** A child's right edge meets its parent centerline, with the Blueprint
- * .28 vertical gap; valid for orange and purple nested families alike.
- */
-function redRightChildPosition(parent:Atom) {
- return positionRedRightNestedOrange(
-  {x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)},
-  {width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y},
-  VERTICAL
- )
-}
+/** A single orange beneath another orange follows the same under-port as pink. */
 function nestedChildPosition(parent:Atom,child:Atom) {
  const childWidth=child.kind==='hexagon'?smallWidth('hexagon'):atomWidth(child)
  const childHeight=child.kind==='hexagon'?height('hexagon')*SMALL_ORANGE_Y:atomHeight(child)
- // Repeating adverb chains use the purple-style right-edge-to-midline anchor.
- // A RIGHT orange within a paired tier is the exception: centered below.
+ // All single orange descendants, including the third below red's RIGHT
+ // orange, use the same offset as an orange beneath pink: right edge at
+ // parent's horizontal midpoint, not centerline-to-centerline.
  return positionChildren(
   {x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)},
   [{id:child.id,width:childWidth,height:childHeight}],
@@ -338,12 +330,9 @@ function alignOrangeTierChildren(doc:Draft,parentId:string,seen=new Set<string>(
  if(!parent||!children.length||children.length>2)return doc
  const smallW=smallWidth('hexagon'),smallH=height('hexagon')*SMALL_ORANGE_Y
  const parentBox={x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)}
- const ownerId=parentOfSupport(doc,parentId)
- const siblings=ownerId?orangeChildren(doc,ownerId):[]
- const rightOfPair=siblings.length===2&&siblings[1].id===parentId
  const positions:Map<string,{x:number;y:number}>=children.length===2
   ?positionChildren(parentBox,children.map(c=>({id:c.id,width:smallW,height:smallH})),{gap:GAP,belowGap:VERTICAL})
-  :new Map([[children[0].id,rightOfPair?redRightChildPosition(parent):nestedChildPosition(parent,children[0])]])
+  :new Map([[children[0].id,nestedChildPosition(parent,children[0])]])
  let next=doc
  for(const child of children){
   const current=byId(next,child.id),target=positions.get(child.id)!
@@ -364,11 +353,7 @@ function alignNestedChain(doc:Draft,startId:string,childKind:'hexagon'|'rectangl
   const childId=supportChildOfKind(next,parentId,childKind)
   if(!childId)break
   const parent=byId(next,parentId),child=byId(next,childId)
-  const redId=parentOfSupport(next,parent.id)
-  const red=redId?byId(next,redId):undefined
-  const isRightRedOrange=childKind==='hexagon'&&red?.kind==='triangle'&&
-   orangeChildren(next,red!.id).at(-1)?.id===parent.id
-  const target=isRightRedOrange?redRightChildPosition(parent):nestedChildPosition(parent,child)
+  const target=nestedChildPosition(parent,child)
   next=translate(next,descendants(next,child.id),target.x-child.x,target.y-child.y)
   parentId=childId
  }
@@ -576,7 +561,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
        {x:b.x,y:b.y,width:atomWidth(b),height:atomHeight(b)},
        [{id:a.id,width:smallW,height:smallH},{id:'__future_pair',width:smallW,height:smallH}],
        {gap:GAP,belowGap:VERTICAL}).get(a.id)!:
-      slot==='right-modifier'?redRightChildPosition(b):nestedChildPosition(b,a)
+      nestedChildPosition(b,a)
      offered({parent:b.id,child:a.id,relation:'support',
       dx:target.x-a.x,dy:target.y-a.y,distance:Math.hypot(target.x-a.x,target.y-a.y)})
     }
