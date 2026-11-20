@@ -532,7 +532,7 @@ test('six-orange bottom pair is crossed/touching and seventh uses right paired s
  assert.ok(board.includes("slot==='right-modifier'?redRightModifierPosition(b):nestedChildPosition(b,a)"))
 })
 
-test('six has touching bottom; seven opens bottom gap while both separate middle'),async()=>{
+test('six has touching bottom; seven opens bottom gap while both separate middle',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const tier=board.slice(board.indexOf('function alignOrangeTierChildren('),board.indexOf('function miniFamilyPosition('))
  assert.ok(tier.includes('familySize>=6'))
