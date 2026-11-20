@@ -16,22 +16,22 @@ import { PearlescentGlass } from './pearlescent-atlas'
  * require a live backdrop shader and is intentionally not introduced to the
  * Android magnetic interaction at this stage.
  */
-export function PearlescentAirglass({kind,w,h,omitted=false}:{
- kind:Kind;w:number;h:number;omitted?:boolean
+export function PearlescentAirglass({kind,w,h,omitted=false,dusk=false}:{
+ kind:Kind;w:number;h:number;omitted?:boolean;dusk?:boolean
 }){
  if(omitted)return null
  return <g className="stax-airglass-asset" aria-hidden="true" pointerEvents="none">
   {/* A very faint lens substrate — opacity stays below 10%. */}
-  <Glyph kind={kind} w={w} h={h} fill="#ffffff14"
-    stroke="#d8bff1" strokeWidth={3.6} opacity={.42}/>
+  <Glyph kind={kind} w={w} h={h} fill={dusk?'#ffffff24':'#ffffff14'}
+    stroke="#d8bff1" strokeWidth={3.6} opacity={dusk?.7:.42}/>
   {/* Original high-resolution rainbow caustics and shadows remain present,
       but their alpha lets every underlying glyph show through. */}
-  <g opacity=".38" pointerEvents="none">
+  <g opacity={dusk?.67:.38} pointerEvents="none">
    <PearlescentGlass kind={kind} w={w} h={h}/>
   </g>
   {/* Independent rim reflections keep the result crisp rather than washed out. */}
   <Glyph kind={kind} w={w} h={h} fill="none"
-    stroke="#fef8ff" strokeWidth={2.2} opacity={.88}/>
+    stroke="#fef8ff" strokeWidth={2.2} opacity={dusk?.98:.88}/>
   <Glyph kind={kind} w={w} h={h} fill="none"
     stroke="#b7c9fc" strokeWidth={.75} opacity={.78}/>
  </g>
