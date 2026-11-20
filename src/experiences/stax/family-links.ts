@@ -242,7 +242,7 @@ export function canNestRightRedOrange(
  * An orange below a singleton can continue the same modifier chain.
  * The caller never guesses labels such as "to", "not" or "really".
  */
-export type OrangeTierSlot = 'left-pair'|'promote-right'|'modifier-chain'|'insert'
+export type OrangeTierSlot = 'left-pair'|'right-modifier'|'modifier-chain'
 export function orangeTierChildren(graph:FamilyGraph,parentId:string):string[] {
  return graph.bonds.filter(b=>b.parent===parentId&&b.relation==='support'&&
   graph.atoms.some(a=>a.id===b.child&&a.kind==='hexagon')).map(b=>b.child)
@@ -271,47 +271,15 @@ export function eligibleOrangeTierSlot(graph:FamilyGraph,movingId:string,parentI
  const index=siblings.indexOf(parentId)
  const existing=orangeTierChildren(graph,parentId)
  if(index<0||existing.length>1)return null
- // Dropping below a paired RIGHT orange inserts an adverb before that
- // member: do/not + really => do/really, with not pushed under really.
- // It preserves its old word even when the pair represents bridge/to.
- if(siblings.length===2&&index===1)return orangeTierChildren(graph,movingId).length===0?'promote-right':null
- // Left-hand member of a pair grows a further pair, provisionally unlabelled.
+ // A pair's RIGHT orange can host one lower orange. All pieces retain
+ // their existing locations/identity; the user assigns meaning later.
+ if(siblings.length===2&&index===1)return existing.length===0?'right-modifier':null
+ // A pair's LEFT orange can grow a further paired tier.
  if(siblings.length===2&&index===0)return existing.length===0?'left-pair':null
- // A single orange nested below a right member may continue indefinitely.
- if(siblings.length===1&&index===0)return existing.length===1?'insert':'modifier-chain'
+ // Repeated adverb chains stack downwards like nested purple rectangles.
+ if(siblings.length===1&&index===0)return existing.length===0?'modifier-chain':null
  return null
 }
-/** Promote a newly dropped orange into the RIGHT position of an existing
- * pair. The old RIGHT node, including its entire old descendant family, moves
- * below the new node. Do/not + really becomes do/really -> not. */
-export function promoteOrangeIntoRightSlot<T extends FamilyNode,E extends FamilyEdge>(
- graph:{atoms:T[];bonds:E[]},movingId:string,oldRightId:string
-):{atoms:T[];bonds:E[]} {
- if(eligibleOrangeTierSlot(graph,movingId,oldRightId)!=='promote-right')return graph
- const owner=supportParent(graph,oldRightId)
- if(!owner)return graph
- return {...graph,bonds:[
-  ...graph.bonds.filter(b=>!(b.relation==='support'&&b.parent===owner&&b.child===oldRightId)),
-  {parent:owner,child:movingId,relation:'support'} as E,
-  {parent:movingId,child:oldRightId,relation:'support'} as E,
- ]}
-}
-/** Insertion retains the previous modifier as the new orange's child.
- * Never rename old words, move unrelated graph branches or create cycles.
- */
-export function insertOrangeBeforeExisting<T extends FamilyNode,E extends FamilyEdge>(
- graph:{atoms:T[];bonds:E[]},parentId:string,movingId:string
-):{atoms:T[];bonds:E[]} {
- if(eligibleOrangeTierSlot(graph,movingId,parentId)!=='insert')return graph
- const prior=orangeTierChildren(graph,parentId)[0]
- if(!prior||prior===movingId)return graph
- return {...graph,bonds:[
-  ...graph.bonds.filter(b=>!(b.relation==='support'&&b.parent===parentId&&b.child===prior)),
-  {parent:parentId,child:movingId,relation:'support'} as E,
-  {parent:movingId,child:prior,relation:'support'} as E,
- ]}
-}
-
 /** One direct orange ("not") slot per object blue. Existing green or pink
  * supports do not block late insertion; the row is normalized before them.
  * Orange nested beneath pink/green is a separate grammatical relationship.
