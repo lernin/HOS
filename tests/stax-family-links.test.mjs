@@ -491,3 +491,15 @@ test('direct red two-orange X is isolated from compact tiers and all other famil
  assert.match(pair,/positionChildren\(parent,children,\{gap:upperGap,belowGap:VERTICAL\}\)/)
  assert.match(board,/if\(redRoot\)return redOrangeFamilySize\(d,redRoot\)>2\?'small':'large'/)
 });
+
+test('saved four-orange arrangement is reflowed at load; approved three-orange layout remains untouched',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.ok(board.includes("useState<Draft>(()=>ensureFourOrangeBlueprint(normalizeRoles(load())))"))
+ const start=board.indexOf('function ensureFourOrangeBlueprint(')
+ const end=board.indexOf('/** Visual size follows',start)
+ const rule=board.slice(start,end)
+ assert.match(rule,/redOrangeFamilySize\(next,red.id\)!==4/)
+ assert.match(rule,/orangeChildren\(next,top\[0\]\.id\)\.length!==2/)
+ assert.match(rule,/gap:11\*UNIT,belowGap:VERTICAL/)
+ assert.match(rule,/if\(stale\)next=alignRedSupporters\(next,red.id\)/)
+})
