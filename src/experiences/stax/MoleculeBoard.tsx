@@ -452,12 +452,10 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      distance:Math.hypot(target.x-a.x,target.y-a.y)})
    }
    // Repeated orange tiers are structural: the left orange may open another
-   // pair; the right orange accepts modifiers, including insertion that
-   // preserves an existing lower modifier by pushing it down.
+   // pair; the right orange accepts one lower modifier. No swaps.
    if(a.kind==='hexagon'&&b.kind==='hexagon'&&!molecule(d,a.id).has(b.id)){
     const slot=eligibleOrangeTierSlot(d,a.id,b.id)
     if(slot){
-     const old=orangeTierChildren(d,b.id)[0]
      const smallW=smallWidth('hexagon'),smallH=height('hexagon')*SMALL_ORANGE_Y
      const target=slot==='insert'&&old?{x:byId(d,old).x,y:byId(d,old).y}:
       slot==='left-pair'?positionChildren(
