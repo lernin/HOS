@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, type FamilyChild } from './geometry'
-import { canAttachOrangeUnderBlue, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, canNestRightRedOrange, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
+import { canAttachOrangeUnderBlue, canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, canNestRightRedOrange, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxShapeFill, staxShapeStroke, staxThemeName, type StaxTheme } from './view-modes'
 import './molecule-board.css'
 
@@ -316,7 +316,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    const blue=a.kind==='circle'?a:b.kind==='circle'?b:null
    const sup=(nounSupport(a)||a.kind==='hexagon')?a:(nounSupport(b)||b.kind==='hexagon')?b:null
    if(blue&&sup&&MAGNET_PORTS.blueSupport.includes(sup.kind as 'square'|'rectangle'|'oval'|'hexagon')&&
-    (sup.kind!=='hexagon'||canAttachOrangeUnderBlue(d,blue.id))&&!parentOfSupport(d,sup.id)&&!(sup.kind==='hexagon'&&a.id===sup.id&&hoveringBelowGreen(d,blue.id,sup))){
+    (sup.kind!=='hexagon'||canAttachOrangeUnderObjectBlue(d,blue.id))&&!parentOfSupport(d,sup.id)&&!(sup.kind==='hexagon'&&a.id===sup.id&&hoveringBelowGreen(d,blue.id,sup))){
     const supGroup=molecule(d,sup.id)
     if(![...supGroup].some(id=>byId(d,id).kind==='circle')){
      const already=blueSupportAtoms(d,blue.id)
@@ -386,6 +386,15 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      offered({parent:green.id,child:nestedOrange.id,relation:'support',
       dx:target.x-nestedOrange.x,dy:target.y-nestedOrange.y,distance:proximity})
     }
+   }
+   // An adverb can modify a preposition ("always on the TV"),
+   // without falsely becoming the blue noun's direct "not" child.
+   if(a.kind==='hexagon'&&b.kind==='square'&&!parentOfSupport(d,a.id)&&
+      canAttachAdverbUnderPreposition(d,b.id)&&!molecule(d,a.id).has(b.id)){
+    const target=nestedChildPosition(b,a)
+    offered({parent:b.id,child:a.id,relation:'support',
+     dx:target.x-a.x,dy:target.y-a.y,
+     distance:Math.hypot(target.x-a.x,target.y-a.y)})
    }
    // Recursive modifier: an orange may modify an orange which ultimately
    // belongs to a GREEN adjective under a BLUE noun/pronoun. Other orange
@@ -479,6 +488,10 @@ function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
  if(owner.kind==='oval'){
   const blueId=blueHeadOfAdjective(typed,owner.id)
   return blueId?alignSupporters(typed,blueId):typed
+ }
+ if(owner.kind==='square'){
+  const blueId=parentOfSupport(typed,owner.id)
+  return blueId&&byId(typed,blueId)?.kind==='circle'?alignSupporters(typed,blueId):typed
  }
  if(owner.kind==='rectangle'){
   let candidate=owner.id
@@ -801,11 +814,14 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     const green=greens.find(a=>a.id===selected)||(greens.length===1?greens[0]:undefined)
     if(green){parent=green;target=miniFamilyPosition(next,green,created)}
     else if(!greens.length){
+     const pinks=next.atoms.filter(a=>a.kind==='square'&&canAttachAdverbUnderPreposition(next,a.id))
+     const pink=pinks.find(a=>a.id===selected)||(pinks.length===1?pinks[0]:undefined)
+     if(pink){parent=pink;target=nestedChildPosition(pink,created)}
      const reds=next.atoms.filter(a=>a.kind==='triangle'&&orangeChildren(next,a.id).length<2)
      const red=reds.length===1?reds[0]:reds.find(a=>a.id===selected)
-     if(red){parent=red;target=redOrangePosition(red,next)}
-     else if(!reds.length){
-      const blues=next.atoms.filter(a=>a.kind==='circle'&&canAttachOrangeUnderBlue(next,a.id)&&!blueSupportAtoms(next,a.id).some(child=>child.kind==='hexagon'))
+     if(!parent&&red){parent=red;target=redOrangePosition(red,next)}
+     else if(!parent&&!reds.length){
+      const blues=next.atoms.filter(a=>a.kind==='circle'&&canAttachOrangeUnderObjectBlue(next,a.id)&&!blueSupportAtoms(next,a.id).some(child=>child.kind==='hexagon'))
       const blue=blues.length===1?blues[0]:blues.find(a=>a.id===selected)
       if(blue){parent=blue;target=supportPosition(blue,created,next)}
      }
@@ -909,7 +925,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
      <button onClick={sweepLoose} title="Sweep loose shapes and smaller maps; keep the largest connected map (Undo restores)" aria-label="Sweep loose shapes; keep largest connected map">🧹</button>
      <button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}} title="Clear all shapes" aria-label="Clear all shapes">×</button>
      <button onClick={()=>{const next=nextStaxTheme(theme);setTheme(next);setHint('Visual mode: '+staxThemeName(next))}}
-      title={'Visual mode: '+staxThemeName(theme)+' (tap to cycle Color, Blueprint, Black, Black & white)'}
+      title={'Visual mode: '+staxThemeName(theme)+' (tap to cycle Color, Blueprint, Black, Black & white, Arc Reactor, Holographic Glass, Cosmic Aurora)'}
       aria-label={'Visual mode: '+staxThemeName(theme)+'. Tap to change theme.'}>◐</button>
      <button onClick={()=>{setOmitBrush(v=>!v);setHint(omitBrush?'Dotted omission brush off.':'Dotted omission brush on. Tap a shape to toggle, or add dotted shapes.')}}
       title="Omit brush: tap to toggle; when active tap shapes to mark omitted, or add new dotted shapes"
@@ -954,7 +970,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}>
       {selected===a.id&&<rect x="-7" y="-7" width={atomWidth(a)+14} height={atomHeight(a)+14} rx="5" fill="none" stroke="#7b8795" strokeDasharray="4 5" pointerEvents="none"/>}
       <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} fill={staxShapeFill(theme,SYMBOLS[a.kind].color)} stroke={staxShapeStroke(theme,SYMBOLS[a.kind].color)} strokeWidth={3} strokeDasharray={staxOmissionDash(a.omitted)}/>
-      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={theme==='blueprint'||theme==='black'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
+      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
     </g>)}
    </svg>
    {!doc.atoms.length&&<p className="stax-molecule-empty">Tap a shape in the palette, or drag one into the workspace.</p>}
