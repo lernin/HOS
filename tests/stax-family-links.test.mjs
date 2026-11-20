@@ -8,7 +8,7 @@ const js=ts.transpileModule(src,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022,
 }}).outputText
 const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain,
- canFollowBlueOrange,largestAssembledFamily,normalizeBlueSiblingOrder,canNestPossessive,
+ canFollowBlueOrange,canAttachOrangeUnderObjectBlue,canAttachAdverbUnderPreposition,largestAssembledFamily,normalizeBlueSiblingOrder,canNestPossessive,
  withRedCompanion,canNestRightRedOrange,canAttachOrangeUnderBlue}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
@@ -288,4 +288,41 @@ test('orange after green cannot be mistaken for an under-red orange',()=>{
  const d={atoms:[{id:'red',kind:'triangle'},{id:'blue',kind:'circle'},
   {id:'green',kind:'oval'}],bonds:[sup('blue','green')]}
  assert.equal(canAttachOrangeUnderBlue(d,'red'),false)
+})
+
+test('subject blue above red cannot acquire direct orange; object blue can',()=>{
+ const g={atoms:[
+  {id:'subject',kind:'circle'},{id:'verb',kind:'triangle'},
+  {id:'object',kind:'circle'},{id:'not',kind:'hexagon'}
+ ],bonds:[
+  {parent:'subject',child:'verb',relation:'sequence'},
+  {parent:'verb',child:'object',relation:'sequence'}
+ ]}
+ assert.equal(canAttachOrangeUnderObjectBlue(g,'subject'),false)
+ assert.equal(canAttachOrangeUnderObjectBlue(g,'object'),true)
+ const supported={...g,bonds:[...g.bonds,sup('object','not')]}
+ assert.equal(canAttachOrangeUnderObjectBlue(supported,'object'),true)
+})
+test('a pink preposition supported by object blue can take an orange adverb',()=>{
+ const g={atoms:[
+  {id:'subject',kind:'circle'},{id:'verb',kind:'triangle'},
+  {id:'object',kind:'circle'},{id:'on',kind:'square'},
+  {id:'always',kind:'hexagon'}
+ ],bonds:[
+  {parent:'subject',child:'verb',relation:'sequence'},
+  {parent:'verb',child:'object',relation:'sequence'},
+  sup('object','on')
+ ]}
+ assert.equal(canAttachAdverbUnderPreposition(g,'on'),true)
+ assert.equal(canAttachAdverbUnderPreposition(g,'subject'),false)
+ assert.equal(canAttachAdverbUnderPreposition({...g,bonds:[...g.bonds,sup('on','always')]},'on'),false)
+})
+test('pink added last inserts between object orange and purple, before green',()=>{
+ const row=[
+  {id:'not',kind:'hexagon'},{id:'the',kind:'rectangle'},
+  {id:'big',kind:'oval'},{id:'on',kind:'square'}
+ ]
+ assert.deepEqual(normalizeBlueSiblingOrder(row).map(n=>n.id),
+  ['not','on','the','big'])
+ assert.deepEqual(row.map(n=>n.id),['not','the','big','on'])
 })
