@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, horizontalFollower, type FamilyChild } from './geometry'
+import { canExtendSupportChain, rootedSupportChain, supportChildOfKind } from './family-links'
 import './molecule-board.css'
 
 /**
@@ -28,7 +29,7 @@ const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=66, TAP=9, DOUBLE_MS
 const KEY='stax-free-molecules-v2'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
-const choices:Choice[]=[{kind:'circle',label:'Noun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
+const choices:Choice[]=[{kind:'circle',label:'Noun / pronoun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
 const width=(k:Kind)=>SYMBOLS[k].w*SCALE
 const height=(k:Kind)=>SYMBOLS[k].h*SCALE
 /** Small Blueprint variants use different x/y ratios, not uniform scaling. */
@@ -99,7 +100,7 @@ function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
  if(a.kind==='oval')return owner&&byId(d,owner.parent)?.kind==='circle'?'small':'large'
  // Orange follows its host-role instead of being selected as 'little' or 'big'.
  const previous=d.bonds.find(b=>b.relation==='sequence'&&b.child===a.id)
- return (owner&&['triangle','circle','oval'].includes(byId(d,owner.parent)?.kind))||(previous&&byId(d,previous.parent)?.kind==='triangle')?'small':'large'
+ return (owner&&['triangle','circle','oval','hexagon'].includes(byId(d,owner.parent)?.kind))||(previous&&byId(d,previous.parent)?.kind==='triangle')?'small':'large'
 }
 function normalizeRoles(d:Draft):Draft {
  return {...d,atoms:d.atoms.map(a=>a.kind==='oval'||a.kind==='hexagon'?{...a,variant:contextualVariant(d,a)}:a)}
@@ -179,6 +180,25 @@ function eligibleAdverbHost(doc:Draft,greenId:string):boolean {
  // The preceding determiner and any other adjectives are NOT the adverb's parent.
  return !doc.bonds.some(b=>b.parent===greenId&&b.relation==='support'&&byId(doc,b.child).kind==='hexagon')
 }
+/** Descendant orange chains can project left of a green modifier.
+ * Compute their structural extent from the source-derived single-child rule.
+ * A chain changes family bounds, never the word-order predecessor bond.
+ */
+function nestedFamilyLeftExtent(doc:Draft,rootId:string,rootWidth:number):number {
+ let currentId=rootId,parentWidth=rootWidth,offset=0,leftmost=0
+ const seen=new Set<string>()
+ while(!seen.has(currentId)){
+  seen.add(currentId)
+  const child=supportChildOfKind(doc,currentId,'hexagon')
+  if(!child)break
+  const childWidth=smallWidth('hexagon')
+  offset+=parentWidth/2-childWidth
+  leftmost=Math.min(leftmost,offset)
+  currentId=child
+  parentWidth=childWidth
+ }
+ return leftmost
+}
 /** Direct noun supporters stay side by side; nested adverbs are NEVER row members. */
 function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:number}> {
  const blue=byId(doc,blueId),items=blueSupportAtoms(doc,blueId)
@@ -189,21 +209,22 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
   // Consider descendants when centering a ROW of sibling families. An adverb
   // under a green adjective extends left of the green's own silhouette.
   // This is a structural extent, not an arbitrary on-screen drag position.
-  const nestedOrange=a.kind==='oval'&&doc.bonds.some(b=>
-   b.relation==='support'&&b.parent===a.id&&byId(doc,b.child)?.kind==='hexagon')
-  const nestedLeft=nestedOrange?underSingleX(0,w,smallWidth('hexagon')):0
-  return {id:a.id,width:w,height:h,extentLeft:Math.min(0,nestedLeft),extentRight:w}
+  const nestedLeft=a.kind==='oval'?nestedFamilyLeftExtent(doc,a.id,w):0
+  return {id:a.id,width:w,height:h,extentLeft:nestedLeft,extentRight:w}
  })
  return positionChildren({x:blue.x,y:blue.y,width:width('circle'),height:height('circle')},
   specs,{gap:GAP,belowGap:VERTICAL})
 }
-function miniFamilyPosition(_doc:Draft,green:Atom,orange:Atom) {
- // n moves downward to the real parent, never into the horizontal word row.
+/** A child's right edge meets the vertical midpoint of its actual parent. */
+function nestedOrangePosition(parent:Atom,orange:Atom) {
  return positionChildren(
-  {x:green.x,y:green.y,width:smallWidth('oval'),height:height('oval')*SMALL_GREEN_Y},
+  {x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)},
   [{id:orange.id,width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y}],
   {gap:GAP,belowGap:VERTICAL}
  ).get(orange.id)!
+}
+function miniFamilyPosition(_doc:Draft,green:Atom,orange:Atom) {
+ return nestedOrangePosition(green,orange)
 }
 function alignSupporters(doc:Draft,blueId:string):Draft {
  const positions=blueSupportPositions(doc,blueId)
@@ -214,13 +235,20 @@ function alignSupporters(doc:Draft,blueId:string):Draft {
   const current=byId(next,atom.id)
   next=translate(next,descendants(next,atom.id),target.x-current.x,target.y-current.y)
  }
- // Nested orange depends on the following GREEN, positioned directly BELOW it.
- // It does not widen the blue-level row or shift the preceding adjective.
+ // Reflow the entire descendant family. Each orange can itself own one
+ // orange modifier; no arbitrary maximum chain length or horizontal word bond.
  for(const green of greenSiblings(next,blueId)){
-  const dependent=next.bonds.find(b=>b.relation==='support'&&b.parent===green.id&&byId(next,b.child).kind==='hexagon')
-  if(!dependent)continue
-  const orange=byId(next,dependent.child),target=miniFamilyPosition(next,green,orange)
-  next=translate(next,descendants(next,orange.id),target.x-orange.x,target.y-orange.y)
+  let parentId=green.id
+  const seen=new Set<string>()
+  while(!seen.has(parentId)){
+   seen.add(parentId)
+   const childId=supportChildOfKind(next,parentId,'hexagon')
+   if(!childId)break
+   const parent=byId(next,parentId),child=byId(next,childId)
+   const target=nestedOrangePosition(parent,child)
+   next=translate(next,descendants(next,child.id),target.x-child.x,target.y-child.y)
+   parentId=childId
+  }
  }
  return next
 }
@@ -276,6 +304,16 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      offered({parent:green.id,child:nestedOrange.id,relation:'support',
       dx:target.x-nestedOrange.x,dy:target.y-nestedOrange.y,distance:proximity})
     }
+   }
+   // Recursive modifier: an orange may modify an orange which ultimately
+   // belongs to a GREEN adjective under a BLUE noun/pronoun. Other orange
+   // identities (gate, bridge, negation) remain free until real roles are known.
+   if(a.kind==='hexagon'&&b.kind==='hexagon'&&!parentOfSupport(d,a.id)&&
+      canExtendSupportChain(d,b.id,'hexagon','oval','circle')&&!molecule(d,a.id).has(b.id)){
+    const target=nestedOrangePosition(b,a)
+    offered({parent:b.id,child:a.id,relation:'support',
+     dx:target.x-a.x,dy:target.y-a.y,
+     distance:Math.hypot(target.x-a.x,target.y-a.y)})
    }
    // Orange is an under-verb supporter on the Blueprint; allow either
    // dragging orange to a stationary red or moving a free red to orange.
@@ -338,9 +376,18 @@ function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
  const typed=normalizeRoles(joined)
  if(snap.relation!=='support')return typed
  const owner=byId(typed,snap.parent)
- return owner.kind==='circle'?alignSupporters(typed,snap.parent):
-  owner.kind==='triangle'?alignRedSupporters(typed,snap.parent):
-  owner.kind==='oval'&&blueHeadOfAdjective(typed,owner.id)?alignSupporters(typed,blueHeadOfAdjective(typed,owner.id)!):typed
+ if(owner.kind==='circle')return alignSupporters(typed,snap.parent)
+ if(owner.kind==='triangle')return alignRedSupporters(typed,snap.parent)
+ if(owner.kind==='oval'){
+  const blueId=blueHeadOfAdjective(typed,owner.id)
+  return blueId?alignSupporters(typed,blueId):typed
+ }
+ if(owner.kind==='hexagon'){
+  const greenId=rootedSupportChain(typed,owner.id,'hexagon','oval','circle')
+  const blueId=greenId?blueHeadOfAdjective(typed,greenId):undefined
+  return blueId?alignSupporters(typed,blueId):typed
+ }
+ return typed
 }
 function eligibleMagnet(d:Draft,moving:Set<string>):Snap|null {
  return newFamilyAfterBlue(d,moving)?null:bestSnap(d,moving)
@@ -357,7 +404,8 @@ function magnetLabel(d:Draft,s:Snap):string {
  const parent=byId(d,s.parent),child=byId(d,s.child)
  if(s.relation==='support'&&parent.kind==='triangle')return 'Orange under red'
  if(s.relation==='support'&&parent.kind==='circle')return 'Support under blue'
- if(s.relation==='support'&&parent.kind==='oval')return 'Adverb underneath green (n)'
+ if(s.relation==='support'&&parent.kind==='oval')return 'Modifier beneath green (n)'
+ if(s.relation==='support'&&parent.kind==='hexagon')return 'Nested modifier beneath its actual orange parent'
  if(s.relation==='pair')return 'Support pair'
  if(child.kind==='oval')return 'Green complement'
  return 'Sequence snap'
@@ -589,11 +637,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  function addAt(kind:Kind,client?:{x:number;y:number},variant?:Atom['variant']){
   if(currentDoc.current.atoms.length>=80){setHint('Maximum 80 shapes in this experiment.');return}
   const isNounSupport=kind==='square'||kind==='rectangle'||kind==='oval'
-  const hasNoun=currentDoc.current.atoms.some(a=>a.kind==='circle')
-  if(isNounSupport&&!hasNoun){
-   setHint('Parent first: place a blue noun before adding pink, purple, or green supporters.')
-   return
-  }
+  // All shapes may exist as independent thinking objects. The bonding
+  // eligibility rules, not palette availability, enforce family structure.
   const p=client?fromClient(client.x,client.y):null,camera=currentView.current
   let x=(p?.x??camera.x+camera.width/2)-width(kind)*variantWidthFactor(kind,variant)/2
   let y=(p?.y??camera.y+camera.height/2)-height(kind)*variantHeightFactor(kind,variant)/2
@@ -609,8 +654,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   }
   const previous=currentDoc.current,id=crypto.randomUUID()
   const next:Draft={...previous,atoms:[...previous.atoms,{id,kind,x,y,variant}]}
-  // Drag uses spatial magnets. Tap is a shortcut ONLY when the real parent is
-  // unambiguous. Neither method may create a loose dependent or an n predecessor bond.
+  // Drag uses spatial magnets. Tap can attach to a unique valid parent.
+  // Every shape may also remain loose; only valid family relationships bond.
   let snap:Snap|null=client?eligibleMagnet(next,new Set([id])):null
   if(!client&&(isNounSupport||kind==='hexagon')){
    const created=byId(next,id)
@@ -648,12 +693,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    save(result,previous)
    setSelected(id)
    setHint(snap.relation==='support'&&byId(result,snap.parent)?.kind==='triangle'?'Orange snapped precisely beneath red.':'Magnet connected to its actual parent.')
-  }else if(isNounSupport||kind==='hexagon'){
-   // Reject incomplete families, but leave the rest of the existing board intact.
-   setHint('Parent required: attach to an existing blue noun or green/verb parent. With multiple possible parents, drag to the intended one.')
   }else{
    save(next,previous)
-   setHint('Placed freely. The shape stays there until you move it.')
+   setSelected(id)
+   setHint('Placed freely. Any shape may wait unattached; only valid magnets create a family.')
   }
  }
  function palettePosition(kind:Kind,clientX:number,clientY:number,variant?:Atom['variant']):PaletteHover {
@@ -663,7 +706,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const p=inside?fromClient(screenX,screenY):null
   const worldX=(p?.x??0)-width(kind)*variantWidthFactor(kind,variant)/2,worldY=(p?.y??0)-height(kind)*variantHeightFactor(kind,variant)/2
   let snap:Snap|null=null
-  if(p&&currentDoc.current.atoms.length<80&&(!(kind==='square'||kind==='rectangle'||kind==='oval')||currentDoc.current.atoms.some(a=>a.kind==='circle'))){
+  if(p&&currentDoc.current.atoms.length<80){
    const ghost:Atom={id:'__palette_preview__',kind,x:worldX,y:worldY,variant}
    const trial={...currentDoc.current,atoms:[...currentDoc.current.atoms,ghost]}
    snap=eligibleMagnet(trial,new Set([ghost.id]))
@@ -769,6 +812,6 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     </svg>
    </div>}
   <p className="stax-molecule-hint" role="status">{hint}</p>
-  <p className="stax-molecule-note">Single green and orange shapes adapt size to their attachment. Shapes lift above your finger during touch-drag; eligible magnets glow. Each new shape starts loose, wherever placed. One finger moves atoms or pans; pinch with two fingers to zoom. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Pink/purple support blue; blue/yellow connect horizontally in either order; red/blue keep the staircase.</p>
+  <p className="stax-molecule-note">Shape sizes adapt to their attachment. Shapes lift above your finger during touch-drag; eligible magnets glow. Any color can remain loose for exploration. One finger moves atoms or pans; pinch with two fingers to zoom. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Pink/purple support blue; blue/yellow connect horizontally in either order; red/blue keep the staircase.</p>
  </div>
 }
