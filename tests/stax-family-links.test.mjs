@@ -8,7 +8,8 @@ const js=ts.transpileModule(src,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022,
 }}).outputText
 const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain,
- canFollowBlueOrange,largestAssembledFamily}=
+ canFollowBlueOrange,largestAssembledFamily,normalizeBlueSiblingOrder,canNestPossessive,
+ withRedCompanion,canNestRightRedOrange}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 const atoms=[
@@ -169,4 +170,97 @@ test('broom traverses undirected bond graph, not the shape order',()=>{
  ],bonds:[{parent:'three',child:'two',relation:'sequence'},
  {parent:'one',child:'two',relation:'support'}]}
  assert.deepEqual([...largestAssembledFamily(g)].sort(),['one','three','two'])
+})
+
+test('purple inserted BEFORE green regardless of later attachment',()=>{
+ const row=[
+  {id:'green',kind:'oval'},{id:'purple',kind:'rectangle'}
+ ]
+ assert.deepEqual(normalizeBlueSiblingOrder(row).map(a=>a.id),['purple','green'])
+ assert.deepEqual(row.map(a=>a.id),['green','purple'],'does not mutate graph order')
+})
+test('orange-first assembly keeps orange ahead of purple and green',()=>{
+ const row=[
+  {id:'orange',kind:'hexagon'},
+  {id:'green',kind:'oval'},
+  {id:'purple',kind:'rectangle'},
+  {id:'pink',kind:'square'}
+ ]
+ assert.deepEqual(normalizeBlueSiblingOrder(row).map(a=>a.id),[
+  'orange','purple','green','pink'
+ ])
+})
+test('nested purple possession may grow under a blue-rooted purple',()=>{
+ const g={atoms:[
+  {id:'dog',kind:'circle'},{id:'mom',kind:'rectangle'},
+  {id:'my',kind:'rectangle'},{id:'friend',kind:'rectangle'}
+ ],bonds:[sup('dog','mom')]}
+ assert.equal(canNestPossessive(g,'my','mom'),true)
+ const deeper={...g,bonds:[...g.bonds,sup('mom','my')]}
+ assert.equal(canNestPossessive(deeper,'friend','my'),true)
+ assert.equal(canNestPossessive(deeper,'friend','mom'),false)
+})
+test('an isolated purple cannot start a fake possessive family',()=>{
+ const g={atoms:[{id:'loose',kind:'rectangle'},{id:'other',kind:'rectangle'}],bonds:[]}
+ assert.equal(canNestPossessive(g,'other','loose'),false)
+})
+test('purple cannot nest beneath green or orange or form a cycle',()=>{
+ const g={atoms:[
+  {id:'blue',kind:'circle'},{id:'purple',kind:'rectangle'},
+  {id:'green',kind:'oval'},{id:'orange',kind:'hexagon'},
+  {id:'another',kind:'rectangle'}
+ ],bonds:[sup('blue','purple'),sup('purple','another')]}
+ assert.equal(canNestPossessive(g,'another','purple'),false)
+ assert.equal(canNestPossessive(g,'purple','another'),false)
+ assert.equal(canNestPossessive(g,'green','purple'),false)
+ assert.equal(canNestPossessive(g,'orange','purple'),false)
+})
+test('first orange under red creates exactly one unassigned companion',()=>{
+ const g={atoms:[{id:'red',kind:'triangle'},{id:'aux',kind:'hexagon'}],
+ bonds:[sup('red','aux')]}
+ const result=withRedCompanion(g,'red',id=>({id,kind:'hexagon'}))
+ assert.equal(result.atoms.length,3)
+ assert.equal(result.bonds.length,2)
+ assert.equal(result.bonds[1].child,'red-companion-aux')
+ assert.equal(result.atoms[2].word,undefined)
+ assert.deepEqual(result.bonds.map(b=>b.parent),['red','red'])
+})
+test('red pair completion is stable and preserves an existing second orange',()=>{
+ const g={atoms:[{id:'red',kind:'triangle'},{id:'aux',kind:'hexagon'}],
+ bonds:[sup('red','aux')]}
+ const one=withRedCompanion(g,'red',id=>({id,kind:'hexagon'}))
+ const two=withRedCompanion(one,'red',id=>({id,kind:'hexagon'}))
+ assert.equal(two,one,'do not create duplicate companion on repeat')
+})
+test('red requires a direct orange before companion can be added',()=>{
+ const g={atoms:[{id:'red',kind:'triangle'},{id:'blue',kind:'circle'}],
+ bonds:[sup('red','blue')]}
+ assert.equal(withRedCompanion(g,'red',id=>({id,kind:'hexagon'})),g)
+})
+test('the third orange can attach only beneath the RIGHT red child',()=>{
+ const initial={atoms:[
+  {id:'red',kind:'triangle'},{id:'left',kind:'hexagon'},
+  {id:'third',kind:'hexagon'}
+ ],bonds:[sup('red','left')]}
+ const pair=withRedCompanion(initial,'red',id=>({id,kind:'hexagon'}))
+ assert.equal(canNestRightRedOrange(pair,'third','left'),false)
+ assert.equal(canNestRightRedOrange(pair,'third','red-companion-left'),true)
+})
+test('right red child accepts one nested orange, never two side by side',()=>{
+ const initial={atoms:[
+  {id:'red',kind:'triangle'},{id:'left',kind:'hexagon'},
+  {id:'third',kind:'hexagon'},{id:'fourth',kind:'hexagon'}
+ ],bonds:[sup('red','left')]}
+ const pair=withRedCompanion(initial,'red',id=>({id,kind:'hexagon'}))
+ const grown={...pair,bonds:[...pair.bonds,sup('red-companion-left','third')]}
+ assert.equal(canNestRightRedOrange(grown,'fourth','red-companion-left'),false)
+ assert.equal(canNestRightRedOrange(grown,'third','red-companion-left'),false)
+})
+
+test('auto-red pair refuses exceeding the 80-shape persisted document limit',()=>{
+ const atoms=[{id:'red',kind:'triangle'},{id:'aux',kind:'hexagon'}]
+ for(let i=0;i<78;i++)atoms.push({id:'loose-'+i,kind:'square'})
+ const doc={atoms,bonds:[sup('red','aux')]}
+ assert.equal(doc.atoms.length,80)
+ assert.equal(withRedCompanion(doc,'red',id=>({id,kind:'hexagon'})),doc)
 })
