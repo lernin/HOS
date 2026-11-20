@@ -9,7 +9,7 @@ const src=await readFile(new URL('../src/experiences/stax/geometry.ts',import.me
 const js=ts.transpileModule(src,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022,
 }}).outputText
-const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,positionRedOrangeCrossPair,horizontalFollower,requiredFamilyFollowerShift}=
+const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,positionRedOrangeCrossPair,horizontalFollower,positionRedRightNestedOrange,requiredFamilyFollowerShift}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`expected ${a} ≈ ${b}`)
 const support=(parent,children,gap=STAX_SPACING.attachment)=>
@@ -180,3 +180,34 @@ test('two large orange supporters beneath red cross to form an actual X',()=>{
  const ordinary=support(red,children)
  assert.ok(ordinary.get('left').x+children[0].width<ordinary.get('right').x)
 });
+
+test('right red orange third is staggered but not as far left as pink-style anchor',()=>{
+ const parent={x:135,y:240,width:2.525,height:1.559}
+ const child={id:'third',width:2.525,height:1.559}
+ const result=positionRedRightNestedOrange(parent,child,STAX_SPACING.attachment)
+ const pinkLike=support(parent,[child]).get('third')
+ const centeredX=parent.x+(parent.width-child.width)/2
+ assert.ok(result.x>pinkLike.x,'move third rightward compared with the over-left old version')
+ assert.ok(result.x<centeredX,'third must remain slightly left of center')
+ close(result.x,centeredX-child.width*.2)
+ close(result.y,parent.y+parent.height+STAX_SPACING.attachment)
+})
+
+test('four compact red oranges: lower children form an X with room for the right uncle',()=>{
+ const w=2.775*(3787.2/4147.2),h=1.566*(2332.8/2340.864)
+ const red={x:0,y:0,width:4.6,height:3.548}
+ const bottom=[{id:'grandchild1',width:w,height:h},{id:'grandchild2',width:w,height:h}]
+ const lower=positionRedOrangeCrossPair({x:0,y:0,width:w,height:h},bottom,.28)
+ const first=lower.get('grandchild1'),second=lower.get('grandchild2')
+ close(first.x+w-second.x,w*.025)
+ const overhang=(2*w-w*.025-w)/2
+ const top=positionChildren(red,[
+  {id:'parent',width:w,height:h,extentLeft:-overhang,extentRight:w+overhang},
+  {id:'uncle',width:w,height:h}
+ ],{gap:.28,belowGap:.28})
+ const parent=top.get('parent'),uncle=top.get('uncle')
+ const rightmostDescendant=parent.x+(second.x+w)
+ assert.ok(uncle.x>rightmostDescendant,'the right uncle clears the entire lower paired X')
+ close(uncle.x-rightmostDescendant,.28)
+ close(first.x+w-second.x,w*.025)
+})
