@@ -23,7 +23,7 @@ type Drag = { id:string;pointer:number;sx:number;sy:number;before:Draft;moved:bo
 type Pan = { pointer:number;startX:number;startY:number;before:View;moved:boolean }
 type TouchPoint = {x:number;y:number}
 type Pinch = {pointers:[number,number];startDistance:number;startView:View;anchor:{x:number;y:number}}
-type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number }
+type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number; bridgeRight?:string }
 type PaletteHover = { kind:Kind;variant?:'small'|'large';screenX:number;screenY:number;worldX:number;worldY:number;snap:Snap|null }
 // Distances from the STAX Blueprint's .07-unit design grid; only snap geometry is quantised.
 const UNIT=SCALE*STAX_SPACING.unit
@@ -475,6 +475,25 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
       dx:desired.x-a.x,dy:desired.y-a.y,distance:proximity})
     }
    }
+   // A purple inserted in an occupied blue-family support row should
+   // produce pink→purple→green even if there was no physical empty slot.
+   if(a.kind==='rectangle'&&b.kind==='square'&&!parentOfSupport(d,a.id)){
+    const blueId=parentOfSupport(d,b.id)
+    if(blueId&&byId(d,blueId)?.kind==='circle'&&
+       !blueSupportAtoms(d,blueId).some(x=>x.kind==='rectangle')&&
+       !molecule(d,a.id).has(blueId)){
+     const existing=blueSupportAtoms(d,blueId)
+     const green=existing.find(x=>x.kind==='oval')
+     const target=supportPosition(byId(d,blueId),a,d)
+     const imaginedX=green?
+      (b.x+atomWidth(b)+green.x)/2-atomWidth(a)/2:
+      b.x+atomWidth(b)+GAP
+     const imaginedY=green?(b.y+green.y)/2:b.y
+     const proximity=Math.hypot(a.x-imaginedX,(a.y-imaginedY)*.45)
+     offered({parent:blueId,child:a.id,relation:'support',
+      dx:target.x-a.x,dy:target.y-a.y,distance:proximity})
+    }
+   }
    // Purple possessives nest beneath purple rooted in blue:
    // my -> mom's -> friend's -> dog. This is structural parentage.
    if(a.kind==='rectangle'&&b.kind==='rectangle'&&
@@ -584,6 +603,30 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
       dx:target.x-a.x,dy:target.y-a.y,
       distance:Math.hypot(target.x-a.x,target.y-a.y)})
    }
+   // Inserting a RED verb between TWO blue nouns is a single magnetic
+   // operation, even if the blues are already directly sequenced.
+   if(a.kind==='triangle'&&b.kind==='circle'&&!molecule(d,a.id).has(b.id)&&
+      !d.bonds.some(z=>z.relation==='sequence'&&(z.parent===a.id||z.child===a.id))){
+    const rightBlues=d.atoms.filter(c=>c.kind==='circle'&&c.id!==b.id&&
+     !moving.has(c.id)&&c.x>b.x+atomWidth(b)*.35&&
+     !d.bonds.some(z=>z.relation==='sequence'&&z.child===c.id&&z.parent!==b.id))
+     .sort((u,v)=>u.x-v.x)
+    for(const rightBlue of rightBlues){
+     const leftBusy=d.bonds.some(z=>z.relation==='sequence'&&z.parent===b.id&&z.child!==rightBlue.id)
+     if(leftBusy)continue
+     const target={x:b.x+atomWidth(b)+BLUE_RED_GAP,
+      y:b.y+atomHeight(b)+BLUE_RED_GAP}
+     const gapMiddle=(b.x+atomWidth(b)+rightBlue.x)/2
+     const dropMiddle=a.x+atomWidth(a)/2
+     const preferredY=(b.y+rightBlue.y)/2
+     const proximity=Math.hypot((dropMiddle-gapMiddle)*.85,(a.y-preferredY)*.35)
+     if(proximity<=SNAP_RADIUS*1.05){
+      offered({parent:b.id,child:a.id,relation:'sequence',
+       dx:target.x-a.x,dy:target.y-a.y,distance:Math.min(SNAP_RADIUS,proximity),
+       bridgeRight:rightBlue.id})
+     }
+    }
+   }
    // Sequence ports accept noun ↔ conjunction in either order.
    // Yellow diamonds share the blue head's row; they are not noun supporters.
    const structural=a.kind==='circle'||a.kind==='triangle'
@@ -610,7 +653,14 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      // Only the moving component shifts; orientation is from spatial order.
      const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:
       {x:b.x-width(a.kind)-gap-a.x,y:conjunction?b.y+(height(b.kind)-height(a.kind))/2-a.y:b.y-diagonal-a.y}
-     offered({parent:left.id,child:right.id,relation:'sequence',dx:delta.x,dy:delta.y,distance:Math.hypot(delta.x,delta.y)})
+     // Offer tolerance on vertical distance, but align to the exact
+     // Blueprint staircase port when the finger releases.
+     const blueRed=left.kind!==right.kind&&left.kind!=='diamond'&&right.kind!=='diamond'
+     const magneticDistance=blueRed&&Math.abs(delta.x)<=SNAP_RADIUS*1.3&&
+      Math.abs(delta.y)<=SNAP_RADIUS*2.4
+      ?Math.hypot(delta.x,delta.y*.36):Math.hypot(delta.x,delta.y)
+     offered({parent:left.id,child:right.id,relation:'sequence',
+      dx:delta.x,dy:delta.y,distance:magneticDistance})
     }
    }
   }
@@ -630,8 +680,14 @@ function resolveMagnetBase(d:Draft,moving:Set<string>,snap:Snap):Draft {
   ?eligibleOrangeTierSlot(d,snap.child,snap.parent):null
  // Orange forms depend on the structure alone; do not silently reparent
  // or exchange any existing orange when a new piece attaches underneath.
+ // Blue→red→blue replaces any direct blue→blue sequence between those
+ // same heads. All existing supporters remain attached to their own blues.
+ const unlinked=snap.bridgeRight
+  ?translated.bonds.filter(z=>!(z.relation==='sequence'&&z.parent===snap.parent&&z.child===snap.bridgeRight))
+  :translated.bonds
  let joined:Draft={...translated,bonds:[
-  ...translated.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}
+  ...unlinked,{parent:snap.parent,child:snap.child,relation:snap.relation},
+  ...(snap.bridgeRight?[{parent:snap.child,child:snap.bridgeRight,relation:'sequence' as const}]:[])
  ]}
  if(slot==='left-pair'&&joined.atoms.length<80){
   const id='orange-companion-'+snap.child
