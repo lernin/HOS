@@ -10,7 +10,7 @@ const js=ts.transpileModule(src,{compilerOptions:{
 const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain,
  canFollowBlueOrange,canAttachOrangeUnderObjectBlue,canAttachAdverbUnderPreposition,largestAssembledFamily,normalizeBlueSiblingOrder,canNestPossessive,
  withRedCompanion,canNestRightRedOrange,canAttachOrangeUnderBlue,
- orangeTierChildren,orangeRootedInRed,eligibleOrangeTierSlot,insertOrangeBeforeExisting}=
+ orangeTierChildren,orangeRootedInRed,eligibleOrangeTierSlot}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 const atoms=[
@@ -399,27 +399,25 @@ test('orange red pair supports right modifier and left bridge tier independently
  assert.equal(eligibleOrangeTierSlot(g,'not','really'),'right-modifier')
  assert.equal(eligibleOrangeTierSlot(g,'bridge','do'),'left-pair')
  const withModifier={...g,bonds:[...g.bonds,sup('really','not')]}
- assert.equal(eligibleOrangeTierSlot(withModifier,'to','really'),'insert')
+ assert.equal(eligibleOrangeTierSlot(withModifier,'to','really'),null)
  const withTier={...g,bonds:[...g.bonds,sup('do','bridge'),sup('do','to')]}
  assert.equal(eligibleOrangeTierSlot(withTier,'not','bridge'),'left-pair')
  assert.equal(eligibleOrangeTierSlot(withTier,'not','to'),'right-modifier')
  assert.equal(eligibleOrangeTierSlot(withTier,'not','do'),null,'do not add a third direct child')
 })
-test('adding adverb before not preserves the not shape and pushes its branch downward',()=>{
+test('orange below second orange attaches without swapping existing pieces',()=>{
  const g={atoms:[
-  {id:'red',kind:'triangle'},{id:'do',kind:'hexagon'},
-  {id:'really',kind:'hexagon'},{id:'not',kind:'hexagon',word:'not'},
-  {id:'new',kind:'hexagon',word:'extremely'},{id:'deep',kind:'hexagon'}
- ],bonds:[sup('red','do'),sup('red','really'),sup('really','not'),sup('not','deep')]}
- assert.equal(eligibleOrangeTierSlot(g,'new','really'),'insert')
- const next=insertOrangeBeforeExisting(g,'really','new')
- assert.deepEqual(orangeTierChildren(next,'really'),['new'])
- assert.deepEqual(orangeTierChildren(next,'new'),['not'])
- assert.deepEqual(orangeTierChildren(next,'not'),['deep'])
- assert.equal(next.atoms.find(a=>a.id==='not').word,'not')
- assert.equal(next.bonds.length,g.bonds.length+1)
- assert.deepEqual(g.bonds.map(b=>b.parent),['red','red','really','not'],'original is immutable')
- assert.equal(eligibleOrangeTierSlot(next,'do','new'),null,'already bonded shapes cannot be stolen')
+  {id:'verb',kind:'triangle'},{id:'left',kind:'hexagon'},
+  {id:'right',kind:'hexagon'},{id:'bottom',kind:'hexagon'},
+  {id:'extra',kind:'hexagon'}
+ ],bonds:[sup('verb','left'),sup('verb','right')]}
+ assert.equal(eligibleOrangeTierSlot(g,'bottom','right'),'right-modifier')
+ const next={...g,bonds:[...g.bonds,sup('right','bottom')]}
+ assert.deepEqual(orangeTierChildren(next,'verb'),['left','right'])
+ assert.deepEqual(orangeTierChildren(next,'right'),['bottom'])
+ assert.equal(eligibleOrangeTierSlot(next,'extra','right'),null,'no swapping or implicit reorder')
+ assert.equal(eligibleOrangeTierSlot(next,'extra','bottom'),'modifier-chain')
+ assert.equal(g.bonds.length,2,'existing arrangement is unchanged')
 })
 test('orange tiers never grow from loose oranges, blue modifiers, or cycles',()=>{
  const loose={atoms:[{id:'a',kind:'hexagon'},{id:'b',kind:'hexagon'}],bonds:[]}
@@ -437,8 +435,15 @@ test('red-orange bridge insertion reflows recursively and auto-creates only its 
  const code=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  assert.match(code,/if\(slot==='left-pair'&&joined\.atoms\.length<80\)/)
  assert.match(code,/const id='orange-companion-'\+snap\.child/)
- assert.match(code,/slot==='insert'\?insertOrangeBeforeExisting\(translated,snap\.parent,snap\.child\)/)
+ assert.doesNotMatch(code,/promoteOrangeIntoRightSlot|insertOrangeBeforeExisting/)
  assert.match(code,/if\(orangeRootedInRed\(typed,owner\.id\)\)/)
  assert.match(code,/return alignRedSupporters\(typed,parentId\)/)
  assert.match(code,/for\(const child of orange\)next=alignOrangeTierChildren\(next,child\.id\)/)
+})
+
+test('orange shapes are blank locations, never auto-renamed or reparented during snap',async()=>{
+ const code=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const resolve=code.slice(code.indexOf('function resolveMagnet('),code.indexOf('function eligibleMagnet('))
+ assert.match(resolve,/let joined:Draft=\{\.\.\.translated,bonds:/)
+ assert.doesNotMatch(resolve,/promoteOrangeIntoRightSlot|insertOrangeBeforeExisting/)
 })
