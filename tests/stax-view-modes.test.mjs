@@ -203,7 +203,7 @@ test('Pearlescent Airglass is separate, transparent and preserves all original m
  assert.equal(staxThemeName('pearlescent-glass'),'Pearlescent Glass')
  assert.equal(staxThemeName('pearlescent-airglass'),'Pearlescent Airglass')
  assert.equal(staxBoardColor('pearlescent-airglass'),staxBoardColor('pearlescent-glass'))
- assert.match(src,/opacity="\.38"/)
+ assert.match(src,/opacity=\{dusk\?\.67:\.38\}/)
  assert.match(src,/stroke="#fef8ff"/)
  assert.match(src,/PearlescentGlass kind=\{kind\}/)
  assert.match(src,/pointerEvents="none"/)
