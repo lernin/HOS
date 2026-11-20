@@ -194,3 +194,14 @@ export function canNestRightRedOrange(
   graph.atoms.find(a=>a.id===b.child)?.kind==='hexagon')
  return oranges.length===2&&oranges[1].child===parentId
 }
+
+/** Orange may start a direct blue-headed family ('not a potato'), but
+ * once an adjective is present it cannot be placed AFTER green as a peer.
+ * It must instead attach to the green it modifies; blue and green continue
+ * to be separate, valid shapes if the orange cannot yet find its parent.
+ */
+export function canAttachOrangeUnderBlue(graph:FamilyGraph,blueId:string):boolean {
+ if(graph.atoms.find(a=>a.id===blueId)?.kind!=='circle')return false
+ return !graph.bonds.some(b=>b.relation==='support'&&b.parent===blueId&&
+  graph.atoms.some(a=>a.id===b.child&&a.kind==='oval'))
+}
