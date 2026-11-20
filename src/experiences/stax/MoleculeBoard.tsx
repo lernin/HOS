@@ -69,14 +69,42 @@ const SMALL_ORANGE_X=3787.2/4147.2,SMALL_ORANGE_Y=2332.8/2340.864
 const underSingleX=(parentX:number,parentWidth:number,childWidth:number)=>parentX+parentWidth/2-childWidth
 
 const smallWidth=(kind:Kind)=>width(kind)*(kind==='oval'?SMALL_GREEN_X:kind==='hexagon'?SMALL_ORANGE_X:1)
+/** Orange pair directly under red is large; additional orange tiers trigger
+ * the Blueprint compact form for that connected red-rooted orange family. */
+function redOrangeFamilySize(d:Draft,redId:string):number{
+ const seen=new Set<string>(),pending=[redId]
+ for(let i=0;i<pending.length;i++)for(const edge of d.bonds){
+  if(edge.relation!=='support'||edge.parent!==pending[i]||seen.has(edge.child))continue
+  const child=byId(d,edge.child)
+  if(child?.kind!=='hexagon')continue
+  seen.add(child.id);pending.push(child.id)
+ }
+ return seen.size
+}
+function orangeRedRoot(d:Draft,orangeId:string):string|undefined{
+ const seen=new Set<string>();let current=orangeId
+ while(!seen.has(current)){
+  seen.add(current)
+  const parentId=parentOfSupport(d,current)
+  if(!parentId)return undefined
+  const parent=byId(d,parentId)
+  if(parent?.kind==='triangle')return parentId
+  if(parent?.kind!=='hexagon')return undefined
+  current=parentId
+ }
+ return undefined
+}
 function orangeChildren(doc:Draft,redId:string){
  return doc.bonds.filter(b=>b.relation==='support'&&b.parent===redId).map(b=>byId(doc,b.child)).filter(a=>a.kind==='hexagon')
 }
 function redOrangePosition(red:Atom,doc:Draft){
  const existing=orangeChildren(doc,red.id)
+ const compact=redOrangeFamilySize(doc,red.id)>2
+ const childW=compact?smallWidth('hexagon'):width('hexagon')
+ const childH=compact?height('hexagon')*SMALL_ORANGE_Y:height('hexagon')
  const items:FamilyChild[]=[
-  ...existing.map(a=>({id:a.id,width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y})),
-  {id:'__incoming_orange',width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y},
+  ...existing.map(a=>({id:a.id,width:childW,height:childH})),
+  {id:'__incoming_orange',width:childW,height:childH},
  ]
  return positionChildren(
   {x:red.x,y:red.y,width:width('triangle'),height:height('triangle')},
@@ -88,7 +116,7 @@ function alignRedSupporters(doc:Draft,redId:string):Draft {
  if(!red||orange.length<1)return doc
  const positions=positionChildren(
   {x:red.x,y:red.y,width:width('triangle'),height:height('triangle')},
-  orange.map(a=>({id:a.id,width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y})),
+  orange.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)})),
   {gap:GAP,belowGap:VERTICAL}
  )
  let next=doc
@@ -105,9 +133,12 @@ function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
  if(a.kind!=='oval'&&a.kind!=='hexagon')return undefined
  const owner=d.bonds.find(b=>b.relation==='support'&&b.child===a.id)
  if(a.kind==='oval')return owner&&byId(d,owner.parent)?.kind==='circle'?'small':'large'
- // Orange follows its host-role instead of being selected as 'little' or 'big'.
+ // The two oranges directly below red are large; once a third orange
+ // joins the red-rooted tier, all its oranges adopt the compact form.
+ const redRoot=orangeRedRoot(d,a.id)
+ if(redRoot)return redOrangeFamilySize(d,redRoot)>2?'small':'large'
  const previous=d.bonds.find(b=>b.relation==='sequence'&&b.child===a.id)
- return (owner&&['triangle','circle','oval','hexagon'].includes(byId(d,owner.parent)?.kind))||(previous&&byId(d,previous.parent)?.kind==='triangle')?'small':'large'
+ return (owner&&['circle','oval','hexagon'].includes(byId(d,owner.parent)?.kind))||(previous&&byId(d,previous.parent)?.kind==='triangle')?'small':'large'
 }
 function normalizeRoles(d:Draft):Draft {
  return {...d,atoms:d.atoms.map(a=>a.kind==='oval'||a.kind==='hexagon'?{...a,variant:contextualVariant(d,a)}:a)}
@@ -1141,7 +1172,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-board"/>}
      {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix="stax-mat-board"/>}
-    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'||theme==='golden-line'||(theme==='pearlescent-glass'||theme==='pearlescent-airglass')||hasStaxMaterial(theme)?'transparent':staxBoardColor(theme)}/>
+    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'||theme==='golden-line'||(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')||hasStaxMaterial(theme)?'transparent':staxBoardColor(theme)}/>
     {paletteHover?.snap&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
       {(()=>{
        const phantom:Atom={id:'__palette_preview__',kind:paletteHover.kind,x:paletteHover.worldX,y:paletteHover.worldY,variant:paletteHover.variant,omitted:omitBrush}
@@ -1167,13 +1198,14 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}>
       {selected===a.id&&<rect x="-7" y="-7" width={atomWidth(a)+14} height={atomHeight(a)+14} rx="5" fill="none" stroke={theme==='golden-line'?'#fff1ac':'#7b8795'} strokeDasharray="4 5" pointerEvents="none"/>}
       <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)}
-        fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(a.omitted?'#e9ddf71f':'#ffffff01'):materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
-        stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(a.omitted?'#a891c1':'#ffffff01'):theme==='golden-line'?'url(#stax-golden-board)':materialStroke(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
+        fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?(a.omitted?'#e9ddf71f':'#ffffff01'):materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
+        stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?(a.omitted?'#a891c1':'#ffffff01'):theme==='golden-line'?'url(#stax-golden-board)':materialStroke(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
         strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(a.omitted)}/>
        <StaxMaterialEffect theme={theme} kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} seed={a.id} omitted={a.omitted} animated={pollenAnimated}/>
        {theme==='pearlescent-glass'&&<PearlescentGlass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
-        {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>} 
-      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
+        {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
+      {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted} dusk/>} 
+      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
     </g>)}
    </svg>
    {theme==='golden-pollen'&&<LetterzGoldenPollenCanvas
@@ -1186,10 +1218,11 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    onPointerDown={e=>paletteDown(e,kind,variant)} onPointerMove={paletteMove} onPointerUp={paletteUp} onPointerCancel={paletteCancel}>
    <svg viewBox={`-4 -4 ${width(kind)*variantWidthFactor(kind,variant)+8} ${height(kind)*variantHeightFactor(kind,variant)+8}`} aria-hidden="true">{theme==='golden-line'&&<MetallicGoldStroke id={`stax-golden-palette-${kind}-${variant||'default'}`}/>}
      {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix={`stax-mat-palette-${kind}-${variant||'default'}`}/>}
-     <Glyph kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(omitBrush?'#a891c1':'#ffffff01'):theme==='golden-line'?`url(#stax-golden-palette-${kind}-${variant||'default'})`:materialStroke(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(omitBrush?'#e9ddf71f':'#ffffff01'):materialFill(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(omitBrush)}/>
+     <Glyph kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?(omitBrush?'#a891c1':'#ffffff01'):theme==='golden-line'?`url(#stax-golden-palette-${kind}-${variant||'default'})`:materialStroke(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?(omitBrush?'#e9ddf71f':'#ffffff01'):materialFill(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(omitBrush)}/>
      <StaxMaterialEffect theme={theme} kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} seed={kind} omitted={omitBrush} compact/>
      {theme==='pearlescent-glass'&&<PearlescentGlass kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} omitted={omitBrush}/>} 
-      {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} omitted={omitBrush}/>} </svg>
+      {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} omitted={omitBrush}/>}
+      {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} omitted={omitBrush} dusk/>} </svg>
   </button>)}</div>
   {paletteHover&&<div className={`stax-lifted-ghost${paletteHover.snap?' is-eligible':''}`} style={{left:paletteHover.screenX,top:paletteHover.screenY}} aria-hidden="true">
     <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
@@ -1198,7 +1231,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
      {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-lifted"/>}
       {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix="stax-mat-lifted"/>}
      <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)} h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)}
-       fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?'#ffffff01':materialFill(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(omitBrush?'#a891c1':'#ffffff01'):theme==='golden-line'?(paletteHover.snap?'#fff1ac':'url(#stax-golden-lifted)'):paletteHover.snap?'#12a981':materialStroke(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} strokeWidth={4} strokeDasharray={staxOmissionDash(omitBrush)}/>
+       fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?'#ffffff01':materialFill(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?(omitBrush?'#a891c1':'#ffffff01'):theme==='golden-line'?(paletteHover.snap?'#fff1ac':'url(#stax-golden-lifted)'):paletteHover.snap?'#12a981':materialStroke(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} strokeWidth={4} strokeDasharray={staxOmissionDash(omitBrush)}/>
       <StaxMaterialEffect theme={theme} kind={paletteHover.kind}
        w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)}
        h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)}
@@ -1208,7 +1241,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
        h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)} omitted={omitBrush}/>}
        {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={paletteHover.kind}
        w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)}
-       h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)} omitted={omitBrush}/>} 
+       h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)} omitted={omitBrush}/>}
+       {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={paletteHover.kind}
+       w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)}
+       h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)} omitted={omitBrush} dusk/>} 
     </svg>
    </div>}
   <p className="stax-molecule-hint" role="status">{hint}</p>

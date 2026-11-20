@@ -686,3 +686,58 @@
 .stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-molecule-palette button > svg {
  overflow:visible;
 }
+
+/* Opt-in Pearlescent Dusk. Deliberately darker than original Airglass to
+   restore silhouette and internal-reflection contrast without visual clutter. */
+.stax-molecule-ui[data-theme='pearlescent-dusk'] {
+ --stax-toolbar-ink:#fff6ff;
+ --stax-toolbar-disabled:#c9badb;
+ --stax-bg:#29243e;
+ --stax-panel:rgba(45,38,67,.81);
+ --stax-button:rgba(86,75,115,.64);
+ --stax-border:rgba(248,233,255,.40);
+ --stax-text:#fff8ff;
+ --stax-caption:#eadcf4;
+}
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-molecule-canvas {
+ background:
+  radial-gradient(ellipse 64% 45% at 83% 18%,rgba(154,126,197,.20),transparent 72%),
+  radial-gradient(ellipse 55% 50% at 12% 88%,rgba(102,147,190,.15),transparent 75%),
+  linear-gradient(137deg,#2d2846 0%,#3c3455 48%,#24263f 100%);
+}
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-molecule-palette,
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-molecule-dock {
+ background:rgba(43,37,66,.77);
+ border:1px solid rgba(238,221,255,.45);
+ box-shadow:0 9px 26px rgba(8,7,21,.28),inset 0 1px rgba(255,255,255,.13);
+ backdrop-filter:blur(15px) saturate(1.15);
+ -webkit-backdrop-filter:blur(15px) saturate(1.15);
+}
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-molecule-palette button,
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-molecule-dock button,
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-tray-handle {
+ background:rgba(91,80,119,.65);
+ border-color:rgba(242,229,255,.40);
+ color:#fff6ff!important;
+ box-shadow:inset 0 1px rgba(255,255,255,.14);
+}
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-molecule-canvas svg g[data-kind] {
+ filter:none;
+}
+.stax-molecule-ui[data-theme='pearlescent-dusk'] svg.stax-pearlescent-art {
+ overflow:hidden!important;
+ pointer-events:none!important;
+}
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-pearlescent-art,
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-pearlescent-art image,
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-airglass-asset {
+ pointer-events:none!important;
+}
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-lifted-ghost > svg,
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-molecule-palette button > svg {
+ overflow:visible;
+}
+.stax-molecule-ui[data-theme='pearlescent-dusk'] .stax-molecule-hint {
+ color:#faf2ff;
+ text-shadow:0 1px 3px rgba(10,6,25,.65);
+}
