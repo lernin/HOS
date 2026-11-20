@@ -86,11 +86,11 @@ test('detach one support bond returns its descendants to a loose family',()=>{
  assert.equal(root(detached,'really'),null)
  assert.equal(can(detached,'really'),false)
 })
-test('the graph helpers are color-neutral and reusable for purple chains',()=>{
+test('family traversal is generic and does not hard-code an orange engine',()=>{
  const g={atoms:[
-  {id:'noun',kind:'circle'},{id:'first',kind:'rectangle'},
-  {id:'owner',kind:'rectangle'},{id:'owner2',kind:'rectangle'},
- ],bonds:[sup('noun','first'),sup('first','owner')]}
- assert.equal(rootedSupportChain(g,'owner','rectangle','rectangle','circle'),'owner')
- // Purple rules will use explicit grammatical constraints in a later increment.
+  {id:'noun',kind:'circle'},{id:'modifier',kind:'oval'},
+  {id:'one',kind:'rectangle'},{id:'two',kind:'rectangle'},
+ ],bonds:[sup('noun','modifier'),sup('modifier','one'),sup('one','two')]}
+ assert.equal(rootedSupportChain(g,'two','rectangle','oval','circle'),'modifier')
+ // This checks generic traversal only, not permission to build that grammar.
 })
