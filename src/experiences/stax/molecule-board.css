@@ -43,7 +43,7 @@
  overflow:hidden;
  background:var(--stax-bg);
 }
-.stax-molecule-canvas svg {
+.stax-molecule-canvas > svg {
  display:block;
  width:100%;
  height:100%;
@@ -106,7 +106,7 @@
  user-select:none;
  -webkit-user-select:none;
 }
-.stax-molecule-palette button svg {
+.stax-molecule-palette button > svg {
  width:100%;
  height:36px;
  overflow:visible;
@@ -223,7 +223,7 @@
  filter:drop-shadow(0 5px 7px rgba(20,43,60,.18));
  will-change:left,top;
 }
-.stax-lifted-ghost svg {overflow:visible;max-width:none;max-height:none;}
+.stax-lifted-ghost > svg {overflow:visible;max-width:none;max-height:none;}
 .stax-lifted-ghost.is-eligible {
  filter:drop-shadow(0 0 9px #0aa57c) drop-shadow(0 0 16px rgba(10,165,124,.4));
  animation:stax-magnet-pulse .7s ease-in-out infinite alternate;
@@ -261,7 +261,7 @@
 @media(orientation:landscape) and (max-height:420px) {
  .stax-molecule-palette {grid-template-columns:42px;gap:3px;padding:5px;}
  .stax-molecule-palette button {width:42px;height:42px;min-width:42px;}
- .stax-molecule-palette button svg {height:33px;}
+ .stax-molecule-palette button > svg {height:33px;}
 }
 @media(max-width:370px) {
  .stax-molecule-dock {left:6px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);}
@@ -318,14 +318,14 @@
 .stax-molecule-ui[data-theme='golden-line'] .stax-molecule-canvas svg g[data-kind] {
  filter:drop-shadow(0 0 2px #fff1ac86) drop-shadow(0 0 5px #ce921d9f);
 }
-.stax-molecule-ui[data-theme='golden-line'] .stax-molecule-palette button svg {
+.stax-molecule-ui[data-theme='golden-line'] .stax-molecule-palette button > svg {
  filter:drop-shadow(0 0 2px #fff1ac50) drop-shadow(0 0 4px #ce921d7a);
 }
 .stax-molecule-ui[data-theme='golden-line'] .stax-molecule-canvas svg .stax-resonant-target,
 .stax-molecule-ui[data-theme='golden-line'] .stax-molecule-canvas svg .stax-resonance-ghost {
  filter:drop-shadow(0 0 4px #fff1ac) drop-shadow(0 0 11px #ce921d);
 }
-.stax-molecule-ui[data-theme='golden-line'] .stax-lifted-ghost svg {
+.stax-molecule-ui[data-theme='golden-line'] .stax-lifted-ghost > svg {
  filter:drop-shadow(0 0 3px #fff1ac7a) drop-shadow(0 0 8px #ce921d9a);
 }
 
@@ -344,7 +344,7 @@
  filter:drop-shadow(0 0 3px #ffc06b91) drop-shadow(0 0 9px #e69a4d74);
 }
 .stax-molecule-ui[data-theme='golden-pollen'] .stax-molecule-palette svg,
-.stax-molecule-ui[data-theme='golden-pollen'] .stax-lifted-ghost svg {
+.stax-molecule-ui[data-theme='golden-pollen'] .stax-lifted-ghost > svg {
  filter:drop-shadow(0 0 4px #ffce7f9c);
 }
 .stax-pollen-grain-layer {transform-box:fill-box;transform-origin:center;}
@@ -375,7 +375,7 @@
  filter:drop-shadow(0 5px 7px #070411a6) drop-shadow(0 0 5px #ed8afa5c);
 }
 .stax-molecule-ui[data-theme='jelly-bloom'] .stax-molecule-palette svg,
-.stax-molecule-ui[data-theme='jelly-bloom'] .stax-lifted-ghost svg {
+.stax-molecule-ui[data-theme='jelly-bloom'] .stax-lifted-ghost > svg {
  filter:drop-shadow(0 2px 4px #fba4e8aa);
 }
 .stax-molecule-ui[data-theme='jelly-bloom'] .stax-molecule-dropping .stax-material-jelly {
@@ -422,7 +422,7 @@
  filter:drop-shadow(0 9px 8px #000b1bcc) drop-shadow(0 0 5px #83eaff6c);
 }
 .stax-molecule-ui[data-theme='glass-beads'] .stax-molecule-palette svg,
-.stax-molecule-ui[data-theme='glass-beads'] .stax-lifted-ghost svg {
+.stax-molecule-ui[data-theme='glass-beads'] .stax-lifted-ghost > svg {
  filter:drop-shadow(0 4px 6px #001829cc) drop-shadow(0 0 5px #74e6ff88);
 }
 @media(prefers-reduced-motion:reduce){
@@ -489,17 +489,26 @@
  color:#52486c;
  box-shadow:inset 0 1px rgba(255,255,255,.91),0 2px 8px rgba(147,134,192,.10);
 }
-.stax-molecule-ui[data-theme='pearlescent-glass'] svg .stax-pearlescent-art {
- overflow:hidden;
+.stax-molecule-ui[data-theme='pearlescent-glass'] svg.stax-pearlescent-art {
+ /* The other six atlas tiles must remain clipped even when the palette
+    and lifted preview allow their OWN outer SVG to overflow for glows. */
+ overflow:hidden!important;
  pointer-events:none!important;
 }
 .stax-molecule-ui[data-theme='pearlescent-glass'] .stax-molecule-canvas svg g[data-kind] {
  filter:none; /* original atlas retains its own full soft shadow */
 }
 .stax-molecule-ui[data-theme='pearlescent-glass'] .stax-lifted-ghost svg,
-.stax-molecule-ui[data-theme='pearlescent-glass'] .stax-molecule-palette button svg {
+.stax-molecule-ui[data-theme='pearlescent-glass'] .stax-molecule-palette button > svg {
  overflow:visible;
 }
 .stax-molecule-ui[data-theme='pearlescent-glass'] .stax-molecule-hint {
  color:#4e4669;
+}
+
+/* A glass bitmap is never a draggable hit region. Canonical SVG polygons,
+   rectangles and ellipses remain the sole shape-specific pointer targets. */
+.stax-molecule-ui[data-theme='pearlescent-glass'] .stax-pearlescent-art,
+.stax-molecule-ui[data-theme='pearlescent-glass'] .stax-pearlescent-art image {
+ pointer-events:none!important;
 }
