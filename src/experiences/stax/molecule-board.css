@@ -328,3 +328,105 @@
 .stax-molecule-ui[data-theme='golden-line'] .stax-lifted-ghost svg {
  filter:drop-shadow(0 0 3px #fff1ac7a) drop-shadow(0 0 8px #ce921d9a);
 }
+
+/* Material theater — new experiences remain visual-only. */
+.stax-molecule-ui[data-theme='golden-pollen'] {
+ --stax-bg:#07101e;--stax-panel:rgba(21,22,33,.93);
+ --stax-button:#362618;--stax-border:#ad753b;
+ --stax-text:#fff1cc;--stax-caption:#eac38d;
+}
+.stax-molecule-ui[data-theme='golden-pollen'] .stax-molecule-canvas {
+ background:
+  radial-gradient(ellipse at 45% 44%,#8e4d251c 0%,transparent 58%),
+  radial-gradient(ellipse at 80% 82%,#a56f1530 0%,transparent 42%),#07101e;
+}
+.stax-molecule-ui[data-theme='golden-pollen'] .stax-molecule-canvas svg g[data-kind] {
+ filter:drop-shadow(0 0 3px #ffc06b91) drop-shadow(0 0 9px #e69a4d74);
+}
+.stax-molecule-ui[data-theme='golden-pollen'] .stax-molecule-palette svg,
+.stax-molecule-ui[data-theme='golden-pollen'] .stax-lifted-ghost svg {
+ filter:drop-shadow(0 0 4px #ffce7f9c);
+}
+.stax-pollen-grain-layer {transform-box:fill-box;transform-origin:center;}
+.stax-pollen-layer-0 {animation:stax-golden-pollen-twinkle 2.25s ease-in-out infinite alternate;}
+.stax-pollen-layer-1 {animation:stax-golden-pollen-twinkle 3.15s ease-in-out -1.1s infinite alternate-reverse;}
+.stax-pollen-layer-2 {animation:stax-golden-pollen-drift 4.1s ease-in-out -.7s infinite alternate;}
+@keyframes stax-golden-pollen-twinkle {
+ from {opacity:.32;} to {opacity:1;}
+}
+@keyframes stax-golden-pollen-drift {
+ from {opacity:.52;transform:translateY(1px);}
+ to {opacity:1;transform:translateY(-2px);}
+}
+
+/* Jelly Bloom: plump translucent candy, broad specular crown and gentle bloom. */
+.stax-molecule-ui[data-theme='jelly-bloom'] {
+ --stax-bg:#24112f;--stax-panel:rgba(48,27,62,.89);
+ --stax-button:#57365e;--stax-border:#eaa6dd;
+ --stax-text:#fff1fc;--stax-caption:#f6bedf;
+}
+.stax-molecule-ui[data-theme='jelly-bloom'] .stax-molecule-canvas {
+ background:
+  radial-gradient(ellipse at 20% 28%,#fb6bad43 0%,transparent 47%),
+  radial-gradient(ellipse at 83% 73%,#7b6ffa66 0%,transparent 49%),
+  radial-gradient(circle at 52% 94%,#e9abf52a 0%,transparent 52%),#24112f;
+}
+.stax-molecule-ui[data-theme='jelly-bloom'] .stax-molecule-canvas svg g[data-kind] {
+ filter:drop-shadow(0 5px 7px #070411a6) drop-shadow(0 0 5px #ed8afa5c);
+}
+.stax-molecule-ui[data-theme='jelly-bloom'] .stax-molecule-palette svg,
+.stax-molecule-ui[data-theme='jelly-bloom'] .stax-lifted-ghost svg {
+ filter:drop-shadow(0 2px 4px #fba4e8aa);
+}
+.stax-molecule-ui[data-theme='jelly-bloom'] .stax-molecule-dropping .stax-material-jelly {
+ transform-origin:center;animation:stax-jelly-settle .46s ease-out;
+}
+@keyframes stax-jelly-settle {
+ 0%{transform:scale(1.04,.94);} 45%{transform:scale(.98,1.035);} 100%{transform:scale(1);}
+}
+
+/* Glassmorph: transparent glacial interfaces floating over ambient aurora. */
+.stax-molecule-ui[data-theme='glassmorph'] {
+ --stax-bg:#181e45;--stax-panel:rgba(155,181,224,.19);
+ --stax-button:rgba(209,230,255,.20);--stax-border:rgba(227,249,255,.51);
+ --stax-text:#f3faff;--stax-caption:#cedcf5;
+}
+.stax-molecule-ui[data-theme='glassmorph'] .stax-molecule-canvas {
+ background:
+  radial-gradient(ellipse at 22% 17%,#72e1ff91 0%,transparent 46%),
+  radial-gradient(ellipse at 77% 62%,#af67e59c 0%,transparent 50%),
+  radial-gradient(ellipse at 34% 88%,#ff82d255 0%,transparent 39%),#181e45;
+}
+.stax-molecule-ui[data-theme='glassmorph'] .stax-molecule-dock,
+.stax-molecule-ui[data-theme='glassmorph'] .stax-molecule-palette {
+ backdrop-filter:blur(18px) saturate(1.5);
+ box-shadow:0 12px 32px #03052042,inset 0 1px 0 #fff9;
+}
+.stax-molecule-ui[data-theme='glassmorph'] .stax-molecule-canvas svg g[data-kind] {
+ filter:drop-shadow(0 7px 9px #080e3d6b) drop-shadow(0 0 4px #b8edff6a);
+}
+
+/* Glass Beads: thick icy mineral drops with dark centers and refracted rims. */
+.stax-molecule-ui[data-theme='glass-beads'] {
+ --stax-bg:#031c33;--stax-panel:rgba(5,32,53,.92);
+ --stax-button:#164662;--stax-border:#50c8ed;
+ --stax-text:#f1ffff;--stax-caption:#8edbea;
+}
+.stax-molecule-ui[data-theme='glass-beads'] .stax-molecule-canvas {
+ background:
+  radial-gradient(ellipse at 27% 35%,#2e7c8f47 0%,transparent 48%),
+  radial-gradient(ellipse at 76% 72%,#143e9555 0%,transparent 51%),
+  repeating-linear-gradient(135deg,transparent 0px,transparent 90px,#70cde509 91px),#031c33;
+}
+.stax-molecule-ui[data-theme='glass-beads'] .stax-molecule-canvas svg g[data-kind] {
+ filter:drop-shadow(0 9px 8px #000b1bcc) drop-shadow(0 0 5px #83eaff6c);
+}
+.stax-molecule-ui[data-theme='glass-beads'] .stax-molecule-palette svg,
+.stax-molecule-ui[data-theme='glass-beads'] .stax-lifted-ghost svg {
+ filter:drop-shadow(0 4px 6px #001829cc) drop-shadow(0 0 5px #74e6ff88);
+}
+@media(prefers-reduced-motion:reduce){
+ .stax-pollen-grain-layer,.stax-molecule-ui[data-theme='jelly-bloom'] .stax-molecule-dropping .stax-material-jelly {
+  animation:none!important;transform:none!important;opacity:1!important;
+ }
+}
