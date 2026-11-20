@@ -89,18 +89,19 @@
  overflow:visible;
 }
 
-/* A single compact lower-left dock for actions and camera controls.
-   Button targets are 46px (about 58% larger than the former 29px icons). */
+/* Compact 4×3 lower-left control grid. Large touch targets remain 46px,
+   but the dock intrudes only 220px horizontally instead of 366px. */
 .stax-molecule-dock {
  position:absolute;
  z-index:8;
  left:calc(env(safe-area-inset-left,0px) + 8px);
  bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
- width:366px;
+ width:220px;
  max-width:calc(100vw - 16px);
- display:flex;
- flex-direction:column;
- gap:7px;
+ display:grid;
+ grid-template-columns:repeat(4,var(--stax-control-size));
+ grid-auto-rows:var(--stax-control-size);
+ gap:6px;
  padding:8px;
  border:1px solid #d6dfe4;
  border-radius:13px;
@@ -108,26 +109,20 @@
  box-shadow:0 3px 16px #16324817;
  backdrop-filter:blur(12px);
 }
+/* Unwrap the legacy two toolbar rows into ONE shared grid, not overlays. */
 .stax-molecule-tools,
 .stax-molecule-buttons,
-.stax-molecule-view-controls {
- display:flex;
- align-items:center;
- gap:4px;
- min-width:0;
-}
-.stax-molecule-tools {width:100%;}
-.stax-molecule-buttons {flex:1;}
+.stax-molecule-view-controls {display:contents;}
 .stax-molecule-tools button,
 .stax-molecule-view-controls button {
  display:flex;
  align-items:center;
  justify-content:center;
- min-width:var(--stax-control-size);
+ width:var(--stax-control-size);
  height:var(--stax-control-size);
+ min-width:var(--stax-control-size);
  min-height:var(--stax-control-size);
  padding:0;
- flex:1 1 auto;
  border:1px solid #cbd6dc;
  border-radius:8px;
  background:#fff;
@@ -137,29 +132,25 @@
  cursor:pointer;
 }
 .stax-molecule-tools button:disabled,
-.stax-molecule-view-controls button:disabled {
- opacity:.38;
- cursor:default;
-}
+.stax-molecule-view-controls button:disabled {opacity:.38;cursor:default;}
 .stax-molecule-tools button:focus-visible,
 .stax-molecule-view-controls button:focus-visible,
-.stax-molecule-palette button:focus-visible {
- outline:3px solid #4389c7;
- outline-offset:2px;
-}
-.stax-molecule-back {font-size:26px!important;flex:0 0 var(--stax-control-size)!important;}
+.stax-molecule-palette button:focus-visible {outline:3px solid #4389c7;outline-offset:2px;}
+.stax-molecule-back {font-size:26px!important;}
 .stax-molecule-buttons button:nth-child(2) {font-size:14px;font-weight:800;}
 .stax-molecule-buttons button[aria-label^="Sweep"] {font-size:24px;}
-.stax-molecule-view-controls {width:100%;}
 .stax-molecule-view-controls span {
- flex:1 1 auto;
- min-width:44px;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ min-width:0;
+ width:var(--stax-control-size);
+ height:var(--stax-control-size);
  text-align:center;
  font:600 13px/1.2 system-ui,sans-serif;
  font-variant-numeric:tabular-nums;
  color:#465967;
 }
-.stax-molecule-view-controls button {flex:1 1 54px;}
 
 /* Accessible status remains announced but never obscures the canvas. */
 .stax-molecule-hint {
@@ -230,8 +221,6 @@
  .stax-molecule-example {max-width:42vw;}
 }
 @media(max-width:370px) {
- .stax-molecule-dock {width:calc(100vw - 12px);left:6px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);}
- .stax-molecule-tools {flex-wrap:wrap;}
- .stax-molecule-buttons {flex-wrap:wrap;justify-content:flex-start;}
+ .stax-molecule-dock {left:6px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);}
  .stax-molecule-example {max-width:40vw;}
 }
