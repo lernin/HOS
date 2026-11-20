@@ -13,9 +13,9 @@ const {
 }=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 test('STAX cycles classic, futuristic and four new materials without touching grammar',()=>{
- assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads'])
+ assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass'])
  let mode='color'
- for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','color']){
+ for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','color']){
   mode=nextStaxTheme(mode)
   assert.equal(mode,next)
  }
@@ -66,7 +66,7 @@ test('experimental modes preserve source colors or apply one coherent luminous i
 })
 test('immersive backgrounds remain visible beneath transparent SVG board',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
- assert.match(board,/theme==='arc-reactor'\|\|theme==='hologram'\|\|theme==='cosmic'\|\|theme==='golden-line'\|\|hasStaxMaterial\(theme\)\?'transparent'/)
+ assert.match(board,/theme==='arc-reactor'\|\|theme==='hologram'\|\|theme==='cosmic'\|\|theme==='golden-line'\|\|theme==='pearlescent-glass'\|\|hasStaxMaterial\(theme\)\?'transparent'/)
 })
 
 test('Golden Line reuses Letterz gold colors without changing STAX semantic data',()=>{
@@ -129,4 +129,13 @@ test('jelly and both glasses use genuinely different radial or layered gradients
  assert.match(board,/StaxMaterialDefs prefix=\{`stax-mat-palette-/)
  assert.match(board,/StaxMaterialEffect theme=\{theme\} kind=\{paletteHover.kind\}/)
  assert.match(board,/const KEY='stax-free-molecules-v2'/)
+})
+
+test('Pearlescent Glass is selectable and keeps all original modes unchanged',()=>{
+ assert.equal(STAX_THEMES.length,13)
+ assert.equal(staxThemeName('pearlescent-glass'),'Pearlescent Glass')
+ assert.equal(staxBoardColor('pearlescent-glass'),'#f1edf8')
+ assert.equal(staxShapeStroke('pearlescent-glass','#3379dc'),'#d8c9f6')
+ assert.equal(staxThemeName('golden-line'),'Golden Line')
+ assert.equal(staxThemeName('golden-pollen'),'Golden Pollen')
 })
