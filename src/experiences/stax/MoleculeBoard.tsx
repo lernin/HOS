@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
-import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, type FamilyChild } from './geometry'
+import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
 import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
 import { PearlescentGlass } from './pearlescent-atlas'
+import { PearlescentAirglass } from './pearlescent-airglass'
 import './molecule-board.css'
 
 /**
@@ -132,6 +133,55 @@ function descendants(d:Draft,id:string) {
 }
 function translate(d:Draft,ids:Set<string>,dx:number,dy:number):Draft {
  return {...d,atoms:d.atoms.map(a=>ids.has(a.id)?{...a,x:a.x+dx,y:a.y+dy}:a)}
+}
+/** A sentence FAMILY is a head and everything attached through support/pair,
+ * excluding ordered sequence followers. Never measure just the head polygon:
+ * a rectangle or adverb can project outside it in either direction. */
+function supportFootprint(d:Draft,headId:string):{x:number;y:number;width:number;height:number}[]{
+ const ids=new Set<string>([headId]),queue=[headId]
+ for(let i=0;i<queue.length;i++)for(const edge of d.bonds){
+  const candidate=edge.relation==='support'&&edge.parent===queue[i]?edge.child:
+   edge.relation==='pair'&&edge.parent===queue[i]?edge.child:
+   edge.relation==='pair'&&edge.child===queue[i]?edge.parent:null
+  if(candidate&&!ids.has(candidate)){ids.add(candidate);queue.push(candidate)}
+ }
+ return [...ids].map(id=>byId(d,id)).filter(Boolean).map(a=>({
+  x:a.x,y:a.y,width:atomWidth(a),height:atomHeight(a)
+ }))
+}
+/** The source distinguishes head-to-head row spacing (2.03), staircase
+ * transitions (.49), and connector spacing (.98). Same-blue family heads use
+ * 2.03, never the .49 staircase rule. */
+function sequenceHeadGap(left:Atom,right:Atom):number {
+ if(left.kind==='diamond'||right.kind==='diamond')return CONNECTOR_GAP
+ if(left.kind==='circle'&&right.kind==='triangle')return BLUE_RED_GAP
+ if(left.kind==='triangle'&&right.kind==='circle')return RED_BLUE_GAP
+ return RED_BLUE_GAP
+}
+/** Expand following family branches to honor both the head port and the
+ * silhouettes of children at intersecting heights. Never change supporter
+ * geometry or the relative coordinates within a family. */
+function alignSequenceFamilyClearance(doc:Draft):Draft {
+ let next=doc
+ const edges=doc.bonds.filter(b=>b.relation==='sequence')
+ for(let pass=0;pass<edges.length;pass++){
+  let changed=false
+  for(const edge of edges){
+   const left=byId(next,edge.parent),right=byId(next,edge.child)
+   if(!left||!right)continue
+   const a=supportFootprint(next,left.id),b=supportFootprint(next,right.id)
+   const shift=requiredFamilyFollowerShift(
+    {x:left.x,y:left.y,width:atomWidth(left),height:atomHeight(left)},
+    {x:right.x,y:right.y,width:atomWidth(right),height:atomHeight(right)},
+    a,b,sequenceHeadGap(left,right),CONNECTOR_GAP)
+   if(shift>.01){
+    next=translate(next,descendants(next,right.id),shift,0)
+    changed=true
+   }
+  }
+  if(!changed)break
+ }
+ return next
 }
 function box(d:Draft) {
  if(!d.atoms.length)return null
@@ -317,7 +367,7 @@ function reflowAfterRemoval(d:Draft):Draft {
   next=alignRedSupporters(next,red.id)
  }
  for(const blue of next.atoms.filter(a=>a.kind==='circle'))next=alignSupporters(next,blue.id)
- return next
+ return alignSequenceFamilyClearance(next)
 }
 function supportPosition(blue:Atom,support:Atom,d:Draft) {
  const proposed:Draft={...d,bonds:[...d.bonds,{parent:blue.id,child:support.id,relation:'support'}]}
@@ -542,7 +592,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  * head without consuming that head's sequence port.
  * A second under-red orange reflows its sibling locally; no head is relocated.
  */
-function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
+function resolveMagnetBase(d:Draft,moving:Set<string>,snap:Snap):Draft {
  const translated=translate(d,moving,snap.dx,snap.dy)
  const host=byId(d,snap.parent)
  const slot=snap.relation==='support'&&host?.kind==='hexagon'&&byId(d,snap.child)?.kind==='hexagon'
@@ -610,6 +660,9 @@ function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
   return typed
  }
  return typed
+}
+function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
+ return alignSequenceFamilyClearance(resolveMagnetBase(d,moving,snap))
 }
 function eligibleMagnet(d:Draft,moving:Set<string>):Snap|null {
  return newFamilyAfterBlue(d,moving)?null:bestSnap(d,moving)
@@ -1020,7 +1073,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   function loadQuest(){
   // The example's under-red ports use the same exact positions as live magnets.
   const example=normalizeRoles(quest21())
-  const next=alignRedSupporters(alignRedSupporters(example,'q21-buy'),'q21-is')
+  const next=alignSequenceFamilyClearance(alignRedSupporters(alignRedSupporters(example,'q21-buy'),'q21-is'))
   save(next);setCamera(fit(next,aspect()));setSelected(null);setQuestActive(true)
   setHint('Blueprint Level 21 loaded as a movable demonstration. Word roles are provisional; all shapes and bonds remain editable.')
  }
@@ -1088,7 +1141,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-board"/>}
      {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix="stax-mat-board"/>}
-    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'||theme==='golden-line'||theme==='pearlescent-glass'||hasStaxMaterial(theme)?'transparent':staxBoardColor(theme)}/>
+    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'||theme==='golden-line'||(theme==='pearlescent-glass'||theme==='pearlescent-airglass')||hasStaxMaterial(theme)?'transparent':staxBoardColor(theme)}/>
     {paletteHover?.snap&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
       {(()=>{
        const phantom:Atom={id:'__palette_preview__',kind:paletteHover.kind,x:paletteHover.worldX,y:paletteHover.worldY,variant:paletteHover.variant,omitted:omitBrush}
@@ -1114,12 +1167,13 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}>
       {selected===a.id&&<rect x="-7" y="-7" width={atomWidth(a)+14} height={atomHeight(a)+14} rx="5" fill="none" stroke={theme==='golden-line'?'#fff1ac':'#7b8795'} strokeDasharray="4 5" pointerEvents="none"/>}
       <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)}
-        fill={theme==='pearlescent-glass'?(a.omitted?'#e9ddf71f':'#ffffff01'):materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
-        stroke={theme==='pearlescent-glass'?(a.omitted?'#a891c1':'#ffffff01'):theme==='golden-line'?'url(#stax-golden-board)':materialStroke(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
+        fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(a.omitted?'#e9ddf71f':'#ffffff01'):materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
+        stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(a.omitted?'#a891c1':'#ffffff01'):theme==='golden-line'?'url(#stax-golden-board)':materialStroke(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
         strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(a.omitted)}/>
        <StaxMaterialEffect theme={theme} kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} seed={a.id} omitted={a.omitted} animated={pollenAnimated}/>
        {theme==='pearlescent-glass'&&<PearlescentGlass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
-      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={theme==='pearlescent-glass'?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
+        {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>} 
+      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
     </g>)}
    </svg>
    {theme==='golden-pollen'&&<LetterzGoldenPollenCanvas
@@ -1132,9 +1186,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    onPointerDown={e=>paletteDown(e,kind,variant)} onPointerMove={paletteMove} onPointerUp={paletteUp} onPointerCancel={paletteCancel}>
    <svg viewBox={`-4 -4 ${width(kind)*variantWidthFactor(kind,variant)+8} ${height(kind)*variantHeightFactor(kind,variant)+8}`} aria-hidden="true">{theme==='golden-line'&&<MetallicGoldStroke id={`stax-golden-palette-${kind}-${variant||'default'}`}/>}
      {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix={`stax-mat-palette-${kind}-${variant||'default'}`}/>}
-     <Glyph kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} stroke={theme==='pearlescent-glass'?(omitBrush?'#a891c1':'#ffffff01'):theme==='golden-line'?`url(#stax-golden-palette-${kind}-${variant||'default'})`:materialStroke(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} fill={theme==='pearlescent-glass'?(omitBrush?'#e9ddf71f':'#ffffff01'):materialFill(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(omitBrush)}/>
+     <Glyph kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(omitBrush?'#a891c1':'#ffffff01'):theme==='golden-line'?`url(#stax-golden-palette-${kind}-${variant||'default'})`:materialStroke(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(omitBrush?'#e9ddf71f':'#ffffff01'):materialFill(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(omitBrush)}/>
      <StaxMaterialEffect theme={theme} kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} seed={kind} omitted={omitBrush} compact/>
-     {theme==='pearlescent-glass'&&<PearlescentGlass kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} omitted={omitBrush}/>}</svg>
+     {theme==='pearlescent-glass'&&<PearlescentGlass kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} omitted={omitBrush}/>} 
+      {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} omitted={omitBrush}/>} </svg>
   </button>)}</div>
   {paletteHover&&<div className={`stax-lifted-ghost${paletteHover.snap?' is-eligible':''}`} style={{left:paletteHover.screenX,top:paletteHover.screenY}} aria-hidden="true">
     <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
@@ -1143,12 +1198,15 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
      {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-lifted"/>}
       {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix="stax-mat-lifted"/>}
      <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)} h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)}
-       fill={theme==='pearlescent-glass'?'#ffffff01':materialFill(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} stroke={theme==='pearlescent-glass'?(omitBrush?'#a891c1':'#ffffff01'):theme==='golden-line'?(paletteHover.snap?'#fff1ac':'url(#stax-golden-lifted)'):paletteHover.snap?'#12a981':materialStroke(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} strokeWidth={4} strokeDasharray={staxOmissionDash(omitBrush)}/>
+       fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?'#ffffff01':materialFill(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass')?(omitBrush?'#a891c1':'#ffffff01'):theme==='golden-line'?(paletteHover.snap?'#fff1ac':'url(#stax-golden-lifted)'):paletteHover.snap?'#12a981':materialStroke(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} strokeWidth={4} strokeDasharray={staxOmissionDash(omitBrush)}/>
       <StaxMaterialEffect theme={theme} kind={paletteHover.kind}
        w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)}
        h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)}
        seed={paletteHover.kind} omitted={omitBrush} compact/>
       {theme==='pearlescent-glass'&&<PearlescentGlass kind={paletteHover.kind}
+       w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)}
+       h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)} omitted={omitBrush}/>}
+       {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={paletteHover.kind}
        w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)}
        h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)} omitted={omitBrush}/>} 
     </svg>

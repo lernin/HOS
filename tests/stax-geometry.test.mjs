@@ -9,7 +9,7 @@ const src=await readFile(new URL('../src/experiences/stax/geometry.ts',import.me
 const js=ts.transpileModule(src,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022,
 }}).outputText
-const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,horizontalFollower,positionRedRightNestedOrange}=
+const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,horizontalFollower,positionRedRightNestedOrange,requiredFamilyFollowerShift}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`expected ${a} ≈ ${b}`)
 const support=(parent,children,gap=STAX_SPACING.attachment)=>
@@ -130,4 +130,38 @@ test('third orange under the right red supporter shares the right orange centerl
 test('third red-family positioning rejects invalid dimensions and negative gaps',()=>{
  assert.throws(()=>positionRedRightNestedOrange({x:0,y:0,width:1,height:1},{width:1,height:1},-1),RangeError)
  assert.throws(()=>positionRedRightNestedOrange({x:0,y:0,width:0,height:1},{width:1,height:1},.28),RangeError)
+})
+
+test('source head-to-head family minimum is 2.03, not 0.49 staircase gap',()=>{
+ const left={x:0,y:0,width:3.5,height:3.5}
+ const right={x:5.53,y:0,width:3.5,height:3.5}
+ close(requiredFamilyFollowerShift(left,right,[left],[right],STAX_SPACING.row,STAX_SPACING.connector),0)
+ const tooClose={...right,x:4}
+ close(requiredFamilyFollowerShift(left,tooClose,[left],[tooClose],STAX_SPACING.row,STAX_SPACING.connector),1.53)
+})
+test('overhanging children force greater spacing between distinct sentence families',()=>{
+ const left={x:0,y:0,width:3.5,height:3.5}
+ const right={x:5.53,y:0,width:3.5,height:3.5}
+ const leftChild={x:4.2,y:4.0,width:2.2,height:1.6}
+ const rightChild={x:4.7,y:4.1,width:2.5,height:1.6}
+ const dx=requiredFamilyFollowerShift(left,right,[left,leftChild],[right,rightChild],
+  STAX_SPACING.row,STAX_SPACING.connector)
+ close(dx,6.4+.98-4.7)
+ assert.ok(dx>0)
+ close(rightChild.x+dx-(leftChild.x+leftChild.width),STAX_SPACING.connector)
+})
+test('children in nonintersecting rows do not create unnecessary horizontal space',()=>{
+ const l={x:0,y:0,width:3.5,height:3.5},r={x:5.53,y:0,width:3.5,height:3.5}
+ const high={x:4.9,y:4,width:3,height:1}
+ const low={x:4.4,y:6,width:3,height:1}
+ close(requiredFamilyFollowerShift(l,r,[l,high],[r,low],2.03,.98),0)
+})
+test('family clearance is deterministic, zoom-independent and validates extents',()=>{
+ const l={x:0,y:0,width:3,height:3},r={x:4,y:0,width:3,height:3}
+ const kids=[{x:0,y:4,width:1,height:1}]
+ assert.throws(()=>requiredFamilyFollowerShift(l,r,[l,...kids],[r],-1,.98),RangeError)
+ assert.throws(()=>requiredFamilyFollowerShift(l,r,[l,...kids],[{x:4,y:0,width:0,height:2}],2.03,.98),RangeError)
+ const original=JSON.stringify([l,r,kids])
+ assert.ok(requiredFamilyFollowerShift(l,r,[l,...kids],[r],2.03,.98)>0)
+ assert.equal(JSON.stringify([l,r,kids]),original)
 })

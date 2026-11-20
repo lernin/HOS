@@ -31,7 +31,7 @@ test('Pearlescent Glass draws across workspace, palette and lift, with backgroun
  assert.match(board,/theme==='pearlescent-glass'&&<PearlescentGlass kind=\{a.kind\}/)
  assert.match(board,/theme==='pearlescent-glass'&&<PearlescentGlass kind=\{kind\}/)
  assert.match(board,/theme==='pearlescent-glass'&&<PearlescentGlass kind=\{paletteHover.kind\}/)
- assert.match(board,/theme==='pearlescent-glass'\?\(a.omitted\?'#e9ddf71f':'#ffffff01'\)/)
+ assert.match(board,/theme==='pearlescent-glass'\|\|theme==='pearlescent-airglass'\)\?\(a.omitted\?'#e9ddf71f':'#ffffff01'\)/)
  assert.match(board,/onPointerDown=\{e=>onShapeDown\(e,a.id\)\}/)
  assert.match(board,/const KEY='stax-free-molecules-v2'/)
  assert.match(css,/stax-pearlescent\/background\.avif/)

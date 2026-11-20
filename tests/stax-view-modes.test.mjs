@@ -13,9 +13,9 @@ const {
 }=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 test('STAX cycles classic, futuristic and four new materials without touching grammar',()=>{
- assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass'])
+ assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass'])
  let mode='color'
- for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','color']){
+ for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass','color']){
   mode=nextStaxTheme(mode)
   assert.equal(mode,next)
  }
@@ -66,7 +66,8 @@ test('experimental modes preserve source colors or apply one coherent luminous i
 })
 test('immersive backgrounds remain visible beneath transparent SVG board',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
- assert.match(board,/theme==='arc-reactor'\|\|theme==='hologram'\|\|theme==='cosmic'\|\|theme==='golden-line'\|\|theme==='pearlescent-glass'\|\|hasStaxMaterial\(theme\)\?'transparent'/)
+ assert.match(board,/theme==='arc-reactor'\|\|theme==='hologram'\|\|theme==='cosmic'\|\|theme==='golden-line'/)
+ assert.match(board,/theme==='pearlescent-glass'\|\|theme==='pearlescent-airglass'/)
 })
 
 test('Golden Line reuses Letterz gold colors without changing STAX semantic data',()=>{
@@ -132,7 +133,7 @@ test('jelly and both glasses use genuinely different radial or layered gradients
 })
 
 test('Pearlescent Glass is selectable and keeps all original modes unchanged',()=>{
- assert.equal(STAX_THEMES.length,13)
+ assert.equal(STAX_THEMES.length,14)
  assert.equal(staxThemeName('pearlescent-glass'),'Pearlescent Glass')
  assert.equal(staxBoardColor('pearlescent-glass'),'#f1edf8')
  assert.equal(staxShapeStroke('pearlescent-glass','#3379dc'),'#d8c9f6')
@@ -193,4 +194,22 @@ test('mobile toolbar uses semantic scalable SVG icons, including obvious fullscr
  assert.match(board,/aria-label=\{fullscreen\?"Exit full screen":"Go full screen"\}/)
  assert.match(board,/aria-label="Zoom out"/)
  assert.match(board,/aria-label="Zoom in"/)
+})
+
+test('Pearlescent Airglass is separate, transparent and preserves all original modes',async()=>{
+ const src=await readFile(new URL('../src/experiences/stax/pearlescent-airglass.tsx',import.meta.url),'utf8')
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ assert.equal(staxThemeName('pearlescent-glass'),'Pearlescent Glass')
+ assert.equal(staxThemeName('pearlescent-airglass'),'Pearlescent Airglass')
+ assert.equal(staxBoardColor('pearlescent-airglass'),staxBoardColor('pearlescent-glass'))
+ assert.match(src,/opacity="\.38"/)
+ assert.match(src,/stroke="#fef8ff"/)
+ assert.match(src,/PearlescentGlass kind=\{kind\}/)
+ assert.match(src,/pointerEvents="none"/)
+ assert.match(board,/theme==='pearlescent-airglass'&&<PearlescentAirglass kind=\{a\.kind\}/)
+ assert.match(board,/theme==='pearlescent-airglass'&&<PearlescentAirglass kind=\{kind\}/)
+ assert.match(board,/theme==='pearlescent-airglass'&&<PearlescentAirglass kind=\{paletteHover\.kind\}/)
+ assert.match(css,/data-theme='pearlescent-airglass'/)
+ assert.match(css,/\.stax-airglass-asset \{[\s\S]*?pointer-events:none!important;/)
 })
