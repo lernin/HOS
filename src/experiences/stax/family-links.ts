@@ -130,7 +130,37 @@ export function normalizeBlueSiblingOrder<T extends FamilyNode>(row:readonly T[]
    copy.splice(earliestGreen,0,purple)
   }
  }
+ // Pink prepositions enter before the determiner/adjective phrase even
+ // when the pink is added after an already assembled orange-purple-green row.
+ // Existing direct blue orange ("not") remains the leading support.
+ for(let i=0;i<copy.length;i++){
+  if(copy[i].kind!=='square')continue
+  const firstLater=copy.findIndex((n,j)=>j<i&&(n.kind==='rectangle'||n.kind==='oval'))
+  if(firstLater>=0){
+   const [pink]=copy.splice(i,1)
+   copy.splice(firstLater,0,pink)
+  }
+ }
  return copy
+}
+
+/** An orange direct under blue is an object-family "not" slot,
+ * never an independent subject-family modifier.
+ */
+export function canAttachOrangeUnderObjectBlue(graph:FamilyGraph,blueId:string):boolean {
+ if(!canAttachOrangeUnderBlue(graph,blueId))return false
+ return !graph.bonds.some(b=>b.relation==='sequence'&&b.parent===blueId&&
+  graph.atoms.some(a=>a.id===b.child&&a.kind==='triangle'))
+}
+
+/** A preposition may have its own adverb below it (always on the TV).
+ * This is different from a direct blue-headed "not" slot.
+ */
+export function canAttachAdverbUnderPreposition(graph:FamilyGraph,pinkId:string):boolean {
+ if(graph.atoms.find(a=>a.id===pinkId)?.kind!=='square')return false
+ const blueId=supportParent(graph,pinkId)
+ if(graph.atoms.find(a=>a.id===blueId)?.kind!=='circle')return false
+ return !supportChildOfKind(graph,pinkId,'hexagon')
 }
 
 /** Recursive purple possessive family, rooted in a blue noun/pronoun head.

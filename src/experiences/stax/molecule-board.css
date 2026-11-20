@@ -267,3 +267,33 @@
  .stax-molecule-dock {left:6px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);}
  .stax-molecule-example {max-width:40vw;}
 }
+
+/* Three experimental futuristic modes; geometry remains authored by STAX. */
+.stax-molecule-ui[data-theme='arc-reactor'] {
+ --stax-bg:#020b12;--stax-panel:rgba(2,22,34,.91);
+ --stax-button:#073144;--stax-border:#12d9f5;
+ --stax-text:#b6fbff;--stax-caption:#64e8f7;
+}
+.stax-molecule-ui[data-theme='hologram'] {
+ --stax-bg:#19172f;--stax-panel:rgba(43,31,77,.85);
+ --stax-button:#423365;--stax-border:#cf8cff;
+ --stax-text:#ffe2ff;--stax-caption:#cca9fb;
+}
+.stax-molecule-ui[data-theme='cosmic'] {
+ --stax-bg:#090b22;--stax-panel:rgba(15,20,53,.85);
+ --stax-button:#232852;--stax-border:#6678f4;
+ --stax-text:#f4eaff;--stax-caption:#b3bbff;
+}
+.stax-molecule-ui[data-theme='arc-reactor'] .stax-molecule-canvas {
+ background:radial-gradient(circle at 50% 48%,#14516a80 0%,transparent 42%),repeating-linear-gradient(0deg,transparent 0px,transparent 47px,#1ac8df20 48px),repeating-linear-gradient(90deg,transparent 0px,transparent 47px,#1ac8df20 48px),#020b12;
+}
+.stax-molecule-ui[data-theme='hologram'] .stax-molecule-canvas {
+ background:radial-gradient(ellipse at 24% 18%,#bd4bcd54,transparent 55%),radial-gradient(ellipse at 80% 84%,#4b9fec43,transparent 52%),#19172f;
+}
+.stax-molecule-ui[data-theme='cosmic'] .stax-molecule-canvas {
+ background:radial-gradient(ellipse at 23% 15%,#9c42bb66,transparent 56%),radial-gradient(ellipse at 85% 75%,#067f9b72,transparent 53%),#090b22;
+}
+.stax-molecule-ui[data-theme='arc-reactor'] svg g[data-kind] {filter:drop-shadow(0 0 8px #00e7ffae) drop-shadow(0 0 17px #00e7ff56)}
+.stax-molecule-ui[data-theme='hologram'] svg g[data-kind] {filter:drop-shadow(0 0 8px #fd98f9a0) drop-shadow(0 0 20px #a36afe75)}
+.stax-molecule-ui[data-theme='cosmic'] svg g[data-kind] {filter:drop-shadow(0 0 9px #8584ffab) drop-shadow(0 0 17px #40d4ed55)}
+@media(prefers-reduced-motion:reduce){.stax-molecule-ui svg g[data-kind]{animation:none!important}}

@@ -224,7 +224,8 @@ export async function forwardUploadChunk(uploadUrl: string, bytes: Uint8Array, r
       'content-type': mime,
       'content-range': range,
     },
-    body: bytes,
+    // Copy to an ArrayBuffer-backed typed array for TS 5.9 fetch BodyInit typing.
+    body: new Uint8Array(bytes),
   })
   if (response.status === 308) {
     const next = response.headers.get('location') || ''
