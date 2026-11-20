@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type {Kind} from './model'
 import {Glyph} from './SymbolCanvas'
 
@@ -19,7 +20,7 @@ export function ClassroomFoam({kind,w,h,omitted=false}:{
 }){
  if(omitted)return null
  const c=foam[kind]
- const key='stax-foam-'+kind
+ const key=useId().replace(/:/g,'-')+'-foam-'+kind
  return <g className="stax-foam-asset" pointerEvents="none" aria-hidden="true">
   <defs>
    <filter id={key+'-rough'} x="-9%" y="-12%" width="118%" height="130%">
