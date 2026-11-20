@@ -12,10 +12,10 @@ const {
  staxShapeFill,staxOmissionDash
 }=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
-test('STAX can cycle color, blueprint, black, monochrome then back to color',()=>{
- assert.deepEqual(STAX_THEMES,['color','blueprint','black','white'])
+test('STAX cycles classic and three futuristic visual modes',()=>{
+ assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic'])
  let mode='color'
- for(const next of ['blueprint','black','white','color']){
+ for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','color']){
   mode=nextStaxTheme(mode)
   assert.equal(mode,next)
  }
@@ -53,4 +53,18 @@ test('actual STAX board uses theme/omission inputs and persists existing documen
  assert.match(code,/strokeDasharray=\{staxOmissionDash\(a.omitted\)\}/)
  assert.match(code,/onClick=\{\(\)=>\{setOmitBrush/)
  assert.match(code,/const KEY='stax-free-molecules-v2'/)
+})
+
+test('experimental modes preserve source colors or apply one coherent luminous ink',()=>{
+ assert.equal(staxThemeName('arc-reactor'),'Arc Reactor')
+ assert.equal(staxThemeName('hologram'),'Holographic Glass')
+ assert.equal(staxThemeName('cosmic'),'Cosmic Aurora')
+ assert.equal(staxShapeStroke('arc-reactor','#e69131'),'#00f5ff')
+ assert.equal(staxShapeStroke('hologram','#e69131'),'#f7c5ff')
+ assert.equal(staxShapeStroke('cosmic','#e69131'),'#e69131')
+ for(const theme of STAX_THEMES)assert.ok(staxBoardColor(theme).startsWith('#'))
+})
+test('immersive backgrounds remain visible beneath transparent SVG board',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.match(board,/theme==='arc-reactor'\|\|theme==='hologram'\|\|theme==='cosmic'\?'transparent'/)
 })
