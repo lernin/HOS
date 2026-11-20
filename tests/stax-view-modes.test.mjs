@@ -247,7 +247,8 @@ test('Classroom Foam uses photographed chips and desk without changing magnet lo
   assert.ok(foam.includes(kind+':'),'missing photographed tile for '+kind)
  for(const kind of ['a.kind','kind','paletteHover.kind'])
   assert.ok(board.includes("theme==='classroom-foam'&&<FoamChip kind={"+kind+"}"),'missing foam render surface for '+kind)
- assert.ok(css.includes("url('/stax-foam/wood-desk.webp')"))
+ assert.ok(board.includes('href="/stax-foam/wood-desk.webp"'))
+ assert.ok(board.includes('patternUnits="userSpaceOnUse"'))
  assert.ok(board.includes('className="stax-foam-shortcut"'))
  assert.ok(board.includes("const KEY='stax-free-molecules-v2'"))
 });
