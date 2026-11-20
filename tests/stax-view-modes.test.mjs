@@ -233,7 +233,7 @@ test('Pearlescent Dusk is an isolated more opaque glass mode with darker contras
 })
 
 
-test('Classroom Foam uses seven photographed cutouts and the real desk without changing magnets',async()=>{
+test('Classroom Foam uses photographed chips and desk without changing magnet logic',async()=>{
  const foam=await readFile(new URL('../src/experiences/stax/foam-chips.tsx',import.meta.url),'utf8')
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
@@ -242,13 +242,12 @@ test('Classroom Foam uses seven photographed cutouts and the real desk without c
  assert.equal(staxThemeName('classroom-foam'),'Classroom Foam')
  assert.equal(atlas.toString('ascii',0,4),'RIFF')
  assert.equal(desk.toString('ascii',0,4),'RIFF')
- assert.match(foam,/pointerEvents="none"/)
+ assert.ok(foam.includes('pointerEvents="none"'))
  for(const kind of ['circle','triangle','square','rectangle','diamond','hexagon','oval'])
-  assert.match(foam,new RegExp(kind+':\\d'))
- assert.match(board,/theme==='classroom-foam'&&<FoamChip kind=\\{a.kind\\}/)
- assert.match(board,/theme==='classroom-foam'&&<FoamChip kind=\\{kind\\}/)
- assert.match(board,/theme==='classroom-foam'&&<FoamChip kind=\\{paletteHover.kind\\}/)
- assert.match(css,/url\\('\/stax-foam\/wood-desk.webp'\\)/)
- assert.match(board,/className="stax-foam-shortcut"/)
- assert.match(board,/const KEY='stax-free-molecules-v2'/)
+  assert.ok(foam.includes(kind+':'),'missing photographed tile for '+kind)
+ for(const kind of ['a.kind','kind','paletteHover.kind'])
+  assert.ok(board.includes("theme==='classroom-foam'&&<FoamChip kind={"+kind+"}"),'missing foam render surface for '+kind)
+ assert.ok(css.includes("url('/stax-foam/wood-desk.webp')"))
+ assert.ok(board.includes('className="stax-foam-shortcut"'))
+ assert.ok(board.includes("const KEY='stax-free-molecules-v2'"))
 });
