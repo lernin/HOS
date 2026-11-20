@@ -9,7 +9,7 @@ const src=await readFile(new URL('../src/experiences/stax/geometry.ts',import.me
 const js=ts.transpileModule(src,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022,
 }}).outputText
-const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,horizontalFollower}=
+const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,horizontalFollower,positionRedRightNestedOrange}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`expected ${a} ≈ ${b}`)
 const support=(parent,children,gap=STAX_SPACING.attachment)=>
@@ -116,4 +116,18 @@ test('refuse negative gaps and malformed child extents',()=>{
   [{id:'x',width:2,height:1}],-.28),RangeError)
  assert.throws(()=>support({x:0,y:0,width:3.5,height:3.5},
   [{id:'x',width:2,height:1,extentLeft:1}]),RangeError)
+})
+
+test('third orange under the right red supporter shares the right orange centerline',()=>{
+ const parent={x:135,y:240,width:2.525,height:1.559}
+ const child={width:2.525,height:1.559}
+ const pos=positionRedRightNestedOrange(parent,child,STAX_SPACING.attachment)
+ close(pos.x+child.width/2,parent.x+parent.width/2)
+ close(pos.y,parent.y+parent.height+STAX_SPACING.attachment)
+ const oldSingleton=support(parent,[{id:'old',...child}]).get('old')
+ assert.ok(pos.x>oldSingleton.x,'must shift right relative to previous too-left position')
+})
+test('third red-family positioning rejects invalid dimensions and negative gaps',()=>{
+ assert.throws(()=>positionRedRightNestedOrange({x:0,y:0,width:1,height:1},{width:1,height:1},-1),RangeError)
+ assert.throws(()=>positionRedRightNestedOrange({x:0,y:0,width:0,height:1},{width:1,height:1},.28),RangeError)
 })

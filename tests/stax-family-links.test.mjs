@@ -9,7 +9,7 @@ const js=ts.transpileModule(src,{compilerOptions:{
 }}).outputText
 const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain,
  canFollowBlueOrange,largestAssembledFamily,normalizeBlueSiblingOrder,canNestPossessive,
- withRedCompanion,canNestRightRedOrange}=
+ withRedCompanion,canNestRightRedOrange,canAttachOrangeUnderBlue}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 const atoms=[
@@ -263,4 +263,29 @@ test('auto-red pair refuses exceeding the 80-shape persisted document limit',()=
  const doc={atoms,bonds:[sup('red','aux')]}
  assert.equal(doc.atoms.length,80)
  assert.equal(withRedCompanion(doc,'red',id=>({id,kind:'hexagon'})),doc)
+})
+
+test('orange may start a blue family when no green adjective exists',()=>{
+ const d={atoms:[{id:'blue',kind:'circle'},{id:'orange',kind:'hexagon'}],bonds:[]}
+ assert.equal(canAttachOrangeUnderBlue(d,'blue'),true)
+})
+test('orange cannot be added horizontally after green inside a blue family',()=>{
+ const d={atoms:[{id:'blue',kind:'circle'},{id:'green',kind:'oval'},{id:'orange',kind:'hexagon'}],
+  bonds:[sup('blue','green')]}
+ assert.equal(canAttachOrangeUnderBlue(d,'blue'),false)
+})
+test('a loose green does not prevent an independent orange-blue family',()=>{
+ const d={atoms:[{id:'blue',kind:'circle'},{id:'green',kind:'oval'},{id:'orange',kind:'hexagon'}],bonds:[]}
+ assert.equal(canAttachOrangeUnderBlue(d,'blue'),true)
+})
+test('orange already preceding green stays in the map without destructive cleanup',()=>{
+ const d={atoms:[{id:'blue',kind:'circle'},{id:'orange',kind:'hexagon'},
+  {id:'green',kind:'oval'}],bonds:[sup('blue','orange'),sup('blue','green')]}
+ assert.equal(canAttachOrangeUnderBlue(d,'blue'),false)
+ assert.equal(d.bonds.length,2,'existing valid family data remains intact')
+})
+test('orange after green cannot be mistaken for an under-red orange',()=>{
+ const d={atoms:[{id:'red',kind:'triangle'},{id:'blue',kind:'circle'},
+  {id:'green',kind:'oval'}],bonds:[sup('blue','green')]}
+ assert.equal(canAttachOrangeUnderBlue(d,'red'),false)
 })

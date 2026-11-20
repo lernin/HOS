@@ -10,7 +10,7 @@
     "assemble:logyq": "node scripts/assemble-logyq.mjs",
     "test:viewer": "node --test tests/thekonym-viewer.test.mjs",
     "dev": "vite --host",
-    "test:stax": "node --test tests/stax-geometry.test.mjs tests/stax-family-links.test.mjs",
+    "test:stax": "node --test tests/stax-geometry.test.mjs tests/stax-family-links.test.mjs tests/stax-view-modes.test.mjs",
     "build": "npm run test:stax && tsc -b && vite build",
     "preview": "vite preview --host"
   },
