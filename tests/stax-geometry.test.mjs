@@ -9,7 +9,7 @@ const src=await readFile(new URL('../src/experiences/stax/geometry.ts',import.me
 const js=ts.transpileModule(src,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022,
 }}).outputText
-const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,horizontalFollower,positionRedRightNestedOrange,requiredFamilyFollowerShift}=
+const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,positionRedOrangeCrossPair,horizontalFollower,positionRedRightNestedOrange,requiredFamilyFollowerShift}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`expected ${a} ≈ ${b}`)
 const support=(parent,children,gap=STAX_SPACING.attachment)=>
@@ -165,3 +165,21 @@ test('family clearance is deterministic, zoom-independent and validates extents'
  assert.ok(requiredFamilyFollowerShift(l,r,[l,...kids],[r],2.03,.98)>0)
  assert.equal(JSON.stringify([l,r,kids]),original)
 })
+
+
+test('two large orange supporters beneath red cross to form an actual X',()=>{
+ const red={x:0,y:0,width:4.6,height:3.548}
+ const children=[{id:'left',width:2.775,height:1.566},{id:'right',width:2.775,height:1.566}]
+ const result=positionRedOrangeCrossPair(red,children,.28)
+ const left=result.get('left'),right=result.get('right')
+ const crossing=left.x+children[0].width-right.x
+ assert.ok(crossing>0,'inner hexagon tips must overlap, not merely approach')
+ close(crossing,2.775*.025)
+ assert.ok(crossing<2.775*.05,'cross at tips, without stacking the hexagons')
+ close((left.x+right.x+children[1].width)/2,red.x+red.width/2)
+ close(left.y,right.y)
+ close(left.y,red.y+red.height+.28)
+ // The rest of STAX keeps its general nonnegative-gap sibling layout.
+ const ordinary=support(red,children)
+ assert.ok(ordinary.get('left').x+children[0].width<ordinary.get('right').x)
+});
