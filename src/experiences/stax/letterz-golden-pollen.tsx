@@ -68,7 +68,8 @@ export function staxLetterzPath(kind:Kind,w:number,h:number):string{
  if(kind==='square'||kind==='rectangle')return `M 0 0 H ${w} V ${h} H 0 Z`
  if(kind==='triangle')return polygon([[w/2,0],[w,h],[0,h]])
  if(kind==='diamond')return polygon([[w/2,0],[w,h/2],[w/2,h],[0,h/2]])
- return polygon([[w*.22,0],[w*.78,0],[w,h/2],[w*.78,h],[w*.22,h],[0,h/2]])
+ if(kind==='hexagon')return polygon([[w*.22,0],[w*.78,0],[w,h/2],[w*.78,h],[w*.22,h],[0,h/2]])
+ throw Error('Unsupported STAX kind: '+kind)
 }
 
 /** Letterz's exact path-length and normal/tangent sampling from
