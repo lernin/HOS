@@ -262,3 +262,22 @@ test('Classroom Foam crops each atlas tile in all three nested-SVG contexts',asy
  assert.match(css,/\.stax-molecule-palette button > svg \{[\s\S]*?overflow:visible;/)
  assert.match(css,/\.stax-lifted-ghost > svg \{overflow:visible;/)
 });
+
+
+test('Classroom Foam desk shares immutable world coordinates with chips during pan and zoom',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ // The same viewBox transforms chips and the wood. A screen-space CSS background
+ // would stay in place while the chips moved; prevent that visual regression.
+ assert.ok(board.includes('viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}'))
+ assert.ok(board.includes('patternUnits="userSpaceOnUse"'))
+ assert.ok(board.includes('patternContentUnits="userSpaceOnUse"'))
+ assert.ok(board.includes('id="stax-classroom-wood-world"'))
+ assert.ok(board.includes('viewBox="0 115 1536 548"'))
+ assert.ok(board.includes("fill={theme==='classroom-foam'?'url(#stax-classroom-wood-world)'"))
+ assert.ok(board.includes('data-board-background="true"'))
+ assert.ok(board.indexOf('stax-classroom-wood-world')<board.indexOf('data-board-background="true"'))
+ assert.ok(board.indexOf('data-board-background="true"')<board.indexOf('{doc.atoms.map('))
+ assert.ok(css.includes("background-image:none;"))
+ assert.ok(!css.includes("background-image:url('/stax-foam/wood-desk.webp')"))
+});
