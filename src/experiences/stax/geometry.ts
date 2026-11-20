@@ -88,3 +88,20 @@ export function horizontalFollower(
  if(!Number.isFinite(gap)||gap<0)throw new RangeError('Invalid STAX horizontal gap')
  return {x:left.x+left.width+gap,y:left.y+(left.height-right.height)/2}
 }
+
+/** Red's third orange is a special second-level adverb on the RIGHT orange.
+ * Unlike a default single-child support (right edge at parent center), its
+ * horizontal CENTER follows the right-hand orange's center. This is an
+ * isolated, testable red-family adjustment; vertical attachment remains .28.
+ */
+export function positionRedRightNestedOrange(
+ parent:Box,child:{width:number;height:number},belowGap:number
+):ChildPosition {
+ if(![parent.x,parent.y,parent.width,parent.height,child.width,child.height,belowGap].every(Number.isFinite)||
+    parent.width<=0||parent.height<=0||child.width<=0||child.height<=0||belowGap<0)
+  throw new RangeError('Invalid nested red-family coordinates')
+ return {
+  x:parent.x+(parent.width-child.width)/2,
+  y:parent.y+parent.height+belowGap,
+ }
+}
