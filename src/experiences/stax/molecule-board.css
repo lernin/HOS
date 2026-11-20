@@ -741,3 +741,40 @@
  color:#faf2ff;
  text-shadow:0 1px 3px rgba(10,6,25,.65);
 }
+
+
+/* The photographed classroom experience is opt-in. This is presentation only:
+   real desk in CSS, true transparent foam pieces in the SVG. */
+.stax-molecule-ui[data-theme='classroom-foam'] {
+ --stax-bg:#906c43;
+ --stax-panel:rgba(255,250,239,.94);
+ --stax-button:rgba(255,252,243,.96);
+ --stax-border:#9e896b;
+ --stax-text:#49341e;
+ --stax-caption:#574430;
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-canvas {
+ background-image:url('/stax-foam/wood-desk.webp');
+ background-position:center center;
+ background-size:cover;
+ background-repeat:no-repeat;
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-empty {
+ color:#fff8e7;
+ text-shadow:0 1px 4px #241a11;
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-authentic-foam-chip {
+ filter:drop-shadow(0 3px 2px rgba(35,19,5,.35));
+}
+.stax-molecule-tools button.stax-foam-shortcut {
+ width:46px;
+ min-width:46px;
+ font-size:11px;
+ font-weight:750;
+ letter-spacing:-.2px;
+}
+.stax-molecule-tools button.stax-foam-shortcut[aria-pressed='true'] {
+ background:#735136;
+ color:#fff8ee;
+ border-color:#9e7149;
+}
