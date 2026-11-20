@@ -944,7 +944,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   {questActive&&<p className="stax-molecule-example">STAX QUEST · Level 21 — She’s buying a present for her best friend because her birthday is tomorrow. <small>Illustrative mapping; original slide does not label each shape with its individual word.</small></p>}
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
-    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={staxBoardColor(theme)}/>
+    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'transparent':staxBoardColor(theme)}/>
     {paletteHover?.snap&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
       {(()=>{
        const phantom:Atom={id:'__palette_preview__',kind:paletteHover.kind,x:paletteHover.worldX,y:paletteHover.worldY,variant:paletteHover.variant,omitted:omitBrush}
