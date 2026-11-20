@@ -348,3 +348,27 @@ test('pink-near orange insertion magnet and nested pink reflow have direct rules
  assert.match(src,/Orange arriving beside a pink support inserts BEFORE pink/)
  assert.match(src,/if\(child\.kind==='square'\)next=alignNestedChain\(next,child\.id,'hexagon'\)/)
 })
+
+test('orange below orange shares its parent centerline instead of left-offset singleton anchor',async()=>{
+ const src=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const section=src.slice(src.indexOf('function nestedChildPosition('),src.indexOf('function miniFamilyPosition('))
+ assert.match(section,/if\(parent\.kind==='hexagon'&&child\.kind==='hexagon'\)return positionRedRightNestedOrange/)
+ assert.match(section,/\{width:childWidth,height:childHeight\},VERTICAL/)
+ assert.match(section,/return positionChildren\(/,'non-orange nested roles still use their original anchors')
+ const reflow=src.slice(src.indexOf('function alignNestedChain('),src.indexOf('function alignSupporters('))
+ assert.match(reflow,/isRightRedOrange\?redRightChildPosition\(parent\):nestedChildPosition\(parent,child\)/)
+ const magnet=src.slice(src.indexOf('function bestSnap('),src.indexOf('function resolveMagnet('))
+ assert.match(magnet,/const target=redRightChildPosition\(b\)/,'red pair third-child preview remains centered')
+})
+test('large green complements follow red verbs as sequences, never noun supporters',async()=>{
+ const src=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const section=src.slice(src.indexOf('function bestSnap('),src.indexOf('function resolveMagnet('))
+ assert.match(section,/a\.kind==='oval'&&b\.kind==='triangle'/,'drag green toward red')
+ assert.match(section,/a\.kind==='triangle'&&b\.kind==='oval'/,'drag red toward green')
+ assert.match(section,/parent:b\.id,child:a\.id,relation:'sequence'/)
+ assert.match(section,/parent:a\.id,child:b\.id,relation:'sequence'/)
+ assert.match(section,/z\.parent===b\.id\|\|z\.child===a\.id/,'reject occupied follower slot')
+ assert.match(src,/if\(a\.kind==='oval'\)return owner&&byId\(d,owner\.parent\)\?\.kind==='circle'\?'small':'large'/,
+  'a green complement not supported by blue stays large')
+ assert.match(src,/if\(snap\.relation!=='support'\)return typed/,'following complement must not enter blue supporter reflow')
+})
