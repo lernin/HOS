@@ -473,7 +473,7 @@ test('red pair uses large forms until a third orange makes the family compact',a
  assert.match(board,/function redOrangeFamilySize\(d:Draft,redId:string\):number/)
  assert.match(board,/function orangeRedRoot\(d:Draft,orangeId:string\)/)
  assert.match(board,/if\(redRoot\)return redOrangeFamilySize\(d,redRoot\)>2\?'small':'large'/)
- assert.match(board,/const children=orange\.map\(a=>\{/)
+ assert.ok(board.includes("const children=orange.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)}))"))
  assert.match(board,/const hasLeftLowerPair=orange\.length===2&&orangeChildren\(doc,orange\[0\]\.id\)\.length===2/)
  assert.match(board,/const childW=compact\?smallWidth\('hexagon'\):width\('hexagon'\)/)
  assert.match(board,/const childH=compact\?height\('hexagon'\)\*SMALL_ORANGE_Y:height\('hexagon'\)/)
