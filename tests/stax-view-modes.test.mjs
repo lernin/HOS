@@ -251,3 +251,14 @@ test('Classroom Foam uses photographed chips and desk without changing magnet lo
  assert.ok(board.includes('className="stax-foam-shortcut"'))
  assert.ok(board.includes("const KEY='stax-free-molecules-v2'"))
 });
+
+test('Classroom Foam crops each atlas tile in all three nested-SVG contexts',async()=>{
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ const foam=await readFile(new URL('../src/experiences/stax/foam-chips.tsx',import.meta.url),'utf8')
+ assert.match(foam,/viewBox=\{\`\$\{\(tile%4\)\*CELL\} \$\{Math.floor\(tile\/4\)\*CELL\} \$\{CELL\} \$\{CELL\}\`\}/)
+ assert.match(foam,/className="stax-authentic-foam-chip"/)
+ assert.match(css,/\.stax-molecule-ui\[data-theme='classroom-foam'\] svg\.stax-authentic-foam-chip \{\s*overflow:hidden!important;\s*clip-path:inset\(0\);\s*pointer-events:none!important;/)
+ assert.match(css,/\.stax-molecule-ui\[data-theme='classroom-foam'\] \.stax-authentic-foam-chip image \{\s*pointer-events:none!important;/)
+ assert.match(css,/\.stax-molecule-palette button > svg \{[\s\S]*?overflow:visible;/)
+ assert.match(css,/\.stax-lifted-ghost > svg \{overflow:visible;/)
+});
