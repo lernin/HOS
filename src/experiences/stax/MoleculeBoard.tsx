@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, horizontalFollower, type FamilyChild } from './geometry'
-import { canExtendSupportChain, rootedSupportChain, supportChildOfKind } from './family-links'
+import { canExtendSupportChain, canFollowBlueOrange, largestAssembledFamily, rootedSupportChain, supportChildOfKind } from './family-links'
 import './molecule-board.css'
 
 /**
@@ -152,19 +152,15 @@ function otherInPair(d:Draft,id:string){
 }
 /** Reposition only a blue head's immediate supporters. Sequence heads are NEVER reflowed. */
 /**
- * A blue noun owns one horizontal supporter row. Individual colors are slots,
- * ordered pink → purple → green → orange, regardless of assembly order.
- * A pink-purple pair is still one connection group but occupies two slots.
- * All direct children stay free until a genuine support bond is created.
+ * A blue noun/pronoun owns one horizontal supporter row. Members retain their
+ * actual attachment order. This lets orange precede pink, purple, or green.
+ * A paired support can still travel with its partner; every member is optional.
  */
-const BLUE_SUPPORT_ORDER:Kind[]=['square','rectangle','oval','hexagon']
+const BLUE_SUPPORT_KINDS:Kind[]=['square','rectangle','oval','hexagon']
 function blueSupportAtoms(doc:Draft,blueId:string):Atom[] {
  const ids=new Set(doc.bonds.filter(b=>b.relation==='support'&&b.parent===blueId).map(b=>b.child))
  for(const id of [...ids]){const other=otherInPair(doc,id);if(other)ids.add(other)}
- // Same-color adjectives retain their creation/attachment order within the noun family.
- return [...ids].map(id=>byId(doc,id)).filter(a=>BLUE_SUPPORT_ORDER.includes(a.kind))
-  .sort((a,b)=>BLUE_SUPPORT_ORDER.indexOf(a.kind)-BLUE_SUPPORT_ORDER.indexOf(b.kind)||
-    doc.bonds.findIndex(e=>e.child===a.id)-doc.bonds.findIndex(e=>e.child===b.id))
+ return [...ids].map(id=>byId(doc,id)).filter(a=>BLUE_SUPPORT_KINDS.includes(a.kind))
 }
 function blueHeadOfAdjective(doc:Draft,greenId:string):string|undefined {
  const parent=parentOfSupport(doc,greenId)
@@ -252,6 +248,16 @@ function alignSupporters(doc:Draft,blueId:string):Draft {
  }
  return next
 }
+/** Recompute attached families after a bond or member disappears.
+ * The same Blueprint geometry runs on snap, detach, delete and broom cleanup.
+ * Free shapes and detached branches keep their own world-space coordinates.
+ */
+function reflowAfterRemoval(d:Draft):Draft {
+ let next=normalizeRoles(d)
+ for(const red of next.atoms.filter(a=>a.kind==='triangle'))next=alignRedSupporters(next,red.id)
+ for(const blue of next.atoms.filter(a=>a.kind==='circle'))next=alignSupporters(next,blue.id)
+ return next
+}
 function supportPosition(blue:Atom,support:Atom,d:Draft) {
  const proposed:Draft={...d,bonds:[...d.bonds,{parent:blue.id,child:support.id,relation:'support'}]}
  return blueSupportPositions(normalizeRoles(proposed),blue.id).get(support.id)!
@@ -289,6 +295,25 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
       const dy=a.id===sup.id?desired.y-sup.y:sup.y-desired.y
       offered({parent:blue.id,child:sup.id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)})
      }
+    }
+   }
+   // Follow an existing orange attached directly beneath BLUE with a pink,
+   // purple or green sibling. The orange does not become that shape's parent.
+   // This port deliberately NEVER applies to orange underneath RED.
+   if(a.kind==='square'||a.kind==='rectangle'||a.kind==='oval'){
+    const blueId=canFollowBlueOrange(d,a.id,b.id)
+    if(blueId&&!molecule(d,a.id).has(b.id)){
+     const blue=byId(d,blueId)
+     const desired=supportPosition(blue,a,d)
+     // The candidate may be presented beside the existing orange BEFORE
+     // its row reflows. Permit either that handoff or the precise final port.
+     const alongsideX=b.x+atomWidth(b)+GAP
+     const alongsideY=b.y+(atomHeight(b)-atomHeight(a))/2
+     const proximity=Math.min(
+      Math.hypot(desired.x-a.x,desired.y-a.y),
+      Math.hypot(alongsideX-a.x,alongsideY-a.y))
+     offered({parent:blue.id,child:a.id,relation:'support',
+      dx:desired.x-a.x,dy:desired.y-a.y,distance:proximity})
     }
    }
    // New-family n: orange attaches below its REAL green adjective parent.
@@ -595,11 +620,11 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     const old=currentDoc.current,ids=descendants(old,d.id)
     // Root molecules and standalone atoms also fall; only external parent bonds detach.
     const stripped={...old,bonds:old.bonds.filter(b=>ids.has(b.parent)===ids.has(b.child))}
-    const moved=translate(stripped,ids,0,DROP_DISTANCE)
+    const moved=reflowAfterRemoval(translate(stripped,ids,0,DROP_DISTANCE))
     if(fallTimer.current)clearTimeout(fallTimer.current)
     setFall(new Set(ids));save(moved,old)
     fallTimer.current=setTimeout(()=>setFall(new Set()),300)
-    setHint('Branch dropped with its descendants; the rest stayed where it was.')
+    setHint('Branch detached. The remaining siblings reflowed; Undo restores the previous map.')
    }else lastTap.current={id:d.id,time:t}
    return
   }
@@ -744,7 +769,31 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   try{if(document.fullscreenElement===rootRef.current){await document.exitFullscreen()}else if(rootRef.current?.requestFullscreen){await rootRef.current.requestFullscreen()}}catch{setHint('Full-screen mode is restricted in this browser; the canvas still fills the available window.')}
  }
  function undo(){const prev=history.at(-1);if(prev){update(prev);setHistory(v=>v.slice(0,-1));setHint('Undone.')}}
- function remove(){if(!selected)return;save({atoms:doc.atoms.filter(a=>a.id!==selected),bonds:doc.bonds.filter(b=>b.parent!==selected&&b.child!==selected)});setSelected(null)}
+ function remove(){
+  if(!selected)return
+  const before=currentDoc.current
+  const remaining={
+   atoms:before.atoms.filter(a=>a.id!==selected),
+   bonds:before.bonds.filter(b=>b.parent!==selected&&b.child!==selected),
+  }
+  save(reflowAfterRemoval(remaining),before)
+  setSelected(null)
+  setHint('Removed selected shape. Its former siblings have reflowed; Undo restores it.')
+ }
+ function sweepLoose(){
+  const before=currentDoc.current,keep=largestAssembledFamily(before,selected)
+  if(!keep){setHint('Nothing to sweep yet. Connect two shapes to form a map first.');return}
+  const discard=before.atoms.length-keep.size
+  if(!discard){setHint('Already clean: every shape belongs to the largest map.');return}
+  const trimmed:Draft={
+   atoms:before.atoms.filter(a=>keep.has(a.id)),
+   bonds:before.bonds.filter(b=>keep.has(b.parent)&&keep.has(b.child)),
+  }
+  save(reflowAfterRemoval(trimmed),before)
+  if(selected&&!keep.has(selected))setSelected(null)
+  setQuestActive(false)
+  setHint('Swept '+discard+' unattached or smaller-map shape'+(discard===1?'':'s')+'. Undo restores everything.')
+ }
  return <div ref={rootRef} className="stax-molecule-ui">
   <div className="stax-molecule-dock" aria-label="STAX workspace controls">
    <div className="stax-molecule-tools">
@@ -754,6 +803,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
      <button onClick={loadQuest} title="Load Quest Level 21" aria-label="Load Quest 21">Q21</button>
      <button onClick={undo} disabled={!history.length} title="Undo" aria-label="Undo">↶</button>
      <button onClick={remove} disabled={!selected} title="Remove selected shape" aria-label="Remove selected shape">⌫</button>
+     <button onClick={sweepLoose} title="Sweep loose shapes and smaller maps; keep the largest connected map (Undo restores)" aria-label="Sweep loose shapes; keep largest connected map">🧹</button>
      <button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}} title="Clear all shapes" aria-label="Clear all shapes">×</button>
     </div>
    </div>
