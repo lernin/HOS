@@ -1,195 +1,237 @@
-.stax-molecule-ui{display:flex;flex-direction:column;gap:10px;min-width:0}.stax-molecule-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:7px 2px}.stax-molecule-tools strong{font-size:14px}.stax-molecule-tools span{color:#7a8b95;font-size:11px}.stax-molecule-buttons{display:flex;gap:6px;margin-left:auto}.stax-molecule-buttons button{border:1px solid #cfd8dc;background:#fff;padding:7px 11px;border-radius:7px;font-size:12px}.stax-molecule-canvas{position:relative;min-height:370px;width:100%;border:1px solid #dce1df;border-radius:10px;overflow:hidden;background:#faf9f6}.stax-molecule-canvas svg{width:100%;height:clamp(370px,55dvh,620px);display:block;touch-action:none}.stax-molecule-canvas svg g[data-kind]{touch-action:none;user-select:none}.stax-molecule-empty{position:absolute;top:45%;left:0;right:0;text-align:center;font-size:13px;color:#8a9ba5;pointer-events:none}.stax-molecule-palette{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}.stax-molecule-palette button{height:66px;border:1px solid #dfe5e9;background:#fff;border-radius:9px;display:flex;justify-content:center;align-items:center;padding:6px;touch-action:manipulation}.stax-molecule-palette button svg{width:100%;height:48px;overflow:visible}.stax-molecule-hint{font-size:12px;color:#426274;margin:4px 0}.stax-molecule-note{font-size:10px;color:#88959b;margin:0 0 12px}.stax-molecule-canvas [data-kind] path,.stax-molecule-canvas [data-kind] rect,.stax-molecule-canvas [data-kind] polygon,.stax-molecule-canvas [data-kind] ellipse{pointer-events:visiblePainted}@media(max-width:700px){.stax-molecule-canvas svg{height:55dvh;min-height:375px}.stax-molecule-palette button{height:51px;padding:3px}.stax-molecule-palette button svg{height:39px}.stax-molecule-tools span{width:100%;order:3}}
-/* Camera controls do not modify model geometry or saved molecule positions. */
-.stax-molecule-view-controls{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
-.stax-molecule-view-controls button{border:1px solid #b9cbd5;background:#fff;color:#29495f;padding:8px 12px;border-radius:8px;font-size:13px;min-height:34px;touch-action:manipulation}
-.stax-molecule-view-controls button:focus-visible{outline:3px solid #4389c7;outline-offset:2px}
-.stax-molecule-view-controls span{min-width:47px;text-align:center;color:#465967;font-size:13px;font-variant-numeric:tabular-nums}
-.stax-molecule-canvas svg g.stax-molecule-dropping{transition:transform .28s cubic-bezier(.23,.78,.34,1)}
-@media(max-width:700px){.stax-molecule-view-controls{justify-content:center}.stax-molecule-view-controls button{padding:8px 10px}}
+/* STAX magnetic workspace: canonical immersive layout.
+   One set of declarations per component; avoid stacked legacy overrides.
+   All positions are UI-only: grammar positions live in the geometry engine. */
 
-/* Mobile pointer capture must win over browser scrolling when pulling atoms from palette. */
-.stax-molecule-palette button{touch-action:none;user-select:none;-webkit-user-select:none}
-.stax-molecule-canvas svg{touch-action:none;user-select:none}
-.stax-molecule-canvas [data-kind]{touch-action:none}
-
-/* Lifted shape follows the pointer ~1cm above the finger, without a white tile. */
-.stax-lifted-ghost{position:fixed;z-index:9999;pointer-events:none;transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;filter:drop-shadow(0 5px 7px rgba(20,43,60,.18));will-change:left,top}
-.stax-lifted-ghost svg{overflow:visible;max-width:none;max-height:none}
-.stax-lifted-ghost.is-eligible{animation:stax-magnet-pulse .7s ease-in-out infinite alternate;filter:drop-shadow(0 0 9px #0aa57c) drop-shadow(0 0 16px rgba(10,165,124,.4))}
-.stax-molecule-canvas svg .stax-resonant-target{filter:drop-shadow(0 0 8px #1adbb0) drop-shadow(0 0 14px rgba(16,167,128,.55));animation:stax-magnet-pulse .7s ease-in-out infinite alternate}
-.stax-molecule-canvas svg .stax-resonance-ghost{filter:drop-shadow(0 0 7px #10b88f);animation:stax-magnet-pulse .7s ease-in-out infinite alternate}
-@keyframes stax-magnet-pulse{from{opacity:.55}to{opacity:1}}
-@media(prefers-reduced-motion:reduce){.stax-lifted-ghost.is-eligible,.stax-molecule-canvas svg .stax-resonant-target,.stax-molecule-canvas svg .stax-resonance-ghost{animation:none;opacity:1}}
-
-/* Blueprint page 24: separate green complement/modifier and orange size options. */
-.stax-molecule-palette{grid-template-columns:repeat(9,minmax(0,1fr))}
-.stax-molecule-palette button{min-width:0}
-.stax-molecule-example{margin:0;border-left:3px solid #3381b6;padding:7px 10px;background:#eef6fb;border-radius:5px;color:#2b4962;font-size:12px;line-height:1.55}
-.stax-molecule-example small{display:block;color:#657b8b;font-size:10px}
-@media(max-width:700px){
- .stax-molecule-palette{grid-template-columns:repeat(5,minmax(0,1fr))}
- .stax-molecule-palette button{height:51px}
- .stax-molecule-tools{gap:7px}
- .stax-molecule-buttons{flex-wrap:wrap}
+.stax-molecule-ui {
+ --stax-control-size:46px;
+ position:fixed;
+ inset:0;
+ z-index:1000;
+ isolation:isolate;
+ width:100vw;
+ height:100dvh;
+ overflow:hidden;
+ background:#faf9f6;
 }
 
-.stax-molecule-palette button:has(.stax-palette-kind){flex-direction:column;gap:1px;padding:3px 2px}
-.stax-molecule-palette button:has(.stax-palette-kind) svg{height:31px}
-.stax-palette-kind{display:block;font-size:9px;line-height:1.1;color:#526676;white-space:nowrap;pointer-events:none}
-@media(max-width:700px){.stax-molecule-palette button:has(.stax-palette-kind){height:62px}}
-
-/* Magnetic-only immersive tabletop. The classic STAX editor remains unchanged. */
-.stax-molecule-ui{
- position:fixed;inset:0;z-index:1000;width:100vw;height:100dvh;max-width:none;max-height:100dvh;
- display:block;overflow:hidden;background:#faf9f6;padding:0;margin:0;isolation:isolate;
+.stax-molecule-canvas {
+ position:absolute;
+ inset:0;
+ overflow:hidden;
+ background:#faf9f6;
 }
-.stax-molecule-canvas{position:absolute;inset:0;min-height:0;width:100%;height:100%;border:0;border-radius:0;background:#faf9f6}
-.stax-molecule-canvas svg,.stax-molecule-canvas svg:fullscreen{
- width:100%;height:100%;min-height:0;max-height:none;display:block;touch-action:none;
+.stax-molecule-canvas svg {
+ display:block;
+ width:100%;
+ height:100%;
+ touch-action:none;
+ user-select:none;
 }
-.stax-molecule-tools{
- position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);left:calc(env(safe-area-inset-left,0px) + 10px);
- z-index:5;display:flex;align-items:center;gap:5px;padding:7px 9px;
- max-width:min(66vw,650px);border:1px solid #d6dfe4;border-radius:12px;
- background:rgba(255,255,255,.92);box-shadow:0 3px 16px #16324817;backdrop-filter:blur(12px);
+.stax-molecule-canvas svg g[data-kind] {
+ touch-action:none;
+ user-select:none;
+ cursor:grab;
 }
-.stax-molecule-tools strong{font-size:12px;white-space:nowrap;letter-spacing:.02em}
-.stax-molecule-buttons{display:flex;align-items:center;gap:4px;margin-left:4px;flex-wrap:wrap}
-.stax-molecule-buttons button{padding:7px 8px;min-height:33px;font-size:11px}
-.stax-molecule-view-controls{
- position:absolute;left:calc(env(safe-area-inset-left,0px) + 10px);bottom:calc(env(safe-area-inset-bottom,0px) + 12px);
- z-index:5;display:flex;gap:4px;justify-content:flex-start;align-items:center;
- padding:6px;border:1px solid #d6dfe4;background:rgba(255,255,255,.94);
- border-radius:11px;box-shadow:0 3px 16px #16324812;backdrop-filter:blur(10px);
+.stax-molecule-canvas [data-kind] path,
+.stax-molecule-canvas [data-kind] rect,
+.stax-molecule-canvas [data-kind] polygon,
+.stax-molecule-canvas [data-kind] ellipse { pointer-events:visiblePainted; }
+.stax-molecule-empty {
+ position:absolute;
+ left:0;
+ right:0;
+ top:50%;
+ transform:translateY(-50%);
+ margin:0;
+ color:#899ca6;
+ font-size:13px;
+ text-align:center;
+ pointer-events:none;
 }
-.stax-molecule-view-controls button{font-size:11px;min-height:32px;padding:5px 8px}
-.stax-molecule-palette{
- position:absolute;top:calc(env(safe-area-inset-top,0px) + 8px);right:calc(env(safe-area-inset-right,0px) + 10px);
- z-index:6;display:grid;grid-template-columns:repeat(4,44px);gap:4px;
- padding:6px;border-radius:12px;border:1px solid #d6dfe4;
- background:rgba(255,255,255,.94);box-shadow:0 3px 16px #16324817;backdrop-filter:blur(12px);
-}
-.stax-molecule-palette button,.stax-molecule-palette button:has(.stax-palette-kind){
- width:44px;height:44px;min-width:44px;min-height:44px;margin:0;padding:3px;
- display:flex;align-items:center;justify-content:center;touch-action:none
-}
-.stax-molecule-palette button svg{height:36px;width:100%}
-.stax-molecule-hint{
- position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 69px);
- left:calc(env(safe-area-inset-left,0px) + 10px);z-index:4;
- max-width:min(480px,80vw);padding:6px 10px;font-size:11px;line-height:1.4;
- background:#ffffffdf;border-radius:9px;border:1px solid #e1e6e7;pointer-events:none;
-}
-.stax-molecule-note{display:none}
-.stax-molecule-empty{top:50%;transform:translateY(-50%)}
-.stax-molecule-example{
- position:absolute;z-index:4;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 66px);
- max-width:45vw;width:max-content;padding:4px 9px;font-size:11px;background:rgba(239,247,253,.93);
-}
-.stax-molecule-example small{display:none}
-@media(max-width:850px){
- .stax-molecule-tools{max-width:calc(100vw - 205px);gap:4px;flex-wrap:wrap}
- .stax-molecule-tools strong{font-size:11px}
- .stax-molecule-buttons{gap:3px;margin-left:0}
- .stax-molecule-buttons button{font-size:10px;padding:5px 6px;min-height:28px}
- .stax-molecule-palette{grid-template-columns:repeat(3,40px);gap:3px}
- .stax-molecule-palette button,.stax-molecule-palette button:has(.stax-palette-kind){width:40px;height:40px;min-width:40px;min-height:40px}
- .stax-molecule-palette button svg{height:34px}
- .stax-molecule-view-controls{justify-content:flex-start;max-width:72vw;flex-wrap:nowrap}
- .stax-molecule-hint{bottom:calc(env(safe-area-inset-bottom,0px) + 62px);font-size:10px}
- .stax-molecule-example{max-width:80vw;bottom:calc(env(safe-area-inset-bottom,0px) + 110px)}
-}
-@media(max-width:520px){
- .stax-molecule-tools{max-width:calc(100vw - 162px);padding:5px;top:calc(env(safe-area-inset-top,0px) + 5px);left:5px}
- .stax-molecule-palette{right:5px;top:calc(env(safe-area-inset-top,0px) + 5px);grid-template-columns:repeat(3,38px);padding:4px}
- .stax-molecule-palette button,.stax-molecule-palette button:has(.stax-palette-kind){width:38px;height:38px;min-width:38px;min-height:38px}
- .stax-molecule-view-controls{left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);padding:4px}
- .stax-molecule-view-controls button{font-size:10px;padding:4px 6px;min-height:30px}
- .stax-molecule-hint{left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 52px)}
+.stax-molecule-canvas svg g.stax-molecule-dropping {
+ transition:transform .28s cubic-bezier(.23,.78,.34,1);
 }
 
-.stax-molecule-back{border:1px solid #d1dce0;background:#fff;padding:3px 9px;min-height:32px;font-size:20px!important;line-height:1;color:#27475a!important;touch-action:manipulation}
-
-
-/* STAX directional clear-zone layout: top-left and bottom-right reserved for content.
-   Only the top-right shape dock and bottom-left tool cluster obscure the canvas. */
-.stax-molecule-tools{
- top:auto;right:auto;
- bottom:calc(env(safe-area-inset-bottom,0px) + 70px);
- left:calc(env(safe-area-inset-left,0px) + 10px);
- max-width:min(650px,calc(100vw - 22px));
- padding:5px 7px;gap:4px;
-}
-.stax-molecule-tools strong{display:none}
-.stax-molecule-buttons{margin-left:0;gap:4px}
-.stax-molecule-hint{
- position:absolute;left:-9999px;top:auto;bottom:auto;max-width:1px;
- width:1px;height:1px;overflow:hidden;clip-path:inset(50%);
-}
-.stax-molecule-example{
- left:50%;right:auto;top:calc(env(safe-area-inset-top,0px) + 14px);bottom:auto;
- transform:translateX(-50%);max-width:min(430px,48vw);pointer-events:none;
-}
-.stax-molecule-view-controls{
- bottom:calc(env(safe-area-inset-bottom,0px) + 10px);
- left:calc(env(safe-area-inset-left,0px) + 10px);
- max-width:calc(100vw - 22px);
-}
-@media(max-width:850px){
- .stax-molecule-tools{
-  top:auto;left:calc(env(safe-area-inset-left,0px) + 8px);
-  bottom:calc(env(safe-area-inset-bottom,0px) + 62px);
-  max-width:calc(100vw - 16px);flex-wrap:nowrap;
- }
- .stax-molecule-example{top:calc(env(safe-area-inset-top,0px) + 10px);bottom:auto;max-width:42vw;}
-}
-@media(max-width:520px){
- .stax-molecule-tools{
-  top:auto;left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 51px);
-  max-width:calc(100vw - 10px);padding:4px 5px;
- }
- .stax-molecule-buttons{gap:2px;flex-wrap:nowrap}
- .stax-molecule-buttons button{font-size:9px;padding:4px 5px;min-height:29px}
- .stax-molecule-back{font-size:18px!important;min-height:29px;padding:3px 7px}
- .stax-molecule-view-controls{left:5px;bottom:calc(env(safe-area-inset-bottom,0px) + 5px)}
- .stax-molecule-example{left:46%;max-width:45vw;top:calc(env(safe-area-inset-top,0px) + 6px)}
-}
-
-/* One compact bottom-left dock; top-left and bottom-right remain entirely clear. */
-.stax-molecule-ui .stax-molecule-dock {
- position:absolute;z-index:8;
- left:calc(env(safe-area-inset-left,0px) + 8px);
- bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
- width:206px;max-width:calc(100vw - 16px);
- display:flex;flex-direction:column;gap:5px;
- padding:6px;border:1px solid #d6dfe4;border-radius:13px;
- background:rgba(255,255,255,.94);box-shadow:0 3px 16px #16324817;
+/* Shape palette stays top-right, leaving the upper-left workspace clear. */
+.stax-molecule-palette {
+ position:absolute;
+ top:calc(env(safe-area-inset-top,0px) + 8px);
+ right:calc(env(safe-area-inset-right,0px) + 8px);
+ z-index:6;
+ display:grid;
+ grid-template-columns:repeat(4,44px);
+ gap:4px;
+ padding:6px;
+ background:rgba(255,255,255,.94);
+ border:1px solid #d6dfe4;
+ border-radius:12px;
+ box-shadow:0 3px 16px #16324817;
  backdrop-filter:blur(12px);
 }
-.stax-molecule-ui .stax-molecule-dock .stax-molecule-tools,
-.stax-molecule-ui .stax-molecule-dock .stax-molecule-view-controls {
- position:static;inset:auto;top:auto;left:auto;right:auto;bottom:auto;
- margin:0;padding:0;border:0;border-radius:0;box-shadow:none;
- background:transparent;backdrop-filter:none;width:100%;max-width:none;
- display:flex;align-items:center;flex-wrap:nowrap;justify-content:flex-start;gap:4px;
+.stax-molecule-palette button {
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ width:44px;
+ height:44px;
+ min-width:44px;
+ padding:3px;
+ border:1px solid #dfe5e9;
+ border-radius:9px;
+ background:#fff;
+ touch-action:none;
+ user-select:none;
+ -webkit-user-select:none;
 }
-.stax-molecule-ui .stax-molecule-dock .stax-molecule-buttons{display:flex;gap:3px;margin:0;flex-wrap:nowrap;flex:1}
-.stax-molecule-ui .stax-molecule-dock button {
- display:flex;align-items:center;justify-content:center;
- padding:0;min-width:29px;width:29px;height:32px;min-height:32px;
- background:#fff;border:1px solid #cbd6dc;border-radius:7px;
- font-size:15px!important;line-height:1;flex:0 0 auto;touch-action:manipulation;
+.stax-molecule-palette button svg {
+ width:100%;
+ height:36px;
+ overflow:visible;
 }
-.stax-molecule-ui .stax-molecule-dock .stax-molecule-back{width:32px;font-size:19px!important}
-.stax-molecule-ui .stax-molecule-dock .stax-molecule-buttons button:nth-child(2){font-size:10px!important;font-weight:700}
-.stax-molecule-ui .stax-molecule-dock .stax-molecule-view-controls button{width:32px;height:32px}
-.stax-molecule-ui .stax-molecule-dock .stax-molecule-view-controls span{font-size:10px;min-width:35px;flex:1}
-.stax-molecule-ui .stax-molecule-dock button:focus-visible{outline:3px solid #4389c7;outline-offset:1px}
-@media(max-width:700px) {
- .stax-molecule-ui .stax-molecule-dock {
-  left:calc(env(safe-area-inset-left,0px) + 6px);
-  bottom:calc(env(safe-area-inset-bottom,0px) + 6px);
-  padding:5px;gap:4px;
- }
- .stax-molecule-ui .stax-molecule-dock button{min-width:29px;min-height:32px}
+
+/* A single compact lower-left dock for actions and camera controls.
+   Button targets are 46px (about 58% larger than the former 29px icons). */
+.stax-molecule-dock {
+ position:absolute;
+ z-index:8;
+ left:calc(env(safe-area-inset-left,0px) + 8px);
+ bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
+ width:366px;
+ max-width:calc(100vw - 16px);
+ display:flex;
+ flex-direction:column;
+ gap:7px;
+ padding:8px;
+ border:1px solid #d6dfe4;
+ border-radius:13px;
+ background:rgba(255,255,255,.94);
+ box-shadow:0 3px 16px #16324817;
+ backdrop-filter:blur(12px);
+}
+.stax-molecule-tools,
+.stax-molecule-buttons,
+.stax-molecule-view-controls {
+ display:flex;
+ align-items:center;
+ gap:4px;
+ min-width:0;
+}
+.stax-molecule-tools {width:100%;}
+.stax-molecule-buttons {flex:1;}
+.stax-molecule-tools button,
+.stax-molecule-view-controls button {
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ min-width:var(--stax-control-size);
+ height:var(--stax-control-size);
+ min-height:var(--stax-control-size);
+ padding:0;
+ flex:1 1 auto;
+ border:1px solid #cbd6dc;
+ border-radius:8px;
+ background:#fff;
+ color:#27475a;
+ font:600 22px/1 system-ui,sans-serif;
+ touch-action:manipulation;
+ cursor:pointer;
+}
+.stax-molecule-tools button:disabled,
+.stax-molecule-view-controls button:disabled {
+ opacity:.38;
+ cursor:default;
+}
+.stax-molecule-tools button:focus-visible,
+.stax-molecule-view-controls button:focus-visible,
+.stax-molecule-palette button:focus-visible {
+ outline:3px solid #4389c7;
+ outline-offset:2px;
+}
+.stax-molecule-back {font-size:26px!important;flex:0 0 var(--stax-control-size)!important;}
+.stax-molecule-buttons button:nth-child(2) {font-size:14px;font-weight:800;}
+.stax-molecule-buttons button[aria-label^="Sweep"] {font-size:24px;}
+.stax-molecule-view-controls {width:100%;}
+.stax-molecule-view-controls span {
+ flex:1 1 auto;
+ min-width:44px;
+ text-align:center;
+ font:600 13px/1.2 system-ui,sans-serif;
+ font-variant-numeric:tabular-nums;
+ color:#465967;
+}
+.stax-molecule-view-controls button {flex:1 1 54px;}
+
+/* Accessible status remains announced but never obscures the canvas. */
+.stax-molecule-hint {
+ position:absolute;
+ left:-9999px;
+ width:1px;
+ height:1px;
+ overflow:hidden;
+ clip-path:inset(50%);
+}
+.stax-molecule-note {display:none;}
+.stax-molecule-example {
+ position:absolute;
+ z-index:4;
+ top:calc(env(safe-area-inset-top,0px) + 12px);
+ left:50%;
+ transform:translateX(-50%);
+ max-width:min(430px,46vw);
+ width:max-content;
+ margin:0;
+ padding:6px 10px;
+ border-left:3px solid #3381b6;
+ border-radius:5px;
+ color:#2b4962;
+ background:rgba(239,247,253,.93);
+ font-size:11px;
+ line-height:1.4;
+ pointer-events:none;
+}
+.stax-molecule-example small {display:none;}
+
+/* Hover visuals use the same projection that commits on release. */
+.stax-lifted-ghost {
+ position:fixed;
+ z-index:9999;
+ display:flex;
+ align-items:center;
+ justify-content:center;
+ transform:translate(-50%,-50%);
+ pointer-events:none;
+ filter:drop-shadow(0 5px 7px rgba(20,43,60,.18));
+ will-change:left,top;
+}
+.stax-lifted-ghost svg {overflow:visible;max-width:none;max-height:none;}
+.stax-lifted-ghost.is-eligible {
+ filter:drop-shadow(0 0 9px #0aa57c) drop-shadow(0 0 16px rgba(10,165,124,.4));
+ animation:stax-magnet-pulse .7s ease-in-out infinite alternate;
+}
+.stax-molecule-canvas svg .stax-resonant-target {
+ filter:drop-shadow(0 0 8px #1adbb0) drop-shadow(0 0 14px rgba(16,167,128,.55));
+ animation:stax-magnet-pulse .7s ease-in-out infinite alternate;
+}
+.stax-molecule-canvas svg .stax-resonance-ghost {
+ filter:drop-shadow(0 0 7px #10b88f);
+ animation:stax-magnet-pulse .7s ease-in-out infinite alternate;
+}
+@keyframes stax-magnet-pulse {
+ from {opacity:.55;}
+ to {opacity:1;}
+}
+@media(prefers-reduced-motion:reduce) {
+ .stax-lifted-ghost.is-eligible,
+ .stax-molecule-canvas svg .stax-resonant-target,
+ .stax-molecule-canvas svg .stax-resonance-ghost {animation:none;opacity:1;}
+}
+@media(max-width:850px) {
+ .stax-molecule-palette {grid-template-columns:repeat(3,44px);}
+ .stax-molecule-example {max-width:42vw;}
+}
+@media(max-width:370px) {
+ .stax-molecule-dock {width:calc(100vw - 12px);left:6px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);}
+ .stax-molecule-tools {flex-wrap:wrap;}
+ .stax-molecule-buttons {flex-wrap:wrap;justify-content:flex-start;}
+ .stax-molecule-example {max-width:40vw;}
 }

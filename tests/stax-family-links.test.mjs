@@ -7,7 +7,8 @@ const src=await readFile(new URL('../src/experiences/stax/family-links.ts',impor
 const js=ts.transpileModule(src,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022,
 }}).outputText
-const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain}=
+const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain,
+ canFollowBlueOrange,largestAssembledFamily}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 const atoms=[
@@ -93,4 +94,79 @@ test('family traversal is generic and does not hard-code an orange engine',()=>{
  ],bonds:[sup('noun','modifier'),sup('modifier','one'),sup('one','two')]}
  assert.equal(rootedSupportChain(g,'two','rectangle','oval','circle'),'modifier')
  // This checks generic traversal only, not permission to build that grammar.
+})
+
+test('pink, purple and green can follow an orange directly supported by blue',()=>{
+ const doc={atoms:[
+  {id:'blue',kind:'circle'},{id:'not',kind:'hexagon'},
+  {id:'pink',kind:'square'},{id:'purple',kind:'rectangle'},
+  {id:'green',kind:'oval'},
+ ],bonds:[sup('blue','not')]}
+ for(const id of ['pink','purple','green'])assert.equal(canFollowBlueOrange(doc,id,'not'),'blue')
+})
+test('orange directly under red does NOT permit pink, purple or green following magnet',()=>{
+ const doc={atoms:[
+  {id:'red',kind:'triangle'},{id:'orange',kind:'hexagon'},
+  {id:'pink',kind:'square'},{id:'purple',kind:'rectangle'},
+  {id:'green',kind:'oval'},
+ ],bonds:[sup('red','orange')]}
+ for(const id of ['pink','purple','green'])assert.equal(canFollowBlueOrange(doc,id,'orange'),null)
+})
+test('an orange under green is NOT a blue-level orange sibling',()=>{
+ const doc={atoms:[
+  {id:'blue',kind:'circle'},{id:'green',kind:'oval'},
+  {id:'very',kind:'hexagon'},{id:'purple',kind:'rectangle'}
+ ],bonds:[sup('blue','green'),sup('green','very')]}
+ assert.equal(canFollowBlueOrange(doc,'purple','very'),null)
+})
+test('new colors follow attachment order and cannot leapfrog an existing later sibling',()=>{
+ const g={atoms:[
+  {id:'blue',kind:'circle'},{id:'orange',kind:'hexagon'},
+  {id:'pink',kind:'square'},{id:'purple',kind:'rectangle'}
+ ],bonds:[sup('blue','orange'),sup('blue','pink')]}
+ assert.equal(canFollowBlueOrange(g,'purple','orange'),null)
+ const first={...g,bonds:[sup('blue','orange')]}
+ assert.equal(canFollowBlueOrange(first,'purple','orange'),'blue')
+})
+test('already attached or duplicate determiner cannot be added after orange',()=>{
+ const g={atoms:[
+  {id:'blue',kind:'circle'},{id:'orange',kind:'hexagon'},
+  {id:'existing',kind:'rectangle'},{id:'moving',kind:'rectangle'}
+ ],bonds:[sup('blue','existing'),sup('blue','orange')]}
+ assert.equal(canFollowBlueOrange(g,'moving','orange'),null)
+ const attached={...g,bonds:[sup('blue','orange'),sup('blue','moving')]}
+ assert.equal(canFollowBlueOrange(attached,'moving','orange'),null)
+})
+test('broom retains largest assembled map and removes disconnected loose pieces',()=>{
+ const d={atoms:[
+  {id:'red',kind:'triangle'},{id:'blue',kind:'circle'},
+  {id:'green',kind:'oval'},{id:'orange',kind:'hexagon'},
+  {id:'loose',kind:'square'},{id:'other',kind:'circle'},{id:'little',kind:'oval'}
+ ],bonds:[sup('red','orange'),sup('blue','green'),sup('green','little'),
+  {parent:'red',child:'blue',relation:'sequence'}]}
+ const kept=largestAssembledFamily(d)
+ assert.deepEqual([...kept].sort(),['blue','green','little','orange','red'].sort())
+ assert.equal(kept.has('loose'),false)
+ assert.equal(kept.has('other'),false)
+})
+test('broom never clears a board consisting only of loose pieces',()=>{
+ const g={atoms:[{id:'a',kind:'circle'},{id:'b',kind:'oval'}],bonds:[]}
+ assert.equal(largestAssembledFamily(g),null)
+})
+test('broom respects selection to resolve equal-size assembled maps',()=>{
+ const g={atoms:[
+  {id:'a',kind:'circle'},{id:'b',kind:'oval'},
+  {id:'c',kind:'triangle'},{id:'d',kind:'hexagon'},
+  {id:'loose',kind:'square'},
+ ],bonds:[sup('a','b'),sup('c','d')]}
+ assert.deepEqual([...largestAssembledFamily(g)].sort(),['a','b'])
+ assert.deepEqual([...largestAssembledFamily(g,'d')].sort(),['c','d'])
+})
+test('broom traverses undirected bond graph, not the shape order',()=>{
+ const g={atoms:[
+  {id:'one',kind:'circle'},{id:'two',kind:'triangle'},
+  {id:'three',kind:'oval'},{id:'free',kind:'rectangle'},
+ ],bonds:[{parent:'three',child:'two',relation:'sequence'},
+ {parent:'one',child:'two',relation:'support'}]}
+ assert.deepEqual([...largestAssembledFamily(g)].sort(),['one','three','two'])
 })
