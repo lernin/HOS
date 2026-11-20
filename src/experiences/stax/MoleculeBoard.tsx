@@ -458,12 +458,12 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
    }
    // A large green complement can follow a red linking verb ("I am happy").
    // Unlike little green adjectives under blue, this is a following sequence.
-   // Both directions allow the *moving* atom to be placed on an existing partner.
+   // Blueprint: 2.03 horizontal spacing, .49 vertical drop from red bottom.\n   // Both directions allow the *moving* atom to be placed on an existing partner.
    if(a.kind==='oval'&&b.kind==='triangle'&&!parentOfSupport(d,a.id)&&
       !molecule(d,a.id).has(b.id)&&
       !d.bonds.some(z=>z.relation==='sequence'&&(z.parent===b.id||z.child===a.id))){
      const target={x:b.x+atomWidth(b)+RED_BLUE_GAP,
-      y:b.y+atomHeight(b)+RED_BLUE_GAP}
+      y:b.y+atomHeight(b)+BLUE_RED_GAP}
      offered({parent:b.id,child:a.id,relation:'sequence',
       dx:target.x-a.x,dy:target.y-a.y,
       distance:Math.hypot(target.x-a.x,target.y-a.y)})
@@ -472,7 +472,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
       !molecule(d,a.id).has(b.id)&&
       !d.bonds.some(z=>z.relation==='sequence'&&(z.parent===a.id||z.child===b.id))){
      const target={x:b.x-atomWidth(a)-RED_BLUE_GAP,
-      y:b.y-atomHeight(a)-RED_BLUE_GAP}
+      y:b.y-atomHeight(a)-BLUE_RED_GAP}
      offered({parent:a.id,child:b.id,relation:'sequence',
       dx:target.x-a.x,dy:target.y-a.y,
       distance:Math.hypot(target.x-a.x,target.y-a.y)})
