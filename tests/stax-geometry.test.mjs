@@ -212,7 +212,7 @@ test('four compact red oranges: centered upper pair with .77 gap and touching lo
  assert.ok(lowerRightmost>uncle.x,'lower-right tip can extend horizontally beneath uncle')
  assert.ok(lowerRightmost<uncle.x+w,'lower X should not overrun the complete uncle')
  // Despite horizontal extent overlap, their vertical bands are separate.
- assert.ok(parent.y+parent.height+.28>=uncle.y+ h)
+ assert.ok(parent.y+first.y>uncle.y+h,'lower X is below the uncle, not on the same row')
  const three=positionChildren(red,[{id:'left',width:w,height:h},{id:'right',width:w,height:h}],{
   gap:.28,belowGap:.28
  })
