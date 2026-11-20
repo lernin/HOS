@@ -9,7 +9,8 @@ const js=ts.transpileModule(src,{compilerOptions:{
 }}).outputText
 const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain,
  canFollowBlueOrange,canAttachOrangeUnderObjectBlue,canAttachAdverbUnderPreposition,largestAssembledFamily,normalizeBlueSiblingOrder,canNestPossessive,
- withRedCompanion,canNestRightRedOrange,canAttachOrangeUnderBlue,\n orangeTierChildren,orangeRootedInRed,eligibleOrangeTierSlot,insertOrangeBeforeExisting}=
+ withRedCompanion,canNestRightRedOrange,canAttachOrangeUnderBlue,
+ orangeTierChildren,orangeRootedInRed,eligibleOrangeTierSlot,insertOrangeBeforeExisting}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 const atoms=[
