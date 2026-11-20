@@ -755,11 +755,10 @@
  --stax-text:#49341e;
  --stax-caption:#574430;
 }
+/* The classroom wood is painted by the world-anchored SVG pattern.
+   Do NOT set background-image here: CSS would stay fixed while chips pan. */
 .stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-canvas {
- background-image:url('/stax-foam/wood-desk.webp');
- background-position:center center;
- background-size:cover;
- background-repeat:no-repeat;
+ background-image:none;
 }
 .stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-empty {
  color:#fff8e7;
