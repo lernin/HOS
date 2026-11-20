@@ -13,9 +13,9 @@ const {
 }=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 test('STAX cycles classic, futuristic and four new materials without touching grammar',()=>{
- assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass','pearlescent-dusk'])
+ assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass','pearlescent-dusk','classroom-foam'])
  let mode='color'
- for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass','pearlescent-dusk','color']){
+ for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass','pearlescent-dusk','classroom-foam','color']){
   mode=nextStaxTheme(mode)
   assert.equal(mode,next)
  }
@@ -133,7 +133,7 @@ test('jelly and both glasses use genuinely different radial or layered gradients
 })
 
 test('Pearlescent Glass is selectable and keeps all original modes unchanged',()=>{
- assert.equal(STAX_THEMES.length,15)
+ assert.equal(STAX_THEMES.length,16)
  assert.equal(staxThemeName('pearlescent-glass'),'Pearlescent Glass')
  assert.equal(staxBoardColor('pearlescent-glass'),'#f1edf8')
  assert.equal(staxShapeStroke('pearlescent-glass','#3379dc'),'#d8c9f6')
@@ -167,7 +167,7 @@ test('tray retracts after inactivity without losing keyboard or touch access',as
  assert.match(board,/const KEY='stax-free-molecules-v2'/)
 })
 
-test('all 15 STAX themes define readable toolbar icon inks instead of inheriting browser button glyph colors',async()=>{
+test('all 16 STAX themes define readable toolbar icon inks instead of inheriting browser button glyph colors',async()=>{
  const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
  for(const theme of STAX_THEMES){
   const rule=theme==='color'?/\.stax-molecule-ui \{\s*--stax-toolbar-ink:/:
@@ -229,4 +229,19 @@ test('Pearlescent Dusk is an isolated more opaque glass mode with darker contras
  assert.match(css,/--stax-toolbar-ink:#fff6ff/)
  assert.equal(STAX_THEMES.at(-2),'pearlescent-airglass')
  assert.equal(STAX_THEMES.at(-1),'pearlescent-dusk')
+})
+
+test('Classroom Foam Table is additive, with source-inspired hues and untouched shape hit geometry',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const mat=await readFile(new URL('../src/experiences/stax/classroom-foam.tsx',import.meta.url),'utf8')
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ assert.equal(staxThemeName('classroom-foam'),'Classroom Foam Table')
+ assert.equal(STAX_THEMES.at(-1),'classroom-foam')
+ for(const kind of ['circle','triangle','square','rectangle','diamond','hexagon','oval'])
+  assert.ok(mat.includes(kind+':{face:'),'missing foam material '+kind)
+ assert.match(board,/theme==='classroom-foam'&&<ClassroomFoam kind=\{a\.kind\}/)
+ assert.match(board,/theme==='classroom-foam'&&<ClassroomFoam kind=\{kind\}/)
+ assert.match(board,/theme==='classroom-foam'&&<ClassroomFoam kind=\{paletteHover\.kind\}/)
+ assert.match(mat,/className="stax-foam-asset" pointerEvents="none"/)
+ assert.match(css,/data-theme='classroom-foam'/)
 })
