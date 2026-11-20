@@ -765,8 +765,17 @@
  color:#fff8e7;
  text-shadow:0 1px 4px #241a11;
 }
-.stax-molecule-ui[data-theme='classroom-foam'] .stax-authentic-foam-chip {
- filter:drop-shadow(0 3px 2px rgba(35,19,5,.35));
+/* The source is a 4×2 texture atlas. The NESTED SVG must clip to exactly
+   its selected 192px tile in every render context. The palette and lifted
+   ghost intentionally allow their OUTER SVGs to overflow; without this rule
+   each chip leaks the entire seven-piece atlas into neighboring controls. */
+.stax-molecule-ui[data-theme='classroom-foam'] svg.stax-authentic-foam-chip {
+ overflow:hidden!important;
+ clip-path:inset(0);
+ pointer-events:none!important;
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-authentic-foam-chip image {
+ pointer-events:none!important;
 }
 .stax-molecule-tools button.stax-foam-shortcut {
  width:46px;
