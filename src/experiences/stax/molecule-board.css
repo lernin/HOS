@@ -643,13 +643,13 @@
    and assets above remain entirely untouched. Reuse its serene background;
    only the shape materials change to 38%-alpha optical artwork with crisp rims. */
 .stax-molecule-ui[data-theme='pearlescent-airglass'] {
+ --stax-toolbar-ink:#41365d;
  --stax-bg:#f1edf8;
  --stax-panel:rgba(255,251,255,.69);
  --stax-button:rgba(255,255,255,.48);
  --stax-border:rgba(255,255,255,.9);
  --stax-text:#4e4669;
  --stax-caption:#766f91;
- --stax-toolbar-ink:#41365d;
  --stax-toolbar-disabled:#81718d;
 }
 .stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-molecule-canvas {
