@@ -1220,7 +1220,21 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-board"/>}
      {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix="stax-mat-board"/>}
-    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'||theme==='golden-line'||(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')||hasStaxMaterial(theme)?'transparent':staxBoardColor(theme)}/>
+     {theme==='classroom-foam'&&<defs>
+      {/* World-space pattern: the photographed desk's dark slat edges at
+          source y=115 and y=663 are the repeat boundaries. The pattern is
+          anchored to world coordinates, not to the viewport or CSS.
+          Pan and pinch zoom thus transform the wood and chips together. */}
+      <pattern id="stax-classroom-wood-world" patternUnits="userSpaceOnUse"
+       x="0" y="0" width="1152" height="411" patternContentUnits="userSpaceOnUse">
+       <svg x="0" y="0" width="1152" height="411" viewBox="0 115 1536 548"
+        preserveAspectRatio="none" overflow="hidden" pointerEvents="none">
+        <image href="/stax-foam/wood-desk.webp" x="0" y="0"
+         width="1536" height="716" preserveAspectRatio="none" pointerEvents="none"/>
+       </svg>
+      </pattern>
+     </defs>}
+    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={theme==='classroom-foam'?'url(#stax-classroom-wood-world)':theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'||theme==='golden-line'||(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')||hasStaxMaterial(theme)?'transparent':staxBoardColor(theme)}/>
     {paletteHover?.snap&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
       {(()=>{
        const phantom:Atom={id:'__palette_preview__',kind:paletteHover.kind,x:paletteHover.worldX,y:paletteHover.worldY,variant:paletteHover.variant,omitted:omitBrush}
