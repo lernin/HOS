@@ -234,6 +234,11 @@ function redRightChildPosition(parent:Atom) {
 function nestedChildPosition(parent:Atom,child:Atom) {
  const childWidth=child.kind==='hexagon'?smallWidth('hexagon'):atomWidth(child)
  const childHeight=child.kind==='hexagon'?height('hexagon')*SMALL_ORANGE_Y:atomHeight(child)
+ // Orange under orange follows the vertical centerline in the Blueprint;
+ // green/pink nesting keeps the standard right-edge-to-center anchor.
+ if(parent.kind==='hexagon'&&child.kind==='hexagon')return positionRedRightNestedOrange(
+  {x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)},
+  {width:childWidth,height:childHeight},VERTICAL)
  return positionChildren(
   {x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)},
   [{id:child.id,width:childWidth,height:childHeight}],
@@ -450,6 +455,27 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      const dy=a.id===orange.id?destination.y-orange.y:orange.y-height('triangle')-VERTICAL-red.y
      offered({parent:red.id,child:orange.id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)})
     }
+   }
+   // A large green complement can follow a red linking verb ("I am happy").
+   // Unlike little green adjectives under blue, this is a following sequence.
+   // Both directions allow the *moving* atom to be placed on an existing partner.
+   if(a.kind==='oval'&&b.kind==='triangle'&&!parentOfSupport(d,a.id)&&
+      !molecule(d,a.id).has(b.id)&&
+      !d.bonds.some(z=>z.relation==='sequence'&&(z.parent===b.id||z.child===a.id))){
+     const target={x:b.x+atomWidth(b)+RED_BLUE_GAP,
+      y:b.y+atomHeight(b)+RED_BLUE_GAP}
+     offered({parent:b.id,child:a.id,relation:'sequence',
+      dx:target.x-a.x,dy:target.y-a.y,
+      distance:Math.hypot(target.x-a.x,target.y-a.y)})
+   }
+   if(a.kind==='triangle'&&b.kind==='oval'&&!parentOfSupport(d,b.id)&&
+      !molecule(d,a.id).has(b.id)&&
+      !d.bonds.some(z=>z.relation==='sequence'&&(z.parent===a.id||z.child===b.id))){
+     const target={x:b.x-atomWidth(a)-RED_BLUE_GAP,
+      y:b.y-atomHeight(a)-RED_BLUE_GAP}
+     offered({parent:a.id,child:b.id,relation:'sequence',
+      dx:target.x-a.x,dy:target.y-a.y,
+      distance:Math.hypot(target.x-a.x,target.y-a.y)})
    }
    // Sequence ports accept noun ↔ conjunction in either order.
    // Yellow diamonds share the blue head's row; they are not noun supporters.
