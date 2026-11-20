@@ -115,3 +115,80 @@ export function largestAssembledFamily(
  }
  return best.length>1?new Set(best):null
 }
+
+/** Purple determiners precede green adjectives even if the user attaches
+ * the purple later. Other positions retain their relative assembly order,
+ * including orange followed by purple or pink beneath blue.
+ */
+export function normalizeBlueSiblingOrder<T extends FamilyNode>(row:readonly T[]):T[] {
+ const copy=[...row]
+ for(let i=0;i<copy.length;i++){
+  if(copy[i].kind!=='rectangle')continue
+  const earliestGreen=copy.findIndex((n,j)=>j<i&&n.kind==='oval')
+  if(earliestGreen>=0){
+   const [purple]=copy.splice(i,1)
+   copy.splice(earliestGreen,0,purple)
+  }
+ }
+ return copy
+}
+
+/** Recursive purple possessive family, rooted in a blue noun/pronoun head.
+ * Support relationships are real parentage, not mere sentence adjacency.
+ */
+export function canNestPossessive(
+ graph:FamilyGraph,movingId:string,parentId:string
+):boolean {
+ const moving=graph.atoms.find(a=>a.id===movingId)
+ const parent=graph.atoms.find(a=>a.id===parentId)
+ if(moving?.kind!=='rectangle'||parent?.kind!=='rectangle'||movingId===parentId||
+  supportParent(graph,movingId)||supportChildOfKind(graph,parentId,'rectangle'))return false
+ const seen=new Set<string>()
+ let current=parentId
+ while(!seen.has(current)){
+  seen.add(current)
+  const owner=supportParent(graph,current)
+  if(!owner)return false
+  const ownerKind=graph.atoms.find(a=>a.id===owner)?.kind
+  if(ownerKind==='circle')return true
+  if(ownerKind!=='rectangle')return false
+  current=owner
+ }
+ return false
+}
+
+/** Each red directly hosts a pair of orange positions when its first orange
+ * bonds. No lexical role is inferred for the second slot: both gate/not and
+ * bridge/to were described by the owner, so guessing would be incorrect.
+ */
+export function withRedCompanion<T extends FamilyNode, E extends FamilyEdge>(
+ graph:{atoms:T[];bonds:E[]},redId:string,makeAtom:(id:string)=>T
+):{atoms:T[];bonds:E[]} {
+ if(graph.atoms.find(a=>a.id===redId)?.kind!=='triangle')return graph
+ const direct=graph.bonds.filter(b=>b.relation==='support'&&b.parent===redId&&
+  graph.atoms.some(a=>a.id===b.child&&a.kind==='hexagon'))
+ if(direct.length!==1)return graph
+ const partnerId='red-companion-'+direct[0].child
+ if(graph.atoms.some(a=>a.id===partnerId))return graph
+ return {
+  atoms:[...graph.atoms,makeAtom(partnerId)],
+  bonds:[...graph.bonds,{parent:redId,child:partnerId,relation:'support'} as E],
+ }
+}
+
+/** The third orange is nested beneath the RIGHT red-supported orange,
+ * never added as a third direct child of the red triangle.
+ */
+export function canNestRightRedOrange(
+ graph:FamilyGraph,movingId:string,parentId:string
+):boolean {
+ if(graph.atoms.find(a=>a.id===movingId)?.kind!=='hexagon'||
+  graph.atoms.find(a=>a.id===parentId)?.kind!=='hexagon'||
+  movingId===parentId||supportParent(graph,movingId)||
+  supportChildOfKind(graph,parentId,'hexagon'))return false
+ const redId=supportParent(graph,parentId)
+ if(graph.atoms.find(a=>a.id===redId)?.kind!=='triangle')return false
+ const oranges=graph.bonds.filter(b=>b.relation==='support'&&b.parent===redId&&
+  graph.atoms.find(a=>a.id===b.child)?.kind==='hexagon')
+ return oranges.length===2&&oranges[1].child===parentId
+}
