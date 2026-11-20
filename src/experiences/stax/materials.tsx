@@ -105,13 +105,16 @@ function edgeAt(kind:Kind,w:number,h:number,t:number):Point {
  return {x:0,y:0,nx:0,ny:1}
 }
 
-export function StaxMaterialEffect({theme,kind,w,h,omitted=false,seed='',compact=false}:{
- theme:StaxTheme;kind:Kind;w:number;h:number;omitted?:boolean;seed?:string;compact?:boolean
+export function StaxMaterialEffect({theme,kind,w,h,omitted=false,seed='',compact=false,animated=false}:{
+ theme:StaxTheme;kind:Kind;w:number;h:number;omitted?:boolean;seed?:string;compact?:boolean;animated?:boolean
 }){
  if(!hasStaxMaterial(theme))return null
  // Omitted shapes stay dotted: no continuous material overlay may restore them.
  if(omitted)return null
  if(theme==='golden-pollen'){
+  // The true Letterz Canvas owns active board strokes; SVG dust is fallback
+  // for loading and miniature palette icons only, never an extra overlay.
+  if(animated)return null
   const n=compact?16:Math.min(42,Math.max(24,Math.round((w+h)/7)))
   const serial=[...seed].reduce((sum,ch)=>sum+ch.charCodeAt(0),0)
   const particles=Array.from({length:n},(_,i)=>{
