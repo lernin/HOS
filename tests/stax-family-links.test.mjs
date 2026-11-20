@@ -9,7 +9,7 @@ const js=ts.transpileModule(src,{compilerOptions:{
 }}).outputText
 const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain,
  canFollowBlueOrange,canAttachOrangeUnderObjectBlue,canAttachAdverbUnderPreposition,largestAssembledFamily,normalizeBlueSiblingOrder,canNestPossessive,
- withRedCompanion,canNestRightRedOrange,canAttachOrangeUnderBlue}=
+ withRedCompanion,canNestRightRedOrange,canAttachOrangeUnderBlue,\n orangeTierChildren,orangeRootedInRed,eligibleOrangeTierSlot,insertOrangeBeforeExisting}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 const atoms=[
@@ -349,16 +349,17 @@ test('pink-near orange insertion magnet and nested pink reflow have direct rules
  assert.match(src,/if\(child\.kind==='square'\)next=alignNestedChain\(next,child\.id,'hexagon'\)/)
 })
 
-test('orange below orange shares its parent centerline instead of left-offset singleton anchor',async()=>{
- const src=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
- const section=src.slice(src.indexOf('function nestedChildPosition('),src.indexOf('function miniFamilyPosition('))
- assert.match(section,/if\(parent\.kind==='hexagon'&&child\.kind==='hexagon'\)return positionRedRightNestedOrange/)
- assert.match(section,/\{width:childWidth,height:childHeight\},VERTICAL/)
- assert.match(section,/return positionChildren\(/,'non-orange nested roles still use their original anchors')
- const reflow=src.slice(src.indexOf('function alignNestedChain('),src.indexOf('function alignSupporters('))
- assert.match(reflow,/isRightRedOrange\?redRightChildPosition\(parent\):nestedChildPosition\(parent,child\)/)
- const magnet=src.slice(src.indexOf('function bestSnap('),src.indexOf('function resolveMagnet('))
- assert.match(magnet,/const target=redRightChildPosition\(b\)/,'red pair third-child preview remains centered')
+test('purple-style orange chains keep a singleton anchor; paired right orange stays centered',async()=>{
+ const code=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const nested=code.slice(code.indexOf('function nestedChildPosition('),code.indexOf('function alignOrangeTierChildren('))
+ assert.match(nested,/return positionChildren\(/)
+ assert.doesNotMatch(nested,/parent\.kind==='hexagon'&&child\.kind==='hexagon'\)return positionRedRightNestedOrange/)
+ const tier=code.slice(code.indexOf('function alignOrangeTierChildren('),code.indexOf('function miniFamilyPosition('))
+ assert.match(tier,/children\.length===2[\s\S]*?positionChildren\(/)
+ assert.match(tier,/rightOfPair\?redRightChildPosition\(parent\):nestedChildPosition\(parent,children\[0\]\)/)
+ assert.match(tier,/next=alignOrangeTierChildren\(next,child\.id,seen\)/)
+ const magnet=code.slice(code.indexOf('function bestSnap('),code.indexOf('function resolveMagnet('))
+ assert.match(magnet,/slot==='right-modifier'\?redRightChildPosition\(b\):nestedChildPosition\(b,a\)/)
 })
 test('large green complements follow red verbs as sequences, never noun supporters',async()=>{
  const src=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
@@ -384,4 +385,59 @@ test('Blueprint red-to-large-green complement uses 2.03 horizontal and 0.49 vert
  assert.doesNotMatch(code,/y:b\.y\+atomHeight\(b\)\+RED_BLUE_GAP/)
  assert.doesNotMatch(code,/y:b\.y-atomHeight\(a\)-RED_BLUE_GAP/)
  assert.match(src,/const BLUE_RED_GAP=SCALE\*STAX_SPACING\.group, RED_BLUE_GAP=SCALE\*STAX_SPACING\.row/)
+})
+
+test('orange red pair supports right modifier and left bridge tier independently',()=>{
+ const g={atoms:[
+  {id:'red',kind:'triangle'},{id:'do',kind:'hexagon'},{id:'really',kind:'hexagon'},
+  {id:'not',kind:'hexagon'},{id:'bridge',kind:'hexagon'},{id:'to',kind:'hexagon'}
+ ],bonds:[sup('red','do'),sup('red','really')]}
+ assert.deepEqual(orangeTierChildren(g,'red'),['do','really'])
+ assert.equal(orangeRootedInRed(g,'do'),true)
+ assert.equal(orangeRootedInRed(g,'really'),true)
+ assert.equal(eligibleOrangeTierSlot(g,'not','really'),'right-modifier')
+ assert.equal(eligibleOrangeTierSlot(g,'bridge','do'),'left-pair')
+ const withModifier={...g,bonds:[...g.bonds,sup('really','not')]}
+ assert.equal(eligibleOrangeTierSlot(withModifier,'to','really'),'insert')
+ const withTier={...g,bonds:[...g.bonds,sup('do','bridge'),sup('do','to')]}
+ assert.equal(eligibleOrangeTierSlot(withTier,'not','bridge'),'left-pair')
+ assert.equal(eligibleOrangeTierSlot(withTier,'not','to'),'right-modifier')
+ assert.equal(eligibleOrangeTierSlot(withTier,'not','do'),null,'do not add a third direct child')
+})
+test('adding adverb before not preserves the not shape and pushes its branch downward',()=>{
+ const g={atoms:[
+  {id:'red',kind:'triangle'},{id:'do',kind:'hexagon'},
+  {id:'really',kind:'hexagon'},{id:'not',kind:'hexagon',word:'not'},
+  {id:'new',kind:'hexagon',word:'extremely'},{id:'deep',kind:'hexagon'}
+ ],bonds:[sup('red','do'),sup('red','really'),sup('really','not'),sup('not','deep')]}
+ assert.equal(eligibleOrangeTierSlot(g,'new','really'),'insert')
+ const next=insertOrangeBeforeExisting(g,'really','new')
+ assert.deepEqual(orangeTierChildren(next,'really'),['new'])
+ assert.deepEqual(orangeTierChildren(next,'new'),['not'])
+ assert.deepEqual(orangeTierChildren(next,'not'),['deep'])
+ assert.equal(next.atoms.find(a=>a.id==='not').word,'not')
+ assert.equal(next.bonds.length,g.bonds.length+1)
+ assert.deepEqual(g.bonds.map(b=>b.parent),['red','red','really','not'],'original is immutable')
+ assert.equal(eligibleOrangeTierSlot(next,'do','new'),null,'already bonded shapes cannot be stolen')
+})
+test('orange tiers never grow from loose oranges, blue modifiers, or cycles',()=>{
+ const loose={atoms:[{id:'a',kind:'hexagon'},{id:'b',kind:'hexagon'}],bonds:[]}
+ assert.equal(eligibleOrangeTierSlot(loose,'b','a'),null)
+ const green={atoms:[{id:'blue',kind:'circle'},{id:'green',kind:'oval'},
+  {id:'a',kind:'hexagon'},{id:'b',kind:'hexagon'}],
+  bonds:[sup('blue','green'),sup('green','a')]}
+ assert.equal(eligibleOrangeTierSlot(green,'b','a'),null)
+ assert.equal(orangeRootedInRed(green,'a'),false)
+ const cyclic={atoms:[{id:'a',kind:'hexagon'},{id:'b',kind:'hexagon'}],
+  bonds:[sup('a','b'),sup('b','a')]}
+ assert.equal(orangeRootedInRed(cyclic,'a'),false)
+})
+test('red-orange bridge insertion reflows recursively and auto-creates only its intended companion',async()=>{
+ const code=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.match(code,/if\(slot==='left-pair'&&joined\.atoms\.length<80\)/)
+ assert.match(code,/const id='orange-companion-'\+snap\.child/)
+ assert.match(code,/slot==='insert'\?insertOrangeBeforeExisting\(translated,snap\.parent,snap\.child\)/)
+ assert.match(code,/if\(orangeRootedInRed\(typed,owner\.id\)\)/)
+ assert.match(code,/return alignRedSupporters\(typed,parentId\)/)
+ assert.match(code,/for\(const child of orange\)next=alignOrangeTierChildren\(next,child\.id\)/)
 })
