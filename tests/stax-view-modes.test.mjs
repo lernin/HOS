@@ -227,8 +227,8 @@ test('Pearlescent Dusk is an isolated more opaque glass mode with darker contras
  assert.match(css,/data-theme='pearlescent-dusk'/)
  assert.match(css,/background:[\s\S]*?linear-gradient\(137deg,#2d2846/)
  assert.match(css,/--stax-toolbar-ink:#fff6ff/)
- assert.equal(STAX_THEMES.at(-2),'pearlescent-airglass')
- assert.equal(STAX_THEMES.at(-1),'pearlescent-dusk')
+ assert.equal(STAX_THEMES.at(-3),'pearlescent-airglass')
+ assert.equal(STAX_THEMES.at(-2),'pearlescent-dusk')
 })
 
 test('Classroom Foam Table is additive, with source-inspired hues and untouched shape hit geometry',async()=>{
