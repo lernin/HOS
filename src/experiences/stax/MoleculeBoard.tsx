@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, type FamilyChild } from './geometry'
-import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, canNestRightRedOrange, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
+import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
 import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
@@ -95,8 +95,8 @@ function alignRedSupporters(doc:Draft,redId:string):Draft {
   const a=byId(next,child.id),target=positions.get(child.id)!
   next=translate(next,descendants(next,a.id),target.x-a.x,target.y-a.y)
  }
- // Third orange sits below the right child, not directly under red.
- for(const child of orange)next=alignNestedChain(next,child.id,'hexagon')
+ // Red's paired oranges can each own descendants and additional bridge tiers.
+ for(const child of orange)next=alignOrangeTierChildren(next,child.id)
  return next
 }
 /** Visual size follows its current structural position, not the palette choice. */
@@ -234,16 +234,36 @@ function redRightChildPosition(parent:Atom) {
 function nestedChildPosition(parent:Atom,child:Atom) {
  const childWidth=child.kind==='hexagon'?smallWidth('hexagon'):atomWidth(child)
  const childHeight=child.kind==='hexagon'?height('hexagon')*SMALL_ORANGE_Y:atomHeight(child)
- // Orange under orange follows the vertical centerline in the Blueprint;
- // green/pink nesting keeps the standard right-edge-to-center anchor.
- if(parent.kind==='hexagon'&&child.kind==='hexagon')return positionRedRightNestedOrange(
-  {x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)},
-  {width:childWidth,height:childHeight},VERTICAL)
+ // Repeating adverb chains use the purple-style right-edge-to-midline anchor.
+ // A RIGHT orange within a paired tier is the exception: centered below.
  return positionChildren(
   {x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)},
   [{id:child.id,width:childWidth,height:childHeight}],
   {gap:GAP,belowGap:VERTICAL}
  ).get(child.id)!
+}
+/** Red-rooted families can have pairs under left orange and modifier chains
+ * under right orange. Descendant subtrees move rigidly on every reflow. */
+function alignOrangeTierChildren(doc:Draft,parentId:string,seen=new Set<string>()):Draft {
+ if(seen.has(parentId))return doc
+ seen.add(parentId)
+ const parent=byId(doc,parentId),children=orangeChildren(doc,parentId)
+ if(!parent||!children.length||children.length>2)return doc
+ const smallW=smallWidth('hexagon'),smallH=height('hexagon')*SMALL_ORANGE_Y
+ const parentBox={x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)}
+ const ownerId=parentOfSupport(doc,parentId)
+ const siblings=ownerId?orangeChildren(doc,ownerId):[]
+ const rightOfPair=siblings.length===2&&siblings[1].id===parentId
+ const positions:Map<string,{x:number;y:number}>=children.length===2
+  ?positionChildren(parentBox,children.map(c=>({id:c.id,width:smallW,height:smallH})),{gap:GAP,belowGap:VERTICAL})
+  :new Map([[children[0].id,rightOfPair?redRightChildPosition(parent):nestedChildPosition(parent,children[0])]])
+ let next=doc
+ for(const child of children){
+  const current=byId(next,child.id),target=positions.get(child.id)!
+  next=translate(next,descendants(next,child.id),target.x-current.x,target.y-current.y)
+ }
+ for(const child of children)next=alignOrangeTierChildren(next,child.id,seen)
+ return next
 }
 function miniFamilyPosition(_doc:Draft,green:Atom,orange:Atom) {
  return nestedChildPosition(green,orange)
@@ -431,14 +451,20 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      dx:target.x-a.x,dy:target.y-a.y,
      distance:Math.hypot(target.x-a.x,target.y-a.y)})
    }
-   // A third orange may attach under the RIGHT orange of a red pair.
-   // This is a nested family, never a third direct red support.
-   if(a.kind==='hexagon'&&b.kind==='hexagon'&&
-      canNestRightRedOrange(d,a.id,b.id)&&!molecule(d,a.id).has(b.id)){
-    const target=redRightChildPosition(b)
-    offered({parent:b.id,child:a.id,relation:'support',
-     dx:target.x-a.x,dy:target.y-a.y,
-     distance:Math.hypot(target.x-a.x,target.y-a.y)})
+   // Repeated orange tiers are structural: the left orange may open another
+   // pair; the right orange accepts one lower modifier. No swaps.
+   if(a.kind==='hexagon'&&b.kind==='hexagon'&&!molecule(d,a.id).has(b.id)){
+    const slot=eligibleOrangeTierSlot(d,a.id,b.id)
+    if(slot){
+     const smallW=smallWidth('hexagon'),smallH=height('hexagon')*SMALL_ORANGE_Y
+     const target=slot==='left-pair'?positionChildren(
+       {x:b.x,y:b.y,width:atomWidth(b),height:atomHeight(b)},
+       [{id:a.id,width:smallW,height:smallH},{id:'__future_pair',width:smallW,height:smallH}],
+       {gap:GAP,belowGap:VERTICAL}).get(a.id)!:
+      slot==='right-modifier'?redRightChildPosition(b):nestedChildPosition(b,a)
+     offered({parent:b.id,child:a.id,relation:'support',
+      dx:target.x-a.x,dy:target.y-a.y,distance:Math.hypot(target.x-a.x,target.y-a.y)})
+    }
    }
    // Orange is an under-verb supporter on the Blueprint; allow either
    // dragging orange to a stationary red or moving a free red to orange.
@@ -518,7 +544,21 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  */
 function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
  const translated=translate(d,moving,snap.dx,snap.dy)
- const joined={...translated,bonds:[...translated.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
+ const host=byId(d,snap.parent)
+ const slot=snap.relation==='support'&&host?.kind==='hexagon'&&byId(d,snap.child)?.kind==='hexagon'
+  ?eligibleOrangeTierSlot(d,snap.child,snap.parent):null
+ // Orange forms depend on the structure alone; do not silently reparent
+ // or exchange any existing orange when a new piece attaches underneath.
+ let joined:Draft={...translated,bonds:[
+  ...translated.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}
+ ]}
+ if(slot==='left-pair'&&joined.atoms.length<80){
+  const id='orange-companion-'+snap.child
+  if(!joined.atoms.some(a=>a.id===id))joined={
+   ...joined,atoms:[...joined.atoms,{id,kind:'hexagon',x:host.x,y:host.y+atomHeight(host)+VERTICAL,variant:'small'}],
+   bonds:[...joined.bonds,{parent:host.id,child:id,relation:'support'}]
+  }
+ }
  const typed=normalizeRoles(joined)
  if(snap.relation!=='support')return typed
  const owner=byId(typed,snap.parent)
@@ -556,8 +596,18 @@ function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
   const greenId=rootedSupportChain(typed,owner.id,'hexagon','oval','circle')
   const blueId=greenId?blueHeadOfAdjective(typed,greenId):undefined
   if(blueId)return alignSupporters(typed,blueId)
-  const redId=parentOfSupport(typed,owner.id)
-  return redId&&byId(typed,redId)?.kind==='triangle'?alignRedSupporters(typed,redId):typed
+  if(orangeRootedInRed(typed,owner.id)){
+   let current=owner.id
+   const seen=new Set<string>()
+   while(!seen.has(current)){
+    seen.add(current)
+    const parentId=parentOfSupport(typed,current)
+    if(!parentId)break
+    if(byId(typed,parentId)?.kind==='triangle')return alignRedSupporters(typed,parentId)
+    current=parentId
+   }
+  }
+  return typed
  }
  return typed
 }
