@@ -85,7 +85,7 @@ test('Golden Line uses metallic SVG strokes on the board, palette and lifted gho
  assert.match(code,/stax-golden-board/)
  assert.match(code,/stax-golden-palette-/)
  assert.match(code,/stax-golden-lifted/)
- assert.match(code,/Golden Line\)/)
+ assert.match(code,/STAX_THEMES\.map\(staxThemeName\)/)
  assert.match(css,/data-theme='golden-line'/)
  assert.match(css,/#fff1ac/)
  assert.match(css,/#ce921d/)
