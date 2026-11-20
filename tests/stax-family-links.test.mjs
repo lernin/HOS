@@ -460,3 +460,15 @@ test('sentence family footprint clearance runs after all snaps and support-remov
  assert.match(board,/if\(left\.kind==='circle'&&right\.kind==='triangle'\)return BLUE_RED_GAP/)
  assert.match(board,/return RED_BLUE_GAP/)
 })
+
+test('red pair uses large forms until a third orange makes the family compact',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.match(board,/function redOrangeFamilySize\(d:Draft,redId:string\):number/)
+ assert.match(board,/function orangeRedRoot\(d:Draft,orangeId:string\)/)
+ assert.match(board,/if\(redRoot\)return redOrangeFamilySize\(d,redRoot\)>2\?'small':'large'/)
+ assert.match(board,/orange\.map\(a=>\(\{id:a\.id,width:atomWidth\(a\),height:atomHeight\(a\)\}\)\)/)
+ assert.match(board,/const childW=compact\?smallWidth\('hexagon'\):width\('hexagon'\)/)
+ assert.match(board,/const childH=compact\?height\('hexagon'\)\*SMALL_ORANGE_Y:height\('hexagon'\)/)
+ assert.match(board,/return alignRedSupporters\(paired,owner\.id\)/)
+ assert.match(board,/for\(const child of orange\)next=alignOrangeTierChildren/)
+})
