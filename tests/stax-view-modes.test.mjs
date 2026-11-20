@@ -165,3 +165,32 @@ test('tray retracts after inactivity without losing keyboard or touch access',as
  assert.match(css,/@media\(prefers-reduced-motion:reduce\) \{\s*\.stax-molecule-dock \{transition:none;/)
  assert.match(board,/const KEY='stax-free-molecules-v2'/)
 })
+
+test('all 13 STAX themes define readable toolbar icon inks instead of inheriting browser button glyph colors',async()=>{
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ for(const theme of STAX_THEMES){
+  const rule=theme==='color'?/\.stax-molecule-ui \{\s*--stax-toolbar-ink:/:
+    new RegExp("\\.stax-molecule-ui\\[data-theme='"+theme+"'\\] \\{\\s*--stax-toolbar-ink:")
+  assert.match(css,rule,'missing readable toolbar ink for '+theme)
+ }
+ assert.match(css,/\.stax-molecule-dock button:not\(:disabled\) \{[\s\S]*?color:var\(--stax-toolbar-ink\)!important;/)
+ assert.match(css,/\.stax-molecule-dock button:disabled \{[\s\S]*?color:var\(--stax-toolbar-disabled\)!important;/)
+ assert.match(css,/\.stax-molecule-dock \.stax-toolbar-icon \{[\s\S]*?stroke:currentColor;/)
+ assert.match(css,/button\.stax-mode-active:not\(:disabled\) \{[\s\S]*?color:#ffffff!important;/)
+})
+test('mobile toolbar uses semantic scalable SVG icons, including obvious fullscreen and zoom actions',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.match(board,/function StaxToolbarIcon\(\{name\}/)
+ assert.match(board,/stroke="currentColor"/)
+ for(const name of ['back','expand','shrink','undo','remove','sweep','clear','theme','omit','center','fit','minus','plus'])
+  assert.ok(board.includes("name==='"+name+"'"),'missing actual icon drawing '+name)
+ assert.match(board,/name=\{fullscreen\?'shrink':'expand'\}/)
+ assert.match(board,/<StaxToolbarIcon name="fit"\/>/)
+ assert.match(board,/<StaxToolbarIcon name="center"\/>/)
+ assert.match(board,/<StaxToolbarIcon name="minus"\/>/)
+ assert.match(board,/<StaxToolbarIcon name="plus"\/>/)
+ assert.doesNotMatch(board,/>⛶<|>⤢<|>⊞<|>◎<|>↶<|>⌫<|>┄</)
+ assert.match(board,/aria-label=\{fullscreen\?"Exit full screen":"Go full screen"\}/)
+ assert.match(board,/aria-label="Zoom out"/)
+ assert.match(board,/aria-label="Zoom in"/)
+})
