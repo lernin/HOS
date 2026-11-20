@@ -637,3 +637,52 @@
  font-weight:800;
  text-shadow:none;
 }
+
+
+/* Pearlescent Airglass is NEW and opt-in. The original Pearlescent Glass rules
+   and assets above remain entirely untouched. Reuse its serene background;
+   only the shape materials change to 38%-alpha optical artwork with crisp rims. */
+.stax-molecule-ui[data-theme='pearlescent-airglass'] {
+ --stax-bg:#f1edf8;
+ --stax-panel:rgba(255,251,255,.69);
+ --stax-button:rgba(255,255,255,.48);
+ --stax-border:rgba(255,255,255,.9);
+ --stax-text:#4e4669;
+ --stax-caption:#766f91;
+ --stax-toolbar-ink:#41365d;
+ --stax-toolbar-disabled:#81718d;
+}
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-molecule-canvas {
+ background:linear-gradient(125deg,rgba(255,250,255,.12),rgba(227,227,255,.08)),
+   url('/stax-pearlescent/background.avif') center center / cover no-repeat,#eee9f7;
+}
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-molecule-palette,
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-molecule-dock {
+ background:rgba(255,255,255,.48);
+ border:1px solid rgba(255,255,255,.92);
+ box-shadow:0 10px 36px rgba(111,91,155,.17),inset 0 1px rgba(255,255,255,.93);
+ backdrop-filter:blur(18px) saturate(1.15);
+ -webkit-backdrop-filter:blur(18px) saturate(1.15);
+}
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-molecule-palette button,
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-molecule-dock button {
+ background:rgba(255,255,255,.44);
+ border-color:rgba(255,255,255,.79);
+ box-shadow:inset 0 1px rgba(255,255,255,.91),0 2px 8px rgba(147,134,192,.10);
+}
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-molecule-canvas svg g[data-kind] {
+ filter:none;
+}
+.stax-molecule-ui[data-theme='pearlescent-airglass'] svg.stax-pearlescent-art {
+ overflow:hidden!important;
+ pointer-events:none!important;
+}
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-pearlescent-art,
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-pearlescent-art image,
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-airglass-asset {
+ pointer-events:none!important;
+}
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-lifted-ghost > svg,
+.stax-molecule-ui[data-theme='pearlescent-airglass'] .stax-molecule-palette button > svg {
+ overflow:visible;
+}
