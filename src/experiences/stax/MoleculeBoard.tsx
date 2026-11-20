@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, type FamilyChild } from './geometry'
-import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, insertOrangeBeforeExisting, promoteOrangeIntoRightSlot, orangeTierChildren, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
+import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeTierChildren, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
 import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
@@ -464,7 +464,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
        {x:b.x,y:b.y,width:atomWidth(b),height:atomHeight(b)},
        [{id:a.id,width:smallW,height:smallH},{id:'__future_pair',width:smallW,height:smallH}],
        {gap:GAP,belowGap:VERTICAL}).get(a.id)!:
-      slot==='promote-right'?redRightChildPosition(b):nestedChildPosition(b,a)
+      slot==='right-modifier'?redRightChildPosition(b):nestedChildPosition(b,a)
      offered({parent:b.id,child:a.id,relation:'support',
       dx:target.x-a.x,dy:target.y-a.y,distance:Math.hypot(target.x-a.x,target.y-a.y)})
     }
@@ -550,12 +550,11 @@ function resolveMagnet(d:Draft,moving:Set<string>,snap:Snap):Draft {
  const host=byId(d,snap.parent)
  const slot=snap.relation==='support'&&host?.kind==='hexagon'&&byId(d,snap.child)?.kind==='hexagon'
   ?eligibleOrangeTierSlot(d,snap.child,snap.parent):null
- // Insert before an existing adverb instead of destroying or duplicating it.
- const inserted=slot==='insert'?insertOrangeBeforeExisting(translated,snap.parent,snap.child):null
- const promoted=slot==='promote-right'?promoteOrangeIntoRightSlot(translated,snap.child,snap.parent):null
- let joined:Draft=promoted&&promoted!==translated?promoted:
-  inserted&&inserted!==translated?inserted:
-  {...translated,bonds:[...translated.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}]}
+ // Orange forms depend on the structure alone; do not silently reparent
+ // or exchange any existing orange when a new piece attaches underneath.
+ let joined:Draft={...translated,bonds:[
+  ...translated.bonds,{parent:snap.parent,child:snap.child,relation:snap.relation}
+ ]}
  if(slot==='left-pair'&&joined.atoms.length<80){
   const id='orange-companion-'+snap.child
   if(!joined.atoms.some(a=>a.id===id))joined={
