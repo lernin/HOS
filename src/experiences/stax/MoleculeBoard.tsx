@@ -3,7 +3,7 @@ import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, type FamilyChild } from './geometry'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, canNestRightRedOrange, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
-import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxShapeFill, staxShapeStroke, staxThemeName, type StaxTheme } from './view-modes'
+import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
 import './molecule-board.css'
 
