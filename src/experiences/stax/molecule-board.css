@@ -741,3 +741,46 @@
  color:#faf2ff;
  text-shadow:0 1px 3px rgba(10,6,25,.65);
 }
+
+/* Optional foam-table classroom mode. This CSS wood background is a
+ * lightweight approximation; the source-photograph cutouts are exported
+ * separately as authentic alpha PNGs for eventual binary asset upload. */
+.stax-molecule-ui[data-theme='classroom-foam'] {
+ --stax-toolbar-ink:#38271a;
+ --stax-toolbar-disabled:#7b6554;
+ --stax-text:#302015;
+ --stax-caption:#4c3220;
+ --stax-panel:rgba(255,247,224,.90);
+ --stax-button:rgba(255,245,218,.95);
+ --stax-border:rgba(93,55,25,.62);
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-canvas {
+ background:
+ repeating-linear-gradient(175deg,transparent 0 5px,rgba(43,25,11,.045) 6px 8px,rgba(255,251,215,.07) 9px 14px,transparent 15px 20px),
+ repeating-linear-gradient(1deg,rgba(55,38,20,.10) 0 2px,transparent 2px 27px,rgba(255,249,228,.12) 28px 29px,transparent 30px 40px),
+ linear-gradient(135deg,#ad8052,#d6b78b 42%,#977148 78%,#b99665);
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-palette,
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-dock {
+ background:rgba(255,249,229,.91);
+ border:1px solid rgba(103,67,38,.61);
+ box-shadow:0 6px 21px rgba(56,32,12,.19);
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-palette button,
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-dock button,
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-tray-handle {
+ background:rgba(255,248,225,.97);
+ color:#38271a!important;
+ border-color:rgba(115,74,42,.49);
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-canvas svg .stax-foam-asset {
+ pointer-events:none!important;
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-foam-asset,
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-foam-asset * {
+ pointer-events:none!important;
+}
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-palette button > svg,
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-lifted-ghost > svg {
+ overflow:visible;
+}
