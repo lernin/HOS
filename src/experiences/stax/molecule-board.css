@@ -4,6 +4,12 @@
 
 .stax-molecule-ui {
  --stax-control-size:46px;
+ --stax-bg:#faf9f6;
+ --stax-panel:rgba(255,255,255,.94);
+ --stax-button:#fff;
+ --stax-border:#cbd6dc;
+ --stax-text:#27475a;
+ --stax-caption:#899ca6;
  position:fixed;
  inset:0;
  z-index:1000;
@@ -11,14 +17,31 @@
  width:100vw;
  height:100dvh;
  overflow:hidden;
- background:#faf9f6;
+ background:var(--stax-bg);
+}
+
+/* Theme alters presentation only, never the world-space grammar model. */
+.stax-molecule-ui[data-theme='blueprint'] {
+ --stax-bg:#082a45;--stax-panel:rgba(8,38,62,.96);
+ --stax-button:#123752;--stax-border:#386681;
+ --stax-text:#dbf3ff;--stax-caption:#82b5d1;
+}
+.stax-molecule-ui[data-theme='black'] {
+ --stax-bg:#090b10;--stax-panel:rgba(21,24,29,.96);
+ --stax-button:#282d34;--stax-border:#555e69;
+ --stax-text:#f4f7fb;--stax-caption:#a9b4be;
+}
+.stax-molecule-ui[data-theme='white'] {
+ --stax-bg:#fbfaf7;--stax-panel:rgba(252,252,251,.95);
+ --stax-button:#fff;--stax-border:#9aa5ae;
+ --stax-text:#1c2733;--stax-caption:#6f7984;
 }
 
 .stax-molecule-canvas {
  position:absolute;
  inset:0;
  overflow:hidden;
- background:#faf9f6;
+ background:var(--stax-bg);
 }
 .stax-molecule-canvas svg {
  display:block;
@@ -43,7 +66,7 @@
  top:50%;
  transform:translateY(-50%);
  margin:0;
- color:#899ca6;
+ color:var(--stax-caption);
  font-size:13px;
  text-align:center;
  pointer-events:none;
@@ -62,8 +85,8 @@
  grid-template-columns:repeat(4,44px);
  gap:4px;
  padding:6px;
- background:rgba(255,255,255,.94);
- border:1px solid #d6dfe4;
+ background:var(--stax-panel);
+ border:1px solid var(--stax-border);
  border-radius:12px;
  box-shadow:0 3px 16px #16324817;
  backdrop-filter:blur(12px);
@@ -76,9 +99,9 @@
  height:44px;
  min-width:44px;
  padding:3px;
- border:1px solid #dfe5e9;
+ border:1px solid var(--stax-border);
  border-radius:9px;
- background:#fff;
+ background:var(--stax-button);
  touch-action:none;
  user-select:none;
  -webkit-user-select:none;
@@ -103,9 +126,9 @@
  grid-auto-rows:var(--stax-control-size);
  gap:6px;
  padding:8px;
- border:1px solid #d6dfe4;
+ border:1px solid var(--stax-border);
  border-radius:13px;
- background:rgba(255,255,255,.94);
+ background:var(--stax-panel);
  box-shadow:0 3px 16px #16324817;
  backdrop-filter:blur(12px);
 }
@@ -123,10 +146,10 @@
  min-width:var(--stax-control-size);
  min-height:var(--stax-control-size);
  padding:0;
- border:1px solid #cbd6dc;
+ border:1px solid var(--stax-border);
  border-radius:8px;
- background:#fff;
- color:#27475a;
+ background:var(--stax-button);
+ color:var(--stax-text);
  font:600 22px/1 system-ui,sans-serif;
  touch-action:manipulation;
  cursor:pointer;
@@ -139,6 +162,12 @@
 .stax-molecule-back {font-size:26px!important;}
 .stax-molecule-buttons button:nth-child(2) {font-size:14px;font-weight:800;}
 .stax-molecule-buttons button[aria-label^="Sweep"] {font-size:24px;}
+.stax-molecule-tools button.stax-mode-active {
+ background:#146e63;
+ color:#fff;
+ border-color:#2ab8a4;
+ box-shadow:inset 0 0 0 2px #91e7db;
+}
 .stax-molecule-view-controls span {
  display:flex;
  align-items:center;
@@ -149,7 +178,7 @@
  text-align:center;
  font:600 13px/1.2 system-ui,sans-serif;
  font-variant-numeric:tabular-nums;
- color:#465967;
+ color:var(--stax-text);
 }
 
 /* Accessible status remains announced but never obscures the canvas. */
@@ -219,6 +248,20 @@
 @media(max-width:850px) {
  .stax-molecule-palette {grid-template-columns:repeat(3,44px);}
  .stax-molecule-example {max-width:42vw;}
+}
+/* In landscape the palette occupies only one column along the right edge. */
+@media(orientation:landscape) {
+ .stax-molecule-palette {
+  grid-template-columns:44px;
+  max-height:calc(100dvh - 16px);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+ }
+}
+@media(orientation:landscape) and (max-height:420px) {
+ .stax-molecule-palette {grid-template-columns:42px;gap:3px;padding:5px;}
+ .stax-molecule-palette button {width:42px;height:42px;min-width:42px;}
+ .stax-molecule-palette button svg {height:33px;}
 }
 @media(max-width:370px) {
  .stax-molecule-dock {left:6px;bottom:calc(env(safe-area-inset-bottom,0px) + 6px);}
