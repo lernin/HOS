@@ -105,3 +105,35 @@ export function positionRedRightNestedOrange(
   y:parent.y+parent.height+belowGap,
  }
 }
+
+
+/**
+ * Minimal RIGHT shift for a following sentence family.
+ *
+ * Blueprint head spacing is measured separately from the clearance between
+ * hanging supporters of adjacent families. A direct .28 support attachment
+ * is NOT the clearance between different word families: those get the .98
+ * group boundary when their vertical bands intersect. No extra space is
+ * consumed when their descendants do not share a vertical band.
+ *
+ * Return a shift (>= 0), never mutate a shape, so camera/zoom and animation
+ * cannot alter the canonical geometry.
+ */
+export function requiredFamilyFollowerShift(
+ leftHead:Box,rightHead:Box,
+ leftMembers:readonly Box[],rightMembers:readonly Box[],
+ headGap:number,familyGap:number,
+):number {
+ const boxes=[leftHead,rightHead,...leftMembers,...rightMembers]
+ if(![headGap,familyGap,...boxes.flatMap(b=>[b.x,b.y,b.width,b.height])].every(Number.isFinite)||
+    headGap<0||familyGap<0||boxes.some(b=>b.width<=0||b.height<=0))
+  throw new RangeError('Invalid STAX sequence family geometry')
+ let shift=Math.max(0,leftHead.x+leftHead.width+headGap-rightHead.x)
+ for(const a of leftMembers)for(const b of rightMembers){
+  // A finite overlap, not a shared exact baseline: vertical neighbors do
+  // not need a horizontal displacement merely to clear one another.
+  if(a.y < b.y+b.height && b.y < a.y+a.height)
+   shift=Math.max(shift,a.x+a.width+familyGap-b.x)
+ }
+ return Math.max(0,shift)
+}
