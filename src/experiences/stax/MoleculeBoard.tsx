@@ -373,8 +373,8 @@ function alignOrangeTierChildren(doc:Draft,parentId:string,seen=new Set<string>(
  const parentBox={x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)}
  const ownerId=parentOfSupport(doc,parentId)
  const owner=ownerId?byId(doc,ownerId):undefined
- const siblings=owner?.kind==='triangle'?orangeChildren(doc,owner.id):[]
- const rightDirectRedOrange=siblings.length===2&&siblings[1].id===parentId
+ const siblings=owner&&(owner.kind==='triangle'||owner.kind==='hexagon')?orangeChildren(doc,owner.id):[]
+ const rightDirectRedOrange=owner?.kind==='triangle'&&siblings.length===2&&siblings[1].id===parentId
  // The seventh orange beneath the RIGHT member of the second paired row
  // uses the same staggered right-side port as the third orange. The older
  // generic single-child port shifts it too far left toward the bottom pair.
