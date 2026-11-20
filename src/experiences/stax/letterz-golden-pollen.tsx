@@ -159,8 +159,7 @@ export function LetterzGoldenPollenCanvas({atoms,view,svgRef,onReady}:{
      const host={
       canvas,c:ctx,i:9,t:(seed%83)/10,gameplay:true,
       materialScale:1,coreScale:1,liveParts:[part],
-      setGameplayTransform:(_c:CanvasRenderingContext2D)=>{},
-      draw:(_dt:number)=>{}
+      setGameplayTransform:(_c:CanvasRenderingContext2D)=>{}
      } as LetterzScene
      scene=registry.instantiate(GOLDEN_POLLEN_ID,host)
      scenes.set(atom.id,scene)
