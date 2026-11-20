@@ -532,10 +532,12 @@ test('six-orange bottom pair is crossed/touching and seventh uses right paired s
  assert.ok(board.includes("slot==='right-modifier'?redRightModifierPosition(b):nestedChildPosition(b,a)"))
 })
 
-test('six-seven nested pairs keep middle separated and bottom touching while four stays unchanged',async()=>{
+test('six has touching bottom; seven opens bottom gap while both separate middle'),async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const tier=board.slice(board.indexOf('function alignOrangeTierChildren('),board.indexOf('function miniFamilyPosition('))
- assert.ok(tier.includes('redOrangeFamilySize(doc,rootId)>=6'))
+ assert.ok(tier.includes('familySize>=6'))
+ assert.ok(tier.includes('familySize>=7&&children.length===2'))
+ assert.ok(tier.includes('middleOfDeepFamily||bottomOfSeven'))
  assert.ok(tier.includes("owner?.kind==='triangle'"))
  assert.ok(tier.includes('orangeChildren(doc,children[0].id).length===2'))
  assert.ok(tier.includes('gap:GAP,belowGap:VERTICAL'))
@@ -543,5 +545,6 @@ test('six-seven nested pairs keep middle separated and bottom touching while fou
  const reflow=board.slice(board.indexOf('function ensureFourOrangeBlueprint('),board.indexOf('/** Visual size follows'))
  assert.ok(reflow.includes('if(redOrangeFamilySize(next,red.id)<6)continue'))
  assert.ok(reflow.includes('middle.some('))
+ assert.ok(reflow.includes('staleBottom=bottom.some('))
  assert.ok(reflow.includes('next=alignRedSupporters(next,red.id)'))
 })
