@@ -12,10 +12,10 @@ const {
  staxShapeFill,staxOmissionDash
 }=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
-test('STAX cycles classic, futuristic and Golden Line modes',()=>{
- assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line'])
+test('STAX cycles classic, futuristic and four new materials without touching grammar',()=>{
+ assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads'])
  let mode='color'
- for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','color']){
+ for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','color']){
   mode=nextStaxTheme(mode)
   assert.equal(mode,next)
  }
@@ -66,7 +66,7 @@ test('experimental modes preserve source colors or apply one coherent luminous i
 })
 test('immersive backgrounds remain visible beneath transparent SVG board',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
- assert.match(board,/theme==='arc-reactor'\|\|theme==='hologram'\|\|theme==='cosmic'\|\|theme==='golden-line'\?'transparent'/)
+ assert.match(board,/theme==='arc-reactor'\|\|theme==='hologram'\|\|theme==='cosmic'\|\|theme==='golden-line'\|\|hasStaxMaterial\(theme\)\?'transparent'/)
 })
 
 test('Golden Line reuses Letterz gold colors without changing STAX semantic data',()=>{
@@ -85,9 +85,48 @@ test('Golden Line uses metallic SVG strokes on the board, palette and lifted gho
  assert.match(code,/stax-golden-board/)
  assert.match(code,/stax-golden-palette-/)
  assert.match(code,/stax-golden-lifted/)
- assert.match(code,/Golden Line\)/)
+ assert.match(code,/STAX_THEMES\.map\(staxThemeName\)/)
  assert.match(css,/data-theme='golden-line'/)
  assert.match(css,/#fff1ac/)
  assert.match(css,/#ce921d/)
  assert.match(code,/const KEY='stax-free-molecules-v2'/)
+})
+
+test('four material themes have distinct palette and board colors',()=>{
+ assert.equal(staxThemeName('golden-pollen'),'Golden Pollen')
+ assert.equal(staxThemeName('jelly-bloom'),'Jelly Bloom')
+ assert.equal(staxThemeName('glassmorph'),'Glassmorph')
+ assert.equal(staxThemeName('glass-beads'),'Glass Beads')
+ assert.equal(staxBoardColor('golden-pollen'),'#07101e')
+ assert.equal(new Set(['golden-pollen','jelly-bloom','glassmorph','glass-beads'].map(staxBoardColor)).size,4)
+ assert.equal(staxThemeName('golden-line'),'Golden Line','original gold stroke remains distinct')
+ assert.equal(new Set(['golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads'].map(t=>staxShapeStroke(t,'#3379dc'))).size,5)
+})
+test('Golden Pollen material traces Letterz #10 colors and moving pollen grains, but uses bounded SVG',async()=>{
+ const mat=await readFile(new URL('../src/experiences/stax/materials.tsx',import.meta.url),'utf8')
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ for(const tone of ['#ffc06b','#ffe29e','#fff9d9'])assert.match(mat,new RegExp(tone))
+ assert.match(mat,/Golden Pollen palette/)
+ assert.match(mat,/const hash=/)
+ assert.match(mat,/const off=/)
+ assert.match(mat,/Math.min\(42,Math.max\(24/)
+ assert.match(mat,/if\(omitted\)return null/)
+ assert.match(board,/<StaxMaterialEffect theme=\{theme\}/)
+ assert.match(board,/<StaxMaterialDefs prefix="stax-mat-board"/)
+ assert.match(css,/@keyframes stax-golden-pollen-drift/)
+ assert.match(css,/prefers-reduced-motion:reduce/)
+ assert.doesNotMatch(mat,/requestAnimationFrame/)
+})
+test('jelly and both glasses use genuinely different radial or layered gradients on board and palette',async()=>{
+ const mat=await readFile(new URL('../src/experiences/stax/materials.tsx',import.meta.url),'utf8')
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ for(const id of ['jelly','jelly-edge','frost','frost-edge','bead','bead-edge'])assert.ok(mat.includes('${prefix}-'+id))
+ for(const mode of ['golden-pollen','jelly-bloom','glassmorph','glass-beads'])assert.ok(css.includes("data-theme='"+mode+"'"))
+ assert.match(board,/materialStroke\(theme,'stax-mat-board'/)
+ assert.match(board,/materialFill\(theme,'stax-mat-board'/)
+ assert.match(board,/StaxMaterialDefs prefix=\{`stax-mat-palette-/)
+ assert.match(board,/StaxMaterialEffect theme=\{theme\} kind=\{paletteHover.kind\}/)
+ assert.match(board,/const KEY='stax-free-molecules-v2'/)
 })

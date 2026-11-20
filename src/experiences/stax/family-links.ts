@@ -116,9 +116,9 @@ export function largestAssembledFamily(
  return best.length>1?new Set(best):null
 }
 
-/** Purple determiners precede green adjectives even if the user attaches
- * the purple later. Other positions retain their relative assembly order,
- * including orange followed by purple or pink beneath blue.
+/** Object-blue support row uses semantic word order, not attachment order.
+ * Direct orange means "not" and must precede pink, purple, and green even
+ * when inserted last. Nested orange under pink/green is never a row child.
  */
 export function normalizeBlueSiblingOrder<T extends FamilyNode>(row:readonly T[]):T[] {
  const copy=[...row]
@@ -139,6 +139,14 @@ export function normalizeBlueSiblingOrder<T extends FamilyNode>(row:readonly T[]
   if(firstLater>=0){
    const [pink]=copy.splice(i,1)
    copy.splice(firstLater,0,pink)
+  }
+ }
+ // "this is not in Vancouver": late "not" moves ahead of pink.
+ for(let i=1;i<copy.length;i++){
+  if(copy[i].kind==='hexagon'){
+   const [orange]=copy.splice(i,1)
+   copy.unshift(orange)
+   break
   }
  }
  return copy
@@ -225,13 +233,12 @@ export function canNestRightRedOrange(
  return oranges.length===2&&oranges[1].child===parentId
 }
 
-/** Orange may start a direct blue-headed family ('not a potato'), but
- * once an adjective is present it cannot be placed AFTER green as a peer.
- * It must instead attach to the green it modifies; blue and green continue
- * to be separate, valid shapes if the orange cannot yet find its parent.
+/** One direct orange ("not") slot per object blue. Existing green or pink
+ * supports do not block late insertion; the row is normalized before them.
+ * Orange nested beneath pink/green is a separate grammatical relationship.
  */
 export function canAttachOrangeUnderBlue(graph:FamilyGraph,blueId:string):boolean {
  if(graph.atoms.find(a=>a.id===blueId)?.kind!=='circle')return false
  return !graph.bonds.some(b=>b.relation==='support'&&b.parent===blueId&&
-  graph.atoms.some(a=>a.id===b.child&&a.kind==='oval'))
+  graph.atoms.some(a=>a.id===b.child&&a.kind==='hexagon'))
 }

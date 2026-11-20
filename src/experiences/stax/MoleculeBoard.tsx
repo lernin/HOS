@@ -3,7 +3,8 @@ import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNestedOrange, type FamilyChild } from './geometry'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, canNestRightRedOrange, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
-import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxShapeFill, staxShapeStroke, staxThemeName, type StaxTheme } from './view-modes'
+import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
+import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
 import './molecule-board.css'
 
 /**
@@ -271,6 +272,7 @@ function alignSupporters(doc:Draft,blueId:string):Draft {
  // Reflow real descendants, never the word-order predecessor.
  for(const child of blueSupportAtoms(next,blueId)){
   if(child.kind==='oval')next=alignNestedChain(next,child.id,'hexagon')
+  if(child.kind==='square')next=alignNestedChain(next,child.id,'hexagon')
   if(child.kind==='rectangle')next=alignNestedChain(next,child.id,'rectangle')
  }
  return next
@@ -328,6 +330,22 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
       const dy=a.id===sup.id?desired.y-sup.y:sup.y-desired.y
       offered({parent:blue.id,child:sup.id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)})
      }
+    }
+   }
+   // Orange arriving beside a pink support inserts BEFORE pink on object blue.
+   // It may instead nest BELOW pink if dropped onto that lower port.
+   if(a.kind==='hexagon'&&b.kind==='square'&&!parentOfSupport(d,a.id)){
+    const blueId=parentOfSupport(d,b.id)
+    if(blueId&&canAttachOrangeUnderObjectBlue(d,blueId)&&
+      !blueSupportAtoms(d,blueId).some(child=>child.kind==='hexagon')){
+     const target=supportPosition(byId(d,blueId),a,d)
+     const alongsideX=b.x-atomWidth(a)-GAP
+     const alongsideY=b.y+(atomHeight(b)-atomHeight(a))/2
+     const proximity=Math.min(
+      Math.hypot(target.x-a.x,target.y-a.y),
+      Math.hypot(alongsideX-a.x,alongsideY-a.y))
+     offered({parent:blueId,child:a.id,relation:'support',
+      dx:target.x-a.x,dy:target.y-a.y,distance:proximity})
     }
    }
    // Follow an existing orange attached directly beneath BLUE with a pink,
@@ -936,7 +954,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
      <button onClick={sweepLoose} title="Sweep loose shapes and smaller maps; keep the largest connected map (Undo restores)" aria-label="Sweep loose shapes; keep largest connected map">🧹</button>
      <button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}} title="Clear all shapes" aria-label="Clear all shapes">×</button>
      <button onClick={()=>{const next=nextStaxTheme(theme);setTheme(next);setHint('Visual mode: '+staxThemeName(next))}}
-      title={'Visual mode: '+staxThemeName(theme)+' (tap to cycle Color, Blueprint, Black, Black & white, Arc Reactor, Holographic Glass, Cosmic Aurora, Golden Line)'}
+      title={'Visual mode: '+staxThemeName(theme)+' (tap to cycle '+STAX_THEMES.map(staxThemeName).join(', ')+')'}
       aria-label={'Visual mode: '+staxThemeName(theme)+'. Tap to change theme.'}>◐</button>
      <button onClick={()=>{setOmitBrush(v=>!v);setHint(omitBrush?'Dotted omission brush off.':'Dotted omission brush on. Tap a shape to toggle, or add dotted shapes.')}}
       title="Omit brush: tap to toggle; when active tap shapes to mark omitted, or add new dotted shapes"
@@ -956,7 +974,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-board"/>}
-    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'||theme==='golden-line'?'transparent':staxBoardColor(theme)}/>
+     {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix="stax-mat-board"/>}
+    <rect data-board-background="true" x={view.x} y={view.y} width={view.width} height={view.height} fill={theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'||theme==='golden-line'||hasStaxMaterial(theme)?'transparent':staxBoardColor(theme)}/>
     {paletteHover?.snap&&<g className="stax-resonance-ghost" aria-hidden="true" pointerEvents="none">
       {(()=>{
        const phantom:Atom={id:'__palette_preview__',kind:paletteHover.kind,x:paletteHover.worldX,y:paletteHover.worldY,variant:paletteHover.variant,omitted:omitBrush}
@@ -981,23 +1000,35 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       ].filter(Boolean).join(' ')}
       onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}>
       {selected===a.id&&<rect x="-7" y="-7" width={atomWidth(a)+14} height={atomHeight(a)+14} rx="5" fill="none" stroke={theme==='golden-line'?'#fff1ac':'#7b8795'} strokeDasharray="4 5" pointerEvents="none"/>}
-      <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} fill={staxShapeFill(theme,SYMBOLS[a.kind].color)} stroke={theme==='golden-line'?'url(#stax-golden-board)':staxShapeStroke(theme,SYMBOLS[a.kind].color)} strokeWidth={3} strokeDasharray={staxOmissionDash(a.omitted)}/>
-      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={theme==='golden-line'?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
+      <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)}
+        fill={materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
+        stroke={theme==='golden-line'?'url(#stax-golden-board)':materialStroke(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
+        strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(a.omitted)}/>
+       <StaxMaterialEffect theme={theme} kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} seed={a.id} omitted={a.omitted}/>
+      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
     </g>)}
    </svg>
    {!doc.atoms.length&&<p className="stax-molecule-empty">Tap a shape in the palette, or drag one into the workspace.</p>}
   </div>
   <div className="stax-molecule-palette">{choices.map(({kind,variant,label})=><button key={`${kind}-${variant||'default'}`} title={label+(omitBrush?' (omitted)':'')} aria-label={`Add ${label}${omitBrush?' (omitted)':''}`}
    onPointerDown={e=>paletteDown(e,kind,variant)} onPointerMove={paletteMove} onPointerUp={paletteUp} onPointerCancel={paletteCancel}>
-   <svg viewBox={`-4 -4 ${width(kind)*variantWidthFactor(kind,variant)+8} ${height(kind)*variantHeightFactor(kind,variant)+8}`} aria-hidden="true">{theme==='golden-line'&&<MetallicGoldStroke id={`stax-golden-palette-${kind}-${variant||'default'}`}/>}<Glyph kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} stroke={theme==='golden-line'?`url(#stax-golden-palette-${kind}-${variant||'default'})`:staxShapeStroke(theme,SYMBOLS[kind].color)} fill={staxShapeFill(theme,SYMBOLS[kind].color)} strokeWidth={3} strokeDasharray={staxOmissionDash(omitBrush)}/></svg>
+   <svg viewBox={`-4 -4 ${width(kind)*variantWidthFactor(kind,variant)+8} ${height(kind)*variantHeightFactor(kind,variant)+8}`} aria-hidden="true">{theme==='golden-line'&&<MetallicGoldStroke id={`stax-golden-palette-${kind}-${variant||'default'}`}/>}
+     {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix={`stax-mat-palette-${kind}-${variant||'default'}`}/>}
+     <Glyph kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} stroke={theme==='golden-line'?`url(#stax-golden-palette-${kind}-${variant||'default'})`:materialStroke(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} fill={materialFill(theme,`stax-mat-palette-${kind}-${variant||'default'}`,SYMBOLS[kind].color)} strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(omitBrush)}/>
+     <StaxMaterialEffect theme={theme} kind={kind} w={width(kind)*variantWidthFactor(kind,variant)} h={height(kind)*variantHeightFactor(kind,variant)} seed={kind} omitted={omitBrush} compact/></svg>
   </button>)}</div>
   {paletteHover&&<div className={`stax-lifted-ghost${paletteHover.snap?' is-eligible':''}`} style={{left:paletteHover.screenX,top:paletteHover.screenY}} aria-hidden="true">
     <svg width={Math.max(40,Math.min(130,width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
       height={Math.max(28,Math.min(130,height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)*(svg.current?.getBoundingClientRect().width||960)/view.width))}
       viewBox={`0 0 ${width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)} ${height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)}`}>
      {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-lifted"/>}
+      {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix="stax-mat-lifted"/>}
      <Glyph kind={paletteHover.kind} w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)} h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)}
-       fill={staxShapeFill(theme,SYMBOLS[paletteHover.kind].color)} stroke={theme==='golden-line'?(paletteHover.snap?'#fff1ac':'url(#stax-golden-lifted)'):paletteHover.snap?'#12a981':staxShapeStroke(theme,SYMBOLS[paletteHover.kind].color)} strokeWidth={4} strokeDasharray={staxOmissionDash(omitBrush)}/>
+       fill={materialFill(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} stroke={theme==='golden-line'?(paletteHover.snap?'#fff1ac':'url(#stax-golden-lifted)'):paletteHover.snap?'#12a981':materialStroke(theme,'stax-mat-lifted',SYMBOLS[paletteHover.kind].color)} strokeWidth={4} strokeDasharray={staxOmissionDash(omitBrush)}/>
+      <StaxMaterialEffect theme={theme} kind={paletteHover.kind}
+       w={width(paletteHover.kind)*variantWidthFactor(paletteHover.kind,paletteHover.variant)}
+       h={height(paletteHover.kind)*variantHeightFactor(paletteHover.kind,paletteHover.variant)}
+       seed={paletteHover.kind} omitted={omitBrush} compact/>
     </svg>
    </div>}
   <p className="stax-molecule-hint" role="status">{hint}</p>
