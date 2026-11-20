@@ -43,7 +43,7 @@ test('real Letterz #10 Golden Pollen draws moving frames and registers same orig
  }))}
  const host={canvas:{},c,i:9,t:1,gameplay:true,
   materialScale:1,coreScale:1,liveParts:[part],
-  setGameplayTransform(){},draw(){}}
+  setGameplayTransform(){}}
  const scene=registration.instantiate(10,host)
  scene.draw(.033)
  const first=ops.map(({x,y})=>[x,y])
