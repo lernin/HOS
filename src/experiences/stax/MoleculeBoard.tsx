@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
-import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
+import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -118,7 +118,18 @@ function alignRedSupporters(doc:Draft,redId:string):Draft {
  const red=byId(doc,redId),orange=orangeChildren(doc,redId)
  if(!red||orange.length<1)return doc
  const parent={x:red.x,y:red.y,width:width('triangle'),height:height('triangle')}
- const children=orange.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)}))
+ const children=orange.map(a=>{
+  const w=atomWidth(a),h=atomHeight(a)
+  // When the LEFT direct orange owns a lower pair, reserve the entire X
+  // footprint before placing its sibling (the right-hand "uncle").
+  const lower=orangeChildren(doc,a.id)
+  if(lower.length===2){
+   const lowerW=smallWidth('hexagon')
+   const halfOverhang=Math.max(0,(2*lowerW-lowerW*.025-w)/2)
+   return {id:a.id,width:w,height:h,extentLeft:-halfOverhang,extentRight:w+halfOverhang}
+  }
+  return {id:a.id,width:w,height:h}
+ })
  // Exactly two direct large hexagons cross at their inner tips (Blueprint X).
  // If another orange is added to the red-rooted family, keep existing compact
  // tier spacing; neither purple nor other support rows use this exception.
@@ -309,6 +320,15 @@ function blueSupportPositions(doc:Draft,blueId:string):Map<string,{x:number;y:nu
   specs,{gap:GAP,belowGap:VERTICAL})
 }
 /** A single orange beneath another orange follows the same under-port as pink. */
+function redRightModifierPosition(parent:Atom) {
+ // Special THIRD orange: beneath the right direct red supporter, slightly
+ // left of center but NOT as far left as the pink-like single-child port.
+ return positionRedRightNestedOrange(
+  {x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)},
+  {width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y},
+  VERTICAL
+ )
+}
 function nestedChildPosition(parent:Atom,child:Atom) {
  const childWidth=child.kind==='hexagon'?smallWidth('hexagon'):atomWidth(child)
  const childHeight=child.kind==='hexagon'?height('hexagon')*SMALL_ORANGE_Y:atomHeight(child)
@@ -330,9 +350,17 @@ function alignOrangeTierChildren(doc:Draft,parentId:string,seen=new Set<string>(
  if(!parent||!children.length||children.length>2)return doc
  const smallW=smallWidth('hexagon'),smallH=height('hexagon')*SMALL_ORANGE_Y
  const parentBox={x:parent.x,y:parent.y,width:atomWidth(parent),height:atomHeight(parent)}
+ const ownerId=parentOfSupport(doc,parentId)
+ const owner=ownerId?byId(doc,ownerId):undefined
+ const siblings=owner?.kind==='triangle'?orangeChildren(doc,owner.id):[]
+ const rightDirectRedOrange=siblings.length===2&&siblings[1].id===parentId
  const positions:Map<string,{x:number;y:number}>=children.length===2
-  ?positionChildren(parentBox,children.map(c=>({id:c.id,width:smallW,height:smallH})),{gap:GAP,belowGap:VERTICAL})
-  :new Map([[children[0].id,nestedChildPosition(parent,children[0])]])
+  ?positionRedOrangeCrossPair(parentBox,[
+    {id:children[0].id,width:smallW,height:smallH},
+    {id:children[1].id,width:smallW,height:smallH}
+   ],VERTICAL)
+  :new Map([[children[0].id,rightDirectRedOrange
+    ?redRightModifierPosition(parent):nestedChildPosition(parent,children[0])]])
  let next=doc
  for(const child of children){
   const current=byId(next,child.id),target=positions.get(child.id)!
@@ -557,11 +585,11 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
     const slot=eligibleOrangeTierSlot(d,a.id,b.id)
     if(slot){
      const smallW=smallWidth('hexagon'),smallH=height('hexagon')*SMALL_ORANGE_Y
-     const target=slot==='left-pair'?positionChildren(
+     const target=slot==='left-pair'?positionRedOrangeCrossPair(
        {x:b.x,y:b.y,width:atomWidth(b),height:atomHeight(b)},
        [{id:a.id,width:smallW,height:smallH},{id:'__future_pair',width:smallW,height:smallH}],
-       {gap:GAP,belowGap:VERTICAL}).get(a.id)!:
-      nestedChildPosition(b,a)
+       VERTICAL).get(a.id)!:
+      slot==='right-modifier'?redRightModifierPosition(b):nestedChildPosition(b,a)
      offered({parent:b.id,child:a.id,relation:'support',
       dx:target.x-a.x,dy:target.y-a.y,distance:Math.hypot(target.x-a.x,target.y-a.y)})
     }
