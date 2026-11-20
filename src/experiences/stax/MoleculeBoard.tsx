@@ -375,12 +375,17 @@ function alignOrangeTierChildren(doc:Draft,parentId:string,seen=new Set<string>(
  const owner=ownerId?byId(doc,ownerId):undefined
  const siblings=owner?.kind==='triangle'?orangeChildren(doc,owner.id):[]
  const rightDirectRedOrange=siblings.length===2&&siblings[1].id===parentId
+ // The seventh orange beneath the RIGHT member of the second paired row
+ // uses the same staggered right-side port as the third orange. The older
+ // generic single-child port shifts it too far left toward the bottom pair.
+ const rightPairedOrange=rightDirectRedOrange||(
+  owner?.kind==='hexagon'&&siblings.length===2&&siblings[1].id===parentId)
  const positions:Map<string,{x:number;y:number}>=children.length===2
   ?positionRedOrangeCrossPair(parentBox,[
     {id:children[0].id,width:smallW,height:smallH},
     {id:children[1].id,width:smallW,height:smallH}
    ],VERTICAL)
-  :new Map([[children[0].id,rightDirectRedOrange
+  :new Map([[children[0].id,rightPairedOrange
     ?redRightModifierPosition(parent):nestedChildPosition(parent,children[0])]])
  let next=doc
  for(const child of children){
