@@ -443,7 +443,20 @@ test('red-orange bridge insertion reflows recursively and auto-creates only its 
 
 test('orange shapes are blank locations, never auto-renamed or reparented during snap',async()=>{
  const code=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
- const resolve=code.slice(code.indexOf('function resolveMagnet('),code.indexOf('function eligibleMagnet('))
+ const resolve=code.slice(code.indexOf('function resolveMagnetBase('),code.indexOf('function resolveMagnet('))
  assert.match(resolve,/let joined:Draft=\{\.\.\.translated,bonds:/)
  assert.doesNotMatch(resolve,/promoteOrangeIntoRightSlot|insertOrangeBeforeExisting/)
+})
+
+test('sentence family footprint clearance runs after all snaps and support-removal reflow',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.match(board,/function supportFootprint\(d:Draft,headId:string\)/)
+ assert.match(board,/edge\.relation==='support'/)
+ assert.match(board,/edge\.relation==='pair'/)
+ assert.match(board,/function alignSequenceFamilyClearance\(doc:Draft\)/)
+ assert.match(board,/requiredFamilyFollowerShift\(/)
+ assert.match(board,/return alignSequenceFamilyClearance\(resolveMagnetBase\(d,moving,snap\)\)/)
+ assert.match(board,/return alignSequenceFamilyClearance\(next\)/)
+ assert.match(board,/if\(left\.kind==='circle'&&right\.kind==='triangle'\)return BLUE_RED_GAP/)
+ assert.match(board,/return RED_BLUE_GAP/)
 })
