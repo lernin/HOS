@@ -141,6 +141,31 @@ function alignRedSupporters(doc:Draft,redId:string):Draft {
  for(const child of orange)next=alignOrangeTierChildren(next,child.id)
  return next
 }
+/** Reconcile only the four-orange Blueprint upper tier after loading old saved
+ * workspaces or a nonstandard edit path. Prior previews preserved the old,
+ * over-wide coordinates in localStorage even after the spacing rule changed.
+ * Do NOT normalize or move other family shapes here (notably the approved
+ * three-orange arrangement and existing purple insertion).
+ */
+function ensureFourOrangeBlueprint(d:Draft):Draft {
+ let next=d
+ for(const red of d.atoms.filter(a=>a.kind==='triangle')){
+  const top=orangeChildren(next,red.id)
+  if(top.length!==2||redOrangeFamilySize(next,red.id)!==4||
+    orangeChildren(next,top[0].id).length!==2)continue
+  const parent={x:red.x,y:red.y,width:atomWidth(red),height:atomHeight(red)}
+  const children=top.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)}))
+  const correct=positionChildren(parent,children,{gap:11*UNIT,belowGap:VERTICAL})
+  // Reflow only stale coordinates; never perturb an already-correct assembly.
+  const stale=top.some(a=>{
+   const target=correct.get(a.id)!
+   return Math.abs(a.x-target.x)>SCALE*.05||
+     Math.abs(a.y-target.y)>SCALE*.05
+  })
+  if(stale)next=alignRedSupporters(next,red.id)
+ }
+ return next
+}
 /** Visual size follows its current structural position, not the palette choice. */
 function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
  if(a.kind!=='oval'&&a.kind!=='hexagon')return undefined
@@ -869,7 +894,7 @@ function StaxToolbarIcon({name}:{name:StaxToolbarIconName}){
  </svg>
 }
 export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
- const [doc,setDoc]=useState<Draft>(()=>normalizeRoles(load()))
+ const [doc,setDoc]=useState<Draft>(()=>ensureFourOrangeBlueprint(normalizeRoles(load())))
  const [theme,setTheme]=useState<StaxTheme>(()=>{
   try{const value=localStorage.getItem(THEME_KEY);return STAX_THEMES.find(t=>t===value)??'color'}catch{return 'color'}
  })
@@ -908,7 +933,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc])
  useEffect(()=>{try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme])
  useEffect(()=>()=>{if(fallTimer.current)clearTimeout(fallTimer.current)},[])
- function update(d:Draft){const resolved=normalizeRoles(d);currentDoc.current=resolved;setDoc(resolved)}
+ function update(d:Draft){const resolved=ensureFourOrangeBlueprint(normalizeRoles(d));currentDoc.current=resolved;setDoc(resolved)}
  function save(d:Draft,prev=currentDoc.current){setHistory(v=>[...v,prev].slice(-40));update(d)}
  function aspect(){const rect=svg.current?.getBoundingClientRect();return rect?.height?rect.width/rect.height:ASPECT}
  function setCamera(v:View){
