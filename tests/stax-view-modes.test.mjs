@@ -13,9 +13,9 @@ const {
 }=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
 test('STAX cycles classic, futuristic and four new materials without touching grammar',()=>{
- assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass','pearlescent-dusk'])
+ assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass','pearlescent-dusk','classroom-foam'])
  let mode='color'
- for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass','pearlescent-dusk','color']){
+ for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','golden-pollen','jelly-bloom','glassmorph','glass-beads','pearlescent-glass','pearlescent-airglass','pearlescent-dusk','classroom-foam','color']){
   mode=nextStaxTheme(mode)
   assert.equal(mode,next)
  }
@@ -133,7 +133,7 @@ test('jelly and both glasses use genuinely different radial or layered gradients
 })
 
 test('Pearlescent Glass is selectable and keeps all original modes unchanged',()=>{
- assert.equal(STAX_THEMES.length,15)
+ assert.equal(STAX_THEMES.length,16)
  assert.equal(staxThemeName('pearlescent-glass'),'Pearlescent Glass')
  assert.equal(staxBoardColor('pearlescent-glass'),'#f1edf8')
  assert.equal(staxShapeStroke('pearlescent-glass','#3379dc'),'#d8c9f6')
@@ -167,7 +167,7 @@ test('tray retracts after inactivity without losing keyboard or touch access',as
  assert.match(board,/const KEY='stax-free-molecules-v2'/)
 })
 
-test('all 15 STAX themes define readable toolbar icon inks instead of inheriting browser button glyph colors',async()=>{
+test('all 16 STAX themes define readable toolbar icon inks instead of inheriting browser button glyph colors',async()=>{
  const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
  for(const theme of STAX_THEMES){
   const rule=theme==='color'?/\.stax-molecule-ui \{\s*--stax-toolbar-ink:/:
@@ -227,6 +227,27 @@ test('Pearlescent Dusk is an isolated more opaque glass mode with darker contras
  assert.match(css,/data-theme='pearlescent-dusk'/)
  assert.match(css,/background:[\s\S]*?linear-gradient\(137deg,#2d2846/)
  assert.match(css,/--stax-toolbar-ink:#fff6ff/)
- assert.equal(STAX_THEMES.at(-2),'pearlescent-airglass')
- assert.equal(STAX_THEMES.at(-1),'pearlescent-dusk')
+ assert.equal(STAX_THEMES.at(-3),'pearlescent-airglass')
+ assert.equal(STAX_THEMES.at(-2),'pearlescent-dusk')
+  assert.equal(STAX_THEMES.at(-1),'classroom-foam')
 })
+
+
+test('Classroom Foam uses photographed chips and desk without changing magnet logic',async()=>{
+ const foam=await readFile(new URL('../src/experiences/stax/foam-chips.tsx',import.meta.url),'utf8')
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ const atlas=await readFile(new URL('../public/stax-foam/foam-atlas.webp',import.meta.url))
+ const desk=await readFile(new URL('../public/stax-foam/wood-desk.webp',import.meta.url))
+ assert.equal(staxThemeName('classroom-foam'),'Classroom Foam')
+ assert.equal(atlas.toString('ascii',0,4),'RIFF')
+ assert.equal(desk.toString('ascii',0,4),'RIFF')
+ assert.ok(foam.includes('pointerEvents="none"'))
+ for(const kind of ['circle','triangle','square','rectangle','diamond','hexagon','oval'])
+  assert.ok(foam.includes(kind+':'),'missing photographed tile for '+kind)
+ for(const kind of ['a.kind','kind','paletteHover.kind'])
+  assert.ok(board.includes("theme==='classroom-foam'&&<FoamChip kind={"+kind+"}"),'missing foam render surface for '+kind)
+ assert.ok(css.includes("url('/stax-foam/wood-desk.webp')"))
+ assert.ok(board.includes('className="stax-foam-shortcut"'))
+ assert.ok(board.includes("const KEY='stax-free-molecules-v2'"))
+});
