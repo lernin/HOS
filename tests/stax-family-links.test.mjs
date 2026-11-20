@@ -269,10 +269,11 @@ test('orange may start a blue family when no green adjective exists',()=>{
  const d={atoms:[{id:'blue',kind:'circle'},{id:'orange',kind:'hexagon'}],bonds:[]}
  assert.equal(canAttachOrangeUnderBlue(d,'blue'),true)
 })
-test('orange cannot be added horizontally after green inside a blue family',()=>{
+test('late object-level not can be inserted and reordered ahead of green',()=>{
  const d={atoms:[{id:'blue',kind:'circle'},{id:'green',kind:'oval'},{id:'orange',kind:'hexagon'}],
   bonds:[sup('blue','green')]}
- assert.equal(canAttachOrangeUnderBlue(d,'blue'),false)
+ assert.equal(canAttachOrangeUnderBlue(d,'blue'),true)
+ assert.deepEqual(normalizeBlueSiblingOrder([d.atoms[1],d.atoms[2]]).map(a=>a.id),['orange','green'])
 })
 test('a loose green does not prevent an independent orange-blue family',()=>{
  const d={atoms:[{id:'blue',kind:'circle'},{id:'green',kind:'oval'},{id:'orange',kind:'hexagon'}],bonds:[]}
@@ -301,7 +302,7 @@ test('subject blue above red cannot acquire direct orange; object blue can',()=>
  assert.equal(canAttachOrangeUnderObjectBlue(g,'subject'),false)
  assert.equal(canAttachOrangeUnderObjectBlue(g,'object'),true)
  const supported={...g,bonds:[...g.bonds,sup('object','not')]}
- assert.equal(canAttachOrangeUnderObjectBlue(supported,'object'),true)
+ assert.equal(canAttachOrangeUnderObjectBlue(supported,'object'),false)
 })
 test('a pink preposition supported by object blue can take an orange adverb',()=>{
  const g={atoms:[
@@ -325,4 +326,25 @@ test('pink added last inserts between object orange and purple, before green',()
  assert.deepEqual(normalizeBlueSiblingOrder(row).map(n=>n.id),
   ['not','on','the','big'])
  assert.deepEqual(row.map(n=>n.id),['not','the','big','on'])
+})
+
+test('late orange precedes pink, purple and green; never pink then orange',()=>{
+ const row=[{id:'in',kind:'square'},{id:'the',kind:'rectangle'},
+  {id:'big',kind:'oval'},{id:'not',kind:'hexagon'}]
+ assert.deepEqual(normalizeBlueSiblingOrder(row).map(a=>a.id),['not','in','the','big'])
+ assert.deepEqual(normalizeBlueSiblingOrder([{id:'in',kind:'square'},{id:'not',kind:'hexagon'}]).map(a=>a.id),['not','in'])
+ assert.deepEqual(row.map(a=>a.id),['in','the','big','not'])
+})
+test('direct blue not slot differs from orange nested below pink',()=>{
+ const d={atoms:[{id:'blue',kind:'circle'},{id:'pink',kind:'square'},
+  {id:'usually',kind:'hexagon'},{id:'not',kind:'hexagon'}],
+ bonds:[sup('blue','pink'),sup('pink','usually')]}
+ assert.equal(canAttachAdverbUnderPreposition(d,'pink'),false)
+ assert.equal(canAttachOrangeUnderObjectBlue(d,'blue'),true)
+ assert.equal(canAttachOrangeUnderObjectBlue({...d,bonds:[...d.bonds,sup('blue','not')]},'blue'),false)
+})
+test('pink-near orange insertion magnet and nested pink reflow have direct rules',async()=>{
+ const src=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.match(src,/Orange arriving beside a pink support inserts BEFORE pink/)
+ assert.match(src,/if\(child\.kind==='square'\)next=alignNestedChain\(next,child\.id,'hexagon'\)/)
 })
