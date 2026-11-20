@@ -69,14 +69,42 @@ const SMALL_ORANGE_X=3787.2/4147.2,SMALL_ORANGE_Y=2332.8/2340.864
 const underSingleX=(parentX:number,parentWidth:number,childWidth:number)=>parentX+parentWidth/2-childWidth
 
 const smallWidth=(kind:Kind)=>width(kind)*(kind==='oval'?SMALL_GREEN_X:kind==='hexagon'?SMALL_ORANGE_X:1)
+/** Orange pair directly under red is large; additional orange tiers trigger
+ * the Blueprint compact form for that connected red-rooted orange family. */
+function redOrangeFamilySize(d:Draft,redId:string):number{
+ const seen=new Set<string>(),pending=[redId]
+ for(let i=0;i<pending.length;i++)for(const edge of d.bonds){
+  if(edge.relation!=='support'||edge.parent!==pending[i]||seen.has(edge.child))continue
+  const child=byId(d,edge.child)
+  if(child?.kind!=='hexagon')continue
+  seen.add(child.id);pending.push(child.id)
+ }
+ return seen.size
+}
+function orangeRedRoot(d:Draft,orangeId:string):string|undefined{
+ const seen=new Set<string>();let current=orangeId
+ while(!seen.has(current)){
+  seen.add(current)
+  const parentId=parentOfSupport(d,current)
+  if(!parentId)return undefined
+  const parent=byId(d,parentId)
+  if(parent?.kind==='triangle')return parentId
+  if(parent?.kind!=='hexagon')return undefined
+  current=parentId
+ }
+ return undefined
+}
 function orangeChildren(doc:Draft,redId:string){
  return doc.bonds.filter(b=>b.relation==='support'&&b.parent===redId).map(b=>byId(doc,b.child)).filter(a=>a.kind==='hexagon')
 }
 function redOrangePosition(red:Atom,doc:Draft){
  const existing=orangeChildren(doc,red.id)
+ const compact=redOrangeFamilySize(doc,red.id)>2
+ const childW=compact?smallWidth('hexagon'):width('hexagon')
+ const childH=compact?height('hexagon')*SMALL_ORANGE_Y:height('hexagon')
  const items:FamilyChild[]=[
-  ...existing.map(a=>({id:a.id,width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y})),
-  {id:'__incoming_orange',width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y},
+  ...existing.map(a=>({id:a.id,width:childW,height:childH})),
+  {id:'__incoming_orange',width:childW,height:childH},
  ]
  return positionChildren(
   {x:red.x,y:red.y,width:width('triangle'),height:height('triangle')},
@@ -88,7 +116,7 @@ function alignRedSupporters(doc:Draft,redId:string):Draft {
  if(!red||orange.length<1)return doc
  const positions=positionChildren(
   {x:red.x,y:red.y,width:width('triangle'),height:height('triangle')},
-  orange.map(a=>({id:a.id,width:smallWidth('hexagon'),height:height('hexagon')*SMALL_ORANGE_Y})),
+  orange.map(a=>({id:a.id,width:atomWidth(a),height:atomHeight(a)})),
   {gap:GAP,belowGap:VERTICAL}
  )
  let next=doc
@@ -105,9 +133,12 @@ function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
  if(a.kind!=='oval'&&a.kind!=='hexagon')return undefined
  const owner=d.bonds.find(b=>b.relation==='support'&&b.child===a.id)
  if(a.kind==='oval')return owner&&byId(d,owner.parent)?.kind==='circle'?'small':'large'
- // Orange follows its host-role instead of being selected as 'little' or 'big'.
+ // The two oranges directly below red are large; once a third orange
+ // joins the red-rooted tier, all its oranges adopt the compact form.
+ const redRoot=orangeRedRoot(d,a.id)
+ if(redRoot)return redOrangeFamilySize(d,redRoot)>2?'small':'large'
  const previous=d.bonds.find(b=>b.relation==='sequence'&&b.child===a.id)
- return (owner&&['triangle','circle','oval','hexagon'].includes(byId(d,owner.parent)?.kind))||(previous&&byId(d,previous.parent)?.kind==='triangle')?'small':'large'
+ return (owner&&['circle','oval','hexagon'].includes(byId(d,owner.parent)?.kind))||(previous&&byId(d,previous.parent)?.kind==='triangle')?'small':'large'
 }
 function normalizeRoles(d:Draft):Draft {
  return {...d,atoms:d.atoms.map(a=>a.kind==='oval'||a.kind==='hexagon'?{...a,variant:contextualVariant(d,a)}:a)}
