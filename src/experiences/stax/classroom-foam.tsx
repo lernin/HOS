@@ -35,8 +35,10 @@ export function ClassroomFoam({kind,w,h,omitted=false}:{
     <Glyph kind={kind} w={w} h={h} fill="white" stroke="none" strokeWidth={0}/>
    </clipPath>
   </defs>
-  <Glyph kind={kind} w={w} h={h} fill={c.edge} stroke={c.edge}
-   strokeWidth={2} filter={`url(#${key}-rough)`}/>
+  <g filter={`url(#${key}-rough)`}>
+   <Glyph kind={kind} w={w} h={h} fill={c.edge} stroke={c.edge}
+    strokeWidth={2}/>
+  </g>
   <g clipPath={`url(#${key}-clip)`}>
    <rect x="2" y="1" width={Math.max(0,w-3)} height={Math.max(0,h-3)} fill={c.face}/>
    <rect x="0" y="0" width={w} height={h} fill="#ffffff" opacity=".13"
