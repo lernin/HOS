@@ -233,52 +233,57 @@ test('Pearlescent Dusk is an isolated more opaque glass mode with darker contras
 })
 
 
-test('Classroom Foam uses photographed chips and desk without changing magnet logic',async()=>{
+test('Classroom Foam displays seven separate photo assets in workspace, palette and lift',async()=>{
  const foam=await readFile(new URL('../src/experiences/stax/foam-chips.tsx',import.meta.url),'utf8')
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
- const atlas=await readFile(new URL('../public/stax-foam/foam-atlas.webp',import.meta.url))
- const desk=await readFile(new URL('../public/stax-foam/wood-desk.webp',import.meta.url))
  assert.equal(staxThemeName('classroom-foam'),'Classroom Foam')
- assert.equal(atlas.toString('ascii',0,4),'RIFF')
- assert.equal(desk.toString('ascii',0,4),'RIFF')
+ for(const kind of ['circle','triangle','square','rectangle','diamond','hexagon','oval']){
+  const path=new URL('../public/stax-foam/chips/'+kind+'.webp',import.meta.url)
+  const bytes=await readFile(path)
+  assert.equal(bytes.toString('ascii',0,4),'RIFF','independent photo image '+kind)
+  assert.ok(bytes.length>1000,'valid nonempty image '+kind)
+  assert.ok(foam.includes('/stax-foam/chips/'+kind+'.webp'),'each kind has its own source URL')
+ }
+ assert.ok(foam.includes('return <image href={CLASSROOM_FOAM_FILES[kind]}'))
  assert.ok(foam.includes('pointerEvents="none"'))
- for(const kind of ['circle','triangle','square','rectangle','diamond','hexagon','oval'])
-  assert.ok(foam.includes(kind+':'),'missing photographed tile for '+kind)
- for(const kind of ['a.kind','kind','paletteHover.kind'])
-  assert.ok(board.includes("theme==='classroom-foam'&&<FoamChip kind={"+kind+"}"),'missing foam render surface for '+kind)
- assert.ok(board.includes('href="/stax-foam/wood-desk.webp"'))
- assert.ok(board.includes('patternUnits="userSpaceOnUse"'))
+ assert.doesNotMatch(foam,/foam-atlas|CELL=192|viewBox=|<svg /)
+ for(const surface of ['a.kind','kind','paletteHover.kind'])
+  assert.ok(board.includes("theme==='classroom-foam'&&<FoamChip kind={"+surface+"}"),
+    'missing independent foam render surface '+surface)
  assert.ok(board.includes('className="stax-foam-shortcut"'))
  assert.ok(board.includes("const KEY='stax-free-molecules-v2'"))
-});
+ assert.ok(css.includes("image.stax-authentic-foam-chip"))
+})
 
-test('Classroom Foam crops each atlas tile in all three nested-SVG contexts',async()=>{
- const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+test('Classroom Foam does not rely on buggy nested atlas clipping in Chrome or Android',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const foam=await readFile(new URL('../src/experiences/stax/foam-chips.tsx',import.meta.url),'utf8')
- assert.match(foam,/viewBox=\{\`\$\{\(tile%4\)\*CELL\} \$\{Math.floor\(tile\/4\)\*CELL\} \$\{CELL\} \$\{CELL\}\`\}/)
- assert.match(foam,/className="stax-authentic-foam-chip"/)
- assert.match(css,/\.stax-molecule-ui\[data-theme='classroom-foam'\] svg\.stax-authentic-foam-chip \{\s*overflow:hidden!important;\s*clip-path:inset\(0\);\s*pointer-events:none!important;/)
- assert.match(css,/\.stax-molecule-ui\[data-theme='classroom-foam'\] \.stax-authentic-foam-chip image \{\s*pointer-events:none!important;/)
- assert.match(css,/\.stax-molecule-palette button > svg \{[\s\S]*?overflow:visible;/)
- assert.match(css,/\.stax-lifted-ghost > svg \{overflow:visible;/)
-});
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ assert.ok(!foam.includes('foam-atlas.webp'))
+ assert.ok(!foam.includes('clip-path:inset'))
+ assert.ok(!css.includes('svg.stax-authentic-foam-chip'))
+ assert.ok(css.includes('pointer-events:none!important'))
+ assert.match(board,/onPointerDown=\{e=>onShapeDown\(e,a.id\)\}/)
+ // The existing magnetic graph and saved document key must remain intact.
+ assert.ok(board.includes("const KEY='stax-free-molecules-v2'"))
+})
 
-
-test('Classroom Foam desk shares immutable world coordinates with chips during pan and zoom',async()=>{
+test('Classroom Foam desk alternates mirrored strips in the same SVG world as the foam',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
- // The same viewBox transforms chips and the wood. A screen-space CSS background
- // would stay in place while the chips moved; prevent that visual regression.
+ const image=await readFile(new URL('../public/stax-foam/wood-desk-mirrored.webp',import.meta.url))
+ assert.equal(image.toString('ascii',0,4),'RIFF')
+ assert.ok(image.length>10000)
  assert.ok(board.includes('viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`}'))
  assert.ok(board.includes('patternUnits="userSpaceOnUse"'))
  assert.ok(board.includes('patternContentUnits="userSpaceOnUse"'))
  assert.ok(board.includes('id="stax-classroom-wood-world"'))
- assert.ok(board.includes('viewBox="0 115 1536 548"'))
+ assert.ok(board.includes('width="2304" height="411"'))
+ assert.ok(board.includes('href="/stax-foam/wood-desk-mirrored.webp"'))
  assert.ok(board.includes("fill={theme==='classroom-foam'?'url(#stax-classroom-wood-world)'"))
- assert.ok(board.includes('data-board-background="true"'))
  assert.ok(board.indexOf('stax-classroom-wood-world')<board.indexOf('data-board-background="true"'))
  assert.ok(board.indexOf('data-board-background="true"')<board.indexOf('{doc.atoms.map('))
  assert.ok(css.includes("background-image:none;"))
  assert.ok(!css.includes("background-image:url('/stax-foam/wood-desk.webp')"))
-});
+})
