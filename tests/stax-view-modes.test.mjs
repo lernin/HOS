@@ -12,10 +12,10 @@ const {
  staxShapeFill,staxOmissionDash
 }=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 
-test('STAX cycles classic and three futuristic visual modes',()=>{
- assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic'])
+test('STAX cycles classic, futuristic and Golden Line modes',()=>{
+ assert.deepEqual(STAX_THEMES,['color','blueprint','black','white','arc-reactor','hologram','cosmic','golden-line'])
  let mode='color'
- for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','color']){
+ for(const next of ['blueprint','black','white','arc-reactor','hologram','cosmic','golden-line','color']){
   mode=nextStaxTheme(mode)
   assert.equal(mode,next)
  }
@@ -66,5 +66,28 @@ test('experimental modes preserve source colors or apply one coherent luminous i
 })
 test('immersive backgrounds remain visible beneath transparent SVG board',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
- assert.match(board,/theme==='arc-reactor'\|\|theme==='hologram'\|\|theme==='cosmic'\?'transparent'/)
+ assert.match(board,/theme==='arc-reactor'\|\|theme==='hologram'\|\|theme==='cosmic'\|\|theme==='golden-line'\?'transparent'/)
+})
+
+test('Golden Line reuses Letterz gold colors without changing STAX semantic data',()=>{
+ assert.equal(staxThemeName('golden-line'),'Golden Line')
+ assert.equal(staxShapeStroke('golden-line','#3379dc'),'#f7d35c')
+ assert.equal(staxShapeStroke('golden-line','#e69131'),'#f7d35c')
+ assert.equal(staxBoardColor('golden-line'),'#08090c')
+ assert.equal(staxShapeFill('golden-line','#3379dc'),'#c995241c')
+ assert.equal(staxOmissionDash(true),'4 8')
+})
+test('Golden Line uses metallic SVG strokes on the board, palette and lifted ghost',async()=>{
+ const code=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ assert.match(code,/function MetallicGoldStroke/)
+ assert.match(code,/<linearGradient id=\{id\}/)
+ assert.match(code,/stax-golden-board/)
+ assert.match(code,/stax-golden-palette-/)
+ assert.match(code,/stax-golden-lifted/)
+ assert.match(code,/Golden Line\)/)
+ assert.match(css,/data-theme='golden-line'/)
+ assert.match(css,/#fff1ac/)
+ assert.match(css,/#ce921d/)
+ assert.match(code,/const KEY='stax-free-molecules-v2'/)
 })
