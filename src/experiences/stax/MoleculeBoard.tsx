@@ -705,6 +705,27 @@ function MetallicGoldStroke({id}:{id:string}){
   <stop offset="100%" stopColor="#805319"/>
  </linearGradient></defs>
 }
+/** Theme-aware toolbar pictograms. SVG uses currentColor instead of platform font
+ * symbols, so all 13 visual modes get the same legible line weights. */
+type StaxToolbarIconName='back'|'expand'|'shrink'|'undo'|'remove'|'sweep'|'clear'|'theme'|'omit'|'center'|'fit'|'minus'|'plus'
+function StaxToolbarIcon({name}:{name:StaxToolbarIconName}){
+ return <svg className="stax-toolbar-icon" viewBox="0 0 24 24" width="25" height="25"
+  fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  {name==='back'&&<><path d="m14.5 5-7 7 7 7"/><path d="M8 12h12"/></>}
+  {name==='expand'&&<><path d="M9 3H3v6M15 3h6v6M3 15v6h6M21 15v6h-6"/><path d="m3 3 7 7m11-7-7 7M3 21l7-7m11 7-7-7" opacity=".35"/></>}
+  {name==='shrink'&&<><path d="M9 9H3M9 9V3M15 9h6M15 9V3M9 15H3M9 15v6M15 15h6M15 15v6"/><path d="m3 3 6 6m12-6-6 6M3 21l6-6m12 6-6-6" opacity=".35"/></>}
+  {name==='undo'&&<><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></>}
+  {name==='remove'&&<><path d="m4 8 6-5h10v18H10L4 16Z"/><path d="m12 10 5 5m0-5-5 5"/></>}
+  {name==='sweep'&&<><path d="m5 3 13 13"/><path d="m13 13-6 1-4 5 2 2 5-4 1-6"/><path d="M13 19h8M16 22h5"/></>}
+  {name==='clear'&&<><path d="M5 5 19 19M19 5 5 19"/></>}
+  {name==='theme'&&<><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor" stroke="none" opacity=".6"/></>}
+  {name==='omit'&&<><path d="M3 12h3m4 0h4m4 0h3"/><circle cx="12" cy="12" r="8" strokeDasharray="2 4"/></>}
+  {name==='center'&&<><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 1v4m0 14v4M1 12h4m14 0h4"/></>}
+  {name==='fit'&&<><path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5"/><path d="m8 8 4 4 4-4m-8 8 4-4 4 4" opacity=".55"/></>}
+  {name==='minus'&&<><circle cx="10" cy="10" r="7"/><path d="M7 10h6m2.5 5.5L21 21"/></>}
+  {name==='plus'&&<><circle cx="10" cy="10" r="7"/><path d="M7 10h6m-3-3v6m5.5 2.5L21 21"/></>}
+ </svg>
+}
 export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const [doc,setDoc]=useState<Draft>(()=>normalizeRoles(load()))
  const [theme,setTheme]=useState<StaxTheme>(()=>{
@@ -1033,33 +1054,33 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   setHint('Swept '+discard+' unattached or smaller-map shape'+(discard===1?'':'s')+'. Undo restores everything.')
  }
  return <div ref={rootRef} className="stax-molecule-ui" data-theme={theme} data-original-pollen={pollenAnimated?'true':'false'}>
-  <button className="stax-tray-handle" type="button" aria-label={trayOpen?'Close workspace controls':'Open workspace controls'} aria-controls="stax-bottom-tray" aria-expanded={trayOpen} onClick={()=>{setTrayOpen(v=>!v);setTrayActivity(n=>n+1)}}>{trayOpen?'‹':'›'}</button>
+  <button className="stax-tray-handle" type="button" aria-label={trayOpen?'Close workspace controls':'Open workspace controls'} aria-controls="stax-bottom-tray" aria-expanded={trayOpen} onClick={()=>{setTrayOpen(v=>!v);setTrayActivity(n=>n+1)}}><span aria-hidden="true">{trayOpen?'‹':'›'}</span></button>
   <div id="stax-bottom-tray" className="stax-molecule-dock" data-open={trayOpen?'true':'false'} aria-label="STAX workspace controls" aria-hidden={!trayOpen}
     onPointerEnter={openTray} onPointerDownCapture={openTray} onFocusCapture={openTray} onWheel={openTray}>
    <div className="stax-molecule-tools">
-    <button className="stax-molecule-back" onClick={onBack} title="Back to Classic Shape Lab" aria-label="Back to Classic Shape Lab">←</button>
+    <button className="stax-molecule-back" onClick={onBack} title="Back to Classic Shape Lab" aria-label="Back to Classic Shape Lab"><StaxToolbarIcon name="back"/></button>
     <div className="stax-molecule-buttons">
-     <button onClick={toggleFullscreen} title={fullscreen?"Exit full screen":"Full screen"} aria-label={fullscreen?"Exit full screen":"Go full screen"}>{fullscreen?"⤢":"⛶"}</button>
+     <button onClick={toggleFullscreen} title={fullscreen?"Exit full screen":"Full screen"} aria-label={fullscreen?"Exit full screen":"Go full screen"}><StaxToolbarIcon name={fullscreen?'shrink':'expand'}/></button>
      <button onClick={loadQuest} title="Load Quest Level 21" aria-label="Load Quest 21">Q21</button>
-     <button onClick={undo} disabled={!history.length} title="Undo" aria-label="Undo">↶</button>
-     <button onClick={remove} disabled={!selected} title="Remove selected shape" aria-label="Remove selected shape">⌫</button>
-     <button onClick={sweepLoose} title="Sweep loose shapes and smaller maps; keep the largest connected map (Undo restores)" aria-label="Sweep loose shapes; keep largest connected map">🧹</button>
-     <button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}} title="Clear all shapes" aria-label="Clear all shapes">×</button>
+     <button onClick={undo} disabled={!history.length} title="Undo" aria-label="Undo"><StaxToolbarIcon name="undo"/></button>
+     <button onClick={remove} disabled={!selected} title="Remove selected shape" aria-label="Remove selected shape"><StaxToolbarIcon name="remove"/></button>
+     <button onClick={sweepLoose} title="Sweep loose shapes and smaller maps; keep the largest connected map (Undo restores)" aria-label="Sweep loose shapes; keep largest connected map"><StaxToolbarIcon name="sweep"/></button>
+     <button onClick={()=>{save(empty());setSelected(null);setQuestActive(false)}} title="Clear all shapes" aria-label="Clear all shapes"><StaxToolbarIcon name="clear"/></button>
      <button onClick={()=>{const next=nextStaxTheme(theme);setTheme(next);setHint('Visual mode: '+staxThemeName(next))}}
       title={'Visual mode: '+staxThemeName(theme)+' (tap to cycle '+STAX_THEMES.map(staxThemeName).join(', ')+')'}
-      aria-label={'Visual mode: '+staxThemeName(theme)+'. Tap to change theme.'}>◐</button>
+      aria-label={'Visual mode: '+staxThemeName(theme)+'. Tap to change theme.'}><StaxToolbarIcon name="theme"/></button>
      <button onClick={()=>{setOmitBrush(v=>!v);setHint(omitBrush?'Dotted omission brush off.':'Dotted omission brush on. Tap a shape to toggle, or add dotted shapes.')}}
       title="Omit brush: tap to toggle; when active tap shapes to mark omitted, or add new dotted shapes"
       aria-label="Toggle dotted omission brush" aria-pressed={omitBrush}
-      className={omitBrush?'stax-mode-active':''}>┄</button>
+      className={omitBrush?'stax-mode-active':''}><StaxToolbarIcon name="omit"/></button>
     </div>
    </div>
    <div className="stax-molecule-view-controls">
-    <button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))} title="Center" aria-label="Center">◎</button>
-    <button onClick={()=>setCamera(fit(currentDoc.current,aspect()))} title="Fit all" aria-label="Fit all">⊞</button>
-    <button aria-label="Zoom out" title="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}>−</button>
+    <button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))} title="Center" aria-label="Center"><StaxToolbarIcon name="center"/></button>
+    <button onClick={()=>setCamera(fit(currentDoc.current,aspect()))} title="Fit all" aria-label="Fit all"><StaxToolbarIcon name="fit"/></button>
+    <button aria-label="Zoom out" title="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}><StaxToolbarIcon name="minus"/></button>
     <span>{Math.round(100*W/view.width)}%</span>
-    <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}>+</button>
+    <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}><StaxToolbarIcon name="plus"/></button>
    </div>
   </div>
   {questActive&&<p className="stax-molecule-example">STAX QUEST · Level 21 — She’s buying a present for her best friend because her birthday is tomorrow. <small>Illustrative mapping; original slide does not label each shape with its individual word.</small></p>}

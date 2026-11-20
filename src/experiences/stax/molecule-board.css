@@ -555,3 +555,85 @@
 .stax-molecule-ui[data-theme='pearlescent-glass'] .stax-pearlescent-art image {
  pointer-events:none!important;
 }
+
+/* Toolbar contrast contract: every visual theme sets an explicit ICON ink.
+   Never rely on mobile browser default button color, emoji rendering, or
+   inherited global styles. Decorative background palettes remain unchanged. */
+.stax-molecule-ui {
+ --stax-toolbar-ink:#18374b;
+ --stax-toolbar-disabled:#617787;
+}
+.stax-molecule-ui[data-theme='blueprint'] {
+ --stax-toolbar-ink:#effbff;--stax-toolbar-disabled:#b1d2e3;
+}
+.stax-molecule-ui[data-theme='black'] {
+ --stax-toolbar-ink:#ffffff;--stax-toolbar-disabled:#b6bdc9;
+}
+.stax-molecule-ui[data-theme='white'] {
+ --stax-toolbar-ink:#1b2633;--stax-toolbar-disabled:#687382;
+}
+.stax-molecule-ui[data-theme='arc-reactor'] {
+ --stax-toolbar-ink:#d8ffff;--stax-toolbar-disabled:#7cd5de;
+}
+.stax-molecule-ui[data-theme='hologram'] {
+ --stax-toolbar-ink:#fff4ff;--stax-toolbar-disabled:#e0b9f8;
+}
+.stax-molecule-ui[data-theme='cosmic'] {
+ --stax-toolbar-ink:#ffffff;--stax-toolbar-disabled:#c6c8ff;
+}
+.stax-molecule-ui[data-theme='golden-line'] {
+ --stax-toolbar-ink:#ffebb8;--stax-toolbar-disabled:#d4b884;
+}
+.stax-molecule-ui[data-theme='golden-pollen'] {
+ --stax-toolbar-ink:#fff3d5;--stax-toolbar-disabled:#e0ba86;
+}
+.stax-molecule-ui[data-theme='jelly-bloom'] {
+ --stax-toolbar-ink:#fff8ff;--stax-toolbar-disabled:#e9beda;
+}
+.stax-molecule-ui[data-theme='glassmorph'] {
+ --stax-toolbar-ink:#ffffff;--stax-toolbar-disabled:#d9eeff;
+}
+.stax-molecule-ui[data-theme='glass-beads'] {
+ --stax-toolbar-ink:#eaffff;--stax-toolbar-disabled:#acdeee;
+}
+.stax-molecule-ui[data-theme='pearlescent-glass'] {
+ --stax-toolbar-ink:#41365d;--stax-toolbar-disabled:#81718d;
+}
+/* Elevated button-specific selectors prevent competing theme rules and host
+   styles from blanking controls when switching between themes. */
+.stax-molecule-ui .stax-tray-handle,
+.stax-molecule-ui .stax-molecule-dock button:not(:disabled) {
+ color:var(--stax-toolbar-ink)!important;
+ -webkit-text-fill-color:currentColor;
+ opacity:1;
+}
+.stax-molecule-ui .stax-molecule-dock button:disabled {
+ color:var(--stax-toolbar-disabled)!important;
+ -webkit-text-fill-color:currentColor;
+ opacity:.75;
+ cursor:not-allowed;
+}
+.stax-molecule-ui .stax-molecule-dock .stax-toolbar-icon {
+ display:block;
+ flex:0 0 auto;
+ width:26px;
+ height:26px;
+ color:inherit;
+ stroke:currentColor;
+ fill:none;
+ opacity:1;
+ overflow:visible;
+ pointer-events:none;
+}
+/* Selected omission mode intentionally uses white icons on its green chip. */
+.stax-molecule-ui .stax-molecule-dock button.stax-mode-active:not(:disabled) {
+ color:#ffffff!important;
+ -webkit-text-fill-color:#ffffff;
+}
+/* A readable handle must be visible against all backgrounds, even when the
+   dock has auto-retracted and the browser is in portrait mode. */
+.stax-molecule-ui .stax-tray-handle {
+ font-size:32px;
+ font-weight:800;
+ text-shadow:none;
+}
