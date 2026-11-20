@@ -5,6 +5,7 @@ import { STAX_SPACING, positionChildren, horizontalFollower, positionRedRightNes
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, canNestRightRedOrange, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
+import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
 import './molecule-board.css'
 
 /**
@@ -633,6 +634,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   try{const value=localStorage.getItem(THEME_KEY);return STAX_THEMES.find(t=>t===value)??'color'}catch{return 'color'}
  })
  const [omitBrush,setOmitBrush]=useState(false)
+ const [pollenAnimated,setPollenAnimated]=useState(false)
+ useEffect(()=>{if(theme!=='golden-pollen')setPollenAnimated(false)},[theme])
  const [view,setView]=useState<View>(defaultView)
  const [history,setHistory]=useState<Draft[]>([])
  const [questActive,setQuestActive]=useState(false)
@@ -942,7 +945,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   setQuestActive(false)
   setHint('Swept '+discard+' unattached or smaller-map shape'+(discard===1?'':'s')+'. Undo restores everything.')
  }
- return <div ref={rootRef} className="stax-molecule-ui" data-theme={theme}>
+ return <div ref={rootRef} className="stax-molecule-ui" data-theme={theme} data-original-pollen={pollenAnimated?'true':'false'}>
   <div className="stax-molecule-dock" aria-label="STAX workspace controls">
    <div className="stax-molecule-tools">
     <button className="stax-molecule-back" onClick={onBack} title="Back to Classic Shape Lab" aria-label="Back to Classic Shape Lab">←</button>
@@ -1004,10 +1007,14 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
         fill={materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
         stroke={theme==='golden-line'?'url(#stax-golden-board)':materialStroke(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
         strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(a.omitted)}/>
-       <StaxMaterialEffect theme={theme} kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} seed={a.id} omitted={a.omitted}/>
+       <StaxMaterialEffect theme={theme} kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} seed={a.id} omitted={a.omitted} animated={pollenAnimated}/>
       {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
     </g>)}
    </svg>
+   {theme==='golden-pollen'&&<LetterzGoldenPollenCanvas
+     atoms={doc.atoms.map(a=>({id:a.id,kind:a.kind,x:a.x,y:a.y,
+      w:atomWidth(a),h:atomHeight(a),omitted:a.omitted}))}
+     view={view} svgRef={svg} onReady={setPollenAnimated}/>}
    {!doc.atoms.length&&<p className="stax-molecule-empty">Tap a shape in the palette, or drag one into the workspace.</p>}
   </div>
   <div className="stax-molecule-palette">{choices.map(({kind,variant,label})=><button key={`${kind}-${variant||'default'}`} title={label+(omitBrush?' (omitted)':'')} aria-label={`Add ${label}${omitBrush?' (omitted)':''}`}

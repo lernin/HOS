@@ -430,3 +430,29 @@
   animation:none!important;transform:none!important;opacity:1!important;
  }
 }
+
+/* Original Letterz #10 animation is a single composited transparent canvas.
+   All STAX touch events continue to hit the canonical SVG underneath. */
+.stax-molecule-canvas .stax-letterz-original-pollen-canvas {
+ position:absolute;
+ inset:0;
+ width:100%;
+ height:100%;
+ z-index:2;
+ display:block;
+ pointer-events:none!important;
+ user-select:none;
+ touch-action:none;
+}
+/* Remove the STAX imitation from the BOARD only once the exact renderer paints.
+   Keep transparent (rather than 'none') glyph paint to preserve visiblePainted
+   pointer hit testing, and retain genuine dotted omission outlines. */
+.stax-molecule-ui[data-theme='golden-pollen'][data-original-pollen='true']
+ .stax-molecule-canvas svg g[data-kind][data-omitted='false'] > ellipse,
+.stax-molecule-ui[data-theme='golden-pollen'][data-original-pollen='true']
+ .stax-molecule-canvas svg g[data-kind][data-omitted='false'] > rect,
+.stax-molecule-ui[data-theme='golden-pollen'][data-original-pollen='true']
+ .stax-molecule-canvas svg g[data-kind][data-omitted='false'] > polygon {
+ stroke:transparent!important;
+ fill:transparent!important;
+}
