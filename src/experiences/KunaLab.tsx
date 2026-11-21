@@ -226,16 +226,16 @@ export function KunaLab({onBack}:{onBack:()=>void}){
         throw Error('Unrecognized Kuna gallery library format.')
       const source=pack?pack.takes:data
       const rawItems=Array.isArray(source)?source:[source]
-      if(!rawItems.length||rawItems.length>60||!rawItems.every(validateKunaTake))
+      if(rawItems.length>60||(!rawItems.length&&!pack)||!rawItems.every(validateKunaTake))
         throw Error('Invalid Kuna Studio recording JSON.')
       const items=rawItems as KunaStudioTake[]
       const previous=new Map(takes.map(x=>[x.id,x]))
       for(const t of items)previous.set(t.id,t)
       const next=[...previous.values()].slice(-60)
-      setLibrary(next);setSelected(items[0].id)
+      if(items.length){setLibrary(next);setSelected(items[0].id)}
       const importedNames=Array.isArray(pack?.emotions)?pack.emotions:[]
       saveEmotionCatalog(emotionNames([...emotionCatalog,...importedNames],next))
-      setStatus('Imported '+items.length+' Kuna gesture recording(s) with emotional ratings.')
+      setStatus(items.length?'Imported '+items.length+' Kuna gesture recording(s) with emotional ratings.':'Imported emotion vocabulary. No recordings were changed.')
     }catch(e){setStatus(e instanceof Error?e.message:'Could not import recordings.')}
   }
   function runSimulation(){
@@ -520,7 +520,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
               <button onClick={exportSelected}>Export this take</button></div>
           </div>}
           <div className="kl-row">
-            <button disabled={!takes.length} onClick={()=>downloadJson('kuna-motion-expression-gallery-v3.json',
+            <button onClick={()=>downloadJson('kuna-motion-expression-gallery-v3.json',
               {type:'kuna-motion-library',version:3,emotions:emotionCatalog,takes})}>Export gallery + vocabulary</button>
             <label className="kl-import">Import JSON<input type="file" accept=".json,application/json" onChange={e=>void importRecipe(e)}/></label>
           </div>
