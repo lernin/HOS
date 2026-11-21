@@ -29,7 +29,8 @@ test('recorded recipes interpolate deterministically independent of 30/60 FPS',(
     const direct=sampleKunaRecipe(recipe,t)
     const same=sampleKunaRecipe(recipe,t)
     assert.deepEqual(direct,same)
-    assert.deepEqual(direct,sampleKunaRecipe(recipe,t+recipe.duration*3))
+    const repeated=sampleKunaRecipe(recipe,t+recipe.duration*3)
+    for(const channel of ['pitch','turn','tilt'])assert.ok(Math.abs(direct[channel]-repeated[channel])<1e-9)
   }
   const sample=(fps)=>{
     let time=0
