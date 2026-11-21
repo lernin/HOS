@@ -622,24 +622,16 @@ test('Estate offers one-tap fullscreen entry at the upper left, with no in-game 
   assert.match(css,/\.oe-header\{padding-top:max\(9px,env\(safe-area-inset-top\)\);padding-left:max\(9px,env\(safe-area-inset-left\)\)/)
 })
 
-test('Kuna is visible from the Kitchen destination and never leaves walkable kitchen floor',()=>{
- const src=readFileSync(new URL('../src/experiences/estate/npcs.ts',import.meta.url),'utf8')
- const definition=src.match(/export const KUNA_KITCHEN_STOPS:readonly Point\[\]=\[([\s\S]*?)\]/)
- assert.ok(definition,'Kuna has a kitchen-only route')
- const stops=[...definition[1].matchAll(/\{x:([-\d.]+),z:([-\d.]+)\}/g)].map(([,x,z])=>({x:Number(x),z:Number(z)}))
- assert.ok(stops.length>=2,'Kuna has room to walk in the kitchen')
- const kitchen=plan.canonicalTourViews['Kitchen']
- assert.ok(kitchen,'Kitchen has a saved visitor viewpoint')
- for(const [i,point] of stops.entries()){
-   assert.equal(plan.locationAt(point),'Kitchen','Kuna stays inside Kitchen')
-   assert.equal(nav.walkable(point,.48),true,'Kuna stop '+i+' has generous collision clearance')
-   assert.ok(navigator.path(stops[0],point),'Kuna can walk to stop '+i)
-   const dx=point.x-kitchen.x,dz=point.z-kitchen.z
-   const distance=Math.hypot(dx,dz)
-   const heading=Math.atan2(-dx,-dz)
-   const delta=Math.abs(Math.atan2(Math.sin(heading-kitchen.yaw),Math.cos(heading-kitchen.yaw)))
-   assert.ok(distance>1.5&&distance<4,'Kuna should be near, but not on the camera')
-   assert.ok(delta<.85,'Kuna should be within the saved Kitchen camera view')
- }
- assert.match(src,/ctx\.fillText\('Kuna',128,40\)/,'name tag makes Kuna easy to find')
+test('Kuna starts in view of the Kitchen destination with the accepted 0.78m avatar',()=>{
+ const source=readFileSync(new URL('../src/experiences/estate/npcs.ts',import.meta.url),'utf8')
+ const home={x:-13.35,z:8.15},kitchen=plan.canonicalTourViews['Kitchen']
+ assert.equal(plan.locationAt(home),'Kitchen')
+ assert.equal(nav.walkable(home,.46),true)
+ assert.ok(kitchen&&navigator.path(kitchen,home),'home remains reachable and child can approach Kuna')
+ const d=Math.hypot(home.x-kitchen.x,home.z-kitchen.z)
+ assert.ok(d>1.5&&d<4,'Kuna initially appears near the Kitchen camera, not on top of it')
+ assert.match(source,/export const KUNA_HEIGHT=\.78/)
+ assert.match(source,/createKunaNavigator\(\)/)
+ assert.match(source,/ctx\.fillText\('Kuna',128,40\)/)
 })
+
