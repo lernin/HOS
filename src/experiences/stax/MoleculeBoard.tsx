@@ -28,7 +28,7 @@ type Drag = { id:string;pointer:number;sx:number;sy:number;before:Draft;moved:bo
 type Pan = { pointer:number;startX:number;startY:number;before:View;moved:boolean }
 type TouchPoint = {x:number;y:number}
 type Pinch = {pointers:[number,number];startDistance:number;startView:View;anchor:{x:number;y:number}}
-type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number;insertBefore?:string }
+type Snap = { parent:string;child:string;relation:Relation;dx:number;dy:number;distance:number;insertBefore?:string;bridgeRight?:string }
 type PaletteHover = { kind:Kind;variant?:'small'|'large';screenX:number;screenY:number;worldX:number;worldY:number;snap:Snap|null }
 // Distances from the STAX Blueprint's .07-unit design grid; only snap geometry is quantised.
 const UNIT=SCALE*STAX_SPACING.unit
@@ -212,8 +212,9 @@ function contextualVariant(d:Draft,a:Atom):Atom['variant'] {
  // joins the red-rooted tier, all its oranges adopt the compact form.
  const redRoot=orangeRedRoot(d,a.id)
  if(redRoot)return redOrangeFamilySize(d,redRoot)>2?'small':'large'
- const previous=d.bonds.find(b=>b.relation==='sequence'&&b.child===a.id)
- return (owner&&['circle','oval','hexagon'].includes(byId(d,owner.parent)?.kind))||(previous&&byId(d,previous.parent)?.kind==='triangle')?'small':'large'
+ // A following orange is LARGE, like a green complement after red.
+ // Only nested/support oranges take the small form.
+ return owner&&['circle','oval','hexagon'].includes(byId(d,owner.parent)?.kind)?'small':'large'
 }
 function normalizeRoles(d:Draft):Draft {
  return {...d,atoms:d.atoms.map(a=>a.kind==='oval'||a.kind==='hexagon'?{...a,variant:contextualVariant(d,a)}:a)}
@@ -260,7 +261,7 @@ function supportFootprint(d:Draft,headId:string):{x:number;y:number;width:number
  * 2.03, never the .49 staircase rule. */
 /** Shared exact snap port: free drag and Quest sentence heads use the same Blueprint coordinates. */
 function snappedSequenceFollowerPosition(left:Atom,right:Atom):{x:number;y:number}{
- if(left.kind==='triangle'&&right.kind==='oval')return {
+ if(left.kind==='triangle'&&(right.kind==='oval'||right.kind==='hexagon'))return {
   x:left.x+atomWidth(left)+RED_BLUE_GAP,
   y:left.y+atomHeight(left)+BLUE_RED_GAP
  }
@@ -522,6 +523,30 @@ function redBetweenBlues(d:Draft,moving:Set<string>):Snap|null {
    dx:desiredX-red.x,dy:desiredY-red.y,distance:score,insertBefore:right.id}
   if(!best||candidate.distance<best.distance)best=candidate
  }
+ // Two separate blue heads can BOTH connect to the red in a single drop.
+ // Preserve their existing support families and reject distant second blues.
+ if(best)return best
+ const blues=d.atoms.filter(a=>a.kind==='circle'&&!moving.has(a.id))
+ for(const left of blues){
+  if(d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id))continue
+  for(const right of blues){
+   if(right.id===left.id||right.x<=left.x||molecule(d,left.id).has(right.id))continue
+   if(d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id))continue
+   const expectedRed=snappedSequenceFollowerPosition(left,red)
+   const placedRed={...red,x:expectedRed.x,y:expectedRed.y}
+   const expectedRight=snappedSequenceFollowerPosition(placedRed,right)
+   const blueGapError=Math.hypot(right.x-expectedRight.x,right.y-expectedRight.y)
+   const redError=Math.hypot(red.x-expectedRed.x,red.y-expectedRed.y)
+   if(blueGapError>RED_BLUE_SNAP_RADIUS*1.5||redError>RED_BLUE_SNAP_RADIUS)continue
+   const redMid=red.x+atomWidth(red)/2
+   if(redMid<=left.x+atomWidth(left)/2||redMid>=right.x+atomWidth(right)/2)continue
+   const score=redError+blueGapError*.35
+   const candidate:Snap={parent:left.id,child:red.id,relation:'sequence',
+    dx:expectedRed.x-red.x,dy:expectedRed.y-red.y,distance:score,
+    bridgeRight:right.id}
+   if(!best||candidate.distance<best.distance)best=candidate
+  }
+ }
  return best
 }
 /** Returns only plausible near-drop join geometry; does NOT move anything itself. */
@@ -682,10 +707,10 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      offered({parent:red.id,child:orange.id,relation:'support',dx,dy,distance:Math.hypot(dx,dy)})
     }
    }
-   // A large green complement can follow a red linking verb ("I am happy").
-   // Unlike little green adjectives under blue, this is a following sequence.
+   // A LARGE green or orange complement can follow a red linking verb.
+   // Its sentence-follower port is distinct from under-red orange support.
    // Blueprint: 2.03 horizontal spacing, .49 vertical drop from red bottom.\n   // Both directions allow the *moving* atom to be placed on an existing partner.
-   if(a.kind==='oval'&&b.kind==='triangle'&&!parentOfSupport(d,a.id)&&
+   if((a.kind==='oval'||a.kind==='hexagon')&&b.kind==='triangle'&&!parentOfSupport(d,a.id)&&
       !molecule(d,a.id).has(b.id)&&
       !d.bonds.some(z=>z.relation==='sequence'&&(z.parent===b.id||z.child===a.id))){
      const target={x:b.x+atomWidth(b)+RED_BLUE_GAP,
@@ -694,7 +719,7 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
       dx:target.x-a.x,dy:target.y-a.y,
       distance:Math.hypot(target.x-a.x,target.y-a.y)})
    }
-   if(a.kind==='triangle'&&b.kind==='oval'&&!parentOfSupport(d,b.id)&&
+   if(a.kind==='triangle'&&(b.kind==='oval'||b.kind==='hexagon')&&!parentOfSupport(d,b.id)&&
       !molecule(d,a.id).has(b.id)&&
       !d.bonds.some(z=>z.relation==='sequence'&&(z.parent===a.id||z.child===b.id))){
      const target={x:b.x-atomWidth(a)-RED_BLUE_GAP,
@@ -736,6 +761,20 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  * A second under-red orange reflows its sibling locally; no head is relocated.
  */
 function resolveMagnetBase(d:Draft,moving:Set<string>,snap:Snap):Draft {
+ if(snap.bridgeRight){
+  // One gesture joins BLUE -> RED -> BLUE. Shift the right family's
+  // complete descendant subtree, never destroy its support bonds.
+  const redMoved=translate(d,moving,snap.dx,snap.dy)
+  const red=byId(redMoved,snap.child),right=byId(redMoved,snap.bridgeRight)
+  const target=snappedSequenceFollowerPosition(red,right)
+  const repositioned=translate(redMoved,descendants(redMoved,right.id),
+   target.x-right.x,target.y-right.y)
+  return {...repositioned,bonds:[
+   ...repositioned.bonds,
+   {parent:snap.parent,child:snap.child,relation:'sequence'},
+   {parent:snap.child,child:snap.bridgeRight,relation:'sequence'}
+  ]}
+ }
  if(snap.insertBefore){
   const redMoved=translate(d,moving,snap.dx,snap.dy)
   const red=byId(redMoved,snap.child),right=byId(redMoved,snap.insertBefore)
