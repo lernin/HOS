@@ -1,19 +1,19 @@
 import * as T from 'three'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
-import { floorAt, type Point } from './plan'
+import { floorAt, FLOOR, type Point } from './plan'
 import { moveSafely, walkable } from './navigation'
 import { advanceWalker } from './npc-motion'
 
 type Navigator={path:(start:Point,end:Point)=>Point[]|null}
-// Restricted to the public-looking arrival gardens for this first experiment.
-// Route all movement through the Estate's existing collision-aware navigator.
-export const KUNA_GARDEN_STOPS:readonly Point[]=[
-  {x:9,z:35},{x:13,z:38},{x:13,z:46},{x:9,z:50},{x:8,z:40},
+// Keep Kuna within the clear east-side kitchen aisle, directly in view of the
+// saved Kitchen tour viewpoint. Reuse Estate navigation and collision boundaries.
+export const KUNA_KITCHEN_STOPS:readonly Point[]=[
+  {x:-13.35,z:8.15},{x:-13.3,z:7.2},{x:-13.1,z:8.85},
 ]
 
 function foxModel(){
   const figure=new T.Group()
-  figure.name='Kuna — garden fox'
+  figure.name='Kuna — kitchen fox'
   figure.userData.estateNPC=true
   const body=new T.Group();figure.add(body)
   const parts:T.BufferGeometry[]=[]
@@ -49,6 +49,20 @@ function foxModel(){
     const paw=new T.Mesh(legGeometry,legMaterial);paw.position.y=-.175;joint.add(paw)
     figure.add(joint);legs.push(joint)
   }
+  // A subtle world-space name tag makes the first character findable at child height.
+  const nameCanvas=document.createElement('canvas')
+  nameCanvas.width=256;nameCanvas.height=80
+  const ctx=nameCanvas.getContext('2d')
+  if(ctx){
+    ctx.fillStyle='rgba(22,42,30,.83)'
+    ctx.beginPath();ctx.roundRect(17,8,222,62,18);ctx.fill()
+    ctx.fillStyle='#fff4d5';ctx.font='600 37px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle'
+    ctx.fillText('Kuna',128,40)
+  }
+  const nameTexture=new T.CanvasTexture(nameCanvas)
+  nameTexture.colorSpace=T.SRGBColorSpace
+  const nameMaterial=new T.SpriteMaterial({map:nameTexture,transparent:true,depthWrite:false,depthTest:true})
+  const nameTag=new T.Sprite(nameMaterial);nameTag.scale.set(1.04,.32,1);nameTag.position.y=1.68;figure.add(nameTag)
   const tail=new T.Group();tail.position.set(0,.69,.28);figure.add(tail)
   const tailGeometry=new T.SphereGeometry(1,10,8)
   const tailCoat=new T.MeshLambertMaterial({color:0xc87539})
@@ -58,17 +72,17 @@ function foxModel(){
 
   return {figure,body,legs,tail,dispose(){
     merged.dispose();bodyMaterial.dispose();legGeometry.dispose();legMaterial.dispose()
-    tailGeometry.dispose();tailCoat.dispose();tailTip.dispose()
+    tailGeometry.dispose();tailCoat.dispose();tailTip.dispose();nameMaterial.dispose();nameTexture.dispose()
   }}
 }
 
 export function createKunaWanderer(scene:T.Scene,navigator:Navigator){
-  const stops=KUNA_GARDEN_STOPS.filter(p=>walkable(p,.48))
+  const stops=KUNA_KITCHEN_STOPS.filter(p=>walkable(p,.48))
   const model=foxModel()
   scene.add(model.figure)
   if(!stops.length){model.figure.visible=false;return {update(){},dispose(){scene.remove(model.figure);model.dispose()}}}
   let position:Point={...stops[0]},route:Point[]=[],nextStop=1,dwell=1.2,age=0
-  model.figure.position.set(position.x,floorAt(position)??4.8,position.z)
+  model.figure.position.set(position.x,floorAt(position)??FLOOR,position.z)
   function routeToNextStop(){
     for(let i=0;i<stops.length;i++){
       const goal=stops[nextStop++%stops.length]
@@ -81,7 +95,7 @@ export function createKunaWanderer(scene:T.Scene,navigator:Navigator){
     const elapsed=Math.max(0,Math.min(.1,dt))
     age+=elapsed
     let walking=false
-    const nearPlayer=Math.hypot(player.x-position.x,player.z-position.z)<2.4
+    const nearPlayer=Math.hypot(player.x-position.x,player.z-position.z)<1.3
     if(!nearPlayer){
       if(dwell>0)dwell=Math.max(0,dwell-elapsed)
       else{
@@ -104,7 +118,7 @@ export function createKunaWanderer(scene:T.Scene,navigator:Navigator){
     model.body.position.y=(walking?Math.sin(age*18)*.016:Math.sin(age*2)*.008)
     model.tail.rotation.y=Math.sin(age*2.8)*.25
     model.tail.rotation.x=.18+Math.sin(age*2.2)*.075
-    model.figure.position.set(position.x,(floorAt(position)??4.8)+.012,position.z)
+    model.figure.position.set(position.x,(floorAt(position)??FLOOR)+.012,position.z)
   }
   return {update,dispose(){scene.remove(model.figure);model.dispose()}}
 }
