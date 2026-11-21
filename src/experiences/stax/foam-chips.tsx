@@ -6,13 +6,13 @@ import type { Kind } from './model'
  * Appearance only: STAX's world geometry and magnetic graph are unchanged.
  */
 export const CLASSROOM_FOAM_FILES:Record<Kind,string>={
- circle:'/stax-foam/chips/circle.webp',
- triangle:'/stax-foam/chips/triangle.webp',
- square:'/stax-foam/chips/square.webp',
- rectangle:'/stax-foam/chips/rectangle.webp',
- diamond:'/stax-foam/chips/diamond.webp',
- hexagon:'/stax-foam/chips/hexagon.webp',
- oval:'/stax-foam/chips/oval.webp',
+ circle:'/stax-foam/cleaned/circle.webp',
+ triangle:'/stax-foam/cleaned/triangle.webp',
+ square:'/stax-foam/cleaned/square.webp',
+ rectangle:'/stax-foam/cleaned/rectangle.webp',
+ diamond:'/stax-foam/cleaned/diamond.webp',
+ hexagon:'/stax-foam/cleaned/hexagon.webp',
+ oval:'/stax-foam/cleaned/oval.webp',
 }
 
 /** One image, one chip: no nested atlas SVG, clipping, or accidental groups. */
