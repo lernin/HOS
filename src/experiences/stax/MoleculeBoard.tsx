@@ -35,7 +35,7 @@ const UNIT=SCALE*STAX_SPACING.unit
 const GAP=SCALE*STAX_SPACING.attachment, VERTICAL=SCALE*STAX_SPACING.attachment
 const BLUE_RED_GAP=SCALE*STAX_SPACING.group, RED_BLUE_GAP=SCALE*STAX_SPACING.row
 const CONNECTOR_GAP=SCALE*STAX_SPACING.connector
-const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=124, TAP=9, DOUBLE_MS=350, FINGER_LIFT=42
+const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=124, TAP=9, DOUBLE_MS=350, FINGER_LIFT=42, FINGER_COVER_DIAMETER=58
 // Red/blue heads have diagonal Blueprint destinations; allow a wider approach
 // zone but preserve exact final positions and all other magnet eligibility.
 const RED_BLUE_SNAP_RADIUS=SNAP_RADIUS*1.75
@@ -1276,6 +1276,22 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    panning.current=null
   }
  }
+ /** Lift ONLY a touch-hidden tiny shape. A visible joined molecule should
+  * stay under the finger, even when the board is zoomed out. */
+ function needsFingerLift(d:Draft,id:string,pointerType:string):boolean{
+  if(pointerType!=='touch')return false
+  const group=molecule(d,id)
+  const atoms=d.atoms.filter(a=>group.has(a.id))
+  if(!atoms.length)return false
+  const rect=svg.current?.getBoundingClientRect()
+  if(!rect?.width||!rect.height)return false
+  const left=Math.min(...atoms.map(a=>a.x)),right=Math.max(...atoms.map(a=>a.x+atomWidth(a)))
+  const top=Math.min(...atoms.map(a=>a.y)),bottom=Math.max(...atoms.map(a=>a.y+atomHeight(a)))
+  const renderedWidth=(right-left)*rect.width/currentView.current.width
+  const renderedHeight=(bottom-top)*rect.height/currentView.current.height
+  // Even partially visible joined pieces offer a usable visual reference.
+  return renderedWidth<FINGER_COVER_DIAMETER&&renderedHeight<FINGER_COVER_DIAMETER
+ }
  function onShapeDown(e:ReactPointerEvent<SVGGElement>,id:string){
   if(e.pointerType==='mouse'&&e.button!==0)return
   if(pinch.current||questTwoPair.current)return
@@ -1291,7 +1307,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   e.stopPropagation();const p=pointer(e)
   if(fallTimer.current)clearTimeout(fallTimer.current)
   setFall(new Set())
-  dragging.current={id,pointer:e.pointerId,sx:p.x,sy:p.y,before:currentDoc.current,moved:false,fingerLift:e.pointerType==='touch'?FINGER_LIFT:0}
+  dragging.current={id,pointer:e.pointerId,sx:p.x,sy:p.y,before:currentDoc.current,moved:false,fingerLift:needsFingerLift(currentDoc.current,id,e.pointerType)?FINGER_LIFT:0}
   if(theme==='classroom-foam'&&foamSoundEnabled)audio().start(e.clientX,e.clientY)
   e.currentTarget.setPointerCapture(e.pointerId)
   setSelected(id)
