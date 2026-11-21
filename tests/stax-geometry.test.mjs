@@ -9,7 +9,7 @@ const src=await readFile(new URL('../src/experiences/stax/geometry.ts',import.me
 const js=ts.transpileModule(src,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022,
 }}).outputText
-const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,positionRedOrangeCrossPair,horizontalFollower,positionRedRightNestedOrange,requiredFamilyFollowerShift}=
+const {STAX_SPACING,SMALL_BLUE_RATIO,positionChildren,positionRedOrangeCrossPair,horizontalFollower,redBlueMagnetDistance,positionRedRightNestedOrange,requiredFamilyFollowerShift}=
  await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`expected ${a} ≈ ${b}`)
 const support=(parent,children,gap=STAX_SPACING.attachment)=>
@@ -217,4 +217,28 @@ test('four compact red oranges: centered upper pair with .77 gap and touching lo
   gap:.28,belowGap:.28
  })
  close(three.get('right').x-(three.get('left').x+w),.28)
+})
+
+test('red-blue size-aware magnetic zone forgives near edges but rejects remote placement',()=>{
+ const shape={width:100,height:94}
+ assert.equal(redBlueMagnetDistance(0,0,shape),0)
+ assert.equal(redBlueMagnetDistance(55,55,shape),0,
+  'head is welcomed near its rectangle, not just an exact top-left anchor')
+ assert.ok(redBlueMagnetDistance(120,72,shape)<76,
+  'red-blue accepts a forgiving near-drop that the old 76px radial rule rejected')
+ assert.ok(redBlueMagnetDistance(300,200,shape)>76,
+  'distant heads must remain loose')
+ assert.equal(redBlueMagnetDistance(-120,-72,shape),redBlueMagnetDistance(120,72,shape),
+  'both drag orientations have symmetric tolerance')
+ assert.throws(()=>redBlueMagnetDistance(0,0,{width:0,height:40}),RangeError)
+})
+test('only red-blue sequences use generous magnet acceptance, never pink supporter or final coordinates',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const magnet=board.slice(board.indexOf('function bestSnap('),board.indexOf('function resolveMagnetBase('))
+ assert.match(magnet,/const redBlue=\(left.kind==='circle'&&right.kind==='triangle'\)\|\|/)
+ assert.match(magnet,/\(left.kind==='triangle'&&right.kind==='circle'\)/)
+ assert.match(magnet,/redBlueMagnetDistance\(delta.x,delta.y,\{width:atomWidth\(a\),height:atomHeight\(a\)\}\)/)
+ assert.match(magnet,/const desired=snappedSequenceFollowerPosition\(left,right\)/)
+ assert.match(magnet,/const offered=\(s:Snap\)=>\{if\(s.distance<=SNAP_RADIUS/)
+ assert.match(magnet,/const desired=supportPosition\(blue,sup,d\)/)
 })

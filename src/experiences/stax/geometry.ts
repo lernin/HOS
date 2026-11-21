@@ -163,3 +163,25 @@ export function requiredFamilyFollowerShift(
  }
  return Math.max(0,shift)
 }
+
+/**
+ * Red ↔ blue heads should engage when they are clearly being brought together,
+ * even if the finger misses the canonical top-left snap coordinate.
+ *
+ * The rectangular acceptance halo is derived from the MOVING head's size;
+ * this changes the gesture tolerance only, never the stored snap position,
+ * grammar permission, reading direction, or magnetic graph. Other kinds
+ * continue using the ordinary Euclidean snap distance.
+ */
+export function redBlueMagnetDistance(
+ dx:number,dy:number,moving:{width:number;height:number}
+):number {
+ if(![dx,dy,moving.width,moving.height].every(Number.isFinite)||
+    moving.width<=0||moving.height<=0)throw new RangeError('Invalid red-blue snap distance')
+ const reachX=Math.min(90,moving.width*.60)
+ const reachY=Math.min(90,moving.height*.70)
+ return Math.hypot(
+  Math.max(0,Math.abs(dx)-reachX),
+  Math.max(0,Math.abs(dy)-reachY)
+ )
+}
