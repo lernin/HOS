@@ -1090,11 +1090,21 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const pt=svg.current!.createSVGPoint();pt.x=x;pt.y=y
   return pt.matrixTransform(matrix.inverse())
  }
- // Root capture handlers track all touches, including those beginning directly on a shape.
- // A second touch cancels drag and starts a camera-only pinch. Model coordinates never scale.
+ // Two stationary touches on the Level 2 BLUE I + RED SMR pair switch
+ // contraction. Any moving pair remains a pinch zoom. No grammar mutation.
+ function beginPinch(ids:[number,number],a:TouchPoint,b:TouchPoint){
+  const midX=(a.x+b.x)/2,midY=(a.y+b.y)/2
+  const world=fromClient(midX,midY)
+  if(!world)return
+  pinch.current={pointers:ids,startDistance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),startView:currentView.current,anchor:world}
+  setHint('Pinch to zoom. Shapes keep their positions and connections.')
+ }
  function downTouch(e:ReactPointerEvent<SVGSVGElement>){
   if(e.pointerType!=='touch')return
   activeTouches.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+  touchStarted.current.set(e.pointerId,Date.now())
+  const atomId=(e.target as Element).closest?.('[data-id]')?.getAttribute('data-id')
+  if(atomId)touchAtom.current.set(e.pointerId,atomId)
   blockRelease.current.delete(e.pointerId)
   if(activeTouches.current.size!==2)return
   const ids=[...activeTouches.current.keys()] as [number,number]
@@ -1102,15 +1112,30 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   if(dragging.current){update(dragging.current.before);dragging.current=null;setPreview(null)}
   panning.current=null;lastTap.current=null
   blockRelease.current.add(ids[0]);blockRelease.current.add(ids[1])
-  const midX=(a.x+b.x)/2,midY=(a.y+b.y)/2
-  const world=fromClient(midX,midY)
-  if(!world)return
-  pinch.current={pointers:ids,startDistance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),startView:currentView.current,anchor:world}
-  setHint('Pinch to zoom. Shapes keep their positions and connections.')
+  const atoms=[touchAtom.current.get(ids[0]),touchAtom.current.get(ids[1])]
+  const recognized=questActive&&activeQuestLevel===2&&questTwoSide==='answer'&&
+   atoms.includes('q2-a-q-1')&&atoms.includes('q2-a-q-2')&&
+   Math.abs((touchStarted.current.get(ids[0])||0)-(touchStarted.current.get(ids[1])||0))<300
+  if(recognized){
+   questTwoPair.current={pointers:ids,first:{...a},second:{...b},started:Date.now(),released:new Set()}
+   setHint('Release both shapes together to toggle I am / I\'m. Move to pinch zoom.')
+   return
+  }
+  beginPinch(ids,a,b)
  }
  function moveTouch(e:ReactPointerEvent<SVGSVGElement>){
   if(e.pointerType!=='touch'||!activeTouches.current.has(e.pointerId))return
   activeTouches.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+  const pair=questTwoPair.current
+  if(pair){
+   const a=activeTouches.current.get(pair.pointers[0]),b=activeTouches.current.get(pair.pointers[1])
+   const distanceA=a?Math.hypot(a.x-pair.first.x,a.y-pair.first.y):0
+   const distanceB=b?Math.hypot(b.x-pair.second.x,b.y-pair.second.y):0
+   if(Math.max(distanceA,distanceB)<=14)return
+   questTwoPair.current=null
+   if(a&&b)beginPinch(pair.pointers,pair.first,pair.second)
+   else return
+  }
   const p=pinch.current;if(!p)return
   const a=activeTouches.current.get(p.pointers[0]),b=activeTouches.current.get(p.pointers[1])
   if(!a||!b)return
@@ -1119,14 +1144,26 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const midX=(a.x+b.x)/2,midY=(a.y+b.y)/2
   const rect=svg.current?.getBoundingClientRect()
   if(!rect||!rect.width||!rect.height)return
-  // Pinch midpoint anchors the same world-space point while fingers spread and move.
   const x=p.anchor.x-(midX-rect.left)*w/rect.width
   const y=p.anchor.y-(midY-rect.top)*h/rect.height
   setCamera({x,y,width:w,height:h})
  }
  function endTouch(e:ReactPointerEvent<SVGSVGElement>){
   if(e.pointerType!=='touch')return
+  const pair=questTwoPair.current
+  if(pair&&pair.pointers.includes(e.pointerId)){
+   if(e.type==='pointercancel')questTwoPair.current=null
+   else{
+    pair.released.add(e.pointerId)
+    if(pair.released.size===2){
+     questTwoPair.current=null
+     if(Date.now()-pair.started<=550)toggleQuestTwoContraction()
+    }
+   }
+  }
   activeTouches.current.delete(e.pointerId)
+  touchAtom.current.delete(e.pointerId)
+  touchStarted.current.delete(e.pointerId)
   if(pinch.current?.pointers.includes(e.pointerId)){
    pinch.current=null
    panning.current=null
@@ -1134,7 +1171,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  }
  function onShapeDown(e:ReactPointerEvent<SVGGElement>,id:string){
   if(e.pointerType==='mouse'&&e.button!==0)return
-  if(pinch.current)return
+  if(pinch.current||questTwoPair.current)return
   if(omitBrush){
    e.stopPropagation()
    const old=currentDoc.current
@@ -1152,7 +1189,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   setSelected(id)
  }
  function onShapeMove(e:ReactPointerEvent<SVGGElement>){
-  if(pinch.current)return
+  if(pinch.current||questTwoPair.current)return
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
   const pt=pointer(e),dx=pt.x-d.sx,dy=pt.y-d.sy
   if(Math.hypot(dx,dy)>TAP)d.moved=true
@@ -1171,6 +1208,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
   dragging.current=null;setPreview(null);e.stopPropagation()
   if(!d.moved){
+   if(questActive&&activeQuestLevel===2){lastTap.current=null;questTwoTap(d.id);return}
    const t=Date.now()
    if(lastTap.current?.id===d.id&&t-lastTap.current.time<DOUBLE_MS){
     lastTap.current=null
@@ -1200,7 +1238,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   }
  }
  function downBackground(e:ReactPointerEvent<SVGSVGElement>){
-  if(pinch.current)return
+  if(pinch.current||questTwoPair.current)return
   if(e.target!==e.currentTarget&&!(e.target as Element).hasAttribute('data-board-background'))return
   if(e.pointerType==='mouse'&&e.button!==0)return
   panning.current={pointer:e.pointerId,startX:e.clientX,startY:e.clientY,before:currentView.current,moved:false}
