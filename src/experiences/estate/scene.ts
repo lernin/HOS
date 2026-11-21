@@ -6,6 +6,7 @@ import { furnish } from './furniture'
 import { decorateArt, type EstateArtChoice, type EstateArtDisplay } from './art'
 import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, resolveFloorRay, spawn, type Point, type EstateTourView, type EstateTourViews } from './plan'
+import { skipReachedWaypoints, easeGuidedPace } from './motion'
 import { createEstateEditor, type EditableRoomId, type EditableSurface, type EditorMaterial } from './editor'
 import { addMossRockSet } from './moss-rocks'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number}
@@ -77,13 +78,13 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     editor=createEstateEditor(scene,renderer,camera,canvas);water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
-    let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
+    let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,guidedPace=1,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
     let arrivalYaw:number|null=null,arrivalPitch:number|null=null,arrivalStarted=0,arrivalLookBaseline=0
     let journeyView:{yaw:number;pitch:number;fov:number;lead:number}|null=null,viewFov=69
     let tourViews:EstateTourViews={...initialTourViews}
     let inspectView:{position:T.Vector3;target:T.Vector3}|null=null
     camera.position.set(position.x,(floorAt(position)??FLOOR)+EYE,position.z)
-    const stop=()=>{path=[];destination='';tour=false;vx=0;vz=0;arrivalYaw=null;arrivalPitch=null;journeyView=null;marker.visible=false}
+    const stop=()=>{path=[];destination='';tour=false;vx=0;vz=0;guidedPace=1;arrivalYaw=null;arrivalPitch=null;journeyView=null;marker.visible=false}
     function go(point:Point,name='Your destination'){
       if(artInspect)return false
       const stored=tourViews[name]
@@ -173,7 +174,10 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(!input.paused&&!inspectView&&!artInspect){
         let dx=0,dz=0,turnWalkScale=1;const manual=Math.hypot(input.x,input.z)>.01
         if(manual){path=[];tour=false;marker.visible=false;destination='';arrivalYaw=null;arrivalPitch=null;journeyView=null;viewFov=69;const norm=Math.max(1,Math.hypot(input.x,input.z));dx=(input.x*Math.cos(yaw)+input.z*Math.sin(yaw))/norm;dz=(-input.x*Math.sin(yaw)+input.z*Math.cos(yaw))/norm}
-        else if(path.length){const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);if(d<.16){path.shift();if(!path.length){
+        else if(path.length){
+          // Consume every reached waypoint in this frame; do not pause the walker for a frame at each point.
+          path=skipReachedWaypoints(path,position)
+          if(!path.length){
             marker.visible=false;dwell=now+2600
             const view=destinations.find(item=>item.name===destination)
             const stored=tourViews[destination]
@@ -184,7 +188,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
             }
             journeyView=null
           }}
-          else{dx=(p.x-position.x)/d;dz=(p.z-position.z)/d;const factor=path.length===1?Math.min(1,d/.95):1;dx*=factor;dz*=factor
+          else{const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);dx=(p.x-position.x)/d;dz=(p.z-position.z)/d;const factor=path.length===1?Math.min(1,d/.95):1;dx*=factor;dz*=factor
             // Look ahead along the route so the camera turns before the body reaches a bend.
             let ahead=p,prev=position,lookAhead=Math.max(1.65,Math.min(5.5,input.speed*2.15)),remaining=d
             for(let i=1;i<path.length;i++)remaining+=Math.hypot(path[i].x-path[i-1].x,path[i].z-path[i-1].z)
@@ -222,7 +226,9 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
           }
         }
         if(tour&&!path.length&&now>dwell){const d=destinations[tourIndex%destinations.length];tourIndex++;if(!go(d,d.name)){tour=false}else dwell=Infinity}
-        const speed=input.speed*(input.fast?1.45:1)*turnWalkScale,damp=1-Math.exp(-dt*4.8);vx+=(dx*speed-vx)*damp;vz+=(dz*speed-vz)*damp
+        // Blend the camera-alignment speed limit instead of abruptly slowing/accelerating at bends.
+        guidedPace=easeGuidedPace(guidedPace,path.length?turnWalkScale:1,dt)
+        const speed=input.speed*(input.fast?1.45:1)*(manual?1:guidedPace),damp=1-Math.exp(-dt*4.8);vx+=(dx*speed-vx)*damp;vz+=(dz*speed-vz)*damp
         const next=moveSafely(position,vx*dt,vz*dt);if(Math.hypot(next.x-position.x,next.z-position.z)<.00005&&!path.length){vx=0;vz=0}position=next
         const cameraDelta=Math.atan2(Math.sin(input.yaw-yaw),Math.cos(input.yaw-yaw))
         const guidedTurn=(path.length>0||arrivalYaw!==null)&&!input.looking&&now-input.lookedAt>=2800
