@@ -1,6 +1,11 @@
 import type { ProcediaClip } from './procediaKeyboard'
 import type { HeadPose } from './expressions'
 
+export type KunaPerformanceContext='face-to-face'|'alongside'
+export const KUNA_PERFORMANCE_CONTEXTS=['face-to-face','alongside'] as const
+export function contextLabel(value:KunaPerformanceContext):string{
+  return value==='alongside'?'Walking alongside':'Face-to-face'
+}
 export type KunaMotionFrame=HeadPose&{at:number;jaw:number}
 export type KunaClipEvent={at:number;name:string;timeScale?:number}
 export type KunaStudioTake={
@@ -8,6 +13,9 @@ export type KunaStudioTake={
   frames:KunaMotionFrame[];clips:KunaClipEvent[]
   // Optional to preserve every existing v2 recording and v1 migration.
   emotions?:Record<string,number>;playbackIntensity?:number
+  // One take may be usable in one or both contexts. No separate left/right
+  // meanings are necessary: the alongside viewpoint is mirrored in Studio.
+  contexts?:KunaPerformanceContext[]
 }
 export type RecorderMode='idle'|'armed'|'recording'|'paused'
 const clipNames=new Set(['Death','Fall','Rest Pose','Sit','Idle Alert','Walk','Run','Fetch','Jump','Bite'])
@@ -31,6 +39,11 @@ export function validateKunaTake(value:unknown):value is KunaStudioTake {
     t.tags.some(x=>typeof x!=='string'||x.length>48)||!Number.isFinite(t.duration)||t.duration<.1||t.duration>12||
     !Array.isArray(t.frames)||t.frames.length<2||t.frames.length>800||
     !Array.isArray(t.clips)||t.clips.length>40)return false
+  if(t.contexts!==undefined&&(
+    !Array.isArray(t.contexts)||t.contexts.length<1||t.contexts.length>2||
+    new Set(t.contexts).size!==t.contexts.length||
+    t.contexts.some(c=>!KUNA_PERFORMANCE_CONTEXTS.includes(c))
+  ))return false
   if(t.playbackIntensity!==undefined&&(!Number.isInteger(t.playbackIntensity)||t.playbackIntensity<0||t.playbackIntensity>100))return false
   if(t.emotions!==undefined){
     if(!t.emotions||typeof t.emotions!=='object'||Array.isArray(t.emotions))return false
