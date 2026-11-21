@@ -631,7 +631,7 @@ test('Kuna starts in view of the Kitchen destination with the accepted 0.78m ava
  const d=Math.hypot(home.x-kitchen.x,home.z-kitchen.z)
  assert.ok(d>1.5&&d<4,'Kuna initially appears near the Kitchen camera, not on top of it')
  assert.match(source,/export const KUNA_HEIGHT=\.78/)
- assert.match(source,/createKunaNavigator\(\)/)
+ assert.match(source,/createKunaCompanionNavigator\(playerNavigator\)/)
  assert.match(source,/ctx\.fillText\('Kuna',128,40\)/)
 })
 
