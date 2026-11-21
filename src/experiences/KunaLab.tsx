@@ -375,7 +375,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
       const speechJaw=currentPhase==='speaking'?
         clamp(.38+.21*Math.sin(t*17)+.16*Math.sin(t*27),.07,.9):0
       const seated=sittingRef.current||currentPhase!=='idle'
-      aliveRig?.update(dt,{active:seated&&!beside,phase:currentPhase,speedFraction:beside?.58:0,
+      aliveRig?.update(dt,{active:seated&&!beside,phase:currentPhase,speedFraction:beside ? 0.58 : 0,
         jaw:speechJaw,manualJaw:jaw,freezeIdle:keys.freeze,manualPose:manual,
         studioMode:true,directPose:instant})
       if(aliveRig&&recorderRef.current.mode()==='recording'){
@@ -427,7 +427,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
       <section className="kl-stage" aria-label="Animated Procedia Kuna preview">
         <canvas ref={canvas} aria-label="Original 3D Kuna model"/>
         <div className="kl-stage-caption"><b>Original Procedia Kuna</b>
-          <span>{auditionContext==='alongside'?'Walking alongside · '+auditionSide+' view (mirrored)':'Face-to-face · calm closed-mouth stance'} · 0.78 m in Ocean Estate</span>
+          <span>{auditionContext==='alongside'?'Walking alongside · '+auditionSide+' view'+(auditionSide==='left'?' (mirrored)':''):'Face-to-face · calm closed-mouth stance'} · 0.78 m in Ocean Estate</span>
         </div>
         <div className="kl-indicator">{assetReady?'Model ready':status}</div>
       </section>
