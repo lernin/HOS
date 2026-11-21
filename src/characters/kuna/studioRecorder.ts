@@ -60,7 +60,7 @@ export function validateKunaTake(value:unknown):value is KunaStudioTake {
   return t.clips.every(c=>c&&Number.isFinite(c.at)&&c.at>=0&&c.at<=t.duration+.001&&
     clipNames.has(c.name)&&(c.timeScale===undefined||Number.isFinite(c.timeScale)&&c.timeScale>.1&&c.timeScale<=3))
 }
-export function sampleKunaTake(t:KunaStudioTake,seconds:number,intensity=100):KunaMotionFrame {
+export function sampleKunaTake(t:KunaStudioTake,seconds:number,intensity=100,mirrored=false):KunaMotionFrame {
   const at=clamp(Number.isFinite(seconds)?seconds:0,0,t.duration)
   const frames=t.frames
   let lo=0,hi=frames.length-1
@@ -73,8 +73,11 @@ export function sampleKunaTake(t:KunaStudioTake,seconds:number,intensity=100):Ku
   const u=clamp((at-a.at)/Math.max(.00001,b.at-a.at),0,1)
   const lerp=(x:number,y:number)=>x+(y-x)*u
   const strength=clamp(Number.isFinite(intensity)?intensity:100,0,100)/100
-  return {at,pitch:lerp(a.pitch,b.pitch)*strength,turn:lerp(a.turn,b.turn)*strength,
-    tilt:lerp(a.tilt,b.tilt)*strength,jaw:lerp(a.jaw,b.jaw)*strength}
+  // Only lateral head channels mirror; timing, nod/pitch and mouth do not.
+  // The same authored take can work alongside either shoulder.
+  const sign=mirrored?-1:1
+  return {at,pitch:lerp(a.pitch,b.pitch)*strength,turn:lerp(a.turn,b.turn)*strength*sign,
+    tilt:lerp(a.tilt,b.tilt)*strength*sign,jaw:lerp(a.jaw,b.jaw)*strength}
 }
 export function createKunaRecorder(){
   let mode:RecorderMode='idle',began=0,pausedAt=0,pausedTime=0
