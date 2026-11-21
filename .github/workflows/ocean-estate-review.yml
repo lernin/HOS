@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'preview/ocean-estate-*'
+      - 'feature/ocean-estate-kuna-*'
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx
