@@ -253,6 +253,20 @@ function supportFootprint(d:Draft,headId:string):{x:number;y:number;width:number
 /** The source distinguishes head-to-head row spacing (2.03), staircase
  * transitions (.49), and connector spacing (.98). Same-blue family heads use
  * 2.03, never the .49 staircase rule. */
+/** Shared exact snap port: free drag and Quest sentence heads use the same Blueprint coordinates. */
+function snappedSequenceFollowerPosition(left:Atom,right:Atom):{x:number;y:number}{
+ if(left.kind==='triangle'&&right.kind==='oval')return {
+  x:left.x+atomWidth(left)+RED_BLUE_GAP,
+  y:left.y+atomHeight(left)+BLUE_RED_GAP
+ }
+ const conjunction=left.kind==='diamond'||right.kind==='diamond'
+ const diagonal=conjunction||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
+ const gap=conjunction?CONNECTOR_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
+ const horizontal=horizontalFollower(
+  {x:left.x,y:left.y,width:width(left.kind),height:height(left.kind)},
+  {width:width(right.kind),height:height(right.kind)},gap)
+ return {x:horizontal.x,y:conjunction?horizontal.y:left.y+diagonal}
+}
 function sequenceHeadGap(left:Atom,right:Atom):number {
  if(left.kind==='diamond'||right.kind==='diamond')return CONNECTOR_GAP
  if(left.kind==='circle'&&right.kind==='triangle')return BLUE_RED_GAP
@@ -692,17 +706,10 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
     const occupiedRight=d.bonds.some(z=>z.relation==='sequence'&&z.parent===left.id)
     const occupiedLeft=d.bonds.some(z=>z.relation==='sequence'&&z.child===right.id)
     if(!occupiedRight&&!occupiedLeft) {
-     // Conjunctions sit horizontally beside blue; blue/red retain their Blueprint staircase.
-     const conjunction=left.kind==='diamond'||right.kind==='diamond'
-     const diagonal=conjunction||left.kind===right.kind?0:height(left.kind)+(left.kind==='circle'?4:7)*UNIT
-     const gap=conjunction?CONNECTOR_GAP:left.kind==='triangle'&&right.kind==='circle'?RED_BLUE_GAP:BLUE_RED_GAP
-     const horizontal=horizontalFollower(
-      {x:left.x,y:left.y,width:width(left.kind),height:height(left.kind)},
-      {width:width(right.kind),height:height(right.kind)},gap)
-     const desired={x:horizontal.x,y:conjunction?horizontal.y:left.y+diagonal}
-     // Only the moving component shifts; orientation is from spatial order.
+     // Same canonical magnet position used by parser-generated Quest maps.
+     const desired=snappedSequenceFollowerPosition(left,right)
      const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:
-      {x:b.x-width(a.kind)-gap-a.x,y:conjunction?b.y+(height(b.kind)-height(a.kind))/2-a.y:b.y-diagonal-a.y}
+      {x:b.x-(desired.x-left.x)-a.x,y:b.y-(desired.y-left.y)-a.y}
      offered({parent:left.id,child:right.id,relation:'sequence',dx:delta.x,dy:delta.y,distance:Math.hypot(delta.x,delta.y)})
     }
    }
@@ -865,25 +872,18 @@ function layoutParsedQuest(parsed:ParsedStax):Draft{
  heads.forEach((head,i)=>{
   const previous=i>0?heads[i-1]:null
   const prior=previous?coords.get(previous.id):null
-  coords.set(head.id,previous&&prior?{
-   x:prior.x+width(previous.kind)+(previous.kind==='circle'?BLUE_RED_GAP:RED_BLUE_GAP),
-   y:prior.y+Math.max(80,height(previous.kind)*.55),
-  }:{x:95,y:85})
+  if(!previous||!prior){coords.set(head.id,{x:95,y:85});return}
+  const source:Atom={id:previous.id,kind:previous.kind,x:prior.x,y:prior.y,word:previous.word}
+  const follower:Atom={id:head.id,kind:head.kind,x:0,y:0,word:head.word}
+  coords.set(head.id,snappedSequenceFollowerPosition(source,follower))
  })
  const atoms:Atom[]=parsed.atoms.map(a=>{
   const xy=coords.get(a.id)||{x:95,y:85}
   return {id:a.id,kind:a.kind,word:a.word,x:xy.x,y:xy.y}
  })
  let doc:Draft=normalizeRoles({atoms,bonds:parsed.bonds.map(b=>({...b}))})
- // First seed direct supporters at their actual parents; then use the SAME
- // layout rules as manual magnetic snapping (never a second grammar engine).
- for(const edge of doc.bonds.filter(b=>b.relation==='support')){
-  const parent=byId(doc,edge.parent),child=byId(doc,edge.child)
-  if(!parent||!child)continue
-  const x=underSingleX(parent.x,atomWidth(parent),atomWidth(child))
-  const y=parent.y+atomHeight(parent)+VERTICAL
-  doc={...doc,atoms:doc.atoms.map(a=>a.id===child.id?{...a,x,y}:a)}
- }
+ // Supporters align ONLY via the same exact reflow functions as manual snaps:
+ // alignSupporters for BLUE and alignRedSupporters for RED. Never estimate.
  for(const head of heads){
   if(head.kind==='circle'&&blueSupportAtoms(doc,head.id).length)doc=alignSupporters(doc,head.id)
   if(head.kind==='triangle'&&orangeChildren(doc,head.id).length)doc=alignRedSupporters(doc,head.id)
