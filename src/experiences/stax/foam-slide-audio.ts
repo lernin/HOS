@@ -16,7 +16,7 @@ export const FOAM_SLIDE_SOUNDS=[
  {id:'grit',label:'10 · Fine grit',frequency:1320,lowpass:3700,q:1.0,colour:.42,gain:.64,grain:.65},
 ] as const
 export type FoamSlideSoundId=typeof FOAM_SLIDE_SOUNDS[number]['id']
-const DEFAULT_SOUND:FoamSlideSoundId='felt'
+const DEFAULT_SOUND:FoamSlideSoundId='plastic'
 export function safeFoamSoundId(value:string|null):FoamSlideSoundId {
  return FOAM_SLIDE_SOUNDS.find(p=>p.id===value)?.id??DEFAULT_SOUND
 }
