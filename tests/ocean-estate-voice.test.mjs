@@ -78,6 +78,7 @@ test('Kuna shares an authentic Sit/Head/Chin expression rig rather than inventin
   assert.match(rig,/getObjectByName\('Head'\)/)
   assert.match(rig,/getObjectByName\('Chin'\)/)
   assert.match(rig,/jawEuler\.set\(\.381\*jawAmount,0,0\)/,'match Procedia jaw rotation')
+  assert.match(rig,/head\.quaternion\.copy\(neutralHead\)\.multiply\(headQuaternion\)/,'no rolling baseline under Sit/Idle')
   assert.match(rig,/conversationalHeadPose\(phase,phaseElapsed,sitAmount\)/)
   assert.match(npc,/holding=focus\|\|Boolean\(rig\?\.isTransitioning\(\)\)/,'keep collision body stationary through sit/stand')
   assert.match(npc,/setPhase\(next:KunaVoicePhase\)/)
