@@ -243,7 +243,10 @@ test('Classroom Foam displays seven separate photo assets in workspace, palette 
   const bytes=await readFile(path)
   assert.equal(bytes.toString('ascii',0,4),'RIFF','independent photo image '+kind)
   assert.ok(bytes.length>1000,'valid nonempty image '+kind)
-  assert.ok(foam.includes('/stax-foam/chips/'+kind+'.webp'),'each kind has its own source URL')
+  const cleaned=await readFile(new URL('../public/stax-foam/cleaned/'+kind+'.webp',import.meta.url))
+  assert.equal(cleaned.toString('ascii',0,4),'RIFF','processed image '+kind)
+  assert.ok(cleaned.length>1000,'cleaned foam retains texture '+kind)
+  assert.ok(foam.includes('/stax-foam/cleaned/'+kind+'.webp'),'each kind renders its isolated cleaned source')
  }
  assert.ok(foam.includes('return <image href={CLASSROOM_FOAM_FILES[kind]}'))
  assert.ok(foam.includes('pointerEvents="none"'))
@@ -254,6 +257,13 @@ test('Classroom Foam displays seven separate photo assets in workspace, palette 
  assert.ok(board.includes('className="stax-foam-shortcut"'))
  assert.ok(board.includes("const KEY='stax-free-molecules-v2'"))
  assert.ok(css.includes("image.stax-authentic-foam-chip"))
+ const chipCss=css.match(/image\\.stax-authentic-foam-chip \\{([\\s\\S]*?)\\}/)?.[1]??''
+ assert.match(chipCss,/drop-shadow\\(0 1px 1px rgba\\(0,0,0,\\.10\\)\\)/)
+ assert.match(chipCss,/drop-shadow\\(0 4px 8px rgba\\(0,0,0,\\.16\\)\\)/)
+ assert.doesNotMatch(chipCss,/box-shadow/)
+ const pack=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'))
+ assert.ok(pack.scripts.prebuild.includes('clean-stax-foam.mjs'))
+ assert.ok(pack.scripts.predev.includes('clean-stax-foam.mjs'))
 })
 
 test('Classroom Foam does not rely on buggy nested atlas clipping in Chrome or Android',async()=>{
