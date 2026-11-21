@@ -9,6 +9,7 @@ import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
 import { PearlescentGlass } from './pearlescent-atlas'
 import { PearlescentAirglass } from './pearlescent-airglass'
 import { FoamChip } from './foam-chips'
+import { STAX_QUEST_LEVELS, staxQuestLevel } from './quest-levels'
 import './molecule-board.css'
 
 /**
@@ -857,6 +858,20 @@ function newFamilyAfterBlue(d:Draft,moving:Set<string>):boolean {
  * encode the lexical identity of every colored shape, so assignments of
  * individual word roles and bond orientations below are proposals.
  */
+/** Minimal editable STAX Quest Level 1: noun/pronoun + copula + complement.
+ * The original source gives the sentence, not explicit per-word bonds.
+ * The visual decomposition is a teacher-reviewable initial proposal.
+ */
+function quest1():Draft{
+ return {atoms:[
+  {id:'q1-i',kind:'circle',word:'I',x:105,y:110},
+  {id:'q1-am',kind:'triangle',word:"'m",x:355,y:265},
+  {id:'q1-happy',kind:'oval',word:'happy',x:630,y:420},
+ ],bonds:[
+  {parent:'q1-i',child:'q1-am',relation:'sequence'},
+  {parent:'q1-am',child:'q1-happy',relation:'sequence'},
+ ]}
+}
 function quest21():Draft {
  type Spec=[id:string,kind:Kind,word:string,x:number,y:number,variant?:Atom['variant']]
  const specs:Spec[]=[
@@ -927,6 +942,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const [view,setView]=useState<View>(defaultView)
  const [history,setHistory]=useState<Draft[]>([])
  const [questActive,setQuestActive]=useState(false)
+ const [questPanelOpen,setQuestPanelOpen]=useState(false)
+ const [chosenQuestLevel,setChosenQuestLevel]=useState(1)
+ const [activeQuestLevel,setActiveQuestLevel]=useState<number|null>(null)
  const [fullscreen,setFullscreen]=useState(false)
  const rootRef=useRef<HTMLDivElement>(null)
  useEffect(()=>{const sync=()=>setFullscreen(document.fullscreenElement===rootRef.current);document.addEventListener('fullscreenchange',sync);return()=>document.removeEventListener('fullscreenchange',sync)},[])
@@ -1207,12 +1225,23 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   addAt(p.kind,moved?{x:e.clientX,y:liftedY}:undefined,p.variant)
  }
  function paletteCancel(){paletteDrag.current=null;setPaletteHover(null)}
-  function loadQuest(){
-  // The example's under-red ports use the same exact positions as live magnets.
-  const example=normalizeRoles(quest21())
-  const next=alignSequenceFamilyClearance(alignRedSupporters(alignRedSupporters(example,'q21-buy'),'q21-is'))
-  save(next);setCamera(fit(next,aspect()));setSelected(null);setQuestActive(true)
-  setHint('Blueprint Level 21 loaded as a movable demonstration. Word roles are provisional; all shapes and bonds remain editable.')
+ function loadQuest(level:number){
+  const item=staxQuestLevel(level)
+  if(!item)return
+  // Never silently merge a quest into the child's existing molecule; Undo
+  // restores that draft when switching activities.
+  const before=currentDoc.current
+  const example=level===1?normalizeRoles(quest1()):level===21?normalizeRoles(quest21()):empty()
+  const next=level===21
+   ?alignSequenceFamilyClearance(alignRedSupporters(alignRedSupporters(example,'q21-buy'),'q21-is'))
+   :example
+  save(next,before)
+  if(next.atoms.length)setCamera(fit(next,aspect()))
+  else setCamera(defaultView)
+  setSelected(null);setQuestActive(true);setActiveQuestLevel(level);setQuestPanelOpen(false)
+  setHint(level===1?'Quest 1 loaded. Move the three shapes; this is an editable proposed map for “I’m happy.”':
+   level===21?'Quest 21 illustrative map loaded; individual word-role mappings remain provisional.':
+   'Quest '+level+': build the original sentence with shapes. No automatic map has been invented.')
  }
  async function toggleFullscreen(){
   try{if(document.fullscreenElement===rootRef.current){await document.exitFullscreen()}else if(rootRef.current?.requestFullscreen){await rootRef.current.requestFullscreen()}}catch{setHint('Full-screen mode is restricted in this browser; the canvas still fills the available window.')}
@@ -1251,7 +1280,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     <button className="stax-molecule-back" onClick={onBack} title="Back to Classic Shape Lab" aria-label="Back to Classic Shape Lab"><StaxToolbarIcon name="back"/></button>
     <div className="stax-molecule-buttons">
      <button onClick={toggleFullscreen} title={fullscreen?"Exit full screen":"Full screen"} aria-label={fullscreen?"Exit full screen":"Go full screen"}><StaxToolbarIcon name={fullscreen?'shrink':'expand'}/></button>
-     <button onClick={loadQuest} title="Load Quest Level 21" aria-label="Load Quest 21">Q21</button>
+     <button onClick={()=>loadQuest(21)} title="Load Quest Level 21" aria-label="Load Quest 21">Q21</button>
      <button onClick={undo} disabled={!history.length} title="Undo" aria-label="Undo"><StaxToolbarIcon name="undo"/></button>
      <button onClick={remove} disabled={!selected} title="Remove selected shape" aria-label="Remove selected shape"><StaxToolbarIcon name="remove"/></button>
      <button onClick={sweepLoose} title="Sweep loose shapes and smaller maps; keep the largest connected map (Undo restores)" aria-label="Sweep loose shapes; keep largest connected map"><StaxToolbarIcon name="sweep"/></button>
@@ -1277,7 +1306,25 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}><StaxToolbarIcon name="plus"/></button>
    </div>
   </div>
-  {questActive&&<p className="stax-molecule-example">STAX QUEST · Level 21 — She’s buying a present for her best friend because her birthday is tomorrow. <small>Illustrative mapping; original slide does not label each shape with its individual word.</small></p>}
+  <div className="stax-quest-nav">
+   <button className="stax-quest-tab" type="button" aria-expanded={questPanelOpen} aria-controls="stax-quest-panel"
+    onClick={()=>setQuestPanelOpen(v=>!v)}>STAX Quest · {chosenQuestLevel}/100</button>
+   {questPanelOpen&&<div id="stax-quest-panel" className="stax-quest-panel" role="region" aria-label="STAX Quest level selection">
+    <label htmlFor="stax-quest-level">Choose a level</label>
+    <select id="stax-quest-level" value={chosenQuestLevel} onChange={e=>setChosenQuestLevel(Number(e.target.value))}>
+     {STAX_QUEST_LEVELS.map(item=><option key={item.level} value={item.level}>Level {item.level} — {item.sentence}</option>)}
+    </select>
+    <p className="stax-quest-sentence">{staxQuestLevel(chosenQuestLevel)?.sentence}</p>
+    <div className="stax-quest-actions">
+     <button type="button" onClick={()=>setChosenQuestLevel(n=>Math.max(1,n-1))} disabled={chosenQuestLevel===1}>Previous</button>
+     <button type="button" onClick={()=>loadQuest(chosenQuestLevel)}>{chosenQuestLevel===1||chosenQuestLevel===21?'Load example':'Start blank map'}</button>
+     <button type="button" onClick={()=>setChosenQuestLevel(n=>Math.min(100,n+1))} disabled={chosenQuestLevel===100}>Next</button>
+    </div>
+    {staxQuestLevel(chosenQuestLevel)?.youtubeUrl&&<a href={staxQuestLevel(chosenQuestLevel)!.youtubeUrl!} target="_blank" rel="noopener noreferrer">Watch original Quest video</a>}
+    {chosenQuestLevel!==1&&chosenQuestLevel!==21&&<small>Original sentence available; shape map not yet authored.</small>}
+   </div>}
+  </div>
+  {questActive&&activeQuestLevel!==null&&<p className="stax-molecule-example">STAX QUEST · Level {activeQuestLevel} — {staxQuestLevel(activeQuestLevel)?.sentence} {(activeQuestLevel===1||activeQuestLevel===21)&&<small>Editable illustrative map; confirm grammatical roles before using for assessment.</small>}</p>}
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-board"/>}
