@@ -783,3 +783,46 @@
  color:#fff8ee;
  border-color:#9e7149;
 }
+
+/* STAX Quest: compact upper-left navigator; no movement of the shape palette. */
+.stax-quest-nav{
+ position:absolute;z-index:9;top:calc(env(safe-area-inset-top,0px) + 8px);
+ left:calc(env(safe-area-inset-left,0px) + 8px);
+ max-width:min(370px,calc(100vw - 30px));
+ font:500 14px/1.4 system-ui,sans-serif;color:var(--stax-text);
+}
+.stax-quest-tab{
+ background:var(--stax-panel);border:1px solid var(--stax-border);
+ color:var(--stax-text);border-radius:11px;padding:9px 13px;
+ font:700 13px/1.25 system-ui,sans-serif;cursor:pointer;
+ box-shadow:0 3px 16px #16324817;
+}
+.stax-quest-panel{
+ margin-top:7px;display:flex;flex-direction:column;gap:9px;
+ width:min(350px,calc(100vw - 32px));max-height:min(65dvh,475px);
+ overflow-y:auto;box-sizing:border-box;padding:13px;
+ background:var(--stax-panel);border:1px solid var(--stax-border);
+ border-radius:12px;box-shadow:0 8px 28px #061b3040;
+}
+.stax-quest-panel label{font-size:12px;font-weight:700;}
+.stax-quest-panel select{
+ width:100%;min-height:41px;border:1px solid var(--stax-border);
+ background:var(--stax-button);color:var(--stax-text);border-radius:8px;
+ padding:7px;font:500 13px/1.4 system-ui,sans-serif;
+}
+.stax-quest-sentence{font-size:15px;font-weight:650;line-height:1.5;margin:0;}
+.stax-quest-actions{display:flex;gap:5px;align-items:stretch;}
+.stax-quest-actions button{
+ min-height:42px;flex:1;border-radius:8px;border:1px solid var(--stax-border);
+ background:var(--stax-button);color:var(--stax-text);
+ font:650 12px/1.2 system-ui,sans-serif;padding:7px;cursor:pointer;
+}
+.stax-quest-actions button:disabled{opacity:.35;cursor:default;}
+.stax-quest-panel a{color:var(--stax-text);text-decoration:underline;font-size:13px;}
+.stax-quest-panel small{color:var(--stax-caption);font-size:11px;}
+.stax-quest-tab:focus-visible,.stax-quest-panel button:focus-visible,
+.stax-quest-panel select:focus-visible{outline:3px solid #4389c7;outline-offset:2px;}
+@media(max-width:560px){
+ .stax-quest-nav{max-width:calc(100vw - 18px);}
+ .stax-quest-panel{width:min(330px,calc(100vw - 30px));}
+}
