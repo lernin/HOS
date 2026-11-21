@@ -14,7 +14,7 @@ try{
     if(options.hasTouch)await button.tap()
     else await button.click()
     await page.waitForFunction(()=>document.fullscreenElement?.classList.contains('oe-root')===true,{timeout:5000})
-    assert.equal(await button.count(),0,options.label+' hides entry button after fullscreen succeeds')
+    await button.waitFor({state:'detached',timeout:5000}) // React's fullscreenchange state render is asynchronous
     assert.equal(await page.getByRole('button',{name:'Estate menu'}).count(),1,options.label+' menu remains available')
     console.log('Fullscreen entry verified on '+options.label)
     await context.close()
