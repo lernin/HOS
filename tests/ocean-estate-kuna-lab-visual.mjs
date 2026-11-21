@@ -14,6 +14,16 @@ try{
       isMobile:testCase.mobile,hasTouch:testCase.mobile,acceptDownloads:true
     })
     const page=await context.newPage()
+    // Vite dev server does not apply Vercel's cross-project GLB rewrite.
+    // Serve the exact canonical Procedia fox asset through this test route.
+    await page.route('**/models/fox-mascot.glb',async route=>{
+      const response=await fetch('https://procedia-two.vercel.app/models/fox-mascot.glb')
+      assert.equal(response.status,200,'canonical Procedia GLB must be available')
+      await route.fulfill({
+        status:200,contentType:'model/gltf-binary',
+        body:Buffer.from(await response.arrayBuffer()),
+      })
+    })
     const errors=[]
     page.on('pageerror',e=>errors.push(e.message))
     await page.goto('http://127.0.0.1:4173/kuna-lab',{waitUntil:'domcontentloaded'})
