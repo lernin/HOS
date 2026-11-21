@@ -11,6 +11,8 @@ type Visual=(active:boolean,jaw:number,phase:Phase)=>void
 export function useKunaVoice(onVisual:Visual){
   const visual=useRef(onVisual);visual.current=onVisual
   const [phase,setPhase]=useState<Phase>('idle'),[notice,setNotice]=useState('')
+  const [engaged,setEngaged]=useState(false),engagedRef=useRef(false)
+  const autoListenRef=useRef<ReturnType<typeof setTimeout>|null>(null)
   const phaseRef=useRef<Phase>('idle'),sessionRef=useRef(0),mounted=useRef(true)
   const recorderRef=useRef<MediaRecorder|null>(null),streamRef=useRef<MediaStream|null>(null)
   const captureCtx=useRef<AudioContext|null>(null),listenFrame=useRef<number|null>(null)
@@ -18,7 +20,12 @@ export function useKunaVoice(onVisual:Visual){
   const pending=useRef<AbortController|null>(null),lastSpeed=useRef<number|null>(null)
   const startAt=useRef(0),lastSound=useRef(0),heardSpeech=useRef(false)
 
-  function status(next:Phase){phaseRef.current=next;if(mounted.current)setPhase(next);visual.current(next!=='idle',0,next)}
+  function status(next:Phase){
+    phaseRef.current=next;if(mounted.current)setPhase(next)
+    // Engagement outlives each microphone/answer phase. Kuna must not
+    // stand up between a child's words and his reply.
+    visual.current(engagedRef.current,0,next)
+  }
   function info(s:string){if(mounted.current)setNotice(s)}
   function stopMicrophone(){
     if(listenFrame.current!==null){cancelAnimationFrame(listenFrame.current);listenFrame.current=null}
@@ -31,12 +38,15 @@ export function useKunaVoice(onVisual:Visual){
   function stopPlayback(){
     if(playFrame.current!==null){cancelAnimationFrame(playFrame.current);playFrame.current=null}
     if(playbackSource.current){playbackSource.current.onended=null;try{playbackSource.current.stop()}catch{/* Already finished. */};playbackSource.current.disconnect();playbackSource.current=null}
-    visual.current(false,0,phaseRef.current)
+    visual.current(engagedRef.current,0,phaseRef.current)
   }
   function cancelAll(){
     sessionRef.current++
+    if(autoListenRef.current){clearTimeout(autoListenRef.current);autoListenRef.current=null}
     pending.current?.abort();pending.current=null
-    stopMicrophone();stopPlayback();status('idle')
+    stopMicrophone();stopPlayback()
+    engagedRef.current=false;if(mounted.current)setEngaged(false)
+    status('idle');info('')
   }
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;cancelAll();void playbackCtx.current?.close().catch(()=>{});playbackCtx.current=null}},[])
 
@@ -88,10 +98,22 @@ export function useKunaVoice(onVisual:Visual){
         let sum=0
         for(const s of samples){const v=(s-128)/128;sum+=v*v}
         const rms=Math.sqrt(sum/samples.length)
-        visual.current(true,Math.min(1,Math.max(0,(rms-.018)*5)),phaseRef.current)
+        visual.current(engagedRef.current,Math.min(1,Math.max(0,(rms-.018)*5)),phaseRef.current)
         playFrame.current=requestAnimationFrame(trackJaw)
       }
-      source.onended=()=>{if(id!==sessionRef.current)return;stopPlayback();status('idle')}
+      source.onended=()=>{
+        if(id!==sessionRef.current)return
+        stopPlayback();status('idle')
+        if(!engagedRef.current)return
+        // One tap opens a conversational session. Auto-arm the next
+        // half-duplex turn after Kuna finishes speaking; do not capture
+        // the speaker's own reply via the microphone.
+        autoListenRef.current=setTimeout(()=>{
+          autoListenRef.current=null
+          if(id!==sessionRef.current||!engagedRef.current||document.hidden)return
+          void beginListening()
+        },550)
+      }
       source.start(0);trackJaw()
     }catch(e){
       if(id!==sessionRef.current||controller.signal.aborted)return
@@ -107,7 +129,9 @@ export function useKunaVoice(onVisual:Visual){
     recorder.stop() // onstop sends one completed utterance
   }
   async function beginListening(){
-    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined'){info('Microphone recording needs a supported browser.');return}
+    if(!engagedRef.current)return
+    if(autoListenRef.current){clearTimeout(autoListenRef.current);autoListenRef.current=null}
+    if(!navigator.mediaDevices?.getUserMedia||typeof MediaRecorder==='undefined'){info('Microphone recording needs a supported browser.');status('idle');return}
     const id=++sessionRef.current
     // Unlock output audio during the original tap; mobiles may reject later autoplay.
     try{
@@ -160,8 +184,16 @@ export function useKunaVoice(onVisual:Visual){
   function tap(){
     if(phaseRef.current==='listening'){finishSpeaking();return}
     if(phaseRef.current==='thinking'){info('Kuna is thinking.');return}
-    if(phaseRef.current==='speaking'){cancelAll();return}
+    if(phaseRef.current==='speaking'){
+      // Tapping again interrupts Kuna and lets the child speak.
+      stopPlayback();info('');status('idle');void beginListening();return
+    }
+    if(!engagedRef.current){
+      engagedRef.current=true
+      if(mounted.current)setEngaged(true)
+      visual.current(true,0,'idle')
+    }
     info('');void beginListening()
   }
-  return {phase,notice,tap,cancel:cancelAll}
+  return {phase,engaged,notice,tap,end:cancelAll,cancel:cancelAll}
 }

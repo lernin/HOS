@@ -139,8 +139,8 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
       return
     }
     const isFinal=route.length===1
-    const following=route[1]
-    const bend=following?Math.abs(angleDelta(heading(waypoint,following),desiredYaw)):0
+    const nextWaypoint=route[1]
+    const bend=nextWaypoint?Math.abs(angleDelta(heading(waypoint,nextWaypoint),desiredYaw)):0
     // Brake for the goal, or ahead of a sharp corner. Do not reverse in motion.
     const stopDistance=isFinal?remaining:(bend>.48?remaining:Math.max(remaining,.5))
     const arrivalSpeed=Math.sqrt(Math.max(0,2*DECEL*stopDistance))
