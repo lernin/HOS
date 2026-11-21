@@ -1359,6 +1359,17 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  function loadQuest(level:number){
   const item=staxQuestLevel(level)
   if(!item)return
+  if(level===2){
+   const question=questTwoQuestionDraft()
+   save(question,currentDoc.current)
+   setCamera(fitQuestTwoQuestion(question,aspect()))
+   setSelected(null);setOmitBrush(false);setQuestActive(true)
+   setActiveQuestLevel(2);setChosenQuestLevel(2);setQuestPanelOpen(false)
+   setQuestTwoSide('question');setQuestTwoTaps([]);setQuestTwoContracted(true)
+   setHint('Quest 2 · 4B: tap H, then are, then you. The complement space is unknown.')
+   return
+  }
+  setQuestTwoTaps([])
   const before=currentDoc.current
   const parsed=level<=10?parseStaxSentence(item.sentence,{learnerName:'Ashley'}):null
   const known=parsed?.supported?layoutParsedQuest(parsed):null
@@ -1404,6 +1415,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   setQuestActive(false)
   setHint('Swept '+discard+' unattached or smaller-map shape'+(discard===1?'':'s')+'. Undo restores everything.')
  }
+ const questionMarker=questActive&&activeQuestLevel===2&&questTwoSide==='question'?questTwoHPosition(doc):null
+ const questTwoHarvest=questActive&&activeQuestLevel===2?harvestQuestTwo(questTwoSide,questTwoTaps,questTwoContracted):null
+ const viewPercentX=(x:number)=>`${(x-view.x)/view.width*100}%`
+ const viewPercentY=(y:number)=>`${(y-view.y)/view.height*100}%`
  return <div ref={rootRef} className="stax-molecule-ui" data-theme={theme} data-original-pollen={pollenAnimated?'true':'false'}>
   <button className="stax-tray-handle" type="button" aria-label={trayOpen?'Close workspace controls':'Open workspace controls'} aria-controls="stax-bottom-tray" aria-expanded={trayOpen} onClick={()=>{setTrayOpen(v=>!v);setTrayActivity(n=>n+1)}}><span aria-hidden="true">{trayOpen?'‹':'›'}</span></button>
   <div id="stax-bottom-tray" className="stax-molecule-dock" data-open={trayOpen?'true':'false'} aria-label="STAX workspace controls" aria-hidden={!trayOpen}
@@ -1431,8 +1446,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     </div>
    </div>
    <div className="stax-molecule-view-controls">
-    <button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))} title="Center" aria-label="Center"><StaxToolbarIcon name="center"/></button>
-    <button onClick={()=>setCamera(fit(currentDoc.current,aspect()))} title="Fit all" aria-label="Fit all"><StaxToolbarIcon name="fit"/></button>
+    <button onClick={()=>setCamera(questionMarker?fitQuestTwoQuestion(currentDoc.current,aspect()):centre(currentDoc.current,currentView.current))} title="Center" aria-label="Center"><StaxToolbarIcon name="center"/></button>
+    <button onClick={()=>setCamera(questionMarker?fitQuestTwoQuestion(currentDoc.current,aspect()):fit(currentDoc.current,aspect()))} title="Fit all" aria-label="Fit all"><StaxToolbarIcon name="fit"/></button>
     <button aria-label="Zoom out" title="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}><StaxToolbarIcon name="minus"/></button>
     <span>{Math.round(100*W/view.width)}%</span>
     <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}><StaxToolbarIcon name="plus"/></button>
@@ -1449,7 +1464,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     <p className="stax-quest-sentence">{staxQuestLevel(chosenQuestLevel)?.sentence}</p>
     <div className="stax-quest-actions">
      <button type="button" onClick={()=>setChosenQuestLevel(n=>Math.max(1,n-1))} disabled={chosenQuestLevel===1}>Previous</button>
-     <button type="button" onClick={()=>loadQuest(chosenQuestLevel)}>{chosenQuestLevel<=10||chosenQuestLevel===21?'Load map':'Start blank map'}</button>
+     <button type="button" onClick={()=>loadQuest(chosenQuestLevel)}>{chosenQuestLevel===2?'Play 4B / 5':chosenQuestLevel<=10||chosenQuestLevel===21?'Load map':'Start blank map'}</button>
      <button type="button" onClick={()=>setChosenQuestLevel(n=>Math.min(100,n+1))} disabled={chosenQuestLevel===100}>Next</button>
     </div>
     {staxQuestLevel(chosenQuestLevel)?.youtubeUrl&&<a href={staxQuestLevel(chosenQuestLevel)!.youtubeUrl!} target="_blank" rel="noopener noreferrer">Watch original Quest video</a>}
@@ -1457,7 +1472,21 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     {chosenQuestLevel===6&&<small>Level 6 map uses “My name is Ashley.” Learner-name personalization can follow later.</small>}
    </div>}
   </div>
-  {questActive&&activeQuestLevel!==null&&<p className="stax-molecule-example">STAX QUEST · Level {activeQuestLevel} — {activeQuestLevel===6?'My name is Ashley.':staxQuestLevel(activeQuestLevel)?.sentence} {(activeQuestLevel<=10||activeQuestLevel===21)&&<small>Editable draft; teacher confirmation required before assessment.</small>}</p>}
+  {questActive&&activeQuestLevel!==null&&<p className="stax-molecule-example">STAX QUEST · Level {activeQuestLevel} {activeQuestLevel===2?'· '+(questTwoSide==='question'?'4B question':'5 answer'):'— '+(activeQuestLevel===6?'My name is Ashley.':staxQuestLevel(activeQuestLevel)?.sentence)} {(activeQuestLevel<=10||activeQuestLevel===21)&&<small>Editable draft; teacher confirmation required before assessment.</small>}</p>}
+  {questActive&&activeQuestLevel===2&&<section className="stax-quest2-panel" aria-label="STAX Quest Level 2 question and answer">
+   <div className="stax-quest2-modes">
+    <button type="button" aria-pressed={questTwoSide==='question'} onClick={()=>changeQuestTwoSide('question')}>4B · Question</button>
+    <button type="button" aria-pressed={questTwoSide==='answer'} onClick={()=>changeQuestTwoSide('answer')}>5 · Answer</button>
+   </div>
+   <div className="stax-quest2-output" role="status" aria-live="polite">
+    {questTwoHarvest?<strong>{questTwoHarvest}</strong>:<span>{questTwoSide==='question'?'Tap H → are → you':'Tap I → am → ok'} <em>{questTwoTaps.length}/3</em></span>}
+   </div>
+   <div className="stax-quest2-actions">
+    {questTwoSide==='answer'&&<button type="button" onClick={toggleQuestTwoContraction} aria-pressed={questTwoContracted}>Contraction: {questTwoContracted?"I'm":'I am'}</button>}
+    <button type="button" onClick={()=>{setQuestTwoTaps([]);setHint('Tap the three targets in order.')}}>Try again</button>
+   </div>
+   {questTwoSide==='answer'&&<small>Touch blue I and red SMR together to toggle. Move two fingers to zoom.</small>}
+  </section>}
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-board"/>}
@@ -1497,7 +1526,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
        (paletteHover?.snap&&(paletteHover.snap.parent===a.id||paletteHover.snap.child===a.id))||
        (preview&&dragging.current&&!molecule(doc,dragging.current.id).has(a.id)&&(preview.parent===a.id||preview.child===a.id))?'stax-resonant-target':''
       ].filter(Boolean).join(' ')}
-      onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}>
+      tabIndex={questActive&&activeQuestLevel===2?0:undefined} role={questActive&&activeQuestLevel===2?'button':undefined} aria-label={questActive&&activeQuestLevel===2?'Tap '+wordOnAtom(a):undefined}
+      onKeyDown={e=>{if(questActive&&activeQuestLevel===2&&(e.key==='Enter'||e.key===' ')){e.preventDefault();questTwoTap(a.id)}}}
+      onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}> 
       {selected===a.id&&<rect x="-7" y="-7" width={atomWidth(a)+14} height={atomHeight(a)+14} rx="5" fill="none" stroke={theme==='golden-line'?'#fff1ac':'#7b8795'} strokeDasharray="4 5" pointerEvents="none"/>}
       <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)}
         fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?(a.omitted?'#e9ddf71f':'#ffffff01'):materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
@@ -1508,9 +1539,13 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
         {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
       {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted} dusk/>}
       {theme==='classroom-foam'&&<FoamChip kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>} 
-      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(a.word.length,3)*1.4))} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{a.word}</text>}
+      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(wordOnAtom(a).length,3)*1.4))} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
     </g>)}
    </svg>
+   {questionMarker&&<>
+     <div className="stax-quest2-empty-slot" aria-hidden="true" style={{left:viewPercentX(questionMarker.slotX),top:viewPercentY(questionMarker.slotY)}}/>
+     <button className="stax-quest2-h" type="button" aria-label="H interrogative marker, tap to ask How" title="H means How" style={{left:viewPercentX(questionMarker.x),top:viewPercentY(questionMarker.y)}} onClick={()=>questTwoTap('H')}>H</button>
+    </>}
    {theme==='golden-pollen'&&<LetterzGoldenPollenCanvas
      atoms={doc.atoms.map(a=>({id:a.id,kind:a.kind,x:a.x,y:a.y,
       w:atomWidth(a),h:atomHeight(a),omitted:a.omitted}))}
