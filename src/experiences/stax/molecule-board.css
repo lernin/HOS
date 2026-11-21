@@ -827,25 +827,20 @@
  .stax-quest-panel{width:min(330px,calc(100vw - 30px));}
 }
 
-/* STAX Quest 2 expression layer: tappable H above the unknown complement.
-   The marker is a screen-sized control anchored to the exact grammar port.
-   No new shape geometry or undocumented HOW token is drawn on the board. */
+/* The 4B interrogative is ONLY a floating H above the unchanged 5 map.
+   Keep a 54px transparent touch target but no visible box, slot or outline
+   except on keyboard focus. Its position follows the blue subject on pan/zoom. */
 .stax-quest2-h{
  position:absolute;z-index:7;transform:translate(-50%,-50%);
  width:54px;height:54px;min-width:54px;min-height:54px;
- border:2px solid #4485b4;border-radius:16px;
- background:var(--stax-panel);color:var(--stax-text);
- box-shadow:0 5px 18px #0b325833;
+ border:0;border-radius:12px;padding:0;
+ background:transparent;color:var(--stax-text);
+ box-shadow:none;
  font:800 28px/1 system-ui,sans-serif;cursor:pointer;
  touch-action:manipulation;
 }
 .stax-quest2-h:active{transform:translate(-50%,-50%) scale(.94);}
 .stax-quest2-h:focus-visible{outline:3px solid #36a77e;outline-offset:3px;}
-.stax-quest2-empty-slot{
- position:absolute;z-index:3;pointer-events:none;
- transform:translate(-50%,-50%);width:76px;height:36px;
- border-bottom:3px dashed #6f91a7;border-radius:50%;opacity:.64;
-}
 .stax-molecule-canvas svg g.stax-quest2-tapped{
  filter:drop-shadow(0 0 5px #28b18b) drop-shadow(0 0 9px #20a881);
 }
