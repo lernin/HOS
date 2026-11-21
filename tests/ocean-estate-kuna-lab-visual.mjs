@@ -27,7 +27,7 @@ try{
     const errors=[]
     page.on('pageerror',e=>errors.push(e.message))
     await page.goto('http://127.0.0.1:4173/kuna-lab',{waitUntil:'domcontentloaded'})
-    assert.equal(await page.getByText('Ashley’s private workspace').count(),1,'the real Kuna Lab route stays PIN-protected')
+    await page.getByText('Ashley’s private workspace').waitFor({state:'visible',timeout:15000}) // Preserve the real PIN gate.
     // An isolated Vite-only fixture renders the same component without
     // weakening app authentication or storing a PIN in test credentials.
     await page.goto('http://127.0.0.1:4173/tests/kuna-lab-preview.html',{waitUntil:'domcontentloaded'})
