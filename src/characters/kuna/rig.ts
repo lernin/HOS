@@ -33,6 +33,37 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     sit.paused=true
   }
   const head=model.getObjectByName('Head'),chin=model.getObjectByName('Chin')
+  let demo:T.AnimationAction|null=null
+  function restoreNativeAction(action:T.AnimationAction){
+    // Procedia numbered previews can reuse the same mixer actions as our
+    // persistent Sit/Walk/Idle layers. Restore them after a one-shot.
+    if(action===idle){idle.reset().play()}
+    if(action===walk){walk.reset().play()}
+    if(action===sit){sit.reset().play();sit.paused=true}
+  }
+  const onDemoFinished=(event:{action:T.AnimationAction})=>{
+    if(event.action!==demo)return
+    const finished=demo
+    demo=null
+    finished.stop()
+    restoreNativeAction(finished)
+  }
+  mixer.addEventListener('finished',onDemoFinished)
+  function triggerDemoClip(name:string,timeScale=1):boolean{
+    const clip=clips.find(c=>c.name===name)
+    if(!clip||!Number.isFinite(timeScale)||timeScale<=.1||timeScale>3)return false
+    if(demo){const previous=demo;demo=null;previous.stop();restoreNativeAction(previous)}
+    demo=mixer.clipAction(clip)
+    demo.reset()
+    demo.setLoop(T.LoopOnce,1)
+    demo.clampWhenFinished=true
+    demo.setEffectiveWeight(1)
+    demo.timeScale=timeScale
+    demo.enabled=true
+    demo.play()
+    return true
+  }
+  function cancelDemo(){if(demo){const previous=demo;demo=null;previous.stop();restoreNativeAction(previous)}}
   // Immutable bind-pose references; never capture a pose after playing Sit.
   const neutralHead=head?.quaternion.clone(),neutralChin=chin?.quaternion.clone()
   const neutralPosition=model.position.clone(),neutralRotation=model.quaternion.clone()
@@ -42,7 +73,7 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
   const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n))
   const transitionDuration=sitClip?clamp(sitClip.duration,.85,2.25):.85
 
-  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number;turning?:boolean;manualPose?:HeadPose|null}){
+  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number;turning?:boolean;manualPose?:HeadPose|null;manualJaw?:number;freezeIdle?:boolean;studioMode?:boolean;directPose?:boolean}){
     const elapsed=clamp(Number.isFinite(dt)?dt:0,0,.1)
     if(phase!==options.phase){phase=options.phase;phaseElapsed=0}else phaseElapsed+=elapsed
     const seated=options.active&&!!sit
@@ -55,13 +86,19 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     const targetWalk=!options.active&&sitAmount===0?
       Math.max(clamp(options.speedFraction,0,1),options.turning?.34:0):0
     walkBlend=T.MathUtils.damp(walkBlend,targetWalk,5,elapsed)
-    walk?.setEffectiveWeight((1-sitWeight)*walkBlend)
-    idle?.setEffectiveWeight((1-sitWeight)*(1-walkBlend))
-    if(walk)walk.timeScale=options.turning?.48:.68+.35*walkBlend
-    if(sit){
+    const demoWeight=demo?1:0
+    if(walk&&walk!==demo){
+      walk.setEffectiveWeight((1-demoWeight)*(1-sitWeight)*walkBlend)
+      walk.timeScale=options.turning?.48:.68+.35*walkBlend
+    }
+    if(idle&&idle!==demo){
+      idle.setEffectiveWeight((1-demoWeight)*(1-sitWeight)*(1-walkBlend))
+      idle.timeScale=options.freezeIdle?0:.64
+    }
+    if(sit&&sit!==demo){
       sit.paused=true
       sit.time=clamp(sitAmount*sitClip!.duration,0,sitClip!.duration)
-      sit.setEffectiveWeight(sitWeight)
+      sit.setEffectiveWeight((1-demoWeight)*sitWeight)
     }
     mixer.update(elapsed)
     // Strip GLB root motion; Kuna's swept collision body remains authoritative.
@@ -71,9 +108,11 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
       // Use Procedia's Head axes, with a fixed original neutral quaternion.
       // A moving baseline from the GLB Sit clip was the source of wild turns.
       const target=options.manualPose??conversationalHeadPose(phase,phaseElapsed,sitAmount)
-      headPitch=T.MathUtils.damp(headPitch,T.MathUtils.clamp(target.pitch,-.28,.28),6,elapsed)
-      headTurn=T.MathUtils.damp(headTurn,T.MathUtils.clamp(target.turn,-.20,.20),6,elapsed)
-      headTilt=T.MathUtils.damp(headTilt,T.MathUtils.clamp(target.tilt,-.22,.22),6,elapsed)
+      const maximum=options.studioMode?{pitch:.63,turn:.56,tilt:.53}:{pitch:.28,turn:.20,tilt:.22}
+      const follow=(was:number,goal:number)=>options.directPose?goal:T.MathUtils.damp(was,goal,6,elapsed)
+      headPitch=follow(headPitch,T.MathUtils.clamp(target.pitch,-maximum.pitch,maximum.pitch))
+      headTurn=follow(headTurn,T.MathUtils.clamp(target.turn,-maximum.turn,maximum.turn))
+      headTilt=follow(headTilt,T.MathUtils.clamp(target.tilt,-maximum.tilt,maximum.tilt))
       // Procedia Desk Speaking: head turn is LOCAL Z, nod/pitch LOCAL X,
       // and curious side tilt is LOCAL Y with a small upward X offset.
       // Never add tilt and turn on Z; that makes the fox look contorted.
@@ -85,8 +124,8 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     }
     if(chin&&neutralChin){
       // Preserve Procedia's 0.381rad jaw. No previous-frame quaternion drift.
-      const target=phase==='speaking'?clamp(options.jaw,0,1):0
-      jawAmount=T.MathUtils.damp(jawAmount,target,target>jawAmount?18:30,elapsed)
+      const target=clamp(Math.max(options.manualJaw??0,phase==='speaking'?options.jaw:0),0,1)
+      jawAmount=options.directPose?target:T.MathUtils.damp(jawAmount,target,target>jawAmount?18:30,elapsed)
       jawEuler.set(.381*jawAmount,0,0)
       jawQuaternion.setFromEuler(jawEuler)
       chin.quaternion.copy(neutralChin).multiply(jawQuaternion)
@@ -94,10 +133,15 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
   }
   return {
     update,
+    triggerDemoClip,
+    cancelDemo,
+    // The exact smoothed pose displayed on the rendered fox. Recording this
+    // instead of raw key codes preserves the performed timing on replay.
+    displayedPose:()=>({pitch:headPitch,turn:headTurn,tilt:headTilt,jaw:jawAmount}),
     hasWalk:!!walk,
     hasSit:!!sit,
     isTransitioning:()=>sitAmount>.001,
     sitProgress:()=>sitAmount,
-    dispose(){mixer.stopAllAction();mixer.uncacheRoot(model)},
+    dispose(){mixer.removeEventListener('finished',onDemoFinished);cancelDemo();mixer.stopAllAction();mixer.uncacheRoot(model)},
   }
 }
