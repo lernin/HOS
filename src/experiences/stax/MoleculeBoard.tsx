@@ -9,7 +9,7 @@ import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
 import { PearlescentGlass } from './pearlescent-atlas'
 import { PearlescentAirglass } from './pearlescent-airglass'
 import { FoamChip } from './foam-chips'
-import { FoamSlideAudio } from './foam-slide-audio'
+import { FoamSlideAudio, FOAM_SLIDE_SOUNDS, safeFoamSoundId, type FoamSlideSoundId } from './foam-slide-audio'
 import { STAX_QUEST_LEVELS, staxQuestLevel } from './quest-levels'
 import { parseStaxSentence, type ParsedStax } from './quest-parser'
 import { advanceQuestTwo, harvestQuestTwo, QUEST_TWO_ORDER, type QuestTwoSide } from './quest-two'
@@ -39,7 +39,7 @@ const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=124, TAP=9, DOUBLE_M
 // Red/blue heads have diagonal Blueprint destinations; allow a wider approach
 // zone but preserve exact final positions and all other magnet eligibility.
 const RED_BLUE_SNAP_RADIUS=SNAP_RADIUS*1.75
-const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1', FOAM_SOUND_KEY='stax-foam-slide-sound-v1'
+const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1', FOAM_SOUND_KEY='stax-foam-slide-sound-v1', FOAM_SOUND_PRESET_KEY='stax-foam-slide-preset-v1', FOAM_SPREAD_KEY='stax-foam-shadow-spread-v1', FOAM_FONT_KEY='stax-foam-text-style-v1'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
 const choices:Choice[]=[{kind:'circle',label:'Noun / pronoun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
@@ -1039,16 +1039,38 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
    return Number.isFinite(value)?Math.min(200,Math.max(0,Math.round(value))):100
   }catch{return 100}
  })
+ const [foamShadowSpread,setFoamShadowSpread]=useState(()=>{
+  try{const n=Number(localStorage.getItem(FOAM_SPREAD_KEY)??100);return Number.isFinite(n)?Math.max(0,Math.min(250,Math.round(n/5)*5)):100}catch{return 100}
+ })
+ const [foamTextStyle,setFoamTextStyle]=useState<{font:string;size:number;bold:boolean}>(()=>{
+  try{
+   const value=JSON.parse(localStorage.getItem(FOAM_FONT_KEY)||'null')
+   const allowed=['Arial','Verdana','Trebuchet MS','Georgia','Tahoma','system-ui']
+   return {font:allowed.includes(value?.font)?value.font:'Arial',
+    size:Number.isFinite(value?.size)?Math.max(12,Math.min(36,Math.round(value.size))):23,
+    bold:typeof value?.bold==='boolean'?value.bold:true}
+  }catch{return {font:'Arial',size:23,bold:true}}
+ })
  const shadowCssVars={
   '--stax-foam-shadow-contact':String(Math.min(.9,.34*foamShadowStrength/100)),
   '--stax-foam-shadow-middle':String(Math.min(.85,.29*foamShadowStrength/100)),
   '--stax-foam-shadow-cast':String(Math.min(.65,.17*foamShadowStrength/100)),
+  '--stax-foam-shadow-blur-near':String(Math.max(0.5,2*foamShadowSpread/100))+'px',
+  '--stax-foam-shadow-blur-middle':String(Math.max(0.5,9*foamShadowSpread/100))+'px',
+  '--stax-foam-shadow-blur-far':String(Math.max(0.5,17*foamShadowSpread/100))+'px',
  } as CSSProperties
  const [foamSoundEnabled,setFoamSoundEnabled]=useState(()=>{
   try{return localStorage.getItem(FOAM_SOUND_KEY)!=='off'}catch{return true}
  })
+ const [foamSoundPreset,setFoamSoundPreset]=useState<FoamSlideSoundId>(()=>{
+  try{return safeFoamSoundId(localStorage.getItem(FOAM_SOUND_PRESET_KEY))}catch{return 'felt'}
+ })
  const foamAudio=useRef<FoamSlideAudio|null>(null)
- function audio(){if(!foamAudio.current)foamAudio.current=new FoamSlideAudio();return foamAudio.current}
+ function audio(){
+  if(!foamAudio.current)foamAudio.current=new FoamSlideAudio()
+  foamAudio.current.setPreset(foamSoundPreset)
+  return foamAudio.current
+ }
  const [omitBrush,setOmitBrush]=useState(false)
  const [pollenAnimated,setPollenAnimated]=useState(false)
  useEffect(()=>{if(theme!=='golden-pollen')setPollenAnimated(false)},[theme])
@@ -1093,6 +1115,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc])
  useEffect(()=>{try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme])
  useEffect(()=>{try{localStorage.setItem(FOAM_SHADOW_KEY,String(foamShadowStrength))}catch{/* local preference unavailable */}},[foamShadowStrength])
+ useEffect(()=>{try{localStorage.setItem(FOAM_SPREAD_KEY,String(foamShadowSpread))}catch{/* unavailable */}},[foamShadowSpread])
+ useEffect(()=>{try{localStorage.setItem(FOAM_FONT_KEY,JSON.stringify(foamTextStyle))}catch{/* unavailable */}},[foamTextStyle])
+ useEffect(()=>{foamAudio.current?.setPreset(foamSoundPreset);try{localStorage.setItem(FOAM_SOUND_PRESET_KEY,foamSoundPreset)}catch{/* unavailable */}},[foamSoundPreset])
  useEffect(()=>{
   foamAudio.current?.setEnabled(foamSoundEnabled&&theme==='classroom-foam')
   try{localStorage.setItem(FOAM_SOUND_KEY,foamSoundEnabled?'on':'off')}catch{/* local sound preference unavailable */}
@@ -1528,12 +1553,42 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       onChange={e=>setFoamShadowStrength(Number(e.target.value))}
       aria-label="Foam shadow strength" disabled={theme!=='classroom-foam'}/>
      <div className="stax-shadow-scale"><span>Off</span><span>Normal</span><span>Strong</span></div>
+     <label htmlFor="stax-foam-shadow-spread">Shadow spread <output htmlFor="stax-foam-shadow-spread">{foamShadowSpread}%</output></label>
+     <input id="stax-foam-shadow-spread" type="range" min="0" max="250" step="5" value={foamShadowSpread}
+      onChange={e=>setFoamShadowSpread(Number(e.target.value))}
+      aria-label="Shadow spread" disabled={theme!=='classroom-foam'}/>
+     <div className="stax-shadow-scale"><span>Tight</span><span>Normal</span><span>Wide</span></div>
      {theme!=='classroom-foam'&&<small>Switch to Foam to adjust shadows.</small>}
      <button type="button" className="stax-shadow-reset" onClick={()=>setFoamShadowStrength(100)} disabled={foamShadowStrength===100}>Reset shadow</button>
      <label className="stax-foam-sound-option">
       <input type="checkbox" checked={foamSoundEnabled} onChange={e=>setFoamSoundEnabled(e.target.checked)}/>
       Foam sliding sound
      </label>
+     <div className="stax-setting-section">
+      <label htmlFor="stax-foam-font">Shape text font</label>
+      <select id="stax-foam-font" value={foamTextStyle.font}
+       onChange={e=>setFoamTextStyle(v=>({...v,font:e.target.value}))}>
+       {['Arial','Verdana','Trebuchet MS','Georgia','Tahoma','system-ui'].map(f=><option key={f} value={f}>{f}</option>)}
+      </select>
+      <label htmlFor="stax-foam-font-size">Text size <output htmlFor="stax-foam-font-size">{foamTextStyle.size}px</output></label>
+      <input id="stax-foam-font-size" type="range" min="12" max="36" step="1" value={foamTextStyle.size}
+       onChange={e=>setFoamTextStyle(v=>({...v,size:Number(e.target.value)}))}/>
+      <label className="stax-foam-sound-option">
+       <input type="checkbox" checked={foamTextStyle.bold}
+        onChange={e=>setFoamTextStyle(v=>({...v,bold:e.target.checked}))}/>
+       Bold shape text
+      </label>
+     </div>
+     <div className="stax-setting-section">
+      <label htmlFor="stax-foam-sound-preset">Sliding sound (10 options)</label>
+      <select id="stax-foam-sound-preset" value={foamSoundPreset}
+       onChange={e=>{setFoamSoundPreset(safeFoamSoundId(e.target.value));foamAudio.current?.stop()}}>
+       {FOAM_SLIDE_SOUNDS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
+      </select>
+      <button className="stax-sound-preview" type="button" disabled={!foamSoundEnabled||theme!=='classroom-foam'}
+       onClick={()=>audio().preview(foamSoundPreset)}>Play sound preview</button>
+      <small>Try each sound. It also plays as you slide pieces on the table.</small>
+     </div>
     </div>
    </section>}
   <div className="stax-quest-nav">
@@ -1622,7 +1677,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
         {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
       {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted} dusk/>}
       {theme==='classroom-foam'&&<FoamChip kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>} 
-      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(wordOnAtom(a).length,3)*1.4))} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
+      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2} dominantBaseline="middle" fontFamily={theme==='classroom-foam'?foamTextStyle.font:undefined}
+        fontSize={theme==='classroom-foam'?Math.min(foamTextStyle.size,Math.max(10,(atomWidth(a)-12)/(Math.max(wordOnAtom(a).length,1)*.57))):Math.min(18,Math.max(11,atomWidth(a)/Math.max(wordOnAtom(a).length,3)*1.4))} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight={theme==='classroom-foam'?(foamTextStyle.bold?700:400):600} textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
     </g>)}
    </svg>
    {questionMarker&&<button className="stax-quest2-h" type="button" aria-label="H interrogative marker, tap to ask How" title="H means How" style={{left:viewPercentX(questionMarker.x),top:viewPercentY(questionMarker.y)}} onClick={()=>questTwoTap('H')}>H</button>}
