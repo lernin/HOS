@@ -12,7 +12,7 @@ import { createEstateEditor, type EditableRoomId, type EditableSurface, type Edi
 import { addMossRockSet } from './moss-rocks'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number}
 export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean}
-export type EstatePick={kind:'floor'}|{kind:'art';art:EstateArtChoice}
+export type EstatePick={kind:'floor'}|{kind:'art';art:EstateArtChoice}|{kind:'kuna'}
 type ArtPhase='entering'|'active'|'exiting'
 type ArtInspect={
   display:EstateArtDisplay
@@ -78,7 +78,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     progress('Setting the mossy stones…');try{mossRocks=await addMossRockSet(scene,signal)}catch(error){if(signal.aborted)throw error;console.warn('Ocean Estate moss rock set failed to load',error)}
     editor=createEstateEditor(scene,renderer,camera,canvas);water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
-    progress('Finding the garden paths…');const navigator=createNavigator();kuna=createKunaWanderer(scene,navigator)
+    progress('Finding the garden paths…');const navigator=createNavigator();kuna=createKunaWanderer(scene,navigator,signal)
     let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,guidedPace=1,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,lastKunaUpdate=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
     let arrivalYaw:number|null=null,arrivalPitch:number|null=null,arrivalStarted=0,arrivalLookBaseline=0
     let journeyView:{yaw:number;pitch:number;fov:number;lead:number}|null=null,viewFov=69
@@ -126,6 +126,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       const r=canvas.getBoundingClientRect();raycaster.setFromCamera(new T.Vector2((clientX-r.left)/r.width*2-1,-(clientY-r.top)/r.height*2+1),camera)
       const displays=artInstallation?.displays??[],artHit=raycaster.intersectObjects(displays.map(d=>d.mesh),false)[0]
       if(artHit){const display=displays.find(d=>d.mesh===artHit.object);if(display)return {kind:'art',art:beginArt(display)}}
+       if(kuna?.hit(raycaster.ray)){stop();return {kind:'kuna'}}
       const p=floorPointFromRay();if(!p)return null
       const y=floorAt(p);if(y===null)return null
       if(!raycaster.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-y),hit))return null
@@ -254,6 +255,8 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     }
     renderer.render(scene,camera);frame=requestAnimationFrame(tick)
     return {dispose,stop,reset,pick,closeArt,panArt,zoomArt,resetArtView,
+       setKunaTalking(active:boolean,jaw=0){kuna?.setTalking(active,jaw);dirty=true},
+       getKunaStatus:()=>kuna?.status()??'loading',
       setTourViews(next:EstateTourViews){tourViews={...next}},
       getTourViewpoint():EstateTourView{return {x:position.x,z:position.z,yaw,pitch}},
       go:(point:Point,name?:string)=>{tour=false;return go(point,name)},tour(){if(artInspect)return;stop();tour=true;tourIndex=1;dwell=0},getPosition:()=>({...position}),diagnostics:()=>({calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,geometries:renderer.info.memory.geometries,textures:renderer.info.memory.textures,pixelRatio:renderer.getPixelRatio()}),inspect(view:{position:T.Vector3;target:T.Vector3}|null){inspectView=view;dirty=true},advance(dx:number,dz:number){if(artInspect)return {...position};position=moveSafely(position,dx,dz);dirty=true;return {...position}},walkable,

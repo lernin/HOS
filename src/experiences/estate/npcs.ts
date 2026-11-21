@@ -1,124 +1,125 @@
 import * as T from 'three'
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { floorAt, FLOOR, type Point } from './plan'
 import { moveSafely, walkable } from './navigation'
 import { advanceWalker } from './npc-motion'
 
 type Navigator={path:(start:Point,end:Point)=>Point[]|null}
-// Keep Kuna within the clear east-side kitchen aisle, directly in view of the
-// saved Kitchen tour viewpoint. Reuse Estate navigation and collision boundaries.
+// Match Procedia's deployed SpeakingAvatar GLB exactly. The Vercel rewrite below
+// retrieves this same asset from Procedia; no lookalike meshes are constructed.
+export const PROCEDIA_KUNA_MODEL='/models/fox-mascot.glb'
 export const KUNA_KITCHEN_STOPS:readonly Point[]=[
   {x:-13.35,z:8.15},{x:-13.3,z:7.2},{x:-13.1,z:8.85},
 ]
-
-function foxModel(){
-  const figure=new T.Group()
-  figure.name='Kuna — kitchen fox'
-  figure.userData.estateNPC=true
-  const body=new T.Group();figure.add(body)
-  const parts:T.BufferGeometry[]=[]
-  function piece(geometry:T.BufferGeometry,color:number,x:number,y:number,z:number,sx:number,sy:number,sz:number){
-    geometry.applyMatrix4(new T.Matrix4().compose(new T.Vector3(x,y,z),new T.Quaternion(),new T.Vector3(sx,sy,sz)))
-    const tint=new T.Color(color),array=new Float32Array(geometry.getAttribute('position').count*3)
-    for(let i=0;i<array.length;i+=3){array[i]=tint.r;array[i+1]=tint.g;array[i+2]=tint.b}
-    geometry.setAttribute('color',new T.BufferAttribute(array,3))
-    parts.push(geometry)
-  }
-  const ball=()=>new T.SphereGeometry(1,12,8)
-  piece(ball(),0xc87539,0,.58,0,.28,.35,.37)            // coat
-  piece(ball(),0xd58442,0,1.02,-.12,.26,.25,.26)        // head
-  piece(ball(),0xfff0cc,0,.57,-.285,.185,.25,.12)       // chest
-  piece(ball(),0xffecc9,0,.91,-.32,.20,.12,.14)         // muzzle
-  piece(new T.ConeGeometry(1,1,6),0xd58442,-.17,1.29,-.12,.12,.29,.12)
-  piece(new T.ConeGeometry(1,1,6),0xd58442,.17,1.29,-.12,.12,.29,.12)
-  piece(new T.ConeGeometry(1,1,6),0x954e36,-.17,1.305,-.188,.065,.18,.035)
-  piece(new T.ConeGeometry(1,1,6),0x954e36,.17,1.305,-.188,.065,.18,.035)
-  piece(ball(),0x231d1b,-.105,1.04,-.327,.033,.044,.026)
-  piece(ball(),0x231d1b,.105,1.04,-.327,.033,.044,.026)
-  piece(ball(),0x2b211d,0,.88,-.457,.048,.039,.036)
-  const merged=mergeGeometries(parts,false)
-  parts.forEach(g=>g.dispose())
-  if(!merged)throw new Error('Cannot assemble the Kuna model')
-  const bodyMaterial=new T.MeshLambertMaterial({vertexColors:true})
-  body.add(new T.Mesh(merged,bodyMaterial))
-
-  const legGeometry=new T.BoxGeometry(.115,.35,.15),legMaterial=new T.MeshLambertMaterial({color:0x45342c})
-  const legs:T.Group[]=[]
-  for(const side of [-1,1])for(const front of [-1,1]){
-    const joint=new T.Group();joint.position.set(side*.17,.40,front*.19)
-    const paw=new T.Mesh(legGeometry,legMaterial);paw.position.y=-.175;joint.add(paw)
-    figure.add(joint);legs.push(joint)
-  }
-  // A subtle world-space name tag makes the first character findable at child height.
-  const nameCanvas=document.createElement('canvas')
-  nameCanvas.width=256;nameCanvas.height=80
-  const ctx=nameCanvas.getContext('2d')
-  if(ctx){
-    ctx.fillStyle='rgba(22,42,30,.83)'
-    ctx.beginPath();ctx.roundRect(17,8,222,62,18);ctx.fill()
-    ctx.fillStyle='#fff4d5';ctx.font='600 37px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle'
-    ctx.fillText('Kuna',128,40)
-  }
-  const nameTexture=new T.CanvasTexture(nameCanvas)
-  nameTexture.colorSpace=T.SRGBColorSpace
-  const nameMaterial=new T.SpriteMaterial({map:nameTexture,transparent:true,depthWrite:false,depthTest:true})
-  const nameTag=new T.Sprite(nameMaterial);nameTag.scale.set(1.04,.32,1);nameTag.position.y=1.68;figure.add(nameTag)
-  const tail=new T.Group();tail.position.set(0,.69,.28);figure.add(tail)
-  const tailGeometry=new T.SphereGeometry(1,10,8)
-  const tailCoat=new T.MeshLambertMaterial({color:0xc87539})
-  const tailTip=new T.MeshLambertMaterial({color:0xffedcf})
-  const plume=new T.Mesh(tailGeometry,tailCoat);plume.position.set(0,.15,.28);plume.scale.set(.18,.21,.43);tail.add(plume)
-  const tip=new T.Mesh(tailGeometry,tailTip);tip.position.set(0,.26,.57);tip.scale.set(.145,.15,.18);tail.add(tip)
-
-  return {figure,body,legs,tail,dispose(){
-    merged.dispose();bodyMaterial.dispose();legGeometry.dispose();legMaterial.dispose()
-    tailGeometry.dispose();tailCoat.dispose();tailTip.dispose();nameMaterial.dispose();nameTexture.dispose()
-  }}
+function makeLabel(){
+  const canvas=document.createElement('canvas');canvas.width=256;canvas.height=80
+  const ctx=canvas.getContext('2d')
+  if(ctx){ctx.fillStyle='rgba(22,42,30,.83)';ctx.beginPath();ctx.roundRect(17,8,222,62,18);ctx.fill();ctx.fillStyle='#fff4d5';ctx.font='600 37px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Kuna',128,40)}
+  const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace
+  const material=new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:true})
+  const sprite=new T.Sprite(material);sprite.scale.set(1.04,.32,1);sprite.position.y=1.71
+  return {sprite,dispose(){texture.dispose();material.dispose()}}
 }
-
-export function createKunaWanderer(scene:T.Scene,navigator:Navigator){
+export function createKunaWanderer(scene:T.Scene,navigator:Navigator,signal?:AbortSignal){
   const stops=KUNA_KITCHEN_STOPS.filter(p=>walkable(p,.48))
-  const model=foxModel()
-  scene.add(model.figure)
-  if(!stops.length){model.figure.visible=false;return {update(){},dispose(){scene.remove(model.figure);model.dispose()}}}
-  let position:Point={...stops[0]},route:Point[]=[],nextStop=1,dwell=1.2,age=0
-  model.figure.position.set(position.x,floorAt(position)??FLOOR,position.z)
+  const figure=new T.Group();figure.name='Kuna — Procedia speaking fox';figure.userData.estateNPC=true;figure.visible=false
+  scene.add(figure)
+  const label=makeLabel();figure.add(label.sprite)
+  let model:T.Group|null=null,mixer:T.AnimationMixer|null=null
+  let idle:T.AnimationAction|null=null,walk:T.AnimationAction|null=null
+  let chin:T.Object3D|null=null,chinBase:T.Quaternion|null=null
+  let position:Point=stops.length?{...stops[0]}:{x:-13.35,z:8.15}
+  let route:Point[]=[],nextStop=1,dwell=1.2,focus=false,speaking=false,energy=0,disposed=false,failed=false,now=0,isWalking=false
+  const center=new T.Vector3(),target=new T.Vector3()
+  figure.position.set(position.x,floorAt(position)??FLOOR,position.z)
+  const loader=new GLTFLoader()
+  loader.load(PROCEDIA_KUNA_MODEL,gltf=>{
+    if(disposed||signal?.aborted){gltf.scene.traverse(o=>{if((o as T.Mesh).isMesh){const m=o as T.Mesh;m.geometry?.dispose();const materials=Array.isArray(m.material)?m.material:[m.material];materials.forEach(t=>t?.dispose())}});return}
+    model=gltf.scene
+    // Procedia's SpeakingAvatar normalizes this exact GLB to 1.29 world units.
+    model.updateWorldMatrix(true,true)
+    const bounds=new T.Box3().setFromObject(model),size=new T.Vector3()
+    bounds.getSize(size)
+    if(size.y>.001){model.scale.setScalar(1.29/size.y);model.updateWorldMatrix(true,true);bounds.setFromObject(model);const mid=bounds.getCenter(new T.Vector3());model.position.set(-mid.x,-bounds.min.y,-mid.z)}
+    figure.add(model)
+    chin=model.getObjectByName('Chin')??null
+    const clips=gltf.animations.map(c=>{
+      if(!/idle/i.test(c.name))return c
+      const clean=c.clone()
+      clean.tracks=clean.tracks.filter(t=>!(/^(Chin|Chin_Tip)\.rotation$/.test(t.name)))
+      return clean
+    })
+    mixer=new T.AnimationMixer(model)
+    const idleClip=clips.find(c=>c.name==='Idle')??clips.find(c=>/idle/i.test(c.name))??clips.find(c=>/survey/i.test(c.name))??clips[0]
+    const walkClip=clips.find(c=>/^walk$/i.test(c.name))??clips.find(c=>/walk/i.test(c.name))
+    if(idleClip){idle=mixer.clipAction(idleClip);idle.setLoop(T.LoopRepeat,Infinity);idle.timeScale=.64;idle.play()}
+    if(walkClip){walk=mixer.clipAction(walkClip);walk.setLoop(T.LoopRepeat,Infinity)}
+    figure.visible=Boolean(stops.length)
+  },undefined,err=>{failed=true;console.warn('Unable to load Procedia Kuna model',err)})
   function routeToNextStop(){
     for(let i=0;i<stops.length;i++){
-      const goal=stops[nextStop++%stops.length]
-      const planned=navigator.path(position,goal)
+      const goal=stops[nextStop++%stops.length],planned=navigator.path(position,goal)
       if(planned?.length){route=planned;return}
     }
     route=[];dwell=3
   }
   function update(dt:number,player:Point){
-    const elapsed=Math.max(0,Math.min(.1,dt))
-    age+=elapsed
-    let walking=false
+    const elapsed=Math.max(0,Math.min(.1,Number.isFinite(dt)?dt:0))
+    if(!model||!figure.visible)return
+    now+=elapsed
     const nearPlayer=Math.hypot(player.x-position.x,player.z-position.z)<1.3
-    if(!nearPlayer){
+    let moving=false
+    if(!focus&&!nearPlayer&&walk){
       if(dwell>0)dwell=Math.max(0,dwell-elapsed)
-      else{
+      else {
         if(!route.length)routeToNextStop()
         if(route.length){
-          const result=advanceWalker(position,route,.82,elapsed)
-          const actual=moveSafely(position,result.point.x-position.x,result.point.z-position.z)
-          const dx=actual.x-position.x,dz=actual.z-position.z
+          const step=advanceWalker(position,route,.72,elapsed)
+          const next=moveSafely(position,step.point.x-position.x,step.point.z-position.z)
+          const dx=next.x-position.x,dz=next.z-position.z
           if(Math.hypot(dx,dz)>.001){
-            position=actual;route=result.remaining;walking=true
-            const heading=Math.atan2(-dx,-dz),turn=Math.atan2(Math.sin(heading-model.figure.rotation.y),Math.cos(heading-model.figure.rotation.y))
-            model.figure.rotation.y+=turn*(1-Math.exp(-elapsed*5))
-            if(!route.length)dwell=1.5
-          }else if(result.moved>.001){route=[];dwell=2}
+            position=next;route=step.remaining;moving=true
+            const heading=Math.atan2(dx,dz)
+            const delta=Math.atan2(Math.sin(heading-figure.rotation.y),Math.cos(heading-figure.rotation.y))
+            figure.rotation.y+=delta*(1-Math.exp(-elapsed*4))
+            if(!route.length)dwell=1.35
+          }else if(step.moved>.001){route=[];dwell=2}
         }
       }
     }
-    const gait=walking?1:0
-    model.legs.forEach((leg,i)=>{const target=Math.sin(age*9+((i===0||i===3)?0:Math.PI))*.32*gait;leg.rotation.x+=(target-leg.rotation.x)*Math.min(1,elapsed*12)})
-    model.body.position.y=(walking?Math.sin(age*18)*.016:Math.sin(age*2)*.008)
-    model.tail.rotation.y=Math.sin(age*2.8)*.25
-    model.tail.rotation.x=.18+Math.sin(age*2.2)*.075
-    model.figure.position.set(position.x,(floorAt(position)??FLOOR)+.012,position.z)
+    if(moving!==isWalking){
+      isWalking=moving
+      if(moving){idle?.fadeOut(.3);walk?.reset().fadeIn(.3).play()}
+      else {walk?.fadeOut(.3);idle?.reset().fadeIn(.3).play()}
+    }
+    if(focus&&!moving){
+      const yaw=Math.atan2(player.x-position.x,player.z-position.z)
+      const diff=Math.atan2(Math.sin(yaw-figure.rotation.y),Math.cos(yaw-figure.rotation.y))
+      figure.rotation.y+=diff*(1-Math.exp(-elapsed*3))
+    }
+    mixer?.update(elapsed)
+    if(chin){
+      if(!chinBase)chinBase=chin.quaternion.clone()
+      const open=speaking?Math.max(.03,energy):0
+      const jaw=new T.Quaternion().setFromEuler(new T.Euler(.381*open,0,0))
+      chin.quaternion.copy(chinBase).multiply(jaw)
+    }
+    figure.position.set(position.x,(floorAt(position)??FLOOR)+.012,position.z)
   }
-  return {update,dispose(){scene.remove(model.figure);model.dispose()}}
+  return {
+    update,
+    hit(ray:T.Ray){
+      if(!figure.visible||!model)return false
+      center.set(position.x,(floorAt(position)??FLOOR)+.81,position.z)
+      target.copy(center).sub(ray.origin)
+      const along=target.dot(ray.direction)
+      return along>0&&along<8&&ray.distanceSqToPoint(center)<.68*.68
+    },
+    setTalking(active:boolean,jaw=0){focus=active;speaking=active&&jaw>0;energy=Math.max(0,Math.min(1,jaw));if(active){route=[];dwell=1.5}},
+    status(){return failed?'error':model?'ready':'loading'},
+    dispose(){
+      disposed=true;scene.remove(figure);label.dispose();mixer?.stopAllAction();mixer?.uncacheRoot(model!)
+      model?.traverse(o=>{if((o as T.Mesh).isMesh){const m=o as T.Mesh;m.geometry?.dispose();const materials=Array.isArray(m.material)?m.material:[m.material];materials.forEach(t=>t?.dispose())}})
+    },
+  }
 }
