@@ -9,7 +9,7 @@ import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
 import { PearlescentGlass } from './pearlescent-atlas'
 import { PearlescentAirglass } from './pearlescent-airglass'
 import { FoamChip } from './foam-chips'
-import { FoamSlideAudio, FOAM_SLIDE_SOUNDS, safeFoamSoundId, type FoamSlideSoundId } from './foam-slide-audio'
+import { FoamSlideAudio, FOAM_SLIDE_SOUNDS, safeFoamSoundId, normalizeFoamSoundTuning, DEFAULT_FOAM_SOUND_TUNING, type FoamSlideSoundId, type FoamSoundTuning } from './foam-slide-audio'
 import { STAX_QUEST_LEVELS, staxQuestLevel } from './quest-levels'
 import { parseStaxSentence, type ParsedStax } from './quest-parser'
 import { advanceQuestTwo, harvestQuestTwo, QUEST_TWO_ORDER, type QuestTwoSide } from './quest-two'
@@ -39,7 +39,7 @@ const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=124, TAP=9, DOUBLE_M
 // Red/blue heads have diagonal Blueprint destinations; allow a wider approach
 // zone but preserve exact final positions and all other magnet eligibility.
 const RED_BLUE_SNAP_RADIUS=SNAP_RADIUS*1.75
-const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1', FOAM_SOUND_KEY='stax-foam-slide-sound-v1', FOAM_SOUND_PRESET_KEY='stax-foam-slide-preset-v2', FOAM_SPREAD_KEY='stax-foam-shadow-spread-v1', FOAM_FONT_KEY='stax-foam-text-style-v1'
+const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1', FOAM_SOUND_KEY='stax-foam-slide-sound-v1', FOAM_SOUND_PRESET_KEY='stax-foam-slide-preset-v2', FOAM_SOUND_TUNING_KEY='stax-foam-synth-tuning-v1', FOAM_SPREAD_KEY='stax-foam-shadow-spread-v1', FOAM_FONT_KEY='stax-foam-text-style-v1'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
 const choices:Choice[]=[{kind:'circle',label:'Noun / pronoun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
@@ -1065,10 +1065,16 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const [foamSoundPreset,setFoamSoundPreset]=useState<FoamSlideSoundId>(()=>{
   try{return safeFoamSoundId(localStorage.getItem(FOAM_SOUND_PRESET_KEY))}catch{return 'plastic'}
  })
+ const [foamSoundTuning,setFoamSoundTuning]=useState<FoamSoundTuning>(()=>{
+  try{return normalizeFoamSoundTuning(JSON.parse(localStorage.getItem(FOAM_SOUND_TUNING_KEY)||'null'))}
+  catch{return {...DEFAULT_FOAM_SOUND_TUNING}}
+ })
+ const [soundLabOpen,setSoundLabOpen]=useState(false)
  const foamAudio=useRef<FoamSlideAudio|null>(null)
  function audio(){
   if(!foamAudio.current)foamAudio.current=new FoamSlideAudio()
   foamAudio.current.setPreset(foamSoundPreset)
+  foamAudio.current.setTuning(foamSoundTuning)
   return foamAudio.current
  }
  const [omitBrush,setOmitBrush]=useState(false)
@@ -1120,6 +1126,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  useEffect(()=>{try{localStorage.setItem(FOAM_SPREAD_KEY,String(foamShadowSpread))}catch{/* unavailable */}},[foamShadowSpread])
  useEffect(()=>{try{localStorage.setItem(FOAM_FONT_KEY,JSON.stringify(foamTextStyle))}catch{/* unavailable */}},[foamTextStyle])
  useEffect(()=>{foamAudio.current?.setPreset(foamSoundPreset);try{localStorage.setItem(FOAM_SOUND_PRESET_KEY,foamSoundPreset)}catch{/* unavailable */}},[foamSoundPreset])
+ useEffect(()=>{
+  foamAudio.current?.setTuning(foamSoundTuning)
+  try{localStorage.setItem(FOAM_SOUND_TUNING_KEY,JSON.stringify(foamSoundTuning))}catch{/* unavailable */}
+ },[foamSoundTuning])
  useEffect(()=>{
   foamAudio.current?.setEnabled(foamSoundEnabled&&theme==='classroom-foam')
   try{localStorage.setItem(FOAM_SOUND_KEY,foamSoundEnabled?'on':'off')}catch{/* local sound preference unavailable */}
@@ -1615,7 +1625,33 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       </select>
       <button className="stax-sound-preview" type="button" disabled={!foamSoundEnabled||theme!=='classroom-foam'}
        onClick={()=>audio().preview(foamSoundPreset)}>Play sound preview</button>
-      <small>Try each sound. It also plays as you slide pieces on the table.</small>
+      <button type="button" className="stax-sound-lab-toggle" aria-expanded={soundLabOpen}
+       aria-controls="stax-sound-lab" onClick={()=>setSoundLabOpen(v=>!v)}>
+       {soundLabOpen?'Hide sound lab':'Open sound lab · synth sliders'}
+      </button>
+      {soundLabOpen&&<div id="stax-sound-lab" className="stax-sound-lab" role="region" aria-label="Synthesized sliding sound lab">
+       {([
+        {key:'pitch',title:'Pitch',min:50,max:200,low:'Lower',high:'Higher'},
+        {key:'brightness',title:'Brightness',min:40,max:200,low:'Darker',high:'Crisper'},
+        {key:'texture',title:'Texture',min:0,max:200,low:'Smooth',high:'Grainy'},
+        {key:'volume',title:'Volume',min:0,max:200,low:'Silent',high:'Louder'},
+       ] as const).map(control=><div className="stax-sound-lab-control" key={control.key}>
+        <label htmlFor={'stax-sound-'+control.key}>{control.title}
+         <output htmlFor={'stax-sound-'+control.key}>{foamSoundTuning[control.key]}%</output>
+        </label>
+        <input type="range" id={'stax-sound-'+control.key} min={control.min} max={control.max} step="5"
+         value={foamSoundTuning[control.key]} disabled={!foamSoundEnabled||theme!=='classroom-foam'}
+         onChange={e=>setFoamSoundTuning(v=>({...v,[control.key]:Number(e.target.value)}))}/>
+        <div className="stax-shadow-scale"><span>{control.low}</span><span>{control.high}</span></div>
+       </div>)}
+       <div className="stax-sound-lab-actions">
+        <button type="button" disabled={!foamSoundEnabled||theme!=='classroom-foam'}
+         onClick={()=>audio().preview(foamSoundPreset)}>Preview tuned sound</button>
+        <button type="button" onClick={()=>setFoamSoundTuning({...DEFAULT_FOAM_SOUND_TUNING})}>Reset tuning</button>
+       </div>
+       <small>Each change is saved automatically and affects the next foam slide. Pitch is the best place to start.</small>
+      </div>}
+      <small>Choose a material above; use the lab to tune it, then drag a piece to hear it in motion.</small>
      </div>
     </div>
    </section>}
