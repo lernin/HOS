@@ -7,6 +7,7 @@ import { decorateArt, type EstateArtChoice, type EstateArtDisplay } from './art'
 import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, resolveFloorRay, spawn, type Point, type EstateTourView, type EstateTourViews } from './plan'
 import { skipReachedWaypoints, easeGuidedPace } from './motion'
+import { createKunaWanderer } from './npcs'
 import { createEstateEditor, type EditableRoomId, type EditableSurface, type EditorMaterial } from './editor'
 import { addMossRockSet } from './moss-rocks'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number}
@@ -64,11 +65,11 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     scene.add(light)
     return light
   })
-  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,artInstallation:ReturnType<typeof decorateArt>|undefined,editor:ReturnType<typeof createEstateEditor>|undefined,mossRocks:Awaited<ReturnType<typeof addMossRockSet>>|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
+  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,artInstallation:ReturnType<typeof decorateArt>|undefined,editor:ReturnType<typeof createEstateEditor>|undefined,mossRocks:Awaited<ReturnType<typeof addMossRockSet>>|undefined,kuna:ReturnType<typeof createKunaWanderer>|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
   const raycaster=new T.Raycaster(),hit=new T.Vector3()
   const marker=new T.Mesh(new T.RingGeometry(.17,.24,36),new T.MeshBasicMaterial({color:'#e7d3a6',side:T.DoubleSide,transparent:true,opacity:.85,depthWrite:false}));marker.rotation.x=-Math.PI/2;marker.visible=false;scene.add(marker)
   let artInspect:ArtInspect|null=null,artExitResolve:(()=>void)|undefined
-  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();artExitResolve?.();editor?.dispose();artInstallation?.dispose();mossRocks?.dispose();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
+  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();artExitResolve?.();editor?.dispose();artInstallation?.dispose();mossRocks?.dispose();kuna?.dispose();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
   signal.addEventListener('abort',dispose,{once:true})
   try{
     progress('Opening the house…');architecture(kit);furnish(kit);artInstallation=decorateArt(scene,kit)
@@ -77,8 +78,8 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     progress('Setting the mossy stones…');try{mossRocks=await addMossRockSet(scene,signal)}catch(error){if(signal.aborted)throw error;console.warn('Ocean Estate moss rock set failed to load',error)}
     editor=createEstateEditor(scene,renderer,camera,canvas);water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
-    progress('Finding the garden paths…');const navigator=createNavigator()
-    let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,guidedPace=1,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
+    progress('Finding the garden paths…');const navigator=createNavigator();kuna=createKunaWanderer(scene,navigator)
+    let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,guidedPace=1,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,lastKunaUpdate=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
     let arrivalYaw:number|null=null,arrivalPitch:number|null=null,arrivalStarted=0,arrivalLookBaseline=0
     let journeyView:{yaw:number;pitch:number;fov:number;lead:number}|null=null,viewFov=69
     let tourViews:EstateTourViews={...initialTourViews}
@@ -242,7 +243,13 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(Math.hypot(position.x-lastShadow.x,position.z-lastShadow.z)>12){lastShadow={...position};sun.position.set(-55,input.lighting==='daylight'?70:30,-80);sun.target.position.set(0,6,0);renderer.shadowMap.needsUpdate=true}
       // Architectural fixture positions and brightness do not track the camera.
       if(inspectView){camera.position.copy(inspectView.position);camera.lookAt(inspectView.target)}else if(artInspect)updateArtCamera(now)
-      if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}
+      // Idle characters are animated at 20 FPS, independent of the device's full render loop.
+       // Keep the world quiet (and save phone GPU time) when the viewer is paused.
+       if(!input.paused&&!inspectView&&!artInspect&&now-lastKunaUpdate>=50){
+         kuna?.update(Math.min(.1,(now-lastKunaUpdate)/1000),position)
+         lastKunaUpdate=now;dirty=true
+       }else if(input.paused||inspectView||artInspect)lastKunaUpdate=now
+       if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}
       if(now-lastReport>500){report({location:locationAt(position),moving:!artInspect&&(path.length>0||Math.hypot(vx,vz)>.1),destination:!artInspect&&path.length?destination:'',fps:Math.round(frameCount/((now-lastReport)/1000)),position:{...position},touring:!artInspect&&tour});frameCount=0;lastReport=now}
     }
     renderer.render(scene,camera);frame=requestAnimationFrame(tick)
