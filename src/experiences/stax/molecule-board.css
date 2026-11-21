@@ -770,9 +770,9 @@
 .stax-molecule-ui[data-theme='classroom-foam'] image.stax-authentic-foam-chip {
  pointer-events:none!important;
  /* Silhouette-aware app shadow. Never bake shadows into image assets. */
- filter:drop-shadow(0 2px 2px rgba(24,16,9,.34))
-        drop-shadow(0 6px 9px rgba(24,16,9,.29))
-        drop-shadow(0 12px 17px rgba(24,16,9,.17));
+ filter:drop-shadow(0 2px 2px rgba(24,16,9,var(--stax-foam-shadow-contact,.34)))
+        drop-shadow(0 6px 9px rgba(24,16,9,var(--stax-foam-shadow-middle,.29)))
+        drop-shadow(0 12px 17px rgba(24,16,9,var(--stax-foam-shadow-cast,.17)));
 }
 /* Prevent the image shadow being cut off in palette or lifted previews. */
 .stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-palette button > svg,
@@ -892,4 +892,54 @@
  .stax-quest2-panel button{min-height:32px;}
  .stax-quest2-panel small{display:none;}
  .stax-quest2-output{font-size:13px;min-height:21px;}
+}
+
+/* Classroom Foam shadow setting: lightweight overlay, independent of canvas
+   pan/zoom, magnetic hit targets, and the retractable controls tray. */
+.stax-molecule-tools button.stax-settings-button {
+ width:64px;min-width:64px;font-size:11px;font-weight:750;
+}
+.stax-settings-panel {
+ position:absolute;z-index:16;
+ left:calc(env(safe-area-inset-left,0px) + 10px);
+ bottom:calc(env(safe-area-inset-bottom,0px) + 82px);
+ width:min(330px,calc(100vw - 20px));
+ box-sizing:border-box;padding:14px;
+ border-radius:14px;border:1px solid var(--stax-border);
+ color:var(--stax-text);background:var(--stax-panel);
+ box-shadow:0 10px 32px #101c273d;
+ font:500 13px/1.4 system-ui,sans-serif;
+ backdrop-filter:blur(12px);
+ touch-action:pan-y;
+}
+.stax-settings-header,.stax-shadow-setting label,.stax-shadow-scale {
+ display:flex;align-items:center;justify-content:space-between;
+}
+.stax-settings-header {margin-bottom:12px;font-size:15px;}
+.stax-settings-header button {
+ border:1px solid var(--stax-border);border-radius:8px;
+ background:var(--stax-button);color:var(--stax-text);
+ width:36px;height:36px;font:600 23px/1 system-ui,sans-serif;
+ cursor:pointer;
+}
+.stax-shadow-setting label {font-weight:700;}
+.stax-shadow-setting output {font-variant-numeric:tabular-nums;}
+.stax-shadow-setting input[type='range'] {
+ display:block;width:100%;margin:13px 0 6px;min-height:34px;
+ accent-color:#9b683b;touch-action:pan-x;cursor:pointer;
+}
+.stax-shadow-setting input[type='range']:disabled {opacity:.4;cursor:default;}
+.stax-shadow-scale {color:var(--stax-caption);font-size:11px;}
+.stax-shadow-setting small {display:block;margin-top:8px;color:var(--stax-caption);}
+.stax-shadow-reset {
+ margin-top:12px;padding:8px 12px;min-height:38px;
+ border:1px solid var(--stax-border);border-radius:8px;
+ background:var(--stax-button);color:var(--stax-text);cursor:pointer;
+ font:650 12px/1 system-ui,sans-serif;
+}
+.stax-shadow-reset:disabled {opacity:.4;cursor:default;}
+.stax-settings-panel button:focus-visible,
+.stax-settings-panel input:focus-visible {outline:3px solid #4389c7;outline-offset:2px;}
+@media(orientation:landscape) and (max-height:520px) {
+ .stax-settings-panel {bottom:calc(env(safe-area-inset-bottom,0px) + 64px);padding:10px;}
 }
