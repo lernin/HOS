@@ -258,8 +258,9 @@ test('Classroom Foam displays seven separate photo assets in workspace, palette 
  assert.ok(board.includes("const KEY='stax-free-molecules-v2'"))
  assert.ok(css.includes("image.stax-authentic-foam-chip"))
  const chipCss=css.match(/image\.stax-authentic-foam-chip \{([\s\S]*?)\}/)?.[1]??''
- assert.match(chipCss,/drop-shadow\(0 1px 1px rgba\(0,0,0,\.10\)\)/)
- assert.match(chipCss,/drop-shadow\(0 4px 8px rgba\(0,0,0,\.16\)\)/)
+ assert.match(chipCss,/drop-shadow\(0 2px 2px rgba\(24,16,9,\.34\)\)/)
+ assert.match(chipCss,/drop-shadow\(0 6px 9px rgba\(24,16,9,\.29\)\)/)
+ assert.match(chipCss,/drop-shadow\(0 12px 17px rgba\(24,16,9,\.17\)\)/)
  assert.doesNotMatch(chipCss,/box-shadow/)
  const pack=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'))
  assert.ok(pack.scripts.prebuild.includes('clean-stax-foam.mjs'))
