@@ -1,16 +1,19 @@
 import * as T from 'three'
-import { conversationalHeadPose, type KunaVoicePhase } from './expressions'
+import { conversationalHeadPose, type HeadPose, type KunaVoicePhase } from './expressions'
 
 // World-agnostic animation driver for the exact Procedia fox-mascot.glb.
 // Scene owns physical position/obstacle checking; this owns Sit/Walk/Idle,
 // the Procedia Head and Chin joints, expression recipes, and audio jaw timing.
 export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[]){
   const mixer=new T.AnimationMixer(model)
-  // Procedia excludes Chin/Chin_Tip rotation from Idle so the talking jaw
-  // wins. Extend that principle to all clips, including Sit and Walk.
+  // CRITICAL: Imported Sit/Idle can also animate the Head bone. Mixing that
+  // orientation with our procedural head gestures produces the "exorcist"
+  // rotation seen on the phone. Own Head/Chin channels in ONE layer, like
+  // Procedia's speaking avatar. Keep all body/leg Sit/Walk animation intact.
+  const HEAD_JAW_TRACK=/(?:^|[/.])(Head|Chin|Chin_Tip)\.(?:quaternion|rotation|position)$/i
   const clips=rawClips.map(c=>{
     const copy=c.clone()
-    copy.tracks=copy.tracks.filter(track=>!/^(Chin|Chin_Tip)\.rotation$/.test(track.name))
+    copy.tracks=copy.tracks.filter(track=>!HEAD_JAW_TRACK.test(track.name))
     return copy
   })
   const idleClip=clips.find(c=>c.name==='Idle')??clips.find(c=>/idle/i.test(c.name))??clips.find(c=>/survey/i.test(c.name))??clips[0]
@@ -30,6 +33,8 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     sit.paused=true
   }
   const head=model.getObjectByName('Head'),chin=model.getObjectByName('Chin')
+  // Immutable bind-pose references; never capture a pose after playing Sit.
+  const neutralHead=head?.quaternion.clone(),neutralChin=chin?.quaternion.clone()
   const neutralPosition=model.position.clone(),neutralRotation=model.quaternion.clone()
   let sitAmount=0,walkBlend=0,jawAmount=0,phaseElapsed=0
   let phase:KunaVoicePhase='idle',headPitch=0,headTurn=0,headTilt=0
@@ -37,7 +42,7 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
   const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n))
   const transitionDuration=sitClip?clamp(sitClip.duration,.85,2.25):.85
 
-  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number}){
+  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number;manualPose?:HeadPose|null}){
     const elapsed=clamp(Number.isFinite(dt)?dt:0,0,.1)
     if(phase!==options.phase){phase=options.phase;phaseElapsed=0}else phaseElapsed+=elapsed
     const seated=options.active&&!!sit
@@ -59,27 +64,24 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     // Strip GLB root motion; Kuna's swept collision body remains authoritative.
     model.position.copy(neutralPosition)
     model.quaternion.copy(neutralRotation)
-    if(head){
-      // Sample the bone's post-mixer pose as Procedia does, then apply the
-      // bounded expression on top. No cumulative rotation or head snapping.
-      const baseline=head.quaternion.clone()
-      const target=conversationalHeadPose(phase,phaseElapsed,sitAmount)
-      headPitch=T.MathUtils.damp(headPitch,target.pitch,7.5,elapsed)
-      headTurn=T.MathUtils.damp(headTurn,target.turn,7.5,elapsed)
-      headTilt=T.MathUtils.damp(headTilt,target.tilt,7.5,elapsed)
+    if(head&&neutralHead){
+      // Use Procedia's Head axes, with a fixed original neutral quaternion.
+      // A moving baseline from the GLB Sit clip was the source of wild turns.
+      const target=options.manualPose??conversationalHeadPose(phase,phaseElapsed,sitAmount)
+      headPitch=T.MathUtils.damp(headPitch,T.MathUtils.clamp(target.pitch,-.28,.28),6,elapsed)
+      headTurn=T.MathUtils.damp(headTurn,T.MathUtils.clamp(target.turn,-.20,.20),6,elapsed)
+      headTilt=T.MathUtils.damp(headTilt,T.MathUtils.clamp(target.tilt,-.22,.22),6,elapsed)
       headEuler.set(headPitch,0,headTurn+headTilt)
       headQuaternion.setFromEuler(headEuler)
-      head.quaternion.copy(baseline).multiply(headQuaternion)
+      head.quaternion.copy(neutralHead).multiply(headQuaternion)
     }
-    if(chin){
-      // The talking jaw follows Procedia's 0.381rad bone rotation and the
-      // current TTS amplitude. Listening never opens the jaw.
+    if(chin&&neutralChin){
+      // Preserve Procedia's 0.381rad jaw. No previous-frame quaternion drift.
       const target=phase==='speaking'?clamp(options.jaw,0,1):0
       jawAmount=T.MathUtils.damp(jawAmount,target,target>jawAmount?18:30,elapsed)
-      const baseline=chin.quaternion.clone()
       jawEuler.set(.381*jawAmount,0,0)
       jawQuaternion.setFromEuler(jawEuler)
-      chin.quaternion.copy(baseline).multiply(jawQuaternion)
+      chin.quaternion.copy(neutralChin).multiply(jawQuaternion)
     }
   }
   return {
