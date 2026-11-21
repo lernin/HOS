@@ -752,8 +752,8 @@
 /* The photographed classroom experience is opt-in. This is presentation only:
    real desk in CSS, true transparent foam pieces in the SVG. */
 .stax-molecule-ui[data-theme='classroom-foam'] {
- --stax-accent:#94633b;
  --stax-toolbar-ink:#49341e;
+ --stax-accent:#94633b;
  --stax-toolbar-disabled:#97836b;
  --stax-bg:#906c43;
  --stax-panel:rgba(255,250,239,.94);
