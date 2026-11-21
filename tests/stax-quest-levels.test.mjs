@@ -90,3 +90,59 @@ test('Quest scene uses the exact manual magnet sequence port, never approximate 
  assert.match(preset,/return alignSequenceFamilyClearance\(normalizeRoles\(doc\)\)/)
  assert.doesNotMatch(preset,/Math\.max\(80|height\(previous\.kind\)\*\.55|underSingleX\(/)
 })
+
+const quest2Source=await readFile(new URL('../src/experiences/stax/quest-two.ts',import.meta.url),'utf8')
+const quest2Js=ts.transpileModule(quest2Source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText
+const {advanceQuestTwo,harvestQuestTwo,QUEST_TWO_ORDER,QUEST_TWO_EXPRESSION}=
+ await import('data:text/javascript;base64,'+Buffer.from(quest2Js).toString('base64'))
+test('Quest 2 4B question harvests H → are → you (not a written How atom)',()=>{
+ assert.equal(QUEST_TWO_EXPRESSION.question,'4B')
+ assert.deepEqual(QUEST_TWO_ORDER.question,['H','q2-question-are','q2-question-you'])
+ let steps=[]
+ assert.equal(harvestQuestTwo('question',steps),null)
+ for(const token of QUEST_TWO_ORDER.question){
+  const result=advanceQuestTwo('question',steps,token)
+  assert.equal(result.accepted,true)
+  steps=result.next
+ }
+ assert.equal(harvestQuestTwo('question',steps),'How are you?')
+})
+test('Quest 2 5 answer is composed from separate I + SMR + ok tokens',()=>{
+ assert.equal(QUEST_TWO_EXPRESSION.answer,'5')
+ assert.deepEqual(QUEST_TWO_ORDER.answer,['q2-a-q-1','q2-a-q-2','q2-a-q-3'])
+ let progress=[]
+ for(const token of QUEST_TWO_ORDER.answer)progress=advanceQuestTwo('answer',progress,token).next
+ assert.equal(harvestQuestTwo('answer',progress,true),"I'm ok.")
+ assert.equal(harvestQuestTwo('answer',progress,false),'I am ok.')
+})
+test('Quest 2 wrong order resets safely and never falsely harvests',()=>{
+ const step=advanceQuestTwo('question',[],'q2-question-you')
+ assert.equal(step.accepted,false)
+ assert.deepEqual(step.next,[])
+ assert.equal(harvestQuestTwo('question',['H','q2-question-you','q2-question-are']),null)
+ const first=advanceQuestTwo('question',[],'H')
+ assert.equal(first.accepted,true)
+ const wrong=advanceQuestTwo('question',first.next,'q2-question-you')
+ assert.deepEqual(wrong.next,[])
+})
+test('Quest 2 H is a separate tappable marker above empty complement snap port',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const segment=board.slice(board.indexOf('function questTwoQuestionDraft('),board.indexOf('function quest21('))
+ assert.match(segment,/snappedSequenceFollowerPosition\(you,are\)/)
+ assert.match(segment,/snappedSequenceFollowerPosition\(red,unknown\)/)
+ assert.match(segment,/slot\.y-height\('circle'\)\*\.47/)
+ assert.doesNotMatch(segment,/kind:'oval',word:'How'/)
+ assert.match(board,/questTwoTap\('H'\)/)
+ assert.match(board,/className="stax-quest2-h"/)
+ assert.match(board,/className="stax-quest2-empty-slot"/)
+ assert.match(board,/onClick=\{\(\)=>changeQuestTwoSide\('answer'\)\}/)
+ assert.match(board,/if\(questActive&&activeQuestLevel===2\)\{lastTap\.current=null;questTwoTap\(d\.id\);return\}/)
+})
+test('contraction gesture only recognizes BLUE I + RED SMR and preserves pinch',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.match(board,/atoms\.includes\('q2-a-q-1'\)&&atoms\.includes\('q2-a-q-2'\)/)
+ assert.match(board,/Math\.max\(distanceA,distanceB\)<=14/)
+ assert.match(board,/if\(a&&b\)beginPinch\(pair\.pointers,pair\.first,pair\.second\)/)
+ assert.match(board,/if\(Date\.now\(\)-pair\.started<=550\)toggleQuestTwoContraction\(\)/)
+ assert.match(board,/return activeQuestLevel===2&&questActive&&questTwoSide==='answer'&&a\.id==='q2-a-q-2'/)
+})

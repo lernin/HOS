@@ -826,3 +826,67 @@
  .stax-quest-nav{max-width:calc(100vw - 18px);}
  .stax-quest-panel{width:min(330px,calc(100vw - 30px));}
 }
+
+/* STAX Quest 2 expression layer: tappable H above the unknown complement.
+   The marker is a screen-sized control anchored to the exact grammar port.
+   No new shape geometry or undocumented HOW token is drawn on the board. */
+.stax-quest2-h{
+ position:absolute;z-index:7;transform:translate(-50%,-50%);
+ width:54px;height:54px;min-width:54px;min-height:54px;
+ border:2px solid #4485b4;border-radius:16px;
+ background:var(--stax-panel);color:var(--stax-text);
+ box-shadow:0 5px 18px #0b325833;
+ font:800 28px/1 system-ui,sans-serif;cursor:pointer;
+ touch-action:manipulation;
+}
+.stax-quest2-h:active{transform:translate(-50%,-50%) scale(.94);}
+.stax-quest2-h:focus-visible{outline:3px solid #36a77e;outline-offset:3px;}
+.stax-quest2-empty-slot{
+ position:absolute;z-index:3;pointer-events:none;
+ transform:translate(-50%,-50%);width:76px;height:36px;
+ border-bottom:3px dashed #6f91a7;border-radius:50%;opacity:.64;
+}
+.stax-molecule-canvas svg g.stax-quest2-tapped{
+ filter:drop-shadow(0 0 5px #28b18b) drop-shadow(0 0 9px #20a881);
+}
+.stax-molecule-canvas svg g[role='button']:focus-visible{outline:3px solid #25a97b;outline-offset:3px;}
+.stax-quest2-panel{
+ position:absolute;z-index:9;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 79px);
+ transform:translateX(-50%);width:min(390px,calc(100vw - 30px));
+ box-sizing:border-box;padding:10px 12px;display:flex;flex-direction:column;gap:8px;
+ background:var(--stax-panel);color:var(--stax-text);
+ border:1px solid var(--stax-border);border-radius:15px;
+ box-shadow:0 6px 22px #102f4530;
+ font:500 13px/1.3 system-ui,sans-serif;
+ backdrop-filter:blur(12px);
+}
+.stax-quest2-panel button{
+ border:1px solid var(--stax-border);border-radius:8px;
+ background:var(--stax-button);color:var(--stax-text);
+ font:700 12px/1.2 system-ui,sans-serif;cursor:pointer;
+ min-height:39px;padding:7px 9px;touch-action:manipulation;
+}
+.stax-quest2-panel button:focus-visible{outline:3px solid #329d9a;outline-offset:2px;}
+.stax-quest2-modes{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.stax-quest2-modes button[aria-pressed='true']{
+ background:#176a74;color:#fff;border-color:#269397;
+}
+.stax-quest2-output{
+ text-align:center;min-height:25px;display:flex;
+ justify-content:center;align-items:center;gap:8px;
+ font-size:15px;font-weight:600;
+}
+.stax-quest2-output strong{font-size:17px;}
+.stax-quest2-output em{
+ font-style:normal;font-size:12px;font-variant-numeric:tabular-nums;
+ color:var(--stax-caption);margin-left:6px;
+}
+.stax-quest2-actions{display:flex;justify-content:center;gap:7px;}
+.stax-quest2-actions button{min-width:90px;}
+.stax-quest2-panel small{color:var(--stax-caption);font-size:10px;text-align:center;}
+@media(orientation:landscape) and (max-height:520px){
+ .stax-quest2-panel{width:min(355px,48vw);left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 72px);padding:7px 9px;gap:4px;}
+ .stax-quest2-panel button{min-height:32px;}
+ .stax-quest2-panel small{display:none;}
+ .stax-quest2-output{font-size:13px;min-height:21px;}
+}
