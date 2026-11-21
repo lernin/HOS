@@ -124,11 +124,22 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     }
     if(chin&&neutralChin){
       // Preserve Procedia's 0.381rad jaw. No previous-frame quaternion drift.
-      const target=clamp(Math.max(options.manualJaw??0,phase==='speaking'?options.jaw:0),0,1)
+      // Procedia's closed-mouth bind pose is the ONLY resting baseline.
+      // AI/listening/locomotion never keep a speaking jaw open. A deliberate
+      // Studio jaw key still works, and speaking follows actual audio energy.
+      const manualJaw=clamp(options.manualJaw??0,0,1)
+      const speechJaw=phase==='speaking'?clamp(options.jaw,0,1):0
+      const target=Math.max(manualJaw,speechJaw)
       jawAmount=options.directPose?target:T.MathUtils.damp(jawAmount,target,target>jawAmount?18:30,elapsed)
-      jawEuler.set(.381*jawAmount,0,0)
-      jawQuaternion.setFromEuler(jawEuler)
-      chin.quaternion.copy(neutralChin).multiply(jawQuaternion)
+      if(target===0&&jawAmount<.002)jawAmount=0
+      // Reset against the immutable original bind each frame: never allow
+      // animation blending or a previous open-mouth frame to accumulate.
+      chin.quaternion.copy(neutralChin)
+      if(jawAmount>0){
+        jawEuler.set(.381*jawAmount,0,0)
+        jawQuaternion.setFromEuler(jawEuler)
+        chin.quaternion.multiply(jawQuaternion)
+      }
     }
   }
   return {
