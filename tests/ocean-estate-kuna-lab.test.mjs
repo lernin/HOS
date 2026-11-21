@@ -44,6 +44,16 @@ try{
     assert.ok(chin.quaternion.angleTo(rest)<.02,'jaw returns to neutral after speaking')
     rig.dispose()
   })
+  test('head gestures keep Procedia Z-turn, X-pitch and Y-tilt axes separate',()=>{
+    const fox=new THREE.Group(),head=new THREE.Object3D();head.name='Head';fox.add(head)
+    const rig=createKunaRig(fox,[new THREE.AnimationClip('Idle',1,[])])
+    for(let i=0;i<180;i++)rig.update(1/60,{active:false,phase:'idle',speedFraction:0,jaw:0,
+      manualPose:{pitch:0,turn:0,tilt:.15}})
+    const e=new THREE.Euler().setFromQuaternion(head.quaternion,'XYZ')
+    assert.ok(Math.abs(e.y)>.10,'curious tilt rotates on original Procedia Y axis')
+    assert.ok(Math.abs(e.z)<.03,'tilt does not accidentally spin around the turn axis')
+    rig.dispose()
+  })
   test('Kuna Lab uses original GLB, bounded controls and local speaking simulator',()=>{
     assert.match(ui,/\/models\/fox-mascot\.glb/)
     assert.match(ui,/createKunaRig\(glb,asset\.animations\)/)

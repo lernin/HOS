@@ -38,7 +38,7 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
   const neutralPosition=model.position.clone(),neutralRotation=model.quaternion.clone()
   let sitAmount=0,walkBlend=0,jawAmount=0,phaseElapsed=0
   let phase:KunaVoicePhase='idle',headPitch=0,headTurn=0,headTilt=0
-  const headQuaternion=new T.Quaternion(),jawQuaternion=new T.Quaternion(),headEuler=new T.Euler(),jawEuler=new T.Euler()
+  const headQuaternion=new T.Quaternion(),headTiltQuaternion=new T.Quaternion(),jawQuaternion=new T.Quaternion(),headEuler=new T.Euler(),tiltEuler=new T.Euler(),jawEuler=new T.Euler()
   const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n))
   const transitionDuration=sitClip?clamp(sitClip.duration,.85,2.25):.85
 
@@ -74,9 +74,14 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
       headPitch=T.MathUtils.damp(headPitch,T.MathUtils.clamp(target.pitch,-.28,.28),6,elapsed)
       headTurn=T.MathUtils.damp(headTurn,T.MathUtils.clamp(target.turn,-.20,.20),6,elapsed)
       headTilt=T.MathUtils.damp(headTilt,T.MathUtils.clamp(target.tilt,-.22,.22),6,elapsed)
-      headEuler.set(headPitch,0,headTurn+headTilt)
+      // Procedia Desk Speaking: head turn is LOCAL Z, nod/pitch LOCAL X,
+      // and curious side tilt is LOCAL Y with a small upward X offset.
+      // Never add tilt and turn on Z; that makes the fox look contorted.
+      headEuler.set(headPitch,0,headTurn)
+      tiltEuler.set(-headTilt/6,headTilt,0)
       headQuaternion.setFromEuler(headEuler)
-      head.quaternion.copy(neutralHead).multiply(headQuaternion)
+      headTiltQuaternion.setFromEuler(tiltEuler)
+      head.quaternion.copy(neutralHead).multiply(headQuaternion).multiply(headTiltQuaternion)
     }
     if(chin&&neutralChin){
       // Preserve Procedia's 0.381rad jaw. No previous-frame quaternion drift.
