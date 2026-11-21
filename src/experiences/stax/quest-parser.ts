@@ -1,10 +1,10 @@
 /** Conservative STAX sentence-to-shape parser.
  * Recognizes documented Quest 1–10 grammatical patterns ONLY.
  * No LLM inference: unknown sentence structures return unsupported.
- * SMR (S/M/R) is the red verbal head, including contracted 'm / 's.
+ * SMR (is/am/are family: S/M/R) uses the red verbal head, including contracted 'm / 's.
  */
 export type ParsedKind='circle'|'triangle'|'square'|'rectangle'|'diamond'|'hexagon'|'oval'
-export type ParsedRole='nominal'|'smr'|'determiner'|'preposition'|'complement'|'gate'|'negation'
+export type ParsedRole='nominal'|'smr'|'verb'|'determiner'|'preposition'|'complement'|'gate'|'negation'
 export type ParsedAtom={id:string;kind:ParsedKind;word:string;role:ParsedRole}
 export type ParsedBond={parent:string;child:string;relation:'sequence'|'support'}
 export type ParsedStax={supported:true;atoms:ParsedAtom[];bonds:ParsedBond[];displaySentence:string;rule:string}
@@ -28,7 +28,7 @@ export function parseStaxSentence(sentence:string,options:StaxParseOptions={}):S
  }
  const seq=(ids:string[])=>{for(let i=0;i<ids.length-1;i++)bond(ids[i],ids[i+1],'sequence')}
  const head=(word:string)=>add('circle',word,'nominal')
- const verb=(word:string)=>add('triangle',word,'smr')
+ const verb=(word:string)=>add('triangle',word,/^(am|is|are|'m|'s|'re)$/i.test(word)?'smr':'verb')
  const det=(parent:string,word:string)=>bond(parent,add('rectangle',word,'determiner'),'support')
  const finish=(rule:string,visible=displaySentence):ParsedStax=>({
   supported:true,atoms,bonds,displaySentence:visible,rule
@@ -44,7 +44,7 @@ export function parseStaxSentence(sentence:string,options:StaxParseOptions={}):S
  const complement=displaySentence.match(/^(I'm|She's|I am|She is) (happy|ok|pink)\.$/i)
  if(complement){
   const subject= complement[1].toLowerCase().startsWith('she')?'She':'I'
-  const contracted=displaySentence.slice(0,4).toLowerCase()==="she's"||displaySentence.slice(0,3).toLowerCase()==="i'm"
+  const contracted=/^(She's|I'm) /i.test(displaySentence)
   const verbWord=contracted?(subject==='She'?"'s":"'m"):subject==='I'?'am':'is'
   seq([head(subject),verb(verbWord),add('oval',complement[2],'complement')])
   return finish('smr-copula-complement')
