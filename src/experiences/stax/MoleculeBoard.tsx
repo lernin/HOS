@@ -39,7 +39,7 @@ const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=124, TAP=9, DOUBLE_M
 // Red/blue heads have diagonal Blueprint destinations; allow a wider approach
 // zone but preserve exact final positions and all other magnet eligibility.
 const RED_BLUE_SNAP_RADIUS=SNAP_RADIUS*1.75
-const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1', FOAM_SOUND_KEY='stax-foam-slide-sound-v1', FOAM_SOUND_PRESET_KEY='stax-foam-slide-preset-v2', FOAM_SOUND_TUNING_KEY='stax-foam-synth-tuning-v1', FOAM_SPREAD_KEY='stax-foam-shadow-spread-v1', FOAM_FONT_KEY='stax-foam-text-style-v1'
+const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SOUND_KEY='stax-foam-slide-sound-v1', FOAM_SOUND_PRESET_KEY='stax-foam-slide-preset-v2', FOAM_SOUND_TUNING_KEY='stax-foam-synth-tuning-v1'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
 const choices:Choice[]=[{kind:'circle',label:'Noun / pronoun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
@@ -1031,33 +1031,13 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   try{const value=localStorage.getItem(THEME_KEY);return STAX_THEMES.find(t=>t===value)??'color'}catch{return 'color'}
  })
  // Classroom Foam presentation only; no shape or magnet geometry depends on this.
- const [settingsOpen,setSettingsOpen]=useState(false)
- const [foamShadowStrength,setFoamShadowStrength]=useState(()=>{
-  try{
-   const stored=localStorage.getItem(FOAM_SHADOW_KEY)
-   const value=stored===null?125:Number(stored)
-   return Number.isFinite(value)?Math.min(200,Math.max(0,Math.round(value))):100
-  }catch{return 125}
- })
- const [foamShadowSpread,setFoamShadowSpread]=useState(()=>{
-  try{const n=Number(localStorage.getItem(FOAM_SPREAD_KEY)??0);return Number.isFinite(n)?Math.max(0,Math.min(250,Math.round(n/5)*5)):0}catch{return 0}
- })
- const [foamTextStyle,setFoamTextStyle]=useState<{font:string;size:number;bold:boolean}>(()=>{
-  try{
-   const value=JSON.parse(localStorage.getItem(FOAM_FONT_KEY)||'null')
-   const allowed=['Arial','Verdana','Trebuchet MS','Georgia','Tahoma','system-ui']
-   return {font:allowed.includes(value?.font)?value.font:'Arial',
-    size:Number.isFinite(value?.size)?Math.max(12,Math.min(36,Math.round(value.size))):23,
-    bold:typeof value?.bold==='boolean'?value.bold:true}
-  }catch{return {font:'Arial',size:23,bold:true}}
- })
  const shadowCssVars={
-  '--stax-foam-shadow-contact':String(Math.min(.9,.34*foamShadowStrength/100)),
-  '--stax-foam-shadow-middle':String(Math.min(.85,.29*foamShadowStrength/100)),
-  '--stax-foam-shadow-cast':String(Math.min(.65,.17*foamShadowStrength/100)),
-  '--stax-foam-shadow-blur-near':String(Math.max(0.5,2*foamShadowSpread/100))+'px',
-  '--stax-foam-shadow-blur-middle':String(Math.max(0.5,9*foamShadowSpread/100))+'px',
-  '--stax-foam-shadow-blur-far':String(Math.max(0.5,17*foamShadowSpread/100))+'px',
+  '--stax-foam-shadow-contact':String(.425),
+  '--stax-foam-shadow-middle':String(.3625),
+  '--stax-foam-shadow-cast':String(.2125),
+  '--stax-foam-shadow-blur-near':'0.5px',
+  '--stax-foam-shadow-blur-middle':'0.5px',
+  '--stax-foam-shadow-blur-far':'0.5px',
  } as CSSProperties
  const [foamSoundEnabled,setFoamSoundEnabled]=useState(()=>{
   try{return localStorage.getItem(FOAM_SOUND_KEY)!=='off'}catch{return true}
@@ -1122,9 +1102,6 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const blockRelease=useRef<Set<number>>(new Set())
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc])
  useEffect(()=>{try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme])
- useEffect(()=>{try{localStorage.setItem(FOAM_SHADOW_KEY,String(foamShadowStrength))}catch{/* local preference unavailable */}},[foamShadowStrength])
- useEffect(()=>{try{localStorage.setItem(FOAM_SPREAD_KEY,String(foamShadowSpread))}catch{/* unavailable */}},[foamShadowSpread])
- useEffect(()=>{try{localStorage.setItem(FOAM_FONT_KEY,JSON.stringify(foamTextStyle))}catch{/* unavailable */}},[foamTextStyle])
  useEffect(()=>{foamAudio.current?.setPreset(foamSoundPreset);try{localStorage.setItem(FOAM_SOUND_PRESET_KEY,foamSoundPreset)}catch{/* unavailable */}},[foamSoundPreset])
  useEffect(()=>{
   foamAudio.current?.setTuning(foamSoundTuning)
@@ -1566,9 +1543,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       onClick={()=>{const next=theme==='classroom-foam'?'color':'classroom-foam';setTheme(next);setHint('Visual mode: '+staxThemeName(next))}}
       title="Toggle Classroom Foam using Ashley's photographed desk and seven real foam pieces"
       aria-label="Toggle Classroom Foam">Foam</button>
-      <button type="button" className="stax-settings-button" onClick={()=>{setSettingsOpen(v=>!v);openTray()}}
-       aria-label="STAX settings" title="STAX settings" aria-expanded={settingsOpen} aria-controls="stax-settings-panel">
-       Settings</button>
+      <button type="button" className="stax-sound-button"
+       onClick={()=>setSoundLabOpen(v=>!v)}
+       aria-label="Foam sound lab" title="Foam sound lab" aria-expanded={soundLabOpen} aria-controls="stax-sound-panel">Sound</button>
      <button onClick={()=>{setOmitBrush(v=>!v);setHint(omitBrush?'Dotted omission brush off.':'Dotted omission brush on. Tap a shape to toggle, or add dotted shapes.')}}
       title="Omit brush: tap to toggle; when active tap shapes to mark omitted, or add new dotted shapes"
       aria-label="Toggle dotted omission brush" aria-pressed={omitBrush}
@@ -1583,94 +1560,51 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}><StaxToolbarIcon name="plus"/></button>
    </div>
   </div>
-  {settingsOpen&&<section className="stax-settings-panel" id="stax-settings-panel" role="region" aria-label="STAX settings">
-    <div className="stax-settings-header">
-     <strong>Settings</strong>
-     <button type="button" onClick={()=>setSettingsOpen(false)} aria-label="Close STAX settings">×</button>
+  {soundLabOpen&&<section className="stax-sound-panel" id="stax-sound-panel" role="region" aria-label="Foam sound lab">
+    <div className="stax-sound-panel-header">
+     <strong>Foam sound lab</strong>
+     <button type="button" onClick={()=>setSoundLabOpen(false)} aria-label="Close sound lab">×</button>
     </div>
-    <div className="stax-shadow-setting">
-     <label htmlFor="stax-foam-shadow-strength">Foam shadow <output htmlFor="stax-foam-shadow-strength">{foamShadowStrength}%</output></label>
-     <input id="stax-foam-shadow-strength" type="range" min="0" max="200" step="5" value={foamShadowStrength}
-      onChange={e=>setFoamShadowStrength(Number(e.target.value))}
-      aria-label="Foam shadow strength" disabled={theme!=='classroom-foam'}/>
-     <div className="stax-shadow-scale"><span>Off</span><span>Normal</span><span>Strong</span></div>
-     <label htmlFor="stax-foam-shadow-spread">Shadow spread <output htmlFor="stax-foam-shadow-spread">{foamShadowSpread}%</output></label>
-     <input id="stax-foam-shadow-spread" type="range" min="0" max="250" step="5" value={foamShadowSpread}
-      onChange={e=>setFoamShadowSpread(Number(e.target.value))}
-      aria-label="Shadow spread" disabled={theme!=='classroom-foam'}/>
-     <div className="stax-shadow-scale"><span>Tight</span><span>Normal</span><span>Wide</span></div>
-     {theme!=='classroom-foam'&&<small>Switch to Foam to adjust shadows.</small>}
-     <button type="button" className="stax-shadow-reset" onClick={()=>{setFoamShadowStrength(125);setFoamShadowSpread(0)}} disabled={foamShadowStrength===125&&foamShadowSpread===0}>Reset shadows (125% / 0%)</button>
-     <label className="stax-foam-sound-option">
-      <input type="checkbox" checked={foamSoundEnabled} onChange={e=>setFoamSoundEnabled(e.target.checked)}/>
-      Foam sliding sound
-     </label>
-     <div className="stax-setting-section">
-      <label htmlFor="stax-foam-font">Shape text font</label>
-      <div className="stax-foam-type-sample" aria-label="Live shape text sample"
-       style={{fontFamily:foamTextStyle.font,fontSize:foamTextStyle.size,fontWeight:foamTextStyle.bold?700:400}}>
-       Sample ABC
-      </div>
-      <label htmlFor="stax-selected-shape-word">Text on selected shape</label>
-      <input id="stax-selected-shape-word" type="text" maxLength={36}
-       placeholder={selected?'Enter a word…':'Tap a shape first'}
-       disabled={!selected||!doc.atoms.some(a=>a.id===selected)}
-       value={selected?doc.atoms.find(a=>a.id===selected)?.word??'':''}
-       onFocus={()=>{textEditBefore.current=currentDoc.current}}
-       onChange={e=>setSelectedShapeWord(e.target.value)}
-       onBlur={finishShapeTextEdit}/>
-      <small>Tap a foam piece, then type here. Font changes appear on that piece and in the preview.</small>
-      <select id="stax-foam-font" value={foamTextStyle.font}
-       onChange={e=>setFoamTextStyle(v=>({...v,font:e.target.value}))}>
-       {['Arial','Verdana','Trebuchet MS','Georgia','Tahoma','system-ui'].map(f=><option key={f} value={f}>{f}</option>)}
-      </select>
-      <label htmlFor="stax-foam-font-size">Text size <output htmlFor="stax-foam-font-size">{foamTextStyle.size}px</output></label>
-      <input id="stax-foam-font-size" type="range" min="12" max="36" step="1" value={foamTextStyle.size}
-       onChange={e=>setFoamTextStyle(v=>({...v,size:Number(e.target.value)}))}/>
-      <label className="stax-foam-sound-option">
-       <input type="checkbox" checked={foamTextStyle.bold}
-        onChange={e=>setFoamTextStyle(v=>({...v,bold:e.target.checked}))}/>
-       Bold shape text
+    <label className="stax-foam-sound-option">
+     <input type="checkbox" checked={foamSoundEnabled} onChange={e=>setFoamSoundEnabled(e.target.checked)}/>
+     Foam sliding sound
+    </label>
+    <label htmlFor="stax-foam-sound-preset">Surface material</label>
+    <select id="stax-foam-sound-preset" value={foamSoundPreset}
+     onChange={e=>{setFoamSoundPreset(safeFoamSoundId(e.target.value));foamAudio.current?.stop()}}>
+     {FOAM_SLIDE_SOUNDS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
+    </select>
+    <div id="stax-sound-lab" className="stax-sound-lab" role="region" aria-label="Synthesized sliding sound lab">
+     {([
+      {key:'pitch',title:'Pitch',min:50,max:200,low:'Lower',high:'Higher'},
+      {key:'brightness',title:'Brightness',min:40,max:200,low:'Darker',high:'Crisper'},
+      {key:'texture',title:'Texture',min:0,max:200,low:'Smooth',high:'Grainy'},
+      {key:'volume',title:'Volume',min:0,max:200,low:'Silent',high:'Louder'},
+     ] as const).map(control=><div className="stax-sound-lab-control" key={control.key}>
+      <label htmlFor={'stax-sound-'+control.key}>{control.title}
+       <output htmlFor={'stax-sound-'+control.key}>{foamSoundTuning[control.key]}%</output>
       </label>
+      <input type="range" id={'stax-sound-'+control.key} min={control.min} max={control.max} step="5"
+       value={foamSoundTuning[control.key]} disabled={!foamSoundEnabled||theme!=='classroom-foam'}
+       onChange={e=>setFoamSoundTuning(v=>({...v,[control.key]:Number(e.target.value)}))}/>
+      <div className="stax-sound-scale"><span>{control.low}</span><span>{control.high}</span></div>
+     </div>)}
+     <div className="stax-sound-lab-actions">
+      <button type="button" disabled={!foamSoundEnabled||theme!=='classroom-foam'}
+       onClick={()=>audio().preview(foamSoundPreset)}>Preview tuned sound</button>
+      <button type="button" onClick={()=>setFoamSoundTuning({...DEFAULT_FOAM_SOUND_TUNING})}>Reset tuning</button>
      </div>
-     <div className="stax-setting-section">
-      <label htmlFor="stax-foam-sound-preset">Sliding sound (10 options)</label>
-      <select id="stax-foam-sound-preset" value={foamSoundPreset}
-       onChange={e=>{setFoamSoundPreset(safeFoamSoundId(e.target.value));foamAudio.current?.stop()}}>
-       {FOAM_SLIDE_SOUNDS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
-      </select>
-      <button className="stax-sound-preview" type="button" disabled={!foamSoundEnabled||theme!=='classroom-foam'}
-       onClick={()=>audio().preview(foamSoundPreset)}>Play sound preview</button>
-      <button type="button" className="stax-sound-lab-toggle" aria-expanded={soundLabOpen}
-       aria-controls="stax-sound-lab" onClick={()=>setSoundLabOpen(v=>!v)}>
-       {soundLabOpen?'Hide sound lab':'Open sound lab · synth sliders'}
-      </button>
-      {soundLabOpen&&<div id="stax-sound-lab" className="stax-sound-lab" role="region" aria-label="Synthesized sliding sound lab">
-       {([
-        {key:'pitch',title:'Pitch',min:50,max:200,low:'Lower',high:'Higher'},
-        {key:'brightness',title:'Brightness',min:40,max:200,low:'Darker',high:'Crisper'},
-        {key:'texture',title:'Texture',min:0,max:200,low:'Smooth',high:'Grainy'},
-        {key:'volume',title:'Volume',min:0,max:200,low:'Silent',high:'Louder'},
-       ] as const).map(control=><div className="stax-sound-lab-control" key={control.key}>
-        <label htmlFor={'stax-sound-'+control.key}>{control.title}
-         <output htmlFor={'stax-sound-'+control.key}>{foamSoundTuning[control.key]}%</output>
-        </label>
-        <input type="range" id={'stax-sound-'+control.key} min={control.min} max={control.max} step="5"
-         value={foamSoundTuning[control.key]} disabled={!foamSoundEnabled||theme!=='classroom-foam'}
-         onChange={e=>setFoamSoundTuning(v=>({...v,[control.key]:Number(e.target.value)}))}/>
-        <div className="stax-shadow-scale"><span>{control.low}</span><span>{control.high}</span></div>
-       </div>)}
-       <div className="stax-sound-lab-actions">
-        <button type="button" disabled={!foamSoundEnabled||theme!=='classroom-foam'}
-         onClick={()=>audio().preview(foamSoundPreset)}>Preview tuned sound</button>
-        <button type="button" onClick={()=>setFoamSoundTuning({...DEFAULT_FOAM_SOUND_TUNING})}>Reset tuning</button>
-       </div>
-       <small>Each change is saved automatically and affects the next foam slide. Pitch is the best place to start.</small>
-      </div>}
-      <small>Choose a material above; use the lab to tune it, then drag a piece to hear it in motion.</small>
-     </div>
+     <small>Saved automatically. Drag a foam piece to hear your changes.</small>
     </div>
    </section>}
+  {selected&&doc.atoms.some(a=>a.id===selected)&&<label className="stax-shape-word-editor" htmlFor="stax-selected-shape-word">
+   <span>Shape word</span>
+   <input id="stax-selected-shape-word" type="text" maxLength={36}
+    placeholder="Enter a word…" value={doc.atoms.find(a=>a.id===selected)?.word??''}
+    onFocus={()=>{textEditBefore.current=currentDoc.current}}
+    onChange={e=>setSelectedShapeWord(e.target.value)}
+    onBlur={finishShapeTextEdit}/>
+  </label>}
   <div className="stax-quest-nav">
    <button className="stax-quest-tab" type="button" aria-expanded={questPanelOpen} aria-controls="stax-quest-panel"
     onClick={()=>setQuestPanelOpen(v=>!v)}>STAX Quest · {chosenQuestLevel}/100</button>
@@ -1757,10 +1691,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
         {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
       {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted} dusk/>}
       {theme==='classroom-foam'&&<FoamChip kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>} 
-      {wordOnAtom(a)&&<text x={atomWidth(a)/2} y={atomHeight(a)/2} dominantBaseline="middle" fontFamily={theme==='classroom-foam'?foamTextStyle.font:undefined}
-        fontSize={theme==='classroom-foam'?Math.min(foamTextStyle.size,atomHeight(a)*.72):Math.min(18,Math.max(11,atomWidth(a)/Math.max(wordOnAtom(a).length,3)*1.4))}
-        textLength={theme==='classroom-foam'&&wordOnAtom(a).length*foamTextStyle.size*.58>atomWidth(a)-14?Math.max(8,atomWidth(a)-14):undefined}
-        lengthAdjust="spacingAndGlyphs" fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight={theme==='classroom-foam'?(foamTextStyle.bold?700:400):600} textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
+      {wordOnAtom(a)&&<text x={atomWidth(a)/2} y={atomHeight(a)/2} dominantBaseline="middle" fontFamily={'"Trebuchet MS","Noto Sans",system-ui,sans-serif'}
+        fontSize={Math.min(22,Math.max(13,atomHeight(a)*.29),(atomWidth(a)-12)/Math.max(1,wordOnAtom(a).length*.56))}
+         fill={theme==='classroom-foam'?'#3b2d22':(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?'#3f354c':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight={700} textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
     </g>)}
    </svg>
    {questionMarker&&<button className="stax-quest2-h" type="button" aria-label="H interrogative marker, tap to ask How" title="H means How" style={{left:viewPercentX(questionMarker.x),top:viewPercentY(questionMarker.y)}} onClick={()=>questTwoTap('H')}>H</button>}
