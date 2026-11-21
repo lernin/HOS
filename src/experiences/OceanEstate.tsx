@@ -51,7 +51,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const stop=()=>{input.current.x=0;input.current.z=0;input.current.fast=false;keys.current.clear();pointer.current=null;clearTouch();engine.current?.stop()}
   const activeRoom:EditableRoomId|null=state.location==='Grand foyer'?'foyer':state.location==='Great room'?'great-room':null
   const updateTouchMovement=()=>{const touches=[...touchPointers.current.values()],left=touches.find(t=>t.side==='left'),right=touches.find(t=>t.side==='right');if(!left){input.current.x=0;input.current.z=0;return}input.current.z=axis((left.y-left.startY)/72);input.current.x=right?axis((left.x-left.startX)/72):0}
-  function handleWorldTap(x:number,y:number){if(input.current.paused)return;if(editMode){if(picker){if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(picked?.kind==='floor')setHelp(false)}}else{const hit=engine.current?.pickEditSurface(x,y);if(hit){openPicker(hit.room,hit.surface);setHelp(false)}else setNotice('Tap a floor or wall in the Grand foyer or Great room.')}}else if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(!picked)setNotice('Tap a clear spot on the floor or a painting.');else if(picked.kind==='art')enterArt(picked.art);else if(picked.kind==='kuna'){setHelp(false);kunaVoice.tap()}else setHelp(false)}}
+  function handleWorldTap(x:number,y:number){if(input.current.paused)return;if(editMode){if(picker){if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(picked?.kind==='floor')setHelp(false)}}else{const hit=engine.current?.pickEditSurface(x,y);if(hit){openPicker(hit.room,hit.surface);setHelp(false)}else setNotice('Tap a floor or wall in the Grand foyer or Great room.')}}else if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(!picked)setNotice('Tap a clear spot on the floor or a painting.');else if(picked.kind==='art')enterArt(picked.art);else if(picked.kind==='kuna'){setHelp(false);engine.current?.engageKuna();kunaVoice.tap()}else setHelp(false)}}
   useEffect(()=>{const sync=()=>setFullscreen(document.fullscreenElement===root.current);document.addEventListener('fullscreenchange',sync);sync();return()=>document.removeEventListener('fullscreenchange',sync)},[])
   useEffect(()=>{const controller=new AbortController();void loadEstateMaterialCatalog(controller.signal).then(setMaterialCatalog).catch(()=>{});return()=>controller.abort()},[])
   useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress,tourViews).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
@@ -74,7 +74,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   },[editMode,activeRoom,started,paused,picker,art])
   async function beginSound(){try{if(!audio.current)audio.current=estateAudio();audio.current.volume(prefs.volume);await audio.current.play()}catch{setSound(false);setNotice('Sound could not start. You can keep exploring.')}}
   function begin(){stop();input.current.paused=false;setStarted(true);setPaused(false);if(sound)void beginSound()}
-  function openSettings(){kunaVoice.cancel();stop();input.current.paused=true;audio.current?.pause();dialog.current?.showModal()}
+  function openSettings(){kunaVoice.cancel();engine.current?.disengageKuna();stop();input.current.paused=true;audio.current?.pause();dialog.current?.showModal()}
   function goFromMenu(d:(typeof destinations)[number]){
     if(engine.current?.go(d,d.name)){
       setEditTarget(editTour?d.name:null);dialog.current?.close();setHelp(false)
@@ -138,7 +138,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     // Request directly in the tap handler; awaiting anything first loses mobile user activation.
     void target.requestFullscreen().catch(()=>setNotice('This browser blocked fullscreen. Try opening Ocean Estate in Chrome.'))
   }
-  function back(){kunaVoice.cancel();stop();input.current.paused=true;audio.current?.pause();onBack()}
+  function back(){kunaVoice.cancel();engine.current?.disengageKuna();stop();input.current.paused=true;audio.current?.pause();onBack()}
   function openPicker(room:EditableRoomId,surface:EditableSurface){stop();input.current.paused=false;engine.current?.setEditSelection(room,surface);setPicker({room,surface,original:selections[room][surface],current:selections[room][surface]})}
   function previewMaterial(id:string|null){if(!picker)return;engine.current?.setRoomMaterial(picker.room,picker.surface,id);setPicker({...picker,current:id})}
   function finishPicker(keep:boolean){if(!picker)return;const value=keep?picker.current:picker.original;engine.current?.setRoomMaterial(picker.room,picker.surface,value);engine.current?.setEditSelection(null,null);if(keep){const next={...selections,[picker.room]:{...selections[picker.room],[picker.surface]:value}} as RoomSelections;setSelections(next);try{localStorage.setItem('ocean-estate-room-materials-v1',JSON.stringify(next))}catch{/* Keep in memory. */};setNotice(`${roomName(picker.room)} ${picker.surface==='floor'?'floor':'walls'} saved.`)}setPicker(null);if(started&&!paused)input.current.paused=false}
@@ -163,7 +163,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
         lastRightTap.current={time:now,x:e.clientX,y:e.clientY}
       }else handleWorldTap(e.clientX,e.clientY)
     }return}const p=pointer.current;if(!p||p.id!==e.pointerId)return;if(allowTap&&!p.dragged)handleWorldTap(e.clientX,e.clientY);pointer.current=null;input.current.looking=false;input.current.lookedAt=performance.now();input.current.z=0}
-  return <main ref={root} className="oe-root" aria-label="Ocean Estate" data-player-x={state.position.x.toFixed(3)} data-player-z={state.position.z.toFixed(3)} data-camera-yaw={input.current.yaw.toFixed(3)} data-touch-help={help?'on':'off'}>
+  return <main ref={root} className="oe-root" aria-label="Ocean Estate" data-player-x={state.position.x.toFixed(3)} data-player-z={state.position.z.toFixed(3)} data-camera-yaw={input.current.yaw.toFixed(3)} data-touch-help={help?'on':'off'} data-kuna-mode={engine.current?.getKunaMode()??'loading'}>
     <canvas ref={canvas} className="oe-canvas" aria-label="Explorable oceanfront estate" onContextMenu={e=>e.preventDefault()}
       onPointerDown={worldPointerDown}
       onPointerMove={worldPointerMove}

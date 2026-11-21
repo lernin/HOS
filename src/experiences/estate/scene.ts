@@ -252,7 +252,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
        const cameraMoving=!!(path.length||Math.hypot(vx,vz)>.05||input.looking||input.x||input.z)
        const kunaInterval=cameraMoving?0:33
        if(!input.paused&&!inspectView&&!artInspect&&now-lastKunaUpdate>=kunaInterval){
-         kuna?.update(Math.min(.05,(now-lastKunaUpdate)/1000),position)
+         kuna?.update(Math.min(.05,(now-lastKunaUpdate)/1000),position,Math.hypot(vx,vz)>.15?Math.atan2(-vx,-vz):yaw)
          lastKunaUpdate=now;dirty=true
        }else if(input.paused||inspectView||artInspect)lastKunaUpdate=now
        if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}
@@ -262,6 +262,9 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     return {dispose,stop,reset,pick,closeArt,panArt,zoomArt,resetArtView,
        setKunaTalking(active:boolean,jaw=0){kuna?.setTalking(active,jaw);dirty=true},
        setKunaPhase(phase:KunaVoicePhase){kuna?.setPhase(phase);dirty=true},
+       engageKuna(){kuna?.engage(position);dirty=true},
+       disengageKuna(){kuna?.disengage();dirty=true},
+       getKunaMode:()=>kuna?.mode()??'loading',
        getKunaStatus:()=>kuna?.status()??'loading',
       setTourViews(next:EstateTourViews){tourViews={...next}},
       getTourViewpoint():EstateTourView{return {x:position.x,z:position.z,yaw,pitch}},
