@@ -131,7 +131,7 @@ test('Quest 2 H floats above the ORIGINAL blue map without introducing a new sce
  assert.match(segment,/parseStaxSentence\("I'm ok\."\)/)
  assert.match(segment,/const blue=d\.atoms\.find\(a=>a\.id==='q2-a-q-1'&&a\.kind==='circle'\)/)
  assert.match(segment,/x:blue\.x\+atomWidth\(blue\)\/2,y:blue\.y-height\('circle'\)\*\.60/)
- assert.doesNotMatch(segment,/questTwoQuestionDraft|q2-question-|unknown|virtual|slotX|slotY|fitQuestTwoQuestion/)
+ assert.doesNotMatch(segment,/questTwoQuestionDraft|q2-question-|q2-unknown-complement|q2-virtual|slotX|slotY|fitQuestTwoQuestion/)
  assert.match(board,/const base=questTwoAnswerDraft\(\)/)
  assert.match(board,/setCamera\(fit\(base,aspect\(\)\)\)/)
  assert.match(board,/questTwoTap\('H'\)/)
