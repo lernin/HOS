@@ -34,9 +34,11 @@ try{
     await page.getByRole('heading',{name:'Kuna Lab'}).waitFor({timeout:15000})
     await page.getByText('Model ready',{exact:true}).waitFor({timeout:30000})
     assert.equal(await page.locator('.kl-stage canvas').count(),1,'Kuna Lab has an interactive 3D stage')
+    await page.screenshot({path:'artifacts/ocean-estate/kuna-neutral-front-'+testCase.name+'.png'})
     await page.getByRole('button',{name:'Run full simulation'}).click()
     await page.getByRole('button',{name:'listening',exact:true}).waitFor({state:'visible'})
-    await page.waitForFunction(()=>document.querySelector('button.selected')?.textContent==='listening',{timeout:2500})
+    await page.waitForFunction(()=>[...document.querySelectorAll('button.selected')]
+      .some(button=>button.textContent==='listening'),null,{timeout:2500})
     await page.getByRole('button',{name:'idle',exact:true}).click()
     await page.getByRole('button',{name:'Record',exact:true}).click()
     await page.keyboard.press('j')
@@ -73,6 +75,7 @@ try{
     await page.getByRole('button',{name:/Replay at 25%/}).click()
     await page.getByRole('button',{name:/Mirror view: left → right/}).click()
     await page.getByText(/Walking alongside · right view/).waitFor()
+    await page.screenshot({path:'artifacts/ocean-estate/kuna-walking-alongside-'+testCase.name+'.png'})
     const downloadEvent=page.waitForEvent('download')
     await page.getByRole('button',{name:'Export gallery + vocabulary'}).click()
     const dl=await downloadEvent
@@ -90,6 +93,7 @@ try{
     await page.keyboard.press('l')
     await page.waitForTimeout(450)
     await page.getByRole('button',{name:'Stop & Save'}).click()
+    await page.getByText(/Saved custom\./).waitFor({timeout:5000})
     const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('hos-kuna-motion-studio-v2')??'[]'))
     assert.equal(saved.length,2)
     assert.deepEqual(saved[1].contexts,['alongside'])
