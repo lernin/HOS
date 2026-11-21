@@ -33,8 +33,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: node --test tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
-      - run: npm install --no-save --package-lock=false playwright@1.55.0
+      - run: node --test tests/ocean-estate-motion.test.mjs tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
       - run: npx playwright install --with-deps chromium
       - name: Render estate and verify landscape phone interactions
         run: |
