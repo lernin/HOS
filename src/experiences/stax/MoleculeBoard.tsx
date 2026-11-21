@@ -10,6 +10,7 @@ import { PearlescentGlass } from './pearlescent-atlas'
 import { PearlescentAirglass } from './pearlescent-airglass'
 import { FoamChip } from './foam-chips'
 import { STAX_QUEST_LEVELS, staxQuestLevel } from './quest-levels'
+import { parseStaxSentence, type ParsedStax } from './quest-parser'
 import './molecule-board.css'
 
 /**
@@ -853,25 +854,48 @@ function newFamilyAfterBlue(d:Draft,moving:Set<string>):boolean {
  })
 }
 /**
+ * Turn a conservative grammar parse into world-space editable STAX atoms.
+ * Parser owns grammatical roles; board geometry owns shape sizes/positions.
+ * Sentence-head sequence and direct supporter relationships remain separate.
+ */
+function layoutParsedQuest(parsed:ParsedStax):Draft{
+ const connected=new Set(parsed.bonds.filter(b=>b.relation==='support').map(b=>b.child))
+ const heads=parsed.atoms.filter(a=>!connected.has(a.id))
+ const coords=new Map<string,{x:number;y:number}>()
+ heads.forEach((head,i)=>{
+  const previous=i>0?heads[i-1]:null
+  const prior=previous?coords.get(previous.id):null
+  coords.set(head.id,previous&&prior?{
+   x:prior.x+width(previous.kind)+(previous.kind==='circle'?BLUE_RED_GAP:RED_BLUE_GAP),
+   y:prior.y+Math.max(80,height(previous.kind)*.55),
+  }:{x:95,y:85})
+ })
+ const atoms:Atom[]=parsed.atoms.map(a=>{
+  const xy=coords.get(a.id)||{x:95,y:85}
+  return {id:a.id,kind:a.kind,word:a.word,x:xy.x,y:xy.y}
+ })
+ let doc:Draft=normalizeRoles({atoms,bonds:parsed.bonds.map(b=>({...b}))})
+ // First seed direct supporters at their actual parents; then use the SAME
+ // layout rules as manual magnetic snapping (never a second grammar engine).
+ for(const edge of doc.bonds.filter(b=>b.relation==='support')){
+  const parent=byId(doc,edge.parent),child=byId(doc,edge.child)
+  if(!parent||!child)continue
+  const x=underSingleX(parent.x,atomWidth(parent),atomWidth(child))
+  const y=parent.y+atomHeight(parent)+VERTICAL
+  doc={...doc,atoms:doc.atoms.map(a=>a.id===child.id?{...a,x,y}:a)}
+ }
+ for(const head of heads){
+  if(head.kind==='circle'&&blueSupportAtoms(doc,head.id).length)doc=alignSupporters(doc,head.id)
+  if(head.kind==='triangle'&&orangeChildren(doc,head.id).length)doc=alignRedSupporters(doc,head.id)
+ }
+ return alignSequenceFamilyClearance(normalizeRoles(doc))
+}
+/**
  * Reconstructs an editable *illustrative* molecule scene from the exact
  * sentence on STAX Blueprint slide 13 (Level 21). Source slide does not
  * encode the lexical identity of every colored shape, so assignments of
  * individual word roles and bond orientations below are proposals.
  */
-/** Minimal editable STAX Quest Level 1: noun/pronoun + copula + complement.
- * The original source gives the sentence, not explicit per-word bonds.
- * The visual decomposition is a teacher-reviewable initial proposal.
- */
-function quest1():Draft{
- return {atoms:[
-  {id:'q1-i',kind:'circle',word:'I',x:105,y:110},
-  {id:'q1-am',kind:'triangle',word:"'m",x:355,y:265},
-  {id:'q1-happy',kind:'oval',word:'happy',x:630,y:420},
- ],bonds:[
-  {parent:'q1-i',child:'q1-am',relation:'sequence'},
-  {parent:'q1-am',child:'q1-happy',relation:'sequence'},
- ]}
-}
 function quest21():Draft {
  type Spec=[id:string,kind:Kind,word:string,x:number,y:number,variant?:Atom['variant']]
  const specs:Spec[]=[
@@ -1228,20 +1252,21 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  function loadQuest(level:number){
   const item=staxQuestLevel(level)
   if(!item)return
-  // Never silently merge a quest into the child's existing molecule; Undo
-  // restores that draft when switching activities.
   const before=currentDoc.current
-  const example=level===1?normalizeRoles(quest1()):level===21?normalizeRoles(quest21()):empty()
+  const parsed=level<=10?parseStaxSentence(item.sentence,{learnerName:'Ashley'}):null
+  const known=parsed?.supported?layoutParsedQuest(parsed):null
+  // No fabricated maps for unknown grammar. Level 21 retains the existing
+  // illustrative diagram; all other levels open a blank editable workspace.
+  const example=known|| (level===21?normalizeRoles(quest21()):empty())
   const next=level===21
    ?alignSequenceFamilyClearance(alignRedSupporters(alignRedSupporters(example,'q21-buy'),'q21-is'))
    :example
   save(next,before)
-  if(next.atoms.length)setCamera(fit(next,aspect()))
-  else setCamera(defaultView)
+  setCamera(next.atoms.length?fit(next,aspect()):defaultView)
   setSelected(null);setQuestActive(true);setActiveQuestLevel(level);setQuestPanelOpen(false)
-  setHint(level===1?'Quest 1 loaded. Move the three shapes; this is an editable proposed map for “I’m happy.”':
+  setHint(level<=10&&known?'Quest '+level+' loaded: editable sentence-to-STAX map. SMR and other verb forms are kept distinct.':
    level===21?'Quest 21 illustrative map loaded; individual word-role mappings remain provisional.':
-   'Quest '+level+': build the original sentence with shapes. No automatic map has been invented.')
+   'Quest '+level+': build the original sentence with shapes. Its grammar has not yet been parsed.')
  }
  async function toggleFullscreen(){
   try{if(document.fullscreenElement===rootRef.current){await document.exitFullscreen()}else if(rootRef.current?.requestFullscreen){await rootRef.current.requestFullscreen()}}catch{setHint('Full-screen mode is restricted in this browser; the canvas still fills the available window.')}
@@ -1317,14 +1342,15 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     <p className="stax-quest-sentence">{staxQuestLevel(chosenQuestLevel)?.sentence}</p>
     <div className="stax-quest-actions">
      <button type="button" onClick={()=>setChosenQuestLevel(n=>Math.max(1,n-1))} disabled={chosenQuestLevel===1}>Previous</button>
-     <button type="button" onClick={()=>loadQuest(chosenQuestLevel)}>{chosenQuestLevel===1||chosenQuestLevel===21?'Load example':'Start blank map'}</button>
+     <button type="button" onClick={()=>loadQuest(chosenQuestLevel)}>{chosenQuestLevel<=10||chosenQuestLevel===21?'Load map':'Start blank map'}</button>
      <button type="button" onClick={()=>setChosenQuestLevel(n=>Math.min(100,n+1))} disabled={chosenQuestLevel===100}>Next</button>
     </div>
     {staxQuestLevel(chosenQuestLevel)?.youtubeUrl&&<a href={staxQuestLevel(chosenQuestLevel)!.youtubeUrl!} target="_blank" rel="noopener noreferrer">Watch original Quest video</a>}
-    {chosenQuestLevel!==1&&chosenQuestLevel!==21&&<small>Original sentence available; shape map not yet authored.</small>}
+    {chosenQuestLevel>10&&chosenQuestLevel!==21&&<small>Original sentence available; shape map not yet authored.</small>}
+    {chosenQuestLevel===6&&<small>Level 6 map uses “My name is Ashley.” Learner-name personalization can follow later.</small>}
    </div>}
   </div>
-  {questActive&&activeQuestLevel!==null&&<p className="stax-molecule-example">STAX QUEST · Level {activeQuestLevel} — {staxQuestLevel(activeQuestLevel)?.sentence} {(activeQuestLevel===1||activeQuestLevel===21)&&<small>Editable illustrative map; confirm grammatical roles before using for assessment.</small>}</p>}
+  {questActive&&activeQuestLevel!==null&&<p className="stax-molecule-example">STAX QUEST · Level {activeQuestLevel} — {activeQuestLevel===6?'My name is Ashley.':staxQuestLevel(activeQuestLevel)?.sentence} {(activeQuestLevel<=10||activeQuestLevel===21)&&<small>Editable draft; teacher confirmation required before assessment.</small>}</p>}
   <div className="stax-molecule-canvas">
    <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-board"/>}
