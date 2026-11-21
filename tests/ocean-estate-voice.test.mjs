@@ -29,7 +29,7 @@ test('tap on Kuna uses dedicated 3D ray hit, not a floor tap or text bubble',()=
   assert.match(npc,/hit\(ray:T\.Ray\)/)
   assert.match(scene,/if\(kuna\?\.hit\(raycaster\.ray\)\)\{stop\(\);return \{kind:'kuna'\}\}/)
   assert.match(scene,/setKunaTalking\(active:boolean,jaw=0\)/)
-  assert.match(ui,/picked\.kind==='kuna'\)\{setHelp\(false\);kunaVoice\.tap\(\)\}/)
+  assert.match(ui,/picked\.kind==='kuna'\)\{setHelp\(false\);engine\.current\?\.engageKuna\(\);kunaVoice\.tap\(\)\}/)
   assert.doesNotMatch(ui,/kuna-chat-bubble|oe-kuna-dialogue/)
 })
 test('Kuna voice uses same Procedia STT/chat/TTS contracts and verse voice styling',()=>{
@@ -80,7 +80,7 @@ test('Kuna shares an authentic Sit/Head/Chin expression rig rather than inventin
   assert.match(rig,/jawEuler\.set\(\.381\*jawAmount,0,0\)/,'match Procedia jaw rotation')
   assert.match(rig,/head\.quaternion\.copy\(neutralHead\)\.multiply\(headQuaternion\)/,'no rolling baseline under Sit/Idle')
   assert.match(rig,/conversationalHeadPose\(phase,phaseElapsed,sitAmount\)/)
-  assert.match(npc,/holding=focus\|\|Boolean\(rig\?\.isTransitioning\(\)\)/,'keep collision body stationary through sit/stand')
+  assert.match(npc,/holding=engaged\|\|Boolean\(rig\?\.isTransitioning\(\)\)/,'keep collision body stationary through sit/stand')
   assert.match(npc,/setPhase\(next:KunaVoicePhase\)/)
   assert.match(voice,/visual\.current\(next!=='idle',0,next\)/)
   assert.match(scene,/setKunaPhase\(phase:KunaVoicePhase\)/)

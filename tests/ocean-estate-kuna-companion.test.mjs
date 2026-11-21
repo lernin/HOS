@@ -37,7 +37,7 @@ try{
     session.end();assert.equal(session.mode(),'roaming')
   })
   test('follow target remains collision-safe, keeps physical clearance and stops without teleporting',()=>{
-    const nav=createKunaNavigator(),child={x:-12.4,z:7.7},target=KUNA_KITCHEN_GOALS[1]
+    const nav=createKunaNavigator(),child={x:-12.4,z:4.2},target=KUNA_KITCHEN_GOALS[1]
     assert.ok(nav.isSafe(target))
     const walker=createKunaBehavior(nav,KUNA_HOME)
     let last=walker.snapshot(),travel=0,walking=0

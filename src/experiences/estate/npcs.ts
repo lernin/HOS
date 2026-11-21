@@ -134,7 +134,7 @@ export function createKunaWanderer(scene:T.Scene,_playerNavigator:Navigator,sign
       }
     }
     // Keep the collision body parked throughout Sit and reverse Stand.
-    const holding=engaged||Boolean(rig?.isTransitioning())
+    const holding=engaged||Boolean(rig?.isTransitioning())||(following&&!followTarget)
     const frame=rig?.hasWalk?
       behavior.update(elapsed,player,holding,following&&!holding?followTarget:null):
       behavior.update(elapsed,player,true)
