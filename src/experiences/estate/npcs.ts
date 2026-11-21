@@ -8,6 +8,8 @@ type Navigator={path:(start:Point,end:Point)=>Point[]|null}
 // Match Procedia's deployed SpeakingAvatar GLB exactly. The Vercel rewrite below
 // retrieves this same asset from Procedia; no lookalike meshes are constructed.
 export const PROCEDIA_KUNA_MODEL='/models/fox-mascot.glb'
+// Child-height companion, not the 1.29m tall standalone chat-room presentation.
+export const KUNA_HEIGHT=.78
 export const KUNA_KITCHEN_STOPS:readonly Point[]=[
   {x:-13.35,z:8.15},{x:-13.3,z:7.2},{x:-13.1,z:8.85},
 ]
@@ -17,7 +19,7 @@ function makeLabel(){
   if(ctx){ctx.fillStyle='rgba(22,42,30,.83)';ctx.beginPath();ctx.roundRect(17,8,222,62,18);ctx.fill();ctx.fillStyle='#fff4d5';ctx.font='600 37px Arial, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Kuna',128,40)}
   const texture=new T.CanvasTexture(canvas);texture.colorSpace=T.SRGBColorSpace
   const material=new T.SpriteMaterial({map:texture,transparent:true,depthWrite:false,depthTest:true})
-  const sprite=new T.Sprite(material);sprite.scale.set(1.04,.32,1);sprite.position.y=1.71
+  const sprite=new T.Sprite(material);sprite.scale.set(.84,.26,1);sprite.position.y=KUNA_HEIGHT+.22
   return {sprite,dispose(){texture.dispose();material.dispose()}}
 }
 export function createKunaWanderer(scene:T.Scene,navigator:Navigator,signal?:AbortSignal){
@@ -29,18 +31,18 @@ export function createKunaWanderer(scene:T.Scene,navigator:Navigator,signal?:Abo
   let idle:T.AnimationAction|null=null,walk:T.AnimationAction|null=null
   let chin:T.Object3D|null=null,chinBase:T.Quaternion|null=null
   let position:Point=stops.length?{...stops[0]}:{x:-13.35,z:8.15}
-  let route:Point[]=[],nextStop=1,dwell=1.2,focus=false,speaking=false,energy=0,disposed=false,failed=false,now=0,isWalking=false
-  const center=new T.Vector3(),target=new T.Vector3()
+  let route:Point[]=[],nextStop=1,dwell=.45,focus=false,speaking=false,energy=0,disposed=false,failed=false,gaitBlend=0,targetHeading=0
+  const center=new T.Vector3()
   figure.position.set(position.x,floorAt(position)??FLOOR,position.z)
   const loader=new GLTFLoader()
   loader.load(PROCEDIA_KUNA_MODEL,gltf=>{
     if(disposed||signal?.aborted){gltf.scene.traverse(o=>{if((o as T.Mesh).isMesh){const m=o as T.Mesh;m.geometry?.dispose();const materials=Array.isArray(m.material)?m.material:[m.material];materials.forEach(t=>t?.dispose())}});return}
     model=gltf.scene
-    // Procedia's SpeakingAvatar normalizes this exact GLB to 1.29 world units.
+    // Keep Procedia's exact GLB and native animation, but fit the smaller child-friendly world-space height.
     model.updateWorldMatrix(true,true)
     const bounds=new T.Box3().setFromObject(model),size=new T.Vector3()
     bounds.getSize(size)
-    if(size.y>.001){model.scale.setScalar(1.29/size.y);model.updateWorldMatrix(true,true);bounds.setFromObject(model);const mid=bounds.getCenter(new T.Vector3());model.position.set(-mid.x,-bounds.min.y,-mid.z)}
+    if(size.y>.001){model.scale.setScalar(KUNA_HEIGHT/size.y);model.updateWorldMatrix(true,true);bounds.setFromObject(model);const mid=bounds.getCenter(new T.Vector3());model.position.set(-mid.x,-bounds.min.y,-mid.z)}
     figure.add(model)
     chin=model.getObjectByName('Chin')??null
     const clips=gltf.animations.map(c=>{
@@ -52,8 +54,8 @@ export function createKunaWanderer(scene:T.Scene,navigator:Navigator,signal?:Abo
     mixer=new T.AnimationMixer(model)
     const idleClip=clips.find(c=>c.name==='Idle')??clips.find(c=>/idle/i.test(c.name))??clips.find(c=>/survey/i.test(c.name))??clips[0]
     const walkClip=clips.find(c=>/^walk$/i.test(c.name))??clips.find(c=>/walk/i.test(c.name))
-    if(idleClip){idle=mixer.clipAction(idleClip);idle.setLoop(T.LoopRepeat,Infinity);idle.timeScale=.64;idle.play()}
-    if(walkClip){walk=mixer.clipAction(walkClip);walk.setLoop(T.LoopRepeat,Infinity)}
+    if(idleClip){idle=mixer.clipAction(idleClip);idle.setLoop(T.LoopRepeat,Infinity);idle.timeScale=.64;idle.setEffectiveWeight(1);idle.play()}
+    if(walkClip){walk=mixer.clipAction(walkClip);walk.setLoop(T.LoopRepeat,Infinity);walk.timeScale=.82;walk.setEffectiveWeight(0);walk.play()}
     figure.visible=Boolean(stops.length)
   },undefined,err=>{failed=true;console.warn('Unable to load Procedia Kuna model',err)})
   function routeToNextStop(){
@@ -74,29 +76,28 @@ export function createKunaWanderer(scene:T.Scene,navigator:Navigator,signal?:Abo
       else {
         if(!route.length)routeToNextStop()
         if(route.length){
-          const step=advanceWalker(position,route,.72,elapsed)
+          const step=advanceWalker(position,route,.52,elapsed)
           const next=moveSafely(position,step.point.x-position.x,step.point.z-position.z)
           const dx=next.x-position.x,dz=next.z-position.z
           if(Math.hypot(dx,dz)>.001){
             position=next;route=step.remaining;moving=true
-            const heading=Math.atan2(dx,dz)
-            const delta=Math.atan2(Math.sin(heading-figure.rotation.y),Math.cos(heading-figure.rotation.y))
-            figure.rotation.y+=delta*(1-Math.exp(-elapsed*4))
-            if(!route.length)dwell=1.35
+            targetHeading=Math.atan2(dx,dz)
+            // Keep walking between nearby waypoints instead of resetting the
+            // animation and freezing for 1.35s after every short step.
+            if(!route.length)dwell=.35
           }else if(step.moved>.001){route=[];dwell=2}
         }
       }
     }
-    if(moving!==isWalking){
-      isWalking=moving
-      if(moving){idle?.fadeOut(.3);walk?.reset().fadeIn(.3).play()}
-      else {walk?.fadeOut(.3);idle?.reset().fadeIn(.3).play()}
-    }
-    if(focus&&!moving){
-      const yaw=Math.atan2(player.x-position.x,player.z-position.z)
-      const diff=Math.atan2(Math.sin(yaw-figure.rotation.y),Math.cos(yaw-figure.rotation.y))
-      figure.rotation.y+=diff*(1-Math.exp(-elapsed*3))
-    }
+    if(focus&&!moving)targetHeading=Math.atan2(player.x-position.x,player.z-position.z)
+    // Smoothly rotate on every animation tick, including the short pauses.
+    const headingDelta=Math.atan2(Math.sin(targetHeading-figure.rotation.y),Math.cos(targetHeading-figure.rotation.y))
+    figure.rotation.y+=headingDelta*(1-Math.exp(-elapsed*3.6))
+    // Both native clips keep running: blend their weights continuously.
+    // Resetting a clip on every half-second patrol leg caused visible jumps.
+    gaitBlend=T.MathUtils.damp(gaitBlend,moving?1:0,5,elapsed)
+    walk?.setEffectiveWeight(gaitBlend)
+    idle?.setEffectiveWeight(1-gaitBlend)
     mixer?.update(elapsed)
     if(chin){
       if(!chinBase)chinBase=chin.quaternion.clone()
@@ -110,10 +111,9 @@ export function createKunaWanderer(scene:T.Scene,navigator:Navigator,signal?:Abo
     update,
     hit(ray:T.Ray){
       if(!figure.visible||!model)return false
-      center.set(position.x,(floorAt(position)??FLOOR)+.81,position.z)
-      target.copy(center).sub(ray.origin)
-      const along=target.dot(ray.direction)
-      return along>0&&along<8&&ray.distanceSqToPoint(center)<.68*.68
+      center.set(position.x,(floorAt(position)??FLOOR)+KUNA_HEIGHT*.56,position.z)
+      const along=center.clone().sub(ray.origin).dot(ray.direction)
+      return along>0&&along<8&&ray.distanceSqToPoint(center)<.52*.52
     },
     setTalking(active:boolean,jaw=0){focus=active;speaking=active&&jaw>0;energy=Math.max(0,Math.min(1,jaw));if(active){route=[];dwell=1.5}},
     status(){return failed?'error':model?'ready':'loading'},
