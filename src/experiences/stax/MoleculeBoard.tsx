@@ -35,6 +35,9 @@ const GAP=SCALE*STAX_SPACING.attachment, VERTICAL=SCALE*STAX_SPACING.attachment
 const BLUE_RED_GAP=SCALE*STAX_SPACING.group, RED_BLUE_GAP=SCALE*STAX_SPACING.row
 const CONNECTOR_GAP=SCALE*STAX_SPACING.connector
 const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=124, TAP=9, DOUBLE_MS=350, FINGER_LIFT=42
+// Red/blue heads have diagonal Blueprint destinations; allow a wider approach
+// zone but preserve exact final positions and all other magnet eligibility.
+const RED_BLUE_SNAP_RADIUS=SNAP_RADIUS*1.75
 const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
@@ -523,7 +526,14 @@ function redBetweenBlues(d:Draft,moving:Set<string>):Snap|null {
 /** Returns only plausible near-drop join geometry; does NOT move anything itself. */
 function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  let best:Snap|null=null
- const offered=(s:Snap)=>{if(s.distance<=SNAP_RADIUS&&(!best||s.distance<best.distance))best=s}
+ const offered=(s:Snap)=>{
+  const parent=byId(d,s.parent),child=byId(d,s.child)
+  const redBlue=s.relation==='sequence'&&parent&&child&&
+   ((parent.kind==='circle'&&child.kind==='triangle')||
+    (parent.kind==='triangle'&&child.kind==='circle'))
+  const radius=redBlue?RED_BLUE_SNAP_RADIUS:SNAP_RADIUS
+  if(s.distance<=radius&&(!best||s.distance<best.distance))best=s
+ }
  for(const a of d.atoms) {
   if(!moving.has(a.id))continue
   for(const b of d.atoms) {
