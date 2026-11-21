@@ -102,7 +102,7 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
       return
     }
     while(route.length&&distance(position,route[0])<.11)route.shift()
-    if(!route.length){settle(3.8+(nextGoal%3)*.7);return}
+    if(!route.length){settle(follow?0:3.8+(nextGoal%3)*.7);return}
     const waypoint=route[0],remaining=distance(position,waypoint)
     const desiredYaw=heading(position,waypoint)
     const turn=angleDelta(desiredYaw,yaw)
@@ -121,8 +121,8 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
       return
     }
     const isFinal=route.length===1
-    const following=route[1]
-    const bend=following?Math.abs(angleDelta(heading(waypoint,following),desiredYaw)):0
+    const nextWaypoint=route[1]
+    const bend=nextWaypoint?Math.abs(angleDelta(heading(waypoint,nextWaypoint),desiredYaw)):0
     // Brake for the goal, or ahead of a sharp corner. Do not reverse in motion.
     const stopDistance=isFinal?remaining:(bend>.48?remaining:Math.max(remaining,.5))
     const maximum=follow?KUNA_FOLLOW_SPEED:KUNA_MAX_SPEED
