@@ -9,6 +9,7 @@ on:
       - 'feature/ocean-estate-kuna-safe-*'
       - 'feature/ocean-estate-kuna-sit-*'
       - 'fix/ocean-estate-kuna-head-*'
+      - 'fix/ocean-estate-kuna-continuous-*'
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx
@@ -47,7 +48,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: node --test tests/ocean-estate-kuna-lab.test.mjs tests/ocean-estate-kuna-expression.test.mjs tests/ocean-estate-kuna-behavior.test.mjs tests/ocean-estate-voice.test.mjs tests/ocean-estate-npc.test.mjs tests/ocean-estate-motion.test.mjs tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
+      - run: node --test tests/ocean-estate-kuna-companion.test.mjs tests/ocean-estate-kuna-lab.test.mjs tests/ocean-estate-kuna-expression.test.mjs tests/ocean-estate-kuna-behavior.test.mjs tests/ocean-estate-voice.test.mjs tests/ocean-estate-npc.test.mjs tests/ocean-estate-motion.test.mjs tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
       - name: Verify Procedia fox asset and proxied voice routes on Vercel preview (no billable calls)
         run: node tests/ocean-estate-procedia-routes.mjs
       - run: npx playwright install --with-deps chromium

@@ -2,9 +2,10 @@ import * as T from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { floorAt, FLOOR, type Point } from './plan'
 import { createKunaNavigator, KUNA_HOME, KUNA_RADIUS, KUNA_KITCHEN_GOALS } from './npc-navigation'
-import { createKunaBehavior, KUNA_MAX_SPEED } from './npc-behavior'
+import { createKunaBehavior, KUNA_MAX_SPEED, KUNA_FOLLOW_SPEED } from './npc-behavior'
 import { createKunaRig } from '../../characters/kuna/rig'
 import type { KunaVoicePhase } from '../../characters/kuna/expressions'
+import { createKunaCompanionSession } from '../../characters/kuna/companion-session'
 
 // The exact original Procedia avatar; no surrogate 3D character.
 export const PROCEDIA_KUNA_MODEL='/models/fox-mascot.glb'
@@ -32,7 +33,10 @@ export function createKunaWanderer(scene:T.Scene,_playerNavigator:Navigator,sign
   figure.userData.estateNPC=true;figure.visible=false;scene.add(figure)
   const label=makeLabel();figure.add(label.sprite)
   let model:T.Group|null=null,rig:ReturnType<typeof createKunaRig>|null=null
-  let focus=false,phase:KunaVoicePhase='idle',energy=0,disposed=false,failed=false
+  const session=createKunaCompanionSession()
+  let wasFollowing=false,phase:KunaVoicePhase='idle',energy=0,disposed=false,failed=false
+  let followTarget:Point|null=null,followSide:1|-1=1
+  let lastPlayer:Point={...KUNA_HOME},lastPlayerYaw=0
   const center=new T.Vector3(),toCenter=new T.Vector3()
   const homeY=floorAt(KUNA_HOME)??FLOOR
   figure.position.set(KUNA_HOME.x,homeY,KUNA_HOME.z)
@@ -87,17 +91,61 @@ export function createKunaWanderer(scene:T.Scene,_playerNavigator:Navigator,sign
     if(!rig.hasSit)console.warn('Kuna Sit clip is missing; using an upright listening pose')
   },undefined,error=>{failed=true;console.warn('Unable to load Procedia Kuna model',error)})
 
-  function update(dt:number,player:Point){
+  function update(dt:number,player:Point,playerYaw=lastPlayerYaw){
     const elapsed=Math.max(0,Math.min(.1,Number.isFinite(dt)?dt:0))
+    const playerStep=Math.hypot(player.x-lastPlayer.x,player.z-lastPlayer.z)
+    lastPlayer={...player};lastPlayerYaw=playerYaw
     if(!model||!figure.visible)return
-    // Physics never moves while the Sit clip is lowering/rising.
-    const holding=focus||Boolean(rig?.isTransitioning())
-    const frame=rig?.hasWalk?behavior.update(elapsed,player,holding):behavior.update(elapsed,player,true)
+    // A conversation is a *persistent engagement*, not just a TTS clip.
+    // Finishing a spoken reply leaves Kuna sitting. Real player movement
+    // ends sitting and starts an obstacle-aware companion walk.
+    const mode=session.update(player)
+    const engaged=mode==='engaged',following=mode==='following'
+    if(following&&!wasFollowing){
+      wasFollowing=true;followTarget=null
+      const frame=behavior.snapshot()
+      // Pick the side that requires less travel. Don't flip sides every turn.
+      const right={x:player.x+Math.cos(playerYaw)*.85-Math.sin(playerYaw)*1.65,
+                   z:player.z-Math.sin(playerYaw)*.85-Math.cos(playerYaw)*1.65}
+      const left={x:player.x-Math.cos(playerYaw)*.85-Math.sin(playerYaw)*1.65,
+                  z:player.z+Math.sin(playerYaw)*.85-Math.cos(playerYaw)*1.65}
+      followSide=Math.hypot(frame.position.x-right.x,frame.position.z-right.z)<
+                 Math.hypot(frame.position.x-left.x,frame.position.z-left.z)?1:-1
+    }
+    if(!following)wasFollowing=false
+    if(following){
+      // Prefer a point in view (ahead and to one side), not behind the camera.
+      // Follow the child's direction of travel, not rapid head/camera turns.
+      // Freeze the last safe anchor when the child stops to prevent orbiting.
+      if(playerStep>.008||!followTarget){
+        const ahead={x:-Math.sin(playerYaw),z:-Math.cos(playerYaw)}
+        const right={x:Math.cos(playerYaw),z:-Math.sin(playerYaw)}
+        const candidate=(side:1|-1):Point=>({
+          x:player.x+ahead.x*1.65+right.x*side*.85,
+          z:player.z+ahead.z*1.65+right.z*side*.85,
+        })
+        const preferred=candidate(followSide)
+        if(nav.isSafe(preferred))followTarget=preferred
+        else {
+          const other=candidate(followSide===1?-1:1)
+          if(nav.isSafe(other)){followTarget=other;followSide=followSide===1?-1:1}
+          else followTarget=null // Never route through walls or teleport outside Kitchen
+        }
+      }
+    }
+    // Keep the collision body parked throughout Sit and reverse Stand.
+    const holding=engaged||Boolean(rig?.isTransitioning())
+    const frame=rig?.hasWalk?
+      behavior.update(elapsed,player,holding,following&&!holding?followTarget:null):
+      behavior.update(elapsed,player,true)
     figure.position.set(frame.position.x,(floorAt(frame.position)??homeY)+.012,frame.position.z)
     figure.rotation.y=frame.yaw
+    const turnSteps=frame.phase==='turn'&&!holding
     rig?.update(elapsed,{
-      active:focus,phase,
-      speedFraction:rig.hasWalk?Math.max(0,Math.min(1,frame.speed/KUNA_MAX_SPEED)):0,
+      active:engaged,phase,
+      speedFraction:rig.hasWalk?Math.min(1,frame.speed/(following?1.1:KUNA_MAX_SPEED)):0,
+      runFraction:following?Math.max(0,Math.min(1,(frame.speed-1.15)/(KUNA_FOLLOW_SPEED-1.55))):0,
+      turning:turnSteps,
       jaw:energy,
     })
     if(showDebug)debug.userData.setPosition?.(frame.position)
@@ -111,8 +159,11 @@ export function createKunaWanderer(scene:T.Scene,_playerNavigator:Navigator,sign
       const along=toCenter.copy(center).sub(ray.origin).dot(ray.direction)
       return along>0&&along<8&&ray.distanceSqToPoint(center)<.52*.52
     },
-    setTalking(active:boolean,jaw=0){focus=active;energy=Math.max(0,Math.min(1,jaw));if(!active)phase='idle'},
-    setPhase(next:KunaVoicePhase){phase=next;focus=next!=='idle'},
+    engage(player:Point){session.engage(player);wasFollowing=false;followTarget=null},
+    disengage(){session.end();wasFollowing=false;followTarget=null;phase='idle';energy=0},
+    mode:()=>session.mode(),
+    setTalking(_active:boolean,jaw=0){energy=Math.max(0,Math.min(1,jaw))},
+    setPhase(next:KunaVoicePhase){phase=next},
     status(){return failed?'error':model?'ready':'loading'},
     dispose(){
       disposed=true;scene.remove(figure);label.dispose()

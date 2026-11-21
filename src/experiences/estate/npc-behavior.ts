@@ -17,8 +17,10 @@ export type KunaFrame={
 }
 
 export const KUNA_MAX_SPEED=.52
+export const KUNA_FOLLOW_SPEED=3.0 // up to a brisk trot; reach a walking player without teleporting
 export const KUNA_STEP=1/60
 const ACCEL=.62,DECEL=.95,TURN_RATE=1.6,PERSONAL_SPACE=1.35
+const FOLLOW_ACCEL=2.7,FOLLOW_DECEL=3.6,FOLLOW_TURN_RATE=2.7
 const distance=(a:Point,b:Point)=>Math.hypot(a.x-b.x,a.z-b.z)
 const angleDelta=(a:number,b:number)=>Math.atan2(Math.sin(a-b),Math.cos(a-b))
 const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n))
@@ -27,7 +29,7 @@ const heading=(a:Point,b:Point)=>Math.atan2(b.x-a.x,b.z-a.z)
 export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
   let position:Point={...start},yaw=initialYaw,speed=0,phase:KunaPhase='idle'
   let target:Point|null=null,route:Point[]=[],dwell=3.4,nextGoal=1,accumulator=0
-  let lastTalking=false
+  let lastTalking=false,followCooldown=0,following=false
   const safeHome=nav.isSafe(position)
   if(!safeHome)phase='blocked'
   let previous:KunaFrame={position:{...position},yaw,speed,phase,goal:null,route:[]}
@@ -51,7 +53,7 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
     }
     settle(6,'blocked')
   }
-  function tick(player:Point,interacting:boolean,dt:number){
+  function tick(player:Point,interacting:boolean,dt:number,followTarget:Point|null){
     if(!safeHome)return
     if(interacting){
       if(!lastTalking){settle(0,'talk');lastTalking=true}
@@ -59,8 +61,31 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
       yaw+=clamp(delta,-TURN_RATE*dt,TURN_RATE*dt)
       return
     }
-    if(lastTalking){lastTalking=false;settle(3.2)}
+    if(lastTalking){lastTalking=false;settle(followTarget?0:3.2)}
+    const follow=!!followTarget
+    if(follow!==following){
+      following=follow
+      settle(follow?0:3.4)
+      followCooldown=0
+    }
     const toPlayer=distance(position,player)
+    // Follow must use the same swept, .46m fox collision radius as roaming.
+    // Never chase a target in a different room or jump through a wall.
+    if(followTarget){
+      followCooldown=Math.max(0,followCooldown-dt)
+      if(!nav.isSafe(followTarget)){settle(1,'blocked');return}
+      if(distance(position,followTarget)<.65){settle(0,'idle');return}
+      const stale=!target||distance(target,followTarget)>.75
+      if(followCooldown<=0&&(stale||!route.length)){
+        followCooldown=.85
+        const candidate=nav.path(position,followTarget)
+        let previous=position
+        if(!candidate?.length||!candidate.every(p=>{const ok=nav.clear(previous,p);previous=p;return ok})){
+          settle(1.2,'blocked');return
+        }
+        route=[...candidate];target={...followTarget};phase='turn'
+      }
+    }
     if(toPlayer<PERSONAL_SPACE+0.20){
       // A person is dynamic: do not push, slide or repeatedly replan around them.
       // Resume only when they have clearly moved away (hysteresis).
@@ -71,6 +96,7 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
       settle(3)
     }
     if(phase==='idle'||phase==='blocked'){
+      if(follow)return // wait for next safe follow target, never wander off
       dwell-=dt
       if(dwell<=0)chooseGoal()
       return
@@ -80,7 +106,7 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
     const waypoint=route[0],remaining=distance(position,waypoint)
     const desiredYaw=heading(position,waypoint)
     const turn=angleDelta(desiredYaw,yaw)
-    const turnLimit=(phase==='turn'?TURN_RATE:1.05)*dt
+    const turnLimit=(follow?FOLLOW_TURN_RATE:(phase==='turn'?TURN_RATE:1.05))*dt
     yaw+=clamp(turn,-turnLimit,turnLimit)
 
     if(phase==='turn'){
@@ -90,7 +116,7 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
     }
     if(Math.abs(turn)>.60){
       // Brake, then deliberately rotate in place. No crab-walk into cabinetry.
-      speed=Math.max(0,speed-DECEL*dt)
+      speed=Math.max(0,speed-(follow?FOLLOW_DECEL:DECEL)*dt)
       if(speed<.035){speed=0;phase='turn'}
       return
     }
@@ -99,12 +125,15 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
     const bend=following?Math.abs(angleDelta(heading(waypoint,following),desiredYaw)):0
     // Brake for the goal, or ahead of a sharp corner. Do not reverse in motion.
     const stopDistance=isFinal?remaining:(bend>.48?remaining:Math.max(remaining,.5))
-    const arrivalSpeed=Math.sqrt(Math.max(0,2*DECEL*stopDistance))
-    const bendSpeed=bend>.48?Math.min(.26,arrivalSpeed):KUNA_MAX_SPEED
-    let desiredSpeed=Math.min(KUNA_MAX_SPEED,arrivalSpeed,bendSpeed)
+    const maximum=follow?KUNA_FOLLOW_SPEED:KUNA_MAX_SPEED
+    const decel=follow?FOLLOW_DECEL:DECEL
+    const arrivalSpeed=Math.sqrt(Math.max(0,2*decel*stopDistance))
+    const bendSpeed=bend>.48?Math.min(follow?1.05:.26,arrivalSpeed):maximum
+    let desiredSpeed=Math.min(maximum,arrivalSpeed,bendSpeed)
     // Begin yielding before entering the child's personal space.
-    desiredSpeed=Math.min(desiredSpeed,clamp((toPlayer-PERSONAL_SPACE)*.65,0,KUNA_MAX_SPEED))
-    speed=clamp(desiredSpeed,speed-DECEL*dt,speed+ACCEL*dt)
+    if(follow)desiredSpeed=Math.min(desiredSpeed,clamp((toPlayer-PERSONAL_SPACE)*2.5,0,maximum))
+    else desiredSpeed=Math.min(desiredSpeed,clamp((toPlayer-PERSONAL_SPACE)*.65,0,KUNA_MAX_SPEED))
+    speed=clamp(desiredSpeed,speed-decel*dt,speed+(follow?FOLLOW_ACCEL:ACCEL)*dt)
     if(speed<=.0001)return
     const step=Math.min(remaining,speed*dt)
     const next={x:position.x+(waypoint.x-position.x)/remaining*step,
@@ -115,7 +144,7 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
     position=next
     if(distance(position,waypoint)<.11){
       route.shift()
-      if(!route.length){settle(3.8+(nextGoal%3)*.7);return}
+      if(!route.length){settle(follow?0:3.8+(nextGoal%3)*.7);return}
       const cornerAngle=Math.abs(angleDelta(heading(position,route[0]),yaw))
       if(cornerAngle>.38){phase='turn';speed=0}
     }
@@ -124,7 +153,7 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
     return {position:{...position},yaw,speed,phase,goal:target?{...target}:null,
       route:route.map(p=>({...p}))}
   }
-  function update(dt:number,player:Point,interacting=false):KunaFrame{
+  function update(dt:number,player:Point,interacting=false,followTarget:Point|null=null):KunaFrame{
     const frameDt=Number.isFinite(dt)?clamp(dt,0,.10):0
     if(interacting&&!lastTalking){
       // A tap freezes the actor at the *visible* interpolated pose,
@@ -136,7 +165,7 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
     let steps=0
     while(accumulator+1e-9>=KUNA_STEP&&steps++<8){
       previous=simulationState()
-      tick(player,interacting,KUNA_STEP);accumulator-=KUNA_STEP
+      tick(player,interacting,KUNA_STEP,followTarget);accumulator-=KUNA_STEP
     }
     // Interpolate *rendered* motion between simulation ticks. Without this,
     // irregular phone frames may execute two fixed steps at once, causing a

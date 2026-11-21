@@ -59,10 +59,10 @@ test('no new student data endpoints or chat transcripts and no new API secrets',
 test('Kuna uses a collision-first state machine and blends feet with actual ground velocity',()=>{
   assert.match(npc,/createKunaNavigator\(\)/)
   assert.match(npc,/createKunaBehavior\(nav,KUNA_HOME\)/)
-  assert.match(npc,/behavior\.update\(elapsed,player,holding\)/)
+  assert.match(npc,/behavior\.update\(elapsed,player,holding,following&&!holding\?followTarget:null\)/)
   assert.match(rig,/walkBlend=T\.MathUtils\.damp\(walkBlend,targetWalk,5,elapsed\)/)
-  assert.match(rig,/walk\?\.setEffectiveWeight\(\(1-sitWeight\)\*walkBlend\)/)
-  assert.match(rig,/idle\?\.setEffectiveWeight\(\(1-sitWeight\)\*\(1-walkBlend\)\)/)
+  assert.match(rig,/walk\?\.setEffectiveWeight\(\(1-sitWeight\)\*walkBlend\*\(1-runBlend\)\)/)
+  assert.match(rig,/idle\?\.setEffectiveWeight\(\(1-sitWeight\)\*\(1-walkBlend\)\*\(1-runBlend\)\)/)
   assert.doesNotMatch(npc,/walk\?\.reset\(\)|idle\?\.reset\(\)/)
   assert.match(rig,/model\.position\.copy\(neutralPosition\)/,'model-root motion never drifts relative to collision body')
   assert.match(scene,/const kunaInterval=cameraMoving\?0:33/,'Kuna tracks the viewer frame rate during walking')

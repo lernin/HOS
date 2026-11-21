@@ -11,6 +11,7 @@ const source=readFileSync(new URL('../src/characters/kuna/rig.ts',import.meta.ur
 const ui=readFileSync(new URL('../src/experiences/KunaLab.tsx',import.meta.url),'utf8')
 const main=readFileSync(new URL('../src/main.tsx',import.meta.url),'utf8')
 const estate=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+const vercel=JSON.parse(readFileSync(new URL('../vercel.json',import.meta.url),'utf8'))
 const dir=await mkdtemp(path.resolve('node_modules/.kuna-lab-test-'))
 const output=path.join(dir,'rig.mjs')
 try{
@@ -63,5 +64,6 @@ try{
     assert.match(main,/navigate\('kuna-lab'\)/)
     assert.match(main,/view === 'kuna-lab'/)
     assert.match(estate,/window\.location\.assign\('\/kuna-lab'\)/)
+    assert.deepEqual(vercel.rewrites.find(x=>x.source==='/kuna-lab'),{source:'/kuna-lab',destination:'/'},'Vercel MUST serve the React SPA at the direct lab URL')
   })
 }finally{await rm(dir,{recursive:true,force:true})}
