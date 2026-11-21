@@ -607,3 +607,39 @@ test('west gallery exterior paving never overlaps interior floor planes',()=>{
   assert.ok(nav.walkable(pt),`exterior path remains continuous at ${JSON.stringify(pt)}`)
  }
 })
+
+test('Estate offers one-tap fullscreen entry at the upper left, with no in-game exit button',()=>{
+  const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+  const css=readFileSync(new URL('../src/experiences/estate/estate.css',import.meta.url),'utf8')
+  assert.match(ui,/className="oe-header-left"/)
+  assert.match(ui,/className="oe-fullscreen"/)
+  assert.match(ui,/aria-label="Enter fullscreen"/)
+  assert.match(ui,/onClick=\{enterFullscreen\}/)
+  assert.match(ui,/target\.requestFullscreen\(\)/)
+  assert.match(ui,/document\.addEventListener\('fullscreenchange',sync\)/)
+  assert.match(ui,/!fullscreen&&<button/)
+  assert.doesNotMatch(ui,/document\.exitFullscreen\(/)
+  assert.match(css,/\.oe-header\{padding-top:max\(9px,env\(safe-area-inset-top\)\);padding-left:max\(9px,env\(safe-area-inset-left\)\)/)
+})
+
+test('Kuna is visible from the Kitchen destination and never leaves walkable kitchen floor',()=>{
+ const src=readFileSync(new URL('../src/experiences/estate/npcs.ts',import.meta.url),'utf8')
+ const definition=src.match(/export const KUNA_KITCHEN_STOPS:readonly Point\[\]=\[([\s\S]*?)\]/)
+ assert.ok(definition,'Kuna has a kitchen-only route')
+ const stops=[...definition[1].matchAll(/\{x:([-\d.]+),z:([-\d.]+)\}/g)].map(([,x,z])=>({x:Number(x),z:Number(z)}))
+ assert.ok(stops.length>=2,'Kuna has room to walk in the kitchen')
+ const kitchen=plan.canonicalTourViews['Kitchen']
+ assert.ok(kitchen,'Kitchen has a saved visitor viewpoint')
+ for(const [i,point] of stops.entries()){
+   assert.equal(plan.locationAt(point),'Kitchen','Kuna stays inside Kitchen')
+   assert.equal(nav.walkable(point,.48),true,'Kuna stop '+i+' has generous collision clearance')
+   assert.ok(navigator.path(stops[0],point),'Kuna can walk to stop '+i)
+   const dx=point.x-kitchen.x,dz=point.z-kitchen.z
+   const distance=Math.hypot(dx,dz)
+   const heading=Math.atan2(-dx,-dz)
+   const delta=Math.abs(Math.atan2(Math.sin(heading-kitchen.yaw),Math.cos(heading-kitchen.yaw)))
+   assert.ok(distance>1.5&&distance<4,'Kuna should be near, but not on the camera')
+   assert.ok(delta<.85,'Kuna should be within the saved Kitchen camera view')
+ }
+ assert.match(src,/ctx\.fillText\('Kuna',128,40\)/,'name tag makes Kuna easy to find')
+})

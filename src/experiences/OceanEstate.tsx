@@ -33,13 +33,13 @@ function readTourViews():EstateTourViews{
 }
 const axis=(n:number)=>Math.abs(n)<.12?0:Math.max(-1,Math.min(1,n))
 export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
-  const canvas=useRef<HTMLCanvasElement>(null),engine=useRef<Awaited<ReturnType<typeof createEstate>>|null>(null),audio=useRef<ReturnType<typeof estateAudio>|null>(null),dialog=useRef<HTMLDialogElement>(null)
+  const root=useRef<HTMLElement>(null),canvas=useRef<HTMLCanvasElement>(null),engine=useRef<Awaited<ReturnType<typeof createEstate>>|null>(null),audio=useRef<ReturnType<typeof estateAudio>|null>(null),dialog=useRef<HTMLDialogElement>(null)
   const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:2.4,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180})
   const pointer=useRef<{id:number;x:number;y:number;startX:number;startY:number;dragged:boolean}|null>(null),keys=useRef(new Set<string>())
   const touchPointers=useRef(new Map<number,TouchPoint>())
   const lastRightTap=useRef<{time:number;x:number;y:number}|null>(null)
   const artPointers=useRef(new Map<number,{x:number;y:number}>()),pinchDistance=useRef<number|null>(null),artOpen=useRef(false),artClosingRef=useRef(false)
-  const [prefs,setPrefs]=useState(readPrefs),[ready,setReady]=useState(false),[progress,setProgress]=useState('Opening Ocean Estate…'),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[started,setStarted]=useState(false),[paused,setPaused]=useState(false),[sound,setSound]=useState(false),[notice,setNotice]=useState(''),[help,setHelp]=useState(true),[showLocation,setShowLocation]=useState(true)
+  const [prefs,setPrefs]=useState(readPrefs),[ready,setReady]=useState(false),[progress,setProgress]=useState('Opening Ocean Estate…'),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[fullscreen,setFullscreen]=useState(false),[started,setStarted]=useState(false),[paused,setPaused]=useState(false),[sound,setSound]=useState(false),[notice,setNotice]=useState(''),[help,setHelp]=useState(true),[showLocation,setShowLocation]=useState(true)
   const [state,setState]=useState<EstateState>({location:'Arrival steps',position:spawn,moving:false,destination:'',fps:0,touring:false})
   const [art,setArt]=useState<EstateArtChoice|null>(null),[artInfo,setArtInfo]=useState(false),[artZoom,setArtZoom]=useState(1),[artClosing,setArtClosing]=useState(false)
   const [editMode,setEditMode]=useState(false),[editTour,setEditTour]=useState(()=>{try{return localStorage.getItem('ocean-estate-edit-tour-v1')==='on'}catch{return false}}),[editTarget,setEditTarget]=useState<string|null>(null),[tourViews,setTourViews]=useState(readTourViews),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
@@ -50,6 +50,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const activeRoom:EditableRoomId|null=state.location==='Grand foyer'?'foyer':state.location==='Great room'?'great-room':null
   const updateTouchMovement=()=>{const touches=[...touchPointers.current.values()],left=touches.find(t=>t.side==='left'),right=touches.find(t=>t.side==='right');if(!left){input.current.x=0;input.current.z=0;return}input.current.z=axis((left.y-left.startY)/72);input.current.x=right?axis((left.x-left.startX)/72):0}
   function handleWorldTap(x:number,y:number){if(input.current.paused)return;if(editMode){if(picker){if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(picked?.kind==='floor')setHelp(false)}}else{const hit=engine.current?.pickEditSurface(x,y);if(hit){openPicker(hit.room,hit.surface);setHelp(false)}else setNotice('Tap a floor or wall in the Grand foyer or Great room.')}}else if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(!picked)setNotice('Tap a clear spot on the floor or a painting.');else if(picked.kind==='art')enterArt(picked.art);else setHelp(false)}}
+  useEffect(()=>{const sync=()=>setFullscreen(document.fullscreenElement===root.current);document.addEventListener('fullscreenchange',sync);sync();return()=>document.removeEventListener('fullscreenchange',sync)},[])
   useEffect(()=>{const controller=new AbortController();void loadEstateMaterialCatalog(controller.signal).then(setMaterialCatalog).catch(()=>{});return()=>controller.abort()},[])
   useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress,tourViews).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
   useEffect(()=>{const e=engine.current;if(!e)return;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface])},[materialCatalog])
@@ -128,6 +129,13 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     dialog.current?.close();stop();onPlan()
   }
   function closeSettings(){if(started&&!paused&&!picker&&!artOpen.current){input.current.paused=false;if(sound)void beginSound()}}
+  function enterFullscreen(){
+    const target=root.current
+    if(!target||document.fullscreenElement===target)return
+    if(typeof target.requestFullscreen!=='function'){setNotice('Fullscreen is not supported by this browser.');return}
+    // Request directly in the tap handler; awaiting anything first loses mobile user activation.
+    void target.requestFullscreen().catch(()=>setNotice('This browser blocked fullscreen. Try opening Ocean Estate in Chrome.'))
+  }
   function back(){stop();input.current.paused=true;audio.current?.pause();onBack()}
   function openPicker(room:EditableRoomId,surface:EditableSurface){stop();input.current.paused=false;engine.current?.setEditSelection(room,surface);setPicker({room,surface,original:selections[room][surface],current:selections[room][surface]})}
   function previewMaterial(id:string|null){if(!picker)return;engine.current?.setRoomMaterial(picker.room,picker.surface,id);setPicker({...picker,current:id})}
@@ -153,14 +161,17 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
         lastRightTap.current={time:now,x:e.clientX,y:e.clientY}
       }else handleWorldTap(e.clientX,e.clientY)
     }return}const p=pointer.current;if(!p||p.id!==e.pointerId)return;if(allowTap&&!p.dragged)handleWorldTap(e.clientX,e.clientY);pointer.current=null;input.current.looking=false;input.current.lookedAt=performance.now();input.current.z=0}
-  return <main className="oe-root" aria-label="Ocean Estate" data-player-x={state.position.x.toFixed(3)} data-player-z={state.position.z.toFixed(3)} data-camera-yaw={input.current.yaw.toFixed(3)} data-touch-help={help?'on':'off'}>
+  return <main ref={root} className="oe-root" aria-label="Ocean Estate" data-player-x={state.position.x.toFixed(3)} data-player-z={state.position.z.toFixed(3)} data-camera-yaw={input.current.yaw.toFixed(3)} data-touch-help={help?'on':'off'}>
     <canvas ref={canvas} className="oe-canvas" aria-label="Explorable oceanfront estate" onContextMenu={e=>e.preventDefault()}
       onPointerDown={worldPointerDown}
       onPointerMove={worldPointerMove}
       onPointerUp={e=>worldPointerEnd(e)}
       onPointerCancel={e=>worldPointerEnd(e,false)}
       onLostPointerCapture={e=>worldPointerEnd(e,false)}/>
-    <header className="oe-header"><button className="oe-back" onClick={back} aria-label="Back to The Lab">←</button><div className="oe-wordmark">{!started||paused?'OCEAN ESTATE':''}</div><button className="oe-icon" aria-label="Estate menu" onClick={openSettings}>☷</button></header>
+    <header className="oe-header"><div className="oe-header-left">
+      {!fullscreen&&<button type="button" className="oe-fullscreen" aria-label="Enter fullscreen" title="Enter fullscreen" onClick={enterFullscreen}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M20 15v5h-5M4 15v5h5"/></svg></button>}
+      <button className="oe-back" onClick={back} aria-label="Back to The Lab">←</button>
+    </div><div className="oe-wordmark">{!started||paused?'OCEAN ESTATE':''}</div><button className="oe-icon" aria-label="Estate menu" onClick={openSettings}>☷</button></header>
     {started&&!error&&!art&&<>
       <div className={`oe-location oe-location-fade${showLocation?' visible':''}`}><h1>{state.location}</h1></div>
       {editMode&&<div className="oe-edit-badge"><span>EDIT MODE</span>{activeRoom?<strong>{roomName(activeRoom)} · tap a floor or wall</strong>:<strong>Walk into the foyer or great room</strong>}</div>}
