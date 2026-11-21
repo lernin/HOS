@@ -4,7 +4,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js'
 import {createKunaRig} from '../characters/kuna/rig'
 import {KUNA_EXPRESSIONS,KUNA_NEUTRAL,sampleKunaRecipe,validateKunaRecipe,type ExpressionRecipe,type HeadPose,type KunaVoicePhase} from '../characters/kuna/expressions'
 import {PROCEDIA_KEY_ROWS,PROCEDIA_CLIP_KEYS,PROCEDIA_GESTURE_CODES,getProcediaClip,isProcediaKey,sampleProcediaKeys} from '../characters/kuna/procediaKeyboard'
-import {createKunaRecorder,sampleKunaTake,validateKunaTake,KUNA_STARTER_EMOTIONS,normalizeKunaEmotion,validKunaEmotion,type KunaStudioTake,type RecorderMode} from '../characters/kuna/studioRecorder'
+import {createKunaRecorder,sampleKunaTake,validateKunaTake,KUNA_STARTER_EMOTIONS,normalizeKunaEmotion,validKunaEmotion,contextLabel,type KunaPerformanceContext,type KunaStudioTake,type RecorderMode} from '../characters/kuna/studioRecorder'
 import './kuna-lab.css'
 
 type Playback={recipe?:ExpressionRecipe;take?:KunaStudioTake;since:number;lastClipAt:number}
@@ -89,6 +89,12 @@ export function KunaLab({onBack}:{onBack:()=>void}){
   const [emotionCatalog,setEmotionCatalog]=useState<string[]>([...KUNA_STARTER_EMOTIONS])
   const [emotionDraft,setEmotionDraft]=useState('')
   const [emotionFilter,setEmotionFilter]=useState('all')
+  const [contextFilter,setContextFilter]=useState<'all'|KunaPerformanceContext>('all')
+  const [auditionContext,setAuditionContext]=useState<KunaPerformanceContext>('face-to-face')
+  const auditionContextRef=useRef<KunaPerformanceContext>('face-to-face')
+  // Alongside right is the recording master; left is a mirrored audition.
+  const [auditionSide,setAuditionSide]=useState<'right'|'left'>('right')
+  const auditionSideRef=useRef<'right'|'left'>('right')
   const [presetId,setPresetId]=useState('listen.curious')
   const [playing,setPlaying]=useState(false)
   const [status,setStatus]=useState('Loading Procedia’s original fox model…')
@@ -141,8 +147,24 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     }
     updateTake(take.id,{emotions})
   }
+  function chooseAuditionContext(next:KunaPerformanceContext){
+    if(mode==='recording'||mode==='paused')return
+    auditionContextRef.current=next;setAuditionContext(next)
+    if(next==='alongside')setSit(false)
+    setStatus(next==='alongside'?'Walking audition: native Walk cycle, angled view and mirrored left preview.':'Face-to-face audition: direct view, neutral closed-mouth stance.')
+  }
+  function mirrorAuditionSide(){
+    if(mode!=='idle')return
+    const next=auditionSideRef.current==='right'?'left':'right'
+    auditionSideRef.current=next;setAuditionSide(next)
+    setStatus('Mirrored to '+next+' walking side. Same recording and emotional ratings.')
+  }
   function arm(){
     if(mode==='recording'||mode==='paused')return
+    // Record one canonical right-side take; mirror it to the left at review.
+    if(auditionContextRef.current==='alongside'){
+      auditionSideRef.current='right';setAuditionSide('right')
+    }
     recorderRef.current.arm();setMode('armed')
     pressedRef.current.clear();setPressed([])
     playbackRef.current=null;simRef.current=null;setPlaying(false);choosePhase('idle')
@@ -158,8 +180,9 @@ export function KunaLab({onBack}:{onBack:()=>void}){
   }
   function stopAndSave(armNext=false){
     const id='take-'+String(++takeSeqRef.current).padStart(3,'0')
-    const take=recorderRef.current.finish(performance.now(),lastPoseRef.current,id)
-    if(take){
+    const recorded=recorderRef.current.finish(performance.now(),lastPoseRef.current,id)
+    if(recorded){
+      const take:KunaStudioTake={...recorded,contexts:[auditionContextRef.current]}
       setLibrary([...takes,take].slice(-60));setSelected(take.id)
       setStatus('Saved custom.'+take.id+' — replay it, then name the feeling. '+take.frames.length+' motion frames captured.')
     }else setStatus('No movement recorded. Press Arm, then perform a gesture.')
@@ -206,7 +229,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     simRef.current=null;setPlaying(true);choosePhase('idle')
     setStatus('Replaying '+(take.label||printable(take.id))+' at '+(take.playbackIntensity??100)+'% head/jaw movement; timing remains original.')
   }
-  function updateTake(id:string,changes:Partial<Pick<KunaStudioTake,'label'|'tags'|'emotions'|'playbackIntensity'>>){
+  function updateTake(id:string,changes:Partial<Pick<KunaStudioTake,'label'|'tags'|'emotions'|'playbackIntensity'|'contexts'>>){
     const updated=takes.map(t=>t.id===id?{...t,...changes}:t)
     setLibrary(updated)
   }
@@ -274,7 +297,8 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12
     const scene=new T.Scene()
     const camera=new T.PerspectiveCamera(38,1,.05,30)
-    camera.position.set(2,1.55,3.8);camera.lookAt(0,.65,0)
+    camera.position.set(0,1.55,3.8);camera.lookAt(0,.65,0)
+    const cameraTarget=new T.Vector3()
     scene.add(new T.HemisphereLight('#f5f6ff','#6d4931',2.3))
     const key=new T.DirectionalLight('#ffe3ad',3);key.position.set(3,6,5);scene.add(key)
     const back=new T.DirectionalLight('#9fd0ff',1.5);back.position.set(-4,3,-2);scene.add(back)
@@ -305,6 +329,10 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     const draw=(now:number)=>{
       if(disposed)return
       const dt=clamp((now-last)/1000,0,.08);last=now
+      const beside=auditionContextRef.current==='alongside'
+      cameraTarget.set(beside?(auditionSideRef.current==='right'?2.6:-2.6):0,1.55,beside?2.65:3.8)
+      camera.position.lerp(cameraTarget,Math.min(1,dt*7))
+      camera.lookAt(0,.65,0)
       let currentPhase=phaseRef.current
       if(simRef.current!==null){
         const t=(now-simRef.current)/1000
@@ -326,7 +354,8 @@ export function KunaLab({onBack}:{onBack:()=>void}){
       if(preview){
         const time=(now-preview.since)/1000
         if(preview.take){
-          const frameValue=sampleKunaTake(preview.take,time,preview.take.playbackIntensity??100)
+          const frameValue=sampleKunaTake(preview.take,time,preview.take.playbackIntensity??100,
+            beside&&auditionSideRef.current==='left')
           manual=frameValue;jaw=frameValue.jaw;instant=true
           for(const event of preview.take.clips){
             if(event.at>preview.lastClipAt&&event.at<=time)aliveRig?.triggerDemoClip(event.name,event.timeScale)
@@ -334,7 +363,9 @@ export function KunaLab({onBack}:{onBack:()=>void}){
           preview.lastClipAt=time
           if(time>=preview.take.duration){playbackRef.current=null;setPlaying(false)}
         }else if(preview.recipe){
-          manual=sampleKunaRecipe(preview.recipe,time);instant=true
+          const sampled=sampleKunaRecipe(preview.recipe,time)
+          manual=beside&&auditionSideRef.current==='left'?{...sampled,turn:-sampled.turn,tilt:-sampled.tilt}:sampled
+          instant=true
           if(!preview.recipe.repeat&&time>=preview.recipe.duration){
             playbackRef.current=null;setPlaying(false)
           }
@@ -344,7 +375,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
       const speechJaw=currentPhase==='speaking'?
         clamp(.38+.21*Math.sin(t*17)+.16*Math.sin(t*27),.07,.9):0
       const seated=sittingRef.current||currentPhase!=='idle'
-      aliveRig?.update(dt,{active:seated,phase:currentPhase,speedFraction:0,
+      aliveRig?.update(dt,{active:seated&&!beside,phase:currentPhase,speedFraction:beside?.58:0,
         jaw:speechJaw,manualJaw:jaw,freezeIdle:keys.freeze,manualPose:manual,
         studioMode:true,directPose:instant})
       if(aliveRig&&recorderRef.current.mode()==='recording'){
@@ -385,7 +416,8 @@ export function KunaLab({onBack}:{onBack:()=>void}){
   },[mode])
   const current=takes.find(t=>t.id===selected)
   const selectedPreset=presets.find(r=>r.id===presetId)
-  const gallery=takes.filter(t=>emotionFilter==='all'||t.emotions?.[emotionFilter]!==undefined).reverse()
+  const gallery=takes.filter(t=>(emotionFilter==='all'||t.emotions?.[emotionFilter]!==undefined)&&
+    (contextFilter==='all'||t.contexts?.includes(contextFilter))).reverse()
   return <main className="kl-root" aria-label="Kuna Motion Studio">
     <header className="kl-header"><div><span className="kl-eyebrow">PROCEDIA CHARACTER SYSTEM · REUSABLE WORLD PACKAGE</span>
       <h1>Kuna Lab</h1><p>Motion Studio · perform first, name the feeling afterward</p></div>
@@ -394,10 +426,33 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     <div className="kl-layout">
       <section className="kl-stage" aria-label="Animated Procedia Kuna preview">
         <canvas ref={canvas} aria-label="Original 3D Kuna model"/>
-        <div className="kl-stage-caption"><b>Original Procedia Kuna</b><span>Same GLB, Head and Chin bones · 0.78 m in Ocean Estate</span></div>
+        <div className="kl-stage-caption"><b>Original Procedia Kuna</b>
+          <span>{auditionContext==='alongside'?'Walking alongside · '+auditionSide+' view (mirrored)':'Face-to-face · calm closed-mouth stance'} · 0.78 m in Ocean Estate</span>
+        </div>
         <div className="kl-indicator">{assetReady?'Model ready':status}</div>
       </section>
       <section className="kl-panel">
+        <div className="kl-section kl-view-context">
+          <h2>Performance context</h2>
+          <p>Rehearse facing the child or walking just ahead, beside the child. Both use one emotion vocabulary. No second left/right gesture library.</p>
+          <div className="kl-row" role="group" aria-label="Expression viewing context">
+            <button type="button" className={auditionContext==='face-to-face'?'selected':''}
+              aria-pressed={auditionContext==='face-to-face'}
+              disabled={mode==='recording'||mode==='paused'}
+              onClick={()=>chooseAuditionContext('face-to-face')}>Face-to-face</button>
+            <button type="button" className={auditionContext==='alongside'?'selected':''}
+              aria-pressed={auditionContext==='alongside'}
+              disabled={mode==='recording'||mode==='paused'}
+              onClick={()=>chooseAuditionContext('alongside')}>Walking alongside</button>
+          </div>
+          {auditionContext==='alongside'&&<div className="kl-row">
+            <button type="button" disabled={mode!=='idle'} onClick={mirrorAuditionSide}>
+              Mirror view: {auditionSide==='right'?'right → left':'left → right'}
+            </button>
+            <span className="kl-context-note">One recorded performance; horizontal head motion mirrors for the other side.</span>
+          </div>}
+          <small>Recording locks the viewpoint so the performance remains consistent. Walking uses the existing native gait; the side shown here is an audition view, not an additional saved emotion.</small>
+        </div>
         <div className="kl-section kl-recorder">
           <h2>Motion Studio</h2><p>Arm, then press any Procedia movement key. Recording starts with your first action—not before. Capture several takes, then decide what they mean.</p>
           <div className="kl-record-indicator" aria-live="polite"><span className={'kl-record-dot kl-record-dot--'+mode}/>
@@ -450,6 +505,14 @@ export function KunaLab({onBack}:{onBack:()=>void}){
                 {emotionCatalog.map(name=><option key={name} value={name}>{name}</option>)}
               </select>
             </label>
+            <label>Performance context
+              <select aria-label="Filter takes by performance context" value={contextFilter}
+                onChange={e=>setContextFilter(e.target.value as 'all'|KunaPerformanceContext)}>
+                <option value="all">All contexts</option>
+                <option value="face-to-face">Face-to-face</option>
+                <option value="alongside">Walking alongside</option>
+              </select>
+            </label>
             <span>{gallery.length} of {takes.length} takes</span>
           </div>
           {gallery.length===0?<p className="kl-empty">{takes.length?'No takes registered with this emotion yet.':'No takes yet. Press Record and perform a gesture.'}</p>:
@@ -465,6 +528,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
               </svg>
               <span className="kl-card-title"><b>{t.label||printable(t.id)}</b><span>▶</span></span>
               <span className="kl-card-meta">{t.duration.toFixed(1)} sec · {t.frames.length} frames · motion {t.playbackIntensity??100}%</span>
+              <span className="kl-card-context">{t.contexts?.map(contextLabel).join(' + ')||'Context not classified'}</span>
               <span className="kl-card-emotions">
                 {Object.entries(t.emotions??{}).length===0?<i>Not emotionally rated</i>:
                   Object.entries(t.emotions??{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([name,value])=>
@@ -478,6 +542,22 @@ export function KunaLab({onBack}:{onBack:()=>void}){
               <input type="text" maxLength={100} placeholder="Curious head tilt"
                 value={current.label} onChange={e=>updateTake(current.id,{label:e.target.value})}/>
             </label>
+            <h3>Where is this gesture appropriate?</h3>
+            <div className="kl-emotion-palette" role="group" aria-label="Applicable performance contexts">
+              {(['face-to-face','alongside'] as KunaPerformanceContext[]).map(context=>
+                <button key={context} type="button"
+                  aria-pressed={current.contexts?.includes(context)??false}
+                  className={current.contexts?.includes(context)?'selected':''}
+                  onClick={()=>{
+                    const next=current.contexts?.includes(context)
+                      ?current.contexts.filter(c=>c!==context)
+                      :[...(current.contexts??[]),context]
+                    if(!next.length){setStatus('Keep at least one context per rated gesture.');return}
+                    updateTake(current.id,{contexts:next})
+                  }}>
+                  {current.contexts?.includes(context)?'✓ ':'+ '}{contextLabel(context)}
+                </button>)}
+            </div>
             <p>Which emotions does the gesture communicate? Add any that are present, then rate their strength. Unselected means not rated; 0% means explicitly none.</p>
             <div className="kl-emotion-palette" aria-label="Registered emotions">
               {emotionCatalog.map(name=><button type="button" key={name}
