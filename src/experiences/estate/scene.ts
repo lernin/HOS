@@ -8,6 +8,7 @@ import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, resolveFloorRay, spawn, type Point, type EstateTourView, type EstateTourViews } from './plan'
 import { skipReachedWaypoints, easeGuidedPace } from './motion'
 import { createKunaWanderer } from './npcs'
+import type { KunaVoicePhase } from '../../characters/kuna/expressions'
 import { createEstateEditor, type EditableRoomId, type EditableSurface, type EditorMaterial } from './editor'
 import { addMossRockSet } from './moss-rocks'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number}
@@ -260,6 +261,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     renderer.render(scene,camera);frame=requestAnimationFrame(tick)
     return {dispose,stop,reset,pick,closeArt,panArt,zoomArt,resetArtView,
        setKunaTalking(active:boolean,jaw=0){kuna?.setTalking(active,jaw);dirty=true},
+       setKunaPhase(phase:KunaVoicePhase){kuna?.setPhase(phase);dirty=true},
        getKunaStatus:()=>kuna?.status()??'loading',
       setTourViews(next:EstateTourViews){tourViews={...next}},
       getTourViewpoint():EstateTourView{return {x:position.x,z:position.z,yaw,pitch}},
