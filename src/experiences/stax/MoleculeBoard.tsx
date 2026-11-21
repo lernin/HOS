@@ -39,7 +39,7 @@ const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=124, TAP=9, DOUBLE_M
 // Red/blue heads have diagonal Blueprint destinations; allow a wider approach
 // zone but preserve exact final positions and all other magnet eligibility.
 const RED_BLUE_SNAP_RADIUS=SNAP_RADIUS*1.75
-const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1', FOAM_SOUND_KEY='stax-foam-slide-sound-v1', FOAM_SOUND_PRESET_KEY='stax-foam-slide-preset-v1', FOAM_SPREAD_KEY='stax-foam-shadow-spread-v1', FOAM_FONT_KEY='stax-foam-text-style-v1'
+const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1', FOAM_SOUND_KEY='stax-foam-slide-sound-v1', FOAM_SOUND_PRESET_KEY='stax-foam-slide-preset-v2', FOAM_SPREAD_KEY='stax-foam-shadow-spread-v1', FOAM_FONT_KEY='stax-foam-text-style-v1'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
 const choices:Choice[]=[{kind:'circle',label:'Noun / pronoun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
@@ -1035,12 +1035,12 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const [foamShadowStrength,setFoamShadowStrength]=useState(()=>{
   try{
    const stored=localStorage.getItem(FOAM_SHADOW_KEY)
-   const value=stored===null?100:Number(stored)
+   const value=stored===null?125:Number(stored)
    return Number.isFinite(value)?Math.min(200,Math.max(0,Math.round(value))):100
-  }catch{return 100}
+  }catch{return 125}
  })
  const [foamShadowSpread,setFoamShadowSpread]=useState(()=>{
-  try{const n=Number(localStorage.getItem(FOAM_SPREAD_KEY)??100);return Number.isFinite(n)?Math.max(0,Math.min(250,Math.round(n/5)*5)):100}catch{return 100}
+  try{const n=Number(localStorage.getItem(FOAM_SPREAD_KEY)??0);return Number.isFinite(n)?Math.max(0,Math.min(250,Math.round(n/5)*5)):0}catch{return 0}
  })
  const [foamTextStyle,setFoamTextStyle]=useState<{font:string;size:number;bold:boolean}>(()=>{
   try{
@@ -1063,7 +1063,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   try{return localStorage.getItem(FOAM_SOUND_KEY)!=='off'}catch{return true}
  })
  const [foamSoundPreset,setFoamSoundPreset]=useState<FoamSlideSoundId>(()=>{
-  try{return safeFoamSoundId(localStorage.getItem(FOAM_SOUND_PRESET_KEY))}catch{return 'felt'}
+  try{return safeFoamSoundId(localStorage.getItem(FOAM_SOUND_PRESET_KEY))}catch{return 'plastic'}
  })
  const foamAudio=useRef<FoamSlideAudio|null>(null)
  function audio(){
@@ -1087,6 +1087,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const rootRef=useRef<HTMLDivElement>(null)
  useEffect(()=>{const sync=()=>setFullscreen(document.fullscreenElement===rootRef.current);document.addEventListener('fullscreenchange',sync);return()=>document.removeEventListener('fullscreenchange',sync)},[])
  const [selected,setSelected]=useState<string|null>(null)
+ // Preserve one Undo snapshot per input session, rather than per keystroke.
+ const textEditBefore=useRef<Draft|null>(null)
  const [hint,setHint]=useState('Drag any shape anywhere. Only compatible pieces brought close together will snap.')
  // Keep all workspace controls in a horizontal bottom tray. Retract after
  // 6.5 seconds of inactivity; the left-edge handle remains reachable.
@@ -1144,6 +1146,19 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  function toggleQuestTwoContraction(){
   setQuestTwoContracted(v=>!v)
   setHint('The BLUE and RED shapes stay separate; only the spoken/written form changes.')
+ }
+ function setSelectedShapeWord(value:string){
+  if(!selected)return
+  const current=currentDoc.current
+  if(!current.atoms.some(a=>a.id===selected))return
+  update({...current,atoms:current.atoms.map(a=>a.id===selected?{...a,word:value.slice(0,36)}:a)})
+ }
+ function finishShapeTextEdit(){
+  const before=textEditBefore.current
+  textEditBefore.current=null
+  if(before&&selected&&before.atoms.find(a=>a.id===selected)?.word!==currentDoc.current.atoms.find(a=>a.id===selected)?.word){
+   setHistory(h=>[...h,before].slice(-40))
+  }
  }
  function wordOnAtom(a:Atom){
   return activeQuestLevel===2&&questActive&&questTwoSide==='answer'&&a.id==='q2-a-q-2'
@@ -1559,13 +1574,26 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       aria-label="Shadow spread" disabled={theme!=='classroom-foam'}/>
      <div className="stax-shadow-scale"><span>Tight</span><span>Normal</span><span>Wide</span></div>
      {theme!=='classroom-foam'&&<small>Switch to Foam to adjust shadows.</small>}
-     <button type="button" className="stax-shadow-reset" onClick={()=>setFoamShadowStrength(100)} disabled={foamShadowStrength===100}>Reset shadow</button>
+     <button type="button" className="stax-shadow-reset" onClick={()=>{setFoamShadowStrength(125);setFoamShadowSpread(0)}} disabled={foamShadowStrength===125&&foamShadowSpread===0}>Reset shadows (125% / 0%)</button>
      <label className="stax-foam-sound-option">
       <input type="checkbox" checked={foamSoundEnabled} onChange={e=>setFoamSoundEnabled(e.target.checked)}/>
       Foam sliding sound
      </label>
      <div className="stax-setting-section">
       <label htmlFor="stax-foam-font">Shape text font</label>
+      <div className="stax-foam-type-sample" aria-label="Live shape text sample"
+       style={{fontFamily:foamTextStyle.font,fontSize:foamTextStyle.size,fontWeight:foamTextStyle.bold?700:400}}>
+       Sample ABC
+      </div>
+      <label htmlFor="stax-selected-shape-word">Text on selected shape</label>
+      <input id="stax-selected-shape-word" type="text" maxLength={36}
+       placeholder={selected?'Enter a word…':'Tap a shape first'}
+       disabled={!selected||!doc.atoms.some(a=>a.id===selected)}
+       value={selected?doc.atoms.find(a=>a.id===selected)?.word??'':''}
+       onFocus={()=>{textEditBefore.current=currentDoc.current}}
+       onChange={e=>setSelectedShapeWord(e.target.value)}
+       onBlur={finishShapeTextEdit}/>
+      <small>Tap a foam piece, then type here. Font changes appear on that piece and in the preview.</small>
       <select id="stax-foam-font" value={foamTextStyle.font}
        onChange={e=>setFoamTextStyle(v=>({...v,font:e.target.value}))}>
        {['Arial','Verdana','Trebuchet MS','Georgia','Tahoma','system-ui'].map(f=><option key={f} value={f}>{f}</option>)}
@@ -1677,8 +1705,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
         {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
       {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted} dusk/>}
       {theme==='classroom-foam'&&<FoamChip kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>} 
-      {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2} dominantBaseline="middle" fontFamily={theme==='classroom-foam'?foamTextStyle.font:undefined}
-        fontSize={theme==='classroom-foam'?Math.min(foamTextStyle.size,Math.max(10,(atomWidth(a)-12)/(Math.max(wordOnAtom(a).length,1)*.57))):Math.min(18,Math.max(11,atomWidth(a)/Math.max(wordOnAtom(a).length,3)*1.4))} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight={theme==='classroom-foam'?(foamTextStyle.bold?700:400):600} textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
+      {wordOnAtom(a)&&<text x={atomWidth(a)/2} y={atomHeight(a)/2} dominantBaseline="middle" fontFamily={theme==='classroom-foam'?foamTextStyle.font:undefined}
+        fontSize={theme==='classroom-foam'?Math.min(foamTextStyle.size,atomHeight(a)*.72):Math.min(18,Math.max(11,atomWidth(a)/Math.max(wordOnAtom(a).length,3)*1.4))}
+        textLength={theme==='classroom-foam'&&wordOnAtom(a).length*foamTextStyle.size*.58>atomWidth(a)-14?Math.max(8,atomWidth(a)-14):undefined}
+        lengthAdjust="spacingAndGlyphs" fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight={theme==='classroom-foam'?(foamTextStyle.bold?700:400):600} textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
     </g>)}
    </svg>
    {questionMarker&&<button className="stax-quest2-h" type="button" aria-label="H interrogative marker, tap to ask How" title="H means How" style={{left:viewPercentX(questionMarker.x),top:viewPercentY(questionMarker.y)}} onClick={()=>questTwoTap('H')}>H</button>}
