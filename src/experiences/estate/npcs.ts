@@ -121,7 +121,7 @@ export function createKunaWanderer(scene:T.Scene,playerNavigator:Navigator,signa
       active:seated,phase,
       speedFraction:rig.hasWalk?Math.max(0,Math.min(1,frame.speed/KUNA_MAX_SPEED)):0,
       turning:frame.phase==='turn'&&!seated,
-      jaw:energy,
+      jaw:phase==='speaking'?energy:0,
     })
     if(showDebug)debug.userData.setPosition?.(frame.position)
   }
@@ -139,10 +139,10 @@ export function createKunaWanderer(scene:T.Scene,playerNavigator:Navigator,signa
         engagementPoint=lastPlayer?{...lastPlayer}:null
         following=false;playerStillFor=0
       }
-      focus=active;energy=Math.max(0,Math.min(1,jaw))
+      focus=active;energy=active?Math.max(0,Math.min(1,jaw)):0
       if(!active){phase='idle';following=false;engagementPoint=null}
     },
-    setPhase(next:KunaVoicePhase){phase=next},
+    setPhase(next:KunaVoicePhase){phase=next;if(next!=='speaking')energy=0},
     status(){return failed?'error':model?'ready':'loading'},
     dispose(){
       disposed=true;scene.remove(figure);label.dispose()
