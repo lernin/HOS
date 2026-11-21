@@ -4,7 +4,7 @@ import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js'
 import {createKunaRig} from '../characters/kuna/rig'
 import {KUNA_EXPRESSIONS,KUNA_NEUTRAL,sampleKunaRecipe,validateKunaRecipe,type ExpressionRecipe,type HeadPose,type KunaVoicePhase} from '../characters/kuna/expressions'
 import {PROCEDIA_KEY_ROWS,PROCEDIA_CLIP_KEYS,PROCEDIA_GESTURE_CODES,getProcediaClip,isProcediaKey,sampleProcediaKeys} from '../characters/kuna/procediaKeyboard'
-import {createKunaRecorder,sampleKunaTake,validateKunaTake,type KunaStudioTake,type RecorderMode} from '../characters/kuna/studioRecorder'
+import {createKunaRecorder,sampleKunaTake,validateKunaTake,KUNA_STARTER_EMOTIONS,normalizeKunaEmotion,validKunaEmotion,type KunaStudioTake,type RecorderMode} from '../characters/kuna/studioRecorder'
 import './kuna-lab.css'
 
 type Playback={recipe?:ExpressionRecipe;take?:KunaStudioTake;since:number;lastClipAt:number}
@@ -13,6 +13,25 @@ const deg=(n:number)=>n*Math.PI/180
 const degrees=(n:number)=>Math.round(n*180/Math.PI)
 const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n))
 const STORAGE='hos-kuna-motion-studio-v2'
+const EMOTION_STORE='hos-kuna-emotion-catalog-v1'
+function emotionNames(values:unknown,recordings:KunaStudioTake[]=[]):string[]{
+  const names:string[]=[...KUNA_STARTER_EMOTIONS]
+  const add=(name:unknown)=>{
+    if(validKunaEmotion(name)&&!names.includes(name)&&names.length<48)names.push(name)
+  }
+  if(Array.isArray(values))values.forEach(add)
+  recordings.forEach(t=>Object.keys(t.emotions??{}).forEach(add))
+  return names
+}
+function readEmotionNames(recordings:KunaStudioTake[]):string[]{
+  try{return emotionNames(JSON.parse(localStorage.getItem(EMOTION_STORE)??'[]'),recordings)}
+  catch{return emotionNames([],recordings)}
+}
+function motionTrace(take:KunaStudioTake,axis:'turn'|'pitch'):string{
+  const step=Math.max(1,Math.ceil(take.frames.length/48))
+  return take.frames.filter((_,i)=>i%step===0||i===take.frames.length-1)
+    .map((f,i)=>(i?'L':'M')+(100*f.at/take.duration).toFixed(2)+' '+(24-f[axis]*27).toFixed(2)).join(' ')
+}
 const presets:ExpressionRecipe[]=[
   ...Object.values(KUNA_EXPRESSIONS),
   {version:1,id:'agree.soft-nod',category:'response',duration:1.6,repeat:false,keys:[
@@ -67,6 +86,9 @@ export function KunaLab({onBack}:{onBack:()=>void}){
   const [mode,setMode]=useState<RecorderMode>('idle')
   const [takes,setTakes]=useState<KunaStudioTake[]>([])
   const [selected,setSelected]=useState('')
+  const [emotionCatalog,setEmotionCatalog]=useState<string[]>([...KUNA_STARTER_EMOTIONS])
+  const [emotionDraft,setEmotionDraft]=useState('')
+  const [emotionFilter,setEmotionFilter]=useState('all')
   const [presetId,setPresetId]=useState('listen.curious')
   const [playing,setPlaying]=useState(false)
   const [status,setStatus]=useState('Loading Procedia’s original fox model…')
@@ -93,6 +115,31 @@ export function KunaLab({onBack}:{onBack:()=>void}){
   function setLibrary(next:KunaStudioTake[]){
     setTakes(next)
     try{localStorage.setItem(STORAGE,JSON.stringify(next))}catch{/* Export still works. */}
+  }
+  function saveEmotionCatalog(next:string[]){
+    setEmotionCatalog(next)
+    try{localStorage.setItem(EMOTION_STORE,JSON.stringify(next))}catch{/* JSON export remains available. */}
+  }
+  function registerEmotion(){
+    const name=normalizeKunaEmotion(emotionDraft)
+    if(!validKunaEmotion(name)){
+      setStatus('Use an emotion name of 1–32 letters, numbers, spaces or hyphens.');return
+    }
+    if(!emotionCatalog.includes(name)){
+      if(emotionCatalog.length>=48){setStatus('Emotion catalog limit reached (48).');return}
+      saveEmotionCatalog([...emotionCatalog,name])
+    }
+    setEmotionDraft('')
+    setStatus(name+' is registered. Select a recording and give it a strength rating.')
+  }
+  function toggleEmotion(take:KunaStudioTake,name:string){
+    const emotions={...take.emotions}
+    if(emotions[name]!==undefined)delete emotions[name]
+    else {
+      if(Object.keys(emotions).length>=24){setStatus('Use at most 24 ratings per take.');return}
+      emotions[name]=50
+    }
+    updateTake(take.id,{emotions})
   }
   function arm(){
     if(mode==='recording'||mode==='paused')return
@@ -157,9 +204,9 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     rigRef.current?.cancelDemo()
     playbackRef.current={take,since:performance.now(),lastClipAt:-1}
     simRef.current=null;setPlaying(true);choosePhase('idle')
-    setStatus('Replaying '+(take.label||printable(take.id))+' with the exact recorded movement and timing.')
+    setStatus('Replaying '+(take.label||printable(take.id))+' at '+(take.playbackIntensity??100)+'% head/jaw movement; timing remains original.')
   }
-  function updateTake(id:string,changes:Partial<Pick<KunaStudioTake,'label'|'tags'>>){
+  function updateTake(id:string,changes:Partial<Pick<KunaStudioTake,'label'|'tags'|'emotions'|'playbackIntensity'>>){
     const updated=takes.map(t=>t.id===id?{...t,...changes}:t)
     setLibrary(updated)
   }
@@ -173,13 +220,22 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     try{
       if(file.size>1500000)throw Error('Recording file is too large.')
       const data=JSON.parse(await file.text()) as unknown
-      const items=(Array.isArray(data)?data:[data]).filter(validateKunaTake)
-      if(!items.length||items.length>60)throw Error('Invalid Kuna Studio recording JSON.')
+      const pack=data&&typeof data==='object'&&!Array.isArray(data)&&'takes' in data
+        ?data as {version?:unknown;type?:unknown;takes?:unknown;emotions?:unknown}:null
+      if(pack&&(pack.version!==3||pack.type!=='kuna-motion-library'))
+        throw Error('Unrecognized Kuna gallery library format.')
+      const source=pack?pack.takes:data
+      const rawItems=Array.isArray(source)?source:[source]
+      if(!rawItems.length||rawItems.length>60||!rawItems.every(validateKunaTake))
+        throw Error('Invalid Kuna Studio recording JSON.')
+      const items=rawItems as KunaStudioTake[]
       const previous=new Map(takes.map(x=>[x.id,x]))
       for(const t of items)previous.set(t.id,t)
       const next=[...previous.values()].slice(-60)
       setLibrary(next);setSelected(items[0].id)
-      setStatus('Imported '+items.length+' Kuna gesture recording(s).')
+      const importedNames=Array.isArray(pack?.emotions)?pack.emotions:[]
+      saveEmotionCatalog(emotionNames([...emotionCatalog,...importedNames],next))
+      setStatus('Imported '+items.length+' Kuna gesture recording(s) with emotional ratings.')
     }catch(e){setStatus(e instanceof Error?e.message:'Could not import recordings.')}
   }
   function runSimulation(){
@@ -207,6 +263,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     setTakes(stored)
     if(stored.length)setSelected(stored.at(-1)!.id)
     takeSeqRef.current=stored.reduce((n,t)=>Math.max(n,Number(t.id.match(/^take-(\d+)$/)?.[1]??0)),0)
+    setEmotionCatalog(readEmotionNames(stored))
   },[])
   useEffect(()=>{
     const node=canvas.current;if(!node)return
@@ -269,7 +326,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
       if(preview){
         const time=(now-preview.since)/1000
         if(preview.take){
-          const frameValue=sampleKunaTake(preview.take,time)
+          const frameValue=sampleKunaTake(preview.take,time,preview.take.playbackIntensity??100)
           manual=frameValue;jaw=frameValue.jaw;instant=true
           for(const event of preview.take.clips){
             if(event.at>preview.lastClipAt&&event.at<=time)aliveRig?.triggerDemoClip(event.name,event.timeScale)
@@ -328,6 +385,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
   },[mode])
   const current=takes.find(t=>t.id===selected)
   const selectedPreset=presets.find(r=>r.id===presetId)
+  const gallery=takes.filter(t=>emotionFilter==='all'||t.emotions?.[emotionFilter]!==undefined).reverse()
   return <main className="kl-root" aria-label="Kuna Motion Studio">
     <header className="kl-header"><div><span className="kl-eyebrow">PROCEDIA CHARACTER SYSTEM · REUSABLE WORLD PACKAGE</span>
       <h1>Kuna Lab</h1><p>Motion Studio · perform first, name the feeling afterward</p></div>
@@ -382,35 +440,91 @@ export function KunaLab({onBack}:{onBack:()=>void}){
                 value={degrees(pose[s.key])} onChange={e=>setManual({...slidersRef.current,[s.key]:deg(Number(e.target.value))})}/>
             </label>)}
         </div>
-        <div className="kl-section">
-          <h2>Recorded takes <span className="kl-count">{takes.length}</span></h2>
-          <p>Review before labeling. One take can have several interpretations.</p>
-          {takes.length===0?<p className="kl-empty">No takes yet. Press Record and perform a gesture.</p>:
-          <div className="kl-takes">
-            {[...takes].reverse().map(t=><div className={'kl-take'+(selected===t.id?' kl-take--selected':'')} key={t.id}>
-              <button type="button" onClick={()=>{setSelected(t.id);playTake(t)}} aria-label={'Replay '+(t.label||printable(t.id))}><span>▶</span></button>
-              <button className="kl-take-select" onClick={()=>setSelected(t.id)}>{t.label||printable(t.id)}
-                <small>{t.duration.toFixed(1)} s · {t.frames.length} frames{t.clips.length?' · '+t.clips.length+' clips':''}</small>
-              </button>
-            </div>)}
+        <div className="kl-section kl-gallery-section">
+          <h2>Expression gallery <span className="kl-count">{takes.length}</span></h2>
+          <p>Every card is a recorded performance. Tap to replay. The two traces show head turn and pitch—not emotion.</p>
+          <div className="kl-gallery-toolbar">
+            <label>Show recordings
+              <select aria-label="Filter takes by registered emotion" value={emotionFilter} onChange={e=>setEmotionFilter(e.target.value)}>
+                <option value="all">All emotions / unrated</option>
+                {emotionCatalog.map(name=><option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+            <span>{gallery.length} of {takes.length} takes</span>
+          </div>
+          {gallery.length===0?<p className="kl-empty">{takes.length?'No takes registered with this emotion yet.':'No takes yet. Press Record and perform a gesture.'}</p>:
+          <div className="kl-gallery">
+            {gallery.map(t=><button type="button" key={t.id}
+              className={'kl-gallery-card'+(selected===t.id?' kl-gallery-card--selected':'')}
+              onClick={()=>{setSelected(t.id);playTake(t)}}
+              aria-label={'Select and replay '+(t.label||printable(t.id))}>
+              <svg className="kl-motion-trace" viewBox="0 0 100 48" preserveAspectRatio="none" aria-hidden="true">
+                <path className="kl-trace-baseline" d="M0 24 H100"/>
+                <path className="kl-trace-turn" d={motionTrace(t,'turn')}/>
+                <path className="kl-trace-pitch" d={motionTrace(t,'pitch')}/>
+              </svg>
+              <span className="kl-card-title"><b>{t.label||printable(t.id)}</b><span>▶</span></span>
+              <span className="kl-card-meta">{t.duration.toFixed(1)} sec · {t.frames.length} frames · motion {t.playbackIntensity??100}%</span>
+              <span className="kl-card-emotions">
+                {Object.entries(t.emotions??{}).length===0?<i>Not emotionally rated</i>:
+                  Object.entries(t.emotions??{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([name,value])=>
+                    <span className="kl-emotion-chip" key={name}>{name} {value}%</span>)}
+              </span>
+            </button>)}
           </div>}
           {current&&<div className="kl-label-editor">
-            <label>What does this gesture feel like?
-              <input type="text" maxLength={100} placeholder="Curious? Happy? Doubtful?"
+            <h3>Register this expression · {current.label||printable(current.id)}</h3>
+            <label>Short name (optional)
+              <input type="text" maxLength={100} placeholder="Curious head tilt"
                 value={current.label} onChange={e=>updateTake(current.id,{label:e.target.value})}/>
             </label>
-            <label>Optional emotional tags, separated by commas
-              <input type="text" value={current.tags.join(', ')} placeholder="curious, listening, uncertain"
+            <p>Which emotions does the gesture communicate? Add any that are present, then rate their strength. Unselected means not rated; 0% means explicitly none.</p>
+            <div className="kl-emotion-palette" aria-label="Registered emotions">
+              {emotionCatalog.map(name=><button type="button" key={name}
+                aria-pressed={current.emotions?.[name]!==undefined}
+                className={current.emotions?.[name]!==undefined?'selected':''}
+                onClick={()=>toggleEmotion(current,name)}>
+                {current.emotions?.[name]!==undefined?'✓ ':'+ '}{name}
+              </button>)}
+            </div>
+            {Object.entries(current.emotions??{}).length>0&&<div className="kl-emotion-ratings">
+              {Object.entries(current.emotions??{}).sort((a,b)=>emotionCatalog.indexOf(a[0])-emotionCatalog.indexOf(b[0]))
+                .map(([name,value])=><div className="kl-rating-row" key={name}>
+                  <label className="kl-slider">{name}<output>{value}%</output>
+                    <input aria-label={name+' emotional strength'} type="range" min="0" max="100" step="5"
+                      value={value} onChange={e=>updateTake(current.id,{emotions:{...current.emotions,[name]:Number(e.target.value)}})}/>
+                  </label>
+                  <button type="button" onClick={()=>toggleEmotion(current,name)} aria-label={'Remove '+name+' rating'}>Remove</button>
+                </div>)}
+            </div>}
+            <div className="kl-emotion-register">
+              <label>Register a new emotion
+                <input type="text" maxLength={32} placeholder="e.g. reassurance"
+                  value={emotionDraft} onChange={e=>setEmotionDraft(e.target.value)}
+                  onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();registerEmotion()}}}/>
+              </label>
+              <button type="button" onClick={registerEmotion}>Add emotion</button>
+            </div>
+            <h3>Playback intensity · independent of emotional meaning</h3>
+            <label className="kl-slider">Head and jaw movement <output>{current.playbackIntensity??100}%</output>
+              <input aria-label="Playback intensity" type="range" min="0" max="100" step="5"
+                value={current.playbackIntensity??100}
+                onChange={e=>updateTake(current.id,{playbackIntensity:Number(e.target.value)})}/>
+            </label>
+            <small>Original recording stays unchanged. This controls head/jaw amplitude, not the emotional ratings or playback speed. Native full-body one-shot clips still play at their recorded strength.</small>
+            <label>Legacy free-text tags (optional)
+              <input type="text" value={current.tags.join(', ')} placeholder="notes, other interpretations"
                 onChange={e=>updateTake(current.id,{tags:e.target.value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,12)})}/>
             </label>
-            <div className="kl-row"><button className="kl-primary" onClick={()=>playTake(current)}>Replay take</button>
-              <button onClick={exportSelected}>Export JSON</button></div>
+            <div className="kl-row"><button className="kl-primary" onClick={()=>playTake(current)}>Replay at {current.playbackIntensity??100}%</button>
+              <button onClick={exportSelected}>Export this take</button></div>
           </div>}
           <div className="kl-row">
-            <button disabled={!takes.length} onClick={()=>downloadJson('kuna-motion-studio-library.json',takes)}>Export all takes</button>
+            <button disabled={!takes.length} onClick={()=>downloadJson('kuna-motion-expression-gallery-v3.json',
+              {type:'kuna-motion-library',version:3,emotions:emotionCatalog,takes})}>Export gallery + vocabulary</button>
             <label className="kl-import">Import JSON<input type="file" accept=".json,application/json" onChange={e=>void importRecipe(e)}/></label>
           </div>
-          <small>Saved locally on this device. Export your library to transfer it to other machines or environments. No speech recordings are saved.</small>
+          <small>Local-only ratings; no child emotion inference or AI gesture selection yet. Export includes take ratings, original motion, and registered vocabulary. Old v2 take files still import.</small>
         </div>
         <div className="kl-section">
           <h2>Expression menus</h2><p>Built-in recipes are starting points. Your recorded takes remain independent until you choose labels.</p>
