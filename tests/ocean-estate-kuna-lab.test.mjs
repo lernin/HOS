@@ -56,7 +56,7 @@ try{
   })
   test('Kuna Lab uses original GLB, bounded controls and local speaking simulator',()=>{
     assert.match(ui,/\/models\/fox-mascot\.glb/)
-    assert.match(ui,/createKunaRig\(glb,asset\.animations\)/)
+    assert.match(ui,/createKunaRig\(fox,asset\.animations\)/)
     assert.match(ui,/runSimulation\(\)/)
     assert.match(ui,/window\.speechSynthesis\.speak\(utterance\)/)
     assert.match(ui,/No AI requests|No API request/)
