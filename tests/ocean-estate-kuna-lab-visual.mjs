@@ -27,6 +27,10 @@ try{
     const errors=[]
     page.on('pageerror',e=>errors.push(e.message))
     await page.goto('http://127.0.0.1:4173/kuna-lab',{waitUntil:'domcontentloaded'})
+    assert.equal(await page.getByText('Ashley’s private workspace').count(),1,'the real Kuna Lab route stays PIN-protected')
+    // An isolated Vite-only fixture renders the same component without
+    // weakening app authentication or storing a PIN in test credentials.
+    await page.goto('http://127.0.0.1:4173/tests/kuna-lab-preview.html',{waitUntil:'domcontentloaded'})
     await page.getByRole('heading',{name:'Kuna Lab'}).waitFor({timeout:15000})
     await page.getByText('Model ready',{exact:true}).waitFor({timeout:30000})
     assert.equal(await page.locator('.kl-stage canvas').count(),1,'Kuna Lab has an interactive 3D stage')
