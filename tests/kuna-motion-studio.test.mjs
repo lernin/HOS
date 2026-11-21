@@ -86,6 +86,41 @@ try{
     assert.equal(motion.validateKunaTake({...take,duration:200}),false)
     assert.equal(motion.validateKunaTake({...take,frames:[{...still,at:0,pitch:9}]}),false)
   })
+  test('emotion catalog and per-take ratings are separate from playback intensity',()=>{
+    assert.deepEqual([...motion.KUNA_STARTER_EMOTIONS],[
+      'enthusiasm','curiosity','agreement','uncertainty','attentiveness','disagreement'])
+    assert.equal(motion.normalizeKunaEmotion('  Gentle  Reassurance '),'gentle reassurance')
+    assert.equal(motion.validKunaEmotion('gentle reassurance'),true)
+    assert.equal(motion.validKunaEmotion('injected<script>'),false)
+    const take={version:2,id:'take-003',label:'curious tilt',tags:[],duration:1,
+      frames:[{at:0,...still},{at:.5,pitch:.4,turn:-.2,tilt:.1,jaw:.6},{at:1,...still}],
+      clips:[],emotions:{curiosity:90,enthusiasm:0},playbackIntensity:25}
+    assert.equal(motion.validateKunaTake(take),true)
+    assert.equal(motion.sampleKunaTake(take,.5).pitch,.4,'recording remains unmodified')
+    assert.equal(motion.sampleKunaTake(take,.5,25).pitch,.1,'head replay is scaled')
+    assert.equal(motion.sampleKunaTake(take,.5,25).jaw,.15,'jaw replay is scaled')
+    assert.equal(motion.sampleKunaTake(take,.5,0).pitch,0)
+    assert.equal(motion.validateKunaTake({...take,emotions:{curiosity:101}}),false)
+    assert.equal(motion.validateKunaTake({...take,emotions:{curiosity:-1}}),false)
+    assert.equal(motion.validateKunaTake({...take,emotions:{curiosity:22.5}}),false)
+    assert.equal(motion.validateKunaTake({...take,emotions:{'bad<>':50}}),false)
+    assert.equal(motion.validateKunaTake({...take,playbackIntensity:101}),false)
+    assert.equal(motion.validateKunaTake({...take,playbackIntensity:-5}),false)
+    const legacy={...take};delete legacy.emotions;delete legacy.playbackIntensity
+    assert.equal(motion.validateKunaTake(legacy),true,'existing v2 takes still validate')
+  })
+  test('gallery UI exposes recorded motion traces, explicit ratings, catalog and legacy import',()=>{
+    const ui=readFileSync(new URL('../src/experiences/KunaLab.tsx',import.meta.url),'utf8')
+    for(const label of ['Expression gallery','Register a new emotion','emotional strength',
+      'Playback intensity','Filter takes by registered emotion','Export gallery + vocabulary']){
+      assert.ok(ui.includes(label),label)
+    }
+    assert.match(ui,/sampleKunaTake\(preview.take,time,preview.take.playbackIntensity\?\?100\)/)
+    assert.match(ui,/version:3,emotions:emotionCatalog,takes/)
+    assert.match(ui,/Array.isArray\(source\)\?source:\[source\]/)
+    assert.match(ui,/validKunaEmotion/)
+    assert.doesNotMatch(ui,/fetch\('\/api\/kuna\//)
+  })
   test('rig plays native one-shot Sit and resets shared animation actions safely',()=>{
     const model=new THREE.Group()
     const head=new THREE.Object3D();head.name='Head';model.add(head)
