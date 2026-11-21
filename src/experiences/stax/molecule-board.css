@@ -770,9 +770,9 @@
 .stax-molecule-ui[data-theme='classroom-foam'] image.stax-authentic-foam-chip {
  pointer-events:none!important;
  /* Silhouette-aware app shadow. Never bake shadows into image assets. */
- filter:drop-shadow(0 2px 2px rgba(24,16,9,var(--stax-foam-shadow-contact,.34)))
-        drop-shadow(0 6px 9px rgba(24,16,9,var(--stax-foam-shadow-middle,.29)))
-        drop-shadow(0 12px 17px rgba(24,16,9,var(--stax-foam-shadow-cast,.17)));
+ filter:drop-shadow(0 2px var(--stax-foam-shadow-blur-near,2px) rgba(24,16,9,var(--stax-foam-shadow-contact,.34)))
+        drop-shadow(0 6px var(--stax-foam-shadow-blur-middle,9px) rgba(24,16,9,var(--stax-foam-shadow-middle,.29)))
+        drop-shadow(0 12px var(--stax-foam-shadow-blur-far,17px) rgba(24,16,9,var(--stax-foam-shadow-cast,.17)));
 }
 /* Prevent the image shadow being cut off in palette or lifted previews. */
 .stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-palette button > svg,
@@ -953,4 +953,41 @@
 .stax-foam-sound-option input[type='checkbox'] {
  width:20px;height:20px;margin:0;accent-color:#9b683b;
  cursor:pointer;flex:none;
+}
+
+/* Tuning panel remains reachable on short landscape phones; do not cover the
+   full board or move the floating shape palette. */
+.stax-settings-panel {
+ max-height:min(75vh,620px);
+ overflow-y:auto;
+ overscroll-behavior:contain;
+}
+.stax-setting-section {
+ display:flex;flex-direction:column;gap:9px;
+ margin-top:14px;padding-top:12px;border-top:1px solid var(--stax-border);
+}
+.stax-setting-section > label {font-weight:700;}
+.stax-setting-section select {
+ display:block;min-height:42px;width:100%;
+ padding:6px 9px;box-sizing:border-box;
+ border:1px solid var(--stax-border);border-radius:8px;
+ color:var(--stax-text);background:var(--stax-button);
+ font:600 13px/1.3 system-ui,sans-serif;
+}
+.stax-setting-section input[type='range'] {
+ width:100%;min-height:36px;margin:0;
+ accent-color:#9b683b;touch-action:pan-x;
+}
+.stax-setting-section .stax-foam-sound-option {
+ margin-top:0;padding-top:0;border-top:0;flex-direction:row;
+}
+.stax-sound-preview {
+ padding:9px 12px;min-height:44px;
+ border:1px solid var(--stax-border);border-radius:8px;
+ color:var(--stax-text);background:var(--stax-button);
+ font:700 13px/1.3 system-ui,sans-serif;cursor:pointer;
+}
+.stax-sound-preview:disabled {opacity:.4;cursor:default;}
+@media(orientation:landscape) and (max-height:520px) {
+ .stax-settings-panel {max-height:calc(100vh - 92px);}
 }
