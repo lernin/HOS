@@ -1,10 +1,11 @@
 /** Level 2 STAX Quest 4B → 5 interaction.
  * This is an activity/expression layer over the existing shape grammar.
- * H is a tappable interrogative marker, not a word-shape or written "How".
+ * H is a tappable interrogative marker floating over the unchanged 5 map,
+ * not a word-shape or written "How". Both modes tap the same atom IDs.
  */
 export type QuestTwoSide='question'|'answer'
 export const QUEST_TWO_ORDER:Record<QuestTwoSide,readonly string[]>={
- question:['H','q2-question-are','q2-question-you'],
+ question:['H','q2-a-q-2','q2-a-q-1'],
  answer:['q2-a-q-1','q2-a-q-2','q2-a-q-3'],
 }
 export const QUEST_TWO_EXPRESSION:Record<QuestTwoSide,'4B'|'5'>={question:'4B',answer:'5'}
