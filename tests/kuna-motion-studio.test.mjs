@@ -108,6 +108,16 @@ try{
     assert.equal(motion.validateKunaTake({...take,playbackIntensity:-5}),false)
     const legacy={...take};delete legacy.emotions;delete legacy.playbackIntensity
     assert.equal(motion.validateKunaTake(legacy),true,'existing v2 takes still validate')
+    const contexts={...take,contexts:['face-to-face','alongside']}
+    assert.equal(motion.validateKunaTake(contexts),true,'one take supports both views')
+    assert.equal(motion.validateKunaTake({...take,contexts:['face-to-face','face-to-face']}),false)
+    assert.equal(motion.validateKunaTake({...take,contexts:['left']}),false,'mirroring is not a separate emotional context')
+    assert.equal(motion.validateKunaTake({...take,contexts:[]}),false)
+    assert.equal(motion.sampleKunaTake(take,.5,25,true).turn,.05,'mirroring reverses horizontal turn')
+    assert.equal(motion.sampleKunaTake(take,.5,25,true).tilt,-.025,'mirroring reverses side tilt')
+    assert.equal(motion.sampleKunaTake(take,.5,25,true).pitch,.1,'mirroring retains pitch')
+    assert.equal(motion.sampleKunaTake(take,.5,25,true).jaw,.15,'mirroring retains mouth')
+
   })
   test('gallery UI exposes recorded motion traces, explicit ratings, catalog and legacy import',()=>{
     const ui=readFileSync(new URL('../src/experiences/KunaLab.tsx',import.meta.url),'utf8')
@@ -119,6 +129,11 @@ try{
     assert.match(ui,/version:3,emotions:emotionCatalog,takes/)
     assert.match(ui,/Array.isArray\(source\)\?source:\[source\]/)
     assert.match(ui,/validKunaEmotion/)
+    assert.match(ui,/Face-to-face/)
+    assert.match(ui,/Walking alongside/)
+    assert.match(ui,/Filter takes by performance context/)
+    assert.match(ui,/Mirror view:/)
+    assert.match(ui,/speedFraction:beside\s*\?\s*0\.58\s*:\s*0/)
     assert.doesNotMatch(ui,/fetch\('\/api\/kuna\//)
   })
   test('rig plays native one-shot Sit and resets shared animation actions safely',()=>{
@@ -138,6 +153,24 @@ try{
     rig.update(1/60,{active:false,phase:'idle',speedFraction:0,jaw:0,manualPose:{pitch:.3,turn:.2,tilt:.15},manualJaw:.5,studioMode:true,directPose:true})
     assert.ok(Math.abs(rig.displayedPose().pitch-.3)<1e-9)
     assert.ok(Math.abs(rig.displayedPose().jaw-.5)<1e-9)
+    rig.dispose()
+  })
+  test('Procedure neutral jaw closes fully after speech and while walking',()=>{
+    const model=new THREE.Group()
+    const head=new THREE.Object3D();head.name='Head';model.add(head)
+    const chin=new THREE.Object3D();chin.name='Chin';head.add(chin)
+    chin.quaternion.setFromAxisAngle(new THREE.Vector3(0,0,1),.15)
+    const original=chin.quaternion.clone()
+    const rig=createKunaRig(model,[new THREE.AnimationClip('Idle',1,[]),new THREE.AnimationClip('Walk',1,[])])
+    rig.update(1/60,{active:false,phase:'speaking',speedFraction:0,jaw:.9})
+    assert.ok(chin.quaternion.angleTo(original)>.001,'real speech opens jaw')
+    for(let i=0;i<40;i++)rig.update(1/60,{active:false,phase:'idle',speedFraction:.55,jaw:1})
+    assert.ok(chin.quaternion.angleTo(original)<1e-8,'idle/walking cannot inherit stale audio jaw')
+    assert.equal(rig.displayedPose().jaw,0)
+    rig.update(1/60,{active:false,phase:'idle',speedFraction:.55,jaw:0,manualJaw:.5})
+    assert.ok(chin.quaternion.angleTo(original)>.001,'deliberate Studio jaw remains available')
+    for(let i=0;i<40;i++)rig.update(1/60,{active:false,phase:'idle',speedFraction:.55,jaw:0})
+    assert.ok(chin.quaternion.angleTo(original)<1e-8)
     rig.dispose()
   })
   test('Studio UI records, replays, labels afterward, imports/exports, without billable requests',()=>{

@@ -12,6 +12,7 @@ on:
       - 'fix/ocean-estate-kuna-companion-*'
       - 'feature/kuna-motion-studio-*'
       - 'feature/kuna-expression-gallery-*'
+      - 'feature/kuna-neutral-and-two-contexts-*'
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx

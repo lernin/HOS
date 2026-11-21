@@ -1,6 +1,11 @@
 import type { ProcediaClip } from './procediaKeyboard'
 import type { HeadPose } from './expressions'
 
+export type KunaPerformanceContext='face-to-face'|'alongside'
+export const KUNA_PERFORMANCE_CONTEXTS=['face-to-face','alongside'] as const
+export function contextLabel(value:KunaPerformanceContext):string{
+  return value==='alongside'?'Walking alongside':'Face-to-face'
+}
 export type KunaMotionFrame=HeadPose&{at:number;jaw:number}
 export type KunaClipEvent={at:number;name:string;timeScale?:number}
 export type KunaStudioTake={
@@ -8,6 +13,9 @@ export type KunaStudioTake={
   frames:KunaMotionFrame[];clips:KunaClipEvent[]
   // Optional to preserve every existing v2 recording and v1 migration.
   emotions?:Record<string,number>;playbackIntensity?:number
+  // One take may be usable in one or both contexts. No separate left/right
+  // meanings are necessary: the alongside viewpoint is mirrored in Studio.
+  contexts?:KunaPerformanceContext[]
 }
 export type RecorderMode='idle'|'armed'|'recording'|'paused'
 const clipNames=new Set(['Death','Fall','Rest Pose','Sit','Idle Alert','Walk','Run','Fetch','Jump','Bite'])
@@ -31,6 +39,11 @@ export function validateKunaTake(value:unknown):value is KunaStudioTake {
     t.tags.some(x=>typeof x!=='string'||x.length>48)||!Number.isFinite(t.duration)||t.duration<.1||t.duration>12||
     !Array.isArray(t.frames)||t.frames.length<2||t.frames.length>800||
     !Array.isArray(t.clips)||t.clips.length>40)return false
+  if(t.contexts!==undefined&&(
+    !Array.isArray(t.contexts)||t.contexts.length<1||t.contexts.length>2||
+    new Set(t.contexts).size!==t.contexts.length||
+    t.contexts.some(c=>!KUNA_PERFORMANCE_CONTEXTS.includes(c))
+  ))return false
   if(t.playbackIntensity!==undefined&&(!Number.isInteger(t.playbackIntensity)||t.playbackIntensity<0||t.playbackIntensity>100))return false
   if(t.emotions!==undefined){
     if(!t.emotions||typeof t.emotions!=='object'||Array.isArray(t.emotions))return false
@@ -47,7 +60,7 @@ export function validateKunaTake(value:unknown):value is KunaStudioTake {
   return t.clips.every(c=>c&&Number.isFinite(c.at)&&c.at>=0&&c.at<=t.duration+.001&&
     clipNames.has(c.name)&&(c.timeScale===undefined||Number.isFinite(c.timeScale)&&c.timeScale>.1&&c.timeScale<=3))
 }
-export function sampleKunaTake(t:KunaStudioTake,seconds:number,intensity=100):KunaMotionFrame {
+export function sampleKunaTake(t:KunaStudioTake,seconds:number,intensity=100,mirrored=false):KunaMotionFrame {
   const at=clamp(Number.isFinite(seconds)?seconds:0,0,t.duration)
   const frames=t.frames
   let lo=0,hi=frames.length-1
@@ -60,8 +73,11 @@ export function sampleKunaTake(t:KunaStudioTake,seconds:number,intensity=100):Ku
   const u=clamp((at-a.at)/Math.max(.00001,b.at-a.at),0,1)
   const lerp=(x:number,y:number)=>x+(y-x)*u
   const strength=clamp(Number.isFinite(intensity)?intensity:100,0,100)/100
-  return {at,pitch:lerp(a.pitch,b.pitch)*strength,turn:lerp(a.turn,b.turn)*strength,
-    tilt:lerp(a.tilt,b.tilt)*strength,jaw:lerp(a.jaw,b.jaw)*strength}
+  // Only lateral head channels mirror; timing, nod/pitch and mouth do not.
+  // The same authored take can work alongside either shoulder.
+  const sign=mirrored?-1:1
+  return {at,pitch:lerp(a.pitch,b.pitch)*strength,turn:lerp(a.turn,b.turn)*strength*sign,
+    tilt:lerp(a.tilt,b.tilt)*strength*sign,jaw:lerp(a.jaw,b.jaw)*strength}
 }
 export function createKunaRecorder(){
   let mode:RecorderMode='idle',began=0,pausedAt=0,pausedTime=0

@@ -57,3 +57,12 @@
 .kl-emotion-register label{flex:1;min-width:0;margin:0!important}
 .kl-emotion-register button{white-space:nowrap;padding:9px;font-size:11px}
 @media(max-width:420px){.kl-gallery{grid-template-columns:1fr}.kl-root .kl-gallery-card{min-height:132px}}
+
+
+/* Rehearsal viewpoint: one gesture library, two real child-relative contexts. */
+.kl-view-context{border-color:#b8b68a70}
+.kl-context-note{display:flex;align-items:center;flex:1 1 160px;min-width:0;font-size:11px;line-height:1.4;color:#c6d3c4}
+.kl-gallery-toolbar{flex-wrap:wrap;align-items:flex-end}
+.kl-gallery-toolbar label{flex:1 1 150px}
+.kl-card-context{font-size:10px;font-weight:600;letter-spacing:.015em;color:#edc687}
+@media(max-width:800px){.kl-gallery-toolbar{gap:6px}.kl-gallery-toolbar label{flex:1 1 120px}}
