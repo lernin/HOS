@@ -187,7 +187,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
               arrivalStarted=now;arrivalLookBaseline=input.lookedAt
             }
             journeyView=null
-          }}
+          }
           else{const p=path[0],d=Math.hypot(p.x-position.x,p.z-position.z);dx=(p.x-position.x)/d;dz=(p.z-position.z)/d;const factor=path.length===1?Math.min(1,d/.95):1;dx*=factor;dz*=factor
             // Look ahead along the route so the camera turns before the body reaches a bend.
             let ahead=p,prev=position,lookAhead=Math.max(1.65,Math.min(5.5,input.speed*2.15)),remaining=d
