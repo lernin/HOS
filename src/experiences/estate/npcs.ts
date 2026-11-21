@@ -68,7 +68,6 @@ export function createKunaWanderer(scene:T.Scene,navigator:Navigator,signal?:Abo
   function update(dt:number,player:Point){
     const elapsed=Math.max(0,Math.min(.1,Number.isFinite(dt)?dt:0))
     if(!model||!figure.visible)return
-    now+=elapsed
     const nearPlayer=Math.hypot(player.x-position.x,player.z-position.z)<1.3
     let moving=false
     if(!focus&&!nearPlayer&&walk){
