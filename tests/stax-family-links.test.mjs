@@ -562,3 +562,20 @@ test('blue circle centers its immediate supporters, never the recursive descenda
  // is the only source of sibling membership for centering.
  assert.ok(board.includes("doc.bonds.filter(b=>b.relation==='support'&&b.parent===blueId)"))
 })
+
+test('red-blue sequence magnets welcome nearby drops without changing canonical layout or other rules',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.match(board,/const RED_BLUE_SNAP_RADIUS=SNAP_RADIUS\*1\.75/)
+ const best=board.slice(board.indexOf('function bestSnap('),board.indexOf('/**\n * ONE resolver'))
+ assert.match(best,/const redBlue=s\.relation==='sequence'/)
+ assert.match(best,/parent\.kind==='circle'&&child\.kind==='triangle'/)
+ assert.match(best,/parent\.kind==='triangle'&&child\.kind==='circle'/)
+ assert.match(best,/const radius=redBlue\?RED_BLUE_SNAP_RADIUS:SNAP_RADIUS/)
+ assert.match(best,/s\.distance<=radius/)
+ assert.ok(board.includes('const desired=snappedSequenceFollowerPosition(left,right)'))
+ assert.ok(board.includes('redBetweenBlues(d,moving)??bestSnap(d,moving)'))
+ const distance=115
+ assert.ok(distance>76 && distance<76*1.75,'a realistic imperfect red/blue drop is accepted')
+ assert.ok(185>76*1.75,'remote drops remain loose')
+ assert.ok(115>76,'pink and other support magnets keep their original radius')
+})
