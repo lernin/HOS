@@ -4,12 +4,14 @@
 
 .stax-molecule-ui {
  --stax-control-size:46px;
- --stax-bg:#faf9f6;
- --stax-panel:rgba(255,255,255,.94);
- --stax-button:#fff;
- --stax-border:#cbd6dc;
- --stax-text:#27475a;
- --stax-caption:#899ca6;
+ --stax-font:"Trebuchet MS","Noto Sans",system-ui,sans-serif;
+ --stax-accent:#3e7993;
+ --stax-bg:#f8f7f3;
+ --stax-panel:rgba(255,255,253,.96);
+ --stax-button:#fffdfa;
+ --stax-border:#d1d9de;
+ --stax-text:#253d4d;
+ --stax-caption:#657d8b;
  position:fixed;
  inset:0;
  z-index:1000;
@@ -18,15 +20,18 @@
  height:100dvh;
  overflow:hidden;
  background:var(--stax-bg);
+ font-family:var(--stax-font);
 }
 
 /* Theme alters presentation only, never the world-space grammar model. */
 .stax-molecule-ui[data-theme='blueprint'] {
+ --stax-accent:#8bc4df;
  --stax-bg:#082a45;--stax-panel:rgba(8,38,62,.96);
  --stax-button:#123752;--stax-border:#386681;
  --stax-text:#dbf3ff;--stax-caption:#82b5d1;
 }
 .stax-molecule-ui[data-theme='black'] {
+ --stax-accent:#9aaec8;
  --stax-bg:#090b10;--stax-panel:rgba(21,24,29,.96);
  --stax-button:#282d34;--stax-border:#555e69;
  --stax-text:#f4f7fb;--stax-caption:#a9b4be;
@@ -129,7 +134,7 @@
  background:var(--stax-panel);
  color:var(--stax-text);
  box-shadow:0 4px 20px #16324825;
- font:700 30px/1 system-ui,sans-serif;
+ font:700 30px/1 var(--stax-font);
  cursor:pointer;
  touch-action:manipulation;
 }
@@ -194,7 +199,7 @@
  border-radius:8px;
  background:var(--stax-button);
  color:var(--stax-text);
- font:600 22px/1 system-ui,sans-serif;
+ font:600 22px/1 var(--stax-font);
  touch-action:manipulation;
  cursor:pointer;
 }
@@ -220,7 +225,7 @@
  width:var(--stax-control-size);
  height:var(--stax-control-size);
  text-align:center;
- font:600 13px/1.2 system-ui,sans-serif;
+ font:600 13px/1.2 var(--stax-font);
  font-variant-numeric:tabular-nums;
  color:var(--stax-text);
 }
@@ -238,10 +243,10 @@
 .stax-molecule-example {
  position:absolute;
  z-index:4;
- top:calc(env(safe-area-inset-top,0px) + 12px);
- left:50%;
- transform:translateX(-50%);
- max-width:min(430px,46vw);
+ top:calc(env(safe-area-inset-top,0px) + 73px);
+ left:calc(env(safe-area-inset-left,0px) + 10px);
+ transform:none;
+ max-width:min(290px,calc(100vw - 30px));
  width:max-content;
  margin:0;
  padding:6px 10px;
@@ -249,7 +254,8 @@
  border-radius:5px;
  color:#2b4962;
  background:rgba(239,247,253,.93);
- font-size:11px;
+ font-size:14px;
+ font-weight:650;
  line-height:1.4;
  pointer-events:none;
 }
@@ -746,6 +752,7 @@
 /* The photographed classroom experience is opt-in. This is presentation only:
    real desk in CSS, true transparent foam pieces in the SVG. */
 .stax-molecule-ui[data-theme='classroom-foam'] {
+ --stax-accent:#94633b;
  --stax-toolbar-ink:#49341e;
  --stax-toolbar-disabled:#97836b;
  --stax-bg:#906c43;
@@ -797,12 +804,12 @@
  position:absolute;z-index:9;top:calc(env(safe-area-inset-top,0px) + 8px);
  left:calc(env(safe-area-inset-left,0px) + 8px);
  max-width:min(370px,calc(100vw - 30px));
- font:500 14px/1.4 system-ui,sans-serif;color:var(--stax-text);
+ font:500 14px/1.4 var(--stax-font);color:var(--stax-text);
 }
 .stax-quest-tab{
  background:var(--stax-panel);border:1px solid var(--stax-border);
  color:var(--stax-text);border-radius:11px;padding:9px 13px;
- font:700 13px/1.25 system-ui,sans-serif;cursor:pointer;
+ font:700 13px/1.25 var(--stax-font);cursor:pointer;
  box-shadow:0 3px 16px #16324817;
 }
 .stax-quest-panel{
@@ -816,14 +823,14 @@
 .stax-quest-panel select{
  width:100%;min-height:41px;border:1px solid var(--stax-border);
  background:var(--stax-button);color:var(--stax-text);border-radius:8px;
- padding:7px;font:500 13px/1.4 system-ui,sans-serif;
+ padding:7px;font:500 13px/1.4 var(--stax-font);
 }
 .stax-quest-sentence{font-size:15px;font-weight:650;line-height:1.5;margin:0;}
 .stax-quest-actions{display:flex;gap:5px;align-items:stretch;}
 .stax-quest-actions button{
  min-height:42px;flex:1;border-radius:8px;border:1px solid var(--stax-border);
  background:var(--stax-button);color:var(--stax-text);
- font:650 12px/1.2 system-ui,sans-serif;padding:7px;cursor:pointer;
+ font:650 12px/1.2 var(--stax-font);padding:7px;cursor:pointer;
 }
 .stax-quest-actions button:disabled{opacity:.35;cursor:default;}
 .stax-quest-panel a{color:var(--stax-text);text-decoration:underline;font-size:13px;}
@@ -844,7 +851,7 @@
  border:0;border-radius:12px;padding:0;
  background:transparent;color:var(--stax-text);
  box-shadow:none;
- font:800 28px/1 system-ui,sans-serif;cursor:pointer;
+ font:800 28px/1 var(--stax-font);cursor:pointer;
  touch-action:manipulation;
 }
 .stax-quest2-h:active{transform:translate(-50%,-50%) scale(.94);}
@@ -860,13 +867,13 @@
  background:var(--stax-panel);color:var(--stax-text);
  border:1px solid var(--stax-border);border-radius:15px;
  box-shadow:0 6px 22px #102f4530;
- font:500 13px/1.3 system-ui,sans-serif;
+ font:500 13px/1.3 var(--stax-font);
  backdrop-filter:blur(12px);
 }
 .stax-quest2-panel button{
  border:1px solid var(--stax-border);border-radius:8px;
  background:var(--stax-button);color:var(--stax-text);
- font:700 12px/1.2 system-ui,sans-serif;cursor:pointer;
+ font:700 12px/1.2 var(--stax-font);cursor:pointer;
  min-height:39px;padding:7px 9px;touch-action:manipulation;
 }
 .stax-quest2-panel button:focus-visible{outline:3px solid #329d9a;outline-offset:2px;}
@@ -896,147 +903,99 @@
 
 /* Classroom Foam shadow setting: lightweight overlay, independent of canvas
    pan/zoom, magnetic hit targets, and the retractable controls tray. */
-.stax-molecule-tools button.stax-settings-button {
- width:64px;min-width:64px;font-size:11px;font-weight:750;
+.stax-molecule-tools button.stax-sound-button {
+ width:56px;min-width:56px;font-size:12px;font-weight:750;
 }
-.stax-settings-panel {
+.stax-sound-panel {
  position:absolute;z-index:16;
  left:calc(env(safe-area-inset-left,0px) + 10px);
  bottom:calc(env(safe-area-inset-bottom,0px) + 82px);
- width:min(330px,calc(100vw - 20px));
- box-sizing:border-box;padding:14px;
- border-radius:14px;border:1px solid var(--stax-border);
+ width:min(350px,calc(100vw - 20px));
+ box-sizing:border-box;padding:16px;
+ max-height:min(76dvh,650px);overflow-y:auto;
+ border-radius:16px;border:1px solid var(--stax-border);
  color:var(--stax-text);background:var(--stax-panel);
- box-shadow:0 10px 32px #101c273d;
- font:500 13px/1.4 system-ui,sans-serif;
- backdrop-filter:blur(12px);
- touch-action:pan-y;
+ box-shadow:0 14px 40px #101c2736;
+ font:500 13px/1.4 var(--stax-font);
+ backdrop-filter:blur(14px);touch-action:pan-y;overscroll-behavior:contain;
+ display:flex;flex-direction:column;gap:12px;
 }
-.stax-settings-header,.stax-shadow-setting label,.stax-shadow-scale {
- display:flex;align-items:center;justify-content:space-between;
+.stax-sound-panel-header {
+ display:flex;justify-content:space-between;align-items:center;
+ font-size:17px;letter-spacing:-.025em;
 }
-.stax-settings-header {margin-bottom:12px;font-size:15px;}
-.stax-settings-header button {
- border:1px solid var(--stax-border);border-radius:8px;
+.stax-sound-panel-header button {
+ width:38px;height:38px;border:1px solid var(--stax-border);border-radius:9px;
  background:var(--stax-button);color:var(--stax-text);
- width:36px;height:36px;font:600 23px/1 system-ui,sans-serif;
- cursor:pointer;
+ font:700 23px/1 var(--stax-font);cursor:pointer;
 }
-.stax-shadow-setting label {font-weight:700;}
-.stax-shadow-setting output {font-variant-numeric:tabular-nums;}
-.stax-shadow-setting input[type='range'] {
- display:block;width:100%;margin:13px 0 6px;min-height:34px;
- accent-color:#9b683b;touch-action:pan-x;cursor:pointer;
+.stax-sound-panel > label {font-weight:700;}
+.stax-sound-panel > select {
+ display:block;min-height:44px;width:100%;padding:8px;
+ border:1px solid var(--stax-border);border-radius:9px;
+ background:var(--stax-button);color:var(--stax-text);
+ font:600 14px/1.4 var(--stax-font);
 }
-.stax-shadow-setting input[type='range']:disabled {opacity:.4;cursor:default;}
-.stax-shadow-scale {color:var(--stax-caption);font-size:11px;}
-.stax-shadow-setting small {display:block;margin-top:8px;color:var(--stax-caption);}
-.stax-shadow-reset {
- margin-top:12px;padding:8px 12px;min-height:38px;
- border:1px solid var(--stax-border);border-radius:8px;
- background:var(--stax-button);color:var(--stax-text);cursor:pointer;
- font:650 12px/1 system-ui,sans-serif;
-}
-.stax-shadow-reset:disabled {opacity:.4;cursor:default;}
-.stax-settings-panel button:focus-visible,
-.stax-settings-panel input:focus-visible {outline:3px solid #4389c7;outline-offset:2px;}
-@media(orientation:landscape) and (max-height:520px) {
- .stax-settings-panel {bottom:calc(env(safe-area-inset-bottom,0px) + 64px);padding:10px;}
-}
-
-/* Foam-on-wood scritch is optional and saved per device. */
 .stax-foam-sound-option {
- margin-top:12px;display:flex;align-items:center;gap:10px;
- padding-top:10px;border-top:1px solid var(--stax-border);
- font:600 13px/1.4 system-ui,sans-serif;
+ display:flex;align-items:center;gap:10px;font:650 14px/1.4 var(--stax-font);
 }
 .stax-foam-sound-option input[type='checkbox'] {
- width:20px;height:20px;margin:0;accent-color:#9b683b;
- cursor:pointer;flex:none;
-}
-
-/* Tuning panel remains reachable on short landscape phones; do not cover the
-   full board or move the floating shape palette. */
-.stax-settings-panel {
- max-height:min(75vh,620px);
- overflow-y:auto;
- overscroll-behavior:contain;
-}
-.stax-setting-section {
- display:flex;flex-direction:column;gap:9px;
- margin-top:14px;padding-top:12px;border-top:1px solid var(--stax-border);
-}
-.stax-setting-section > label {font-weight:700;}
-.stax-setting-section select {
- display:block;min-height:42px;width:100%;
- padding:6px 9px;box-sizing:border-box;
- border:1px solid var(--stax-border);border-radius:8px;
- color:var(--stax-text);background:var(--stax-button);
- font:600 13px/1.3 system-ui,sans-serif;
-}
-.stax-setting-section input[type='range'] {
- width:100%;min-height:36px;margin:0;
- accent-color:#9b683b;touch-action:pan-x;
-}
-.stax-setting-section .stax-foam-sound-option {
- margin-top:0;padding-top:0;border-top:0;flex-direction:row;
-}
-.stax-sound-preview {
- padding:9px 12px;min-height:44px;
- border:1px solid var(--stax-border);border-radius:8px;
- color:var(--stax-text);background:var(--stax-button);
- font:700 13px/1.3 system-ui,sans-serif;cursor:pointer;
-}
-.stax-sound-preview:disabled {opacity:.4;cursor:default;}
-@media(orientation:landscape) and (max-height:520px) {
- .stax-settings-panel {max-height:calc(100vh - 92px);}
-}
-
-/* Typography settings must demonstrate live changes even if the workspace
-   contains only unlabeled foam. Shape text is independently editable. */
-.stax-foam-type-sample {
- min-height:54px;
- display:flex;align-items:center;justify-content:center;
- padding:8px 12px;box-sizing:border-box;
- border:1px solid var(--stax-border);border-radius:10px;
- color:#3f354c;background:#efe6d7;
- line-height:1.15;
- overflow:hidden;
-}
-.stax-setting-section input[type='text'] {
- width:100%;min-height:44px;box-sizing:border-box;
- padding:9px 11px;
- border:1px solid var(--stax-border);border-radius:8px;
- color:var(--stax-text);background:var(--stax-button);
- font:500 16px/1.3 system-ui,sans-serif;
-}
-.stax-setting-section input[type='text']:disabled {opacity:.6;}
-.stax-setting-section small {font:500 12px/1.35 system-ui,sans-serif;color:var(--stax-caption);}
-
-/* Sound Lab is a collapsible portion of the existing scrollable STAX settings.
-   All synth sliders use native touch inputs for responsive Android adjustment. */
-.stax-sound-lab-toggle,.stax-sound-lab-actions button {
- min-height:44px;padding:10px 12px;cursor:pointer;
- border:1px solid var(--stax-border);border-radius:8px;
- background:var(--stax-button);color:var(--stax-text);
- font:700 13px/1.3 system-ui,sans-serif;
+ width:21px;height:21px;margin:0;accent-color:var(--stax-accent);flex:none;
 }
 .stax-sound-lab {
- padding:12px;margin-top:2px;
- display:flex;flex-direction:column;gap:14px;
- border:1px solid var(--stax-border);border-radius:10px;
- background:color-mix(in srgb,var(--stax-panel) 90%,#b68756 10%);
+ display:flex;flex-direction:column;gap:14px;padding:12px;
+ border:1px solid var(--stax-border);border-radius:12px;
+ background:color-mix(in srgb,var(--stax-panel) 87%,var(--stax-accent) 13%);
 }
-.stax-sound-lab-control label {
+.stax-sound-lab-control label,.stax-sound-scale {
  display:flex;justify-content:space-between;align-items:center;
- font:700 13px/1.4 system-ui,sans-serif;
 }
+.stax-sound-lab-control label {font:700 14px/1.4 var(--stax-font);}
 .stax-sound-lab-control output {font-variant-numeric:tabular-nums;}
 .stax-sound-lab-control input[type='range'] {
- width:100%;min-height:38px;margin:6px 0 2px;
- accent-color:#a06a3e;touch-action:pan-x;
+ display:block;width:100%;min-height:38px;margin:7px 0 2px;
+ accent-color:var(--stax-accent);touch-action:pan-x;
 }
-.stax-sound-lab-actions {display:flex;flex-wrap:wrap;gap:8px;}
-.stax-sound-lab-actions button {flex:1;min-width:120px;}
-.stax-sound-lab-actions button:disabled {opacity:.4;cursor:default;}
-.stax-sound-lab small {font-size:12px;line-height:1.4;}
+.stax-sound-lab-control input[type='range']:disabled {opacity:.4;}
+.stax-sound-scale {color:var(--stax-caption);font-size:12px;}
+.stax-sound-lab-actions {display:flex;flex-wrap:wrap;gap:9px;}
+.stax-sound-lab-actions button {
+ min-height:44px;flex:1;min-width:115px;padding:9px;
+ border:1px solid var(--stax-border);border-radius:9px;
+ background:var(--stax-button);color:var(--stax-text);
+ font:700 13px/1.3 var(--stax-font);cursor:pointer;
+}
+.stax-sound-lab-actions button:disabled {opacity:.4;}
+.stax-sound-lab small {font:500 12px/1.4 var(--stax-font);color:var(--stax-caption);}
+.stax-shape-word-editor {
+ position:absolute;left:50%;transform:translateX(-50%);z-index:9;
+ bottom:calc(env(safe-area-inset-bottom,0px) + 86px);
+ display:flex;align-items:center;gap:8px;max-width:calc(100vw - 28px);
+ padding:8px 10px;border:1px solid var(--stax-border);border-radius:12px;
+ color:var(--stax-text);background:var(--stax-panel);
+ box-shadow:0 8px 24px #11233327;
+ font:700 13px/1.25 var(--stax-font);
+}
+.stax-shape-word-editor input {
+ width:min(185px,40vw);min-height:35px;box-sizing:border-box;
+ padding:5px 9px;border-radius:8px;border:1px solid var(--stax-border);
+ background:var(--stax-button);color:var(--stax-text);
+ font:600 16px/1.3 var(--stax-font);
+}
+.stax-sound-panel :is(button,input,select):focus-visible,
+.stax-shape-word-editor input:focus-visible {
+ outline:3px solid var(--stax-accent);outline-offset:2px;
+}
+@media(orientation:landscape) and (max-height:520px) {
+ .stax-sound-panel {bottom:calc(env(safe-area-inset-bottom,0px) + 65px);max-height:calc(100dvh - 78px);}
+ .stax-shape-word-editor {bottom:calc(env(safe-area-inset-bottom,0px) + 68px);}
+}
+
+
+/* Curated STAX chrome: contrast and typography stay consistent across modes. */
+.stax-molecule-ui .stax-quest-tab {border-left:3px solid var(--stax-accent);letter-spacing:-.01em;}
+.stax-molecule-ui .stax-molecule-palette,.stax-molecule-ui .stax-molecule-dock {border-radius:16px;box-shadow:0 7px 24px #12212e23;}
+.stax-molecule-ui .stax-molecule-palette button,.stax-molecule-ui .stax-molecule-dock button {border-radius:10px;}
+.stax-molecule-ui[data-theme='arc-reactor'] svg g[data-kind] {filter:drop-shadow(0 0 4px #00e7ff70);}
+.stax-molecule-ui[data-theme='hologram'] svg g[data-kind] {filter:drop-shadow(0 0 4px #e0a2fa66);}
+.stax-molecule-ui[data-theme='cosmic'] svg g[data-kind] {filter:drop-shadow(0 0 5px #9a9bfa66);}
