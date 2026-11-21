@@ -36,6 +36,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node --test tests/ocean-estate-voice.test.mjs tests/ocean-estate-npc.test.mjs tests/ocean-estate-motion.test.mjs tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
+      - name: Verify Procedia fox asset and proxied voice routes on Vercel preview (no billable calls)
+        run: node tests/ocean-estate-procedia-routes.mjs
       - run: npx playwright install --with-deps chromium
       - name: Check one-tap fullscreen on desktop and landscape phone
         run: |
