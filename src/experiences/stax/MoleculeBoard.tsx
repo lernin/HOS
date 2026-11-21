@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
@@ -35,7 +35,7 @@ const GAP=SCALE*STAX_SPACING.attachment, VERTICAL=SCALE*STAX_SPACING.attachment
 const BLUE_RED_GAP=SCALE*STAX_SPACING.group, RED_BLUE_GAP=SCALE*STAX_SPACING.row
 const CONNECTOR_GAP=SCALE*STAX_SPACING.connector
 const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=124, TAP=9, DOUBLE_MS=350, FINGER_LIFT=42
-const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1'
+const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
 const choices:Choice[]=[{kind:'circle',label:'Noun / pronoun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
@@ -980,6 +980,20 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const [theme,setTheme]=useState<StaxTheme>(()=>{
   try{const value=localStorage.getItem(THEME_KEY);return STAX_THEMES.find(t=>t===value)??'color'}catch{return 'color'}
  })
+ // Classroom Foam presentation only; no shape or magnet geometry depends on this.
+ const [settingsOpen,setSettingsOpen]=useState(false)
+ const [foamShadowStrength,setFoamShadowStrength]=useState(()=>{
+  try{
+   const stored=localStorage.getItem(FOAM_SHADOW_KEY)
+   const value=stored===null?100:Number(stored)
+   return Number.isFinite(value)?Math.min(200,Math.max(0,Math.round(value))):100
+  }catch{return 100}
+ })
+ const shadowCssVars={
+  '--stax-foam-shadow-contact':String(Math.min(.9,.34*foamShadowStrength/100)),
+  '--stax-foam-shadow-middle':String(Math.min(.85,.29*foamShadowStrength/100)),
+  '--stax-foam-shadow-cast':String(Math.min(.65,.17*foamShadowStrength/100)),
+ } as CSSProperties
  const [omitBrush,setOmitBrush]=useState(false)
  const [pollenAnimated,setPollenAnimated]=useState(false)
  useEffect(()=>{if(theme!=='golden-pollen')setPollenAnimated(false)},[theme])
@@ -1023,6 +1037,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const blockRelease=useRef<Set<number>>(new Set())
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc])
  useEffect(()=>{try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme])
+ useEffect(()=>{try{localStorage.setItem(FOAM_SHADOW_KEY,String(foamShadowStrength))}catch{/* local preference unavailable */}},[foamShadowStrength])
  useEffect(()=>()=>{if(fallTimer.current)clearTimeout(fallTimer.current)},[])
  function questTwoTap(token:string){
   if(!questActive||activeQuestLevel!==2)return
@@ -1401,7 +1416,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const questTwoHarvest=questActive&&activeQuestLevel===2?harvestQuestTwo(questTwoSide,questTwoTaps,questTwoContracted):null
  const viewPercentX=(x:number)=>`${(x-view.x)/view.width*100}%`
  const viewPercentY=(y:number)=>`${(y-view.y)/view.height*100}%`
- return <div ref={rootRef} className="stax-molecule-ui" data-theme={theme} data-original-pollen={pollenAnimated?'true':'false'}>
+ return <div ref={rootRef} className="stax-molecule-ui" style={shadowCssVars} data-theme={theme} data-original-pollen={pollenAnimated?'true':'false'}>
   <button className="stax-tray-handle" type="button" aria-label={trayOpen?'Close workspace controls':'Open workspace controls'} aria-controls="stax-bottom-tray" aria-expanded={trayOpen} onClick={()=>{setTrayOpen(v=>!v);setTrayActivity(n=>n+1)}}><span aria-hidden="true">{trayOpen?'‹':'›'}</span></button>
   <div id="stax-bottom-tray" className="stax-molecule-dock" data-open={trayOpen?'true':'false'} aria-label="STAX workspace controls" aria-hidden={!trayOpen}
     onPointerEnter={openTray} onPointerDownCapture={openTray} onFocusCapture={openTray} onWheel={openTray}>
@@ -1421,6 +1436,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       onClick={()=>{const next=theme==='classroom-foam'?'color':'classroom-foam';setTheme(next);setHint('Visual mode: '+staxThemeName(next))}}
       title="Toggle Classroom Foam using Ashley's photographed desk and seven real foam pieces"
       aria-label="Toggle Classroom Foam">Foam</button>
+      <button type="button" className="stax-settings-button" onClick={()=>{setSettingsOpen(v=>!v);openTray()}}
+       aria-label="STAX settings" title="STAX settings" aria-expanded={settingsOpen} aria-controls="stax-settings-panel">
+       Settings</button>
      <button onClick={()=>{setOmitBrush(v=>!v);setHint(omitBrush?'Dotted omission brush off.':'Dotted omission brush on. Tap a shape to toggle, or add dotted shapes.')}}
       title="Omit brush: tap to toggle; when active tap shapes to mark omitted, or add new dotted shapes"
       aria-label="Toggle dotted omission brush" aria-pressed={omitBrush}
@@ -1435,6 +1453,21 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}><StaxToolbarIcon name="plus"/></button>
    </div>
   </div>
+  {settingsOpen&&<section className="stax-settings-panel" id="stax-settings-panel" role="region" aria-label="STAX settings">
+    <div className="stax-settings-header">
+     <strong>Settings</strong>
+     <button type="button" onClick={()=>setSettingsOpen(false)} aria-label="Close STAX settings">×</button>
+    </div>
+    <div className="stax-shadow-setting">
+     <label htmlFor="stax-foam-shadow-strength">Foam shadow <output htmlFor="stax-foam-shadow-strength">{foamShadowStrength}%</output></label>
+     <input id="stax-foam-shadow-strength" type="range" min="0" max="200" step="5" value={foamShadowStrength}
+      onChange={e=>setFoamShadowStrength(Number(e.target.value))}
+      aria-label="Foam shadow strength" disabled={theme!=='classroom-foam'}/>
+     <div className="stax-shadow-scale"><span>Off</span><span>Normal</span><span>Strong</span></div>
+     {theme!=='classroom-foam'&&<small>Switch to Foam to adjust shadows.</small>}
+     <button type="button" className="stax-shadow-reset" onClick={()=>setFoamShadowStrength(100)} disabled={foamShadowStrength===100}>Reset shadow</button>
+    </div>
+   </section>}
   <div className="stax-quest-nav">
    <button className="stax-quest-tab" type="button" aria-expanded={questPanelOpen} aria-controls="stax-quest-panel"
     onClick={()=>setQuestPanelOpen(v=>!v)}>STAX Quest · {chosenQuestLevel}/100</button>
