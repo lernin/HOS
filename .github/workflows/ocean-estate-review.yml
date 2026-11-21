@@ -5,6 +5,7 @@ on:
       - 'preview/ocean-estate-*'
       - 'feature/ocean-estate-kuna-*'
       - 'feature/ocean-estate-procedia-kuna-*'
+      - 'fix/ocean-estate-kuna-smooth-*'
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx

@@ -244,10 +244,14 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(Math.hypot(position.x-lastShadow.x,position.z-lastShadow.z)>12){lastShadow={...position};sun.position.set(-55,input.lighting==='daylight'?70:30,-80);sun.target.position.set(0,6,0);renderer.shadowMap.needsUpdate=true}
       // Architectural fixture positions and brightness do not track the camera.
       if(inspectView){camera.position.copy(inspectView.position);camera.lookAt(inspectView.target)}else if(artInspect)updateArtCamera(now)
-      // Idle characters are animated at 20 FPS, independent of the device's full render loop.
-       // Keep the world quiet (and save phone GPU time) when the viewer is paused.
-       if(!input.paused&&!inspectView&&!artInspect&&now-lastKunaUpdate>=50){
-         kuna?.update(Math.min(.1,(now-lastKunaUpdate)/1000),position)
+      // Animate Kuna on *every rendered frame* while walking/looking around.
+       // The old 20 FPS NPC clock strobed visibly against 60 FPS camera motion.
+       // At rest, 30 FPS keeps the native walk/idle blend fluid without
+       // forcing the entire 2M-triangle estate to redraw at 60 FPS.
+       const cameraMoving=!!(path.length||Math.hypot(vx,vz)>.05||input.looking||input.x||input.z)
+       const kunaInterval=cameraMoving?0:33
+       if(!input.paused&&!inspectView&&!artInspect&&now-lastKunaUpdate>=kunaInterval){
+         kuna?.update(Math.min(.05,(now-lastKunaUpdate)/1000),position)
          lastKunaUpdate=now;dirty=true
        }else if(input.paused||inspectView||artInspect)lastKunaUpdate=now
        if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}
