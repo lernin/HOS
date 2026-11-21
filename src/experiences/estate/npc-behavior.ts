@@ -126,6 +126,12 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
   }
   function update(dt:number,player:Point,interacting=false):KunaFrame{
     const frameDt=Number.isFinite(dt)?clamp(dt,0,.10):0
+    if(interacting&&!lastTalking){
+      // A tap freezes the actor at the *visible* interpolated pose,
+      // not a hidden physics step ahead (which would create a tiny jerk).
+      position={...rendered.position};yaw=rendered.yaw;speed=0
+      previous=simulationState()
+    }
     accumulator=Math.min(.13,accumulator+frameDt)
     let steps=0
     while(accumulator+1e-9>=KUNA_STEP&&steps++<8){
