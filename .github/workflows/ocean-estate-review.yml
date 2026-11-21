@@ -59,6 +59,14 @@ jobs:
             sleep 1
           done
           node tests/ocean-estate-fullscreen.mjs
+      - name: Verify Kuna Lab model, expression controls and speaking simulator (desktop + phone)
+        run: |
+          npm run dev -- --port 4173 > /tmp/kuna-lab-vite.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/kuna-lab >/dev/null; then break; fi
+            sleep 1
+          done
+          node tests/ocean-estate-kuna-lab-visual.mjs
       - name: Render estate and verify landscape phone interactions
         run: |
           npm run dev -- --port 4173 > /tmp/ocean-estate-vite.log 2>&1 &
