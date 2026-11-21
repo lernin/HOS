@@ -21,6 +21,19 @@ export function safeFoamSoundId(value:string|null):FoamSlideSoundId {
  return FOAM_SLIDE_SOUNDS.find(p=>p.id===value)?.id??DEFAULT_SOUND
 }
 
+/** All sliders are percentages of the selected material's base profile. */
+export type FoamSoundTuning={pitch:number;brightness:number;texture:number;volume:number}
+export const DEFAULT_FOAM_SOUND_TUNING:FoamSoundTuning={pitch:100,brightness:100,texture:100,volume:100}
+export function normalizeFoamSoundTuning(value:unknown):FoamSoundTuning {
+ const raw=value&&typeof value==='object'?value as Partial<FoamSoundTuning>:{}
+ const clean=(v:unknown,min:number,max:number)=>{
+  const n=typeof v==='number'?v:NaN
+  return Number.isFinite(n)?Math.max(min,Math.min(max,Math.round(n/5)*5)):100
+ }
+ return {pitch:clean(raw.pitch,50,200),brightness:clean(raw.brightness,40,200),
+  texture:clean(raw.texture,0,200),volume:clean(raw.volume,0,200)}
+}
+
 export class FoamSlideAudio {
  private context:AudioContext|null=null
  private noise:AudioBufferSourceNode|null=null
@@ -30,6 +43,7 @@ export class FoamSlideAudio {
  private enabled=true
  private active=false
  private preset:FoamSlideSoundId=DEFAULT_SOUND
+ private tuning:FoamSoundTuning={...DEFAULT_FOAM_SOUND_TUNING}
  private last:{x:number;y:number;time:number}|null=null
  private previewTimers:Array<ReturnType<typeof setTimeout>>=[]
 
@@ -38,13 +52,18 @@ export class FoamSlideAudio {
   this.preset=safeFoamSoundId(value)
   this.applyPreset()
  }
+ setTuning(value:FoamSoundTuning){
+  this.tuning=normalizeFoamSoundTuning(value)
+  this.applyPreset()
+ }
  private profile(){return FOAM_SLIDE_SOUNDS.find(p=>p.id===this.preset)??FOAM_SLIDE_SOUNDS[0]}
  private applyPreset(){
   if(!this.context||!this.band||!this.low)return
   const p=this.profile(),t=this.context.currentTime
-  this.band.frequency.setTargetAtTime(p.frequency,t,.035)
+  const pitch=this.tuning.pitch/100,brightness=this.tuning.brightness/100
+  this.band.frequency.setTargetAtTime(Math.min(8500,p.frequency*pitch),t,.035)
   this.band.Q.setTargetAtTime(p.q,t,.035)
-  this.low.frequency.setTargetAtTime(p.lowpass,t,.035)
+  this.low.frequency.setTargetAtTime(Math.min(14000,p.lowpass*brightness),t,.035)
  }
 
  start(x:number,y:number){
@@ -97,8 +116,8 @@ export class FoamSlideAudio {
   const speed=distance/elapsed
   const profile=this.profile()
   // All ten styles are capped well below normal UI sounds.
-  const texture=1+profile.grain*Math.abs(Math.sin(time*.071))
-  const level=Math.min(.055,(.005+speed*.011)*profile.gain*texture)
+  const texture=1+(profile.grain*this.tuning.texture/100)*Math.abs(Math.sin(time*.071))
+  const level=Math.min(.08,(.005+speed*.011)*profile.gain*texture*(this.tuning.volume/100))
   const gain=this.gain.gain,now=this.context.currentTime
   gain.cancelScheduledValues(now)
   gain.setTargetAtTime(level,now,.018)
