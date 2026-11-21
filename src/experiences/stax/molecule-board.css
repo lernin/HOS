@@ -943,3 +943,14 @@
 @media(orientation:landscape) and (max-height:520px) {
  .stax-settings-panel {bottom:calc(env(safe-area-inset-bottom,0px) + 64px);padding:10px;}
 }
+
+/* Foam-on-wood scritch is optional and saved per device. */
+.stax-foam-sound-option {
+ margin-top:12px;display:flex;align-items:center;gap:10px;
+ padding-top:10px;border-top:1px solid var(--stax-border);
+ font:600 13px/1.4 system-ui,sans-serif;
+}
+.stax-foam-sound-option input[type='checkbox'] {
+ width:20px;height:20px;margin:0;accent-color:#9b683b;
+ cursor:pointer;flex:none;
+}

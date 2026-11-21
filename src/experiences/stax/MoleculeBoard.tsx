@@ -9,6 +9,7 @@ import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
 import { PearlescentGlass } from './pearlescent-atlas'
 import { PearlescentAirglass } from './pearlescent-airglass'
 import { FoamChip } from './foam-chips'
+import { FoamSlideAudio } from './foam-slide-audio'
 import { STAX_QUEST_LEVELS, staxQuestLevel } from './quest-levels'
 import { parseStaxSentence, type ParsedStax } from './quest-parser'
 import { advanceQuestTwo, harvestQuestTwo, QUEST_TWO_ORDER, type QuestTwoSide } from './quest-two'
@@ -38,7 +39,7 @@ const W=960,H=570,ASPECT=W/H, SNAP_RADIUS=76, DROP_DISTANCE=124, TAP=9, DOUBLE_M
 // Red/blue heads have diagonal Blueprint destinations; allow a wider approach
 // zone but preserve exact final positions and all other magnet eligibility.
 const RED_BLUE_SNAP_RADIUS=SNAP_RADIUS*1.75
-const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1'
+const KEY='stax-free-molecules-v2', THEME_KEY='stax-molecule-theme-v1', FOAM_SHADOW_KEY='stax-foam-shadow-strength-v1', FOAM_SOUND_KEY='stax-foam-slide-sound-v1'
 const kinds:Kind[]=['circle','triangle','square','rectangle','diamond','hexagon','oval']
 type Choice={kind:Kind;variant?:'small'|'large';label:string}
 const choices:Choice[]=[{kind:'circle',label:'Noun / pronoun'},{kind:'triangle',label:'Verb'},{kind:'square',label:'Preposition'},{kind:'rectangle',label:'Determiner'},{kind:'diamond',label:'Conjunction'},{kind:'hexagon',label:'Orange'},{kind:'oval',label:'Green'}]
@@ -1004,6 +1005,11 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   '--stax-foam-shadow-middle':String(Math.min(.85,.29*foamShadowStrength/100)),
   '--stax-foam-shadow-cast':String(Math.min(.65,.17*foamShadowStrength/100)),
  } as CSSProperties
+ const [foamSoundEnabled,setFoamSoundEnabled]=useState(()=>{
+  try{return localStorage.getItem(FOAM_SOUND_KEY)!=='off'}catch{return true}
+ })
+ const foamAudio=useRef<FoamSlideAudio|null>(null)
+ function audio(){if(!foamAudio.current)foamAudio.current=new FoamSlideAudio();return foamAudio.current}
  const [omitBrush,setOmitBrush]=useState(false)
  const [pollenAnimated,setPollenAnimated]=useState(false)
  useEffect(()=>{if(theme!=='golden-pollen')setPollenAnimated(false)},[theme])
@@ -1048,6 +1054,11 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc])
  useEffect(()=>{try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme])
  useEffect(()=>{try{localStorage.setItem(FOAM_SHADOW_KEY,String(foamShadowStrength))}catch{/* local preference unavailable */}},[foamShadowStrength])
+ useEffect(()=>{
+  foamAudio.current?.setEnabled(foamSoundEnabled&&theme==='classroom-foam')
+  try{localStorage.setItem(FOAM_SOUND_KEY,foamSoundEnabled?'on':'off')}catch{/* local sound preference unavailable */}
+ },[foamSoundEnabled,theme])
+ useEffect(()=>()=>foamAudio.current?.dispose(),[])
  useEffect(()=>()=>{if(fallTimer.current)clearTimeout(fallTimer.current)},[])
  function questTwoTap(token:string){
   if(!questActive||activeQuestLevel!==2)return
@@ -1116,7 +1127,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   if(activeTouches.current.size!==2)return
   const ids=[...activeTouches.current.keys()] as [number,number]
   const a=activeTouches.current.get(ids[0])!,b=activeTouches.current.get(ids[1])!
-  if(dragging.current){update(dragging.current.before);dragging.current=null;setPreview(null)}
+  if(dragging.current){foamAudio.current?.stop();update(dragging.current.before);dragging.current=null;setPreview(null)}
   panning.current=null;lastTap.current=null
   blockRelease.current.add(ids[0]);blockRelease.current.add(ids[1])
   const atoms=[touchAtom.current.get(ids[0]),touchAtom.current.get(ids[1])]
@@ -1192,6 +1203,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   if(fallTimer.current)clearTimeout(fallTimer.current)
   setFall(new Set())
   dragging.current={id,pointer:e.pointerId,sx:p.x,sy:p.y,before:currentDoc.current,moved:false,fingerLift:e.pointerType==='touch'?FINGER_LIFT:0}
+  if(theme==='classroom-foam'&&foamSoundEnabled)audio().start(e.clientX,e.clientY)
   e.currentTarget.setPointerCapture(e.pointerId)
   setSelected(id)
  }
@@ -1201,6 +1213,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const pt=pointer(e),dx=pt.x-d.sx,dy=pt.y-d.sy
   if(Math.hypot(dx,dy)>TAP)d.moved=true
   if(d.moved){
+   if(theme==='classroom-foam'&&foamSoundEnabled)audio().move(e.clientX,e.clientY)
    const raised=d.fingerLift?fromClient(e.clientX,e.clientY-d.fingerLift):null
    const finger=d.fingerLift?fromClient(e.clientX,e.clientY):null
    const lift=raised&&finger?raised.y-finger.y:0
@@ -1211,9 +1224,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   e.stopPropagation()
  }
  function releaseShape(e:ReactPointerEvent<SVGGElement>){
-  if(blockRelease.current.has(e.pointerId)){blockRelease.current.delete(e.pointerId);dragging.current=null;setPreview(null);return}
+  if(blockRelease.current.has(e.pointerId)){blockRelease.current.delete(e.pointerId);foamAudio.current?.stop();dragging.current=null;setPreview(null);return}
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
-  dragging.current=null;setPreview(null);e.stopPropagation()
+  dragging.current=null;foamAudio.current?.stop();setPreview(null);e.stopPropagation()
   if(!d.moved){
    if(questActive&&activeQuestLevel===2){lastTap.current=null;questTwoTap(d.id);return}
    const t=Date.now()
@@ -1346,23 +1359,25 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  function paletteDown(e:ReactPointerEvent<HTMLButtonElement>,kind:Kind,variant?:Atom['variant']){
   if(e.pointerType==='mouse'&&e.button!==0)return
   paletteDrag.current={kind,variant,pointer:e.pointerId,startX:e.clientX,startY:e.clientY}
+  if(theme==='classroom-foam'&&foamSoundEnabled)audio().start(e.clientX,e.clientY)
   e.currentTarget.setPointerCapture(e.pointerId)
   setPaletteHover(palettePosition(kind,e.clientX,e.clientY,variant))
  }
  function paletteMove(e:ReactPointerEvent<HTMLButtonElement>){
   const p=paletteDrag.current;if(!p||p.pointer!==e.pointerId)return
+  if(theme==='classroom-foam'&&foamSoundEnabled&&Math.hypot(e.clientX-p.startX,e.clientY-p.startY)>10)audio().move(e.clientX,e.clientY)
   setPaletteHover(palettePosition(p.kind,e.clientX,e.clientY,p.variant))
  }
  function paletteUp(e:ReactPointerEvent<HTMLButtonElement>){
   const p=paletteDrag.current;if(!p||p.pointer!==e.pointerId)return
-  paletteDrag.current=null;setPaletteHover(null)
+  paletteDrag.current=null;foamAudio.current?.stop();setPaletteHover(null)
   const moved=Math.hypot(e.clientX-p.startX,e.clientY-p.startY)>10
   const liftedY=e.clientY-FINGER_LIFT,rect=svg.current?.getBoundingClientRect()
   const inside=!!rect&&e.clientX>=rect.left&&e.clientX<=rect.right&&liftedY>=rect.top&&liftedY<=rect.bottom
   if(moved&&!inside){setHint('Drop the lifted shape inside the workspace.');return}
   addAt(p.kind,moved?{x:e.clientX,y:liftedY}:undefined,p.variant)
  }
- function paletteCancel(){paletteDrag.current=null;setPaletteHover(null)}
+ function paletteCancel(){paletteDrag.current=null;foamAudio.current?.stop();setPaletteHover(null)}
  function loadQuest(level:number){
   const item=staxQuestLevel(level)
   if(!item)return
@@ -1476,6 +1491,10 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
      <div className="stax-shadow-scale"><span>Off</span><span>Normal</span><span>Strong</span></div>
      {theme!=='classroom-foam'&&<small>Switch to Foam to adjust shadows.</small>}
      <button type="button" className="stax-shadow-reset" onClick={()=>setFoamShadowStrength(100)} disabled={foamShadowStrength===100}>Reset shadow</button>
+     <label className="stax-foam-sound-option">
+      <input type="checkbox" checked={foamSoundEnabled} onChange={e=>setFoamSoundEnabled(e.target.checked)}/>
+      Foam sliding sound
+     </label>
     </div>
    </section>}
   <div className="stax-quest-nav">
@@ -1553,7 +1572,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       ].filter(Boolean).join(' ')}
       tabIndex={questActive&&activeQuestLevel===2?0:undefined} role={questActive&&activeQuestLevel===2?'button':undefined} aria-label={questActive&&activeQuestLevel===2?'Tap '+wordOnAtom(a):undefined}
       onKeyDown={e=>{if(questActive&&activeQuestLevel===2&&(e.key==='Enter'||e.key===' ')){e.preventDefault();questTwoTap(a.id)}}}
-      onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}> 
+      onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{foamAudio.current?.stop();dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}> 
       {selected===a.id&&<rect x="-7" y="-7" width={atomWidth(a)+14} height={atomHeight(a)+14} rx="5" fill="none" stroke={theme==='golden-line'?'#fff1ac':'#7b8795'} strokeDasharray="4 5" pointerEvents="none"/>}
       <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)}
         fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?(a.omitted?'#e9ddf71f':'#ffffff01'):materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
