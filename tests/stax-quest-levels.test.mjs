@@ -95,9 +95,9 @@ const quest2Source=await readFile(new URL('../src/experiences/stax/quest-two.ts'
 const quest2Js=ts.transpileModule(quest2Source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText
 const {advanceQuestTwo,harvestQuestTwo,QUEST_TWO_ORDER,QUEST_TWO_EXPRESSION}=
  await import('data:text/javascript;base64,'+Buffer.from(quest2Js).toString('base64'))
-test('Quest 2 4B question harvests H → are → you (not a written How atom)',()=>{
+test('Quest 2 4B question harvests H → RED → BLUE on the original 5 map',()=>{
  assert.equal(QUEST_TWO_EXPRESSION.question,'4B')
- assert.deepEqual(QUEST_TWO_ORDER.question,['H','q2-question-are','q2-question-you'])
+ assert.deepEqual(QUEST_TWO_ORDER.question,['H','q2-a-q-2','q2-a-q-1'])
  let steps=[]
  assert.equal(harvestQuestTwo('question',steps),null)
  for(const token of QUEST_TWO_ORDER.question){
@@ -116,27 +116,40 @@ test('Quest 2 5 answer is composed from separate I + SMR + ok tokens',()=>{
  assert.equal(harvestQuestTwo('answer',progress,false),'I am ok.')
 })
 test('Quest 2 wrong order resets safely and never falsely harvests',()=>{
- const step=advanceQuestTwo('question',[],'q2-question-you')
+ const step=advanceQuestTwo('question',[],'q2-a-q-1')
  assert.equal(step.accepted,false)
  assert.deepEqual(step.next,[])
- assert.equal(harvestQuestTwo('question',['H','q2-question-you','q2-question-are']),null)
+ assert.equal(harvestQuestTwo('question',['H','q2-a-q-1','q2-a-q-2']),null)
  const first=advanceQuestTwo('question',[],'H')
  assert.equal(first.accepted,true)
- const wrong=advanceQuestTwo('question',first.next,'q2-question-you')
+ const wrong=advanceQuestTwo('question',first.next,'q2-a-q-1')
  assert.deepEqual(wrong.next,[])
 })
-test('Quest 2 H is a separate tappable marker above empty complement snap port',async()=>{
+test('Quest 2 H floats above the ORIGINAL blue map without introducing a new scene',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
- const segment=board.slice(board.indexOf('function questTwoQuestionDraft('),board.indexOf('function quest21('))
- assert.match(segment,/snappedSequenceFollowerPosition\(you,are\)/)
- assert.match(segment,/snappedSequenceFollowerPosition\(red,unknown\)/)
- assert.match(segment,/slot\.y-height\('circle'\)\*\.47/)
- assert.doesNotMatch(segment,/kind:'oval',word:'How'/)
+ const segment=board.slice(board.indexOf('function questTwoAnswerDraft('),board.indexOf('function quest21('))
+ assert.match(segment,/parseStaxSentence\("I'm ok\."\)/)
+ assert.match(segment,/const blue=d\.atoms\.find\(a=>a\.id==='q2-a-q-1'&&a\.kind==='circle'\)/)
+ assert.match(segment,/x:blue\.x\+atomWidth\(blue\)\/2,y:blue\.y-height\('circle'\)\*\.60/)
+ assert.doesNotMatch(segment,/questTwoQuestionDraft|q2-question-|q2-unknown-complement|q2-virtual|slotX|slotY|fitQuestTwoQuestion/)
+ assert.match(board,/const base=questTwoAnswerDraft\(\)/)
+ assert.match(board,/setCamera\(fit\(base,aspect\(\)\)\)/)
  assert.match(board,/questTwoTap\('H'\)/)
  assert.match(board,/className="stax-quest2-h"/)
- assert.match(board,/className="stax-quest2-empty-slot"/)
- assert.match(board,/onClick=\{\(\)=>changeQuestTwoSide\('answer'\)\}/)
+ assert.doesNotMatch(board,/stax-quest2-empty-slot/)
+ const switcher=board.slice(board.indexOf('function changeQuestTwoSide('),board.indexOf('function toggleQuestTwoContraction('))
+ assert.match(switcher,/setQuestTwoSide\(side\);setQuestTwoTaps\(\[\]\)/)
+ assert.doesNotMatch(switcher,/save\(|setCamera\(|questTwoAnswerDraft\(|questTwoQuestionDraft\(/)
  assert.match(board,/if\(questActive&&activeQuestLevel===2\)\{lastTap\.current=null;questTwoTap\(d\.id\);return\}/)
+})
+test('H marker is plain text with a generous invisible hit target',async()=>{
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ const styles=css.slice(css.lastIndexOf('.stax-quest2-h{'),css.lastIndexOf('.stax-quest2-h:active'))
+ assert.match(styles,/width:54px;height:54px/)
+ assert.match(styles,/border:0/)
+ assert.match(styles,/background:transparent/)
+ assert.doesNotMatch(styles,/box-shadow:0/)
+ assert.doesNotMatch(css,/\.stax-quest2-empty-slot\{/)
 })
 test('contraction gesture only recognizes BLUE I + RED SMR and preserves pinch',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
