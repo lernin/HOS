@@ -1012,3 +1012,31 @@
 }
 .stax-setting-section input[type='text']:disabled {opacity:.6;}
 .stax-setting-section small {font:500 12px/1.35 system-ui,sans-serif;color:var(--stax-caption);}
+
+/* Sound Lab is a collapsible portion of the existing scrollable STAX settings.
+   All synth sliders use native touch inputs for responsive Android adjustment. */
+.stax-sound-lab-toggle,.stax-sound-lab-actions button {
+ min-height:44px;padding:10px 12px;cursor:pointer;
+ border:1px solid var(--stax-border);border-radius:8px;
+ background:var(--stax-button);color:var(--stax-text);
+ font:700 13px/1.3 system-ui,sans-serif;
+}
+.stax-sound-lab {
+ padding:12px;margin-top:2px;
+ display:flex;flex-direction:column;gap:14px;
+ border:1px solid var(--stax-border);border-radius:10px;
+ background:color-mix(in srgb,var(--stax-panel) 90%,#b68756 10%);
+}
+.stax-sound-lab-control label {
+ display:flex;justify-content:space-between;align-items:center;
+ font:700 13px/1.4 system-ui,sans-serif;
+}
+.stax-sound-lab-control output {font-variant-numeric:tabular-nums;}
+.stax-sound-lab-control input[type='range'] {
+ width:100%;min-height:38px;margin:6px 0 2px;
+ accent-color:#a06a3e;touch-action:pan-x;
+}
+.stax-sound-lab-actions {display:flex;flex-wrap:wrap;gap:8px;}
+.stax-sound-lab-actions button {flex:1;min-width:120px;}
+.stax-sound-lab-actions button:disabled {opacity:.4;cursor:default;}
+.stax-sound-lab small {font-size:12px;line-height:1.4;}
