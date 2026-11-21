@@ -3,7 +3,7 @@ import { getVoiceStyle } from '../../lib/voiceStyle'
 import { DEFAULT_TTS_VOICE } from '../../lib/ttsVoices'
 
 type Phase='idle'|'listening'|'thinking'|'speaking'
-type Visual=(active:boolean,jaw:number)=>void
+type Visual=(active:boolean,jaw:number,phase:Phase)=>void
 
 // A deliberately tiny adaptation of Procedia's Desk Speaking pipeline.
 // Same STT, Kuna chat prompt and verse voice/style backend, but no text composer,
@@ -18,7 +18,7 @@ export function useKunaVoice(onVisual:Visual){
   const pending=useRef<AbortController|null>(null),lastSpeed=useRef<number|null>(null)
   const startAt=useRef(0),lastSound=useRef(0),heardSpeech=useRef(false)
 
-  function status(next:Phase){phaseRef.current=next;if(mounted.current)setPhase(next);visual.current(next!=='idle',0)}
+  function status(next:Phase){phaseRef.current=next;if(mounted.current)setPhase(next);visual.current(next!=='idle',0,next)}
   function info(s:string){if(mounted.current)setNotice(s)}
   function stopMicrophone(){
     if(listenFrame.current!==null){cancelAnimationFrame(listenFrame.current);listenFrame.current=null}
@@ -31,7 +31,7 @@ export function useKunaVoice(onVisual:Visual){
   function stopPlayback(){
     if(playFrame.current!==null){cancelAnimationFrame(playFrame.current);playFrame.current=null}
     if(playbackSource.current){playbackSource.current.onended=null;try{playbackSource.current.stop()}catch{/* Already finished. */};playbackSource.current.disconnect();playbackSource.current=null}
-    visual.current(false,0)
+    visual.current(false,0,phaseRef.current)
   }
   function cancelAll(){
     sessionRef.current++
@@ -88,7 +88,7 @@ export function useKunaVoice(onVisual:Visual){
         let sum=0
         for(const s of samples){const v=(s-128)/128;sum+=v*v}
         const rms=Math.sqrt(sum/samples.length)
-        visual.current(true,Math.min(1,Math.max(0,(rms-.018)*5)))
+        visual.current(true,Math.min(1,Math.max(0,(rms-.018)*5)),phaseRef.current)
         playFrame.current=requestAnimationFrame(trackJaw)
       }
       source.onended=()=>{if(id!==sessionRef.current)return;stopPlayback();status('idle')}
