@@ -30,6 +30,8 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
   let lastTalking=false
   const safeHome=nav.isSafe(position)
   if(!safeHome)phase='blocked'
+  let previous:KunaFrame={position:{...position},yaw,speed,phase,goal:null,route:[]}
+  let rendered:KunaFrame=previous
 
   function settle(seconds:number,mode:KunaPhase='idle'){
     speed=0;phase=mode;route=[];target=null;dwell=seconds
@@ -118,18 +120,36 @@ export function createKunaBehavior(nav:KunaNav,start:Point,initialYaw=0){
       if(cornerAngle>.38){phase='turn';speed=0}
     }
   }
+  function simulationState():KunaFrame{
+    return {position:{...position},yaw,speed,phase,goal:target?{...target}:null,
+      route:route.map(p=>({...p}))}
+  }
   function update(dt:number,player:Point,interacting=false):KunaFrame{
     const frameDt=Number.isFinite(dt)?clamp(dt,0,.10):0
     accumulator=Math.min(.13,accumulator+frameDt)
     let steps=0
     while(accumulator+1e-9>=KUNA_STEP&&steps++<8){
+      previous=simulationState()
       tick(player,interacting,KUNA_STEP);accumulator-=KUNA_STEP
+    }
+    // Interpolate *rendered* motion between simulation ticks. Without this,
+    // irregular phone frames may execute two fixed steps at once, causing a
+    // visible double-angle jump even though physical yaw is rate limited.
+    const current=simulationState(),alpha=clamp(accumulator/KUNA_STEP,0,1)
+    const yawStep=angleDelta(current.yaw,previous.yaw)
+    rendered={
+      ...current,
+      position:{x:previous.position.x+(current.position.x-previous.position.x)*alpha,
+                z:previous.position.z+(current.position.z-previous.position.z)*alpha},
+      yaw:previous.yaw+yawStep*alpha,
+      speed:previous.speed+(current.speed-previous.speed)*alpha,
     }
     return snapshot()
   }
   function snapshot():KunaFrame{
-    return {position:{...position},yaw,speed,phase,goal:target?{...target}:null,
-      route:route.map(p=>({...p}))}
+    return {...rendered,position:{...rendered.position},
+      goal:rendered.goal?{...rendered.goal}:null,
+      route:rendered.route.map(p=>({...p}))}
   }
   return {update,snapshot}
 }
