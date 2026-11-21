@@ -133,7 +133,7 @@ try{
     assert.match(ui,/Walking alongside/)
     assert.match(ui,/Filter takes by performance context/)
     assert.match(ui,/Mirror view:/)
-    assert.match(ui,/beside\?\.58:0/)
+    assert.match(ui,/beside\\s*\\?\\s*0\\.58\\s*:\\s*0/)
     assert.doesNotMatch(ui,/fetch\('\/api\/kuna\//)
   })
   test('rig plays native one-shot Sit and resets shared animation actions safely',()=>{
