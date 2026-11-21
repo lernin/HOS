@@ -372,8 +372,8 @@ test('third orange uses a modest stagger, lower red pair crosses, and uncle has 
 test('large green complements follow red verbs as sequences, never noun supporters',async()=>{
  const src=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const section=src.slice(src.indexOf('function bestSnap('),src.indexOf('function resolveMagnet('))
- assert.match(section,/a\.kind==='oval'&&b\.kind==='triangle'/,'drag green toward red')
- assert.match(section,/a\.kind==='triangle'&&b\.kind==='oval'/,'drag red toward green')
+ assert.match(section,/\(a\.kind==='oval'\|\|a\.kind==='hexagon'\)&&b\.kind==='triangle'/,'drag green or large orange toward red')
+ assert.match(section,/a\.kind==='triangle'&&\(b\.kind==='oval'\|\|b\.kind==='hexagon'\)/,'drag red toward green or large orange')
  assert.match(section,/parent:b\.id,child:a\.id,relation:'sequence'/)
  assert.match(section,/parent:a\.id,child:b\.id,relation:'sequence'/)
  assert.match(section,/z\.parent===b\.id\|\|z\.child===a\.id/,'reject occupied follower slot')
@@ -384,7 +384,7 @@ test('large green complements follow red verbs as sequences, never noun supporte
 
 test('Blueprint red-to-large-green complement uses 2.03 horizontal and 0.49 vertical offsets in both drag directions',async()=>{
  const src=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
- const start=src.indexOf('A large green complement can follow')
+ const start=src.indexOf('A LARGE green or orange complement can follow')
  const end=src.indexOf('Sequence ports accept noun',start)
  const code=src.slice(start,end)
  assert.ok(start>=0&&end>start)
