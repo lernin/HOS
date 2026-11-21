@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
-import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
+import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, redBlueMagnetDistance, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -711,7 +711,14 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
      const desired=snappedSequenceFollowerPosition(left,right)
      const delta=a.id===right.id?{x:desired.x-a.x,y:desired.y-a.y}:
       {x:b.x-(desired.x-left.x)-a.x,y:b.y-(desired.y-left.y)-a.y}
-     offered({parent:left.id,child:right.id,relation:'sequence',dx:delta.x,dy:delta.y,distance:Math.hypot(delta.x,delta.y)})
+     // Red ↔ blue uses a shape-sized forgiving gesture zone, not a
+      // pixel-perfect top-left target. Final placement still uses exact ports.
+      const redBlue=(left.kind==='circle'&&right.kind==='triangle')||
+       (left.kind==='triangle'&&right.kind==='circle')
+      const distance=redBlue
+       ?redBlueMagnetDistance(delta.x,delta.y,{width:atomWidth(a),height:atomHeight(a)})
+       :Math.hypot(delta.x,delta.y)
+      offered({parent:left.id,child:right.id,relation:'sequence',dx:delta.x,dy:delta.y,distance})
     }
    }
   }
