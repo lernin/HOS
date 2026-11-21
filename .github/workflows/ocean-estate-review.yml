@@ -4,6 +4,7 @@ on:
     branches:
       - 'preview/ocean-estate-*'
       - 'feature/ocean-estate-kuna-*'
+      - 'feature/ocean-estate-procedia-kuna-*'
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx
@@ -34,7 +35,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-      - run: node --test tests/ocean-estate-npc.test.mjs tests/ocean-estate-motion.test.mjs tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
+      - run: node --test tests/ocean-estate-voice.test.mjs tests/ocean-estate-npc.test.mjs tests/ocean-estate-motion.test.mjs tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
       - run: npx playwright install --with-deps chromium
       - name: Check one-tap fullscreen on desktop and landscape phone
         run: |

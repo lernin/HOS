@@ -61,3 +61,10 @@
 .oe-fullscreen{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;padding:0;border:1px solid #eee4cc77;border-radius:10px;background:#20332c99;backdrop-filter:blur(12px)}
 .oe-fullscreen svg{display:block;width:23px;height:23px}
 .oe-root:fullscreen{width:100%;height:100%;inset:0}
+
+/* Minimal voice status only; no chat transcript, message cards or speech bubbles. */
+.oe-kuna-status{position:absolute;left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9;max-width:min(84vw,340px);padding:12px 17px;border-radius:999px;background:#152d26e8;border:1px solid #ead7af88;color:#fff1cc!important;box-shadow:0 8px 28px #07150f59;font-size:13px!important;text-align:center;white-space:nowrap;touch-action:manipulation}
+.oe-kuna-status--listening{border-color:#93e7c4;background:#153b32ef}
+.oe-kuna-status--speaking{border-color:#dec38b}
+.oe-kuna-status--thinking{pointer-events:none;opacity:.86}
+@media(max-height:530px){.oe-kuna-status{bottom:max(7px,env(safe-area-inset-bottom));padding:9px 13px;font-size:12px!important}}
