@@ -63,5 +63,6 @@ try{
     assert.match(main,/navigate\('kuna-lab'\)/)
     assert.match(main,/view === 'kuna-lab'/)
     assert.match(estate,/window\.location\.assign\('\/kuna-lab'\)/)
+    assert.match(readFileSync(new URL('../vercel.json',import.meta.url),'utf8'),/"source": "\/kuna-lab", "destination": "\/"/)
   })
 }finally{await rm(dir,{recursive:true,force:true})}

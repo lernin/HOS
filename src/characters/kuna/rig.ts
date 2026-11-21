@@ -42,7 +42,7 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
   const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n))
   const transitionDuration=sitClip?clamp(sitClip.duration,.85,2.25):.85
 
-  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number;manualPose?:HeadPose|null}){
+  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number;turning?:boolean;manualPose?:HeadPose|null}){
     const elapsed=clamp(Number.isFinite(dt)?dt:0,0,.1)
     if(phase!==options.phase){phase=options.phase;phaseElapsed=0}else phaseElapsed+=elapsed
     const seated=options.active&&!!sit
@@ -50,11 +50,14 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     // isTransitioning() before asking the collision controller to walk.
     sitAmount=clamp(sitAmount+(seated?1:-1)*elapsed/transitionDuration,0,1)
     const sitWeight=sit?clamp(sitAmount*transitionDuration/.26,0,1):0
-    const targetWalk=!options.active&&sitAmount===0?clamp(options.speedFraction,0,1):0
+    // An animal steps its paws while rotating, rather than spinning
+    // stiffly on planted feet. Slow footfalls even for in-place turns.
+    const targetWalk=!options.active&&sitAmount===0?
+      Math.max(clamp(options.speedFraction,0,1),options.turning?.34:0):0
     walkBlend=T.MathUtils.damp(walkBlend,targetWalk,5,elapsed)
     walk?.setEffectiveWeight((1-sitWeight)*walkBlend)
     idle?.setEffectiveWeight((1-sitWeight)*(1-walkBlend))
-    if(walk)walk.timeScale=.68+.35*walkBlend
+    if(walk)walk.timeScale=options.turning?.48:.68+.35*walkBlend
     if(sit){
       sit.paused=true
       sit.time=clamp(sitAmount*sitClip!.duration,0,sitClip!.duration)

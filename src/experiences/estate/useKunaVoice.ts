@@ -129,7 +129,7 @@ export function useKunaVoice(onVisual:Visual){
         if(listenFrame.current!==null){cancelAnimationFrame(listenFrame.current);listenFrame.current=null}
         void captureCtx.current?.close().catch(()=>{});captureCtx.current=null
         if(id!==sessionRef.current)return
-        if(blob.size<900){info('I did not hear anything. Tap Kuna and try again.');status('idle');return}
+        if(!heardSpeech.current||blob.size<900){info('I did not hear anything. Tap Kuna to speak again.');status('idle');return}
         void exchangeAudio(blob,id)
       }
       recorder.start(150)

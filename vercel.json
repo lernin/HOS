@@ -27,6 +27,7 @@
     { "source": "/materials-studio", "destination": "/materials-studio/app.html" },
     { "source": "/stax-shape-lab", "destination": "/" },
     { "source": "/ocean-estate", "destination": "/" },
+    { "source": "/kuna-lab", "destination": "/" },
     { "source": "/ocean-estate-plan", "destination": "/" },
     { "source": "/waterfall-village-v2", "destination": "/" },
     { "source": "/waterfall-village", "destination": "/" },

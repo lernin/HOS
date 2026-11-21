@@ -9,6 +9,7 @@ on:
       - 'feature/ocean-estate-kuna-safe-*'
       - 'feature/ocean-estate-kuna-sit-*'
       - 'fix/ocean-estate-kuna-head-*'
+      - 'fix/ocean-estate-kuna-companion-*'
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx

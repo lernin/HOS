@@ -252,7 +252,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
        const cameraMoving=!!(path.length||Math.hypot(vx,vz)>.05||input.looking||input.x||input.z)
        const kunaInterval=cameraMoving?0:33
        if(!input.paused&&!inspectView&&!artInspect&&now-lastKunaUpdate>=kunaInterval){
-         kuna?.update(Math.min(.05,(now-lastKunaUpdate)/1000),position)
+         kuna?.update(Math.min(.05,(now-lastKunaUpdate)/1000),position,input.yaw)
          lastKunaUpdate=now;dirty=true
        }else if(input.paused||inspectView||artInspect)lastKunaUpdate=now
        if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}

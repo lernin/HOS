@@ -13,7 +13,7 @@ try {
     build({entryPoints:['src/experiences/estate/npc-navigation.ts'],outfile,bundle:true,platform:'node',format:'esm',packages:'external'}),
     build({entryPoints:['src/experiences/estate/npc-behavior.ts'],outfile:behaviorFile,bundle:true,platform:'node',format:'esm',packages:'external'}),
   ])
-  const {createKunaNavigator,KUNA_HOME,KUNA_KITCHEN_GOALS,KUNA_RADIUS,kunaClearSegment,kunaSafe}=await import(pathToFileURL(outfile).href)
+  const {createKunaNavigator,createKunaCompanionNavigator,KUNA_HOME,KUNA_KITCHEN_GOALS,KUNA_RADIUS,kunaClearSegment,kunaSafe}=await import(pathToFileURL(outfile).href)
   const {createKunaBehavior,KUNA_MAX_SPEED}=await import(pathToFileURL(behaviorFile).href)
   const nav=createKunaNavigator()
   const distance=(a,b)=>Math.hypot(a.x-b.x,a.z-b.z)
@@ -89,6 +89,30 @@ try {
     for(let i=0;i<900;i++){
       const p=c.update(1/60,farAway)
       assert.ok(nav.isSafe(p.position))
+    }
+  })
+  test('engaged Kuna can follow a walking child without collision or teleport',()=>{
+    const companion=createKunaCompanionNavigator(nav)
+    const c=createKunaBehavior(companion,KUNA_HOME)
+    const player={x:-14,z:10.8}
+    const target={x:player.x+.78,z:player.z-1.75}
+    assert.ok(companion.isSafe(target),'visible over-shoulder destination is safe')
+    let previous=c.snapshot(),moved=0
+    for(let i=0;i<900;i++){
+      const next=c.update(1/60,player,false,{active:true,yaw:0})
+      assert.ok(companion.isSafe(next.position),'fox stays on walkable surface')
+      assert.ok(companion.clear(previous.position,next.position),'no furniture penetration')
+      moved+=distance(next.position,previous.position)
+      const turn=Math.abs(Math.atan2(Math.sin(next.yaw-previous.yaw),Math.cos(next.yaw-previous.yaw)))
+      assert.ok(turn<1.6/60+.025,'no abrupt yaw snap')
+      previous=next
+    }
+    assert.ok(moved>.15,'fox walks while following a moved child')
+    assert.ok(distance(previous.position,target)<1.0,'fox approaches visible shoulder anchor')
+    const seated=previous.position
+    for(let i=0;i<120;i++){
+      const p=c.update(1/60,player,true)
+      assert.ok(distance(p.position,seated)<.02,'engagement holds position through speech phases')
     }
   })
   test('if a planned route becomes blocked Kuna stops, rather than sliding into furniture',()=>{

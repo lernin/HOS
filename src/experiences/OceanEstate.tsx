@@ -58,7 +58,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   useEffect(()=>{const e=engine.current;if(!e)return;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface])},[materialCatalog])
   useEffect(()=>()=>audio.current?.dispose(),[])
   useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,maxTurnSpeed:prefs.turnSpeed*Math.PI/180,quality:prefs.quality,lighting:prefs.lighting});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
-  useEffect(()=>{const pause=()=>{if(artOpen.current)void exitArt();stop();input.current.paused=true;audio.current?.pause();setPaused(true)};const visibility=()=>{if(document.hidden)pause()}
+  useEffect(()=>{const pause=()=>{if(artOpen.current)void exitArt();kunaVoice.cancel();stop();input.current.paused=true;audio.current?.pause();setPaused(true)};const visibility=()=>{if(document.hidden)pause()}
     const key=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(e.type==='keyup')keys.current.delete(k);if(input.current.paused)return;if(e.target instanceof HTMLElement&&['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return
       if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','escape','shift'].includes(k))e.preventDefault();else return
       if(k==='escape'){if(e.type==='keydown'){if(artOpen.current)void exitArt();else pause()}return}if(artOpen.current)return;if(e.type==='keydown')keys.current.add(k)
@@ -199,9 +199,13 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       {artZoom>1.02&&<button className="oe-art-reset" onClick={resetArt}>Reset {artZoom.toFixed(1)}×</button>}
       {artInfo&&<aside className="oe-art-info-card"><span>ON THE WALL</span><h2>{art.title}</h2><p><strong>{art.artist}</strong><br/>{art.date}</p><p>{art.museum}</p><a href={art.source} target="_blank" rel="noopener noreferrer">View museum record ↗</a></aside>}
     </div>}
-    {(kunaVoice.phase!=='idle'||kunaVoice.notice)&&<button type="button" className={`oe-kuna-status oe-kuna-status--${kunaVoice.phase}`} onClick={kunaVoice.tap} aria-label={kunaVoice.phase==='listening'?'Finish talking to Kuna':kunaVoice.phase==='speaking'?'Stop Kuna speaking':'Kuna voice status'}>
-      {kunaVoice.phase==='listening'?'Listening… tap to finish':kunaVoice.phase==='thinking'?'Kuna is thinking…':kunaVoice.phase==='speaking'?'Kuna is speaking… tap to stop':kunaVoice.notice}
-    </button>}
+    {(kunaVoice.engaged||kunaVoice.notice)&&<div className="oe-kuna-session" role="group" aria-label="Kuna conversation">
+      <button type="button" className={`oe-kuna-status oe-kuna-status--${kunaVoice.phase}`} onClick={kunaVoice.tap}
+        aria-label={kunaVoice.phase==='listening'?'Finish your turn':kunaVoice.phase==='speaking'?'Interrupt Kuna to speak':'Talk to Kuna'}>
+        {kunaVoice.phase==='listening'?'Listening… tap to finish':kunaVoice.phase==='thinking'?'Kuna is thinking…':kunaVoice.phase==='speaking'?'Kuna is speaking…':kunaVoice.notice||(kunaVoice.engaged?'With Kuna · tap to speak':'Tap Kuna to talk')}
+      </button>
+      {kunaVoice.engaged&&<button type="button" className="oe-kuna-end" onClick={kunaVoice.end} aria-label="End conversation with Kuna">End</button>}
+    </div>}
     {notice&&<div className="oe-notice" role="status">{notice}</div>}
     {(!started||paused||error)&&<div className="oe-entry"><section><span className="oe-eyebrow">THE HORIZON RESIDENCE</span><h1>{started&&paused?'Stay a while.':<>A home.<br/>An ocean.<br/>All yours to explore.</>}</h1><p>{error||(started&&paused?'Your walk is paused.':'Warm stone, quiet gardens, and a view that never ends.')}</p>{error?<button className="oe-primary" onClick={()=>{setStarted(false);setPaused(false);setAttempt(n=>n+1)}}>Reopen estate ↗</button>:ready?<button className="oe-primary" onClick={begin}>{started?'Continue exploring':'Step inside'} <span>↗</span></button>:<div className="oe-loading" role="status"><i/>{progress}</div>}<div className="oe-entry-note">Left thumb moves. Right thumb looks. Tap the floor to walk.</div></section></div>}
     <dialog ref={dialog} className="oe-settings" onClose={closeSettings}><form method="dialog"><header><span>YOUR STAY</span><button aria-label="Close settings">×</button></header></form><h2>A little more comfortable.</h2>
