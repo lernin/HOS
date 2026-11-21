@@ -73,7 +73,6 @@ export function KunaLab({onBack}:{onBack:()=>void}){
   const [assetReady,setAssetReady]=useState(false)
   const [isSitting,setIsSitting]=useState(false)
   const sittingRef=useRef(false)
-  const [showHelp,setShowHelp]=useState(true)
 
   const choosePhase=(next:KunaVoicePhase)=>{phaseRef.current=next;setPhase(next)}
   const setSit=(next:boolean)=>{sittingRef.current=next;setIsSitting(next)}
