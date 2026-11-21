@@ -54,3 +54,10 @@
 .oe-tour-export{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;margin:12px 0 18px;padding:15px 16px;min-height:62px;border:2px solid #fff2b7;border-radius:10px;background:#e9ca76;color:#1b3026;text-align:left;font-size:14px;font-weight:800;box-shadow:0 0 0 3px #f9e7aa25,0 8px 22px #07150f44}
 .oe-tour-export span{white-space:nowrap;font-size:12px;font-weight:700;color:#1b3026}
 @media(max-height:530px){.oe-tour-export{min-height:48px;padding:10px 12px;font-size:12px;margin:9px 0 13px}}
+
+/* One-tap fullscreen entry at the actual top-left, without an in-game exit control. */
+.oe-header{padding-top:max(9px,env(safe-area-inset-top));padding-left:max(9px,env(safe-area-inset-left))}
+.oe-header-left{display:flex;align-items:center;gap:7px}
+.oe-fullscreen{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;padding:0;border:1px solid #eee4cc77;border-radius:10px;background:#20332c99;backdrop-filter:blur(12px)}
+.oe-fullscreen svg{display:block;width:23px;height:23px}
+.oe-root:fullscreen{width:100%;height:100%;inset:0}

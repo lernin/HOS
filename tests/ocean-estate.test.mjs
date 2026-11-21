@@ -607,3 +607,17 @@ test('west gallery exterior paving never overlaps interior floor planes',()=>{
   assert.ok(nav.walkable(pt),`exterior path remains continuous at ${JSON.stringify(pt)}`)
  }
 })
+
+test('Estate offers one-tap fullscreen entry at the upper left, with no in-game exit button',()=>{
+  const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')
+  const css=readFileSync(new URL('../src/experiences/estate/estate.css',import.meta.url),'utf8')
+  assert.match(ui,/className="oe-header-left"/)
+  assert.match(ui,/className="oe-fullscreen"/)
+  assert.match(ui,/aria-label="Enter fullscreen"/)
+  assert.match(ui,/onClick=\{enterFullscreen\}/)
+  assert.match(ui,/target\.requestFullscreen\(\)/)
+  assert.match(ui,/document\.addEventListener\('fullscreenchange',sync\)/)
+  assert.match(ui,/!fullscreen&&<button/)
+  assert.doesNotMatch(ui,/document\.exitFullscreen\(/)
+  assert.match(css,/\.oe-header\{padding-top:max\(9px,env\(safe-area-inset-top\)\);padding-left:max\(9px,env\(safe-area-inset-left\)\)/)
+})
