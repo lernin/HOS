@@ -769,7 +769,14 @@
    beneath this image remains the existing pointer hit target. */
 .stax-molecule-ui[data-theme='classroom-foam'] image.stax-authentic-foam-chip {
  pointer-events:none!important;
- filter:drop-shadow(0 2px 1px rgba(39,24,10,.24));
+ /* Silhouette-aware app shadow. Never bake shadows into image assets. */
+ filter:drop-shadow(0 1px 1px rgba(0,0,0,.10))
+        drop-shadow(0 4px 8px rgba(0,0,0,.16));
+}
+/* Prevent the image shadow being cut off in palette or lifted previews. */
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-palette button > svg,
+.stax-molecule-ui[data-theme='classroom-foam'] .stax-lifted-ghost > svg {
+ overflow:visible;
 }
 .stax-molecule-tools button.stax-foam-shortcut {
  width:46px;
