@@ -770,8 +770,9 @@
 .stax-molecule-ui[data-theme='classroom-foam'] image.stax-authentic-foam-chip {
  pointer-events:none!important;
  /* Silhouette-aware app shadow. Never bake shadows into image assets. */
- filter:drop-shadow(0 1px 1px rgba(0,0,0,.10))
-        drop-shadow(0 4px 8px rgba(0,0,0,.16));
+ filter:drop-shadow(0 2px 2px rgba(24,16,9,.34))
+        drop-shadow(0 6px 9px rgba(24,16,9,.29))
+        drop-shadow(0 12px 17px rgba(24,16,9,.17));
 }
 /* Prevent the image shadow being cut off in palette or lifted previews. */
 .stax-molecule-ui[data-theme='classroom-foam'] .stax-molecule-palette button > svg,
