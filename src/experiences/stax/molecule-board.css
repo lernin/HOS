@@ -991,3 +991,24 @@
 @media(orientation:landscape) and (max-height:520px) {
  .stax-settings-panel {max-height:calc(100vh - 92px);}
 }
+
+/* Typography settings must demonstrate live changes even if the workspace
+   contains only unlabeled foam. Shape text is independently editable. */
+.stax-foam-type-sample {
+ min-height:54px;
+ display:flex;align-items:center;justify-content:center;
+ padding:8px 12px;box-sizing:border-box;
+ border:1px solid var(--stax-border);border-radius:10px;
+ color:#3f354c;background:#efe6d7;
+ line-height:1.15;
+ overflow:hidden;
+}
+.stax-setting-section input[type='text'] {
+ width:100%;min-height:44px;box-sizing:border-box;
+ padding:9px 11px;
+ border:1px solid var(--stax-border);border-radius:8px;
+ color:var(--stax-text);background:var(--stax-button);
+ font:500 16px/1.3 system-ui,sans-serif;
+}
+.stax-setting-section input[type='text']:disabled {opacity:.6;}
+.stax-setting-section small {font:500 12px/1.35 system-ui,sans-serif;color:var(--stax-caption);}
