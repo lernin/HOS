@@ -9,6 +9,7 @@ on:
       - 'feature/ocean-estate-kuna-safe-*'
       - 'feature/ocean-estate-kuna-sit-*'
       - 'fix/ocean-estate-kuna-head-*'
+      - 'fix/ocean-estate-kuna-companion-*'
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx
@@ -19,6 +20,7 @@ on:
       - src/experiences/EstatePlan.tsx
       - src/main.tsx
       - tests/ocean-estate*
+      - tests/kuna-lab-*
       - .github/workflows/ocean-estate-review.yml
   pull_request:
     branches: [main]
@@ -32,6 +34,7 @@ on:
       - src/experiences/EstatePlan.tsx
       - src/main.tsx
       - tests/ocean-estate*
+      - tests/kuna-lab-*
       - .github/workflows/ocean-estate-review.yml
 permissions:
   contents: read
@@ -63,7 +66,7 @@ jobs:
         run: |
           npm run dev -- --port 4173 > /tmp/kuna-lab-vite.log 2>&1 &
           for i in {1..30}; do
-            if curl -fsS http://127.0.0.1:4173/kuna-lab >/dev/null; then break; fi
+            if curl -fsS http://127.0.0.1:4173/tests/kuna-lab-preview.html >/dev/null; then break; fi
             sleep 1
           done
           node tests/ocean-estate-kuna-lab-visual.mjs

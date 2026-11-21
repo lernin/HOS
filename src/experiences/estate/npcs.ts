@@ -1,7 +1,7 @@
 import * as T from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { floorAt, FLOOR, type Point } from './plan'
-import { createKunaNavigator, KUNA_HOME, KUNA_RADIUS, KUNA_KITCHEN_GOALS } from './npc-navigation'
+import { createKunaCompanionNavigator, KUNA_HOME, KUNA_RADIUS, KUNA_KITCHEN_GOALS } from './npc-navigation'
 import { createKunaBehavior, KUNA_MAX_SPEED } from './npc-behavior'
 import { createKunaRig } from '../../characters/kuna/rig'
 import type { KunaVoicePhase } from '../../characters/kuna/expressions'
@@ -25,14 +25,16 @@ function makeLabel(){
 }
 
 type Navigator={path:(start:Point,end:Point)=>Point[]|null}
-export function createKunaWanderer(scene:T.Scene,_playerNavigator:Navigator,signal?:AbortSignal){
-  const nav=createKunaNavigator()
+export function createKunaWanderer(scene:T.Scene,playerNavigator:Navigator,signal?:AbortSignal){
+  const nav=createKunaCompanionNavigator(playerNavigator)
   const behavior=createKunaBehavior(nav,KUNA_HOME)
   const figure=new T.Group();figure.name='Kuna — Procedia fox, collision-safe kitchen walker'
   figure.userData.estateNPC=true;figure.visible=false;scene.add(figure)
   const label=makeLabel();figure.add(label.sprite)
   let model:T.Group|null=null,rig:ReturnType<typeof createKunaRig>|null=null
   let focus=false,phase:KunaVoicePhase='idle',energy=0,disposed=false,failed=false
+  let lastPlayer:Point|null=null,engagementPoint:Point|null=null,playerStillFor=0
+  let travelYaw=0,following=false
   const center=new T.Vector3(),toCenter=new T.Vector3()
   const homeY=floorAt(KUNA_HOME)??FLOOR
   figure.position.set(KUNA_HOME.x,homeY,KUNA_HOME.z)
@@ -87,17 +89,38 @@ export function createKunaWanderer(scene:T.Scene,_playerNavigator:Navigator,sign
     if(!rig.hasSit)console.warn('Kuna Sit clip is missing; using an upright listening pose')
   },undefined,error=>{failed=true;console.warn('Unable to load Procedia Kuna model',error)})
 
-  function update(dt:number,player:Point){
+  function update(dt:number,player:Point,viewerYaw=0){
     const elapsed=Math.max(0,Math.min(.1,Number.isFinite(dt)?dt:0))
     if(!model||!figure.visible)return
-    // Physics never moves while the Sit clip is lowering/rising.
-    const holding=focus||Boolean(rig?.isTransitioning())
-    const frame=rig?.hasWalk?behavior.update(elapsed,player,holding):behavior.update(elapsed,player,true)
+    if(lastPlayer){
+      const dx=player.x-lastPlayer.x,dz=player.z-lastPlayer.z
+      if(Math.hypot(dx,dz)>.009){
+        travelYaw=Math.atan2(-dx,-dz)
+        playerStillFor=0
+      }else playerStillFor+=elapsed
+    }else travelYaw=viewerYaw
+    lastPlayer={...player}
+    // Engagement is not the same as microphone recording or TTS playback.
+    // A single tap establishes companionship, retained between spoken turns.
+    if(focus){
+      if(!engagementPoint)engagementPoint={...player}
+      if(!following&&Math.hypot(player.x-engagementPoint.x,player.z-engagementPoint.z)>.58)following=true
+      // Rejoin at the child's shoulder, then sit again when they pause.
+      if(following&&playerStillFor>1.4&&Math.hypot(player.x-behavior.snapshot().position.x,player.z-behavior.snapshot().position.z)<3.05){
+        following=false;engagementPoint={...player}
+      }
+    }else {following=false;engagementPoint=null}
+    const seated=focus&&!following
+    // Never drag seated feet: play Stand in place before re-enabling physics.
+    const holding=seated||Boolean(rig?.isTransitioning())
+    const follow=following?{active:true,yaw:travelYaw}:undefined
+    const frame=rig?.hasWalk?behavior.update(elapsed,player,holding,follow):behavior.update(elapsed,player,true)
     figure.position.set(frame.position.x,(floorAt(frame.position)??homeY)+.012,frame.position.z)
     figure.rotation.y=frame.yaw
     rig?.update(elapsed,{
-      active:focus,phase,
+      active:seated,phase,
       speedFraction:rig.hasWalk?Math.max(0,Math.min(1,frame.speed/KUNA_MAX_SPEED)):0,
+      turning:frame.phase==='turn'&&!seated,
       jaw:energy,
     })
     if(showDebug)debug.userData.setPosition?.(frame.position)
@@ -111,8 +134,15 @@ export function createKunaWanderer(scene:T.Scene,_playerNavigator:Navigator,sign
       const along=toCenter.copy(center).sub(ray.origin).dot(ray.direction)
       return along>0&&along<8&&ray.distanceSqToPoint(center)<.52*.52
     },
-    setTalking(active:boolean,jaw=0){focus=active;energy=Math.max(0,Math.min(1,jaw));if(!active)phase='idle'},
-    setPhase(next:KunaVoicePhase){phase=next;focus=next!=='idle'},
+    setTalking(active:boolean,jaw=0){
+      if(active&&!focus){
+        engagementPoint=lastPlayer?{...lastPlayer}:null
+        following=false;playerStillFor=0
+      }
+      focus=active;energy=Math.max(0,Math.min(1,jaw))
+      if(!active){phase='idle';following=false;engagementPoint=null}
+    },
+    setPhase(next:KunaVoicePhase){phase=next},
     status(){return failed?'error':model?'ready':'loading'},
     dispose(){
       disposed=true;scene.remove(figure);label.dispose()

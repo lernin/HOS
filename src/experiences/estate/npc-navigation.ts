@@ -117,3 +117,49 @@ export function createKunaNavigator(radius=KUNA_RADIUS){
     debugObstacles:obstacles.filter(o=>o.x2>-23&&o.x1<-11&&o.z2>2&&o.z1<14),
   }
 }
+
+
+// Estate-wide companion navigation. Reuse the world's existing path planner,
+// but ALWAYS verify every waypoint and swept segment against Kuna's larger
+// footprint. If a player-sized path is too narrow, stop and wait safely.
+export function createKunaCompanionNavigator(world:{path:(a:Point,b:Point)=>Point[]|null},radius=KUNA_RADIUS){
+  const kitchen=createKunaNavigator(radius)
+  function safe(p:Point){
+    if(!walkable(p,radius))return false
+    const height=floorAt(p)
+    if(height===null)return false
+    for(let i=0;i<8;i++){
+      const a=i*Math.PI/4
+      const edge={x:p.x+Math.cos(a)*radius,z:p.z+Math.sin(a)*radius}
+      if(floorAt(edge)===null)return false
+    }
+    return true
+  }
+  function clear(a:Point,b:Point){
+    if(!safe(a)||!safe(b))return false
+    const d=Math.hypot(b.x-a.x,b.z-a.z),n=Math.max(1,Math.ceil(d/.075))
+    let prev=a
+    for(let i=1;i<=n;i++){
+      const t=i/n,p={x:a.x+(b.x-a.x)*t,z:a.z+(b.z-a.z)*t}
+      if(!safe(p))return false
+      const y=floorAt(p),last=floorAt(prev)
+      if(y===null||last===null||Math.abs(y-last)>Math.max(.045,d/n*.65))return false
+      prev=p
+    }
+    return true
+  }
+  function path(a:Point,b:Point):Point[]|null{
+    if(!safe(a)||!safe(b))return null
+    if(clear(a,b))return [{...b}]
+    const bothKitchen=locationAt(a)==='Kitchen'&&locationAt(b)==='Kitchen'
+    const candidate=bothKitchen?kitchen.path(a,b):world.path(a,b)
+    if(!candidate?.length)return null
+    let last=a
+    for(const p of candidate){
+      if(!clear(last,p))return null
+      last=p
+    }
+    return candidate
+  }
+  return {...kitchen,isSafe:safe,clear,path}
+}

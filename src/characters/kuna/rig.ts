@@ -38,11 +38,11 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
   const neutralPosition=model.position.clone(),neutralRotation=model.quaternion.clone()
   let sitAmount=0,walkBlend=0,jawAmount=0,phaseElapsed=0
   let phase:KunaVoicePhase='idle',headPitch=0,headTurn=0,headTilt=0
-  const headQuaternion=new T.Quaternion(),jawQuaternion=new T.Quaternion(),headEuler=new T.Euler(),jawEuler=new T.Euler()
+  const headQuaternion=new T.Quaternion(),headTiltQuaternion=new T.Quaternion(),jawQuaternion=new T.Quaternion(),headEuler=new T.Euler(),tiltEuler=new T.Euler(),jawEuler=new T.Euler()
   const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n))
   const transitionDuration=sitClip?clamp(sitClip.duration,.85,2.25):.85
 
-  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number;manualPose?:HeadPose|null}){
+  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number;turning?:boolean;manualPose?:HeadPose|null}){
     const elapsed=clamp(Number.isFinite(dt)?dt:0,0,.1)
     if(phase!==options.phase){phase=options.phase;phaseElapsed=0}else phaseElapsed+=elapsed
     const seated=options.active&&!!sit
@@ -50,11 +50,14 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     // isTransitioning() before asking the collision controller to walk.
     sitAmount=clamp(sitAmount+(seated?1:-1)*elapsed/transitionDuration,0,1)
     const sitWeight=sit?clamp(sitAmount*transitionDuration/.26,0,1):0
-    const targetWalk=!options.active&&sitAmount===0?clamp(options.speedFraction,0,1):0
+    // An animal steps its paws while rotating, rather than spinning
+    // stiffly on planted feet. Slow footfalls even for in-place turns.
+    const targetWalk=!options.active&&sitAmount===0?
+      Math.max(clamp(options.speedFraction,0,1),options.turning?.34:0):0
     walkBlend=T.MathUtils.damp(walkBlend,targetWalk,5,elapsed)
     walk?.setEffectiveWeight((1-sitWeight)*walkBlend)
     idle?.setEffectiveWeight((1-sitWeight)*(1-walkBlend))
-    if(walk)walk.timeScale=.68+.35*walkBlend
+    if(walk)walk.timeScale=options.turning?.48:.68+.35*walkBlend
     if(sit){
       sit.paused=true
       sit.time=clamp(sitAmount*sitClip!.duration,0,sitClip!.duration)
@@ -71,9 +74,14 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
       headPitch=T.MathUtils.damp(headPitch,T.MathUtils.clamp(target.pitch,-.28,.28),6,elapsed)
       headTurn=T.MathUtils.damp(headTurn,T.MathUtils.clamp(target.turn,-.20,.20),6,elapsed)
       headTilt=T.MathUtils.damp(headTilt,T.MathUtils.clamp(target.tilt,-.22,.22),6,elapsed)
-      headEuler.set(headPitch,0,headTurn+headTilt)
+      // Procedia Desk Speaking: head turn is LOCAL Z, nod/pitch LOCAL X,
+      // and curious side tilt is LOCAL Y with a small upward X offset.
+      // Never add tilt and turn on Z; that makes the fox look contorted.
+      headEuler.set(headPitch,0,headTurn)
+      tiltEuler.set(-headTilt/6,headTilt,0)
       headQuaternion.setFromEuler(headEuler)
-      head.quaternion.copy(neutralHead).multiply(headQuaternion)
+      headTiltQuaternion.setFromEuler(tiltEuler)
+      head.quaternion.copy(neutralHead).multiply(headQuaternion).multiply(headTiltQuaternion)
     }
     if(chin&&neutralChin){
       // Preserve Procedia's 0.381rad jaw. No previous-frame quaternion drift.
