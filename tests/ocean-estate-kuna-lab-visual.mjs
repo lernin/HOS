@@ -1,6 +1,6 @@
 import { chromium } from 'playwright'
 import assert from 'node:assert/strict'
-import {mkdir} from 'node:fs/promises'
+import {mkdir,readFile} from 'node:fs/promises'
 
 const browser=await chromium.launch({headless:true,args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-webgl','--enable-unsafe-swiftshader']})
 await mkdir('artifacts/ocean-estate',{recursive:true})
@@ -43,13 +43,37 @@ try{
     await page.waitForTimeout(600)
     await page.getByRole('button',{name:'Stop & Save'}).click()
     await page.getByText(/Saved custom\./).waitFor({timeout:5000})
+    await page.getByRole('heading',{name:/Expression gallery/}).waitFor()
+    assert.equal(await page.locator('.kl-gallery-card').count(),1,'saved take appears as a motion card')
+    await page.getByRole('textbox',{name:'Register a new emotion'}).fill('Reassurance')
+    await page.getByRole('button',{name:'Add emotion'}).click()
+    await page.locator('.kl-emotion-palette').getByRole('button',{name:/reassurance/i}).click()
+    await page.locator('.kl-emotion-palette').getByRole('button',{name:/curiosity/i}).click()
+    const curiosity=page.getByRole('slider',{name:'curiosity emotional strength'})
+    await curiosity.focus()
+    await curiosity.press('End')
+    for(let i=0;i<4;i++)await curiosity.press('ArrowLeft')
+    assert.equal(await curiosity.inputValue(),'80','emotion rating is stored independently')
+    const intensity=page.getByRole('slider',{name:'Playback intensity'})
+    await intensity.focus()
+    await intensity.press('Home')
+    for(let i=0;i<5;i++)await intensity.press('ArrowRight')
+    assert.equal(await intensity.inputValue(),'25','subtle replay has separate movement strength')
+    await page.getByRole('combobox',{name:'Filter takes by registered emotion'}).selectOption('curiosity')
+    assert.equal(await page.locator('.kl-gallery-card').count(),1,'gallery filters by rated meaning')
     const downloadEvent=page.waitForEvent('download')
-    await page.getByRole('button',{name:'Export JSON'}).click()
+    await page.getByRole('button',{name:'Export gallery + vocabulary'}).click()
     const dl=await downloadEvent
     assert.ok(dl.suggestedFilename().endsWith('.json'))
+    const bundle=JSON.parse(await readFile(await dl.path(),'utf8'))
+    assert.equal(bundle.version,3)
+    assert.equal(bundle.type,'kuna-motion-library')
+    assert.ok(bundle.emotions.includes('reassurance'))
+    assert.equal(bundle.takes[0].emotions.curiosity,80)
+    assert.equal(bundle.takes[0].playbackIntensity,25)
     await page.screenshot({path:'artifacts/ocean-estate/kuna-lab-'+testCase.name+'.png',fullPage:true})
     assert.deepEqual(errors,[],'Kuna Lab emitted no uncaught JS exceptions: '+errors.join(','))
-    console.log('Kuna Lab '+testCase.name+': original GLB loaded; speaking simulation, record/replay export passed')
+    console.log('Kuna Lab '+testCase.name+': GLB, recording, emotion registration, 80% rating, 25% replay and v3 export passed')
     await context.close()
   }
 }finally{await browser.close()}

@@ -6,11 +6,23 @@ export type KunaClipEvent={at:number;name:string;timeScale?:number}
 export type KunaStudioTake={
   version:2;id:string;label:string;tags:string[];duration:number
   frames:KunaMotionFrame[];clips:KunaClipEvent[]
+  // Optional to preserve every existing v2 recording and v1 migration.
+  emotions?:Record<string,number>;playbackIntensity?:number
 }
 export type RecorderMode='idle'|'armed'|'recording'|'paused'
 const clipNames=new Set(['Death','Fall','Rest Pose','Sit','Idle Alert','Walk','Run','Fetch','Jump','Bite'])
 const clamp=(n:number,min:number,max:number)=>Math.max(min,Math.min(max,n))
 const round=(n:number)=>Math.round(n*1000)/1000
+export const KUNA_STARTER_EMOTIONS=[
+  'enthusiasm','curiosity','agreement','uncertainty','attentiveness','disagreement',
+] as const
+export function normalizeKunaEmotion(value:string):string{
+  return value.trim().toLowerCase().replace(/\s+/g,' ').slice(0,32)
+}
+export function validKunaEmotion(value:unknown):value is string{
+  return typeof value==='string'&&value.length>0&&value.length<=32&&
+    value===normalizeKunaEmotion(value)&&/^[\p{L}][\p{L}\p{N} -]*$/u.test(value)
+}
 export function validateKunaTake(value:unknown):value is KunaStudioTake {
   if(!value||typeof value!=='object')return false
   const t=value as KunaStudioTake
@@ -19,6 +31,12 @@ export function validateKunaTake(value:unknown):value is KunaStudioTake {
     t.tags.some(x=>typeof x!=='string'||x.length>48)||!Number.isFinite(t.duration)||t.duration<.1||t.duration>12||
     !Array.isArray(t.frames)||t.frames.length<2||t.frames.length>800||
     !Array.isArray(t.clips)||t.clips.length>40)return false
+  if(t.playbackIntensity!==undefined&&(!Number.isInteger(t.playbackIntensity)||t.playbackIntensity<0||t.playbackIntensity>100))return false
+  if(t.emotions!==undefined){
+    if(!t.emotions||typeof t.emotions!=='object'||Array.isArray(t.emotions))return false
+    const ratings=Object.entries(t.emotions)
+    if(ratings.length>24||ratings.some(([name,strength])=>!validKunaEmotion(name)||!Number.isInteger(strength)||strength<0||strength>100))return false
+  }
   let last=-.001
   for(const f of t.frames){
     if(!f||!['at','pitch','turn','tilt','jaw'].every(k=>Number.isFinite(f[k as keyof KunaMotionFrame])))return false
@@ -29,7 +47,7 @@ export function validateKunaTake(value:unknown):value is KunaStudioTake {
   return t.clips.every(c=>c&&Number.isFinite(c.at)&&c.at>=0&&c.at<=t.duration+.001&&
     clipNames.has(c.name)&&(c.timeScale===undefined||Number.isFinite(c.timeScale)&&c.timeScale>.1&&c.timeScale<=3))
 }
-export function sampleKunaTake(t:KunaStudioTake,seconds:number):KunaMotionFrame {
+export function sampleKunaTake(t:KunaStudioTake,seconds:number,intensity=100):KunaMotionFrame {
   const at=clamp(Number.isFinite(seconds)?seconds:0,0,t.duration)
   const frames=t.frames
   let lo=0,hi=frames.length-1
@@ -41,8 +59,9 @@ export function sampleKunaTake(t:KunaStudioTake,seconds:number):KunaMotionFrame 
   const b=frames[lo],a=frames[Math.max(0,lo-1)]
   const u=clamp((at-a.at)/Math.max(.00001,b.at-a.at),0,1)
   const lerp=(x:number,y:number)=>x+(y-x)*u
-  return {at,pitch:lerp(a.pitch,b.pitch),turn:lerp(a.turn,b.turn),
-    tilt:lerp(a.tilt,b.tilt),jaw:lerp(a.jaw,b.jaw)}
+  const strength=clamp(Number.isFinite(intensity)?intensity:100,0,100)/100
+  return {at,pitch:lerp(a.pitch,b.pitch)*strength,turn:lerp(a.turn,b.turn)*strength,
+    tilt:lerp(a.tilt,b.tilt)*strength,jaw:lerp(a.jaw,b.jaw)*strength}
 }
 export function createKunaRecorder(){
   let mode:RecorderMode='idle',began=0,pausedAt=0,pausedTime=0
