@@ -11,6 +11,7 @@ import { PearlescentAirglass } from './pearlescent-airglass'
 import { FoamChip } from './foam-chips'
 import { STAX_QUEST_LEVELS, staxQuestLevel } from './quest-levels'
 import { parseStaxSentence, type ParsedStax } from './quest-parser'
+import { advanceQuestTwo, harvestQuestTwo, QUEST_TWO_ORDER, type QuestTwoSide } from './quest-two'
 import './molecule-board.css'
 
 /**
@@ -890,6 +891,43 @@ function layoutParsedQuest(parsed:ParsedStax):Draft{
  }
  return alignSequenceFamilyClearance(normalizeRoles(doc))
 }
+/** Quest 2 question is the same BLUE → RED → complement structure as form 5.
+ * The complement is unknown, so its exact snap port stays EMPTY and a
+ * separate H marker invokes the 4B 'How' question. No invented shape.
+ */
+function questTwoQuestionDraft():Draft{
+ const you:Atom={id:'q2-question-you',kind:'circle',word:'you',x:95,y:85}
+ const are:Atom={id:'q2-question-are',kind:'triangle',word:'are',x:0,y:0}
+ const target=snappedSequenceFollowerPosition(you,are)
+ return {atoms:[you,{...are,...target}],bonds:[
+  {parent:you.id,child:are.id,relation:'sequence'}
+ ]}
+}
+function questTwoAnswerDraft():Draft{
+ const parsed=parseStaxSentence("I'm ok.")
+ if(!parsed.supported)throw Error('STAX Quest 2 answer must be parsable')
+ const original=layoutParsedQuest(parsed)
+ return {atoms:original.atoms.map(a=>({...a,id:'q2-a-'+a.id})),
+  bonds:original.bonds.map(b=>({parent:'q2-a-'+b.parent,child:'q2-a-'+b.child,relation:b.relation}))}
+}
+function questTwoHPosition(d:Draft):{x:number;y:number;slotX:number;slotY:number}|null{
+ const red=d.atoms.find(a=>a.id==='q2-question-are')
+ if(!red)return null
+ const unknown:Atom={id:'q2-unknown-complement',kind:'oval',x:0,y:0}
+ const slot=snappedSequenceFollowerPosition(red,unknown)
+ return {x:slot.x+atomWidth(unknown)/2,y:slot.y-height('circle')*.47,
+  slotX:slot.x+atomWidth(unknown)/2,slotY:slot.y+atomHeight(unknown)/2}
+}
+function fitQuestTwoQuestion(d:Draft,ratio:number):View{
+ const p=questTwoHPosition(d)
+ if(!p)return fit(d,ratio)
+ const red=d.atoms.find(a=>a.id==='q2-question-are')!
+ const slot=snappedSequenceFollowerPosition(red,{id:'q2-virtual',kind:'oval',x:0,y:0})
+ // Virtual items are CAMERA BOUNDS only: never real grammar atoms.
+ return fit({...d,atoms:[...d.atoms,
+  {id:'q2-camera-space',kind:'oval',x:slot.x,y:slot.y},
+  {id:'q2-camera-marker',kind:'circle',x:p.x-width('circle')/2,y:p.y-height('circle')/2}]},ratio)
+}
 /**
  * Reconstructs an editable *illustrative* molecule scene from the exact
  * sentence on STAX Blueprint slide 13 (Level 21). Source slide does not
@@ -968,6 +1006,9 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const [questActive,setQuestActive]=useState(false)
  const [questPanelOpen,setQuestPanelOpen]=useState(false)
  const [chosenQuestLevel,setChosenQuestLevel]=useState(1)
+ const [questTwoSide,setQuestTwoSide]=useState<QuestTwoSide>('question')
+ const [questTwoTaps,setQuestTwoTaps]=useState<string[]>([])
+ const [questTwoContracted,setQuestTwoContracted]=useState(true)
  const [activeQuestLevel,setActiveQuestLevel]=useState<number|null>(null)
  const [fullscreen,setFullscreen]=useState(false)
  const rootRef=useRef<HTMLDivElement>(null)
@@ -993,11 +1034,39 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  const fallTimer=useRef<ReturnType<typeof setTimeout>|null>(null)
  const paletteDrag=useRef<{kind:Kind;variant?:'small'|'large';pointer:number;startX:number;startY:number}|null>(null)
  const activeTouches=useRef<Map<number,TouchPoint>>(new Map())
+ const touchAtom=useRef<Map<number,string>>(new Map())
+ const touchStarted=useRef<Map<number,number>>(new Map())
+ const questTwoPair=useRef<{pointers:[number,number];first:TouchPoint;second:TouchPoint;started:number;released:Set<number>}|null>(null)
  const pinch=useRef<Pinch|null>(null)
  const blockRelease=useRef<Set<number>>(new Set())
  useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc])
  useEffect(()=>{try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme])
  useEffect(()=>()=>{if(fallTimer.current)clearTimeout(fallTimer.current)},[])
+ function questTwoTap(token:string){
+  if(!questActive||activeQuestLevel!==2)return
+  const result=advanceQuestTwo(questTwoSide,questTwoTaps,token)
+  if(result.complete&&!result.accepted)return
+  setQuestTwoTaps(result.next)
+  if(result.accepted)setHint(result.complete?'Expression harvested: '+harvestQuestTwo(questTwoSide,result.next,questTwoContracted):
+   'Correct '+result.next.length+' of '+QUEST_TWO_ORDER[questTwoSide].length+'.')
+  else setHint('Not quite. Tap in the shown order; start again.')
+ }
+ function changeQuestTwoSide(side:QuestTwoSide){
+  if(questTwoSide===side)return
+  const next=side==='question'?questTwoQuestionDraft():questTwoAnswerDraft()
+  save(next,currentDoc.current)
+  setQuestTwoSide(side);setQuestTwoTaps([]);setSelected(null);setOmitBrush(false)
+  setCamera(side==='question'?fitQuestTwoQuestion(next,aspect()):fit(next,aspect()))
+  setHint(side==='question'?'4B: tap H, are, you.':'5: tap I, am, ok. Contract with the button or a two-shape tap.')
+ }
+ function toggleQuestTwoContraction(){
+  setQuestTwoContracted(v=>!v)
+  setHint('The BLUE and RED shapes stay separate; only the spoken/written form changes.')
+ }
+ function wordOnAtom(a:Atom){
+  return activeQuestLevel===2&&questActive&&questTwoSide==='answer'&&a.id==='q2-a-q-2'
+   ?questTwoContracted?"'m":'am':a.word||''
+ }
  function update(d:Draft){const resolved=ensureFourOrangeBlueprint(normalizeRoles(d));currentDoc.current=resolved;setDoc(resolved)}
  function save(d:Draft,prev=currentDoc.current){setHistory(v=>[...v,prev].slice(-40));update(d)}
  function aspect(){const rect=svg.current?.getBoundingClientRect();return rect?.height?rect.width/rect.height:ASPECT}
