@@ -891,42 +891,24 @@ function layoutParsedQuest(parsed:ParsedStax):Draft{
  }
  return alignSequenceFamilyClearance(normalizeRoles(doc))
 }
-/** Quest 2 question is the same BLUE → RED → complement structure as form 5.
- * The complement is unknown, so its exact snap port stays EMPTY and a
- * separate H marker invokes the 4B 'How' question. No invented shape.
+/** Quest 2 is always the exact unaltered Level 2 answer map.
+ * 4B is an interaction/tap order, NOT a different map. H is a separate
+ * question operator above the BLUE region; there is no placeholder atom.
  */
-function questTwoQuestionDraft():Draft{
- const you:Atom={id:'q2-question-you',kind:'circle',word:'you',x:95,y:85}
- const are:Atom={id:'q2-question-are',kind:'triangle',word:'are',x:0,y:0}
- const target=snappedSequenceFollowerPosition(you,are)
- return {atoms:[you,{...are,...target}],bonds:[
-  {parent:you.id,child:are.id,relation:'sequence'}
- ]}
-}
 function questTwoAnswerDraft():Draft{
  const parsed=parseStaxSentence("I'm ok.")
- if(!parsed.supported)throw Error('STAX Quest 2 answer must be parsable')
+ if(!parsed.supported)throw Error('STAX Quest 2 base must be parsable')
  const original=layoutParsedQuest(parsed)
  return {atoms:original.atoms.map(a=>({...a,id:'q2-a-'+a.id})),
   bonds:original.bonds.map(b=>({parent:'q2-a-'+b.parent,child:'q2-a-'+b.child,relation:b.relation}))}
 }
-function questTwoHPosition(d:Draft):{x:number;y:number;slotX:number;slotY:number}|null{
- const red=d.atoms.find(a=>a.id==='q2-question-are')
- if(!red)return null
- const unknown:Atom={id:'q2-unknown-complement',kind:'oval',x:0,y:0}
- const slot=snappedSequenceFollowerPosition(red,unknown)
- return {x:slot.x+atomWidth(unknown)/2,y:slot.y-height('circle')*.47,
-  slotX:slot.x+atomWidth(unknown)/2,slotY:slot.y+atomHeight(unknown)/2}
-}
-function fitQuestTwoQuestion(d:Draft,ratio:number):View{
- const p=questTwoHPosition(d)
- if(!p)return fit(d,ratio)
- const red=d.atoms.find(a=>a.id==='q2-question-are')!
- const slot=snappedSequenceFollowerPosition(red,{id:'q2-virtual',kind:'oval',x:0,y:0})
- // Virtual items are CAMERA BOUNDS only: never real grammar atoms.
- return fit({...d,atoms:[...d.atoms,
-  {id:'q2-camera-space',kind:'oval',x:slot.x,y:slot.y},
-  {id:'q2-camera-marker',kind:'circle',x:p.x-width('circle')/2,y:p.y-height('circle')/2}]},ratio)
+/** H floats ABOVE the unchanged blue subject, never beside a virtual slot.
+ * Its visible text is only 'H'; the HTML button provides a large touch target.
+ */
+function questTwoHPosition(d:Draft):{x:number;y:number}|null{
+ const blue=d.atoms.find(a=>a.id==='q2-a-q-1'&&a.kind==='circle')
+ if(!blue)return null
+ return {x:blue.x+atomWidth(blue)/2,y:blue.y-height('circle')*.60}
 }
 /**
  * Reconstructs an editable *illustrative* molecule scene from the exact
@@ -1053,11 +1035,11 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
  }
  function changeQuestTwoSide(side:QuestTwoSide){
   if(questTwoSide===side)return
-  const next=side==='question'?questTwoQuestionDraft():questTwoAnswerDraft()
-  save(next,currentDoc.current)
+  // Expression 4B and statement 5 harvest the SAME physical STAX map.
+  // Never replace atoms/bonds, save another scene, or move the camera.
   setQuestTwoSide(side);setQuestTwoTaps([]);setSelected(null);setOmitBrush(false)
-  setCamera(side==='question'?fitQuestTwoQuestion(next,aspect()):fit(next,aspect()))
-  setHint(side==='question'?'4B: tap H, are, you.':'5: tap I, am, ok. Contract with the button or a two-shape tap.')
+  setHint(side==='question'?'4B: tap H, red SMR, blue I. The same map remains in place.':
+   '5: tap blue I, red SMR, green ok. Contract with the button or a two-shape tap.')
  }
  function toggleQuestTwoContraction(){
   setQuestTwoContracted(v=>!v)
@@ -1360,13 +1342,13 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
   const item=staxQuestLevel(level)
   if(!item)return
   if(level===2){
-   const question=questTwoQuestionDraft()
-   save(question,currentDoc.current)
-   setCamera(fitQuestTwoQuestion(question,aspect()))
+   const base=questTwoAnswerDraft()
+   save(base,currentDoc.current)
+   setCamera(fit(base,aspect()))
    setSelected(null);setOmitBrush(false);setQuestActive(true)
    setActiveQuestLevel(2);setChosenQuestLevel(2);setQuestPanelOpen(false)
    setQuestTwoSide('question');setQuestTwoTaps([]);setQuestTwoContracted(true)
-   setHint('Quest 2 · 4B: tap H, then are, then you. The complement space is unknown.')
+   setHint('Quest 2 · 4B: H is above the original I + SMR + ok map. Tap H, then red, then blue.')
    return
   }
   setQuestTwoTaps([])
@@ -1446,8 +1428,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     </div>
    </div>
    <div className="stax-molecule-view-controls">
-    <button onClick={()=>setCamera(questionMarker?fitQuestTwoQuestion(currentDoc.current,aspect()):centre(currentDoc.current,currentView.current))} title="Center" aria-label="Center"><StaxToolbarIcon name="center"/></button>
-    <button onClick={()=>setCamera(questionMarker?fitQuestTwoQuestion(currentDoc.current,aspect()):fit(currentDoc.current,aspect()))} title="Fit all" aria-label="Fit all"><StaxToolbarIcon name="fit"/></button>
+    <button onClick={()=>setCamera(centre(currentDoc.current,currentView.current))} title="Center" aria-label="Center"><StaxToolbarIcon name="center"/></button>
+    <button onClick={()=>setCamera(fit(currentDoc.current,aspect()))} title="Fit all" aria-label="Fit all"><StaxToolbarIcon name="fit"/></button>
     <button aria-label="Zoom out" title="Zoom out" onClick={()=>setCamera(zoom(currentView.current,1.25))}><StaxToolbarIcon name="minus"/></button>
     <span>{Math.round(100*W/view.width)}%</span>
     <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}><StaxToolbarIcon name="plus"/></button>
@@ -1479,7 +1461,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
     <button type="button" aria-pressed={questTwoSide==='answer'} onClick={()=>changeQuestTwoSide('answer')}>5 · Answer</button>
    </div>
    <div className="stax-quest2-output" role="status" aria-live="polite">
-    {questTwoHarvest?<strong>{questTwoHarvest}</strong>:<span>{questTwoSide==='question'?'Tap H → are → you':'Tap I → am → ok'} <em>{questTwoTaps.length}/3</em></span>}
+    {questTwoHarvest?<strong>{questTwoHarvest}</strong>:<span>{questTwoSide==='question'?'Tap H → red → blue':'Tap I → red → ok'} <em>{questTwoTaps.length}/3</em></span>}
    </div>
    <div className="stax-quest2-actions">
     {questTwoSide==='answer'&&<button type="button" onClick={toggleQuestTwoContraction} aria-pressed={questTwoContracted}>Contraction: {questTwoContracted?"I'm":'I am'}</button>}
@@ -1542,10 +1524,7 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       {a.word&&<text x={atomWidth(a)/2} y={atomHeight(a)/2+5} fontSize={Math.min(18,Math.max(11,atomWidth(a)/Math.max(wordOnAtom(a).length,3)*1.4))} fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?'#514868':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight="600" textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
     </g>)}
    </svg>
-   {questionMarker&&<>
-     <div className="stax-quest2-empty-slot" aria-hidden="true" style={{left:viewPercentX(questionMarker.slotX),top:viewPercentY(questionMarker.slotY)}}/>
-     <button className="stax-quest2-h" type="button" aria-label="H interrogative marker, tap to ask How" title="H means How" style={{left:viewPercentX(questionMarker.x),top:viewPercentY(questionMarker.y)}} onClick={()=>questTwoTap('H')}>H</button>
-    </>}
+   {questionMarker&&<button className="stax-quest2-h" type="button" aria-label="H interrogative marker, tap to ask How" title="H means How" style={{left:viewPercentX(questionMarker.x),top:viewPercentY(questionMarker.y)}} onClick={()=>questTwoTap('H')}>H</button>}
    {theme==='golden-pollen'&&<LetterzGoldenPollenCanvas
      atoms={doc.atoms.map(a=>({id:a.id,kind:a.kind,x:a.x,y:a.y,
       w:atomWidth(a),h:atomHeight(a),omitted:a.omitted}))}
