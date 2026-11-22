@@ -4,7 +4,7 @@ import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { nextRedOrangeRemoteStep } from './remote-orange-topology'
 import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
-import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
+import { canPinkSupportBlue, canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
 import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
@@ -588,6 +588,9 @@ function bestSnap(d:Draft,moving:Set<string>):Snap|null {
  let best:Snap|null=null
  const offered=(s:Snap)=>{
   const parent=byId(d,s.parent),child=byId(d,s.child)
+  // Every magnet route obeys the sentence-position rule for pink supporters.
+  if(s.relation==='support'&&parent?.kind==='circle'&&child?.kind==='square'&&
+   !canPinkSupportBlue(d,parent.id))return
   const redBlue=s.relation==='sequence'&&parent&&child&&
    ((parent.kind==='circle'&&child.kind==='triangle')||
     (parent.kind==='triangle'&&child.kind==='circle'))
@@ -1725,6 +1728,9 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   let host=parent
   let destination:{x:number;y:number}|null=null
   if(parent.kind==='circle'&&['square','rectangle','oval','hexagon'].includes(kind)){
+   if(kind==='square'&&!canPinkSupportBlue(before,parent.id)){
+    remoteNotice('Pink cannot support the first blue. Select a later blue in the sentence.');return
+   }
    if(kind==='hexagon'&&!canAttachOrangeUnderObjectBlue(before,parent.id)){
     remoteNotice('This blue has no available direct orange-not slot.');return
    }
