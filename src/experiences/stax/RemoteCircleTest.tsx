@@ -15,7 +15,7 @@ function newRoom(){
  const bytes=new Uint8Array(16);crypto.getRandomValues(bytes)
  return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join('')
 }
-type Contact={id:number;role:'surface'|'corner';corner?:'A'|'B';shift:boolean;startX:number;startY:number;x:number;y:number;moved:boolean}
+type Contact={id:number;role:'surface'|'corner';corner?:'A'|'B';shift:boolean;startX:number;startY:number;x:number;y:number;moved:boolean;swipeFired:boolean}
 type MultiPoint={x:number;y:number;distance:number}
 const THRESHOLD=54
 const urls:Record<RemoteKind,string>={
@@ -249,7 +249,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   const zone=(e.target as HTMLElement).closest('[data-zone]')?.getAttribute('data-zone')
   const corner=zone==='A'||zone==='B'?zone:undefined
   state.current.contacts.set(e.pointerId,{id:e.pointerId,role:corner?'corner':'surface',corner,
-   shift:false,startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,moved:false})
+   shift:false,startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,moved:false,swipeFired:false})
   if(corner){setCornerMode(corner);pulse(11);return}
   const surfaces=surfaceContacts()
   state.current.maxSurface=Math.max(state.current.maxSurface,surfaces.length)
@@ -327,10 +327,11 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   }
   if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
   const travelX=contact.x-contact.startX,travelY=contact.y-contact.startY
-  if(Math.hypot(travelX,travelY)>=THRESHOLD){
+  if(Math.hypot(travelX,travelY)>=THRESHOLD&&!contact.swipeFired){
    performSwipe(modeNow,direction(travelX,travelY))
-   // One long movement advances focus in discrete, repeatable steps.
-   contact.startX=contact.x;contact.startY=contact.y
+   // Exactly one command per physical flick, regardless of travel distance
+   // or pointermove frequency. A new finger-down starts a new gesture.
+   contact.swipeFired=true
   }
  }
  function pointerUp(e:ReactPointerEvent<HTMLDivElement>){
