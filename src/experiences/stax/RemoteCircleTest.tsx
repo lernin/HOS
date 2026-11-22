@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { FoamSlideAudio, safeFoamSoundId, normalizeFoamSoundTuning } from './foam-slide-audio'
 import { initialRemoteBoard, reduceRemoteBoard, type RemoteGesture, type RemoteInput, type RemoteDirection, type RemoteKind } from './remote-gesture-model'
 import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
+import { scanSwipeSteps } from './sequential-scan'
 import './remote-circle-test.css'
 
 type Ping = { type:'ping'|'pong';seq:number }
@@ -15,7 +16,7 @@ function newRoom(){
  const bytes=new Uint8Array(16);crypto.getRandomValues(bytes)
  return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join('')
 }
-type Contact={id:number;role:'surface'|'corner';corner?:'A'|'B';shift:boolean;startX:number;startY:number;x:number;y:number;moved:boolean;swipeFired:boolean;skinStep?:number;skinOriginX?:number}
+type Contact={id:number;role:'surface'|'corner';corner?:'A'|'B';shift:boolean;startX:number;startY:number;x:number;y:number;moved:boolean;swipeFired:boolean;skinStep?:number;skinOriginX?:number;scanStep?:number;scanOriginX?:number;scanStarted?:boolean;thumbMode?:'skins'|'scan'|'add'|'view'}
 const THRESHOLD=54
 const urls:Record<RemoteKind,string>={
  circle:'/stax-foam/cleaned/circle.webp',triangle:'/stax-foam/cleaned/triangle.webp',
@@ -41,6 +42,8 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const [cornerMode,setCornerMode]=useState<'A'|'B'|'A-shift'|'B-shift'|null>(null)
  const [twoFingerMode,setTwoFingerMode]=useState<'pan'|'pinch'|null>(null)
  const [skinMode,setSkinMode]=useState(false)
+ const [scanActive,setScanActive]=useState(false)
+ const [addActive,setAddActive]=useState(false)
  const [scanMode,setScanMode]=useState<'directional'|'sequential'>(()=>{try{return localStorage.getItem('stax-remote-scan-mode-v1')==='sequential'?'sequential':'directional'}catch{return 'directional'}})
  const hostInputRef=useRef(onHostInput)
  hostInputRef.current=onHostInput
@@ -49,7 +52,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const fullscreenRequest=useRef(false)
  const state=useRef({last:{x:0,y:0},dragging:false,seq:0,started:new Map<number,number>(),
   contacts:new Map<number,Contact>(),maxSurface:0,twoFinger:null as TwoFingerSession|null,
-  skinScroll:null as {owner:number}|null,tapTime:0,
+  skinScroll:null as {owner:number}|null,scanScroll:null as {owner:number}|null,tapTime:0,
   tapTimer:null as ReturnType<typeof setTimeout>|null})
  const sendData=useRef<(payload:DataMessage)=>void>(()=>{})
  const board=useRef<HTMLDivElement>(null)
@@ -205,6 +208,10 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    window.speechSynthesis.speak(words)
   }catch{/* audible labels are best effort */}
  }
+ function scanTick(count:number){
+  if(!count)return
+  pulse(count===1?10:Array.from({length:2*count-1},(_,i)=>i%2===0?10:15))
+ }
  function send(action:RemoteGesture['action'],dir?:RemoteDirection){
   sendData.current({type:'gesture',action,dir,seq:++state.current.seq})
  }
@@ -248,6 +255,8 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    shift:false,startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,moved:false,swipeFired:false})
   if(corner){setCornerMode(corner);pulse(11);return}
   const surfaces=surfaceContacts()
+  if(state.current.scanScroll){const surface=surfaces.at(-1)!
+   surface.scanOriginX=surface.x;surface.scanStep=0;surface.swipeFired=true}
   state.current.maxSurface=Math.max(state.current.maxSurface,surfaces.length)
   setPressed(true)
   if(surfaces.length===1&&activeCorner()==='A'){
@@ -272,19 +281,32 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   contact.x=e.clientX;contact.y=e.clientY
   if(Math.hypot(contact.x-contact.startX,contact.y-contact.startY)>9)contact.moved=true
   if(contact.role==='corner'){
-   if(contact.corner==='B'&&!contact.shift){
-    if(state.current.skinScroll?.owner===contact.id)return
-    // The thumb itself slides north on B. The OTHER finger scrolls skins.
-    const up=contact.startY-contact.y
-    if(up>=24&&up>Math.abs(contact.x-contact.startX)*1.2){
-     state.current.skinScroll={owner:contact.id}
+   if(contact.corner==='B'){
+    if(contact.thumbMode)return
+    // Direction on the B thumb selects a temporary, mutually exclusive mode.
+    // A separate surface finger does the actual work.
+    const thumbX=contact.x-contact.startX,thumbY=contact.y-contact.startY
+    const horizontal=Math.abs(thumbX)>Math.abs(thumbY)*1.2
+    const vertical=Math.abs(thumbY)>Math.abs(thumbX)*1.2
+    if(vertical&&thumbY<=-24){
+     contact.thumbMode='skins';state.current.skinScroll={owner:contact.id}
      setSkinMode(true);pulse([14,24,14]);announce('Skins')
-     // Do not reuse any earlier surface swipe as a skin scroll.
      for(const surface of surfaceContacts()){
       surface.skinOriginX=surface.x;surface.skinStep=0;surface.swipeFired=true
      }
-     return
+    }else if(horizontal&&thumbX<=-24){
+     contact.thumbMode='scan';state.current.scanScroll={owner:contact.id}
+     setScanActive(true);pulse([10,22,10]);announce('Sequential scan')
+     for(const surface of surfaceContacts()){
+      surface.scanOriginX=surface.x;surface.scanStep=0;surface.swipeFired=true
+     }
+    }else if(vertical&&thumbY>=24){
+     contact.thumbMode='add';setAddActive(true);pulse(16)
+    }else if(horizontal&&thumbX>=24){
+     contact.thumbMode='view';contact.shift=true
+     setCornerMode('B-shift');pulse([15,25,26])
     }
+    return
    }
    if(!contact.shift){
     const outward=hand==='right'?contact.startX-e.clientX:e.clientX-contact.startX
@@ -307,6 +329,23 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    if(delta){
     for(let i=0;i<Math.min(16,Math.abs(delta));i++)send(delta>0?'theme_next':'theme_prev')
     contact.skinStep=step;pulse(12)
+   }
+   return
+  }
+  // Stream every crossed shape in a single swipe; reverse movement reverses
+  // the scan. B-left is momentary, while Scan: Sequential is a saved option.
+  const scanChord=!!state.current.scanScroll
+  const freeScan=scanMode==='sequential'&&activeCorner()===null
+  const travelX=contact.x-contact.startX,travelY=contact.y-contact.startY
+  if(scanChord&&surfaces.length!==1)return
+  if(surfaces.length===1&&(scanChord||(freeScan&&
+    (contact.scanStarted||Math.abs(travelX)>Math.max(12,Math.abs(travelY)*1.2))))){
+   contact.scanStarted=true
+   const result=scanSwipeSteps(contact.scanStep??0,contact.x-(contact.scanOriginX??contact.startX))
+   if(result.directions.length){
+    for(const dir of result.directions)send('navigate_seq',dir)
+    contact.scanStep=result.step;contact.swipeFired=true
+    scanTick(result.directions.length)
    }
    return
   }
@@ -334,7 +373,6 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    return
   }
   if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
-  const travelX=contact.x-contact.startX,travelY=contact.y-contact.startY
   if(Math.hypot(travelX,travelY)>=THRESHOLD&&!contact.swipeFired){
    performSwipe(modeNow,direction(travelX,travelY))
    // Exactly one command per physical flick, regardless of travel distance
@@ -348,13 +386,15 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   e.preventDefault()
   const modeNow=activeCorner()
   const highest=state.current.maxSurface
-  if(contact.role==='corner'&&contact.corner==='B'&&state.current.skinScroll?.owner===contact.id){
-   state.current.skinScroll=null;setSkinMode(false)
+  if(contact.role==='corner'&&contact.corner==='B'){
+   if(state.current.skinScroll?.owner===contact.id){state.current.skinScroll=null;setSkinMode(false)}
+   if(state.current.scanScroll?.owner===contact.id){state.current.scanScroll=null;setScanActive(false)}
+   setAddActive(false)
   }
   if(contact.role==='corner'&&contact.corner==='A'&&state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
   if(contact.role==='surface'){
    if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
-   if(!contact.moved&&highest===1&&!state.current.skinScroll){
+   if(!contact.moved&&!contact.swipeFired&&highest===1&&!state.current.skinScroll&&!state.current.scanScroll){
     if(modeNow==='B'){send('spine');pulse([15,30,26])}
     else if(modeNow==='A-shift'){send('delete_confirm');pulse([20,30,20])}
     else if(modeNow==='B-shift'){announce('View commands')}
@@ -383,7 +423,9 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   const item=state.current.contacts.get(e.pointerId)
   if(!item)return
   state.current.contacts.delete(e.pointerId)
-  if(item.role==='corner'&&item.corner==='B'){state.current.skinScroll=null;setSkinMode(false)}
+  if(item.role==='corner'&&item.corner==='B'){
+   state.current.skinScroll=null;setSkinMode(false);state.current.scanScroll=null;setScanActive(false);setAddActive(false)
+  }
   if(state.current.dragging){send('move_end');state.current.dragging=false}
   if(item.role==='corner')setCornerMode(activeCorner())
   const remaining=surfaceContacts()
@@ -399,7 +441,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    <button className="stax-remote-scan-toggle" type="button" onPointerDown={e=>e.stopPropagation()}
     onClick={()=>{setScanMode(m=>m==='directional'?'sequential':'directional');pulse([12,20,12])}}
     aria-label={'Navigation mode: '+(scanMode==='sequential'?'sequential family scan':'directional nearest shape')+'. Tap to change.'}
-    title="Switch between directional and sequential shape selection">
+    title="Switch between nearest-direction and continuous family scanning">
     {scanMode==='sequential'?'Scan: Sequential':'Scan: Directional'}
    </button>
    <button className="stax-remote-hand-toggle" type="button" onPointerDown={e=>e.stopPropagation()}
@@ -412,7 +454,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
     <button type="button" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();enterFullscreenOnTouch()}}>Try landscape fullscreen</button>
    </div>}
    <div className="stax-remote-corner stax-remote-corner-b" data-zone="B" data-active={cornerMode?.startsWith('B')?'true':'false'} aria-label="B: slide thumb up on this button to unlock skins; other finger scrolls">
-    <strong>B</strong><small>{skinMode?'SKINS':cornerMode==='B-shift'?'VIEW':'ADD'}</small>
+    <strong>B</strong><small>{skinMode?'SKINS':scanActive?'SCAN':cornerMode==='B-shift'?'VIEW':addActive?'ADD':'ADD'}</small>
    </div>
    <div className="stax-remote-corner stax-remote-corner-a" data-zone="A" data-active={cornerMode?.startsWith('A')?'true':'false'} aria-label="A: hold to move, pull outward for editing">
     <strong>A</strong><small>{cornerMode==='A-shift'?'EDIT':'MOVE'}</small>
@@ -421,7 +463,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    {twoFingerMode&&<div className="stax-remote-intent-status" aria-label={twoFingerMode==='pan'?'Pan locked':'Pinch zoom locked'}>
     {twoFingerMode==='pan'?'PAN · zoom locked':'PINCH · pan locked'}
    </div>}
-   <div className="stax-remote-pad-instruction">{scanMode==='sequential'?'←/→ scans each family bottom-up · ':'Swipe to focus · '}B thumb ↑ unlocks skins</div>
+   <div className="stax-remote-pad-instruction">B ↑ skins · B ← scan · B ↓ add · B → view</div>
    <div className="stax-remote-pad-rtt">{rtt===null?'Measuring connection…':`Round trip: ${rtt} ms`}</div></>}
   </div>
  return <div className="stax-remote-host" data-canonical={onHostInput?"true":"false"}>
