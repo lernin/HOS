@@ -41,6 +41,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const [cornerMode,setCornerMode]=useState<'A'|'B'|'A-shift'|'B-shift'|null>(null)
  const [twoFingerMode,setTwoFingerMode]=useState<'pan'|'pinch'|null>(null)
  const [skinMode,setSkinMode]=useState(false)
+ const [scanMode,setScanMode]=useState<'directional'|'sequential'>(()=>{try{return localStorage.getItem('stax-remote-scan-mode-v1')==='sequential'?'sequential':'directional'}catch{return 'directional'}})
  const hostInputRef=useRef(onHostInput)
  hostInputRef.current=onHostInput
  const [landscape,setLandscape]=useState(()=>window.innerWidth>window.innerHeight)
@@ -53,6 +54,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const sendData=useRef<(payload:DataMessage)=>void>(()=>{})
  const board=useRef<HTMLDivElement>(null)
  useEffect(()=>{try{localStorage.setItem('stax-remote-hand-v1',hand)}catch{/* optional */}},[hand])
+ useEffect(()=>{try{localStorage.setItem('stax-remote-scan-mode-v1',scanMode)}catch{/* optional */}},[scanMode])
  useEffect(()=>{
   if(mode!=='pad')return
   const update=()=>setLandscape(window.innerWidth>window.innerHeight)
@@ -231,7 +233,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    else if(dir==='down')send('center')
    else if(dir==='left')send('zoom_out')
    else send('zoom_in')
-  }else if(mode===null)send('navigate',dir)
+  }else if(mode===null)send(scanMode==='sequential'?'navigate_seq':'navigate',dir)
  }
  function pointerDown(e:ReactPointerEvent<HTMLDivElement>){
   if(!valid)return
@@ -394,6 +396,12 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   onPointerCancel={pointerCancel} onContextMenu={e=>e.preventDefault()}
   aria-label="Black STAX eyes-free landscape controller">
    <div className="stax-remote-pad-status" aria-live="polite">{!valid?'Invalid pairing session':link==='direct'?'Direct connection':link==='relay'?'Relay connection':link==='offline'?'Connection unavailable':'Connecting…'}</div>
+   <button className="stax-remote-scan-toggle" type="button" onPointerDown={e=>e.stopPropagation()}
+    onClick={()=>{setScanMode(m=>m==='directional'?'sequential':'directional');pulse([12,20,12])}}
+    aria-label={'Navigation mode: '+(scanMode==='sequential'?'sequential family scan':'directional nearest shape')+'. Tap to change.'}
+    title="Switch between directional and sequential shape selection">
+    {scanMode==='sequential'?'Scan: Sequential':'Scan: Directional'}
+   </button>
    <button className="stax-remote-hand-toggle" type="button" onPointerDown={e=>e.stopPropagation()}
     onClick={()=>{setHand(h=>h==='right'?'left':'right');pulse([15,25,15])}}
     title="Mirror A and B for handedness">{hand==='right'?'Right-handed':'Left-handed'} · Switch</button>
@@ -413,7 +421,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    {twoFingerMode&&<div className="stax-remote-intent-status" aria-label={twoFingerMode==='pan'?'Pan locked':'Pinch zoom locked'}>
     {twoFingerMode==='pan'?'PAN · zoom locked':'PINCH · pan locked'}
    </div>}
-   <div className="stax-remote-pad-instruction">Slide thumb ↑ on B; swipe ←/→ with another finger</div>
+   <div className="stax-remote-pad-instruction">{scanMode==='sequential'?'←/→ scans each family bottom-up · ':'Swipe to focus · '}B thumb ↑ unlocks skins</div>
    <div className="stax-remote-pad-rtt">{rtt===null?'Measuring connection…':`Round trip: ${rtt} ms`}</div></>}
   </div>
  return <div className="stax-remote-host" data-canonical={onHostInput?"true":"false"}>
