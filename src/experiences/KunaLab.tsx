@@ -1,7 +1,7 @@
 import {useEffect,useRef,useState,type ChangeEvent} from 'react'
 import * as T from 'three'
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js'
-import {createKunaRig} from '../characters/kuna/rig'
+import {createKunaRig,kunaStudioView} from '../characters/kuna/rig'
 import {KUNA_EXPRESSIONS,KUNA_NEUTRAL,sampleKunaRecipe,validateKunaRecipe,type ExpressionRecipe,type HeadPose,type KunaVoicePhase} from '../characters/kuna/expressions'
 import {PROCEDIA_KEY_ROWS,PROCEDIA_CLIP_KEYS,PROCEDIA_GESTURE_CODES,getProcediaClip,isProcediaKey,sampleProcediaKeys} from '../characters/kuna/procediaKeyboard'
 import {createKunaRecorder,sampleKunaTake,validateKunaTake,KUNA_STARTER_EMOTIONS,normalizeKunaEmotion,validKunaEmotion,contextLabel,type KunaPerformanceContext,type KunaStudioTake,type RecorderMode} from '../characters/kuna/studioRecorder'
@@ -151,7 +151,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     if(mode==='recording'||mode==='paused')return
     auditionContextRef.current=next;setAuditionContext(next)
     if(next==='alongside')setSit(false)
-    setStatus(next==='alongside'?'Walking audition: native Walk cycle, angled view and mirrored left preview.':'Face-to-face audition: direct view, neutral closed-mouth stance.')
+    setStatus(next==='alongside'?'Walking rehearsal: Kuna moves forward with you, slightly ahead on your side; opposite side mirrors.':'Face-to-face audition: direct view, neutral closed-mouth stance.')
   }
   function mirrorAuditionSide(){
     if(mode!=='idle')return
@@ -296,6 +296,8 @@ export function KunaLab({onBack}:{onBack:()=>void}){
     renderer.outputColorSpace=T.SRGBColorSpace
     renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12
     const scene=new T.Scene()
+    const studioRoot=new T.Group()
+    scene.add(studioRoot)
     const camera=new T.PerspectiveCamera(38,1,.05,30)
     camera.position.set(0,1.55,3.8);camera.lookAt(0,.65,0)
     const cameraTarget=new T.Vector3()
@@ -317,7 +319,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
         bounds.setFromObject(fox);const middle=bounds.getCenter(new T.Vector3())
         fox.position.set(-middle.x,-bounds.min.y,-middle.z)
       }
-      scene.add(fox);aliveRig=createKunaRig(fox,asset.animations);rigRef.current=aliveRig
+      studioRoot.add(fox);aliveRig=createKunaRig(fox,asset.animations);rigRef.current=aliveRig
       setAssetReady(true)
       setStatus('Procedia Kuna loaded. All head, mouth and numbered animation controls are ready.')
     },undefined,()=>{if(!disposed)setStatus('Could not load the original Procedia fox model.')})
@@ -330,9 +332,15 @@ export function KunaLab({onBack}:{onBack:()=>void}){
       if(disposed)return
       const dt=clamp((now-last)/1000,0,.08);last=now
       const beside=auditionContextRef.current==='alongside'
-      cameraTarget.set(beside?(auditionSideRef.current==='right'?2.6:-2.6):0,1.55,beside?2.65:3.8)
+      // The virtual child looks forward from behind the companion, rather
+      // than orbiting a sideways display model. Kuna walks the SAME heading
+      // as the child, just ahead and to one side. Mirror placement on demand.
+      const placement=kunaStudioView(auditionContextRef.current,auditionSideRef.current)
+      studioRoot.rotation.y=placement.bodyYaw
+      studioRoot.position.set(placement.offsetX,0,placement.offsetZ)
+      cameraTarget.set(placement.cameraX,placement.cameraY,placement.cameraZ)
       camera.position.lerp(cameraTarget,Math.min(1,dt*7))
-      camera.lookAt(0,.65,0)
+      camera.lookAt(placement.offsetX,.65,placement.offsetZ)
       let currentPhase=phaseRef.current
       if(simRef.current!==null){
         const t=(now-simRef.current)/1000
@@ -377,7 +385,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
       const seated=sittingRef.current||currentPhase!=='idle'
       aliveRig?.update(dt,{active:seated&&!beside,phase:currentPhase,speedFraction:beside ? 0.58 : 0,
         jaw:speechJaw,manualJaw:jaw,freezeIdle:keys.freeze,manualPose:manual,
-        studioMode:true,directPose:instant})
+        studioMode:true,directPose:instant,attentionTurn:placement.attentionTurn})
       if(aliveRig&&recorderRef.current.mode()==='recording'){
         const actual=aliveRig.displayedPose()
         lastPoseRef.current=actual
@@ -451,7 +459,7 @@ export function KunaLab({onBack}:{onBack:()=>void}){
             </button>
             <span className="kl-context-note">One recorded performance; horizontal head motion mirrors for the other side.</span>
           </div>}
-          <small>Recording locks the viewpoint so the performance remains consistent. Walking uses the existing native gait; the side shown here is an audition view, not an additional saved emotion.</small>
+          <small>Recording locks the viewpoint so the performance remains consistent. Walking uses Procedia’s original gait, body facing your forward travel direction, and a gentle head turn toward you.</small>
         </div>
         <div className="kl-section kl-recorder">
           <h2>Motion Studio</h2><p>Arm, then press any Procedia movement key. Recording starts with your first action—not before. Capture several takes, then decide what they mean.</p>

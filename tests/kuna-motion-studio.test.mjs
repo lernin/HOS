@@ -17,7 +17,7 @@ try{
   ])
   const keys=await import(pathToFileURL(keyboardPath).href)
   const motion=await import(pathToFileURL(recorderPath).href)
-  const {createKunaRig}=await import(pathToFileURL(rigPath).href)
+  const {createKunaRig,kunaStudioView}=await import(pathToFileURL(rigPath).href)
   const keysDown=(...codes)=>new Set(codes)
   const still={pitch:0,turn:0,tilt:0,jaw:0}
 
@@ -125,7 +125,7 @@ try{
       'Playback intensity','Filter takes by registered emotion','Export gallery + vocabulary']){
       assert.ok(ui.includes(label),label)
     }
-    assert.match(ui,/sampleKunaTake\(preview.take,time,preview.take.playbackIntensity\?\?100\)/)
+    assert.match(ui,/sampleKunaTake\(preview.take,time,preview.take.playbackIntensity\?\?100,\s*beside&&auditionSideRef\.current==='left'\)/)
     assert.match(ui,/version:3,emotions:emotionCatalog,takes/)
     assert.match(ui,/Array.isArray\(source\)\?source:\[source\]/)
     assert.match(ui,/validKunaEmotion/)
@@ -134,6 +134,8 @@ try{
     assert.match(ui,/Filter takes by performance context/)
     assert.match(ui,/Mirror view:/)
     assert.match(ui,/speedFraction:beside\s*\?\s*0\.58\s*:\s*0/)
+    assert.match(ui,/studioRoot\.rotation\.y=placement\.bodyYaw/)
+    assert.match(ui,/studioRoot\.position\.set\(placement\.offsetX/)
     assert.doesNotMatch(ui,/fetch\('\/api\/kuna\//)
   })
   test('rig plays native one-shot Sit and resets shared animation actions safely',()=>{
@@ -155,6 +157,46 @@ try{
     assert.ok(Math.abs(rig.displayedPose().jaw-.5)<1e-9)
     rig.dispose()
   })
+  test('Procedia Idle Chin animation supplies the closed-mouth baseline even while walking',()=>{
+    const model=new THREE.Group()
+    const chin=new THREE.Object3D();chin.name='Chin';model.add(chin)
+    const open=chin.quaternion.clone()
+    const closed=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),-.23)
+    const idleChin=new THREE.QuaternionKeyframeTrack('Chin.quaternion',[0,1],
+      [...closed.toArray(),...closed.toArray()])
+    const walkChin=new THREE.QuaternionKeyframeTrack('Chin.quaternion',[0,1],
+      [...open.toArray(),...open.toArray()])
+    const rig=createKunaRig(model,[
+      new THREE.AnimationClip('Idle',1,[idleChin]),
+      new THREE.AnimationClip('Walk',1,[walkChin])])
+    for(let i=0;i<60;i++)rig.update(1/60,{active:false,phase:'idle',speedFraction:.58,jaw:0})
+    assert.ok(chin.quaternion.angleTo(closed)<1e-5,'use native Procedia Idle jaw, not open GLB bind or Walk jaw')
+    rig.update(1/60,{active:false,phase:'speaking',speedFraction:0,jaw:.8,directPose:true})
+    assert.ok(chin.quaternion.angleTo(closed)>.1,'speaking may open from the correct neutral pose')
+    for(let i=0;i<45;i++)rig.update(1/60,{active:false,phase:'idle',speedFraction:.58,jaw:1})
+    assert.ok(chin.quaternion.angleTo(closed)<1e-5,'speaking closes completely while moving')
+    rig.dispose()
+  })
+
+  test('walking rehearsal moves ahead on the child\'s side and faces the same travel direction',()=>{
+    assert.equal(typeof kunaStudioView,'function')
+    const front=kunaStudioView('face-to-face','right')
+    assert.equal(front.bodyYaw,0)
+    assert.equal(front.offsetX,0)
+    const right=kunaStudioView('alongside','right')
+    const left=kunaStudioView('alongside','left')
+    assert.ok(right.offsetX>0&&left.offsetX<0,'Kuna should be beside, not in the center')
+    assert.ok(right.offsetZ<0&&left.offsetZ<0,'Kuna should be ahead of the viewer')
+    assert.equal(right.bodyYaw,Math.PI,'both advance in the same forward direction')
+    assert.equal(left.bodyYaw,Math.PI)
+    const facing=new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0),right.bodyYaw)
+    assert.ok(facing.z<-.99,'Kuna must move away with the child, not toward them')
+    assert.equal(right.cameraX,0,'camera stays at child position rather than orbiting the fox')
+    assert.equal(left.cameraX,0)
+    assert.equal(right.offsetX,-left.offsetX,'mirrored position, one animation library')
+    assert.equal(right.attentionTurn,-left.attentionTurn,'gaze mirrors toward child')
+  })
+
   test('Procedure neutral jaw closes fully after speech and while walking',()=>{
     const model=new THREE.Group()
     const head=new THREE.Object3D();head.name='Head';model.add(head)
@@ -179,8 +221,8 @@ try{
     assert.match(ui,/recorderRef\.current\.beginOnInput/)
     assert.match(ui,/recorderRef\.current\.capture\(now,actual\)/)
     assert.match(ui,/Save & next take/)
-    assert.match(ui,/What does this gesture feel like/)
-    assert.match(ui,/Export all takes/)
+    assert.match(ui,/Which emotions does the gesture communicate/)
+    assert.match(ui,/Export gallery \+ vocabulary/)
     assert.match(ui,/sampleProcediaKeys/)
     assert.match(ui,/PROCEDIA_CLIP_KEYS/)
     assert.match(ui,/window\.speechSynthesis\.speak\(utterance\)/)

@@ -7,6 +7,7 @@ await mkdir('artifacts/ocean-estate',{recursive:true})
 try{
   for(const testCase of [
     {name:'desktop',width:1280,height:800,mobile:false},
+    {name:'portrait-phone',width:390,height:844,mobile:true},
     {name:'landscape-phone',width:915,height:412,mobile:true}
   ]){
     const context=await browser.newContext({
@@ -24,15 +25,25 @@ try{
         body:Buffer.from(await response.arrayBuffer()),
       })
     })
-    const errors=[]
+    const errors=[],network=[]
     page.on('pageerror',e=>errors.push(e.message))
+    page.on('console',msg=>{if(msg.type()==='error')errors.push('console: '+msg.text())})
+    page.on('requestfailed',req=>network.push('failed '+req.url()+' '+(req.failure()?.errorText??'')))
+    page.on('response',res=>{if(res.url().includes('fox-mascot.glb'))network.push('model HTTP '+res.status())})
     await page.goto('http://127.0.0.1:4173/kuna-lab',{waitUntil:'domcontentloaded'})
     await page.getByText('Ashley’s private workspace').waitFor({state:'visible',timeout:15000}) // Preserve the real PIN gate.
     // An isolated Vite-only fixture renders the same component without
     // weakening app authentication or storing a PIN in test credentials.
     await page.goto('http://127.0.0.1:4173/tests/kuna-lab-preview.html',{waitUntil:'domcontentloaded'})
     await page.getByRole('heading',{name:'Kuna Lab'}).waitFor({timeout:15000})
-    await page.getByText('Model ready',{exact:true}).waitFor({timeout:30000})
+    try{
+      await page.getByText('Model ready',{exact:true}).waitFor({timeout:15000})
+    }catch(error){
+      const indicator=await page.locator('.kl-indicator').allTextContents()
+      console.error('Kuna model load diagnostic',JSON.stringify({indicator,network,errors}))
+      await page.screenshot({path:'artifacts/ocean-estate/kuna-load-diagnostic-'+testCase.name+'.png'})
+      throw error
+    }
     assert.equal(await page.locator('.kl-stage canvas').count(),1,'Kuna Lab has an interactive 3D stage')
     await page.screenshot({path:'artifacts/ocean-estate/kuna-neutral-front-'+testCase.name+'.png'})
     await page.getByRole('button',{name:'Run full simulation'}).click()
