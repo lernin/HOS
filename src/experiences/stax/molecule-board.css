@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;700&family=Bangers&family=Caveat:wght@400;700&family=Cormorant+Garamond:wght@400;700&family=DM+Sans:wght@400;700&family=Lobster+Two:wght@400;700&family=Nunito:wght@400;700&family=Orbitron:wght@400;700&family=Pacifico&family=Playfair+Display:wght@400;700&display=swap');
 /* STAX magnetic workspace: canonical immersive layout.
    One set of declarations per component; avoid stacked legacy overrides.
    All positions are UI-only: grammar positions live in the geometry engine. */
@@ -1019,3 +1020,46 @@
  opacity:.95;
  pointer-events:none;
 }
+
+/* Typography studio is presentation-only and floats over the current board. */
+.stax-molecule-ui .stax-text-workshop{
+ position:absolute;z-index:22;top:calc(env(safe-area-inset-top,0px) + 12px);
+ right:calc(env(safe-area-inset-right,0px) + 12px);
+ width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 26px);
+ overflow:auto;box-sizing:border-box;padding:17px;
+ background:#121d29f2;color:#f0f5fa;border:1px solid #7c91a6;
+ border-radius:18px;box-shadow:0 22px 70px #03080b8c;
+ font-family:"DM Sans",system-ui,sans-serif;font-size:14px;
+ backdrop-filter:blur(18px);overscroll-behavior:contain;
+}
+.stax-text-workshop-heading{display:flex;justify-content:space-between;align-items:start;gap:12px;margin-bottom:13px}
+.stax-text-workshop-heading div{display:flex;flex-direction:column;gap:3px}
+.stax-text-workshop-heading small{font-size:10px;letter-spacing:2px;color:#a5c0d5;font-weight:750}
+.stax-text-workshop-heading strong{font-size:23px;font-family:"Playfair Display",Georgia,serif}
+.stax-text-workshop button,.stax-text-workshop select{font:inherit;color:inherit;cursor:pointer}
+.stax-text-workshop button:focus-visible,.stax-text-workshop select:focus-visible,.stax-text-workshop input:focus-visible{outline:2px solid #a9e6ff;outline-offset:2px}
+.stax-text-workshop-heading button{font-size:27px;line-height:1;background:none;border:0;color:#e1f0ff;padding:0 6px}
+.stax-text-workshop-theme{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:#bbcbd9;margin-bottom:9px}
+.stax-text-workshop-theme select{max-width:65%;background:#24364a;border:1px solid #6b8298;border-radius:9px;padding:9px}
+.stax-text-workshop-description{font-size:12px;line-height:1.5;color:#b8cad8;margin:8px 0 13px}
+.stax-text-targets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-bottom:14px}
+.stax-text-targets button{display:flex;align-items:center;gap:7px;text-align:left;font-size:12px;border:1px solid #4b5e71;border-radius:9px;background:#263546;padding:9px 8px}
+.stax-text-targets button.is-active,.stax-text-font-gallery button.is-active,.stax-text-controls button.is-active{border-color:#a9e7ff;box-shadow:inset 0 0 0 1px #a9e7ff;background:#284758}
+.stax-text-target-mark{display:inline-block;width:13px;height:13px;flex:none;border-radius:5px;border:1px solid #e6efff66}
+.stax-text-font-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.stax-text-font-gallery button{height:69px;min-width:0;overflow:hidden;border-radius:11px;border:1px solid #506475;background:#243241;padding:6px;text-align:center;display:flex;align-items:center;justify-content:center}
+.stax-text-font-gallery button span{font-size:clamp(15px,2.7vw,22px);line-height:1.15;white-space:nowrap;letter-spacing:0;overflow:hidden;text-overflow:clip;color:#f2f2ed}
+.stax-text-controls{display:grid;grid-template-columns:auto auto 1fr;gap:8px;align-items:center;margin:15px 0 10px}
+.stax-text-controls label{display:flex;align-items:center;gap:6px;font-size:12px;color:#e4f0f5}
+.stax-text-controls input[type=color]{width:39px;height:35px;border:1px solid #62788e;border-radius:8px;padding:2px;background:#1c2734}
+.stax-text-controls input[type=range]{min-width:40px;width:100%;accent-color:#a9e7ff}
+.stax-text-controls button{border:1px solid #526d7a;border-radius:9px;background:#243241;padding:9px 12px}
+.stax-text-controls output{min-width:16px;text-align:right}
+.stax-text-workshop-preview{margin:12px 0 14px;border-radius:13px;background:#354456;padding:22px 10px;text-align:center;line-height:1.25;overflow:hidden}
+.stax-text-workshop-footer{display:flex;gap:8px;justify-content:space-between}
+.stax-text-workshop-footer button{border:1px solid #67788b;background:#27394e;border-radius:10px;padding:11px;font-size:12px;flex:1}
+.stax-text-workshop-footer .stax-text-capture{flex:1.7;background:#d3ebfa;color:#102334;font-weight:750;border-color:#d3ebfa}
+.stax-text-workshop-footer .stax-text-capture:disabled{opacity:.55;cursor:default}
+.stax-text-storage-note{display:block;font-size:10px;color:#acbdcc;margin-top:9px;line-height:1.35}
+.stax-molecule-ui .stax-molecule-hint{font-family:var(--stax-font);font-weight:var(--stax-ui-weight,400);font-size:var(--stax-ui-size,14px);color:var(--stax-text)}
+@media(max-width:500px){.stax-molecule-ui .stax-text-workshop{top:calc(env(safe-area-inset-top,0px) + 6px);right:6px;width:calc(100vw - 12px);max-height:calc(100dvh - 12px);padding:12px}}
