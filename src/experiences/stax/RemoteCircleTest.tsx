@@ -220,7 +220,7 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
     style={{transform:`translate(calc(-50% + ${circle.x}px),calc(-50% + ${circle.y}px))`}}/>
   </div>
   <aside className="stax-remote-host-panel">
-   <div className="stax-remote-host-heading"><strong>STAX · Phone Trackpad Test</strong><button onClick={onExit}>Exit</button></div>
+   <div className="stax-remote-host-heading"><strong>STAX · Phone Trackpad Test</strong><button type="button" onClick={onExit} aria-label="Turn remote test off and return to STAX">Remote · On — Turn off</button></div>
    <p>Scan with your phone. Touch the black screen to drag the circle.</p>
    <img className="stax-remote-qr" src={qr} alt="QR code to join the STAX phone trackpad" />
    <div className="stax-remote-connection" aria-live="polite">{link==='direct'?'Direct peer-to-peer · connected':peerReady?'Internet relay connected':link==='offline'?'Connection unavailable':'Waiting for phone…'}</div>
