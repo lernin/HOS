@@ -4,7 +4,7 @@ import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { nextRedOrangeRemoteStep } from './remote-orange-topology'
 import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
-import { sequentialScanNext } from './sequential-scan'
+import { sequentialScanNext, scanSwipeSteps } from './sequential-scan'
 import { canPinkSupportBlue, canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -1131,26 +1131,45 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  function openTray(){setTrayOpen(true);setTrayActivity(n=>n+1)}
  function skinButtonDown(e:ReactPointerEvent<HTMLButtonElement>){
   if(e.pointerType==='mouse'&&e.button!==0)return
-  menuHold.current={pointer:e.pointerId,startX:e.clientX,startY:e.clientY,active:false}
+  menuHold.current={pointer:e.pointerId,startX:e.clientX,startY:e.clientY,mode:null}
   suppressMenuClick.current=false
   try{e.currentTarget.setPointerCapture(e.pointerId)}catch{/* optional */}
  }
  function skinButtonMove(e:ReactPointerEvent<HTMLButtonElement>){
   const hold=menuHold.current
-  if(!hold||hold.pointer!==e.pointerId||hold.active)return
-  const up=hold.startY-e.clientY
-  if(up<24||up<=Math.abs(e.clientX-hold.startX)*1.2)return
-  hold.active=true
+  if(!hold||hold.pointer!==e.pointerId||hold.mode)return
+  const dx=e.clientX-hold.startX,dy=e.clientY-hold.startY
+  const horizontal=Math.abs(dx)>Math.abs(dy)*1.2
+  const vertical=Math.abs(dy)>Math.abs(dx)*1.2
+  if(vertical&&dy<=-24){
+   hold.mode='skins';setSkinButtonActive(true)
+   setHint('SKINS: keep holding menu, then slide another finger left/right on the board.')
+  }else if(horizontal&&dx<=-24){
+   hold.mode='scan';setScanButtonActive(true);scanCursor.current=selected
+   setHint('SCAN: keep holding menu and sweep another finger across the board. Each piece ticks.')
+  }else if(vertical&&dy>=24){
+   hold.mode='add';setTrayOpen(true);setTrayActivity(n=>n+1)
+   setHint('ADD: use the shapes in the open tray.')
+  }else if(horizontal&&dx>=24){
+   hold.mode='view';setTrayOpen(true);setTrayActivity(n=>n+1)
+   setHint('VIEW: use the center, fit, and zoom controls in the tray.')
+  }else return
   suppressMenuClick.current=true
-  setSkinButtonActive(true)
-  // The thumb remains on menu; a new touch on the board drives skins.
   skinSurfaceSwipe.current=null
-  setHint('SKINS: keep holding menu; slide another finger left/right on the board.')
  }
  function skinButtonEnd(e:ReactPointerEvent<HTMLButtonElement>){
-  if(menuHold.current?.pointer!==e.pointerId)return
-  if(skinButtonActive)suppressMenuClick.current=true
-  menuHold.current=null;skinSurfaceSwipe.current=null;setSkinButtonActive(false)
+  const hold=menuHold.current
+  if(!hold||hold.pointer!==e.pointerId)return
+  if(hold.mode)suppressMenuClick.current=true
+  menuHold.current=null;skinSurfaceSwipe.current=null;scanCursor.current=null
+  setSkinButtonActive(false);setScanButtonActive(false)
+ }
+ function menuScanTick(count:number){
+  if(!count)return
+  try{
+   const p=count===1?10:Array.from({length:2*count-1},(_,i)=>i%2===0?10:15)
+   ;(navigator as Navigator&{vibrate?:(pattern:number|number[])=>boolean}).vibrate?.(p)
+  }catch{/* optional vibration; unsupported browsers still scan */}
  }
  const [fall,setFall]=useState<Set<string>>(new Set())
  const [preview,setPreview]=useState<Snap|null>(null)
@@ -1166,10 +1185,12 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  const questTwoPair=useRef<{pointers:[number,number];first:TouchPoint;second:TouchPoint;started:number;released:Set<number>}|null>(null)
  const pinch=useRef<Pinch|null>(null)
  const twoFingerIntent=useRef<TwoFingerSession|null>(null)
- const menuHold=useRef<{pointer:number;startX:number;startY:number;active:boolean}|null>(null)
+ const menuHold=useRef<{pointer:number;startX:number;startY:number;mode:null|'skins'|'scan'|'add'|'view'}|null>(null)
  const skinSurfaceSwipe=useRef<{pointer:number;startX:number;startY:number;originX:number;step:number;active:boolean}|null>(null)
  const suppressMenuClick=useRef(false)
  const [skinButtonActive,setSkinButtonActive]=useState(false)
+ const [scanButtonActive,setScanButtonActive]=useState(false)
+ const scanCursor=useRef<string|null>(null)
  const blockRelease=useRef<Set<number>>(new Set())
  const threeFingerCooldown=useRef(false)
  useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc,remoteSandbox])
@@ -1263,9 +1284,9 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  // contraction. Any moving pair remains a pinch zoom. No grammar mutation.
  function downTouch(e:ReactPointerEvent<SVGSVGElement>){
   if(menuHold.current){
-   // Holding menu blocks construction and camera gestures. After thumb-up
-   // activates skins, a SEPARATE touch may scroll across the board.
-   if(menuHold.current.active&&!skinSurfaceSwipe.current){
+   // The thumb arms a mode; only a separate surface finger changes content.
+   const mode=menuHold.current.mode
+   if((mode==='skins'||mode==='scan')&&!skinSurfaceSwipe.current){
     skinSurfaceSwipe.current={pointer:e.pointerId,startX:e.clientX,startY:e.clientY,originX:e.clientX,step:0,active:true}
     try{e.currentTarget.setPointerCapture(e.pointerId)}catch{/* optional */}
    }
@@ -1307,11 +1328,24 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  function moveTouch(e:ReactPointerEvent<SVGSVGElement>){
   const style=skinSurfaceSwipe.current
   if(menuHold.current){
-   if(style&&style.pointer===e.pointerId&&menuHold.current.active){
-    const step=Math.trunc((e.clientX-style.originX)/48),delta=step-style.step
-    if(delta){
-     setTheme(previous=>STAX_THEMES[(STAX_THEMES.indexOf(previous)+delta%STAX_THEMES.length+STAX_THEMES.length)%STAX_THEMES.length])
-     style.step=step
+   if(style&&style.pointer===e.pointerId){
+    if(menuHold.current.mode==='skins'){
+     const step=Math.trunc((e.clientX-style.originX)/48),delta=step-style.step
+     if(delta){
+      setTheme(previous=>STAX_THEMES[(STAX_THEMES.indexOf(previous)+delta%STAX_THEMES.length+STAX_THEMES.length)%STAX_THEMES.length])
+      style.step=step
+     }
+    }else if(menuHold.current.mode==='scan'){
+     const result=scanSwipeSteps(style.step,e.clientX-style.originX)
+     if(result.directions.length){
+      let next=scanCursor.current
+      for(const direction of result.directions)
+       next=sequentialScanNext(currentDoc.current,next,direction)
+      scanCursor.current=next;style.step=result.step
+      setSelected(next)
+      setHint('Sequential selection: '+(currentDoc.current.atoms.find(a=>a.id===next)?.word||currentDoc.current.atoms.find(a=>a.id===next)?.kind||'none'))
+      menuScanTick(result.directions.length)
+     }
     }
    }
    return
@@ -1987,7 +2021,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  const viewPercentX=(x:number)=>`${(x-view.x)/view.width*100}%`
  const viewPercentY=(y:number)=>`${(y-view.y)/view.height*100}%`
  return <div ref={rootRef} className="stax-molecule-ui" style={shadowCssVars} data-theme={theme} data-remote-sandbox={remoteSandbox?'true':'false'} data-original-pollen={pollenAnimated?'true':'false'}>
-  <button className="stax-tray-handle" type="button" data-skin-mode={skinButtonActive?'true':'false'} aria-label={skinButtonActive?'Skin selection: slide left or right':trayOpen?'Close workspace controls':'Open workspace controls'} aria-controls="stax-bottom-tray" aria-expanded={trayOpen}
+  <button className="stax-tray-handle" type="button" data-skin-mode={skinButtonActive?'true':'false'} data-scan-mode={scanButtonActive?'true':'false'} aria-label={skinButtonActive?'Skin selection: slide left or right':scanButtonActive?'Sequential scan: slide left or right':trayOpen?'Close workspace controls':'Open workspace controls'} aria-controls="stax-bottom-tray" aria-expanded={trayOpen}
     onPointerDown={skinButtonDown} onPointerMove={skinButtonMove} onPointerUp={skinButtonEnd} onPointerCancel={skinButtonEnd}
     onClick={()=>{if(suppressMenuClick.current){suppressMenuClick.current=false;return}setTrayOpen(v=>!v);setTrayActivity(n=>n+1)}}><span aria-hidden="true">{trayOpen?'‹':'›'}</span></button>
   <div id="stax-bottom-tray" className="stax-molecule-dock" data-open={trayOpen?'true':'false'} aria-label="STAX workspace controls" aria-hidden={!trayOpen}
@@ -2212,6 +2246,6 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
     </svg>
    </div>}
   <p className="stax-molecule-hint" role="status">{hint}</p>
-  <p className="stax-molecule-note">Shape sizes adapt to their attachment. Shapes lift above your finger during touch-drag; eligible magnets glow. Any color can remain loose for exploration. One finger moves atoms or pans; pinch with two fingers to zoom. Slide your thumb up on the held menu button, then use another finger left/right on the board to change skins. Three fingers are reserved. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Pink/purple support blue; blue/yellow connect horizontally in either order; red/blue keep the staircase.</p>
+  <p className="stax-molecule-note">Shape sizes adapt to their attachment. Shapes lift above your finger during touch-drag; eligible magnets glow. Any color can remain loose for exploration. One finger moves atoms or pans; pinch with two fingers to zoom. Menu thumb up: skins. Left: continuous shape scan. Down: add tray. Right: view controls. Three fingers are reserved. Drag the background to pan. Nearby compatible shapes snap on release; remote shapes never move. Double-tap a child to detach and drop its branch. Saved locally. Pink/purple support blue; blue/yellow connect horizontally in either order; red/blue keep the staircase.</p>
  </div>
 }
