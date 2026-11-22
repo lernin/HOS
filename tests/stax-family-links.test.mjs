@@ -480,7 +480,7 @@ test('sentence family footprint clearance runs after all snaps and support-remov
  assert.match(board,/function alignSequenceFamilyClearance\(doc:Draft,compact=false\)/)
  assert.match(board,/requiredFamilyFollowerShift\(/)
  assert.match(board,/return alignSequenceFamilyClearance\(resolveMagnetBase\(d,moving,snap\)\)/)
- assert.match(board,/return alignSequenceFamilyClearance\(next\)/)
+ assert.match(board,/return alignSequenceFamilyClearance\(next,true\)/)
  assert.match(board,/if\(left\.kind==='circle'&&right\.kind==='triangle'\)return BLUE_RED_GAP/)
  assert.match(board,/return RED_BLUE_GAP/)
 })
