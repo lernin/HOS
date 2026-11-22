@@ -8,7 +8,7 @@ import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExt
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
 import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
-import { PearlescentGlass } from './pearlescent-atlas'
+import { PearlescentGlass, PEARLESCENT_ATLAS } from './pearlescent-atlas'
 import { PearlescentAirglass } from './pearlescent-airglass'
 import { FoamChip } from './foam-chips'
 import { FoamSlideAudio, FOAM_SLIDE_SOUNDS, safeFoamSoundId, normalizeFoamSoundTuning, DEFAULT_FOAM_SOUND_TUNING, type FoamSlideSoundId, type FoamSoundTuning } from './foam-slide-audio'
@@ -1094,7 +1094,11 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  }
  const [omitBrush,setOmitBrush]=useState(false)
  const [pollenAnimated,setPollenAnimated]=useState(false)
- useEffect(()=>{if(theme!=='golden-pollen')setPollenAnimated(false)},[theme])
+ useEffect(()=>{
+  // Prime shared imagery at board entry; SVG-only skins are already bundled.
+  const assets=[PEARLESCENT_ATLAS,...['circle','triangle','square','rectangle','diamond','hexagon','oval'].map(kind=>'/stax-foam/cleaned/'+kind+'.webp')]
+  for(const src of assets){const img=new Image();img.decoding='async';img.src=src}
+ },[])
  const [view,setView]=useState<View>(()=>remoteSandbox||theme==='classroom-foam'?classroomWoodDefaultView:defaultView)
  const [history,setHistory]=useState<Draft[]>([])
  const [questActive,setQuestActive]=useState(false)
@@ -2133,7 +2137,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
         fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?(a.omitted?'#e9ddf71f':'#ffffff01'):materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
         stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?(a.omitted?'#a891c1':'#ffffff01'):theme==='golden-line'?'url(#stax-golden-board)':materialStroke(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
         strokeWidth={hasStaxMaterial(theme)?4:3} strokeDasharray={staxOmissionDash(a.omitted)}/>
-       <StaxMaterialEffect theme={theme} kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} seed={a.id} omitted={a.omitted} animated={pollenAnimated}/>
+       <StaxMaterialEffect theme={theme} kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} seed={a.id} omitted={a.omitted} animated={theme==='golden-pollen'||pollenAnimated}/>
        {theme==='pearlescent-glass'&&<PearlescentGlass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
         {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
       {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted} dusk/>}
@@ -2144,10 +2148,11 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
     </g>)}
    </svg>
    {questionMarker&&<button className="stax-quest2-h" type="button" aria-label="H interrogative marker, tap to ask How" title="H means How" style={{left:viewPercentX(questionMarker.x),top:viewPercentY(questionMarker.y)}} onClick={()=>questTwoTap('H')}>H</button>}
-   {theme==='golden-pollen'&&<LetterzGoldenPollenCanvas
+   <LetterzGoldenPollenCanvas
      atoms={doc.atoms.map(a=>({id:a.id,kind:a.kind,x:a.x,y:a.y,
       w:atomWidth(a),h:atomHeight(a),omitted:a.omitted}))}
-     view={view} svgRef={svg} onReady={setPollenAnimated}/>}
+     view={view} svgRef={svg} onReady={setPollenAnimated}
+     visible={theme==='golden-pollen'}/>
    {!doc.atoms.length&&<p className="stax-molecule-empty">Tap a shape in the palette, or drag one into the workspace.</p>}
   </div>
   <div className="stax-molecule-palette">{choices.map(({kind,variant,label})=><button key={`${kind}-${variant||'default'}`} title={label+(omitBrush?' (omitted)':'')} aria-label={`Add ${label}${omitBrush?' (omitted)':''}`}
