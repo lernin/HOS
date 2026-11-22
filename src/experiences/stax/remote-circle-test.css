@@ -14,3 +14,20 @@
 .stax-remote-pad-cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:54px;font-weight:200;color:#29363b;pointer-events:none}
 .stax-remote-pad-instruction{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 54px);left:12px;right:12px;text-align:center;color:#7f8b92;font-size:15px;pointer-events:none}
 .stax-remote-pad-rtt{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);left:12px;right:12px;text-align:center;color:#59666a;font-size:12px;pointer-events:none}
+
+/* The pad remains black; a portrait-only prompt encourages the full-width grip.
+   Browser orientation lock is optional and does not gate trackpad functionality. */
+.stax-remote-rotate{
+ position:absolute;z-index:4;inset:0;display:flex;align-items:center;justify-content:center;
+ flex-direction:column;gap:12px;padding:24px;text-align:center;
+ color:#f0f5f6;background:#030303ee;touch-action:manipulation;
+}
+.stax-remote-rotate-icon{font-size:58px;color:#91a9bd;line-height:1}
+.stax-remote-rotate strong{font-size:clamp(18px,5vw,26px);font-weight:750}
+.stax-remote-rotate p{font-size:14px;color:#a0a9ad;margin:0}
+.stax-remote-rotate button{
+ border:1px solid #607487;border-radius:12px;padding:12px 20px;margin-top:8px;
+ color:#e5f3fa;background:#1c303d;font:700 15px/1.3 "Trebuchet MS",system-ui,sans-serif;
+ touch-action:manipulation;cursor:pointer;
+}
+@media(orientation:landscape){.stax-remote-rotate{display:none}}
