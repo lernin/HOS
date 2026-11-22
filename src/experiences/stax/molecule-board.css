@@ -494,14 +494,15 @@
  user-select:none;
  touch-action:none;
 }
-/* Remove the STAX imitation from the BOARD only once the exact renderer paints.
-   Keep transparent (rather than 'none') glyph paint to preserve visiblePainted
-   pointer hit testing, and retain genuine dotted omission outlines. */
-.stax-molecule-ui[data-theme='golden-pollen'][data-original-pollen='true']
+/* The genuine Letterz canvas is warmed before this theme is selected.
+   Never flash the coarse SVG outline/particles while a skin transition occurs.
+   Transparent painted silhouettes preserve SVG pointer hit targets and
+   genuine dotted omitted shapes remain separately visible. */
+.stax-molecule-ui[data-theme='golden-pollen']
  .stax-molecule-canvas svg g[data-kind][data-omitted='false'] > ellipse,
-.stax-molecule-ui[data-theme='golden-pollen'][data-original-pollen='true']
+.stax-molecule-ui[data-theme='golden-pollen']
  .stax-molecule-canvas svg g[data-kind][data-omitted='false'] > rect,
-.stax-molecule-ui[data-theme='golden-pollen'][data-original-pollen='true']
+.stax-molecule-ui[data-theme='golden-pollen']
  .stax-molecule-canvas svg g[data-kind][data-omitted='false'] > polygon {
  stroke:transparent!important;
  fill:transparent!important;
