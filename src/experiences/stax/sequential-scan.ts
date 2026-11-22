@@ -1,17 +1,17 @@
 /** Deterministic eyes-free STAX selection order.
- * Each sentence head (yellow, blue, red, etc.) is a family; its attached
- * supporters and nested descendants scan bottom-up, left-to-right in rows,
- * followed by the head. Then move to the next head in sentence sequence.
- * Works on geometry only; does not mutate grammar or view state.
+ * Visit sentence head families in grammatical sequence. Within each family,
+ * scan ALL supporters and nested descendants from left to right, regardless
+ * of tier/depth; visit the head LAST. The staggered third orange is physically
+ * between the two top oranges, so it is heard/selected between them.
+ * Works on geometry only; never mutates the shape graph or view.
  */
 export type ScanAtom={id:string;kind:string;x:number;y:number}
 export type ScanBond={parent:string;child:string;relation:string}
 export type ScanGraph={atoms:readonly ScanAtom[];bonds:readonly ScanBond[]}
-function familyOrder(atoms:{atom:ScanAtom;depth:number}[]):ScanAtom[]{
- // Deepest descendants first, then left-to-right within the same level.
- // Family depth avoids unreliable raw y comparisons between unequal shapes.
- return atoms.sort((a,b)=>b.depth-a.depth||a.atom.x-b.atom.x||a.atom.y-b.atom.y||
-  a.atom.id.localeCompare(b.atom.id)).map(item=>item.atom)
+function familyOrder(atoms:ScanAtom[]):ScanAtom[]{
+ // Geometry, not graph depth, determines reading order. When two pieces
+ // share an x column, visit the lower piece before climbing to the top.
+ return atoms.sort((a,b)=>a.x-b.x||b.y-a.y||a.id.localeCompare(b.id))
 }
 export function sequentialScanOrder(graph:ScanGraph):string[]{
  const lookup=new Map(graph.atoms.map(a=>[a.id,a]))
@@ -40,17 +40,16 @@ export function sequentialScanOrder(graph:ScanGraph):string[]{
  for(const headId of heads){
   if(included.has(headId))continue
   const family=new Set<string>([headId])
-  const depth=new Map<string,number>([[headId,0]])
   const queue=[headId]
   for(let i=0;i<queue.length;i++){
    for(const edge of graph.bonds){
     if(edge.relation!=='support'&&edge.relation!=='pair')continue
     const child=edge.parent===queue[i]?edge.child:edge.relation==='pair'&&edge.child===queue[i]?edge.parent:null
     if(!child||!lookup.has(child)||family.has(child)||included.has(child))continue
-    family.add(child);depth.set(child,(depth.get(queue[i])??0)+1);queue.push(child)
+    family.add(child);queue.push(child)
    }
   }
-  const members=familyOrder([...family].filter(id=>id!==headId).map(id=>({atom:lookup.get(id)!,depth:depth.get(id)??0})))
+  const members=familyOrder([...family].filter(id=>id!==headId).map(id=>lookup.get(id)!))
   for(const atom of members){if(!included.has(atom.id)){included.add(atom.id);ordered.push(atom.id)}}
   if(!included.has(headId)){included.add(headId);ordered.push(headId)}
  }
