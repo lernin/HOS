@@ -187,28 +187,188 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   },900)
   return ()=>{live=false;signal('bye');if(timer)clearInterval(timer);wire?.close();rtc?.close();void supabase.removeChannel(channel);sendData.current=()=>{}}
  },[mode,room,valid])
+ function pulse(pattern:number|number[]){
+  try{(navigator as Navigator&{vibrate?:(p:number|number[])=>boolean}).vibrate?.(pattern)}catch{/* optional haptic */ }
+ }
+ function announce(label:string){
+  // Browser-generated accessibility cue, independent of the network.
+  try{
+   if(!window.speechSynthesis||typeof SpeechSynthesisUtterance==='undefined')return
+   window.speechSynthesis.cancel()
+   const words=new SpeechSynthesisUtterance(label)
+   words.rate=1.25;words.volume=.55
+   window.speechSynthesis.speak(words)
+  }catch{/* audible labels are best effort */}
+ }
+ function send(action:RemoteGesture['action'],dir?:RemoteDirection){
+  sendData.current({type:'gesture',action,dir,seq:++state.current.seq})
+ }
+ function surfaceContacts(){return [...state.current.contacts.values()].filter(p=>p.role==='surface')}
+ function activeCorner(){
+  const corners=[...state.current.contacts.values()].filter(p=>p.role==='corner')
+  const p=corners.at(-1)
+  return p?.corner?(p.corner+(p.shift?'-shift':'')) as 'A'|'B'|'A-shift'|'B-shift':null
+ }
+ function centroid(contacts:Contact[]):MultiPoint{
+  const x=contacts.reduce((sum,c)=>sum+c.x,0)/contacts.length
+  const y=contacts.reduce((sum,c)=>sum+c.y,0)/contacts.length
+  const distance=contacts.length===2?Math.hypot(contacts[0].x-contacts[1].x,contacts[0].y-contacts[1].y):0
+  return {x,y,distance}
+ }
+ function direction(dx:number,dy:number):RemoteDirection{
+  return Math.abs(dx)>Math.abs(dy)?dx<0?'left':'right':dy<0?'up':'down'
+ }
+ function performSwipe(mode:'A'|'B'|'A-shift'|'B-shift'|null,dir:RemoteDirection){
+  pulse(16)
+  if(mode==='A-shift'){
+   if(dir==='left')send('undo')
+   else if(dir==='right')send('redo')
+   else if(dir==='down'){send('delete_arm');pulse([18,40,30]);announce('Delete? Tap to confirm')}
+   else {send('delete_cancel');announce('Cancel')}
+  }else if(mode==='B'){
+   if(dir==='left'||dir==='right'){
+    send('cycle_kind',dir)
+    setPhonePalette(previous=>{
+     const step=dir==='left'?-1:1
+     const next=REMOTE_KINDS[(REMOTE_KINDS.indexOf(previous)+step+REMOTE_KINDS.length)%REMOTE_KINDS.length]
+     announce(verboseName[next])
+     return next
+    })
+   }else{send('cycle_port',dir);announce(dir==='up'?'Previous attachment direction':'Next attachment direction')}
+  }else if(mode==='B-shift'){
+   if(dir==='up')send('fit')
+   else if(dir==='down')send('center')
+   else if(dir==='left')send('zoom_out')
+   else send('zoom_in')
+  }else if(mode===null)send('navigate',dir)
+ }
  function pointerDown(e:ReactPointerEvent<HTMLDivElement>){
   if(!valid)return
-  e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId)
-  state.current.dragging=true
-  state.current.last={x:e.clientX,y:e.clientY}
+  e.preventDefault()
+  if(window.innerWidth>window.innerHeight&&mode==='pad')enterFullscreenOnTouch()
+  try{e.currentTarget.setPointerCapture(e.pointerId)}catch{/* browser may cancel touch capture */}
+  const zone=(e.target as HTMLElement).closest('[data-zone]')?.getAttribute('data-zone')
+  const corner=zone==='A'||zone==='B'?zone:undefined
+  state.current.contacts.set(e.pointerId,{id:e.pointerId,role:corner?'corner':'surface',corner,
+   shift:false,startX:e.clientX,startY:e.clientY,x:e.clientX,y:e.clientY,moved:false})
+  if(corner){setCornerMode(corner);pulse(11);return}
+  const surfaces=surfaceContacts()
+  state.current.maxSurface=Math.max(state.current.maxSurface,surfaces.length)
   setPressed(true)
-  if(mode==='pad'){
-   if(window.innerWidth>window.innerHeight)enterFullscreenOnTouch()
+  if(surfaces.length===1&&activeCorner()==='A'){
+   state.current.dragging=true
+   state.current.last={x:e.clientX,y:e.clientY}
+   send('move_start')
    sound().start(e.clientX,e.clientY)
+  }else if(surfaces.length===2){
+   if(state.current.dragging){send('move_end');foamSound.current?.stop();state.current.dragging=false}
+   state.current.multi=centroid(surfaces)
+  }else if(surfaces.length===3){
+   state.current.multiStart=centroid(surfaces)
+   state.current.threeFired=false
   }
  }
  function pointerMove(e:ReactPointerEvent<HTMLDivElement>){
-  if(!state.current.dragging)return
+  const contact=state.current.contacts.get(e.pointerId)
+  if(!contact)return
   e.preventDefault()
-  const dx=e.clientX-state.current.last.x,dy=e.clientY-state.current.last.y
-  state.current.last={x:e.clientX,y:e.clientY}
-  if(dx||dy){
-   if(mode==='pad')foamSound.current?.move(e.clientX,e.clientY)
-   sendData.current({type:'move',dx,dy,seq:++state.current.seq})
+  const dx=e.clientX-contact.x,dy=e.clientY-contact.y
+  contact.x=e.clientX;contact.y=e.clientY
+  if(Math.hypot(contact.x-contact.startX,contact.y-contact.startY)>9)contact.moved=true
+  if(contact.role==='corner'){
+   if(!contact.shift){
+    // Pull toward the physical outer edge, like shifting a thumb-held key.
+    const outward=hand==='right'?contact.startX-e.clientX:e.clientX-contact.startX
+    if(outward>22){
+     contact.shift=true
+     const mode=activeCorner();setCornerMode(mode);pulse([15,25,26])
+     if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
+    }
+   }
+   return
+  }
+  const surfaces=surfaceContacts()
+  const maximum=state.current.maxSurface
+  if(maximum>=3){
+   if(!state.current.threeFired&&surfaces.length>=3&&state.current.multiStart){
+    const at=centroid(surfaces)
+    const dx=at.x-state.current.multiStart.x,dy=at.y-state.current.multiStart.y
+    if(Math.abs(dx)>78&&Math.abs(dx)>Math.abs(dy)*1.3){
+     send(dx<0?'undo':'redo')
+     pulse([20,25,24]);state.current.threeFired=true
+    }
+   }
+   return
+  }
+  if(surfaces.length===2){
+   const at=centroid(surfaces),before=state.current.multi
+   state.current.multi=at
+   if(before){
+    const scale=before.distance>10?at.distance/before.distance:1
+    if(Math.abs(at.x-before.x)+Math.abs(at.y-before.y)>0.4||Math.abs(scale-1)>0.006)
+     sendData.current({type:'view',dx:at.x-before.x,dy:at.y-before.y,scale,seq:++state.current.seq})
+   }
+   return
+  }
+  if(surfaces.length!==1)return
+  const modeNow=activeCorner()
+  if(modeNow==='A'){
+   if(!state.current.dragging){state.current.dragging=true;state.current.last={x:e.clientX-dx,y:e.clientY-dy};send('move_start');sound().start(e.clientX-dx,e.clientY-dy)}
+   if(dx||dy){
+    foamSound.current?.move(e.clientX,e.clientY)
+    sendData.current({type:'move',dx,dy,seq:++state.current.seq})
+   }
+   return
+  }
+  if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
+  const travelX=contact.x-contact.startX,travelY=contact.y-contact.startY
+  if(Math.hypot(travelX,travelY)>=THRESHOLD){
+   performSwipe(modeNow,direction(travelX,travelY))
+   // One long movement advances focus in discrete, repeatable steps.
+   contact.startX=contact.x;contact.startY=contact.y
   }
  }
- function pointerUp(){state.current.dragging=false;setPressed(false);foamSound.current?.stop()}
+ function pointerUp(e:ReactPointerEvent<HTMLDivElement>){
+  const contact=state.current.contacts.get(e.pointerId)
+  if(!contact)return
+  e.preventDefault()
+  const modeNow=activeCorner()
+  const highest=state.current.maxSurface
+  if(contact.role==='surface'){
+   if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
+   if(!contact.moved&&highest===1){
+    if(modeNow==='B'){send('add');pulse([15,30,26]);announce('Add '+verboseName[phonePalette])}
+    else if(modeNow==='A-shift'){send('delete_confirm');pulse([20,30,20])}
+    else if(modeNow==='B-shift'){announce('View commands')}
+    else if(modeNow===null){
+     if(performance.now()-state.current.tapTime<280){send('center');pulse([18,20,18]);state.current.tapTime=0}
+     else {send('select');pulse(22);state.current.tapTime=performance.now()}
+    }
+   }
+  }
+  state.current.contacts.delete(e.pointerId)
+  if(contact.role==='corner')setCornerMode(activeCorner())
+  const remaining=surfaceContacts()
+  setPressed(remaining.length>0)
+  if(remaining.length===0){
+   state.current.maxSurface=0;state.current.multi=null;state.current.multiStart=null;state.current.threeFired=false
+   foamSound.current?.stop()
+  }else if(remaining.length===2){
+   state.current.multi=centroid(remaining)
+  }else if(remaining.length===1){
+   state.current.multi=null
+  }
+ }
+ function pointerCancel(e:ReactPointerEvent<HTMLDivElement>){
+  const item=state.current.contacts.get(e.pointerId)
+  if(!item)return
+  state.current.contacts.delete(e.pointerId)
+  if(state.current.dragging){send('move_end');state.current.dragging=false}
+  if(item.role==='corner')setCornerMode(activeCorner())
+  const remaining=surfaceContacts()
+  if(remaining.length===0){state.current.maxSurface=0;state.current.multi=null;state.current.multiStart=null}
+  setPressed(remaining.length>0);foamSound.current?.stop()
+ }
  if(mode==='pad')return <div className="stax-remote-pad" onPointerDown={pointerDown}
   onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}
   onContextMenu={e=>e.preventDefault()} aria-label="Black STAX phone trackpad">
