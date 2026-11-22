@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type RefObject, type P
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
+import { nextRedOrangeRemoteStep } from './remote-orange-topology'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -1528,8 +1529,10 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  const remoteDrag=useRef<{before:Draft;changed:boolean}|null>(null)
  const remoteRedo=useRef<Draft[]>([])
  const remoteDeleteArmed=useRef(false)
+ const remoteDeleteTarget=useRef<string|null>(null)
  function remoteNotice(value:string){setHint(value)}
  function remoteSelect(id:string|null){
+  if(remoteDeleteTarget.current!==id){remoteDeleteArmed.current=false;remoteDeleteTarget.current=null}
   remoteFocus.current=id;setSelected(id)
  }
  function remoteCommit(next:Draft,focused:string|null,message:string){
@@ -1572,6 +1575,20 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  function remoteAttach(parentId:string,kind:Kind){
   const before=currentDoc.current,parent=before.atoms.find(a=>a.id===parentId)
   if(!parent||before.atoms.length>=78){remoteNotice('Cannot add another shape here.');return}
+  if(parent.kind==='triangle'&&kind==='hexagon'){
+   const progress=nextRedOrangeRemoteStep(before,parent.id,()=>({
+    id:crypto.randomUUID(),kind:'hexagon',x:parent.x,y:parent.y+atomHeight(parent)+VERTICAL,variant:'small'
+   }))
+   if(!progress){
+    remoteNotice('Red-orange progression supports 2 → 3 → 4 → 6 → 7; selected red is at an unsupported tier.');return
+   }
+   // The planner changes topology only. Canonical red support positioning,
+   // companion sizes, lower X crossings and later-tier clearance remain here.
+   const next=alignSequenceFamilyClearance(alignRedSupporters(normalizeRoles(progress.graph),parent.id))
+   remoteCommit(next,parent.id,
+    'Red has '+progress.after+' oranges'+(progress.reparented?' (third reorganized into second pair)':'')+'. Undo reverses this entire step.')
+   return
+  }
   const id=crypto.randomUUID()
   const incoming:Atom={id,kind,x:parent.x,y:parent.y+atomHeight(parent)+VERTICAL}
   const staged:Draft={atoms:[...before.atoms,incoming],bonds:[...before.bonds]}
@@ -1585,16 +1602,6 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
     remoteNotice('This blue already has a '+(kind==='square'?'pink':'purple')+' supporter.');return
    }
    destination=supportPosition(parent,incoming,staged)
-  }else if(parent.kind==='triangle'&&kind==='hexagon'){
-   const top=orangeChildren(before,parent.id)
-   if(!top.length)destination=redOrangePosition(parent,staged)
-   else if(top.length===2&&redOrangeFamilySize(before,parent.id)===2){
-    host=top[1]
-    if(eligibleOrangeTierSlot(staged,id,host.id)==='right-modifier')
-     destination=redRightModifierPosition(host)
-   }else{
-    remoteNotice('The paired and third-red-orange arrangements are available; later tiers need a confirmed controller path.');return
-   }
   }else if(parent.kind==='oval'&&kind==='hexagon'){
    let seen=new Set<string>(),tip=parent
    while(!seen.has(tip.id)){
@@ -1637,6 +1644,21 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    distance:Math.hypot(destination.x-incoming.x,destination.y-incoming.y)}
   const next=resolveMagnet(staged,new Set([id]),snap)
   remoteCommit(next,parentId,'Attached '+kind+' to selected '+parent.kind+' with canonical STAX geometry.')
+ }
+ function remoteDetachSelected(){
+  const before=currentDoc.current
+  const id=remoteFocus.current
+  if(!id||!before.atoms.some(a=>a.id===id)){remoteNotice('Select a piece before detaching.');return}
+  const branch=descendants(before,id)
+  const outside=before.bonds.filter(b=>branch.has(b.child)&&!branch.has(b.parent))
+  if(!outside.length){
+   remoteNotice('This piece is already a free root. Hold A and drag it anywhere.');return
+  }
+  // Match the existing double-tap detach mechanic: retain internal links,
+  // remove ONLY incoming bonds, drop the branch clear, reflow the remainder.
+  const separated:Draft={...before,bonds:before.bonds.filter(b=>!outside.includes(b))}
+  const next=reflowAfterRemoval(translate(separated,branch,0,DROP_DISTANCE))
+  remoteCommit(next,id,'Detached '+branch.size+' connected '+(branch.size===1?'piece':'pieces')+'. Hold A to move the free branch. Undo restores it.')
  }
  function remoteRemoveLastModifier(parentId:string){
   const d=currentDoc.current,parent=d.atoms.find(a=>a.id===parentId)
@@ -1738,16 +1760,28 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
      remoteSelect(next.atoms.some(a=>a.id===remoteFocus.current)?remoteFocus.current:next.atoms.at(-1)?.id??null)}
     break
    }
-   case 'delete_arm':remoteDeleteArmed.current=true;remoteNotice('Deletion armed. Confirm or cancel.');break
-   case 'delete_cancel':remoteDeleteArmed.current=false;remoteNotice('Deletion cancelled.');break
-   case 'delete_confirm':{
-    if(!remoteDeleteArmed.current)return
-    remoteDeleteArmed.current=false
+   case 'detach':remoteDetachSelected();break
+   case 'delete_arm':{
     const id=remoteFocus.current
-    if(!id)return
-    if(d.bonds.some(b=>b.parent===id)){remoteNotice('Delete connected children first, or use the desktop board.');return}
-    const next=reflowAfterRemoval({atoms:d.atoms.filter(a=>a.id!==id),bonds:d.bonds.filter(b=>b.parent!==id&&b.child!==id)})
-    remoteCommit(next,next.atoms.at(-1)?.id??null,'Deleted selected leaf. Undo restores it.')
+    if(!id||!d.atoms.some(a=>a.id===id)){
+     remoteNotice('Select a piece before deleting.');break
+    }
+    remoteDeleteArmed.current=true;remoteDeleteTarget.current=id
+    const size=descendants(d,id).size
+    remoteNotice('Delete selected branch ('+size+' '+(size===1?'piece':'pieces')+')? Hold A-Shift and tap to confirm; swipe up to cancel.')
+    break
+   }
+   case 'delete_cancel':remoteDeleteArmed.current=false;remoteDeleteTarget.current=null;remoteNotice('Deletion cancelled.');break
+   case 'delete_confirm':{
+    const id=remoteFocus.current
+    if(!remoteDeleteArmed.current||remoteDeleteTarget.current!==id||!id)return
+    remoteDeleteArmed.current=false;remoteDeleteTarget.current=null
+    const branch=descendants(d,id)
+    const incoming=d.bonds.find(b=>b.child===id&&!branch.has(b.parent))
+    const next=reflowAfterRemoval({atoms:d.atoms.filter(a=>!branch.has(a.id)),
+     bonds:d.bonds.filter(b=>!branch.has(b.child)&&!branch.has(b.parent))})
+    const nextFocus=incoming&&next.atoms.some(a=>a.id===incoming.parent)?incoming.parent:next.atoms.at(-1)?.id??null
+    remoteCommit(next,nextFocus,'Deleted '+branch.size+' selected '+(branch.size===1?'piece':'pieces')+'. Undo restores the branch.')
     break
    }
    case 'center':{
