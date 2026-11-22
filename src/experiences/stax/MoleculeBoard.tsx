@@ -2039,6 +2039,36 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
     <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}><StaxToolbarIcon name="plus"/></button>
    </div>
   </div>
+  {textWorkshopOpen&&<section className="stax-text-workshop" id="stax-text-workshop" role="region" aria-label="Text Workshop">
+   <div className="stax-text-workshop-heading">
+    <div><strong>Text Workshop</strong><small>Every skin has its own lettering.</small></div>
+    <button type="button" onClick={()=>setTextWorkshopOpen(false)} aria-label="Close Text Workshop">✕</button>
+   </div>
+   <label className="stax-text-workshop-skin">Skin
+    <select value={theme} onChange={e=>setTheme(e.target.value as StaxTheme)}>{STAX_THEMES.map(t=><option key={t} value={t}>{staxThemeName(t)}</option>)}</select>
+   </label>
+   <div className="stax-text-workshop-targets" role="group" aria-label="Choose lettering to customize">
+    {TEXT_TARGETS.map(t=><button key={t.id} type="button" aria-pressed={textTarget===t.id} onClick={()=>setTextTarget(t.id)}>{t.label}</button>)}
+   </div>
+   <div className="stax-text-workshop-sample" style={{fontFamily:fontFamily(selectedText.font),fontWeight:selectedText.bold?700:400,color:selectedText.color,fontSize:Math.round(27*selectedText.scale/100)}}>
+    {TEXT_TARGETS.find(t=>t.id===textTarget)?.sample??'STAX'} <span>beautiful words</span>
+   </div>
+   <div className="stax-text-workshop-fonts" role="group" aria-label="Choose typeface by its appearance">
+    {TEXT_FONTS.map(font=><button type="button" key={font.id} className="stax-text-workshop-font" aria-label={'Select '+font.id+' typeface'} aria-pressed={selectedText.font===font.id}
+      onClick={()=>editText({font:font.id})} style={{fontFamily:font.family}}><span>Ag</span><small>beautiful</small></button>)}
+   </div>
+   <div className="stax-text-workshop-adjustments">
+    <label>Ink color <input type="color" value={selectedText.color} onChange={e=>editText({color:e.target.value})}/></label>
+    <button type="button" aria-pressed={selectedText.bold} onClick={()=>editText({bold:!selectedText.bold})}>Bold {selectedText.bold?'On':'Off'}</button>
+    <label>Size <input type="range" min="65" max="135" step="5" value={selectedText.scale} onChange={e=>editText({scale:Number(e.target.value)})}/><span>{selectedText.scale}%</span></label>
+    <button type="button" onClick={()=>editText(defaultTextTreatment(theme,textTarget))}>Reset this</button>
+   </div>
+   <div className="stax-text-workshop-footer">
+    <button type="button" onClick={revertTextTreatments} disabled={!textDirty}>Discard edits</button>
+    <button type="button" className="stax-text-workshop-capture" onClick={captureTextTreatments}>Capture all edits</button>
+   </div>
+   <small className="stax-text-workshop-status">{textDirty?'Live preview — edits not yet saved':'Saved settings loaded. Capture writes all skins to this device.'}</small>
+  </section>}
   {soundLabOpen&&<section className="stax-sound-panel" id="stax-sound-panel" role="region" aria-label="Foam sound lab">
     <div className="stax-sound-panel-header">
      <strong>Foam sound lab</strong>
