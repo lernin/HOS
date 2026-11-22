@@ -477,7 +477,7 @@ test('sentence family footprint clearance runs after all snaps and support-remov
  assert.match(board,/function supportFootprint\(d:Draft,headId:string\)/)
  assert.match(board,/edge\.relation==='support'/)
  assert.match(board,/edge\.relation==='pair'/)
- assert.match(board,/function alignSequenceFamilyClearance\(doc:Draft\)/)
+ assert.match(board,/function alignSequenceFamilyClearance\(doc:Draft,compact=false\)/)
  assert.match(board,/requiredFamilyFollowerShift\(/)
  assert.match(board,/return alignSequenceFamilyClearance\(resolveMagnetBase\(d,moving,snap\)\)/)
  assert.match(board,/return alignSequenceFamilyClearance\(next\)/)
