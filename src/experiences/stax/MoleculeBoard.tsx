@@ -1521,6 +1521,263 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   setQuestActive(false)
   setHint('Swept '+discard+' unattached or smaller-map shape'+(discard===1?'':'s')+'. Undo restores everything.')
  }
+
+ // STAX Remote is a temporary, non-persistent CANONICAL board: no parallel
+ // magnet layout. Contextual commands call the same resolver as physical drag.
+ const remoteFocus=useRef<string|null>(null)
+ const remoteDrag=useRef<{before:Draft;changed:boolean}|null>(null)
+ const remoteRedo=useRef<Draft[]>([])
+ const remoteDeleteArmed=useRef(false)
+ function remoteNotice(value:string){setHint(value)}
+ function remoteSelect(id:string|null){
+  remoteFocus.current=id;setSelected(id)
+ }
+ function remoteCommit(next:Draft,focused:string|null,message:string){
+  if(next===currentDoc.current)return
+  remoteRedo.current=[]
+  save(next)
+  remoteSelect(focused)
+  remoteNotice(message)
+ }
+ function remoteSpine(){
+  const before=currentDoc.current
+  if(before.atoms.length>=78){remoteNotice('Shape limit reached.');return}
+  const heads=before.atoms.filter(a=>a.kind==='circle'||a.kind==='triangle')
+  const last=heads.at(-1)
+  const kind:Kind=!last?'circle':heads.length===1&&last.kind==='circle'?'triangle':'circle'
+  const id=crypto.randomUUID()
+  const target=last?snappedSequenceFollowerPosition(last,{id,kind,x:0,y:0}):{x:Math.max(170,currentView.current.x+currentView.current.width*.39),y:Math.max(95,currentView.current.y+currentView.current.height*.23)}
+  const nextAtom:Atom={id,kind,x:target.x,y:target.y}
+  let next:Draft={atoms:[...before.atoms,nextAtom],bonds:[...before.bonds]}
+  if(last)next.bonds.push({parent:last.id,child:id,relation:'sequence'})
+  if(kind==='triangle'&&heads.length===1){
+   // Working hypothesis: the yellow conjunction is a non-displacing
+   // predecessor of the FIRST blue, never a gap inserted between blue and red.
+   // Preserve the existing blue/red positions; revise this rule if the
+   // final yes/no semantics differ.
+   const blue=heads[0]
+   if(!next.atoms.some(a=>a.kind==='diamond')){
+    const yellowId=crypto.randomUUID()
+    const yellow:Atom={id:yellowId,kind:'diamond',
+     x:blue.x-width('diamond')-CONNECTOR_GAP,y:blue.y}
+    next={atoms:[...next.atoms,yellow],bonds:[...next.bonds,
+     {parent:yellowId,child:blue.id,relation:'sequence'}]}
+   }
+  }
+  next=normalizeRoles(next)
+  remoteCommit(next,id,kind==='triangle'?'Added red; yellow backfilled before the first blue without moving it.':
+   kind==='circle'&&heads.length===0?'First blue circle added.':'Added next blue circle.')
+  setCamera(fit(next,aspect()))
+ }
+ function remoteAttach(parentId:string,kind:Kind){
+  const before=currentDoc.current,parent=before.atoms.find(a=>a.id===parentId)
+  if(!parent||before.atoms.length>=78){remoteNotice('Cannot add another shape here.');return}
+  const id=crypto.randomUUID()
+  const incoming:Atom={id,kind,x:parent.x,y:parent.y+atomHeight(parent)+VERTICAL}
+  const staged:Draft={atoms:[...before.atoms,incoming],bonds:[...before.bonds]}
+  let host=parent
+  let destination:{x:number;y:number}|null=null
+  if(parent.kind==='circle'&&['square','rectangle','oval','hexagon'].includes(kind)){
+   if(kind==='hexagon'&&!canAttachOrangeUnderObjectBlue(before,parent.id)){
+    remoteNotice('This blue has no available direct orange-not slot.');return
+   }
+   if((kind==='square'||kind==='rectangle')&&blueSupportAtoms(before,parent.id).some(a=>a.kind===kind)){
+    remoteNotice('This blue already has a '+(kind==='square'?'pink':'purple')+' supporter.');return
+   }
+   destination=supportPosition(parent,incoming,staged)
+  }else if(parent.kind==='triangle'&&kind==='hexagon'){
+   const top=orangeChildren(before,parent.id)
+   if(!top.length)destination=redOrangePosition(parent,staged)
+   else if(top.length===2&&redOrangeFamilySize(before,parent.id)===2){
+    host=top[1]
+    if(eligibleOrangeTierSlot(staged,id,host.id)==='right-modifier')
+     destination=redRightModifierPosition(host)
+   }else{
+    remoteNotice('The paired and third-red-orange arrangements are available; later tiers need a confirmed controller path.');return
+   }
+  }else if(parent.kind==='oval'&&kind==='hexagon'){
+   let seen=new Set<string>(),tip=parent
+   while(!seen.has(tip.id)){
+    seen.add(tip.id)
+    const childId=supportChildOfKind(before,tip.id,'hexagon')
+    if(!childId)break
+    tip=byId(before,childId)
+   }
+   host=tip
+   if(host.kind==='oval'?!eligibleAdverbHost(before,host.id):
+    !canExtendSupportChain(staged,id,host.id,'hexagon','oval','circle')){
+    remoteNotice('No compatible green-adverb slot.');return
+   }
+   destination=nestedChildPosition(host,incoming)
+  }else if(parent.kind==='square'&&kind==='hexagon'){
+   if(!canAttachAdverbUnderPreposition(before,parent.id)){
+    remoteNotice('Pink already has an adverb. More layers need a verified pink chain.');return
+   }
+   destination=nestedChildPosition(parent,incoming)
+  }else if(parent.kind==='rectangle'&&kind==='rectangle'){
+   let seen=new Set<string>(),tip=parent
+   while(!seen.has(tip.id)){
+    seen.add(tip.id)
+    const childId=supportChildOfKind(before,tip.id,'rectangle')
+    if(!childId)break
+    tip=byId(before,childId)
+   }
+   host=tip
+   if(!canNestPossessive(staged,id,host.id)){
+    remoteNotice('No valid recursive purple attachment.');return
+   }
+   destination=nestedChildPosition(host,incoming)
+  }else if(parent.kind==='hexagon'&&kind==='hexagon'){
+   if(canExtendSupportChain(staged,id,host.id,'hexagon','oval','circle'))
+    destination=nestedChildPosition(host,incoming)
+  }
+  if(!destination){remoteNotice('No verified '+kind+' attachment on '+parent.kind+'.');return}
+  const snap:Snap={parent:host.id,child:id,relation:'support',
+   dx:destination.x-incoming.x,dy:destination.y-incoming.y,
+   distance:Math.hypot(destination.x-incoming.x,destination.y-incoming.y)}
+  const next=resolveMagnet(staged,new Set([id]),snap)
+  remoteCommit(next,parentId,'Attached '+kind+' to selected '+parent.kind+' with canonical STAX geometry.')
+ }
+ function remoteRemoveLastModifier(parentId:string){
+  const d=currentDoc.current,parent=d.atoms.find(a=>a.id===parentId)
+  if(!parent)return
+  const childKind=parent.kind==='rectangle'?'rectangle':'hexagon'
+  if(!['square','oval','rectangle'].includes(parent.kind)){
+   remoteNotice('Select pink, green or purple to remove a nested modifier.');return
+  }
+  let tip=parent
+  const seen=new Set<string>()
+  while(!seen.has(tip.id)){
+   seen.add(tip.id)
+   const childId=supportChildOfKind(d,tip.id,childKind)
+   if(!childId)break
+   tip=byId(d,childId)
+  }
+  if(tip.id===parent.id){remoteNotice('No nested modifier to remove.');return}
+  const next=reflowAfterRemoval({atoms:d.atoms.filter(a=>a.id!==tip.id),
+   bonds:d.bonds.filter(b=>b.child!==tip.id&&b.parent!==tip.id)})
+  remoteCommit(next,parentId,'Removed last '+childKind+' modifier. Undo restores it.')
+ }
+ function remoteModify(dir:RemoteDirection){
+  const d=currentDoc.current
+  const focused=remoteFocus.current??d.atoms.at(-1)?.id
+  const target=focused?d.atoms.find(a=>a.id===focused):undefined
+  if(!target){remoteNotice('First hold B and tap to create a blue circle.');return}
+  if(target.kind==='circle'){
+   const kind:Kind=dir==='left'?'square':dir==='up'?'rectangle':dir==='right'?'oval':'hexagon'
+   remoteAttach(target.id,kind)
+  }else if(target.kind==='triangle'&&dir==='down')remoteAttach(target.id,'hexagon')
+  else if((target.kind==='square'||target.kind==='oval'||target.kind==='rectangle')&&dir==='down')
+   remoteAttach(target.id,target.kind==='rectangle'?'rectangle':'hexagon')
+  else if(dir==='up')remoteRemoveLastModifier(target.id)
+  else remoteNotice('That swipe has no verified attachment for '+target.kind+'.')
+ }
+ function remoteNavigate(dir:RemoteDirection){
+  const d=currentDoc.current,anchor=d.atoms.find(a=>a.id===remoteFocus.current)??d.atoms[0]
+  if(!anchor)return
+  const candidate=d.atoms.filter(a=>{
+   if(a.id===anchor.id)return false
+   const dx=(a.x+atomWidth(a)/2)-(anchor.x+atomWidth(anchor)/2)
+   const dy=(a.y+atomHeight(a)/2)-(anchor.y+atomHeight(anchor)/2)
+   return dir==='left'?dx< -12:dir==='right'?dx>12:dir==='up'?dy< -12:dy>12
+  }).sort((a,b)=>{
+   const cost=(p:Atom)=>{
+    const dx=(p.x+atomWidth(p)/2)-(anchor.x+atomWidth(anchor)/2)
+    const dy=(p.y+atomHeight(p)/2)-(anchor.y+atomHeight(anchor)/2)
+    const primary=dir==='left'||dir==='right'?Math.abs(dx):Math.abs(dy)
+    const secondary=dir==='left'||dir==='right'?Math.abs(dy):Math.abs(dx)
+    return primary+secondary*2
+   }
+   return cost(a)-cost(b)
+  })[0]
+  if(candidate){remoteSelect(candidate.id);remoteNotice('Selected '+candidate.kind+'.')}
+  else remoteNotice('No shape '+dir+' of this '+anchor.kind+'.')
+ }
+ function remoteHandle(input:RemoteInput){
+  if(!remoteSandbox)return
+  const d=currentDoc.current
+  if(input.type==='move'){
+   const drag=remoteDrag.current,id=remoteFocus.current
+   if(!drag||!id||!d.atoms.some(a=>a.id===id))return
+   const rect=svg.current?.getBoundingClientRect()
+   const ratio=currentView.current.width/(rect?.width||960)
+   const dx=Math.max(-90,Math.min(90,input.dx))*ratio,dy=Math.max(-90,Math.min(90,input.dy))*ratio
+   if(dx||dy){update(translate(d,molecule(d,id),dx,dy));drag.changed=true}
+   return
+  }
+  if(input.type==='view'){
+   const v=currentView.current,rect=svg.current?.getBoundingClientRect()
+   const ratio=v.width/(rect?.width||960)
+   const scale=Number.isFinite(input.scale)?Math.max(.8,Math.min(1.25,input.scale)):1
+   const nextWidth=Math.max(W*.25,Math.min(W*8,v.width/scale))
+   const nextHeight=nextWidth/aspect()
+   setCamera({x:v.x+(v.width-nextWidth)/2-input.dx*ratio,
+    y:v.y+(v.height-nextHeight)/2-input.dy*ratio,width:nextWidth,height:nextHeight})
+   return
+  }
+  switch(input.action){
+   case 'spine':remoteSpine();break
+   case 'modify':if(input.dir)remoteModify(input.dir);break
+   case 'navigate':if(input.dir)remoteNavigate(input.dir);break
+   case 'select':if(remoteFocus.current)remoteSelect(remoteFocus.current);break
+   case 'move_start':remoteDrag.current={before:d,changed:false};break
+   case 'move_end':{
+    const drag=remoteDrag.current;remoteDrag.current=null
+    if(drag?.changed){setHistory(h=>[...h,drag.before].slice(-40));remoteRedo.current=[]}
+    break
+   }
+   case 'undo':{
+    const before=history.at(-1)
+    if(before){remoteRedo.current.push(d);setHistory(h=>h.slice(0,-1));update(before);
+     remoteSelect(before.atoms.some(a=>a.id===remoteFocus.current)?remoteFocus.current:before.atoms.at(-1)?.id??null)}
+    break
+   }
+   case 'redo':{
+    const next=remoteRedo.current.pop()
+    if(next){setHistory(h=>[...h,d].slice(-40));update(next);
+     remoteSelect(next.atoms.some(a=>a.id===remoteFocus.current)?remoteFocus.current:next.atoms.at(-1)?.id??null)}
+    break
+   }
+   case 'delete_arm':remoteDeleteArmed.current=true;remoteNotice('Deletion armed. Confirm or cancel.');break
+   case 'delete_cancel':remoteDeleteArmed.current=false;remoteNotice('Deletion cancelled.');break
+   case 'delete_confirm':{
+    if(!remoteDeleteArmed.current)return
+    remoteDeleteArmed.current=false
+    const id=remoteFocus.current
+    if(!id)return
+    if(d.bonds.some(b=>b.parent===id)){remoteNotice('Delete connected children first, or use the desktop board.');return}
+    const next=reflowAfterRemoval({atoms:d.atoms.filter(a=>a.id!==id),bonds:d.bonds.filter(b=>b.parent!==id&&b.child!==id)})
+    remoteCommit(next,next.atoms.at(-1)?.id??null,'Deleted selected leaf. Undo restores it.')
+    break
+   }
+   case 'center':{
+    const a=d.atoms.find(a=>a.id===remoteFocus.current)
+    if(a){const v=currentView.current;setCamera({...v,
+     x:a.x+atomWidth(a)/2-v.width/2,y:a.y+atomHeight(a)/2-v.height/2})}
+    break
+   }
+   case 'fit':setCamera(fit(d,aspect()));break
+   case 'zoom_in':case 'zoom_out':{
+    const v=currentView.current,factor=input.action==='zoom_in'?.84:1.19
+    setCamera({...v,x:v.x+v.width*(1-factor)/2,y:v.y+v.height*(1-factor)/2,
+     width:v.width*factor,height:v.height*factor})
+    break
+   }
+   case 'reset':remoteRedo.current=[];remoteFocus.current=null;setHistory([]);update(empty());setCamera(defaultView);
+    remoteSelect(null);remoteNotice('Demo reset. Hold B and tap to add blue.');break
+   case 'seed':{
+    if(d.atoms.length)remoteNotice('Use B-tap to extend the current sentence, or reset first.')
+    else {remoteSpine()}
+    break
+   }
+   default:break
+  }
+ }
+ useEffect(()=>{
+  if(!remoteInputRef||!remoteSandbox)return
+  remoteInputRef.current=remoteHandle
+  return ()=>{remoteInputRef.current=null}
+ })
  const questionMarker=questActive&&activeQuestLevel===2&&questTwoSide==='question'?questTwoHPosition(doc):null
  const questTwoHarvest=questActive&&activeQuestLevel===2?harvestQuestTwo(questTwoSide,questTwoTaps,questTwoContracted):null
  const viewPercentX=(x:number)=>`${(x-view.x)/view.width*100}%`
