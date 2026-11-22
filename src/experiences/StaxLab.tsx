@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { addBasicPair, addSymbol, findNode, findSupportingCircle, locateDropTarget, countSymbols, KINDS, layoutMap, MAX_SYMBOLS, parseDraft, preset, removeSymbol, RULES, setOmitted, studyScene, SYMBOLS, type Kind, type MapDraft, type Placement, type DropSide } from './stax/model'
 import { SymbolCanvas, SymbolIcon } from './stax/SymbolCanvas'
 import { MoleculeBoard } from './stax/MoleculeBoard'
+import { RemoteCircleTest } from './stax/RemoteCircleTest'
 import './stax/stax.css'
 
 const STORAGE='stax-visual-grammar-v1'
@@ -87,6 +88,7 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
   copy.removeAttribute('style');copy.setAttribute('width',String(scene.width*32));copy.setAttribute('height',String(scene.height*32))
   download(new XMLSerializer().serializeToString(copy),'image/svg+xml',`stax-${mode}-${blueprint?'blueprint':'clean'}.svg`)
  }
+ if(new URLSearchParams(window.location.search).has('remote'))return <RemoteCircleTest onExit={()=>window.location.assign('/stax-shape-lab')}/>
  if(freeBoard)return <main className="stax-lab">
   <header className="stax-header"><div className="stax-identity"><button className="stax-back" onClick={onExit} aria-label="Back to The Lab">←</button><div><h1>STAX <span>Magnetic Molecules</span></h1><p>Free shape assembly · experimental</p></div></div>
    <div className="stax-header-actions"/>
