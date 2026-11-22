@@ -1602,7 +1602,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
      {parent:yellowId,child:blue.id,relation:'sequence'}]}
    }
   }
-  next=normalizeRoles(next)
+  next=alignSequenceFamilyClearance(normalizeRoles(next))
   remoteCommit(next,id,kind==='triangle'?'Added red; yellow backfilled before the first blue without moving it.':
    kind==='circle'&&heads.length===0?'First blue circle added.':'Added next blue circle.')
   // Construction must never zoom or pan automatically. The user controls
