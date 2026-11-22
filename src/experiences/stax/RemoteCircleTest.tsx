@@ -224,10 +224,11 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  function performSwipe(mode:'A'|'B'|'A-shift'|'B-shift'|null,dir:RemoteDirection){
   pulse(16)
   if(mode==='A-shift'){
-   if(dir==='left')send('undo')
-   else if(dir==='right')send('redo')
-   else if(dir==='down'){send('delete_arm');pulse([18,40,30]);announce('Delete? Tap to confirm')}
-   else {send('delete_cancel');announce('Cancel')}
+   // A stays a free grab; A-Shift is a separate chord.
+   if(dir==='left'){send('detach');pulse([20,30,25]);announce('Detach selected branch')}
+   else if(dir==='right')send('undo')
+   else if(dir==='down'){send('delete_arm');pulse([18,40,30]);announce('Delete branch? Tap to confirm')}
+   else {send('delete_cancel');announce('Cancel deletion')}
    }else if(mode==='B'){
    // Only the focused grammar atom decides how a swipe modifies the molecule.
    send('modify',dir)
@@ -424,9 +425,10 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
     <strong>Canonical STAX grammar mode</strong>
     <span>B + tap: blue → red (+ yellow predecessor) → blue → more blues</span>
     <span>On blue: B + ← pink · ↑ purple · → green · ↓ orange</span>
-    <span>On red: B + ↓ two oranges, then a third</span>
+    <span>On red: B + ↓ oranges 2 → 3 → 4 → 6 → 7</span>
     <span>On pink/green/purple: B + ↓ add modifier · ↑ remove last</span>
     <span>A + drag: move the entire connected molecule</span>
+    <span>A-Shift + ← detach · ↓ delete request · tap confirm · ↑ cancel · → undo</span>
     <span>Swipe to select · two fingers pan/pinch</span>
     <small>Normal STAX is preserved. Yellow positioning is provisional; later red-orange tiers remain to be agreed.</small>
    </div>:<div className="stax-remote-board-status" aria-live="polite">
@@ -446,7 +448,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
     <strong>Eyes-free gesture map</strong>
     <p>Swipe: navigate shapes · Tap: select · Double tap: center</p>
     <p>Hold A + drag: move piece · Hold B + swipe: modify · Hold B + tap: add spine</p>
-    <p>A pull outward + hold: Undo / Redo / Delete · B pull outward + hold: Fit / Center / Zoom</p>
+    <p>A pull outward + hold: Detach / Undo / Delete · B pull outward + hold: Fit / Center / Zoom</p>
     <p>Two fingers: pan and pinch · Three fingers left/right: undo/redo</p>
    </div>}
   </aside>
