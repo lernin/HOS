@@ -333,7 +333,7 @@ test('Classroom Foam sliding audio is gesture-driven, low-volume, optional, and 
  assert.match(css,/\.stax-foam-sound-option/)
 })
 
-test('STAX uses curated readable typography with no font settings panel',async()=>{
+test('STAX uses editable per-skin font and ink while preserving original shape word editing',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
  const audio=await readFile(new URL('../src/experiences/stax/foam-slide-audio.ts',import.meta.url),'utf8')
@@ -341,8 +341,8 @@ test('STAX uses curated readable typography with no font settings panel',async()
  assert.match(board,/id="stax-selected-shape-word" type="text" maxLength=\{36\}/)
  assert.match(board,/onChange=\{e=>setSelectedShapeWord\(e\.target\.value\)\}/)
  assert.match(board,/onBlur=\{finishShapeTextEdit\}/)
- assert.match(board,/fontWeight=\{700\}/)
- assert.match(board,/fontFamily=\{'"/)
+ assert.match(board,/fontWeight=\{fontInk\(a\.kind\)\.bold\?700:400\}/)
+ assert.match(board,/fontFamily=\{fontFamily\(fontInk\(a\.kind\)\.font\)\}/)
  assert.match(css,/--stax-font:/)
  assert.match(css,/\.stax-shape-word-editor/)
  assert.match(css,/\.stax-molecule-ui \.(?:stax-quest-tab)/)
