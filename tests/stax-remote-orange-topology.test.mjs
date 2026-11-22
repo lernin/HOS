@@ -157,7 +157,7 @@ test('remote construction never auto-fits and foam tap toggles selection off',as
 
 test('remote modifier flick emits at most once until finger lifts',async()=>{
  const remote=await readFile(new URL('../src/experiences/stax/RemoteCircleTest.tsx',import.meta.url),'utf8')
- assert.match(remote,/type Contact=\{[^\n]+swipeFired:boolean\}/)
+ assert.match(remote,/type Contact=\{[^\n]+swipeFired:boolean;skinStep\?:number\}/)
  assert.match(remote,/moved:false,swipeFired:false\}/)
  const swipe=remote.slice(remote.indexOf('const travelX=contact.x-contact.startX'),remote.indexOf('function pointerUp('))
  assert.match(swipe,/Math\.hypot\(travelX,travelY\)>=THRESHOLD&&!contact\.swipeFired/)
