@@ -1970,13 +1970,16 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
      </g>}
     {doc.atoms.map(a=><g key={a.id} transform={`translate(${a.x} ${a.y})`} data-kind={a.kind} data-id={a.id} data-omitted={a.omitted?'true':'false'} className={[
        fall.has(a.id)?'stax-molecule-dropping':'',
+       selected===a.id?'stax-selected-atom':'',
        (paletteHover?.snap&&(paletteHover.snap.parent===a.id||paletteHover.snap.child===a.id))||
        (preview&&dragging.current&&!molecule(doc,dragging.current.id).has(a.id)&&(preview.parent===a.id||preview.child===a.id))?'stax-resonant-target':''
       ].filter(Boolean).join(' ')}
       tabIndex={questActive&&activeQuestLevel===2?0:undefined} role={questActive&&activeQuestLevel===2?'button':undefined} aria-label={questActive&&activeQuestLevel===2?'Tap '+wordOnAtom(a):undefined}
       onKeyDown={e=>{if(questActive&&activeQuestLevel===2&&(e.key==='Enter'||e.key===' ')){e.preventDefault();questTwoTap(a.id)}}}
       onPointerDown={e=>onShapeDown(e,a.id)} onPointerMove={onShapeMove} onPointerUp={releaseShape} onPointerCancel={()=>{foamAudio.current?.stop();dragging.current=null}} style={{touchAction:'none',cursor:'grab'}}> 
-      {selected===a.id&&<rect x="-7" y="-7" width={atomWidth(a)+14} height={atomHeight(a)+14} rx="5" fill="none" stroke={theme==='golden-line'?'#fff1ac':'#7b8795'} strokeDasharray="4 5" pointerEvents="none"/>}
+      {selected===a.id&&theme!=='classroom-foam'&&<g className="stax-selection-glow-outline" aria-hidden="true" pointerEvents="none">
+       <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} fill="none" stroke="#fffdf6" strokeWidth={4}/>
+      </g>}
       <Glyph kind={a.kind} w={atomWidth(a)} h={atomHeight(a)}
         fill={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?(a.omitted?'#e9ddf71f':'#ffffff01'):materialFill(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
         stroke={(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk'||theme==='classroom-foam')?(a.omitted?'#a891c1':'#ffffff01'):theme==='golden-line'?'url(#stax-golden-board)':materialStroke(theme,'stax-mat-board',SYMBOLS[a.kind].color)}
