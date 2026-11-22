@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Almendra:wght@400;700&family=Baloo+2:wght@400;700&family=Bangers&family=Lobster+Two:wght@400;700&family=Orbitron:wght@400;700&family=Pacifico&display=swap');
 /* STAX magnetic workspace: canonical immersive layout.
    One set of declarations per component; avoid stacked legacy overrides.
    All positions are UI-only: grammar positions live in the geometry engine. */
@@ -1022,7 +1023,7 @@
 
 
 /* Typography workshop: appearance only. The grammar graph and hit targets are untouched. */
-@import url('https://fonts.googleapis.com/css2?family=Almendra:wght@400;700&family=Baloo+2:wght@400;700&family=Bangers&family=Lobster+Two:wght@400;700&family=Orbitron:wght@400;700&family=Pacifico&display=swap');
+
 .stax-text-workshop{
  position:absolute;z-index:60;top:calc(env(safe-area-inset-top,0px) + 10px);
  right:calc(env(safe-area-inset-right,0px) + 10px);
