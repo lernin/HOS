@@ -29,15 +29,18 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
  const [pressed,setPressed]=useState(false)
  const [landscape,setLandscape]=useState(()=>window.innerWidth>window.innerHeight)
  const foamSound=useRef<FoamSlideAudio|null>(null)
+ const fullscreenRequest=useRef(false)
  const state=useRef({last:{x:0,y:0},dragging:false,seq:0,started:new Map<number,number>()})
  const sendData=useRef<(payload:DataMessage)=>void>(()=>{})
  const board=useRef<HTMLDivElement>(null)
  useEffect(()=>{
   if(mode!=='pad')return
   const update=()=>setLandscape(window.innerWidth>window.innerHeight)
+  const onFullscreenChange=()=>{fullscreenRequest.current=false}
   window.addEventListener('resize',update)
   window.addEventListener('orientationchange',update)
-  return ()=>{window.removeEventListener('resize',update);window.removeEventListener('orientationchange',update);foamSound.current?.dispose();foamSound.current=null}
+  document.addEventListener('fullscreenchange',onFullscreenChange)
+  return ()=>{window.removeEventListener('resize',update);window.removeEventListener('orientationchange',update);document.removeEventListener('fullscreenchange',onFullscreenChange);foamSound.current?.dispose();foamSound.current=null}
  },[mode])
  function sound(){
   if(!foamSound.current){
@@ -50,13 +53,22 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   }
   return foamSound.current
  }
- async function requestLandscape(){
-  // Browser support varies: portrait overlay remains the reliable fallback.
+ function enterFullscreenOnTouch(){
+  // Must be invoked synchronously from a real pointer gesture; waiting for an
+  // effect or a network response loses browser fullscreen user activation.
+  if(document.fullscreenElement||fullscreenRequest.current)return
+  const target=document.documentElement
+  if(!target.requestFullscreen)return
+  fullscreenRequest.current=true
   try{
-   if(!document.fullscreenElement&&document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen()
-   const orientation=screen.orientation as ScreenOrientation&{lock?:(mode:'landscape')=>Promise<void>}
-   if(orientation.lock)await orientation.lock('landscape')
-  }catch{/* ask the user to rotate manually instead */}
+   void target.requestFullscreen().then(()=>{
+    // Orientation locking is optional. The user may already be in landscape;
+    // failing to lock must never block the controller or its local audio.
+    if(window.innerWidth>window.innerHeight)return
+    const orientation=screen.orientation as ScreenOrientation&{lock?:(mode:'landscape')=>Promise<void>}
+    if(orientation?.lock)void orientation.lock('landscape').catch(()=>{})
+   }).catch(()=>{fullscreenRequest.current=false})
+  }catch{fullscreenRequest.current=false}
  }
  const url=valid?`${window.location.origin}/stax-shape-lab?remote=pad&room=${room}`:''
  // The QR endpoint receives only a short-lived, random experimental room URL;
@@ -172,6 +184,7 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   state.current.last={x:e.clientX,y:e.clientY}
   setPressed(true)
   if(mode==='pad'){
+   if(window.innerWidth>window.innerHeight)enterFullscreenOnTouch()
    sound().start(e.clientX,e.clientY)
   }
  }
@@ -194,7 +207,7 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
     <span className="stax-remote-rotate-icon" aria-hidden="true">↻</span>
     <strong>Rotate your phone to landscape</strong>
     <p>Use the trackpad with your phone sideways.</p>
-    <button type="button" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();void requestLandscape()}}>Try landscape fullscreen</button>
+    <button type="button" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();enterFullscreenOnTouch()}}>Try landscape fullscreen</button>
    </div>}
    <div className="stax-remote-pad-cross" aria-hidden="true">{pressed?'●':'+'}</div>
    <div className="stax-remote-pad-instruction">Touch anywhere and drag · foam sound plays here</div>
