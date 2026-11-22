@@ -7,7 +7,7 @@ const src=await readFile(new URL('../src/experiences/stax/family-links.ts',impor
 const js=ts.transpileModule(src,{compilerOptions:{
  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022,
 }}).outputText
-const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain,
+const {supportParent,supportChildOfKind,rootedSupportChain,canExtendSupportChain,canPinkSupportBlue,
  canFollowBlueOrange,canAttachOrangeUnderObjectBlue,canAttachAdverbUnderPreposition,largestAssembledFamily,normalizeBlueSiblingOrder,canNestPossessive,
  withRedCompanion,canNestRightRedOrange,canAttachOrangeUnderBlue,
  orangeTierChildren,orangeRootedInRed,eligibleOrangeTierSlot}=
@@ -629,4 +629,35 @@ test('large orange follows red at the green complement sequence port, not the un
  assert.doesNotMatch(variants,/previous&&byId/,'following orange is no longer forced small')
  assert.match(magnets,/MAGNET_PORTS\.redBelow\.includes\('hexagon'\)/,'under-red orange supporters remain valid')
  assert.match(board,/if\(snap\.relation!=='support'\)return typed/,'sentence followers do not spawn support pairs')
+})
+
+test('pink support is forbidden on first blue, permitted on second and later blues',()=>{
+ const doc={
+  atoms:[{id:'yellow',kind:'diamond'},{id:'subject',kind:'circle'},
+   {id:'verb',kind:'triangle'},{id:'object',kind:'circle'},
+   {id:'another',kind:'circle'},{id:'pink',kind:'square'}],
+  bonds:[
+   {parent:'yellow',child:'subject',relation:'sequence'},
+   {parent:'subject',child:'verb',relation:'sequence'},
+   {parent:'verb',child:'object',relation:'sequence'},
+   {parent:'object',child:'another',relation:'sequence'},
+  ],
+ }
+ assert.equal(canPinkSupportBlue(doc,'subject'),false,'leading blue cannot have pink despite yellow')
+ assert.equal(canPinkSupportBlue(doc,'object'),true,'second blue may have pink')
+ assert.equal(canPinkSupportBlue(doc,'another'),true,'later blue may have pink')
+ assert.equal(canPinkSupportBlue({atoms:doc.atoms,bonds:[]},'object'),false,'loose blue has no established sequence')
+ assert.equal(canPinkSupportBlue({...doc,bonds:[{parent:'subject',child:'verb',relation:'support'}]},'object'),false,'support is not sentence order')
+ assert.equal(canPinkSupportBlue(doc,'pink'),false)
+ const cyclic={...doc,bonds:[{parent:'subject',child:'object',relation:'sequence'},{parent:'object',child:'subject',relation:'sequence'}]}
+ assert.equal(canPinkSupportBlue(cyclic,'subject'),true,'a prior blue exists even if graph is cyclic')
+})
+test('pink rule protects magnet offers and remote creation without restricting other supporters',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const magnet=board.slice(board.indexOf('function bestSnap('),board.indexOf('function resolveMagnetBase('))
+ assert.match(magnet,/s\.relation==='support'&&parent\?\.kind==='circle'&&child\?\.kind==='square'/)
+ assert.match(magnet,/!canPinkSupportBlue\(d,parent\.id\)/)
+ const remote=board.slice(board.indexOf('function remoteAttach('),board.indexOf('function remotePairedRedOrange('))
+ assert.match(remote,/kind==='square'&&!canPinkSupportBlue\(before,parent\.id\)/)
+ assert.match(remote,/kind==='hexagon'&&!canAttachOrangeUnderObjectBlue/)
 })
