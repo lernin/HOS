@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type RefObject, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
@@ -11,6 +11,7 @@ import { PearlescentAirglass } from './pearlescent-airglass'
 import { FoamChip } from './foam-chips'
 import { FoamSlideAudio, FOAM_SLIDE_SOUNDS, safeFoamSoundId, normalizeFoamSoundTuning, DEFAULT_FOAM_SOUND_TUNING, type FoamSlideSoundId, type FoamSoundTuning } from './foam-slide-audio'
 import { STAX_QUEST_LEVELS, staxQuestLevel } from './quest-levels'
+import type { RemoteInput, RemoteDirection } from './remote-gesture-model'
 import { parseStaxSentence, type ParsedStax } from './quest-parser'
 import { advanceQuestTwo, harvestQuestTwo, QUEST_TWO_ORDER, type QuestTwoSide } from './quest-two'
 import './molecule-board.css'
@@ -1025,9 +1026,10 @@ function StaxToolbarIcon({name}:{name:StaxToolbarIconName}){
   {name==='plus'&&<><circle cx="10" cy="10" r="7"/><path d="M7 10h6m-3-3v6m5.5 2.5L21 21"/></>}
  </svg>
 }
-export function MoleculeBoard({onBack,onRemoteTest}:{onBack?:()=>void;onRemoteTest?:()=>void}={}){
- const [doc,setDoc]=useState<Draft>(()=>ensureFourOrangeBlueprint(normalizeRoles(load())))
+export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInputRef}:{onBack?:()=>void;onRemoteTest?:()=>void;remoteSandbox?:boolean;remoteInputRef?:RefObject<((input:RemoteInput)=>void)|null>}={}){
+ const [doc,setDoc]=useState<Draft>(()=>remoteSandbox?empty():ensureFourOrangeBlueprint(normalizeRoles(load())))
  const [theme,setTheme]=useState<StaxTheme>(()=>{
+  if(remoteSandbox)return 'classroom-foam'
   try{const value=localStorage.getItem(THEME_KEY);return STAX_THEMES.find(t=>t===value)??'color'}catch{return 'color'}
  })
  // Classroom Foam presentation only; no shape or magnet geometry depends on this.
@@ -1100,8 +1102,8 @@ export function MoleculeBoard({onBack,onRemoteTest}:{onBack?:()=>void;onRemoteTe
  const questTwoPair=useRef<{pointers:[number,number];first:TouchPoint;second:TouchPoint;started:number;released:Set<number>}|null>(null)
  const pinch=useRef<Pinch|null>(null)
  const blockRelease=useRef<Set<number>>(new Set())
- useEffect(()=>{try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc])
- useEffect(()=>{try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme])
+ useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc,remoteSandbox])
+ useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme,remoteSandbox])
  useEffect(()=>{foamAudio.current?.setPreset(foamSoundPreset);try{localStorage.setItem(FOAM_SOUND_PRESET_KEY,foamSoundPreset)}catch{/* unavailable */}},[foamSoundPreset])
  useEffect(()=>{
   foamAudio.current?.setTuning(foamSoundTuning)
@@ -1523,7 +1525,7 @@ export function MoleculeBoard({onBack,onRemoteTest}:{onBack?:()=>void;onRemoteTe
  const questTwoHarvest=questActive&&activeQuestLevel===2?harvestQuestTwo(questTwoSide,questTwoTaps,questTwoContracted):null
  const viewPercentX=(x:number)=>`${(x-view.x)/view.width*100}%`
  const viewPercentY=(y:number)=>`${(y-view.y)/view.height*100}%`
- return <div ref={rootRef} className="stax-molecule-ui" style={shadowCssVars} data-theme={theme} data-original-pollen={pollenAnimated?'true':'false'}>
+ return <div ref={rootRef} className="stax-molecule-ui" style={shadowCssVars} data-theme={theme} data-remote-sandbox={remoteSandbox?'true':'false'} data-original-pollen={pollenAnimated?'true':'false'}>
   <button className="stax-tray-handle" type="button" aria-label={trayOpen?'Close workspace controls':'Open workspace controls'} aria-controls="stax-bottom-tray" aria-expanded={trayOpen} onClick={()=>{setTrayOpen(v=>!v);setTrayActivity(n=>n+1)}}><span aria-hidden="true">{trayOpen?'‹':'›'}</span></button>
   <div id="stax-bottom-tray" className="stax-molecule-dock" data-open={trayOpen?'true':'false'} aria-label="STAX workspace controls" aria-hidden={!trayOpen}
     onPointerEnter={openTray} onPointerDownCapture={openTray} onFocusCapture={openTray} onWheel={openTray}>
