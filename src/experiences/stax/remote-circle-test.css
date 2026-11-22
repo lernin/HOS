@@ -1,0 +1,16 @@
+.stax-remote-host,.stax-remote-pad{position:fixed;inset:0;z-index:2000;font-family:"Trebuchet MS",system-ui,sans-serif}
+.stax-remote-host{overflow:hidden;background:#7e6141;color:#382c22}
+.stax-remote-wood{position:absolute;inset:0;background:#8d6e47 url('/stax-foam/wood-desk-mirrored.webp') center center/auto 46% repeat;overflow:hidden}
+.stax-remote-blue-circle{position:absolute;left:50%;top:50%;width:130px;height:130px;object-fit:contain;pointer-events:none;user-select:none;filter:drop-shadow(0 4px 3px #29170960) drop-shadow(0 11px 9px #29170938);will-change:transform}
+.stax-remote-host-panel{position:absolute;left:18px;top:18px;width:min(310px,calc(100vw - 36px));box-sizing:border-box;background:#fffaf0f2;border:1px solid #a99277;border-radius:18px;box-shadow:0 12px 40px #1f130c58;padding:15px;display:flex;flex-direction:column;gap:9px}
+.stax-remote-host-heading{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:14px}
+.stax-remote-host-heading button{background:#f5ecdf;border:1px solid #b7a28c;border-radius:8px;padding:8px 11px;cursor:pointer;color:#49351f}
+.stax-remote-host-panel p{margin:0;font-size:13px;line-height:1.4}
+.stax-remote-qr{align-self:center;width:min(194px,65vw);height:min(194px,65vw);background:#fff;border-radius:6px;padding:5px}
+.stax-remote-connection{font-weight:700;font-size:12px;color:#3d6749}
+.stax-remote-host-panel small{font-size:12px;color:#685543}
+.stax-remote-pad{background:#030303;color:#c9c9c9;touch-action:none;overscroll-behavior:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;cursor:crosshair}
+.stax-remote-pad-status{position:absolute;top:calc(env(safe-area-inset-top,0px) + 28px);left:15px;right:15px;text-align:center;font-size:14px;color:#9aa4a8;pointer-events:none}
+.stax-remote-pad-cross{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:54px;font-weight:200;color:#29363b;pointer-events:none}
+.stax-remote-pad-instruction{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 54px);left:12px;right:12px;text-align:center;color:#7f8b92;font-size:15px;pointer-events:none}
+.stax-remote-pad-rtt{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);left:12px;right:12px;text-align:center;color:#59666a;font-size:12px;pointer-events:none}
