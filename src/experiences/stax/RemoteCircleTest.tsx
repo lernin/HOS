@@ -15,7 +15,7 @@ function newRoom(){
  const bytes=new Uint8Array(16);crypto.getRandomValues(bytes)
  return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join('')
 }
-type Contact={id:number;role:'surface'|'corner';corner?:'A'|'B';shift:boolean;startX:number;startY:number;x:number;y:number;moved:boolean;swipeFired:boolean}
+type Contact={id:number;role:'surface'|'corner';corner?:'A'|'B';shift:boolean;startX:number;startY:number;x:number;y:number;moved:boolean;swipeFired:boolean;skinStep?:number}
 type MultiPoint={x:number;y:number;distance:number}
 const THRESHOLD=54
 const urls:Record<RemoteKind,string>={
@@ -41,6 +41,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const [hand,setHand]=useState<'right'|'left'>(()=>{try{return localStorage.getItem('stax-remote-hand-v1')==='left'?'left':'right'}catch{return 'right'}})
  const [cornerMode,setCornerMode]=useState<'A'|'B'|'A-shift'|'B-shift'|null>(null)
  const [twoFingerMode,setTwoFingerMode]=useState<'pan'|'pinch'|null>(null)
+ const [skinMode,setSkinMode]=useState(false)
  const hostInputRef=useRef(onHostInput)
  hostInputRef.current=onHostInput
  const [landscape,setLandscape]=useState(()=>window.innerWidth>window.innerHeight)
@@ -48,7 +49,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const fullscreenRequest=useRef(false)
  const state=useRef({last:{x:0,y:0},dragging:false,seq:0,started:new Map<number,number>(),
   contacts:new Map<number,Contact>(),maxSurface:0,twoFinger:null as TwoFingerSession|null,
-  multiStart:null as MultiPoint|null,threeScrollX:0,threeScrollActive:false,tapTime:0,
+  skinScroll:null as {owner:number;startX:number;step:number}|null,tapTime:0,
   tapTimer:null as ReturnType<typeof setTimeout>|null})
  const sendData=useRef<(payload:DataMessage)=>void>(()=>{})
  const board=useRef<HTMLDivElement>(null)
@@ -263,11 +264,9 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    if(state.current.dragging){send('move_end');foamSound.current?.stop();state.current.dragging=false}
    state.current.twoFinger=startTwoFinger(surfaces[0],surfaces[1])
    setTwoFingerMode(null)
-  }else if(surfaces.length===3){
-   state.current.twoFinger=null
-   setTwoFingerMode(null)
-   state.current.multiStart=centroid(surfaces)
-   state.current.threeScrollX=0;state.current.threeScrollActive=false
+  }else if(surfaces.length>=3){
+   // Reserved for future program-level commands; no camera or skins.
+   state.current.twoFinger=null;setTwoFingerMode(null)
   }
  }
  function pointerMove(e:ReactPointerEvent<HTMLDivElement>){
@@ -278,8 +277,24 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   contact.x=e.clientX;contact.y=e.clientY
   if(Math.hypot(contact.x-contact.startX,contact.y-contact.startY)>9)contact.moved=true
   if(contact.role==='corner'){
+   if(contact.corner==='B'){
+    const active=state.current.skinScroll
+    if(active?.owner===contact.id){
+     const step=Math.trunc((contact.x-active.startX)/48),delta=step-active.step
+     if(delta){
+      for(let i=0;i<Math.min(16,Math.abs(delta));i++)send(delta>0?'theme_next':'theme_prev')
+      state.current.skinScroll={...active,step};pulse(12)
+     }
+     return
+    }
+    // Swipe UP on B itself. B + up on the pad still builds purple.
+    if(!contact.shift&&contact.startY-contact.y>=24&&Math.abs(contact.x-contact.startX)<44){
+     state.current.skinScroll={owner:contact.id,startX:contact.x,step:0}
+     setSkinMode(true);pulse([14,24,14]);announce('Skins')
+     return
+    }
+   }
    if(!contact.shift){
-    // Pull toward the physical outer edge, like shifting a thumb-held key.
     const outward=hand==='right'?contact.startX-e.clientX:e.clientX-contact.startX
     if(outward>22){
      contact.shift=true
@@ -291,23 +306,14 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   }
   const surfaces=surfaceContacts()
   const maximum=state.current.maxSurface
-  if(maximum>=3){
-   if(surfaces.length>=3&&state.current.multiStart){
-    const at=centroid(surfaces)
-    const dx=at.x-state.current.multiStart.x,dy=at.y-state.current.multiStart.y
-    // Three fingers SCROLL continuously through themes, one per 64px.
-    // Reversing direction reverses the selection; no grammar or camera edits.
-    if(Math.abs(dx)>=24&&Math.abs(dx)>Math.abs(dy)*1.3)
-     state.current.threeScrollActive=true
-    if(state.current.threeScrollActive){
-     const step=Math.trunc(dx/64),prior=state.current.threeScrollX
-     if(step!==prior){
-      const action=step>prior?'theme_next':'theme_prev'
-      for(let i=0;i<Math.min(16,Math.abs(step-prior));i++)send(action)
-      pulse(12)
-      state.current.threeScrollX=step
-     }
-    }
+  // Three fingers intentionally do nothing; reserved for major navigation.
+  if(maximum>=3)return
+  if(state.current.skinScroll){
+   // B remains held; one-finger horizontal movement on pad cycles skins.
+   const step=Math.trunc((contact.x-contact.startX)/48),delta=step-(contact.skinStep??0)
+   if(delta){
+    for(let i=0;i<Math.min(16,Math.abs(delta));i++)send(delta>0?'theme_next':'theme_prev')
+    contact.skinStep=step;pulse(12)
    }
    return
   }
@@ -349,6 +355,9 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   e.preventDefault()
   const modeNow=activeCorner()
   const highest=state.current.maxSurface
+  if(contact.role==='corner'&&contact.corner==='B'&&state.current.skinScroll?.owner===contact.id){
+   state.current.skinScroll=null;setSkinMode(false)
+  }
   if(contact.role==='corner'&&contact.corner==='A'&&state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
   if(contact.role==='surface'){
    if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
@@ -371,7 +380,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    setTwoFingerMode(null)
   }
   if(remaining.length===0){
-   state.current.maxSurface=0;state.current.twoFinger=null;state.current.multiStart=null;state.current.threeScrollX=0;state.current.threeScrollActive=false
+   state.current.maxSurface=0;state.current.twoFinger=null;
    foamSound.current?.stop()
   }else if(remaining.length===2&&state.current.maxSurface===2&&!state.current.twoFinger){
    state.current.twoFinger=startTwoFinger(remaining[0],remaining[1])
@@ -381,11 +390,12 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   const item=state.current.contacts.get(e.pointerId)
   if(!item)return
   state.current.contacts.delete(e.pointerId)
+  if(item.role==='corner'&&item.corner==='B'){state.current.skinScroll=null;setSkinMode(false)}
   if(state.current.dragging){send('move_end');state.current.dragging=false}
   if(item.role==='corner')setCornerMode(activeCorner())
   const remaining=surfaceContacts()
   if(item.role==='surface'){state.current.twoFinger=null;setTwoFingerMode(null)}
-  if(remaining.length===0){state.current.maxSurface=0;state.current.twoFinger=null;state.current.multiStart=null}
+  if(remaining.length===0){state.current.maxSurface=0;state.current.twoFinger=null}
   setPressed(remaining.length>0);foamSound.current?.stop()
  }
  if(mode==='pad')return <div className="stax-remote-pad" data-hand={hand}
@@ -403,7 +413,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
     <button type="button" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();enterFullscreenOnTouch()}}>Try landscape fullscreen</button>
    </div>}
    <div className="stax-remote-corner stax-remote-corner-b" data-zone="B" data-active={cornerMode?.startsWith('B')?'true':'false'} aria-label="B: hold to construct, pull outward for view commands">
-    <strong>B</strong><small>{cornerMode==='B-shift'?'VIEW':'ADD'}</small>
+    <strong>B</strong><small>{skinMode?'SKINS':cornerMode==='B-shift'?'VIEW':'ADD'}</small>
    </div>
    <div className="stax-remote-corner stax-remote-corner-a" data-zone="A" data-active={cornerMode?.startsWith('A')?'true':'false'} aria-label="A: hold to move, pull outward for editing">
     <strong>A</strong><small>{cornerMode==='A-shift'?'EDIT':'MOVE'}</small>
@@ -412,7 +422,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    {twoFingerMode&&<div className="stax-remote-intent-status" aria-label={twoFingerMode==='pan'?'Pan locked':'Pinch zoom locked'}>
     {twoFingerMode==='pan'?'PAN · zoom locked':'PINCH · pan locked'}
    </div>}
-   <div className="stax-remote-pad-instruction">Swipe to focus · A + drag molecule · B + tap spine / swipe modify</div>
+   <div className="stax-remote-pad-instruction">Swipe to focus · B key ↑ then ←/→ skins · B + surface swipe builds</div>
    <div className="stax-remote-pad-rtt">{rtt===null?'Measuring connection…':`Round trip: ${rtt} ms`}</div></>}
   </div>
  return <div className="stax-remote-host" data-canonical={onHostInput?"true":"false"}>
@@ -459,7 +469,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
     <p>Swipe: navigate shapes · Tap: select · Double tap: center</p>
     <p>Hold A + drag: move piece · Hold B + swipe: modify · Hold B + tap: add spine</p>
     <p>A pull outward + hold: Detach / Undo / Delete · B pull outward + hold: Fit / Center / Zoom</p>
-    <p>Two fingers: pan and pinch · Three fingers: scroll left/right through backgrounds · A-Shift right: undo</p>
+    <p>Two fingers: pan and pinch · Three fingers: reserved · A-Shift right: undo</p>
    </div>}
   </aside>
  </div>
