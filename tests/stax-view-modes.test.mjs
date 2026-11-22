@@ -392,7 +392,7 @@ test('Finger lift happens only when the entire dragged molecule is smaller than 
 test('STAX entry opens current magnetic board without legacy Shape Lab stopover',async()=>{
  const lab=await readFile(new URL('../src/experiences/StaxLab.tsx',import.meta.url),'utf8')
  assert.match(lab,/const \[freeBoard,setFreeBoard\]=useState\(true\)/)
- assert.match(lab,/<MoleculeBoard onBack=\{onExit\}\/>/)
+ assert.match(lab,/<MoleculeBoard onBack=\{onExit\} onRemoteTest=\{\(\)=>setRemoteExperiment\(true\)\}\/>/)
  assert.doesNotMatch(lab,/onClick=\{\(\)=>setFreeBoard\(false\)\}>Classic Shape Lab/)
  assert.match(lab,/return <main className=\{\x60stax-lab/)
 })
