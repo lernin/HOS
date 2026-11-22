@@ -369,32 +369,65 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   if(remaining.length===0){state.current.maxSurface=0;state.current.multi=null;state.current.multiStart=null}
   setPressed(remaining.length>0);foamSound.current?.stop()
  }
- if(mode==='pad')return <div className="stax-remote-pad" onPointerDown={pointerDown}
-  onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}
-  onContextMenu={e=>e.preventDefault()} aria-label="Black STAX phone trackpad">
-  <div className="stax-remote-pad-status" aria-live="polite">{!valid?'Invalid session':link==='direct'?'Direct Wi-Fi peer connection':link==='relay'?'Connected via relay':link==='offline'?'Connection unavailable':'Connecting to board…'}</div>
-  {valid&&<>{!landscape&&<div className="stax-remote-rotate" role="status">
+ if(mode==='pad')return <div className="stax-remote-pad" data-hand={hand}
+  onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp}
+  onPointerCancel={pointerCancel} onContextMenu={e=>e.preventDefault()}
+  aria-label="Black STAX eyes-free landscape controller">
+   <div className="stax-remote-pad-status" aria-live="polite">{!valid?'Invalid pairing session':link==='direct'?'Direct connection':link==='relay'?'Relay connection':link==='offline'?'Connection unavailable':'Connecting…'}</div>
+   <button className="stax-remote-hand-toggle" type="button" onPointerDown={e=>e.stopPropagation()}
+    onClick={()=>{setHand(h=>h==='right'?'left':'right');pulse([15,25,15])}}
+    title="Mirror A and B for handedness">{hand==='right'?'Right-handed':'Left-handed'} · Switch</button>
+   {valid&&<>{!landscape&&<div className="stax-remote-rotate" role="status">
     <span className="stax-remote-rotate-icon" aria-hidden="true">↻</span>
     <strong>Rotate your phone to landscape</strong>
-    <p>Use the trackpad with your phone sideways.</p>
+    <p>Keep your eyes on the larger STAX board.</p>
     <button type="button" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();enterFullscreenOnTouch()}}>Try landscape fullscreen</button>
    </div>}
-   <div className="stax-remote-pad-cross" aria-hidden="true">{pressed?'●':'+'}</div>
-   <div className="stax-remote-pad-instruction">Touch anywhere and drag · foam sound plays here</div>
-   <div className="stax-remote-pad-rtt">{rtt===null?'Measuring latency…':`Round trip: ${rtt} ms`}</div></>}
- </div>
+   <div className="stax-remote-corner stax-remote-corner-b" data-zone="B" data-active={cornerMode?.startsWith('B')?'true':'false'} aria-label="B: hold to construct, pull outward for view commands">
+    <strong>B</strong><small>{cornerMode==='B-shift'?'VIEW':'ADD'}</small>
+   </div>
+   <div className="stax-remote-corner stax-remote-corner-a" data-zone="A" data-active={cornerMode?.startsWith('A')?'true':'false'} aria-label="A: hold to move, pull outward for editing">
+    <strong>A</strong><small>{cornerMode==='A-shift'?'EDIT':'MOVE'}</small>
+   </div>
+   <div className="stax-remote-pad-cross" aria-hidden="true">{pressed?'·':'+'}</div>
+   <div className="stax-remote-pad-instruction">Swipe to focus · Hold A + drag · Hold B + tap to add</div>
+   <div className="stax-remote-pad-rtt">{rtt===null?'Measuring connection…':`Round trip: ${rtt} ms`}</div></>}
+  </div>
  return <div className="stax-remote-host">
-  <div className="stax-remote-wood" ref={board} aria-label="One blue foam circle on a wooden board">
-   <img className="stax-remote-blue-circle" src="/stax-foam/cleaned/circle.webp"
-    draggable={false} alt="One blue STAX foam circle"
-    style={{transform:`translate(calc(-50% + ${circle.x}px),calc(-50% + ${circle.y}px))`}}/>
+  <div className="stax-remote-wood" ref={board} aria-label="Isolated foam STAX gesture workspace">
+   <div className="stax-remote-stage" style={{transform:`translate(${boardState.panX}px,${boardState.panY}px) scale(${boardState.zoom})`}}>
+    {boardState.pieces.map(piece=><div key={piece.id}
+     className={`stax-remote-piece${piece.id===boardState.focus?' is-focused':''}${piece.id===boardState.selected?' is-selected':''}`}
+     style={{left:piece.x,top:piece.y}} data-kind={piece.kind}>
+      <img className="stax-remote-blue-circle" src={urls[piece.kind]} draggable={false}
+       alt={verboseName[piece.kind]}/>
+     </div>)}
+   </div>
   </div>
   <aside className="stax-remote-host-panel">
-   <div className="stax-remote-host-heading"><strong>STAX · Phone Trackpad Test</strong><button type="button" onClick={onExit} aria-label="Turn remote test off and return to STAX">Remote · On — Turn off</button></div>
-   <p>Scan with your phone. Touch the black screen to drag the circle.</p>
-   <img className="stax-remote-qr" src={qr} alt="QR code to join the STAX phone trackpad" />
+   <div className="stax-remote-host-heading"><strong>STAX · Eyes-Free Controller</strong><button type="button" onClick={onExit} aria-label="Turn remote test off and return to STAX">Remote · On — Turn off</button></div>
+   <p>Scan with your phone, rotate to landscape, and operate the STAX demonstration without looking at the phone.</p>
+   <img className="stax-remote-qr" src={qr} alt="QR code to join the STAX phone trackpad"/>
    <div className="stax-remote-connection" aria-live="polite">{link==='direct'?'Direct peer-to-peer · connected':peerReady?'Internet relay connected':link==='offline'?'Connection unavailable':'Waiting for phone…'}</div>
-   <small>{count} position updates received</small>
+   <div className="stax-remote-board-status" aria-live="polite">
+    <strong>{boardState.notice}</strong>
+    <span>{boardState.pieces.length} shapes · ${Math.round(boardState.zoom*100)}% zoom · {boardState.updates} drag packets</span>
+    <span>Focused: {verboseName[boardState.pieces.find(p=>p.id===boardState.focus)?.kind||'circle']}</span>
+    <span>Next shape: {verboseName[boardState.palette]} · Placement: {boardState.port}</span>
+    {boardState.deleteArmed&&<span className="stax-remote-delete-warning">Deletion armed: A-Shift + tap to confirm</span>}
+   </div>
+   <div className="stax-remote-host-buttons">
+    <button type="button" onClick={()=>boardDispatch({type:'gesture',action:'seed',seq:0})}>Try 3 pieces</button>
+    <button type="button" onClick={()=>boardDispatch({type:'gesture',action:'reset',seq:0})}>Reset to 1 circle</button>
+   </div>
+   <div className="stax-remote-legend">
+    <strong>Eyes-free gesture map</strong>
+    <p>Swipe: navigate shapes · Tap: select · Double tap: center</p>
+    <p>Hold A + drag: move piece · Hold B + swipe: choose kind/direction · Hold B + tap: add</p>
+    <p>A pull left + hold: Undo / Redo / Delete · B pull left + hold: Fit / Center / Zoom</p>
+    <p>Two fingers: pan and pinch · Three fingers left/right: undo/redo</p>
+    <small>Gesture sandbox only. The real STAX board remains untouched underneath; canonical magnetic snapping is not simulated in this experiment.</small>
+   </div>
   </aside>
  </div>
 }
