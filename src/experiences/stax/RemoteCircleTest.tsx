@@ -2,6 +2,7 @@ import { useEffect, useReducer, useRef, useState, type PointerEvent as ReactPoin
 import { supabase } from '../../lib/supabase'
 import { FoamSlideAudio, safeFoamSoundId, normalizeFoamSoundTuning } from './foam-slide-audio'
 import { initialRemoteBoard, reduceRemoteBoard, type RemoteGesture, type RemoteInput, type RemoteDirection, type RemoteKind } from './remote-gesture-model'
+import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
 import './remote-circle-test.css'
 
 type Ping = { type:'ping'|'pong';seq:number }
@@ -39,13 +40,14 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const [pressed,setPressed]=useState(false)
  const [hand,setHand]=useState<'right'|'left'>(()=>{try{return localStorage.getItem('stax-remote-hand-v1')==='left'?'left':'right'}catch{return 'right'}})
  const [cornerMode,setCornerMode]=useState<'A'|'B'|'A-shift'|'B-shift'|null>(null)
+ const [twoFingerMode,setTwoFingerMode]=useState<'pan'|'pinch'|null>(null)
  const hostInputRef=useRef(onHostInput)
  hostInputRef.current=onHostInput
  const [landscape,setLandscape]=useState(()=>window.innerWidth>window.innerHeight)
  const foamSound=useRef<FoamSlideAudio|null>(null)
  const fullscreenRequest=useRef(false)
  const state=useRef({last:{x:0,y:0},dragging:false,seq:0,started:new Map<number,number>(),
-  contacts:new Map<number,Contact>(),maxSurface:0,multi:null as MultiPoint|null,
+  contacts:new Map<number,Contact>(),maxSurface:0,twoFinger:null as TwoFingerSession|null,
   multiStart:null as MultiPoint|null,threeFired:false,tapTime:0,
   tapTimer:null as ReturnType<typeof setTimeout>|null})
  const sendData=useRef<(payload:DataMessage)=>void>(()=>{})
@@ -258,8 +260,11 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    sound().start(e.clientX,e.clientY)
   }else if(surfaces.length===2){
    if(state.current.dragging){send('move_end');foamSound.current?.stop();state.current.dragging=false}
-   state.current.multi=centroid(surfaces)
+   state.current.twoFinger=startTwoFinger(surfaces[0],surfaces[1])
+   setTwoFingerMode(null)
   }else if(surfaces.length===3){
+   state.current.twoFinger=null
+   setTwoFingerMode(null)
    state.current.multiStart=centroid(surfaces)
    state.current.threeFired=false
   }
@@ -297,13 +302,16 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    return
   }
   if(surfaces.length===2){
-   const at=centroid(surfaces),before=state.current.multi
-   state.current.multi=at
-   if(before){
-    const scale=before.distance>10?at.distance/before.distance:1
-    if(Math.abs(at.x-before.x)+Math.abs(at.y-before.y)>0.4||Math.abs(scale-1)>0.006)
-     sendData.current({type:'view',dx:at.x-before.x,dy:at.y-before.y,scale,seq:++state.current.seq})
+   // The A/B thumb contacts are excluded from surfaceContacts(). Identify pan
+   // versus pinch once per two-finger gesture and never mix camera channels.
+   const before=state.current.twoFinger??startTwoFinger(surfaces[0],surfaces[1])
+   const result=advanceTwoFinger(before,surfaces[0],surfaces[1])
+   state.current.twoFinger=result.session
+   if(result.lockedNow){
+    setTwoFingerMode(result.session.mode==='pan'?'pan':'pinch')
+    pulse(result.session.mode==='pan'?11:[11,25,13])
    }
+   if(result.frame)sendData.current({type:'view',...result.frame,seq:++state.current.seq})
    return
   }
   if(surfaces.length!==1)return
@@ -347,13 +355,15 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   if(contact.role==='corner')setCornerMode(activeCorner())
   const remaining=surfaceContacts()
   setPressed(remaining.length>0)
+  if(contact.role==='surface'){
+   state.current.twoFinger=null
+   setTwoFingerMode(null)
+  }
   if(remaining.length===0){
-   state.current.maxSurface=0;state.current.multi=null;state.current.multiStart=null;state.current.threeFired=false
+   state.current.maxSurface=0;state.current.twoFinger=null;state.current.multiStart=null;state.current.threeFired=false
    foamSound.current?.stop()
-  }else if(remaining.length===2){
-   state.current.multi=centroid(remaining)
-  }else if(remaining.length===1){
-   state.current.multi=null
+  }else if(remaining.length===2&&state.current.maxSurface===2&&!state.current.twoFinger){
+   state.current.twoFinger=startTwoFinger(remaining[0],remaining[1])
   }
  }
  function pointerCancel(e:ReactPointerEvent<HTMLDivElement>){
@@ -363,7 +373,8 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   if(state.current.dragging){send('move_end');state.current.dragging=false}
   if(item.role==='corner')setCornerMode(activeCorner())
   const remaining=surfaceContacts()
-  if(remaining.length===0){state.current.maxSurface=0;state.current.multi=null;state.current.multiStart=null}
+  if(item.role==='surface'){state.current.twoFinger=null;setTwoFingerMode(null)}
+  if(remaining.length===0){state.current.maxSurface=0;state.current.twoFinger=null;state.current.multiStart=null}
   setPressed(remaining.length>0);foamSound.current?.stop()
  }
  if(mode==='pad')return <div className="stax-remote-pad" data-hand={hand}
@@ -387,6 +398,9 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
     <strong>A</strong><small>{cornerMode==='A-shift'?'EDIT':'MOVE'}</small>
    </div>
    <div className="stax-remote-pad-cross" aria-hidden="true">{pressed?'·':'+'}</div>
+   {twoFingerMode&&<div className="stax-remote-intent-status" aria-label={twoFingerMode==='pan'?'Pan locked':'Pinch zoom locked'}>
+    {twoFingerMode==='pan'?'PAN · zoom locked':'PINCH · pan locked'}
+   </div>}
    <div className="stax-remote-pad-instruction">Swipe to focus · A + drag molecule · B + tap spine / swipe modify</div>
    <div className="stax-remote-pad-rtt">{rtt===null?'Measuring connection…':`Round trip: ${rtt} ms`}</div></>}
   </div>
