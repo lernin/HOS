@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type RefObject, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type RefObject, type WheelEvent as ReactWheelEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
@@ -301,14 +301,15 @@ function alignSequenceFamilyClearance(doc:Draft):Draft {
   for(const edge of edges){
    const left=byId(next,edge.parent),right=byId(next,edge.child)
    if(!left||!right)continue
-   // Blue supporters hang left-justified: adding one beneath the FIRST
-   // blue does not require spreading it from the following bare blue.
-   // Only supporters on the FOLLOWING blue can open that blue-to-blue gap.
-   // Red-orange children likewise never spread a bare following blue.
+   // A single left-justified supporter under the FIRST blue fits without
+   // widening the next blue. Two or more supporters may project rightward
+   // and must trigger real silhouette clearance. A supporter on the following
+   // blue can also require clearance. Red-orange families alone never spread it.
    const leftFamily=left.kind==='circle'?supportFootprint(next,left.id):null
    const rightFamily=right.kind==='circle'?supportFootprint(next,right.id):null
    if(right.kind==='circle'&&(left.kind==='triangle'||left.kind==='circle')&&
-      (rightFamily?.length??1)===1)continue
+      (rightFamily?.length??1)===1&&
+      (left.kind!=='circle'||(leftFamily?.length??1)<=2))continue
    const a=leftFamily??supportFootprint(next,left.id)
    const b=rightFamily??supportFootprint(next,right.id)
    const shift=requiredFamilyFollowerShift(
@@ -1179,6 +1180,19 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   const h=v.width/aspect(),adjusted={...v,y:v.y+(v.height-h)/2,height:h}
   currentView.current=adjusted;setView(adjusted)
  }
+ function wheelZoom(e:ReactWheelEvent<SVGSVGElement>){
+  // Zoom only on intentional desktop wheel movement, anchored to cursor.
+  if(e.ctrlKey)return
+  e.preventDefault()
+  const rect=svg.current?.getBoundingClientRect()
+  if(!rect||!rect.width||!rect.height)return
+  const v=currentView.current
+  const factor=Math.exp(Math.max(-100,Math.min(100,e.deltaY))*.0015)
+  const width=Math.max(300,Math.min(4000,v.width*factor))
+  const height=width/aspect()
+  const u=(e.clientX-rect.left)/rect.width,w=(e.clientY-rect.top)/rect.height
+  setCamera({x:v.x+u*(v.width-width),y:v.y+w*(v.height-height),width,height})
+ }
  useEffect(()=>{
   if(!rootRef.current||typeof ResizeObserver==='undefined')return
   const ro=new ResizeObserver(()=>setCamera(currentView.current))
@@ -1973,7 +1987,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    {questTwoSide==='answer'&&<small>Touch blue I and red SMR together to toggle. Move two fingers to zoom.</small>}
   </section>}
   <div className="stax-molecule-canvas">
-   <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
+   <svg ref={svg} viewBox={`${view.x} ${view.y} ${view.width} ${view.height}`} aria-label="STAX freely movable magnetic workspace" onWheel={wheelZoom} onPointerDownCapture={downTouch} onPointerMoveCapture={moveTouch} onPointerUpCapture={endTouch} onPointerCancelCapture={endTouch} onPointerDown={downBackground} onPointerMove={moveBackground} onPointerUp={upBackground} onPointerCancel={upBackground}>
     {theme==='golden-line'&&<MetallicGoldStroke id="stax-golden-board"/>}
      {hasStaxMaterial(theme)&&<StaxMaterialDefs prefix="stax-mat-board"/>}
      {theme==='classroom-foam'&&<defs>
