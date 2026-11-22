@@ -4,7 +4,7 @@ import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { nextRedOrangeRemoteStep } from './remote-orange-topology'
 import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
-import { sequentialScanNext, scanSwipeSteps } from './sequential-scan'
+import { sequentialScanNext, scanSwipeSteps, scanStrideForSpeed, normalizeScanSpeed, SCAN_SPEED_KEY, DEFAULT_SCAN_SPEED } from './sequential-scan'
 import { canPinkSupportBlue, canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -1089,6 +1089,8 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   catch{return {...DEFAULT_FOAM_SOUND_TUNING}}
  })
  const [soundLabOpen,setSoundLabOpen]=useState(false)
+ const [scanSettingsOpen,setScanSettingsOpen]=useState(false)
+ const [scanSpeed,setScanSpeed]=useState(()=>{try{return normalizeScanSpeed(localStorage.getItem(SCAN_SPEED_KEY))}catch{return DEFAULT_SCAN_SPEED}})
  const foamAudio=useRef<FoamSlideAudio|null>(null)
  function audio(){
   if(!foamAudio.current)foamAudio.current=new FoamSlideAudio()
@@ -1195,6 +1197,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  const threeFingerCooldown=useRef(false)
  useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc,remoteSandbox])
  useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme,remoteSandbox])
+ useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(SCAN_SPEED_KEY,String(scanSpeed))}catch{/* local preference unavailable */}},[scanSpeed,remoteSandbox])
  useEffect(()=>{foamAudio.current?.setPreset(foamSoundPreset);try{localStorage.setItem(FOAM_SOUND_PRESET_KEY,foamSoundPreset)}catch{/* unavailable */}},[foamSoundPreset])
  useEffect(()=>{
   foamAudio.current?.setTuning(foamSoundTuning)
@@ -1336,7 +1339,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
       style.step=step
      }
     }else if(menuHold.current.mode==='scan'){
-     const result=scanSwipeSteps(style.step,e.clientX-style.originX)
+     const result=scanSwipeSteps(style.step,e.clientX-style.originX,scanStrideForSpeed(scanSpeed))
      if(result.directions.length){
       let next=scanCursor.current
       for(const direction of result.directions)
@@ -2047,6 +2050,9 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
       <button type="button" className="stax-sound-button"
        onClick={()=>setSoundLabOpen(v=>!v)}
        aria-label="Foam sound lab" title="Foam sound lab" aria-expanded={soundLabOpen} aria-controls="stax-sound-panel">Sound</button>
+      {!remoteSandbox&&<button type="button" className="stax-scan-settings-button"
+       onClick={()=>setScanSettingsOpen(v=>!v)} aria-expanded={scanSettingsOpen} aria-controls="stax-board-scan-speed-settings"
+       title="Adjust continuous scanner speed" aria-label={'Scanner speed '+scanSpeed+' times; adjust'}>Scan {scanSpeed}×</button>}
      <button onClick={()=>{setOmitBrush(v=>!v);setHint(omitBrush?'Dotted omission brush off.':'Dotted omission brush on. Tap a shape to toggle, or add dotted shapes.')}}
       title="Omit brush: tap to toggle; when active tap shapes to mark omitted, or add new dotted shapes"
       aria-label="Toggle dotted omission brush" aria-pressed={omitBrush}
@@ -2061,6 +2067,16 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
     <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}><StaxToolbarIcon name="plus"/></button>
    </div>
   </div>
+  {scanSettingsOpen&&!remoteSandbox&&<section className="stax-scan-settings-panel" id="stax-board-scan-speed-settings" role="region" aria-label="Sequential scanner speed settings">
+   <div className="stax-scan-settings-header"><strong>Sequential scanner</strong>
+    <button type="button" onClick={()=>setScanSettingsOpen(false)} aria-label="Close scanner settings">×</button></div>
+   <label htmlFor="stax-board-scan-speed">Scan speed <output htmlFor="stax-board-scan-speed">{scanSpeed}×</output></label>
+   <input id="stax-board-scan-speed" type="range" min="1" max="6" step="1"
+    value={scanSpeed} onChange={e=>setScanSpeed(normalizeScanSpeed(e.target.value))}
+    aria-valuetext={scanSpeed+' times original scan speed'}/>
+   <div className="stax-scan-settings-scale"><span>Precise · 1×</span><span>Fast · 6×</span></div>
+   <small>Menu ← then sweep another finger. Saved on this device.</small>
+  </section>}
   {soundLabOpen&&<section className="stax-sound-panel" id="stax-sound-panel" role="region" aria-label="Foam sound lab">
     <div className="stax-sound-panel-header">
      <strong>Foam sound lab</strong>
