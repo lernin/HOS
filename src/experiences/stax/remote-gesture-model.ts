@@ -8,7 +8,7 @@ export type RemoteKind=typeof REMOTE_KINDS[number]
 export type RemoteDirection='left'|'right'|'up'|'down'
 export type RemotePort='right'|'below'|'left'|'above'
 export const REMOTE_PORTS=['right','below','left','above'] as const
-export type RemoteAction='navigate'|'select'|'center'|'fit'|'add'|'cycle_kind'|'cycle_port'|'delete_arm'|'delete_confirm'|'delete_cancel'|'detach'|'undo'|'redo'|'zoom_in'|'zoom_out'|'move_start'|'move_end'|'reset'|'seed'|'spine'|'modify'|'theme_next'|'theme_prev'
+export type RemoteAction='navigate'|'select'|'center'|'fit'|'add'|'cycle_kind'|'cycle_port'|'delete_arm'|'delete_confirm'|'delete_cancel'|'detach'|'undo'|'redo'|'zoom_in'|'zoom_out'|'move_start'|'move_end'|'reset'|'seed'|'spine'|'modify'|'theme_next'|'theme_prev'|'navigate_seq'
 export type RemoteGesture={type:'gesture';action:RemoteAction;dir?:RemoteDirection;seq:number}
 export type RemoteMotion={type:'move';dx:number;dy:number;seq:number}
 export type RemoteView={type:'view';dx:number;dy:number;scale:number;seq:number}
@@ -74,6 +74,13 @@ export function reduceRemoteBoard(s:RemoteBoard,event:RemoteInput):RemoteBoard{
  }
  const action=event.action,dir=event.dir
  if(action==='navigate'&&dir)return navigate(s,dir)
+ if(action==='navigate_seq'&&dir){
+  const ordered=[...s.pieces].sort((a,b)=>a.x-b.x||b.y-a.y)
+  if(!ordered.length)return s
+  const at=ordered.findIndex(p=>p.id===s.focus)
+  const next=ordered[(at<0?(dir==='left'?0:-1):at+(dir==='left'?-1:1)+ordered.length)%ordered.length]
+  return {...s,focus:next.id,selected:null,deleteArmed:false,notice:'Sequential focus: '+next.kind}
+ }
  if(action==='select')return {...s,selected:s.focus,deleteArmed:false,notice:'Selected '+(s.pieces.find(p=>p.id===s.focus)?.kind||'none')}
  if(action==='cycle_kind'){
   const next=step(REMOTE_KINDS,s.palette,dir==='left'?-1:1)
