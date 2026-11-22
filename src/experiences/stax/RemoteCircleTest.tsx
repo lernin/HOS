@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { supabase } from '../../lib/supabase'
+import { FoamSlideAudio, safeFoamSoundId, normalizeFoamSoundTuning } from './foam-slide-audio'
 import './remote-circle-test.css'
 
 type Motion = { type:'move';dx:number;dy:number;seq:number }
@@ -26,9 +27,37 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
  const [rtt,setRtt]=useState<number|null>(null)
  const [count,setCount]=useState(0)
  const [pressed,setPressed]=useState(false)
+ const [landscape,setLandscape]=useState(()=>window.innerWidth>window.innerHeight)
+ const foamSound=useRef<FoamSlideAudio|null>(null)
  const state=useRef({last:{x:0,y:0},dragging:false,seq:0,started:new Map<number,number>()})
  const sendData=useRef<(payload:DataMessage)=>void>(()=>{})
  const board=useRef<HTMLDivElement>(null)
+ useEffect(()=>{
+  if(mode!=='pad')return
+  const update=()=>setLandscape(window.innerWidth>window.innerHeight)
+  window.addEventListener('resize',update)
+  window.addEventListener('orientationchange',update)
+  return ()=>{window.removeEventListener('resize',update);window.removeEventListener('orientationchange',update);foamSound.current?.dispose();foamSound.current=null}
+ },[mode])
+ function sound(){
+  if(!foamSound.current){
+   const audio=new FoamSlideAudio()
+   try{
+    audio.setPreset(safeFoamSoundId(localStorage.getItem('stax-foam-slide-preset-v2')))
+    audio.setTuning(normalizeFoamSoundTuning(JSON.parse(localStorage.getItem('stax-foam-synth-tuning-v1')||'null')))
+   }catch{/* use safe plastic skitter default */}
+   foamSound.current=audio
+  }
+  return foamSound.current
+ }
+ async function requestLandscape(){
+  // Browser support varies: portrait overlay remains the reliable fallback.
+  try{
+   if(!document.fullscreenElement&&document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen()
+   const orientation=screen.orientation as ScreenOrientation&{lock?:(mode:'landscape')=>Promise<void>}
+   if(orientation.lock)await orientation.lock('landscape')
+  }catch{/* ask the user to rotate manually instead */}
+ }
  const url=valid?`${window.location.origin}/stax-shape-lab?remote=pad&room=${room}`:''
  // The QR endpoint receives only a short-lived, random experimental room URL;
  // never send authentication credentials or student data through this room.
@@ -142,21 +171,33 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   state.current.dragging=true
   state.current.last={x:e.clientX,y:e.clientY}
   setPressed(true)
+  if(mode==='pad'){
+   sound().start(e.clientX,e.clientY)
+  }
  }
  function pointerMove(e:ReactPointerEvent<HTMLDivElement>){
   if(!state.current.dragging)return
   e.preventDefault()
   const dx=e.clientX-state.current.last.x,dy=e.clientY-state.current.last.y
   state.current.last={x:e.clientX,y:e.clientY}
-  if(dx||dy)sendData.current({type:'move',dx,dy,seq:++state.current.seq})
+  if(dx||dy){
+   if(mode==='pad')foamSound.current?.move(e.clientX,e.clientY)
+   sendData.current({type:'move',dx,dy,seq:++state.current.seq})
+  }
  }
- function pointerUp(){state.current.dragging=false;setPressed(false)}
+ function pointerUp(){state.current.dragging=false;setPressed(false);foamSound.current?.stop()}
  if(mode==='pad')return <div className="stax-remote-pad" onPointerDown={pointerDown}
   onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}
   onContextMenu={e=>e.preventDefault()} aria-label="Black STAX phone trackpad">
   <div className="stax-remote-pad-status" aria-live="polite">{!valid?'Invalid session':link==='direct'?'Direct Wi-Fi peer connection':link==='relay'?'Connected via relay':link==='offline'?'Connection unavailable':'Connecting to board…'}</div>
-  {valid&&<><div className="stax-remote-pad-cross" aria-hidden="true">{pressed?'●':'+'}</div>
-   <div className="stax-remote-pad-instruction">Touch anywhere and drag.</div>
+  {valid&&<>{!landscape&&<div className="stax-remote-rotate" role="status">
+    <span className="stax-remote-rotate-icon" aria-hidden="true">↻</span>
+    <strong>Rotate your phone to landscape</strong>
+    <p>Use the trackpad with your phone sideways.</p>
+    <button type="button" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();void requestLandscape()}}>Try landscape fullscreen</button>
+   </div>}
+   <div className="stax-remote-pad-cross" aria-hidden="true">{pressed?'●':'+'}</div>
+   <div className="stax-remote-pad-instruction">Touch anywhere and drag · foam sound plays here</div>
    <div className="stax-remote-pad-rtt">{rtt===null?'Measuring latency…':`Round trip: ${rtt} ms`}</div></>}
  </div>
  return <div className="stax-remote-host">
