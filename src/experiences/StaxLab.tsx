@@ -18,6 +18,7 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
  const [placement,setPlacement]=useState<Placement>('auto'),[zoom,setZoom]=useState(1),[rulesOpen,setRulesOpen]=useState(false)
  const [notice,setNotice]=useState(''),[saveError,setSaveError]=useState(false)
  const [freeBoard,setFreeBoard]=useState(true)
+ const [remoteExperiment,setRemoteExperiment]=useState(()=>new URLSearchParams(window.location.search).get('remote')==='host')
  const svgRef=useRef<SVGSVGElement>(null), doc=history.present
  const dragRef=useRef<DragGesture|null>(null), suppressClickRef=useRef<Kind|null>(null)
  const [dragPreview,setDragPreview]=useState<DragPreview|null>(null)
@@ -88,13 +89,14 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
   copy.removeAttribute('style');copy.setAttribute('width',String(scene.width*32));copy.setAttribute('height',String(scene.height*32))
   download(new XMLSerializer().serializeToString(copy),'image/svg+xml',`stax-${mode}-${blueprint?'blueprint':'clean'}.svg`)
  }
- if(new URLSearchParams(window.location.search).has('remote'))return <RemoteCircleTest onExit={()=>window.location.assign('/stax-shape-lab')}/>
+ if(new URLSearchParams(window.location.search).get('remote')==='pad')return <RemoteCircleTest onExit={()=>window.location.assign('/stax-shape-lab')}/>
  if(freeBoard)return <main className="stax-lab">
   <header className="stax-header"><div className="stax-identity"><button className="stax-back" onClick={onExit} aria-label="Back to The Lab">←</button><div><h1>STAX <span>Magnetic Molecules</span></h1><p>Free shape assembly · experimental</p></div></div>
    <div className="stax-header-actions"/>
   </header>
   <section className="stax-main" style={{maxWidth:1200,margin:'0 auto',width:'100%'}}>
-    <MoleculeBoard onBack={onExit}/>
+    <MoleculeBoard onBack={onExit} onRemoteTest={()=>setRemoteExperiment(true)}/>
+    {remoteExperiment&&<RemoteCircleTest onExit={()=>{setRemoteExperiment(false);if(new URLSearchParams(window.location.search).get('remote')==='host')window.history.replaceState({},'', '/stax-shape-lab')}}/>}
   </section>
  </main>
  return <main className={`stax-lab${blueprint?' is-blueprint':''}`}>
