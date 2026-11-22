@@ -7,22 +7,24 @@
 export type ScanAtom={id:string;kind:string;x:number;y:number}
 export type ScanBond={parent:string;child:string;relation:string}
 export type ScanGraph={atoms:readonly ScanAtom[];bonds:readonly ScanBond[]}
-const key=(a:ScanAtom)=>a.x+a.y*0 // x-coordinate comparison, no magic layout assumptions
-function geometricOrder(atoms:ScanAtom[]):ScanAtom[]{
- // Family depths are indicated by each child's support relation, not
- // absolute pixel rows; a moved family remains semantically ordered.
- return atoms.sort((a,b)=>b.y-a.y||key(a)-key(b)||a.id.localeCompare(b.id))
+function familyOrder(atoms:{atom:ScanAtom;depth:number}[]):ScanAtom[]{
+ // Deepest descendants first, then left-to-right within the same level.
+ // Family depth avoids unreliable raw y comparisons between unequal shapes.
+ return atoms.sort((a,b)=>b.depth-a.depth||a.atom.x-b.atom.x||a.atom.y-b.atom.y||
+  a.atom.id.localeCompare(b.atom.id)).map(item=>item.atom)
 }
 export function sequentialScanOrder(graph:ScanGraph):string[]{
  const lookup=new Map(graph.atoms.map(a=>[a.id,a]))
  const successors=new Map<string,string[]>()
  const previous=new Set<string>()
+ const supporters=new Set<string>()
  for(const edge of graph.bonds){
   if(edge.relation!=='sequence'||!lookup.has(edge.parent)||!lookup.has(edge.child))continue
   const list=successors.get(edge.parent)??[]
   if(!list.includes(edge.child))list.push(edge.child)
   successors.set(edge.parent,list);previous.add(edge.child)
  }
+ for(const edge of graph.bonds)if((edge.relation==='support'||edge.relation==='pair')&&lookup.has(edge.child))supporters.add(edge.child)
  const visitHead=new Set<string>(),heads:string[]=[]
  const visit=(id:string)=>{
   if(visitHead.has(id))return
@@ -32,22 +34,23 @@ export function sequentialScanOrder(graph:ScanGraph):string[]{
  }
  // Sequence roots first, sorted left-to-right. This puts a yellow
  // predecessor before its first blue, followed by red and later blues.
- for(const atom of [...graph.atoms].filter(a=>!previous.has(a.id)).sort((a,b)=>a.x-b.x||a.y-b.y))visit(atom.id)
+ for(const atom of [...graph.atoms].filter(a=>!previous.has(a.id)&&!supporters.has(a.id)).sort((a,b)=>a.x-b.x||a.y-b.y))visit(atom.id)
  for(const atom of graph.atoms)visit(atom.id)
  const included=new Set<string>(),ordered:string[]=[]
  for(const headId of heads){
   if(included.has(headId))continue
   const family=new Set<string>([headId])
+  const depth=new Map<string,number>([[headId,0]])
   const queue=[headId]
   for(let i=0;i<queue.length;i++){
    for(const edge of graph.bonds){
     if(edge.relation!=='support'&&edge.relation!=='pair')continue
     const child=edge.parent===queue[i]?edge.child:edge.relation==='pair'&&edge.child===queue[i]?edge.parent:null
     if(!child||!lookup.has(child)||family.has(child)||included.has(child))continue
-    family.add(child);queue.push(child)
+    family.add(child);depth.set(child,(depth.get(queue[i])??0)+1);queue.push(child)
    }
   }
-  const members=geometricOrder([...family].filter(id=>id!==headId).map(id=>lookup.get(id)!).filter(Boolean))
+  const members=familyOrder([...family].filter(id=>id!==headId).map(id=>({atom:lookup.get(id)!,depth:depth.get(id)??0})))
   for(const atom of members){if(!included.has(atom.id)){included.add(atom.id);ordered.push(atom.id)}}
   if(!included.has(headId)){included.add(headId);ordered.push(headId)}
  }
