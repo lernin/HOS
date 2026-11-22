@@ -1019,3 +1019,48 @@
  opacity:.95;
  pointer-events:none;
 }
+
+
+/* Typography workshop: appearance only. The grammar graph and hit targets are untouched. */
+@import url('https://fonts.googleapis.com/css2?family=Almendra:wght@400;700&family=Baloo+2:wght@400;700&family=Bangers&family=Lobster+Two:wght@400;700&family=Orbitron:wght@400;700&family=Pacifico&display=swap');
+.stax-text-workshop{
+ position:absolute;z-index:60;top:calc(env(safe-area-inset-top,0px) + 10px);
+ right:calc(env(safe-area-inset-right,0px) + 10px);
+ width:min(430px,calc(100vw - 20px));max-height:calc(100dvh - 20px);overflow-y:auto;
+ padding:16px;box-sizing:border-box;border:1px solid var(--stax-border);
+ border-radius:17px;background:var(--stax-panel);color:var(--stax-text);
+ box-shadow:0 16px 52px #10192768;backdrop-filter:blur(18px);
+ display:flex;flex-direction:column;gap:12px;
+}
+.stax-text-workshop-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.stax-text-workshop-heading strong{display:block;font-size:19px}
+.stax-text-workshop-heading small{display:block;font-size:12px;margin-top:3px;color:var(--stax-caption)}
+.stax-text-workshop button,.stax-text-workshop select{
+ border:1px solid var(--stax-border);background:var(--stax-button);
+ color:var(--stax-text);border-radius:9px;padding:8px 11px;cursor:pointer;
+ font:inherit;touch-action:manipulation;
+}
+.stax-text-workshop-skin{display:flex;align-items:center;gap:9px;font-weight:700}
+.stax-text-workshop-skin select{flex:1;min-width:0}
+.stax-text-workshop-targets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}
+.stax-text-workshop-targets button{font-size:12px;text-align:left;min-height:33px}
+.stax-text-workshop button[aria-pressed='true']{outline:2px solid var(--stax-accent);outline-offset:-2px}
+.stax-text-workshop-sample{
+ min-height:80px;display:flex;align-items:center;justify-content:center;gap:12px;
+ text-align:center;border:1px solid currentColor;border-radius:13px;
+ background:var(--stax-bg);padding:12px;line-height:1.3;
+}
+.stax-text-workshop-sample span{font-size:.65em}
+.stax-text-workshop-fonts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.stax-text-workshop-font{min-height:77px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.stax-text-workshop-font span{font-size:28px;line-height:1.2}
+.stax-text-workshop-font small{font-family:inherit;font-size:12px}
+.stax-text-workshop-adjustments{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+.stax-text-workshop-adjustments label{display:flex;align-items:center;gap:7px;font-size:12px}
+.stax-text-workshop-adjustments input[type='color']{width:46px;height:34px;border:none;background:transparent;cursor:pointer}
+.stax-text-workshop-adjustments input[type='range']{width:100px;accent-color:var(--stax-accent)}
+.stax-text-workshop-adjustments button{font-size:12px}
+.stax-text-workshop-footer{display:flex;gap:8px;justify-content:flex-end}
+.stax-text-workshop-capture{background:var(--stax-accent)!important;color:#fff!important;font-weight:750!important}
+.stax-text-workshop-status{font-size:11px;color:var(--stax-caption)}
+@media(max-width:550px){.stax-text-workshop{top:calc(env(safe-area-inset-top,0px) + 6px);max-height:calc(100dvh - 10px);padding:12px}.stax-text-workshop-fonts{grid-template-columns:repeat(3,minmax(0,1fr))}}
