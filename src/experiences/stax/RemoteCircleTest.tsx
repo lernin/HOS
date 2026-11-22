@@ -245,7 +245,9 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
  function pointerDown(e:ReactPointerEvent<HTMLDivElement>){
   if(!valid)return
   e.preventDefault()
-  if(window.innerWidth>window.innerHeight&&mode==='pad')enterFullscreenOnTouch()
+  if(mode==='pad'){
+   if(window.innerWidth>window.innerHeight)enterFullscreenOnTouch()
+  }
   try{e.currentTarget.setPointerCapture(e.pointerId)}catch{/* browser may cancel touch capture */}
   const zone=(e.target as HTMLElement).closest('[data-zone]')?.getAttribute('data-zone')
   const corner=zone==='A'||zone==='B'?zone:undefined
@@ -411,7 +413,7 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
    <div className="stax-remote-connection" aria-live="polite">{link==='direct'?'Direct peer-to-peer · connected':peerReady?'Internet relay connected':link==='offline'?'Connection unavailable':'Waiting for phone…'}</div>
    <div className="stax-remote-board-status" aria-live="polite">
     <strong>{boardState.notice}</strong>
-    <span>{boardState.pieces.length} shapes · ${Math.round(boardState.zoom*100)}% zoom · {boardState.updates} drag packets</span>
+    <span>{boardState.pieces.length} shapes · {Math.round(boardState.zoom*100)}% zoom · {boardState.updates} drag packets</span>
     <span>Focused: {verboseName[boardState.pieces.find(p=>p.id===boardState.focus)?.kind||'circle']}</span>
     <span>Next shape: {verboseName[boardState.palette]} · Placement: {boardState.port}</span>
     {boardState.deleteArmed&&<span className="stax-remote-delete-warning">Deletion armed: A-Shift + tap to confirm</span>}
