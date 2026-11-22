@@ -142,3 +142,32 @@
 @media(max-height:390px) and (orientation:landscape){
  .stax-remote-pad .stax-remote-scan-toggle{bottom:calc(env(safe-area-inset-bottom,0px) + 54px);padding:5px 9px}
 }
+
+/* Speedometer stays clear of A/B and disappears while the touchpad is used. */
+.stax-remote-pad .stax-remote-scan-speed-button {
+ position:absolute;z-index:3;right:calc(env(safe-area-inset-right,0px) + 12px);
+ bottom:calc(env(safe-area-inset-bottom,0px) + 67px);
+ border:1px solid #53697a;border-radius:11px;padding:8px 11px;
+ background:#1b2b38;color:#e3f3ff;font:700 12px/1.3 "Trebuchet MS",system-ui,sans-serif;
+ cursor:pointer;touch-action:manipulation;white-space:nowrap;
+}
+.stax-remote-pad .stax-remote-scan-speed-settings {
+ position:absolute;z-index:5;right:calc(env(safe-area-inset-right,0px) + 12px);
+ bottom:calc(env(safe-area-inset-bottom,0px) + 113px);
+ width:min(260px,calc(100vw - 26px));box-sizing:border-box;
+ padding:12px 14px;border:1px solid #53697a;border-radius:12px;
+ background:#172630;color:#e3f3ff;box-shadow:0 7px 24px #0009;
+ font:600 12px/1.4 "Trebuchet MS",system-ui,sans-serif;
+ touch-action:auto;
+}
+.stax-remote-scan-speed-settings label,
+.stax-remote-scan-speed-scale {display:flex;justify-content:space-between;gap:8px}
+.stax-remote-scan-speed-settings output {font-size:15px;font-weight:800}
+.stax-remote-scan-speed-settings input {width:100%;margin:12px 0;accent-color:#86d7f5;touch-action:auto}
+.stax-remote-scan-speed-scale,.stax-remote-scan-speed-settings small{color:#a8bac6;font-size:10px}
+.stax-remote-scan-speed-settings small{display:block;margin-top:8px}
+.stax-remote-scan-speed-button:focus-visible,.stax-remote-scan-speed-settings input:focus-visible{outline:2px solid #a3d4ff;outline-offset:3px}
+@media(max-height:390px) and (orientation:landscape){
+ .stax-remote-pad .stax-remote-scan-speed-button{bottom:calc(env(safe-area-inset-bottom,0px) + 54px);padding:5px 9px}
+ .stax-remote-pad .stax-remote-scan-speed-settings{bottom:calc(env(safe-area-inset-bottom,0px) + 91px)}
+}
