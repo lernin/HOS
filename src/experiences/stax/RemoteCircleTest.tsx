@@ -16,7 +16,6 @@ function newRoom(){
  return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join('')
 }
 type Contact={id:number;role:'surface'|'corner';corner?:'A'|'B';shift:boolean;startX:number;startY:number;x:number;y:number;moved:boolean;swipeFired:boolean;skinStep?:number}
-type MultiPoint={x:number;y:number;distance:number}
 const THRESHOLD=54
 const urls:Record<RemoteKind,string>={
  circle:'/stax-foam/cleaned/circle.webp',triangle:'/stax-foam/cleaned/triangle.webp',
@@ -213,12 +212,6 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   const p=corners.at(-1)
   return p?.corner?(p.corner+(p.shift?'-shift':'')) as 'A'|'B'|'A-shift'|'B-shift':null
  }
- function centroid(contacts:Contact[]):MultiPoint{
-  const x=contacts.reduce((sum,c)=>sum+c.x,0)/contacts.length
-  const y=contacts.reduce((sum,c)=>sum+c.y,0)/contacts.length
-  const distance=contacts.length===2?Math.hypot(contacts[0].x-contacts[1].x,contacts[0].y-contacts[1].y):0
-  return {x,y,distance}
- }
  function direction(dx:number,dy:number):RemoteDirection{
   return Math.abs(dx)>Math.abs(dy)?dx<0?'left':'right':dy<0?'up':'down'
  }
@@ -361,7 +354,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   if(contact.role==='corner'&&contact.corner==='A'&&state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
   if(contact.role==='surface'){
    if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
-   if(!contact.moved&&highest===1){
+   if(!contact.moved&&highest===1&&!state.current.skinScroll){
     if(modeNow==='B'){send('spine');pulse([15,30,26])}
     else if(modeNow==='A-shift'){send('delete_confirm');pulse([20,30,20])}
     else if(modeNow==='B-shift'){announce('View commands')}
