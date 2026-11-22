@@ -125,7 +125,7 @@ try{
       'Playback intensity','Filter takes by registered emotion','Export gallery + vocabulary']){
       assert.ok(ui.includes(label),label)
     }
-    assert.match(ui,/sampleKunaTake\(preview.take,time,preview.take.playbackIntensity\?\?100\)/)
+    assert.match(ui,/sampleKunaTake\(preview.take,time,preview.take.playbackIntensity\?\?100,\s*beside&&auditionSideRef\.current==='left'\)/)
     assert.match(ui,/version:3,emotions:emotionCatalog,takes/)
     assert.match(ui,/Array.isArray\(source\)\?source:\[source\]/)
     assert.match(ui,/validKunaEmotion/)
@@ -221,7 +221,7 @@ try{
     assert.match(ui,/recorderRef\.current\.beginOnInput/)
     assert.match(ui,/recorderRef\.current\.capture\(now,actual\)/)
     assert.match(ui,/Save & next take/)
-    assert.match(ui,/What does this gesture feel like/)
+    assert.match(ui,/Which emotions does the gesture communicate/)
     assert.match(ui,/Export all takes/)
     assert.match(ui,/sampleProcediaKeys/)
     assert.match(ui,/PROCEDIA_CLIP_KEYS/)
