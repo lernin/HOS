@@ -36,7 +36,6 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
  const [peerReady,setPeerReady]=useState(false)
  const [boardState,boardDispatch]=useReducer(reduceRemoteBoard,undefined,initialRemoteBoard)
  const [rtt,setRtt]=useState<number|null>(null)
- const [count,setCount]=useState(0)
  const [pressed,setPressed]=useState(false)
  const [hand,setHand]=useState<'right'|'left'>(()=>{try{return localStorage.getItem('stax-remote-hand-v1')==='left'?'left':'right'}catch{return 'right'}})
  const [cornerMode,setCornerMode]=useState<'A'|'B'|'A-shift'|'B-shift'|null>(null)
