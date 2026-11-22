@@ -125,3 +125,15 @@ test('selected foam uses only white glow while ordinary foam keeps its dark shad
  assert.doesNotMatch(selected,/rgba\(24,16,9/)
  assert.match(ordinary,/rgba\(24,16,9/)
 })
+
+test('red-orange growth never spreads bare blue sentence heads',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const clearance=board.slice(board.indexOf('function alignSequenceFamilyClearance('),board.indexOf('function box('))
+ assert.match(clearance,/const leftFamily=left\.kind==='circle'\?supportFootprint\(next,left\.id\):null/)
+ assert.match(clearance,/const rightFamily=right\.kind==='circle'\?supportFootprint\(next,right\.id\):null/)
+ assert.match(clearance,/if\(right\.kind==='circle'&&\(left\.kind==='triangle'\|\|left\.kind==='circle'\)&&/)
+ assert.match(clearance,/\(leftFamily\?\.length\?\?1\)===1&&\(rightFamily\?\.length\?\?1\)===1\)continue/)
+ assert.match(clearance,/const shift=requiredFamilyFollowerShift\(/)
+ const remote=board.slice(board.indexOf('function remoteAttach('),board.indexOf('function remotePairedRedOrange('))
+ assert.match(remote,/alignSequenceFamilyClearance\(alignRedSupporters\(normalizeRoles\(progress\.graph\),parent\.id\)\)/)
+})
