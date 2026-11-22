@@ -1543,6 +1543,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       onClick={()=>{const next=theme==='classroom-foam'?'color':'classroom-foam';setTheme(next);setHint('Visual mode: '+staxThemeName(next))}}
       title="Toggle Classroom Foam using Ashley's photographed desk and seven real foam pieces"
       aria-label="Toggle Classroom Foam">Foam</button>
+      <button type="button" className="stax-remote-button" title="Test phone trackpad controlling one foam circle"
+       aria-label="Open phone trackpad experiment" onClick={()=>window.location.assign('/stax-shape-lab?remote=host')}>Remote test</button>
       <button type="button" className="stax-sound-button"
        onClick={()=>setSoundLabOpen(v=>!v)}
        aria-label="Foam sound lab" title="Foam sound lab" aria-expanded={soundLabOpen} aria-controls="stax-sound-panel">Sound</button>
