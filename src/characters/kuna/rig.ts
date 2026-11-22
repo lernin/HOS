@@ -4,6 +4,22 @@ import { conversationalHeadPose, type HeadPose, type KunaVoicePhase } from './ex
 // World-agnostic animation driver for the exact Procedia fox-mascot.glb.
 // Scene owns physical position/obstacle checking; this owns Sit/Walk/Idle,
 // the Procedia Head and Chin joints, expression recipes, and audio jaw timing.
+// A child-relative rehearsal: the native fox faces +Z toward the viewer in
+// face-to-face mode, and turns to -Z to walk FORWARD with the viewer in
+// alongside mode. Right/left changes position and attention, not gestures.
+export function kunaStudioView(context:'face-to-face'|'alongside',side:'right'|'left'){
+  const beside=context==='alongside'
+  return {
+    bodyYaw:beside?Math.PI:0,
+    offsetX:beside?(side==='right'?.48:-.48):0,
+    offsetZ:beside?-.38:0,
+    cameraX:0,
+    cameraY:beside?1.4:1.55,
+    cameraZ:beside?3.5:3.8,
+    attentionTurn:beside?(side==='right'?-.18:.18):0,
+  }
+}
+
 export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[]){
   const mixer=new T.AnimationMixer(model)
   // CRITICAL: Imported Sit/Idle can also animate the Head bone. Mixing that
@@ -64,8 +80,25 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     return true
   }
   function cancelDemo(){if(demo){const previous=demo;demo=null;previous.stop();restoreNativeAction(previous)}}
-  // Immutable bind-pose references; never capture a pose after playing Sit.
+  // Procedia's real resting mouth comes from the native Idle Chin animation,
+  // NOT from the raw GLB bind quaternion. The prior implementation removed
+  // all Chin tracks then called that bind 'closed': on the phone it visibly
+  // hung open even while displayedPose().jaw was zero.
+  // Sample the original clip before we strip the procedural Head/Chin tracks,
+  // and hold this closed Idle baseline during walking, listening and speech.
+  // Preserve Procedia's original 0.381-radian spoken jaw relative to it.
   const neutralHead=head?.quaternion.clone(),neutralChin=chin?.quaternion.clone()
+  const nativeIdle=rawClips.find(c=>c.name===idleClip?.name)
+  const idleChinTrack=nativeIdle?.tracks.find(track=>
+    /(?:^|[/.])Chin\.(?:quaternion|rotation)$/i.test(track.name))
+  if(neutralChin&&idleChinTrack&&idleChinTrack.times.length){
+    const sample=idleChinTrack.createInterpolant().evaluate(idleChinTrack.times[0])
+    if(idleChinTrack.getValueSize()===4){
+      neutralChin.set(sample[0],sample[1],sample[2],sample[3]).normalize()
+    }else if(idleChinTrack.getValueSize()===3){
+      neutralChin.setFromEuler(new T.Euler(sample[0],sample[1],sample[2]))
+    }
+  }
   const neutralPosition=model.position.clone(),neutralRotation=model.quaternion.clone()
   let sitAmount=0,walkBlend=0,jawAmount=0,phaseElapsed=0
   let phase:KunaVoicePhase='idle',headPitch=0,headTurn=0,headTilt=0
@@ -73,7 +106,7 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
   const clamp=(n:number,a:number,b:number)=>Math.max(a,Math.min(b,n))
   const transitionDuration=sitClip?clamp(sitClip.duration,.85,2.25):.85
 
-  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number;turning?:boolean;manualPose?:HeadPose|null;manualJaw?:number;freezeIdle?:boolean;studioMode?:boolean;directPose?:boolean}){
+  function update(dt:number,options:{active:boolean;phase:KunaVoicePhase;speedFraction:number;jaw:number;turning?:boolean;manualPose?:HeadPose|null;manualJaw?:number;freezeIdle?:boolean;studioMode?:boolean;directPose?:boolean;attentionTurn?:number}){
     const elapsed=clamp(Number.isFinite(dt)?dt:0,0,.1)
     if(phase!==options.phase){phase=options.phase;phaseElapsed=0}else phaseElapsed+=elapsed
     const seated=options.active&&!!sit
@@ -111,7 +144,7 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
       const maximum=options.studioMode?{pitch:.63,turn:.56,tilt:.53}:{pitch:.28,turn:.20,tilt:.22}
       const follow=(was:number,goal:number)=>options.directPose?goal:T.MathUtils.damp(was,goal,6,elapsed)
       headPitch=follow(headPitch,T.MathUtils.clamp(target.pitch,-maximum.pitch,maximum.pitch))
-      headTurn=follow(headTurn,T.MathUtils.clamp(target.turn,-maximum.turn,maximum.turn))
+      headTurn=follow(headTurn,T.MathUtils.clamp(target.turn+(options.attentionTurn??0),-maximum.turn,maximum.turn))
       headTilt=follow(headTilt,T.MathUtils.clamp(target.tilt,-maximum.tilt,maximum.tilt))
       // Procedia Desk Speaking: head turn is LOCAL Z, nod/pitch LOCAL X,
       // and curious side tilt is LOCAL Y with a small upward X offset.
@@ -124,7 +157,7 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
     }
     if(chin&&neutralChin){
       // Preserve Procedia's 0.381rad jaw. No previous-frame quaternion drift.
-      // Procedia's closed-mouth bind pose is the ONLY resting baseline.
+      // Original Procedia Idle Chin animation is the ONLY resting baseline.
       // AI/listening/locomotion never keep a speaking jaw open. A deliberate
       // Studio jaw key still works, and speaking follows actual audio energy.
       const manualJaw=clamp(options.manualJaw??0,0,1)
@@ -132,7 +165,7 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
       const target=Math.max(manualJaw,speechJaw)
       jawAmount=options.directPose?target:T.MathUtils.damp(jawAmount,target,target>jawAmount?18:30,elapsed)
       if(target===0&&jawAmount<.002)jawAmount=0
-      // Reset against the immutable original bind each frame: never allow
+      // Reset against the immutable original Idle pose each frame: never allow
       // animation blending or a previous open-mouth frame to accumulate.
       chin.quaternion.copy(neutralChin)
       if(jawAmount>0){
