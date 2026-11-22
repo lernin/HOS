@@ -3,6 +3,7 @@ import { Glyph, SCALE } from './SymbolCanvas'
 import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { nextRedOrangeRemoteStep } from './remote-orange-topology'
+import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -1133,8 +1134,10 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  const touchStarted=useRef<Map<number,number>>(new Map())
  const questTwoPair=useRef<{pointers:[number,number];first:TouchPoint;second:TouchPoint;started:number;released:Set<number>}|null>(null)
  const pinch=useRef<Pinch|null>(null)
+ const twoFingerIntent=useRef<TwoFingerSession|null>(null)
  const themeScroll=useRef<{startX:number;startY:number;step:number;active:boolean}|null>(null)
  const blockRelease=useRef<Set<number>>(new Set())
+ const threeFingerCooldown=useRef(false)
  useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc,remoteSandbox])
  useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme,remoteSandbox])
  useEffect(()=>{foamAudio.current?.setPreset(foamSoundPreset);try{localStorage.setItem(FOAM_SOUND_PRESET_KEY,foamSoundPreset)}catch{/* unavailable */}},[foamSoundPreset])
@@ -1240,12 +1243,14 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    const points=[...activeTouches.current.values()]
    themeScroll.current={startX:points.reduce((s,p)=>s+p.x,0)/3,
     startY:points.reduce((s,p)=>s+p.y,0)/3,step:0,active:false}
-   pinch.current=null;panning.current=null;questTwoPair.current=null
+   pinch.current=null;twoFingerIntent.current=null;panning.current=null;questTwoPair.current=null
+   threeFingerCooldown.current=true
    if(dragging.current){foamAudio.current?.stop();update(dragging.current.before);dragging.current=null;setPreview(null)}
    for(const id of activeTouches.current.keys())blockRelease.current.add(id)
    return
   }
-  if(activeTouches.current.size>3){themeScroll.current=null;pinch.current=null;return}
+  if(activeTouches.current.size>3){themeScroll.current=null;pinch.current=null;twoFingerIntent.current=null;threeFingerCooldown.current=true;return}
+  if(threeFingerCooldown.current)return
   touchStarted.current.set(e.pointerId,Date.now())
   const atomId=(e.target as Element).closest?.('[data-id]')?.getAttribute('data-id')
   if(atomId)touchAtom.current.set(e.pointerId,atomId)
@@ -1265,7 +1270,8 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    setHint('Release both shapes together to toggle I am / I\'m. Move to pinch zoom.')
    return
   }
-  beginPinch(ids,a,b)
+  twoFingerIntent.current=startTwoFinger({id:ids[0],...a},{id:ids[1],...b})
+  setHint('Two fingers: move together to pan, spread or pinch to zoom. Gesture locks until release.')
  }
  function moveTouch(e:ReactPointerEvent<SVGSVGElement>){
   if(e.pointerType!=='touch'||!activeTouches.current.has(e.pointerId))return
@@ -1297,17 +1303,30 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    if(a&&b)beginPinch(pair.pointers,pair.first,pair.second)
    else return
   }
-  const p=pinch.current;if(!p)return
-  const a=activeTouches.current.get(p.pointers[0]),b=activeTouches.current.get(p.pointers[1])
+  if(threeFingerCooldown.current)return
+  const session=twoFingerIntent.current
+  if(!session||activeTouches.current.size!==2)return
+  const a=activeTouches.current.get(session.ids[0]),b=activeTouches.current.get(session.ids[1])
   if(!a||!b)return
-  const distance=Math.max(1,Math.hypot(a.x-b.x,a.y-b.y))
-  const w=Math.max(300,Math.min(4000,p.startView.width*p.startDistance/distance)),h=w/ASPECT
-  const midX=(a.x+b.x)/2,midY=(a.y+b.y)/2
+  const result=advanceTwoFinger(session,{id:session.ids[0],...a},{id:session.ids[1],...b})
+  twoFingerIntent.current=result.session
+  if(result.lockedNow)setHint(result.session.mode==='pan'?'PAN locked · zoom disabled until release':'PINCH locked · pan disabled until release')
+  const frame=result.frame
+  if(!frame)return
   const rect=svg.current?.getBoundingClientRect()
   if(!rect||!rect.width||!rect.height)return
-  const x=p.anchor.x-(midX-rect.left)*w/rect.width
-  const y=p.anchor.y-(midY-rect.top)*h/rect.height
-  setCamera({x,y,width:w,height:h})
+  const v=currentView.current
+  if(result.session.mode==='pan'){
+   setCamera({...v,x:v.x-frame.dx*v.width/rect.width,y:v.y-frame.dy*v.height/rect.height})
+  }else{
+   const width=Math.max(300,Math.min(4000,v.width/frame.scale))
+   const height=width/aspect()
+   // Pinch is zoom-only. Keep the fixed midpoint of the initial gesture
+   // anchored to the same world point; ignore centroid drift.
+   const initial=result.session.initial
+   const u=(initial.x-rect.left)/rect.width,w=(initial.y-rect.top)/rect.height
+   setCamera({x:v.x+u*(v.width-width),y:v.y+w*(v.height-height),width,height})
+  }
  }
  function endTouch(e:ReactPointerEvent<SVGSVGElement>){
   if(e.pointerType!=='touch')return
@@ -1323,9 +1342,12 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    }
   }
   activeTouches.current.delete(e.pointerId)
-  if(themeScroll.current){
+  if(themeScroll.current||threeFingerCooldown.current){
    if(activeTouches.current.size<3)themeScroll.current=null
-   pinch.current=null;panning.current=null
+   pinch.current=null;twoFingerIntent.current=null;panning.current=null
+   if(activeTouches.current.size===0)threeFingerCooldown.current=false
+  }else if(activeTouches.current.size<2){
+   twoFingerIntent.current=null
   }
   touchAtom.current.delete(e.pointerId)
   touchStarted.current.delete(e.pointerId)
@@ -1352,7 +1374,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  }
  function onShapeDown(e:ReactPointerEvent<SVGGElement>,id:string){
   if(e.pointerType==='mouse'&&e.button!==0)return
-  if(pinch.current||questTwoPair.current||themeScroll.current)return
+  if(pinch.current||questTwoPair.current||themeScroll.current||twoFingerIntent.current||threeFingerCooldown.current)return
   if(omitBrush){
    e.stopPropagation()
    const old=currentDoc.current
@@ -1372,7 +1394,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   // removes the halo without interfering with an intentional drag.
  }
  function onShapeMove(e:ReactPointerEvent<SVGGElement>){
-  if(pinch.current||questTwoPair.current)return
+  if(pinch.current||questTwoPair.current||themeScroll.current||twoFingerIntent.current||threeFingerCooldown.current)return
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
   const pt=pointer(e),dx=pt.x-d.sx,dy=pt.y-d.sy
   if(Math.hypot(dx,dy)>TAP)d.moved=true
@@ -1432,7 +1454,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   setSelected(null)
  }
  function moveBackground(e:ReactPointerEvent<SVGSVGElement>){
-  if(pinch.current)return
+  if(pinch.current||twoFingerIntent.current||themeScroll.current||threeFingerCooldown.current)return
   const p=panning.current;if(!p||p.pointer!==e.pointerId)return
   const start=p.before,deltaX=(e.clientX-p.startX)*start.width/(svg.current?.getBoundingClientRect().width||1)
   const deltaY=(e.clientY-p.startY)*start.height/(svg.current?.getBoundingClientRect().height||1)
