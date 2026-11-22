@@ -2203,9 +2203,9 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
         {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
       {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted} dusk/>}
       {theme==='classroom-foam'&&<FoamChip kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>} 
-      {wordOnAtom(a)&&<text x={atomWidth(a)/2} y={atomHeight(a)/2} dominantBaseline="middle" fontFamily={'"Trebuchet MS","Noto Sans",system-ui,sans-serif'}
-        fontSize={Math.min(22,Math.max(13,atomHeight(a)*.29),(atomWidth(a)-12)/Math.max(1,wordOnAtom(a).length*.56))}
-         fill={theme==='classroom-foam'?'#3b2d22':(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?'#3f354c':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight={700} textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
+      {wordOnAtom(a)&&<text x={atomWidth(a)/2} y={atomHeight(a)/2} dominantBaseline="middle" fontFamily={fontFamily(fontInk(a.kind).font)}
+       fontSize={Math.min(30,Math.max(10,atomHeight(a)*.29*fontInk(a.kind).scale/100),(atomWidth(a)-12)/Math.max(1,wordOnAtom(a).length*(fontInk(a.kind).font==='orbitron'?.7:.56)))}
+       fill={fontInk(a.kind).color} fontWeight={fontInk(a.kind).bold?700:400} textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
     </g>)}
    </svg>
    {questionMarker&&<button className="stax-quest2-h" type="button" aria-label="H interrogative marker, tap to ask How" title="H means How" style={{left:viewPercentX(questionMarker.x),top:viewPercentY(questionMarker.y)}} onClick={()=>questTwoTap('H')}>H</button>}
