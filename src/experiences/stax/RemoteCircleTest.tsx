@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { supabase } from '../../lib/supabase'
 import { FoamSlideAudio, safeFoamSoundId, normalizeFoamSoundTuning } from './foam-slide-audio'
+import { initialRemoteBoard, reduceRemoteBoard, REMOTE_KINDS, type RemoteGesture, type RemoteInput, type RemoteDirection, type RemoteKind } from './remote-gesture-model'
 import './remote-circle-test.css'
 
-type Motion = { type:'move';dx:number;dy:number;seq:number }
 type Ping = { type:'ping'|'pong';seq:number }
-type DataMessage = Motion|Ping
+type DataMessage = RemoteInput|Ping
 type Signal = { from:'host'|'pad';type:'hello'|'offer'|'answer'|'candidate'|'bye';data?:RTCSessionDescriptionInit|RTCIceCandidateInit }
 type LinkState = 'connecting'|'direct'|'relay'|'offline'
 const ROOM_FORMAT=/^[a-f0-9]{32}$/
@@ -14,7 +14,18 @@ function newRoom(){
  const bytes=new Uint8Array(16);crypto.getRandomValues(bytes)
  return [...bytes].map(b=>b.toString(16).padStart(2,'0')).join('')
 }
-const numeric=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)?v:0
+type Contact={id:number;role:'surface'|'corner';corner?:'A'|'B';shift:boolean;startX:number;startY:number;x:number;y:number;moved:boolean}
+type MultiPoint={x:number;y:number;distance:number}
+const THRESHOLD=54
+const urls:Record<RemoteKind,string>={
+ circle:'/stax-foam/cleaned/circle.webp',triangle:'/stax-foam/cleaned/triangle.webp',
+ rectangle:'/stax-foam/cleaned/rectangle.webp',oval:'/stax-foam/cleaned/oval.webp',
+ square:'/stax-foam/cleaned/square.webp',diamond:'/stax-foam/cleaned/diamond.webp',
+ hexagon:'/stax-foam/cleaned/hexagon.webp',
+}
+const verboseName:Record<RemoteKind,string>={circle:'Blue circle',triangle:'Red triangle',
+ rectangle:'Purple rectangle',oval:'Green oval',square:'Pink square',
+ diamond:'Yellow diamond',hexagon:'Orange hexagon'}
 
 export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
  const query=new URLSearchParams(window.location.search)
@@ -23,16 +34,23 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
  const valid=ROOM_FORMAT.test(room)
  const [link,setLink]=useState<LinkState>('connecting')
  const [peerReady,setPeerReady]=useState(false)
- const [circle,setCircle]=useState({x:0,y:0})
+ const [boardState,boardDispatch]=useReducer(reduceRemoteBoard,undefined,initialRemoteBoard)
  const [rtt,setRtt]=useState<number|null>(null)
  const [count,setCount]=useState(0)
  const [pressed,setPressed]=useState(false)
+ const [hand,setHand]=useState<'right'|'left'>(()=>{try{return localStorage.getItem('stax-remote-hand-v1')==='left'?'left':'right'}catch{return 'right'}})
+ const [cornerMode,setCornerMode]=useState<'A'|'B'|'A-shift'|'B-shift'|null>(null)
+ const [phonePalette,setPhonePalette]=useState<RemoteKind>('triangle')
  const [landscape,setLandscape]=useState(()=>window.innerWidth>window.innerHeight)
  const foamSound=useRef<FoamSlideAudio|null>(null)
  const fullscreenRequest=useRef(false)
- const state=useRef({last:{x:0,y:0},dragging:false,seq:0,started:new Map<number,number>()})
+ const state=useRef({last:{x:0,y:0},dragging:false,seq:0,started:new Map<number,number>(),
+  contacts:new Map<number,Contact>(),maxSurface:0,multi:null as MultiPoint|null,
+  multiStart:null as MultiPoint|null,threeFired:false,tapTime:0,
+  tapTimer:null as ReturnType<typeof setTimeout>|null})
  const sendData=useRef<(payload:DataMessage)=>void>(()=>{})
  const board=useRef<HTMLDivElement>(null)
+ useEffect(()=>{try{localStorage.setItem('stax-remote-hand-v1',hand)}catch{/* optional */}},[hand])
  useEffect(()=>{
   if(mode!=='pad')return
   const update=()=>setLandscape(window.innerWidth>window.innerHeight)
@@ -40,7 +58,7 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   window.addEventListener('resize',update)
   window.addEventListener('orientationchange',update)
   document.addEventListener('fullscreenchange',onFullscreenChange)
-  return ()=>{window.removeEventListener('resize',update);window.removeEventListener('orientationchange',update);document.removeEventListener('fullscreenchange',onFullscreenChange);foamSound.current?.dispose();foamSound.current=null}
+  return ()=>{window.removeEventListener('resize',update);window.removeEventListener('orientationchange',update);document.removeEventListener('fullscreenchange',onFullscreenChange);if(state.current.tapTimer)clearTimeout(state.current.tapTimer);foamSound.current?.dispose();foamSound.current=null}
  },[mode])
  function sound(){
   if(!foamSound.current){
@@ -85,17 +103,9 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
    if(joined)void channel.send({type:'broadcast',event:'signal',payload:{from:mode,type,data} satisfies Signal})
   }
   function apply(data:DataMessage){
-   if(data.type==='move'&&mode==='host'){
-    const dx=Math.max(-90,Math.min(90,numeric(data.dx)))
-    const dy=Math.max(-90,Math.min(90,numeric(data.dy)))
-    setCircle(p=>{
-     const bounds=board.current?.getBoundingClientRect()
-     const w=bounds?.width||960,h=bounds?.height||600
-     return {x:Math.max(-w/2+56,Math.min(w/2-56,p.x+dx)),
-      y:Math.max(-h/2+56,Math.min(h/2-56,p.y+dy))}
-    })
-    setCount(n=>n+1)
-   } else if(data.type==='ping'&&mode==='host')sendData.current({type:'pong',seq:data.seq})
+   if((data.type==='move'||data.type==='gesture'||data.type==='view')&&mode==='host'){
+    boardDispatch(data)
+   }else if(data.type==='ping'&&mode==='host')sendData.current({type:'pong',seq:data.seq})
    else if(data.type==='pong'&&mode==='pad'){
     const before=state.current.started.get(data.seq)
     if(before!==undefined){setRtt(Math.round(performance.now()-before));state.current.started.delete(data.seq)}
