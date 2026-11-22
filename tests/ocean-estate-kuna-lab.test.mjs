@@ -62,7 +62,7 @@ try{
     assert.match(ui,/No AI requests|No API request/)
     assert.match(ui,/validateKunaRecipe\(recipe\)/)
     assert.match(ui,/Record|Stop & Save/)
-    assert.match(ui,/Export JSON/)
+    assert.match(ui,/Export gallery \+ vocabulary/)
     assert.doesNotMatch(ui,/fetch\('\/api\/kuna\//,'local simulation never makes a billable call')
     assert.match(source,/HEAD_JAW_TRACK/)
     assert.match(source,/neutralHead=head\?\.quaternion\.clone\(\)/)
