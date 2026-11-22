@@ -1300,7 +1300,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    const distanceB=b?Math.hypot(b.x-pair.second.x,b.y-pair.second.y):0
    if(Math.max(distanceA,distanceB)<=14)return
    questTwoPair.current=null
-   if(a&&b)beginPinch(pair.pointers,pair.first,pair.second)
+   if(a&&b)twoFingerIntent.current=startTwoFinger({id:pair.pointers[0],...pair.first},{id:pair.pointers[1],...pair.second})
    else return
   }
   if(threeFingerCooldown.current)return
