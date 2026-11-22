@@ -1543,7 +1543,7 @@ export function MoleculeBoard({onBack,onRemoteTest}:{onBack?:()=>void;onRemoteTe
       onClick={()=>{const next=theme==='classroom-foam'?'color':'classroom-foam';setTheme(next);setHint('Visual mode: '+staxThemeName(next))}}
       title="Toggle Classroom Foam using Ashley's photographed desk and seven real foam pieces"
       aria-label="Toggle Classroom Foam">Foam</button>
-      <button type="button" className="stax-remote-button" title="Toggle one-circle phone trackpad experiment without clearing your STAX board"
+      <button type="button" className="stax-remote-button" title="Open phone trackpad experiment without clearing your STAX board"
        aria-label="Toggle phone trackpad experiment on" onClick={onRemoteTest}>Remote · Off</button>
       <button type="button" className="stax-sound-button"
        onClick={()=>setSoundLabOpen(v=>!v)}
