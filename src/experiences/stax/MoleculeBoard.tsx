@@ -301,7 +301,15 @@ function alignSequenceFamilyClearance(doc:Draft):Draft {
   for(const edge of edges){
    const left=byId(next,edge.parent),right=byId(next,edge.child)
    if(!left||!right)continue
-   const a=supportFootprint(next,left.id),b=supportFootprint(next,right.id)
+   // Growing oranges beneath RED must never push bare blue sentence heads.
+   // Between BLUE heads, extra clearance is justified only by attached
+   // children of one of the two related blue families.
+   const leftFamily=left.kind==='circle'?supportFootprint(next,left.id):null
+   const rightFamily=right.kind==='circle'?supportFootprint(next,right.id):null
+   if(right.kind==='circle'&&(left.kind==='triangle'||left.kind==='circle')&&
+      (leftFamily?.length??1)===1&&(rightFamily?.length??1)===1)continue
+   const a=leftFamily??supportFootprint(next,left.id)
+   const b=rightFamily??supportFootprint(next,right.id)
    const shift=requiredFamilyFollowerShift(
     {x:left.x,y:left.y,width:atomWidth(left),height:atomHeight(left)},
     {x:right.x,y:right.y,width:atomWidth(right),height:atomHeight(right)},
