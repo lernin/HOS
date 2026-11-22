@@ -494,7 +494,7 @@ test('direct red two-orange X is isolated from compact tiers and all other famil
 
 test('saved four-orange arrangement is reflowed at load; approved three-orange layout remains untouched',async()=>{
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
- assert.ok(board.includes("useState<Draft>(()=>ensureFourOrangeBlueprint(normalizeRoles(load())))"))
+ assert.ok(board.includes("useState<Draft>(()=>remoteSandbox?empty():ensureFourOrangeBlueprint(normalizeRoles(load())))"))
  const start=board.indexOf('function ensureFourOrangeBlueprint(')
  const end=board.indexOf('/** Visual size follows',start)
  const rule=board.slice(start,end)
