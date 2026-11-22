@@ -9,7 +9,7 @@ const {sequentialScanOrder,sequentialScanNext,scanSwipeSteps,scanStrideForSpeed,
 const atom=(id,kind,x,y)=>({id,kind,x,y})
 const bond=(parent,child,relation)=>({parent,child,relation})
 
-test('scan starts with yellow then visits each family bottom left to right then its head',()=>{
+test('scan starts with yellow then visits each family left-to-right across all tiers and ends at its head',()=>{
  const graph={
   atoms:[
    atom('yellow','diamond',0,0),atom('subject','circle',100,0),
@@ -39,7 +39,7 @@ test('scan starts with yellow then visits each family bottom left to right then 
  assert.equal(sequentialScanNext(graph,null,'right'),'yellow')
  assert.equal(sequentialScanNext(graph,null,'left'),'laterBlue')
 })
-test('nested descendants scan before higher support levels regardless of absolute y',()=>{
+test('nested descendants scan by horizontal position rather than depth or row',()=>{
  const g={atoms:[
   atom('blue','circle',100,100),atom('purple','rectangle',140,145),
   atom('nested','rectangle',155,160),atom('pink','square',70,143),
@@ -50,8 +50,59 @@ test('nested descendants scan before higher support levels regardless of absolut
   bond('purple','nested','support'),bond('blue','pink','support'),
   bond('red','orange','support'),bond('orange','pair','pair'),
  ]}
- assert.deepEqual(sequentialScanOrder(g),['nested','pink','purple','blue','pair','orange','red'])
+ assert.deepEqual(sequentialScanOrder(g),['pink','purple','nested','blue','orange','pair','red'])
 })
+// Construct the THREE-orange shape using the same verified compact geometry
+// as canonical STAX, rather than approximating the orange x positions.
+const geometrySource=await readFile(new URL('../src/experiences/stax/geometry.ts',import.meta.url),'utf8')
+const geometryJs=ts.transpileModule(geometrySource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText
+const {STAX_SPACING,positionChildren,positionRedRightNestedOrange}=await import('data:text/javascript;base64,'+Buffer.from(geometryJs).toString('base64'))
+
+test('three-orange Christmas tree scans top-left, lower orange, top-right, then red head',()=>{
+ const hex={width:2.775*(3787.2/4147.2),height:1.566*(2332.8/2340.864)}
+ const red={x:200,y:40,width:4.6,height:3.548}
+ const top=positionChildren(red,[{id:'topLeft',...hex},{id:'topRight',...hex}],{
+  gap:STAX_SPACING.attachment,belowGap:STAX_SPACING.attachment
+ })
+ const left=top.get('topLeft'),right=top.get('topRight')
+ const below=positionRedRightNestedOrange({...right,...hex},hex,STAX_SPACING.attachment)
+ assert.ok(left.x<below.x&&below.x<right.x,'canonical third orange lies horizontally between top pair')
+ const g={atoms:[
+  atom('red','triangle',red.x,red.y),
+  atom('topRight','hexagon',right.x,right.y),
+  atom('below','hexagon',below.x,below.y),
+  atom('topLeft','hexagon',left.x,left.y),
+ ],bonds:[
+  bond('red','topRight','support'),
+  bond('topRight','below','support'),
+  bond('red','topLeft','support'),
+ ]}
+ assert.deepEqual(sequentialScanOrder(g),['topLeft','below','topRight','red'])
+ assert.equal(sequentialScanNext(g,'topLeft','right'),'below')
+ assert.equal(sequentialScanNext(g,'below','right'),'topRight')
+ assert.equal(sequentialScanNext(g,'topRight','right'),'red')
+ assert.equal(sequentialScanNext(g,'topRight','left'),'below')
+ assert.equal(sequentialScanNext(g,'below','left'),'topLeft')
+ assert.equal(sequentialScanNext(g,'red','right'),'topLeft','wraps to first orange')
+})
+
+test('left-to-right ordering spans multiple orange tiers; same-column lower first and head last',()=>{
+ const g={atoms:[
+  atom('red','triangle',300,20),
+  atom('topRight','hexagon',320,100),
+  atom('middleRight','hexagon',260,160),
+  atom('middleLeft','hexagon',165,160),
+  atom('topLeft','hexagon',200,100),
+  atom('deep','hexagon',165,220)
+ ],bonds:[
+  bond('red','topLeft','support'),bond('red','topRight','support'),
+  bond('topLeft','middleLeft','support'),bond('topLeft','middleRight','support'),
+  bond('middleLeft','deep','support'),
+ ]}
+ assert.deepEqual(sequentialScanOrder(g),
+  ['deep','middleLeft','topLeft','middleRight','topRight','red'])
+})
+
 test('cycles in malformed graphs are bounded and never duplicate shapes',()=>{
  const g={atoms:[atom('a','circle',0,0),atom('b','circle',100,0)],
  bonds:[bond('a','b','sequence'),bond('b','a','sequence'),bond('a','b','support')]}
