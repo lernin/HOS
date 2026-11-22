@@ -439,3 +439,18 @@ test('STAX phone requests fullscreen immediately on first landscape touch, retai
  assert.match(pad,/document\.addEventListener\('fullscreenchange',onFullscreenChange\)/)
  assert.match(pad,/document\.fullscreenElement\|\|fullscreenRequest\.current/)
 })
+
+test('Remote mode overlays STAX as a reversible toggle with foam-only sliding audio',async()=>{
+ const lab=await readFile(new URL('../src/experiences/StaxLab.tsx',import.meta.url),'utf8')
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ const remote=await readFile(new URL('../src/experiences/stax/RemoteCircleTest.tsx',import.meta.url),'utf8')
+ assert.match(lab,/const \[remoteExperiment,setRemoteExperiment\]=useState/)
+ assert.match(lab,/<MoleculeBoard onBack=\{onExit\} onRemoteTest=\{\(\)=>setRemoteExperiment\(true\)\}\/>/)
+ assert.match(lab,/\{remoteExperiment&&<RemoteCircleTest onExit=\{\(\)=>\{setRemoteExperiment\(false\)/)
+ assert.match(lab,/get\('remote'\)==='pad'\)return <RemoteCircleTest/)
+ assert.doesNotMatch(board,/window\.location\.assign\('\/stax-shape-lab\?remote=host'\)/)
+ assert.match(board,/onClick=\{onRemoteTest\}>Remote · Off/)
+ assert.match(remote,/Turn remote test off and return to STAX/)
+ assert.match(board,/foamSoundEnabled&&theme==='classroom-foam'/)
+ assert.match(board,/if\(theme==='classroom-foam'&&foamSoundEnabled\)audio\(\)\.move/)
+})
