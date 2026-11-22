@@ -293,9 +293,21 @@ function sequenceHeadGap(left:Atom,right:Atom):number {
 /** Expand following family branches to honor both the head port and the
  * silhouettes of children at intersecting heights. Never change supporter
  * geometry or the relative coordinates within a family. */
-function alignSequenceFamilyClearance(doc:Draft):Draft {
+function alignSequenceFamilyClearance(doc:Draft,compact=false):Draft {
  let next=doc
  const edges=doc.bonds.filter(b=>b.relation==='sequence')
+ if(compact){
+  // After a supporter is removed, restore the canonical blue-to-blue head
+  // port first, then re-expand only where remaining family silhouettes need
+  // clearance. Moving the follower's descendants keeps its family intact.
+  for(const edge of edges){
+   const left=byId(next,edge.parent),right=byId(next,edge.child)
+   if(!left||!right||left.kind!=='circle'||right.kind!=='circle')continue
+   const target=snappedSequenceFollowerPosition(left,right)
+   const dx=target.x-right.x
+   if(Math.abs(dx)>.01)next=translate(next,descendants(next,right.id),dx,0)
+  }
+ }
  for(let pass=0;pass<edges.length;pass++){
   let changed=false
   for(const edge of edges){
@@ -504,7 +516,7 @@ function reflowAfterRemoval(d:Draft):Draft {
   next=alignRedSupporters(next,red.id)
  }
  for(const blue of next.atoms.filter(a=>a.kind==='circle'))next=alignSupporters(next,blue.id)
- return alignSequenceFamilyClearance(next)
+ return alignSequenceFamilyClearance(next,true)
 }
 function supportPosition(blue:Atom,support:Atom,d:Draft) {
  const proposed:Draft={...d,bonds:[...d.bonds,{parent:blue.id,child:support.id,relation:'support'}]}
