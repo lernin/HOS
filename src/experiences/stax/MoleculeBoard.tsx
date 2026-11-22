@@ -1645,10 +1645,19 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   const next=resolveMagnet(staged,new Set([id]),snap)
   remoteCommit(next,parentId,'Attached '+kind+' to selected '+parent.kind+' with canonical STAX geometry.')
  }
+ function remotePairedRedOrange(d:Draft,id:string):boolean{
+  const target=d.atoms.find(a=>a.id===id)
+  const parentId=parentOfSupport(d,id)
+  const parent=parentId?d.atoms.find(a=>a.id===parentId):undefined
+  return target?.kind==='hexagon'&&parent?.kind==='triangle'&&orangeChildren(d,parent.id).length===2
+ }
  function remoteDetachSelected(){
   const before=currentDoc.current
   const id=remoteFocus.current
   if(!id||!before.atoms.some(a=>a.id===id)){remoteNotice('Select a piece before detaching.');return}
+  if(remotePairedRedOrange(before,id)){
+   remoteNotice('Two direct red oranges form a mandatory pair. Select another branch to detach; removing one would automatically recreate it.');return
+  }
   const branch=descendants(before,id)
   const outside=before.bonds.filter(b=>branch.has(b.child)&&!branch.has(b.parent))
   if(!outside.length){
@@ -1776,6 +1785,9 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
     const id=remoteFocus.current
     if(!remoteDeleteArmed.current||remoteDeleteTarget.current!==id||!id)return
     remoteDeleteArmed.current=false;remoteDeleteTarget.current=null
+    if(remotePairedRedOrange(d,id)){
+     remoteNotice('Cannot remove one mandatory red-orange partner. Undo its construction step instead.');return
+    }
     const branch=descendants(d,id)
     const incoming=d.bonds.find(b=>b.child===id&&!branch.has(b.parent))
     const next=reflowAfterRemoval({atoms:d.atoms.filter(a=>!branch.has(a.id)),
