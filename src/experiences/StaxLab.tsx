@@ -3,6 +3,7 @@ import { addBasicPair, addSymbol, findNode, findSupportingCircle, locateDropTarg
 import { SymbolCanvas, SymbolIcon } from './stax/SymbolCanvas'
 import { MoleculeBoard } from './stax/MoleculeBoard'
 import { RemoteCircleTest } from './stax/RemoteCircleTest'
+import type { RemoteInput } from './stax/remote-gesture-model'
 import './stax/stax.css'
 
 const STORAGE='stax-visual-grammar-v1'
@@ -19,6 +20,7 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
  const [notice,setNotice]=useState(''),[saveError,setSaveError]=useState(false)
  const [freeBoard,setFreeBoard]=useState(true)
  const [remoteExperiment,setRemoteExperiment]=useState(()=>new URLSearchParams(window.location.search).get('remote')==='host')
+ const remoteInputRef=useRef<((input:RemoteInput)=>void)|null>(null)
  const svgRef=useRef<SVGSVGElement>(null), doc=history.present
  const dragRef=useRef<DragGesture|null>(null), suppressClickRef=useRef<Kind|null>(null)
  const [dragPreview,setDragPreview]=useState<DragPreview|null>(null)
@@ -96,7 +98,10 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
   </header>
   <section className="stax-main" style={{maxWidth:1200,margin:'0 auto',width:'100%'}}>
     <MoleculeBoard onBack={onExit} onRemoteTest={()=>setRemoteExperiment(true)}/>
-    {remoteExperiment&&<RemoteCircleTest onExit={()=>{setRemoteExperiment(false);if(new URLSearchParams(window.location.search).get('remote')==='host')window.history.replaceState({},'', '/stax-shape-lab')}}/>}
+    {remoteExperiment&&<>
+     <div className="stax-remote-canonical-board"><MoleculeBoard remoteSandbox remoteInputRef={remoteInputRef}/></div>
+     <RemoteCircleTest onHostInput={input=>remoteInputRef.current?.(input)} onExit={()=>{setRemoteExperiment(false);if(new URLSearchParams(window.location.search).get('remote')==='host')window.history.replaceState({},'', '/stax-shape-lab')}}/>
+    </>}
   </section>
  </main>
  return <main className={`stax-lab${blueprint?' is-blueprint':''}`}>
