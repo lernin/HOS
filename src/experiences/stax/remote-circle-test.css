@@ -31,3 +31,65 @@
  touch-action:manipulation;cursor:pointer;
 }
 @media(orientation:landscape){.stax-remote-rotate{display:none}}
+
+/* Single spatial coordinate system. Pan and pinch affect every foam piece as
+   one board, without ever moving the real STAX document underneath. */
+.stax-remote-stage{position:absolute;left:50%;top:50%;width:0;height:0;
+ transform-origin:0 0;will-change:transform;pointer-events:none}
+.stax-remote-piece{position:absolute;width:130px;height:130px;transform:translate(-50%,-50%);
+ display:flex;align-items:center;justify-content:center;pointer-events:none}
+.stax-remote-piece .stax-remote-blue-circle{position:static;left:auto;top:auto;
+ transform:none;display:block;width:130px;height:130px;object-fit:contain}
+.stax-remote-piece.is-focused::after{content:"";position:absolute;inset:-8px;border:3px dashed #f9f9ffb5;border-radius:50%;pointer-events:none}
+.stax-remote-piece.is-selected::after{content:"";position:absolute;inset:-7px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 0 2px #162b3f9c,0 0 15px #edf7ff7d;pointer-events:none}
+.stax-remote-host-panel{max-height:calc(100vh - 30px);overflow-y:auto;width:min(328px,calc(100vw - 36px));gap:10px}
+.stax-remote-host-panel .stax-remote-host-heading button{font-size:12px;font-weight:700;white-space:nowrap}
+.stax-remote-board-status{display:flex;flex-direction:column;gap:5px;border-radius:11px;
+ background:#f1e9da;padding:11px;color:#4b3d2f;font-size:12px;line-height:1.3}
+.stax-remote-board-status strong{font-size:13px;color:#253d50}
+.stax-remote-board-status span{color:#66594b}
+.stax-remote-board-status .stax-remote-delete-warning{font-weight:800;color:#b2342c}
+.stax-remote-host-buttons{display:flex;gap:8px}
+.stax-remote-host-buttons button{flex:1;border:1px solid #bfaf96;background:#f6eee1;
+ color:#3d352d;border-radius:8px;padding:8px 7px;cursor:pointer;font-size:12px}
+.stax-remote-legend{display:flex;flex-direction:column;gap:5px;
+ border-top:1px solid #d2c4b2;padding-top:9px;font-size:11px;color:#584a38}
+.stax-remote-legend strong{font-size:12px;color:#324a5d}
+.stax-remote-legend p{font-size:11px;margin:0;line-height:1.35}
+.stax-remote-legend small{color:#856e59;font-size:10px;line-height:1.4}
+.stax-remote-pad .stax-remote-corner{
+ position:absolute;width:92px;height:89px;display:flex;flex-direction:column;
+ align-items:center;justify-content:center;gap:3px;z-index:2;
+ border:1px solid #43586e;background:#1f2c38;border-radius:15px;
+ color:#b9d0e2;touch-action:none;user-select:none;-webkit-user-select:none;
+ box-shadow:inset 0 1px 0 #a8bac420}
+.stax-remote-pad .stax-remote-corner strong{font-size:27px;font-weight:750;line-height:1.1;pointer-events:none}
+.stax-remote-pad .stax-remote-corner small{font-size:9px;letter-spacing:1.2px;pointer-events:none}
+.stax-remote-pad .stax-remote-corner[data-active="true"]{
+ background:#385e78;border-color:#89b2cc;color:#fff;box-shadow:0 0 18px #5e9ac139}
+.stax-remote-pad[data-hand="right"] .stax-remote-corner-a{
+ left:calc(env(safe-area-inset-left,0px) + 28px);bottom:calc(env(safe-area-inset-bottom,0px) + 16px)}
+.stax-remote-pad[data-hand="right"] .stax-remote-corner-b{
+ left:calc(env(safe-area-inset-left,0px) + 28px);top:calc(env(safe-area-inset-top,0px) + 12px)}
+.stax-remote-pad[data-hand="left"] .stax-remote-corner-a{
+ right:calc(env(safe-area-inset-right,0px) + 28px);bottom:calc(env(safe-area-inset-bottom,0px) + 16px)}
+.stax-remote-pad[data-hand="left"] .stax-remote-corner-b{
+ right:calc(env(safe-area-inset-right,0px) + 28px);top:calc(env(safe-area-inset-top,0px) + 12px)}
+.stax-remote-pad .stax-remote-hand-toggle{position:absolute;z-index:2;
+ top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);
+ padding:8px 11px;border:1px solid #26323a;border-radius:9px;
+ background:#141b20;color:#768894;font-size:11px;cursor:pointer;touch-action:manipulation}
+.stax-remote-pad .stax-remote-pad-status{top:calc(env(safe-area-inset-top,0px) + 49px);font-size:11px}
+.stax-remote-pad .stax-remote-pad-cross{color:#202c34}
+.stax-remote-pad .stax-remote-pad-instruction{bottom:calc(env(safe-area-inset-bottom,0px) + 37px);font-size:12px}
+.stax-remote-pad .stax-remote-pad-rtt{bottom:calc(env(safe-area-inset-bottom,0px) + 15px);font-size:10px}
+@media (max-height:440px) and (orientation:landscape){
+ .stax-remote-pad .stax-remote-corner{width:77px;height:72px}
+ .stax-remote-pad .stax-remote-corner strong{font-size:24px}
+ .stax-remote-pad .stax-remote-corner small{font-size:8px}
+ .stax-remote-pad .stax-remote-pad-instruction{font-size:11px}
+}
+@media (max-width:650px) and (orientation:portrait){
+ .stax-remote-host-panel{max-height:54vh}
+ .stax-remote-host-panel .stax-remote-legend{display:none}
+}
