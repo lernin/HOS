@@ -305,6 +305,23 @@ test('subject blue above red cannot acquire direct orange; object blue can',()=>
  const supported={...g,bonds:[...g.bonds,sup('object','not')]}
  assert.equal(canAttachOrangeUnderObjectBlue(supported,'object'),false)
 })
+test('only blue directly after red can carry a direct orange not; later blues cannot',()=>{
+ const d={atoms:[
+  {id:'subject',kind:'circle'},{id:'red',kind:'triangle'},
+  {id:'complement',kind:'circle'},{id:'later',kind:'circle'},
+  {id:'evenLater',kind:'circle'},{id:'loose',kind:'circle'},
+ ],bonds:[
+  {parent:'subject',child:'red',relation:'sequence'},
+  {parent:'red',child:'complement',relation:'sequence'},
+  {parent:'complement',child:'later',relation:'sequence'},
+  {parent:'later',child:'evenLater',relation:'sequence'},
+ ]}
+ assert.equal(canAttachOrangeUnderObjectBlue(d,'subject'),false)
+ assert.equal(canAttachOrangeUnderObjectBlue(d,'complement'),true)
+ assert.equal(canAttachOrangeUnderObjectBlue(d,'later'),false)
+ assert.equal(canAttachOrangeUnderObjectBlue(d,'evenLater'),false)
+ assert.equal(canAttachOrangeUnderObjectBlue(d,'loose'),false)
+})
 test('a pink preposition supported by object blue can take an orange adverb',()=>{
  const g={atoms:[
   {id:'subject',kind:'circle'},{id:'verb',kind:'triangle'},
@@ -337,9 +354,9 @@ test('late orange precedes pink, purple and green; never pink then orange',()=>{
  assert.deepEqual(row.map(a=>a.id),['in','the','big','not'])
 })
 test('direct blue not slot differs from orange nested below pink',()=>{
- const d={atoms:[{id:'blue',kind:'circle'},{id:'pink',kind:'square'},
-  {id:'usually',kind:'hexagon'},{id:'not',kind:'hexagon'}],
- bonds:[sup('blue','pink'),sup('pink','usually')]}
+ const d={atoms:[{id:'red',kind:'triangle'},{id:'blue',kind:'circle'},
+  {id:'pink',kind:'square'},{id:'usually',kind:'hexagon'},{id:'not',kind:'hexagon'}],
+ bonds:[{parent:'red',child:'blue',relation:'sequence'},sup('blue','pink'),sup('pink','usually')]}
  assert.equal(canAttachAdverbUnderPreposition(d,'pink'),false)
  assert.equal(canAttachOrangeUnderObjectBlue(d,'blue'),true)
  assert.equal(canAttachOrangeUnderObjectBlue({...d,bonds:[...d.bonds,sup('blue','not')]},'blue'),false)
