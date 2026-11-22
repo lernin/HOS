@@ -71,3 +71,17 @@ test('remote navigation modes preserve existing spatial mode and use scan action
  assert.match(board,/sequentialScanNext\(d,remoteFocus\.current,dir\)/)
  assert.match(model,/\|'navigate_seq'/)
 })
+
+test('B sits at the middle of the left side, A stays at bottom, both mirror for left-handed mode',async()=>{
+ const css=await readFile(new URL('../src/experiences/stax/remote-circle-test.css',import.meta.url),'utf8')
+ const rightB=css.match(/\.stax-remote-pad\[data-hand="right"\] \.stax-remote-corner-b\{([^}]*)\}/)?.[1]
+ const leftB=css.match(/\.stax-remote-pad\[data-hand="left"\] \.stax-remote-corner-b\{([^}]*)\}/)?.[1]
+ const rightA=css.match(/\.stax-remote-pad\[data-hand="right"\] \.stax-remote-corner-a\{([^}]*)\}/)?.[1]
+ const leftA=css.match(/\.stax-remote-pad\[data-hand="left"\] \.stax-remote-corner-a\{([^}]*)\}/)?.[1]
+ assert.match(rightB,/left:calc\(/)
+ assert.match(rightB,/top:50%;transform:translateY\(-50%\)/)
+ assert.match(leftB,/right:calc\(/)
+ assert.match(leftB,/top:50%;transform:translateY\(-50%\)/)
+ assert.match(rightA,/bottom:calc\(/)
+ assert.match(leftA,/bottom:calc\(/)
+})
