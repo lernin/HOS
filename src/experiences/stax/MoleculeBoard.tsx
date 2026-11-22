@@ -1605,7 +1605,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    }
    host=tip
    if(host.kind==='oval'?!eligibleAdverbHost(before,host.id):
-    !canExtendSupportChain(staged,id,host.id,'hexagon','oval','circle')){
+    !canExtendSupportChain(staged,host.id,'hexagon','oval','circle')){
     remoteNotice('No compatible green-adverb slot.');return
    }
    destination=nestedChildPosition(host,incoming)
@@ -1628,7 +1628,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    }
    destination=nestedChildPosition(host,incoming)
   }else if(parent.kind==='hexagon'&&kind==='hexagon'){
-   if(canExtendSupportChain(staged,id,host.id,'hexagon','oval','circle'))
+   if(canExtendSupportChain(staged,host.id,'hexagon','oval','circle'))
     destination=nestedChildPosition(host,incoming)
   }
   if(!destination){remoteNotice('No verified '+kind+' attachment on '+parent.kind+'.');return}
