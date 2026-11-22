@@ -114,3 +114,14 @@
 .stax-remote-host[data-canonical="true"]{background:transparent;pointer-events:none}
 .stax-remote-host[data-canonical="true"] .stax-remote-host-panel{pointer-events:auto}
 .stax-remote-host[data-canonical="true"] .stax-remote-host-panel{max-height:min(calc(100vh - 30px),700px)}
+
+/* Eyes-free feedback: recognition result only, never a second control layer.
+   The glyph appears after the user's first decisive pan/pinch movement. */
+.stax-remote-intent-status{position:absolute;top:calc(env(safe-area-inset-top,0px) + 77px);
+ left:50%;transform:translateX(-50%);border:1px solid #304049;
+ border-radius:999px;background:#16202aeb;color:#bed0d9;
+ font-size:10px;font-weight:750;letter-spacing:.1em;padding:5px 12px;
+ pointer-events:none;user-select:none;z-index:1;white-space:nowrap}
+@media (max-height:440px) and (orientation:landscape){
+ .stax-remote-intent-status{top:calc(env(safe-area-inset-top,0px) + 69px)}
+}
