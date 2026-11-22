@@ -155,7 +155,7 @@ test('contraction gesture only recognizes BLUE I + RED SMR and preserves pinch',
  const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
  assert.match(board,/atoms\.includes\('q2-a-q-1'\)&&atoms\.includes\('q2-a-q-2'\)/)
  assert.match(board,/Math\.max\(distanceA,distanceB\)<=14/)
- assert.match(board,/if\(a&&b\)beginPinch\(pair\.pointers,pair\.first,pair\.second\)/)
+ assert.match(board,/if\(a&&b\)twoFingerIntent\.current=startTwoFinger\(/)
  assert.match(board,/if\(Date\.now\(\)-pair\.started<=550\)toggleQuestTwoContraction\(\)/)
  assert.match(board,/return activeQuestLevel===2&&questActive&&questTwoSide==='answer'&&a\.id==='q2-a-q-2'/)
 })
