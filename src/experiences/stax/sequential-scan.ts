@@ -64,12 +64,25 @@ export function sequentialScanNext(graph:ScanGraph,currentId:string|null,directi
  return order[(at+(direction==='right'?1:-1)+order.length)%order.length]
 }
 
+/** Shared preference for both the phone controller and standalone board.
+ * 1× preserves the original 40 px/shape; default 4× lets a single sweep
+ * cross a full classroom sentence without altering its grammatical order.
+ */
+export const SCAN_SPEED_KEY='stax-sequential-scan-speed-v1'
+export const DEFAULT_SCAN_SPEED=4
+export function normalizeScanSpeed(value:unknown):number{
+ if(value===null||value===undefined||value==='')return DEFAULT_SCAN_SPEED
+ const speed=Number(value)
+ return Number.isFinite(speed)?Math.max(1,Math.min(6,Math.round(speed))):DEFAULT_SCAN_SPEED
+}
+export function scanStrideForSpeed(speed:number):number{return 40/normalizeScanSpeed(speed)}
+
 /** Read a continuous horizontal drag as one scan step per distance interval.
  * The step count changes in either direction, so reversing the same finger
  * retraces previous shapes. A batched pointer move can cross many shapes.
  */
 export function scanSwipeSteps(previous:number,dx:number,stride=40):{step:number;directions:('left'|'right')[]}{
- const safeStride=Number.isFinite(stride)&&stride>=16?stride:40
+ const safeStride=Number.isFinite(stride)&&stride>=6?stride:40
  if(!Number.isFinite(dx)||!Number.isFinite(previous))return {step:0,directions:[]}
  const next=Math.trunc(dx/safeStride)
  const signed=next-previous
