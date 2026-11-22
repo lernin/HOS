@@ -63,3 +63,17 @@ export function sequentialScanNext(graph:ScanGraph,currentId:string|null,directi
  if(at<0)return direction==='right'?order[0]:order[order.length-1]
  return order[(at+(direction==='right'?1:-1)+order.length)%order.length]
 }
+
+/** Read a continuous horizontal drag as one scan step per distance interval.
+ * The step count changes in either direction, so reversing the same finger
+ * retraces previous shapes. A batched pointer move can cross many shapes.
+ */
+export function scanSwipeSteps(previous:number,dx:number,stride=40):{step:number;directions:('left'|'right')[]}{
+ const safeStride=Number.isFinite(stride)&&stride>=16?stride:40
+ if(!Number.isFinite(dx)||!Number.isFinite(previous))return {step:0,directions:[]}
+ const next=Math.trunc(dx/safeStride)
+ const signed=next-previous
+ const count=Math.min(80,Math.abs(signed))
+ const direction=signed>=0?'right':'left'
+ return {step:previous+Math.sign(signed)*count,directions:Array.from({length:count},()=>direction)}
+}
