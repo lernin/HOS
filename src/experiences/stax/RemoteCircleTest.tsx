@@ -453,8 +453,8 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
     <p>Keep your eyes on the larger STAX board.</p>
     <button type="button" onPointerDown={e=>e.stopPropagation()} onClick={e=>{e.stopPropagation();enterFullscreenOnTouch()}}>Try landscape fullscreen</button>
    </div>}
-   <div className="stax-remote-corner stax-remote-corner-b" data-zone="B" data-active={cornerMode?.startsWith('B')?'true':'false'} aria-label="B: slide thumb up on this button to unlock skins; other finger scrolls">
-    <strong>B</strong><small>{skinMode?'SKINS':scanActive?'SCAN':cornerMode==='B-shift'?'VIEW':addActive?'ADD':'ADD'}</small>
+   <div className="stax-remote-corner stax-remote-corner-b" data-zone="B" data-active={cornerMode?.startsWith('B')?'true':'false'} aria-label="B thumb controls: up skins, left continuous scan, down add, right view. Keep holding while another finger uses the pad.">
+    <strong>B</strong><small>{skinMode?'SKINS':scanActive?'SCAN':cornerMode==='B-shift'?'VIEW':'ADD'}</small>
    </div>
    <div className="stax-remote-corner stax-remote-corner-a" data-zone="A" data-active={cornerMode?.startsWith('A')?'true':'false'} aria-label="A: hold to move, pull outward for editing">
     <strong>A</strong><small>{cornerMode==='A-shift'?'EDIT':'MOVE'}</small>
@@ -507,9 +507,9 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    </div>
    {!onHostInput&&<div className="stax-remote-legend">
     <strong>Eyes-free gesture map</strong>
-    <p>Swipe: navigate shapes · Tap: select · Double tap: center</p>
-    <p>Hold A + drag: move piece · Hold B + swipe: modify · Hold B + tap: add spine</p>
-    <p>A pull outward + hold: Detach / Undo / Delete · B pull outward + hold: Fit / Center / Zoom</p>
+    <p>Swipe: directional selection, or choose Sequential for continuous scanning and a tick per shape · Tap: select · Double tap: center</p>
+    <p>Hold A + drag: move piece · B up: skins · B left: continuous scan · B down: add · B right: view · Hold B + tap: add spine</p>
+    <p>A pull outward + hold: Detach / Undo / Delete · B swipe right + hold: Fit / Center / Zoom</p>
     <p>Two fingers: pan and pinch · Three fingers: reserved · A-Shift right: undo</p>
    </div>}
   </aside>
