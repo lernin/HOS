@@ -43,7 +43,6 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const [twoFingerMode,setTwoFingerMode]=useState<'pan'|'pinch'|null>(null)
  const [skinMode,setSkinMode]=useState(false)
  const [scanActive,setScanActive]=useState(false)
- const [addActive,setAddActive]=useState(false)
  const [scanMode,setScanMode]=useState<'directional'|'sequential'>(()=>{try{return localStorage.getItem('stax-remote-scan-mode-v1')==='sequential'?'sequential':'directional'}catch{return 'directional'}})
  const hostInputRef=useRef(onHostInput)
  hostInputRef.current=onHostInput
@@ -301,7 +300,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
       surface.scanOriginX=surface.x;surface.scanStep=0;surface.swipeFired=true
      }
     }else if(vertical&&thumbY>=24){
-     contact.thumbMode='add';setAddActive(true);pulse(16)
+     contact.thumbMode='add';pulse(16)
     }else if(horizontal&&thumbX>=24){
      contact.thumbMode='view';contact.shift=true
      setCornerMode('B-shift');pulse([15,25,26])
@@ -389,7 +388,6 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   if(contact.role==='corner'&&contact.corner==='B'){
    if(state.current.skinScroll?.owner===contact.id){state.current.skinScroll=null;setSkinMode(false)}
    if(state.current.scanScroll?.owner===contact.id){state.current.scanScroll=null;setScanActive(false)}
-   setAddActive(false)
   }
   if(contact.role==='corner'&&contact.corner==='A'&&state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
   if(contact.role==='surface'){
@@ -424,7 +422,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   if(!item)return
   state.current.contacts.delete(e.pointerId)
   if(item.role==='corner'&&item.corner==='B'){
-   state.current.skinScroll=null;setSkinMode(false);state.current.scanScroll=null;setScanActive(false);setAddActive(false)
+   state.current.skinScroll=null;setSkinMode(false);state.current.scanScroll=null;setScanActive(false)
   }
   if(state.current.dragging){send('move_end');state.current.dragging=false}
   if(item.role==='corner')setCornerMode(activeCorner())
