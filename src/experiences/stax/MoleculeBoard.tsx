@@ -1576,7 +1576,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   const before=currentDoc.current,parent=before.atoms.find(a=>a.id===parentId)
   if(!parent||before.atoms.length>=78){remoteNotice('Cannot add another shape here.');return}
   if(parent.kind==='triangle'&&kind==='hexagon'){
-   const progress=nextRedOrangeRemoteStep(before,parent.id,()=>({
+   const progress=nextRedOrangeRemoteStep(before,parent.id,():Atom=>({
     id:crypto.randomUUID(),kind:'hexagon',x:parent.x,y:parent.y+atomHeight(parent)+VERTICAL,variant:'small'
    }))
    if(!progress){
