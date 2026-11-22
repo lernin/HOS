@@ -428,3 +428,14 @@ test('Remote phone trackpad asks for landscape and synthesizes foam scritch loca
  assert.match(css,/\.stax-remote-rotate\{/)
  assert.match(lab,/RemoteCircleTest onExit=\{\(\)=>window\.location\.assign\('\/stax-shape-lab'\)\}/)
 })
+
+test('STAX phone requests fullscreen immediately on first landscape touch, retaining local audio',async()=>{
+ const pad=await readFile(new URL('../src/experiences/stax/RemoteCircleTest.tsx',import.meta.url),'utf8')
+ assert.match(pad,/function enterFullscreenOnTouch\(\)/)
+ assert.match(pad,/if\(window\.innerWidth>window\.innerHeight\)enterFullscreenOnTouch\(\)/)
+ assert.match(pad,/target\.requestFullscreen\(\)/)
+ assert.match(pad,/fullscreenRequest\.current=true/)
+ assert.match(pad,/sound\(\)\.start\(e\.clientX,e\.clientY\)/)
+ assert.match(pad,/document\.addEventListener\('fullscreenchange',onFullscreenChange\)/)
+ assert.match(pad,/document\.fullscreenElement\|\|fullscreenRequest\.current/)
+})
