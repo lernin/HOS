@@ -93,3 +93,24 @@
  .stax-remote-host-panel{max-height:54vh}
  .stax-remote-host-panel .stax-remote-legend{display:none}
 }
+
+/* A second canonical MoleculeBoard is mounted only for the remote preview.
+   It never reads/writes the saved STAX document and has no interactive desktop
+   palette. The normal board remains mounted behind it unchanged. */
+.stax-remote-canonical-board{position:fixed;inset:0;z-index:1500;pointer-events:none}
+.stax-remote-canonical-board .stax-molecule-ui[data-remote-sandbox="true"]{z-index:1500;pointer-events:none}
+.stax-remote-canonical-board .stax-molecule-ui[data-remote-sandbox="true"] .stax-tray-handle,
+.stax-remote-canonical-board .stax-molecule-ui[data-remote-sandbox="true"] .stax-molecule-dock,
+.stax-remote-canonical-board .stax-molecule-ui[data-remote-sandbox="true"] .stax-molecule-palette,
+.stax-remote-canonical-board .stax-molecule-ui[data-remote-sandbox="true"] .stax-sound-panel,
+.stax-remote-canonical-board .stax-molecule-ui[data-remote-sandbox="true"] .stax-quest-nav,
+.stax-remote-canonical-board .stax-molecule-ui[data-remote-sandbox="true"] .stax-shape-word-editor,
+.stax-remote-canonical-board .stax-molecule-ui[data-remote-sandbox="true"] .stax-molecule-note{display:none}
+.stax-remote-canonical-board .stax-molecule-ui[data-remote-sandbox="true"] .stax-molecule-hint{
+ position:absolute;bottom:24px;left:50%;transform:translateX(-50%);max-width:min(620px,58vw);
+ background:#fffaf3dc;border:1px solid #7e65477d;border-radius:10px;
+ color:#493627;padding:10px 14px;box-shadow:0 3px 20px #34221230;
+ font-size:13px;text-align:center;pointer-events:none}
+.stax-remote-host[data-canonical="true"]{background:transparent;pointer-events:none}
+.stax-remote-host[data-canonical="true"] .stax-remote-host-panel{pointer-events:auto}
+.stax-remote-host[data-canonical="true"] .stax-remote-host-panel{max-height:min(calc(100vh - 30px),700px)}
