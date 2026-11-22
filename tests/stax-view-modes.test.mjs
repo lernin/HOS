@@ -397,7 +397,7 @@ test('STAX entry opens current magnetic board without legacy Shape Lab stopover'
  assert.match(lab,/return <main className=\{\x60stax-lab/)
 })
 
-test('Remote trackpad experiment has one foam circle, black phone surface and direct data channel',async()=>{
+test('Remote trackpad retains black phone surface, clean foam assets and direct data channel',async()=>{
  const host=await readFile(new URL('../src/experiences/stax/RemoteCircleTest.tsx',import.meta.url),'utf8')
  const css=await readFile(new URL('../src/experiences/stax/remote-circle-test.css',import.meta.url),'utf8')
  const lab=await readFile(new URL('../src/experiences/StaxLab.tsx',import.meta.url),'utf8')
@@ -409,7 +409,7 @@ test('Remote trackpad experiment has one foam circle, black phone surface and di
  assert.match(host,/new Uint8Array\(16\)/)
  assert.match(host,/onPointerMove=\{pointerMove\}/)
  assert.match(css,/background:#030303/)
- assert.match(lab,/RemoteCircleTest onExit=/)
+ assert.match(lab,/RemoteCircleTest onHostInput=/)
  assert.match(board,/Open phone trackpad experiment/)
 })
 
@@ -446,7 +446,8 @@ test('Remote mode overlays STAX as a reversible toggle with foam-only sliding au
  const remote=await readFile(new URL('../src/experiences/stax/RemoteCircleTest.tsx',import.meta.url),'utf8')
  assert.match(lab,/const \[remoteExperiment,setRemoteExperiment\]=useState/)
  assert.match(lab,/<MoleculeBoard onBack=\{onExit\} onRemoteTest=\{\(\)=>setRemoteExperiment\(true\)\}\/>/)
- assert.match(lab,/\{remoteExperiment&&<RemoteCircleTest onExit=\{\(\)=>\{setRemoteExperiment\(false\)/)
+ assert.match(lab,/\{remoteExperiment&&<>/)
+ assert.match(lab,/onExit=\{\(\)=>\{setRemoteExperiment\(false\)/)
  assert.match(lab,/get\('remote'\)==='pad'\)return <RemoteCircleTest/)
  assert.doesNotMatch(board,/window\.location\.assign\('\/stax-shape-lab\?remote=host'\)/)
  assert.match(board,/onClick=\{onRemoteTest\}>Remote · Off/)
