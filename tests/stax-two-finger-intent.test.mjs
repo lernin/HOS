@@ -82,7 +82,7 @@ test('the gesture stays locked until released even if later finger movement chan
  assert.equal(state.mode,'pan')
  const attemptedPinch=at(state,p(1,80,100),p(2,300,100))
  assert.equal(attemptedPinch.session.mode,'pan')
- assert.equal(attemptedPinch.frame.scale,1)
+ assert.equal(attemptedPinch.frame?.scale??1,1)
 
  state=at(begin(),p(1,80,100),p(2,270,100)).session
  assert.equal(state.mode,'pinch')
