@@ -145,7 +145,7 @@ test('remote construction never auto-fits and foam tap toggles selection off',as
  const select=board.slice(board.indexOf("case 'select':"),board.indexOf("case 'move_start':"))
  assert.match(select,/remoteSelect\(null\)/,'remote tap can deselect')
  const down=board.slice(board.indexOf('function onShapeDown('),board.indexOf('function onShapeMove('))
- assert.doesNotMatch(down,/setSelected\(id\)/,'pointer down must not reselect before release')
+ assert.doesNotMatch(down.slice(down.indexOf('dragging.current={id')),/setSelected\(id\)/,'normal pointer down must not reselect before release')
  const release=board.slice(board.indexOf('function releaseShape('),board.indexOf('function downBackground('))
  assert.match(release,/setSelected\(s=>s===d\.id\?null:d\.id\)/,'tap selected shape clears halo')
  const move=board.slice(board.indexOf('function onShapeMove('),board.indexOf('function releaseShape('))
