@@ -157,6 +157,10 @@ export function normalizeBlueSiblingOrder<T extends FamilyNode>(row:readonly T[]
  */
 export function canAttachOrangeUnderObjectBlue(graph:FamilyGraph,blueId:string):boolean {
  if(!canAttachOrangeUnderBlue(graph,blueId))return false
+ // Only the complement blue immediately following RED owns a direct
+ // orange negation slot. The subject and later blue followers do not.
+ const predecessor=graph.bonds.find(b=>b.relation==='sequence'&&b.child===blueId)
+ if(!predecessor||graph.atoms.find(a=>a.id===predecessor.parent)?.kind!=='triangle')return false
  return !graph.bonds.some(b=>b.relation==='sequence'&&b.parent===blueId&&
   graph.atoms.some(a=>a.id===b.child&&a.kind==='triangle'))
 }
