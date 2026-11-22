@@ -301,13 +301,14 @@ function alignSequenceFamilyClearance(doc:Draft):Draft {
   for(const edge of edges){
    const left=byId(next,edge.parent),right=byId(next,edge.child)
    if(!left||!right)continue
-   // Growing oranges beneath RED must never push bare blue sentence heads.
-   // Between BLUE heads, extra clearance is justified only by attached
-   // children of one of the two related blue families.
+   // Blue supporters hang left-justified: adding one beneath the FIRST
+   // blue does not require spreading it from the following bare blue.
+   // Only supporters on the FOLLOWING blue can open that blue-to-blue gap.
+   // Red-orange children likewise never spread a bare following blue.
    const leftFamily=left.kind==='circle'?supportFootprint(next,left.id):null
    const rightFamily=right.kind==='circle'?supportFootprint(next,right.id):null
    if(right.kind==='circle'&&(left.kind==='triangle'||left.kind==='circle')&&
-      (leftFamily?.length??1)===1&&(rightFamily?.length??1)===1)continue
+      (rightFamily?.length??1)===1)continue
    const a=leftFamily??supportFootprint(next,left.id)
    const b=rightFamily??supportFootprint(next,right.id)
    const shift=requiredFamilyFollowerShift(
