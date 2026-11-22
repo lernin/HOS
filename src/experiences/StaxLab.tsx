@@ -16,7 +16,7 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
  const [selected,setSelected]=useState<string|null>(null),[blueprint,setBlueprint]=useState(false),[mode,setMode]=useState<Mode>('compose')
  const [placement,setPlacement]=useState<Placement>('auto'),[zoom,setZoom]=useState(1),[rulesOpen,setRulesOpen]=useState(false)
  const [notice,setNotice]=useState(''),[saveError,setSaveError]=useState(false)
- const [freeBoard,setFreeBoard]=useState(false)
+ const [freeBoard,setFreeBoard]=useState(true)
  const svgRef=useRef<SVGSVGElement>(null), doc=history.present
  const dragRef=useRef<DragGesture|null>(null), suppressClickRef=useRef<Kind|null>(null)
  const [dragPreview,setDragPreview]=useState<DragPreview|null>(null)
@@ -89,10 +89,10 @@ export function StaxLab({onExit}: {onExit:()=>void}) {
  }
  if(freeBoard)return <main className="stax-lab">
   <header className="stax-header"><div className="stax-identity"><button className="stax-back" onClick={onExit} aria-label="Back to The Lab">←</button><div><h1>STAX <span>Magnetic Molecules</span></h1><p>Free shape assembly · experimental</p></div></div>
-   <div className="stax-header-actions"><button className="stax-text-button" onClick={()=>setFreeBoard(false)}>Classic Shape Lab ↗</button></div>
+   <div className="stax-header-actions"/>
   </header>
   <section className="stax-main" style={{maxWidth:1200,margin:'0 auto',width:'100%'}}>
-    <MoleculeBoard onBack={()=>setFreeBoard(false)}/>
+    <MoleculeBoard onBack={onExit}/>
   </section>
  </main>
  return <main className={`stax-lab${blueprint?' is-blueprint':''}`}>
