@@ -136,8 +136,9 @@
  box-shadow:0 4px 20px #16324825;
  font:700 30px/1 var(--stax-font);
  cursor:pointer;
- touch-action:manipulation;
+ touch-action:none;
 }
+.stax-tray-handle[data-skin-mode='true'] {border-color:var(--stax-accent);box-shadow:0 0 0 3px var(--stax-accent),0 4px 20px #16324825;}
 .stax-tray-handle:focus-visible {outline:3px solid #4389c7;outline-offset:2px;}
 .stax-molecule-dock {
  position:absolute;
