@@ -999,3 +999,24 @@
 .stax-molecule-ui[data-theme='arc-reactor'] svg g[data-kind] {filter:drop-shadow(0 0 4px #00e7ff70);}
 .stax-molecule-ui[data-theme='hologram'] svg g[data-kind] {filter:drop-shadow(0 0 4px #e0a2fa66);}
 .stax-molecule-ui[data-theme='cosmic'] svg g[data-kind] {filter:drop-shadow(0 0 5px #9a9bfa66);}
+
+/* Selected foam follows the exact transparent image silhouette. Preserve the
+   physical shadow underneath while replacing the old rectangular focus box
+   with an obvious warm-white halo. The glow is composited in CSS, not assets. */
+.stax-molecule-ui[data-theme='classroom-foam'] svg g[data-kind].stax-selected-atom image.stax-authentic-foam-chip {
+ filter:
+  drop-shadow(0 0 4px rgba(255,255,255,.98))
+  drop-shadow(0 0 10px rgba(255,252,240,.88))
+  drop-shadow(0 0 22px rgba(241,248,255,.62))
+  drop-shadow(0 2px var(--stax-foam-shadow-blur-near,2px) rgba(24,16,9,var(--stax-foam-shadow-contact,.34)))
+  drop-shadow(0 6px var(--stax-foam-shadow-blur-middle,9px) rgba(24,16,9,var(--stax-foam-shadow-middle,.29)))
+  drop-shadow(0 12px var(--stax-foam-shadow-blur-far,17px) rgba(24,16,9,var(--stax-foam-shadow-cast,.17)));
+}
+/* Vector themes use the native polygon/ellipse silhouette for the same halo. */
+.stax-molecule-ui .stax-selection-glow-outline {
+ filter:drop-shadow(0 0 4px rgba(255,255,255,.94))
+        drop-shadow(0 0 12px rgba(255,255,255,.75))
+        drop-shadow(0 0 22px rgba(255,255,255,.48));
+ opacity:.95;
+ pointer-events:none;
+}
