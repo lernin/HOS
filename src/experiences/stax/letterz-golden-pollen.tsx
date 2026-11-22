@@ -4,7 +4,7 @@ import type { Kind } from './model'
 
 /**
  * Uses Letterz's ORIGINAL material registry/engine (#10), unmodified and
- * loaded only while Golden Pollen is selected. Geometry and camera mapping
+ * prewarmed while the STAX board is open. Geometry and camera mapping
  * are the only STAX-specific pieces. All 160 moving grains + 28 escaping
  * grains are painted by the original Scene.draw code on a single shared canvas.
  *
@@ -95,13 +95,15 @@ function sampleOriginalStroke(sampler:SVGSVGElement,d:string):Part{
  }finally{path.remove()}
 }
 
-export function LetterzGoldenPollenCanvas({atoms,view,svgRef,onReady}:{
+export function LetterzGoldenPollenCanvas({atoms,view,svgRef,onReady,visible}:{
  atoms:PollenAtom[];view:PollenView;svgRef:RefObject<SVGSVGElement|null>;
- onReady:Dispatch<SetStateAction<boolean>>
+ onReady:Dispatch<SetStateAction<boolean>>;visible:boolean
 }){
  const canvasRef=useRef<HTMLCanvasElement>(null)
  const latest=useRef({atoms,view})
  latest.current={atoms,view}
+ const visibleRef=useRef(visible)
+ visibleRef.current=visible
  useEffect(()=>{
   let active=true,frameId=0,last=0,firstPaint=false
   const canvas=canvasRef.current
@@ -122,7 +124,9 @@ export function LetterzGoldenPollenCanvas({atoms,view,svgRef,onReady}:{
    frameId=requestAnimationFrame(time=>draw(registry,time))
    if(document.hidden)return
    const reduced=!!motion?.matches
-   if(last&&now-last<(reduced?250:32))return
+   // Draw a genuine source-material frame in advance, then throttle
+   // hidden work until the user chooses this skin.
+   if(last&&now-last<(visibleRef.current?(reduced?250:32):4000))return
    const dt=last?Math.min(.05,(now-last)/1000):0
    last=now
    const rect=canvas.getBoundingClientRect()
@@ -194,5 +198,5 @@ export function LetterzGoldenPollenCanvas({atoms,view,svgRef,onReady}:{
  },[])
  return <canvas className="stax-letterz-original-pollen-canvas" ref={canvasRef}
   aria-label="Original Letterz Golden Pollen animation" aria-hidden="true"
-  style={{pointerEvents:'none'}}/>
+  style={{pointerEvents:'none',visibility:visible?'visible':'hidden'}}/>
 }
