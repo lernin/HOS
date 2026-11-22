@@ -1307,7 +1307,8 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   dragging.current={id,pointer:e.pointerId,sx:p.x,sy:p.y,before:currentDoc.current,moved:false,fingerLift:needsFingerLift(currentDoc.current,id,e.pointerType)?FINGER_LIFT:0}
   if(theme==='classroom-foam'&&foamSoundEnabled)audio().start(e.clientX,e.clientY)
   e.currentTarget.setPointerCapture(e.pointerId)
-  setSelected(id)
+  // Defer selection until release so tapping an already selected piece
+  // removes the halo without interfering with an intentional drag.
  }
  function onShapeMove(e:ReactPointerEvent<SVGGElement>){
   if(pinch.current||questTwoPair.current)return
@@ -1315,6 +1316,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   const pt=pointer(e),dx=pt.x-d.sx,dy=pt.y-d.sy
   if(Math.hypot(dx,dy)>TAP)d.moved=true
   if(d.moved){
+   setSelected(d.id)
    if(theme==='classroom-foam'&&foamSoundEnabled)audio().move(e.clientX,e.clientY)
    const raised=d.fingerLift?fromClient(e.clientX,e.clientY-d.fingerLift):null
    const finger=d.fingerLift?fromClient(e.clientX,e.clientY):null
@@ -1330,6 +1332,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   const d=dragging.current;if(!d||d.pointer!==e.pointerId)return
   dragging.current=null;foamAudio.current?.stop();setPreview(null);e.stopPropagation()
   if(!d.moved){
+   if(!(questActive&&activeQuestLevel===2))setSelected(s=>s===d.id?null:d.id)
    if(questActive&&activeQuestLevel===2){lastTap.current=null;questTwoTap(d.id);return}
    const t=Date.now()
    if(lastTap.current?.id===d.id&&t-lastTap.current.time<DOUBLE_MS){
@@ -1587,7 +1590,8 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   next=normalizeRoles(next)
   remoteCommit(next,id,kind==='triangle'?'Added red; yellow backfilled before the first blue without moving it.':
    kind==='circle'&&heads.length===0?'First blue circle added.':'Added next blue circle.')
-  setCamera(fit(next,aspect()))
+  // Construction must never zoom or pan automatically. The user controls
+  // the view via two-finger gestures and explicit fit/center commands.
  }
  function remoteAttach(parentId:string,kind:Kind){
   const before=currentDoc.current,parent=before.atoms.find(a=>a.id===parentId)
@@ -1767,7 +1771,11 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    case 'spine':remoteSpine();break
    case 'modify':if(input.dir)remoteModify(input.dir);break
    case 'navigate':if(input.dir)remoteNavigate(input.dir);break
-   case 'select':if(remoteFocus.current)remoteSelect(remoteFocus.current);break
+   case 'select':{
+    if(remoteFocus.current){remoteSelect(null);remoteNotice('Selection cleared. Swipe to focus another piece.')}
+    else remoteNotice('Nothing selected. Swipe to choose a piece.')
+    break
+   }
    case 'move_start':remoteDrag.current={before:d,changed:false};break
    case 'move_end':{
     const drag=remoteDrag.current;remoteDrag.current=null
