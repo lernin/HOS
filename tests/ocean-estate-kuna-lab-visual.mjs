@@ -7,6 +7,7 @@ await mkdir('artifacts/ocean-estate',{recursive:true})
 try{
   for(const testCase of [
     {name:'desktop',width:1280,height:800,mobile:false},
+    {name:'portrait-phone',width:390,height:844,mobile:true},
     {name:'landscape-phone',width:915,height:412,mobile:true}
   ]){
     const context=await browser.newContext({
