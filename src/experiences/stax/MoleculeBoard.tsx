@@ -1133,6 +1133,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  const touchStarted=useRef<Map<number,number>>(new Map())
  const questTwoPair=useRef<{pointers:[number,number];first:TouchPoint;second:TouchPoint;started:number;released:Set<number>}|null>(null)
  const pinch=useRef<Pinch|null>(null)
+ const themeScroll=useRef<{startX:number;startY:number;step:number;active:boolean}|null>(null)
  const blockRelease=useRef<Set<number>>(new Set())
  useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(KEY,JSON.stringify(doc))}catch{/* local save unavailable */}},[doc,remoteSandbox])
  useEffect(()=>{if(remoteSandbox)return;try{localStorage.setItem(THEME_KEY,theme)}catch{/* local theme unavailable */}},[theme,remoteSandbox])
@@ -1233,6 +1234,18 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  function downTouch(e:ReactPointerEvent<SVGSVGElement>){
   if(e.pointerType!=='touch')return
   activeTouches.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+  if(activeTouches.current.size===3){
+   // The standalone phone board uses the same continuous three-finger
+   // design scroll as the paired remote, without touching the camera.
+   const points=[...activeTouches.current.values()]
+   themeScroll.current={startX:points.reduce((s,p)=>s+p.x,0)/3,
+    startY:points.reduce((s,p)=>s+p.y,0)/3,step:0,active:false}
+   pinch.current=null;panning.current=null;questTwoPair.current=null
+   if(dragging.current){foamAudio.current?.stop();update(dragging.current.before);dragging.current=null;setPreview(null)}
+   for(const id of activeTouches.current.keys())blockRelease.current.add(id)
+   return
+  }
+  if(activeTouches.current.size>3){themeScroll.current=null;pinch.current=null;return}
   touchStarted.current.set(e.pointerId,Date.now())
   const atomId=(e.target as Element).closest?.('[data-id]')?.getAttribute('data-id')
   if(atomId)touchAtom.current.set(e.pointerId,atomId)
@@ -1257,6 +1270,23 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  function moveTouch(e:ReactPointerEvent<SVGSVGElement>){
   if(e.pointerType!=='touch'||!activeTouches.current.has(e.pointerId))return
   activeTouches.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
+  const scroll=themeScroll.current
+  if(scroll){
+   if(activeTouches.current.size!==3)return
+   const points=[...activeTouches.current.values()]
+   const dx=points.reduce((s,p)=>s+p.x,0)/3-scroll.startX
+   const dy=points.reduce((s,p)=>s+p.y,0)/3-scroll.startY
+   if(Math.abs(dx)>=24&&Math.abs(dx)>Math.abs(dy)*1.3)scroll.active=true
+   if(scroll.active){
+    const step=Math.trunc(dx/64),difference=step-scroll.step
+    if(difference){
+     const count=Math.min(16,Math.abs(difference)),direction=Math.sign(difference)
+     setTheme(previous=>STAX_THEMES[(STAX_THEMES.indexOf(previous)+direction*count%STAX_THEMES.length+STAX_THEMES.length)%STAX_THEMES.length])
+     scroll.step=step
+    }
+   }
+   return
+  }
   const pair=questTwoPair.current
   if(pair){
    const a=activeTouches.current.get(pair.pointers[0]),b=activeTouches.current.get(pair.pointers[1])
@@ -1293,6 +1323,10 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    }
   }
   activeTouches.current.delete(e.pointerId)
+  if(themeScroll.current){
+   if(activeTouches.current.size<3)themeScroll.current=null
+   pinch.current=null;panning.current=null
+  }
   touchAtom.current.delete(e.pointerId)
   touchStarted.current.delete(e.pointerId)
   if(pinch.current?.pointers.includes(e.pointerId)){
