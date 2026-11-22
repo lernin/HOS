@@ -40,6 +40,7 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
  const [hand,setHand]=useState<'right'|'left'>(()=>{try{return localStorage.getItem('stax-remote-hand-v1')==='left'?'left':'right'}catch{return 'right'}})
  const [cornerMode,setCornerMode]=useState<'A'|'B'|'A-shift'|'B-shift'|null>(null)
  const [phonePalette,setPhonePalette]=useState<RemoteKind>('triangle')
+ const phonePaletteRef=useRef<RemoteKind>('triangle')
  const [landscape,setLandscape]=useState(()=>window.innerWidth>window.innerHeight)
  const foamSound=useRef<FoamSlideAudio|null>(null)
  const fullscreenRequest=useRef(false)
@@ -141,7 +142,7 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
     if(handshake)return
     handshake=true;setLink('relay');setPeerReady(true)
     try{
-     const pc=makePeer();acceptWire(pc.createDataChannel('trackpad',{ordered:false,maxRetransmits:0}))
+     const pc=makePeer();acceptWire(pc.createDataChannel('trackpad',{ordered:true}))
      const offer=await pc.createOffer();await pc.setLocalDescription(offer)
      signal('offer',pc.localDescription?.toJSON())
     }catch{setLink('relay')}
@@ -227,12 +228,11 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   }else if(mode==='B'){
    if(dir==='left'||dir==='right'){
     send('cycle_kind',dir)
-    setPhonePalette(previous=>{
-     const step=dir==='left'?-1:1
-     const next=REMOTE_KINDS[(REMOTE_KINDS.indexOf(previous)+step+REMOTE_KINDS.length)%REMOTE_KINDS.length]
-     announce(verboseName[next])
-     return next
-    })
+    const step=dir==='left'?-1:1
+    const next=REMOTE_KINDS[(REMOTE_KINDS.indexOf(phonePaletteRef.current)+step+REMOTE_KINDS.length)%REMOTE_KINDS.length]
+    phonePaletteRef.current=next
+    setPhonePalette(next)
+    announce(verboseName[next])
    }else{send('cycle_port',dir);announce(dir==='up'?'Previous attachment direction':'Next attachment direction')}
   }else if(mode==='B-shift'){
    if(dir==='up')send('fit')
@@ -335,6 +335,7 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   e.preventDefault()
   const modeNow=activeCorner()
   const highest=state.current.maxSurface
+  if(contact.role==='corner'&&contact.corner==='A'&&state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
   if(contact.role==='surface'){
    if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
    if(!contact.moved&&highest===1){
