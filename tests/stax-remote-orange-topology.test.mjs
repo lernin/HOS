@@ -103,3 +103,14 @@ test('selection is a white silhouette halo, not a dotted rectangular selection b
  assert.match(css,/drop-shadow\(0 0 22px rgba\(241,248,255,\.62\)\)/)
  assert.match(css,/--stax-foam-shadow-contact/)
 })
+
+test('classroom foam starts zoomed out to about three wooden slats, without changing other themes',async()=>{
+ const board=await readFile(new URL('../src/experiences/stax/MoleculeBoard.tsx',import.meta.url),'utf8')
+ assert.match(board,/const CLASSROOM_WOOD_DEFAULT_ZOOM=2\.18/)
+ assert.match(board,/width:W\*CLASSROOM_WOOD_DEFAULT_ZOOM/)
+ assert.match(board,/height:H\*CLASSROOM_WOOD_DEFAULT_ZOOM/)
+ assert.match(board,/remoteSandbox\|\|theme==='classroom-foam'\?classroomWoodDefaultView:defaultView/)
+ assert.match(board,/case 'reset':remoteRedo\.current=\[\];remoteFocus\.current=null;setHistory\(\[\]\);update\(empty\(\)\);setCamera\(classroomWoodDefaultView\)/)
+ const visibleSlats=570*2.18/411
+ assert.ok(visibleSlats>2.8&&visibleSlats<3.2)
+})
