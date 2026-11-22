@@ -48,7 +48,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const fullscreenRequest=useRef(false)
  const state=useRef({last:{x:0,y:0},dragging:false,seq:0,started:new Map<number,number>(),
   contacts:new Map<number,Contact>(),maxSurface:0,twoFinger:null as TwoFingerSession|null,
-  multiStart:null as MultiPoint|null,threeFired:false,tapTime:0,
+  multiStart:null as MultiPoint|null,threeScrollX:0,threeScrollActive:false,tapTime:0,
   tapTimer:null as ReturnType<typeof setTimeout>|null})
  const sendData=useRef<(payload:DataMessage)=>void>(()=>{})
  const board=useRef<HTMLDivElement>(null)
@@ -267,7 +267,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    state.current.twoFinger=null
    setTwoFingerMode(null)
    state.current.multiStart=centroid(surfaces)
-   state.current.threeFired=false
+   state.current.threeScrollX=0;state.current.threeScrollActive=false
   }
  }
  function pointerMove(e:ReactPointerEvent<HTMLDivElement>){
@@ -292,12 +292,21 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   const surfaces=surfaceContacts()
   const maximum=state.current.maxSurface
   if(maximum>=3){
-   if(!state.current.threeFired&&surfaces.length>=3&&state.current.multiStart){
+   if(surfaces.length>=3&&state.current.multiStart){
     const at=centroid(surfaces)
     const dx=at.x-state.current.multiStart.x,dy=at.y-state.current.multiStart.y
-    if(Math.abs(dx)>78&&Math.abs(dx)>Math.abs(dy)*1.3){
-     send(dx<0?'undo':'redo')
-     pulse([20,25,24]);state.current.threeFired=true
+    // Three fingers SCROLL continuously through themes, one per 64px.
+    // Reversing direction reverses the selection; no grammar or camera edits.
+    if(Math.abs(dx)>=24&&Math.abs(dx)>Math.abs(dy)*1.3)
+     state.current.threeScrollActive=true
+    if(state.current.threeScrollActive){
+     const step=Math.trunc(dx/64),prior=state.current.threeScrollX
+     if(step!==prior){
+      const action=step>prior?'theme_next':'theme_prev'
+      for(let i=0;i<Math.min(16,Math.abs(step-prior));i++)send(action)
+      pulse(12)
+      state.current.threeScrollX=step
+     }
     }
    }
    return
@@ -362,7 +371,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
    setTwoFingerMode(null)
   }
   if(remaining.length===0){
-   state.current.maxSurface=0;state.current.twoFinger=null;state.current.multiStart=null;state.current.threeFired=false
+   state.current.maxSurface=0;state.current.twoFinger=null;state.current.multiStart=null;state.current.threeScrollX=0;state.current.threeScrollActive=false
    foamSound.current?.stop()
   }else if(remaining.length===2&&state.current.maxSurface===2&&!state.current.twoFinger){
    state.current.twoFinger=startTwoFinger(remaining[0],remaining[1])
@@ -450,7 +459,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
     <p>Swipe: navigate shapes · Tap: select · Double tap: center</p>
     <p>Hold A + drag: move piece · Hold B + swipe: modify · Hold B + tap: add spine</p>
     <p>A pull outward + hold: Detach / Undo / Delete · B pull outward + hold: Fit / Center / Zoom</p>
-    <p>Two fingers: pan and pinch · Three fingers left/right: undo/redo</p>
+    <p>Two fingers: pan and pinch · Three fingers: scroll left/right through backgrounds · A-Shift right: undo</p>
    </div>}
   </aside>
  </div>
