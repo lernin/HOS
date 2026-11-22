@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { FoamSlideAudio, safeFoamSoundId, normalizeFoamSoundTuning } from './foam-slide-audio'
 import { initialRemoteBoard, reduceRemoteBoard, type RemoteGesture, type RemoteInput, type RemoteDirection, type RemoteKind } from './remote-gesture-model'
 import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
-import { scanSwipeSteps } from './sequential-scan'
+import { scanSwipeSteps, scanStrideForSpeed, normalizeScanSpeed, SCAN_SPEED_KEY, DEFAULT_SCAN_SPEED } from './sequential-scan'
 import './remote-circle-test.css'
 
 type Ping = { type:'ping'|'pong';seq:number }
@@ -44,6 +44,8 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const [skinMode,setSkinMode]=useState(false)
  const [scanActive,setScanActive]=useState(false)
  const [scanMode,setScanMode]=useState<'directional'|'sequential'>(()=>{try{return localStorage.getItem('stax-remote-scan-mode-v1')==='sequential'?'sequential':'directional'}catch{return 'directional'}})
+ const [scanSpeed,setScanSpeed]=useState(()=>{try{return normalizeScanSpeed(localStorage.getItem(SCAN_SPEED_KEY))}catch{return DEFAULT_SCAN_SPEED}})
+ const [scanSettingsOpen,setScanSettingsOpen]=useState(false)
  const hostInputRef=useRef(onHostInput)
  hostInputRef.current=onHostInput
  const [landscape,setLandscape]=useState(()=>window.innerWidth>window.innerHeight)
@@ -57,6 +59,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
  const board=useRef<HTMLDivElement>(null)
  useEffect(()=>{try{localStorage.setItem('stax-remote-hand-v1',hand)}catch{/* optional */}},[hand])
  useEffect(()=>{try{localStorage.setItem('stax-remote-scan-mode-v1',scanMode)}catch{/* optional */}},[scanMode])
+ useEffect(()=>{try{localStorage.setItem(SCAN_SPEED_KEY,String(scanSpeed))}catch{/* optional */}},[scanSpeed])
  useEffect(()=>{
   if(mode!=='pad')return
   const update=()=>setLandscape(window.innerWidth>window.innerHeight)
@@ -340,7 +343,7 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
   if(surfaces.length===1&&(scanChord||(freeScan&&
     (contact.scanStarted||Math.abs(travelX)>Math.max(12,Math.abs(travelY)*1.2))))){
    contact.scanStarted=true
-   const result=scanSwipeSteps(contact.scanStep??0,contact.x-(contact.scanOriginX??contact.startX))
+   const result=scanSwipeSteps(contact.scanStep??0,contact.x-(contact.scanOriginX??contact.startX),scanStrideForSpeed(scanSpeed))
    if(result.directions.length){
     for(const dir of result.directions)send('navigate_seq',dir)
     contact.scanStep=result.step;contact.swipeFired=true
@@ -442,6 +445,18 @@ export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInp
     title="Switch between nearest-direction and continuous family scanning">
     {scanMode==='sequential'?'Scan: Sequential':'Scan: Directional'}
    </button>
+   <button className="stax-remote-scan-speed-button" type="button" onPointerDown={e=>e.stopPropagation()}
+    onClick={()=>setScanSettingsOpen(open=>!open)} aria-expanded={scanSettingsOpen} aria-controls="stax-remote-scan-speed-settings"
+    title="Set how many shapes one swipe crosses">Scan speed {scanSpeed}×</button>
+   {scanSettingsOpen&&<div id="stax-remote-scan-speed-settings" className="stax-remote-scan-speed-settings"
+    role="group" aria-label="Sequential scanner speed settings" onPointerDown={e=>e.stopPropagation()}>
+    <label htmlFor="stax-remote-scan-speed">Sequential scanner <output htmlFor="stax-remote-scan-speed">{scanSpeed}×</output></label>
+    <input id="stax-remote-scan-speed" type="range" min="1" max="6" step="1"
+     value={scanSpeed} onChange={e=>setScanSpeed(normalizeScanSpeed(e.target.value))}
+     aria-valuetext={scanSpeed+' times original scan speed'}/>
+    <div className="stax-remote-scan-speed-scale"><span>Precise · 1×</span><span>Fast · 6×</span></div>
+    <small>Also controls B ← scanning. Saved on this device.</small>
+   </div>}
    <button className="stax-remote-hand-toggle" type="button" onPointerDown={e=>e.stopPropagation()}
     onClick={()=>{setHand(h=>h==='right'?'left':'right');pulse([15,25,15])}}
     title="Mirror A and B for handedness">{hand==='right'?'Right-handed':'Left-handed'} · Switch</button>
