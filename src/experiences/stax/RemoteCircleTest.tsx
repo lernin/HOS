@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { supabase } from '../../lib/supabase'
 import { FoamSlideAudio, safeFoamSoundId, normalizeFoamSoundTuning } from './foam-slide-audio'
-import { initialRemoteBoard, reduceRemoteBoard, REMOTE_KINDS, type RemoteGesture, type RemoteInput, type RemoteDirection, type RemoteKind } from './remote-gesture-model'
+import { initialRemoteBoard, reduceRemoteBoard, type RemoteGesture, type RemoteInput, type RemoteDirection, type RemoteKind } from './remote-gesture-model'
 import './remote-circle-test.css'
 
 type Ping = { type:'ping'|'pong';seq:number }
@@ -27,7 +27,7 @@ const verboseName:Record<RemoteKind,string>={circle:'Blue circle',triangle:'Red 
  rectangle:'Purple rectangle',oval:'Green oval',square:'Pink square',
  diamond:'Yellow diamond',hexagon:'Orange hexagon'}
 
-export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
+export function RemoteCircleTest({onExit,onHostInput}:{onExit:()=>void;onHostInput?:(input:RemoteInput)=>void}) {
  const query=new URLSearchParams(window.location.search)
  const mode=query.get('remote')==='pad'?'pad':'host'
  const [room]=useState(()=>mode==='host'?newRoom():query.get('room')||'')
@@ -39,8 +39,8 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
  const [pressed,setPressed]=useState(false)
  const [hand,setHand]=useState<'right'|'left'>(()=>{try{return localStorage.getItem('stax-remote-hand-v1')==='left'?'left':'right'}catch{return 'right'}})
  const [cornerMode,setCornerMode]=useState<'A'|'B'|'A-shift'|'B-shift'|null>(null)
- const [phonePalette,setPhonePalette]=useState<RemoteKind>('triangle')
- const phonePaletteRef=useRef<RemoteKind>('triangle')
+ const hostInputRef=useRef(onHostInput)
+ hostInputRef.current=onHostInput
  const [landscape,setLandscape]=useState(()=>window.innerWidth>window.innerHeight)
  const foamSound=useRef<FoamSlideAudio|null>(null)
  const fullscreenRequest=useRef(false)
@@ -104,7 +104,8 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   }
   function apply(data:DataMessage){
    if((data.type==='move'||data.type==='gesture'||data.type==='view')&&mode==='host'){
-    boardDispatch(data)
+    if(hostInputRef.current)hostInputRef.current(data)
+    else boardDispatch(data)
    }else if(data.type==='ping'&&mode==='host')sendData.current({type:'pong',seq:data.seq})
    else if(data.type==='pong'&&mode==='pad'){
     const before=state.current.started.get(data.seq)
@@ -225,15 +226,9 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
    else if(dir==='right')send('redo')
    else if(dir==='down'){send('delete_arm');pulse([18,40,30]);announce('Delete? Tap to confirm')}
    else {send('delete_cancel');announce('Cancel')}
-  }else if(mode==='B'){
-   if(dir==='left'||dir==='right'){
-    send('cycle_kind',dir)
-    const step=dir==='left'?-1:1
-    const next=REMOTE_KINDS[(REMOTE_KINDS.indexOf(phonePaletteRef.current)+step+REMOTE_KINDS.length)%REMOTE_KINDS.length]
-    phonePaletteRef.current=next
-    setPhonePalette(next)
-    announce(verboseName[next])
-   }else{send('cycle_port',dir);announce(dir==='up'?'Previous attachment direction':'Next attachment direction')}
+   }else if(mode==='B'){
+   // Only the focused grammar atom decides how a swipe modifies the molecule.
+   send('modify',dir)
   }else if(mode==='B-shift'){
    if(dir==='up')send('fit')
    else if(dir==='down')send('center')
@@ -339,7 +334,7 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
   if(contact.role==='surface'){
    if(state.current.dragging){send('move_end');state.current.dragging=false;foamSound.current?.stop()}
    if(!contact.moved&&highest===1){
-    if(modeNow==='B'){send('add');pulse([15,30,26]);announce('Add '+verboseName[phonePalette])}
+    if(modeNow==='B'){send('spine');pulse([15,30,26])}
     else if(modeNow==='A-shift'){send('delete_confirm');pulse([20,30,20])}
     else if(modeNow==='B-shift'){announce('View commands')}
     else if(modeNow===null){
@@ -392,11 +387,11 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
     <strong>A</strong><small>{cornerMode==='A-shift'?'EDIT':'MOVE'}</small>
    </div>
    <div className="stax-remote-pad-cross" aria-hidden="true">{pressed?'·':'+'}</div>
-   <div className="stax-remote-pad-instruction">Swipe to focus · Hold A + drag · Hold B + tap to add</div>
+   <div className="stax-remote-pad-instruction">Swipe to focus · A + drag molecule · B + tap spine / swipe modify</div>
    <div className="stax-remote-pad-rtt">{rtt===null?'Measuring connection…':`Round trip: ${rtt} ms`}</div></>}
   </div>
- return <div className="stax-remote-host">
-  <div className="stax-remote-wood" ref={board} aria-label="Isolated foam STAX gesture workspace">
+ return <div className="stax-remote-host" data-canonical={onHostInput?"true":"false"}>
+  {!onHostInput&&<div className="stax-remote-wood" ref={board} aria-label="Isolated foam STAX gesture workspace">
    <div className="stax-remote-stage" style={{transform:`translate(${boardState.panX}px,${boardState.panY}px) scale(${boardState.zoom})`}}>
     {boardState.pieces.map(piece=><div key={piece.id}
      className={`stax-remote-piece${piece.id===boardState.focus?' is-focused':''}${piece.id===boardState.selected?' is-selected':''}`}
@@ -405,31 +400,41 @@ export function RemoteCircleTest({onExit}:{onExit:()=>void}) {
        alt={verboseName[piece.kind]}/>
      </div>)}
    </div>
-  </div>
+  </div>}
   <aside className="stax-remote-host-panel">
    <div className="stax-remote-host-heading"><strong>STAX · Eyes-Free Controller</strong><button type="button" onClick={onExit} aria-label="Turn remote test off and return to STAX">Remote · On — Turn off</button></div>
-   <p>Scan with your phone, rotate to landscape, and operate the STAX demonstration without looking at the phone.</p>
+   <p>Scan to control real STAX magnetic geometry on a temporary board. B + tap builds the blue–red–blue spine; B + swipe modifies the focused shape.</p>
    <img className="stax-remote-qr" src={qr} alt="QR code to join the STAX phone trackpad"/>
    <div className="stax-remote-connection" aria-live="polite">{link==='direct'?'Direct peer-to-peer · connected':peerReady?'Internet relay connected':link==='offline'?'Connection unavailable':'Waiting for phone…'}</div>
-   <div className="stax-remote-board-status" aria-live="polite">
+   {onHostInput?<div className="stax-remote-board-status" aria-live="polite">
+    <strong>Canonical STAX grammar mode</strong>
+    <span>B + tap: blue → red (+ yellow predecessor) → blue → more blues</span>
+    <span>On blue: B + ← pink · ↑ purple · → green · ↓ orange</span>
+    <span>On red: B + ↓ two oranges, then a third</span>
+    <span>On pink/green/purple: B + ↓ add modifier · ↑ remove last</span>
+    <span>A + drag: move the entire connected molecule</span>
+    <span>Swipe to select · two fingers pan/pinch</span>
+    <small>Normal STAX is preserved. Yellow positioning is provisional; later red-orange tiers remain to be agreed.</small>
+   </div>:<div className="stax-remote-board-status" aria-live="polite">
     <strong>{boardState.notice}</strong>
     <span>{boardState.pieces.length} shapes · {Math.round(boardState.zoom*100)}% zoom · {boardState.updates} drag packets</span>
     <span>Focused: {verboseName[boardState.pieces.find(p=>p.id===boardState.focus)?.kind||'circle']}</span>
     <span>Next shape: {verboseName[boardState.palette]} · Placement: {boardState.port}</span>
     {boardState.deleteArmed&&<span className="stax-remote-delete-warning">Deletion armed: A-Shift + tap to confirm</span>}
-   </div>
+   </div>}
    <div className="stax-remote-host-buttons">
-    <button type="button" onClick={()=>boardDispatch({type:'gesture',action:'seed',seq:0})}>Try 3 pieces</button>
-    <button type="button" onClick={()=>boardDispatch({type:'gesture',action:'reset',seq:0})}>Reset to 1 circle</button>
+    {onHostInput?<button type="button" onClick={()=>onHostInput({type:'gesture',action:'reset',seq:0})}>Reset remote experiment</button>:<>
+     <button type="button" onClick={()=>boardDispatch({type:'gesture',action:'seed',seq:0})}>Try 3 pieces</button>
+     <button type="button" onClick={()=>boardDispatch({type:'gesture',action:'reset',seq:0})}>Reset to 1 circle</button>
+    </>}
    </div>
-   <div className="stax-remote-legend">
+   {!onHostInput&&<div className="stax-remote-legend">
     <strong>Eyes-free gesture map</strong>
     <p>Swipe: navigate shapes · Tap: select · Double tap: center</p>
-    <p>Hold A + drag: move piece · Hold B + swipe: choose kind/direction · Hold B + tap: add</p>
-    <p>A pull left + hold: Undo / Redo / Delete · B pull left + hold: Fit / Center / Zoom</p>
+    <p>Hold A + drag: move piece · Hold B + swipe: modify · Hold B + tap: add spine</p>
+    <p>A pull outward + hold: Undo / Redo / Delete · B pull outward + hold: Fit / Center / Zoom</p>
     <p>Two fingers: pan and pinch · Three fingers left/right: undo/redo</p>
-    <small>Gesture sandbox only. The real STAX board remains untouched underneath; canonical magnetic snapping is not simulated in this experiment.</small>
-   </div>
+   </div>}
   </aside>
  </div>
 }
