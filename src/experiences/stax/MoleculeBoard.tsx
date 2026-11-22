@@ -1352,7 +1352,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  }
  function onShapeDown(e:ReactPointerEvent<SVGGElement>,id:string){
   if(e.pointerType==='mouse'&&e.button!==0)return
-  if(pinch.current||questTwoPair.current)return
+  if(pinch.current||questTwoPair.current||themeScroll.current)return
   if(omitBrush){
    e.stopPropagation()
    const old=currentDoc.current
