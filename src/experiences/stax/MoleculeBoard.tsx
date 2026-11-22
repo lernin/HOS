@@ -4,6 +4,7 @@ import { SYMBOLS, type Kind } from './model'
 import { STAX_SPACING, positionChildren, positionRedOrangeCrossPair, horizontalFollower, positionRedRightNestedOrange, requiredFamilyFollowerShift, type FamilyChild } from './geometry'
 import { nextRedOrangeRemoteStep } from './remote-orange-topology'
 import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
+import { sequentialScanNext } from './sequential-scan'
 import { canPinkSupportBlue, canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
@@ -1839,6 +1840,17 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   else if(dir==='up')remoteRemoveLastModifier(target.id)
   else remoteNotice('That swipe has no verified attachment for '+target.kind+'.')
  }
+ function remoteSequentialNavigate(dir:RemoteDirection){
+  // Horizontal swipes scan families; vertical retains directional lookup.
+  if(dir==='up'||dir==='down'){remoteNavigate(dir);return}
+  const d=currentDoc.current
+  const next=sequentialScanNext(d,remoteFocus.current,dir)
+  if(next){
+   remoteSelect(next)
+   const atom=d.atoms.find(a=>a.id===next)
+   remoteNotice('Sequential: '+(atom?.word||atom?.kind||'shape'))
+  }else remoteNotice('No shapes to scan.')
+ }
  function remoteNavigate(dir:RemoteDirection){
   const d=currentDoc.current,anchor=d.atoms.find(a=>a.id===remoteFocus.current)??d.atoms[0]
   if(!anchor)return
@@ -1886,6 +1898,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
    case 'spine':remoteSpine();break
    case 'modify':if(input.dir)remoteModify(input.dir);break
    case 'navigate':if(input.dir)remoteNavigate(input.dir);break
+   case 'navigate_seq':if(input.dir)remoteSequentialNavigate(input.dir);break
    case 'select':{
     if(remoteFocus.current){remoteSelect(null);remoteNotice('Selection cleared. Swipe to focus another piece.')}
     else remoteNotice('Nothing selected. Swipe to choose a piece.')
