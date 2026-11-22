@@ -1798,11 +1798,8 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
     break
    }
    case 'theme_next':case 'theme_prev':{
-    const index=STAX_THEMES.indexOf(theme)
     const offset=input.action==='theme_next'?1:-1
-    const next=STAX_THEMES[(index+offset+STAX_THEMES.length)%STAX_THEMES.length]
-    setTheme(next)
-    remoteNotice('Background: '+staxThemeName(next))
+    setTheme(previous=>STAX_THEMES[(STAX_THEMES.indexOf(previous)+offset+STAX_THEMES.length)%STAX_THEMES.length])
     break
    }
    case 'undo':{
