@@ -6,6 +6,8 @@ import { nextRedOrangeRemoteStep } from './remote-orange-topology'
 import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
+import { FONT_STACKS, TYPOGRAPHY_STORAGE_KEY, sanitizeTypographyBook, type TypographyBook } from './skin-typography'
+import { SkinTypographyWorkshop } from './SkinTypographyWorkshop'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
 import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
 import { PearlescentGlass } from './pearlescent-atlas'
@@ -1085,6 +1087,18 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   catch{return {...DEFAULT_FOAM_SOUND_TUNING}}
  })
  const [soundLabOpen,setSoundLabOpen]=useState(false)
+ const [textWorkshopOpen,setTextWorkshopOpen]=useState(false)
+ const loadTextBook=():TypographyBook=>{
+  try{return sanitizeTypographyBook(JSON.parse(localStorage.getItem(TYPOGRAPHY_STORAGE_KEY)||'null'))}
+  catch{return sanitizeTypographyBook(null)}
+ }
+ const [typography,setTypography]=useState<TypographyBook>(loadTextBook)
+ const [savedTypography,setSavedTypography]=useState<TypographyBook>(loadTextBook)
+ const typographyDirty=JSON.stringify(typography)!==JSON.stringify(savedTypography)
+ function captureTypography(){
+  try{localStorage.setItem(TYPOGRAPHY_STORAGE_KEY,JSON.stringify(typography));setSavedTypography(typography);setHint('Captured all skin typography edits on this device.')}
+  catch{setHint('Could not save typography on this device.')}
+ }
  const foamAudio=useRef<FoamSlideAudio|null>(null)
  function audio(){
   if(!foamAudio.current)foamAudio.current=new FoamSlideAudio()
@@ -1963,7 +1977,12 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  const questTwoHarvest=questActive&&activeQuestLevel===2?harvestQuestTwo(questTwoSide,questTwoTaps,questTwoContracted):null
  const viewPercentX=(x:number)=>`${(x-view.x)/view.width*100}%`
  const viewPercentY=(y:number)=>`${(y-view.y)/view.height*100}%`
- return <div ref={rootRef} className="stax-molecule-ui" style={shadowCssVars} data-theme={theme} data-remote-sandbox={remoteSandbox?'true':'false'} data-original-pollen={pollenAnimated?'true':'false'}>
+ return <div ref={rootRef} className="stax-molecule-ui" style={{...shadowCssVars,
+   '--stax-font':FONT_STACKS[typography[theme].interface.font],
+   '--stax-text':typography[theme].interface.color,
+   '--stax-ui-weight':typography[theme].interface.bold?'700':'400',
+   '--stax-ui-size':typography[theme].interface.size+'px'
+  } as CSSProperties} data-theme={theme} data-remote-sandbox={remoteSandbox?'true':'false'} data-original-pollen={pollenAnimated?'true':'false'}>
   <button className="stax-tray-handle" type="button" data-skin-mode={skinButtonActive?'true':'false'} aria-label={skinButtonActive?'Skin selection: slide left or right':trayOpen?'Close workspace controls':'Open workspace controls'} aria-controls="stax-bottom-tray" aria-expanded={trayOpen}
     onPointerDown={skinButtonDown} onPointerMove={skinButtonMove} onPointerUp={skinButtonEnd} onPointerCancel={skinButtonEnd}
     onClick={()=>{if(suppressMenuClick.current){suppressMenuClick.current=false;return}setTrayOpen(v=>!v);setTrayActivity(n=>n+1)}}><span aria-hidden="true">{trayOpen?'‹':'›'}</span></button>
@@ -1990,6 +2009,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
       <button type="button" className="stax-sound-button"
        onClick={()=>setSoundLabOpen(v=>!v)}
        aria-label="Foam sound lab" title="Foam sound lab" aria-expanded={soundLabOpen} aria-controls="stax-sound-panel">Sound</button>
+       <button type="button" onClick={()=>{setTextWorkshopOpen(v=>!v);setTrayOpen(false)}} aria-label="Open text workshop" title="Design lettering for each skin">Text</button>
      <button onClick={()=>{setOmitBrush(v=>!v);setHint(omitBrush?'Dotted omission brush off.':'Dotted omission brush on. Tap a shape to toggle, or add dotted shapes.')}}
       title="Omit brush: tap to toggle; when active tap shapes to mark omitted, or add new dotted shapes"
       aria-label="Toggle dotted omission brush" aria-pressed={omitBrush}
@@ -2004,7 +2024,8 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
     <button aria-label="Zoom in" title="Zoom in" onClick={()=>setCamera(zoom(currentView.current,.8))}><StaxToolbarIcon name="plus"/></button>
    </div>
   </div>
-  {soundLabOpen&&<section className="stax-sound-panel" id="stax-sound-panel" role="region" aria-label="Foam sound lab">
+  {textWorkshopOpen&&!remoteSandbox&&<SkinTypographyWorkshop theme={theme} setTheme={setTheme} book={typography} onChange={setTypography} onCapture={captureTypography} onClose={()=>setTextWorkshopOpen(false)} dirty={typographyDirty}/>}
+   {soundLabOpen&&<section className="stax-sound-panel" id="stax-sound-panel" role="region" aria-label="Foam sound lab">
     <div className="stax-sound-panel-header">
      <strong>Foam sound lab</strong>
      <button type="button" onClick={()=>setSoundLabOpen(false)} aria-label="Close sound lab">×</button>
@@ -2138,9 +2159,9 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
         {theme==='pearlescent-airglass'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>}
       {theme==='pearlescent-dusk'&&<PearlescentAirglass kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted} dusk/>}
       {theme==='classroom-foam'&&<FoamChip kind={a.kind} w={atomWidth(a)} h={atomHeight(a)} omitted={a.omitted}/>} 
-      {wordOnAtom(a)&&<text x={atomWidth(a)/2} y={atomHeight(a)/2} dominantBaseline="middle" fontFamily={'"Trebuchet MS","Noto Sans",system-ui,sans-serif'}
-        fontSize={Math.min(22,Math.max(13,atomHeight(a)*.29),(atomWidth(a)-12)/Math.max(1,wordOnAtom(a).length*.56))}
-         fill={theme==='classroom-foam'?'#3b2d22':(theme==='pearlescent-glass'||theme==='pearlescent-airglass'||theme==='pearlescent-dusk')?'#3f354c':theme==='golden-line'||hasStaxMaterial(theme)?'#fff0c8':theme==='blueprint'||theme==='black'||theme==='arc-reactor'||theme==='hologram'||theme==='cosmic'?'#edf9ff':'#253c55'} fontWeight={700} textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
+      {wordOnAtom(a)&&<text x={atomWidth(a)/2} y={atomHeight(a)/2} dominantBaseline="middle" fontFamily={FONT_STACKS[typography[theme][a.kind].font]}
+        fontSize={Math.min(typography[theme][a.kind].size,Math.max(13,atomHeight(a)*.29),(atomWidth(a)-12)/Math.max(1,wordOnAtom(a).length*.56))}
+        fill={typography[theme][a.kind].color} fontWeight={typography[theme][a.kind].bold?700:400} textAnchor="middle" pointerEvents="none">{wordOnAtom(a)}</text>}
     </g>)}
    </svg>
    {questionMarker&&<button className="stax-quest2-h" type="button" aria-label="H interrogative marker, tap to ask How" title="H means How" style={{left:viewPercentX(questionMarker.x),top:viewPercentY(questionMarker.y)}} onClick={()=>questTwoTap('H')}>H</button>}
