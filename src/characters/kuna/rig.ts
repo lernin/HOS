@@ -92,7 +92,7 @@ export function createKunaRig(model:T.Group,rawClips:readonly T.AnimationClip[])
   const idleChinTrack=nativeIdle?.tracks.find(track=>
     /(?:^|[/.])Chin\.(?:quaternion|rotation)$/i.test(track.name))
   if(neutralChin&&idleChinTrack&&idleChinTrack.times.length){
-    const sample=idleChinTrack.createInterpolant().evaluate(idleChinTrack.times[0])
+    const sample=idleChinTrack.values
     if(idleChinTrack.getValueSize()===4){
       neutralChin.set(sample[0],sample[1],sample[2],sample[3]).normalize()
     }else if(idleChinTrack.getValueSize()===3){
