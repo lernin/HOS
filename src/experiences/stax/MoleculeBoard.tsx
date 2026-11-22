@@ -1797,6 +1797,14 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
     if(drag?.changed){setHistory(h=>[...h,drag.before].slice(-40));remoteRedo.current=[]}
     break
    }
+   case 'theme_next':case 'theme_prev':{
+    const index=STAX_THEMES.indexOf(theme)
+    const offset=input.action==='theme_next'?1:-1
+    const next=STAX_THEMES[(index+offset+STAX_THEMES.length)%STAX_THEMES.length]
+    setTheme(next)
+    remoteNotice('Background: '+staxThemeName(next))
+    break
+   }
    case 'undo':{
     const before=history.at(-1)
     if(before){remoteRedo.current.push(d);setHistory(h=>h.slice(0,-1));update(before);
