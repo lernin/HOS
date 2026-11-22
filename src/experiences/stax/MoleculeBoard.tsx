@@ -56,6 +56,15 @@ const atomWidth=(a:Atom)=>width(a.kind)*variantWidthFactor(a.kind,a.variant)
 const atomHeight=(a:Atom)=>height(a.kind)*variantHeightFactor(a.kind,a.variant)
 const empty=():Draft=>({atoms:[],bonds:[]})
 const defaultView:View={x:0,y:0,width:W,height:H}
+// The authentic wood texture is a 411-unit-tall repeating slat. Showing ~3
+// slats (two black seams) at rest avoids magnifying the tabletop photograph.
+const CLASSROOM_WOOD_DEFAULT_ZOOM=2.18
+const classroomWoodDefaultView:View={
+ x:W*(1-CLASSROOM_WOOD_DEFAULT_ZOOM)/2,
+ y:H*(1-CLASSROOM_WOOD_DEFAULT_ZOOM)/2,
+ width:W*CLASSROOM_WOOD_DEFAULT_ZOOM,
+ height:H*CLASSROOM_WOOD_DEFAULT_ZOOM,
+}
 const byId=(d:Draft,id:string)=>d.atoms.find(a=>a.id===id)!
 const supports=(k:Kind)=>k==='square'||k==='rectangle'
 const nounSupport=(a:Atom)=>supports(a.kind)||a.kind==='oval'
@@ -1063,7 +1072,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  const [omitBrush,setOmitBrush]=useState(false)
  const [pollenAnimated,setPollenAnimated]=useState(false)
  useEffect(()=>{if(theme!=='golden-pollen')setPollenAnimated(false)},[theme])
- const [view,setView]=useState<View>(defaultView)
+ const [view,setView]=useState<View>(()=>remoteSandbox||theme==='classroom-foam'?classroomWoodDefaultView:defaultView)
  const [history,setHistory]=useState<Draft[]>([])
  const [questActive,setQuestActive]=useState(false)
  const [questPanelOpen,setQuestPanelOpen]=useState(false)
@@ -1809,7 +1818,7 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
      width:v.width*factor,height:v.height*factor})
     break
    }
-   case 'reset':remoteRedo.current=[];remoteFocus.current=null;setHistory([]);update(empty());setCamera(defaultView);
+   case 'reset':remoteRedo.current=[];remoteFocus.current=null;setHistory([]);update(empty());setCamera(classroomWoodDefaultView);
     remoteSelect(null);remoteNotice('Demo reset. Hold B and tap to add blue.');break
    case 'seed':{
     if(d.atoms.length)remoteNotice('Use B-tap to extend the current sentence, or reset first.')
