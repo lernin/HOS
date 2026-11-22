@@ -70,11 +70,11 @@
 .stax-remote-pad[data-hand="right"] .stax-remote-corner-a{
  left:calc(env(safe-area-inset-left,0px) + 28px);bottom:calc(env(safe-area-inset-bottom,0px) + 16px)}
 .stax-remote-pad[data-hand="right"] .stax-remote-corner-b{
- left:calc(env(safe-area-inset-left,0px) + 28px);top:50%;transform:translateY(-50%)}
+ left:calc(env(safe-area-inset-left,0px) + 28px);top:57%;transform:translateY(-50%)}
 .stax-remote-pad[data-hand="left"] .stax-remote-corner-a{
  right:calc(env(safe-area-inset-right,0px) + 28px);bottom:calc(env(safe-area-inset-bottom,0px) + 16px)}
 .stax-remote-pad[data-hand="left"] .stax-remote-corner-b{
- right:calc(env(safe-area-inset-right,0px) + 28px);top:50%;transform:translateY(-50%)}
+ right:calc(env(safe-area-inset-right,0px) + 28px);top:57%;transform:translateY(-50%)}
 .stax-remote-pad .stax-remote-hand-toggle{position:absolute;z-index:2;
  top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%);
  padding:8px 11px;border:1px solid #26323a;border-radius:9px;
