@@ -150,7 +150,7 @@ test('bottom STAX controls use one left-edge slide-out tray with horizontal scro
  assert.match(board,/data-open=\{trayOpen\?'true':'false'\}/)
  assert.match(css,/\.stax-molecule-dock \{[\s\S]*?display:flex;[\s\S]*?overflow-x:auto;/)
  assert.match(css,/\.stax-molecule-tools,\s*\.stax-molecule-buttons,\s*\.stax-molecule-view-controls \{[\s\S]*?display:flex;/)
- assert.match(css,/\.stax-molecule-dock\[data-open='false'\] \{[\s\S]*?translateX\(calc\(-100% - 56px\)\)/)
+ assert.match(css,/\.stax-molecule-dock\[data-open='false'\] \{[\s\S]*?translateX\(calc\(-100% - 104px\)\)/)
  assert.doesNotMatch(css,/grid-template-columns:repeat\(4,var\(--stax-control-size\)\)/)
 })
 test('tray retracts after inactivity without losing keyboard or touch access',async()=>{
