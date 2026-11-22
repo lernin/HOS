@@ -6,6 +6,7 @@ import { nextRedOrangeRemoteStep } from './remote-orange-topology'
 import { startTwoFinger, advanceTwoFinger, type TwoFingerSession } from './two-finger-intent'
 import { canAttachOrangeUnderObjectBlue, canAttachAdverbUnderPreposition, canExtendSupportChain, canFollowBlueOrange, canNestPossessive, eligibleOrangeTierSlot, orangeRootedInRed, largestAssembledFamily, normalizeBlueSiblingOrder, rootedSupportChain, supportChildOfKind, withRedCompanion } from './family-links'
 import { STAX_THEMES, nextStaxTheme, staxBoardColor, staxOmissionDash, staxThemeName, type StaxTheme } from './view-modes'
+import { TEXT_FONTS, TEXT_TARGETS, TEXT_TREATMENTS_KEY, copyTreatments, defaultTextTreatment, fontFamily, parseTextTreatments, textTreatment, type TextTarget, type TextTreatment } from './text-workshop'
 import { StaxMaterialDefs, StaxMaterialEffect, hasStaxMaterial, materialFill, materialStroke } from './materials'
 import { LetterzGoldenPollenCanvas } from './letterz-golden-pollen'
 import { PearlescentGlass } from './pearlescent-atlas'
@@ -1065,6 +1066,33 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   if(remoteSandbox)return 'classroom-foam'
   try{const value=localStorage.getItem(THEME_KEY);return STAX_THEMES.find(t=>t===value)??'color'}catch{return 'color'}
  })
+ const [textSaved,setTextSaved]=useState(()=>{
+  try{return parseTextTreatments(localStorage.getItem(TEXT_TREATMENTS_KEY))}
+  catch{return {}}
+ })
+ const [textDraft,setTextDraft]=useState(()=>copyTreatments(textSaved))
+ const [textWorkshopOpen,setTextWorkshopOpen]=useState(false)
+ const [textTarget,setTextTarget]=useState<TextTarget>('circle')
+ const [textDirty,setTextDirty]=useState(false)
+ const selectedText=textTreatment(textDraft,theme,textTarget)
+ const interfaceText=textTreatment(textDraft,theme,'interface')
+ const fontInk=(target:TextTarget)=>textTreatment(textDraft,theme,target)
+ function editText(patch:Partial<TextTreatment>){
+  setTextDraft(current=>{
+   const value=textTreatment(current,theme,textTarget)
+   return {...current,[theme]:{...current[theme],[textTarget]:{...value,...patch}}}
+  })
+  setTextDirty(true)
+ }
+ function captureTextTreatments(){
+  const snapshot=copyTreatments(textDraft)
+  try{
+   localStorage.setItem(TEXT_TREATMENTS_KEY,JSON.stringify(snapshot))
+   setTextSaved(snapshot);setTextDirty(false)
+   setHint('Text Workshop: all skin typography captured on this device.')
+  }catch{setHint('Text Workshop: unable to save on this device.')}
+ }
+ function revertTextTreatments(){setTextDraft(copyTreatments(textSaved));setTextDirty(false)}
  // Classroom Foam presentation only; no shape or magnet geometry depends on this.
  const shadowCssVars={
   '--stax-foam-shadow-contact':String(.425),
@@ -1073,6 +1101,10 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
   '--stax-foam-shadow-blur-near':'0.5px',
   '--stax-foam-shadow-blur-middle':'0.5px',
   '--stax-foam-shadow-blur-far':'0.5px',
+  '--stax-font':fontFamily(interfaceText.font),
+  '--stax-text':interfaceText.color,
+  '--stax-caption':interfaceText.color,
+  '--stax-toolbar-ink':interfaceText.color,
  } as CSSProperties
  const [foamSoundEnabled,setFoamSoundEnabled]=useState(()=>{
   try{return localStorage.getItem(FOAM_SOUND_KEY)!=='off'}catch{return true}
@@ -1987,6 +2019,9 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
       aria-label="Toggle Classroom Foam">Foam</button>
       <button type="button" className="stax-remote-button" title="Open phone trackpad experiment without clearing your STAX board"
        aria-label="Toggle phone trackpad experiment on" onClick={onRemoteTest}>Remote · Off</button>
+      <button type="button" className="stax-text-workshop-trigger"
+       aria-expanded={textWorkshopOpen} aria-controls="stax-text-workshop"
+       title="Text Workshop: tune each skin's lettering" onClick={()=>{setTextWorkshopOpen(v=>!v);setTrayOpen(false)}}>Type</button>
       <button type="button" className="stax-sound-button"
        onClick={()=>setSoundLabOpen(v=>!v)}
        aria-label="Foam sound lab" title="Foam sound lab" aria-expanded={soundLabOpen} aria-controls="stax-sound-panel">Sound</button>
