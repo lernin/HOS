@@ -288,6 +288,6 @@ test('text workshop previews fonts by appearance and captures per-skin per-shape
  assert.match(board,/fill=\{fontInk\(a\.kind\)\.color\}/)
  assert.match(board,/fontWeight=\{fontInk\(a\.kind\)\.bold\?700:400\}/)
  assert.match(source,/TEXT_TARGETS/)
- assert.match(source,/^#[0-9a-fA-F]/m)
+ assert.match(source,/TEXT_TREATMENTS_KEY='stax-text-workshop-v1'/)
  assert.doesNotMatch(board.slice(board.indexOf('function captureTextTreatments()'),board.indexOf('// Classroom Foam presentation')),/save\(\)|setCamera\(/)
 })
