@@ -237,7 +237,7 @@ test('standalone phone board scrolls visual themes continuously with three finge
  assert.match(move,/scroll\.step=step/)
  assert.doesNotMatch(move,/setCamera\([^)]*scroll/,'three finger theme scroll must not zoom')
  assert.match(end,/if\(activeTouches\.current\.size<3\)themeScroll\.current=null/)
- assert.match(board,/if\(pinch\.current\|\|questTwoPair\.current\|\|themeScroll\.current\)return/)
+ assert.match(board,/if\(pinch\.current\|\|questTwoPair\.current\|\|themeScroll\.current\|\|twoFingerIntent\.current\|\|threeFingerCooldown\.current\)return/)
 })
 
 test('standalone board uses remote intent-locked two-finger pan/pinch, never three-finger camera motion',async()=>{
