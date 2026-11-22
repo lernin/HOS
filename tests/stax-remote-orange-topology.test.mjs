@@ -114,3 +114,14 @@ test('classroom foam starts zoomed out to about three wooden slats, without chan
  const visibleSlats=570*2.18/411
  assert.ok(visibleSlats>2.8&&visibleSlats<3.2)
 })
+
+test('selected foam uses only white glow while ordinary foam keeps its dark shadow',async()=>{
+ const css=await readFile(new URL('../src/experiences/stax/molecule-board.css',import.meta.url),'utf8')
+ const selected=css.match(/svg g\[data-kind\]\.stax-selected-atom image\.stax-authentic-foam-chip\s*\{([^}]+)\}/)?.[1]
+ const ordinary=css.match(/\[data-theme='classroom-foam'\] image\.stax-authentic-foam-chip\s*\{([^}]+)\}/)?.[1]
+ assert.ok(selected,'selected foam rule must exist')
+ assert.ok(ordinary,'ordinary foam rule must exist')
+ assert.match(selected,/drop-shadow\(0 0 22px rgba\(241,248,255,\.62\)\)/)
+ assert.doesNotMatch(selected,/rgba\(24,16,9/)
+ assert.match(ordinary,/rgba\(24,16,9/)
+})
