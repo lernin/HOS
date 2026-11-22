@@ -1227,13 +1227,6 @@ export function MoleculeBoard({onBack,onRemoteTest,remoteSandbox=false,remoteInp
  }
  // Two stationary touches on the Level 2 BLUE I + RED SMR pair switch
  // contraction. Any moving pair remains a pinch zoom. No grammar mutation.
- function beginPinch(ids:[number,number],a:TouchPoint,b:TouchPoint){
-  const midX=(a.x+b.x)/2,midY=(a.y+b.y)/2
-  const world=fromClient(midX,midY)
-  if(!world)return
-  pinch.current={pointers:ids,startDistance:Math.max(1,Math.hypot(a.x-b.x,a.y-b.y)),startView:currentView.current,anchor:world}
-  setHint('Pinch to zoom. Shapes keep their positions and connections.')
- }
  function downTouch(e:ReactPointerEvent<SVGSVGElement>){
   if(e.pointerType!=='touch')return
   activeTouches.current.set(e.pointerId,{x:e.clientX,y:e.clientY})
