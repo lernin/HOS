@@ -222,7 +222,7 @@ try{
     assert.match(ui,/recorderRef\.current\.capture\(now,actual\)/)
     assert.match(ui,/Save & next take/)
     assert.match(ui,/Which emotions does the gesture communicate/)
-    assert.match(ui,/Export all takes/)
+    assert.match(ui,/Export gallery \+ vocabulary/)
     assert.match(ui,/sampleProcediaKeys/)
     assert.match(ui,/PROCEDIA_CLIP_KEYS/)
     assert.match(ui,/window\.speechSynthesis\.speak\(utterance\)/)
