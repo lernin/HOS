@@ -16,6 +16,24 @@ export type FamilyGraph = {
 export function supportParent(graph:FamilyGraph,id:string):string|undefined {
  return graph.bonds.find(b=>b.relation==='support'&&b.child===id)?.parent
 }
+/** Pink may support a blue only when an earlier BLUE exists in the same
+ * sentence sequence. A leading blue (even one preceded by a yellow diamond)
+ * cannot acquire a pink supporter. A shifted opening phrase is represented by
+ * explicit grammatical rearrangement, not an automatic first-blue exception.
+ */
+export function canPinkSupportBlue(graph:FamilyGraph,blueId:string):boolean {
+ if(graph.atoms.find(a=>a.id===blueId)?.kind!=='circle')return false
+ const visited=new Set<string>([blueId])
+ let cursor=blueId
+ while(true){
+  const preceding=graph.bonds.find(edge=>edge.relation==='sequence'&&edge.child===cursor)?.parent
+  if(!preceding||visited.has(preceding))return false
+  visited.add(preceding)
+  if(graph.atoms.some(atom=>atom.id===preceding&&atom.kind==='circle'))return true
+  cursor=preceding
+ }
+}
+
 export function supportChildOfKind(graph:FamilyGraph,id:string,kind:string):string|undefined {
  return graph.bonds.find(b=>b.relation==='support'&&b.parent===id&&
   graph.atoms.some(a=>a.id===b.child&&a.kind===kind))?.child
