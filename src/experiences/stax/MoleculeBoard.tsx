@@ -1025,7 +1025,7 @@ function StaxToolbarIcon({name}:{name:StaxToolbarIconName}){
   {name==='plus'&&<><circle cx="10" cy="10" r="7"/><path d="M7 10h6m-3-3v6m5.5 2.5L21 21"/></>}
  </svg>
 }
-export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
+export function MoleculeBoard({onBack,onRemoteTest}:{onBack?:()=>void;onRemoteTest?:()=>void}={}){
  const [doc,setDoc]=useState<Draft>(()=>ensureFourOrangeBlueprint(normalizeRoles(load())))
  const [theme,setTheme]=useState<StaxTheme>(()=>{
   try{const value=localStorage.getItem(THEME_KEY);return STAX_THEMES.find(t=>t===value)??'color'}catch{return 'color'}
@@ -1543,8 +1543,8 @@ export function MoleculeBoard({onBack}:{onBack?:()=>void}={}){
       onClick={()=>{const next=theme==='classroom-foam'?'color':'classroom-foam';setTheme(next);setHint('Visual mode: '+staxThemeName(next))}}
       title="Toggle Classroom Foam using Ashley's photographed desk and seven real foam pieces"
       aria-label="Toggle Classroom Foam">Foam</button>
-      <button type="button" className="stax-remote-button" title="Test phone trackpad controlling one foam circle"
-       aria-label="Open phone trackpad experiment" onClick={()=>window.location.assign('/stax-shape-lab?remote=host')}>Remote test</button>
+      <button type="button" className="stax-remote-button" title="Toggle one-circle phone trackpad experiment without clearing your STAX board"
+       aria-label="Toggle phone trackpad experiment on" onClick={onRemoteTest}>Remote · Off</button>
       <button type="button" className="stax-sound-button"
        onClick={()=>setSoundLabOpen(v=>!v)}
        aria-label="Foam sound lab" title="Foam sound lab" aria-expanded={soundLabOpen} aria-controls="stax-sound-panel">Sound</button>
