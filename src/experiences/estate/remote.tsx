@@ -31,7 +31,9 @@ export function useEstateTvRemote(enabled: boolean, onInput: (packet: EstateRemo
   const callback = useRef(onInput)
   callback.current = onInput
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled) { setPaired(false); setStatus('Open Connect Phone to pair'); return }
+    setPaired(false)
+    setStatus('Connecting…')
     let active = true
     const ch = supabase.channel(channelName(room), { config: { broadcast: { self: false } } })
     let peer: string | null = null
