@@ -6,6 +6,9 @@ import { canonicalTourViews, destinations, spawn, type EstateTourView, type Esta
 import type { LightPreset } from './estate/environment'
 import { estateEditorMaterials, estateEditorPreview, type EditableRoomId, type EditableSurface } from './estate/editor'
 import { loadEstateMaterialCatalog } from './estate/catalog'
+import { startEstateTvRemote } from './estate/tvRemoteChannel'
+import { pairingUrl, newRemoteCode } from './estate/tvRemoteProtocol'
+import { EstatePairQr } from './estate/EstatePairQr'
 import './estate/estate.css'
 type Prefs={speed:number;sensitivity:number;turnSpeed:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number}
 const defaults:Prefs={speed:2.4,sensitivity:1,turnSpeed:28,quality:1,lighting:'golden',mode:'explore',volume:.35}
@@ -45,11 +48,15 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const [editMode,setEditMode]=useState(false),[editTour,setEditTour]=useState(()=>{try{return localStorage.getItem('ocean-estate-edit-tour-v1')==='on'}catch{return false}}),[editTarget,setEditTarget]=useState<string|null>(null),[tourViews,setTourViews]=useState(readTourViews),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
   const [materialCatalog,setMaterialCatalog]=useState(estateEditorMaterials)
   const [markers,setMarkers]=useState<Record<EditableSurface,{x:number;y:number;visible:boolean}>>({floor:{x:0,y:0,visible:false},walls:{x:0,y:0,visible:false}})
+  const [remoteRoom,setRemoteRoom]=useState<string|null>(null),[remoteConnected,setRemoteConnected]=useState(false),[remoteStatus,setRemoteStatus]=useState('')
+  const remotePaired=useRef(false),remoteTap=useRef<(x:number,y:number)=>void>(()=>{}),prefsRef=useRef(prefs)
+  prefsRef.current=prefs
   const clearTouch=()=>{touchPointers.current.clear();input.current.x=0;input.current.z=0;input.current.looking=false}
   const stop=()=>{input.current.x=0;input.current.z=0;input.current.fast=false;keys.current.clear();pointer.current=null;clearTouch();engine.current?.stop()}
   const activeRoom:EditableRoomId|null=state.location==='Grand foyer'?'foyer':state.location==='Great room'?'great-room':null
   const updateTouchMovement=()=>{const touches=[...touchPointers.current.values()],left=touches.find(t=>t.side==='left'),right=touches.find(t=>t.side==='right');if(!left){input.current.x=0;input.current.z=0;return}input.current.z=axis((left.y-left.startY)/72);input.current.x=right?axis((left.x-left.startX)/72):0}
   function handleWorldTap(x:number,y:number){if(input.current.paused)return;if(editMode){if(picker){if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(picked?.kind==='floor')setHelp(false)}}else{const hit=engine.current?.pickEditSurface(x,y);if(hit){openPicker(hit.room,hit.surface);setHelp(false)}else setNotice('Tap a floor or wall in the Grand foyer or Great room.')}}else if(prefs.mode==='explore'){const picked=engine.current?.pick(x,y);if(!picked)setNotice('Tap a clear spot on the floor or a painting.');else if(picked.kind==='art')enterArt(picked.art);else setHelp(false)}}
+  remoteTap.current=handleWorldTap
   useEffect(()=>{const controller=new AbortController();void loadEstateMaterialCatalog(controller.signal).then(setMaterialCatalog).catch(()=>{});return()=>controller.abort()},[])
   useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress,tourViews).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
   useEffect(()=>{const e=engine.current;if(!e)return;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface])},[materialCatalog])
@@ -64,6 +71,35 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     const lost=(e:Event)=>{e.preventDefault();pause();setReady(false);setError('The graphics connection paused. Reopen the estate to continue.')} ;canvas.current?.addEventListener('webglcontextlost',lost)
     return()=>{window.removeEventListener('keydown',key);window.removeEventListener('keyup',key);window.removeEventListener('blur',pause);document.removeEventListener('visibilitychange',visibility);canvas.current?.removeEventListener('webglcontextlost',lost)}
   },[])
+  // Phone controls feed the existing Estate input and collision-safe navigation.
+  // A new code is generated for every connection; the old QR is invalid after disconnect.
+  useEffect(()=>{
+    if(!remoteRoom)return
+    remotePaired.current=false
+    const disconnect=startEstateTvRemote(remoteRoom,{
+      onInput(packet){
+        if(packet.kind==='stop'){stop();return}
+        if(input.current.paused||artOpen.current)return
+        if(packet.kind==='tap'){remoteTap.current(window.innerWidth*.5,window.innerHeight*.63);return}
+        input.current.x=packet.x
+        input.current.z=packet.z
+        if(packet.dx||packet.dy){
+          input.current.yaw-=packet.dx*.003*prefsRef.current.sensitivity
+          input.current.pitch=Math.max(-1.05,Math.min(.95,input.current.pitch-packet.dy*.003*prefsRef.current.sensitivity))
+          input.current.lookedAt=performance.now()
+          input.current.looking=true
+          setHelp(false)
+        }else input.current.looking=false
+      },
+      onPaired(){remotePaired.current=true;setRemoteConnected(true);setRemoteStatus('Connected');dialog.current?.close()},
+      onDisconnected(){remotePaired.current=false;setRemoteConnected(false);setRemoteRoom(null);setRemoteStatus('Phone disconnected');stop()},
+      onStatus(status){setRemoteStatus(status)},
+    })
+    const ttl=window.setTimeout(()=>{
+      if(!remotePaired.current){setRemoteRoom(null);setRemoteStatus('QR expired. Generate another code.')}
+    },5*60*1000)
+    return()=>{window.clearTimeout(ttl);disconnect();stop()}
+  },[remoteRoom])
   useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),2400);return()=>clearTimeout(t)},[notice])
   useEffect(()=>{if(!started||art)return;setShowLocation(true);const t=setTimeout(()=>setShowLocation(false),1800);return()=>clearTimeout(t)},[state.location,started,art])
   useEffect(()=>{if(!editMode||!activeRoom||!started||paused||picker||art){setMarkers({floor:{x:0,y:0,visible:false},walls:{x:0,y:0,visible:false}});return}
@@ -72,6 +108,9 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   async function beginSound(){try{if(!audio.current)audio.current=estateAudio();audio.current.volume(prefs.volume);await audio.current.play()}catch{setSound(false);setNotice('Sound could not start. You can keep exploring.')}}
   function begin(){stop();input.current.paused=false;setStarted(true);setPaused(false);if(sound)void beginSound()}
   function openSettings(){stop();input.current.paused=true;audio.current?.pause();dialog.current?.showModal()}
+  function connectPhone(){setRemoteConnected(false);setRemoteStatus('Connecting…');setRemoteRoom(newRemoteCode())}
+  function disconnectPhone(){setRemoteRoom(null);setRemoteConnected(false);setRemoteStatus('Phone disconnected');stop()}
+  function copyPhoneLink(){if(!remoteRoom)return;void navigator.clipboard.writeText(pairingUrl(window.location.origin,remoteRoom)).then(()=>setRemoteStatus('Phone link copied')).catch(()=>setRemoteStatus('Could not copy; scan the QR instead.'))}
   function goFromMenu(d:(typeof destinations)[number]){
     if(engine.current?.go(d,d.name)){
       setEditTarget(editTour?d.name:null);dialog.current?.close();setHelp(false)
@@ -161,6 +200,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       onPointerCancel={e=>worldPointerEnd(e,false)}
       onLostPointerCapture={e=>worldPointerEnd(e,false)}/>
     <header className="oe-header"><button className="oe-back" onClick={back} aria-label="Back to The Lab">←</button><div className="oe-wordmark">{!started||paused?'OCEAN ESTATE':''}</div><button className="oe-icon" aria-label="Estate menu" onClick={openSettings}>☷</button></header>
+    {remoteConnected&&<aside className="oe-remote-connected" role="status">● Phone remote connected</aside>}
     {started&&!error&&!art&&<>
       <div className={`oe-location oe-location-fade${showLocation?' visible':''}`}><h1>{state.location}</h1></div>
       {editMode&&<div className="oe-edit-badge"><span>EDIT MODE</span>{activeRoom?<strong>{roomName(activeRoom)} · tap a floor or wall</strong>:<strong>Walk into the foyer or great room</strong>}</div>}
@@ -189,6 +229,11 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     {notice&&<div className="oe-notice" role="status">{notice}</div>}
     {(!started||paused||error)&&<div className="oe-entry"><section><span className="oe-eyebrow">THE HORIZON RESIDENCE</span><h1>{started&&paused?'Stay a while.':<>A home.<br/>An ocean.<br/>All yours to explore.</>}</h1><p>{error||(started&&paused?'Your walk is paused.':'Warm stone, quiet gardens, and a view that never ends.')}</p>{error?<button className="oe-primary" onClick={()=>{setStarted(false);setPaused(false);setAttempt(n=>n+1)}}>Reopen estate ↗</button>:ready?<button className="oe-primary" onClick={begin}>{started?'Continue exploring':'Step inside'} <span>↗</span></button>:<div className="oe-loading" role="status"><i/>{progress}</div>}<div className="oe-entry-note">Left thumb moves. Right thumb looks. Tap the floor to walk.</div></section></div>}
     <dialog ref={dialog} className="oe-settings" onClose={closeSettings}><form method="dialog"><header><span>YOUR STAY</span><button aria-label="Close settings">×</button></header></form><h2>A little more comfortable.</h2>
+      <section className="oe-remote-connect" aria-label="Phone remote pairing"><h3>Phone remote</h3>
+        {remoteConnected?<><p>Your phone controls walking and looking while this screen stays on the TV.</p><button type="button" onClick={disconnectPhone}>Disconnect phone</button></>:
+        remoteRoom?<><p>Scan with the phone camera to control the estate. The QR expires after five minutes if unused.</p><EstatePairQr url={pairingUrl(window.location.origin,remoteRoom)}/><p role="status">{remoteStatus}</p><button type="button" onClick={copyPhoneLink}>Copy phone link</button><button type="button" onClick={disconnectPhone}>Cancel pairing</button></>:
+        <><p>Keep the house on your TV. Your phone becomes a dark touch controller.</p><button type="button" onClick={connectPhone}>Connect phone · Show QR</button>{remoteStatus&&<p role="status">{remoteStatus}</p>}</>}
+      </section>
       <section className="oe-menu-section"><h3>Go somewhere</h3><div className="oe-menu-places">{destinations.map((d,i)=><button type="button" className="oe-menu-place" key={d.name} onClick={()=>goFromMenu(d)}><span>{String(i+1).padStart(2,'0')}</span>{d.name}</button>)}</div><button type="button" className="oe-menu-tour" onClick={tourFromMenu}>{editTour?'Start editing tour stops':'Take a quiet tour'} <span>→</span></button><button type="button" className="oe-menu-tour" onClick={openPlan}>Open Estate Plan <span>→</span></button></section>
       <div className="oe-menu-sound"><span><strong>Ocean sound</strong><small>Ambient water and coast</small></span><button type="button" onClick={()=>{const next=!sound;setSound(next);if(!next)audio.current?.pause()}}>{sound?'On':'Off'}</button></div>
       <label>Tour editing<select aria-label="Tour editing" value={editTour?'on':'off'} onChange={e=>toggleEditTour(e.target.value==='on')}><option value="off">Off · enjoy the tour</option><option value="on">On · adjust and save tour stops</option></select></label>
