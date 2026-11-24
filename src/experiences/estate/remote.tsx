@@ -236,7 +236,7 @@ export function EstatePhoneRemote() {
     }
     fullscreenRequested.current = true
     void request.call(document.documentElement, { navigationUI: 'hide' }).then(
-      () => { setFullscreenHint('') },
+      () => { fullscreenRequested.current = false; setFullscreenHint('') },
       () => { setFullscreenHint('Fullscreen is unavailable in this browser.'); fullscreenRequested.current = false },
     )
   }
