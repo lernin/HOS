@@ -563,7 +563,7 @@ test('guided camera slows physical walking to match limited rotation',()=>{
  const scene=readFileSync(new URL('../src/experiences/estate/scene.ts',import.meta.url),'utf8')
  assert.match(scene,/lookAhead=Math.max\(1\.65,Math.min\(5\.5,input\.speed\*2\.15\)\)/)
  assert.match(scene,/turnWalkScale=Math.max\(\.22/)
- assert.match(scene,/const speed=input\.speed\*\(input\.fast\?1\.45:1\)\*turnWalkScale/)
+ assert.match(scene,/const speed=effectiveWalkingSpeed\(input\.speed,input\.fast\)\*turnWalkScale/)
 })
 test('tour-edit controls remain at lower left and leave cinematic view clear',()=>{
  const ui=readFileSync(new URL('../src/experiences/OceanEstate.tsx',import.meta.url),'utf8')

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { supabase } from '../../lib/supabase'
+import { destinations } from './plan'
+import { findRemoteDestination } from './remoteNavigation'
 import './remote.css'
 
 // A separate broadcast topic with a 144-bit, per-session bearer code. No database writes.
@@ -15,12 +17,17 @@ export type EstateRemoteInput =
   | { kind: 'move'; x: number; z: number }
   | { kind: 'look'; dx: number; dy: number }
   | { kind: 'action'; action: Action }
+  | { kind: 'destination'; name: string }
 
-type Packet = { id?: unknown; seq?: unknown; kind?: unknown; x?: unknown; z?: unknown; dx?: unknown; dy?: unknown; action?: unknown }
+type Packet = { id?: unknown; seq?: unknown; kind?: unknown; x?: unknown; z?: unknown; dx?: unknown; dy?: unknown; action?: unknown; name?: unknown }
 function parsePacket(p: Packet): EstateRemoteInput | null {
   if (p.kind === 'move' && finite(p.x, 1) && finite(p.z, 1)) return { kind: 'move', x: axis(p.x), z: axis(p.z) }
   if (p.kind === 'look' && finite(p.dx, 80) && finite(p.dy, 80)) return { kind: 'look', dx: p.dx, dy: p.dy }
   if (p.kind === 'action' && ['start', 'menu', 'select', 'back'].includes(String(p.action))) return { kind: 'action', action: p.action as Action }
+  if (p.kind === 'destination') {
+    const target = findRemoteDestination(destinations, p.name)
+    return target ? { kind: 'destination', name: target.name } : null
+  }
   return null
 }
 
@@ -130,6 +137,9 @@ export function EstatePhoneRemote() {
   const [clientId] = useState(() => secret(16))
   const [status, setStatus] = useState('Connecting to the TV…')
   const [paired, setPaired] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [fullscreenHint, setFullscreenHint] = useState('')
+  const fullscreenRequested = useRef(false)
   const pairedRef = useRef(false)
   const channel = useRef<RealtimeChannel | null>(null)
   const seq = useRef(0)
@@ -155,6 +165,7 @@ export function EstatePhoneRemote() {
   useEffect(() => {
     pairedRef.current = false
     setPaired(false)
+    setMenuOpen(false)
     move.current = { x: 0, z: 0 }
     seq.current = 0
     lastTv.current = 0
@@ -166,6 +177,7 @@ export function EstatePhoneRemote() {
     const join = () => emit('join', { id: clientId })
     const disconnected = (message: string) => {
       move.current = { x: 0, z: 0 }
+      setMenuOpen(false)
       pairedRef.current = false
       setPaired(false); setStatus(message)
     }
@@ -213,6 +225,33 @@ export function EstatePhoneRemote() {
       void supabase.removeChannel(ch)
     }
   }, [room, clientId])
+  // The request must originate from a real phone gesture. iOS browsers that do
+  // not expose document fullscreen retain the existing viewport-filling controls.
+  const enterFullscreen = () => {
+    if (!pairedRef.current || document.fullscreenElement || fullscreenRequested.current) return
+    const request = document.documentElement.requestFullscreen
+    if (!request) {
+      setFullscreenHint('For a fuller view, use Add to Home Screen in your browser.')
+      return
+    }
+    fullscreenRequested.current = true
+    void request.call(document.documentElement, { navigationUI: 'hide' }).then(
+      () => { fullscreenRequested.current = false; setFullscreenHint('') },
+      () => { setFullscreenHint('Fullscreen is unavailable in this browser.'); fullscreenRequested.current = false },
+    )
+  }
+  const openPhoneMenu = () => {
+    move.current = { x: 0, z: 0 }
+    moveTouch.current = null
+    lookTouch.current = null
+    command({ kind: 'move', x: 0, z: 0 })
+    setMenuOpen(true)
+  }
+  const chooseDestination = (name: string) => {
+    if (!findRemoteDestination(destinations, name)) return
+    command({ kind: 'destination', name })
+    setMenuOpen(false)
+  }
   const beginPad = (e: ReactPointerEvent<HTMLDivElement>, side: 'move' | 'look') => {
     if (!paired) return
     e.currentTarget.setPointerCapture(e.pointerId)
@@ -242,18 +281,30 @@ export function EstatePhoneRemote() {
       command({ kind: 'move', x: 0, z: 0 })
     } else lookTouch.current = null
   }
-  return <main className="oe-phone" aria-label="Ocean Estate phone remote">
+  return <main className="oe-phone" aria-label="Ocean Estate phone remote"
+    onPointerUpCapture={enterFullscreen} onClickCapture={enterFullscreen}>
     <header className="oe-phone-header"><span>OCEAN ESTATE · REMOTE</span><strong className={paired ? 'connected' : ''} role="status">{paired ? '● Connected' : '○ ' + status}</strong></header>
-    <div className="oe-phone-pads">
-      <div className="oe-phone-pad" aria-label="Drag to walk" onPointerDown={e => beginPad(e, 'move')} onPointerMove={e => movePad(e, 'move')} onPointerUp={e => endPad(e, 'move')} onPointerCancel={e => endPad(e, 'move')}><span>MOVE</span><small>Drag to walk</small><i>✦</i></div>
-      <div className="oe-phone-pad" aria-label="Drag to look around" onPointerDown={e => beginPad(e, 'look')} onPointerMove={e => movePad(e, 'look')} onPointerUp={e => endPad(e, 'look')} onPointerCancel={e => endPad(e, 'look')}><span>LOOK</span><small>Drag to turn</small><i>✦</i></div>
-    </div>
-    <nav className="oe-phone-actions" aria-label="TV actions">
-      <button type="button" disabled={!paired} onClick={() => command({ kind: 'action', action: 'back' })}>Back</button>
-      <button type="button" disabled={!paired} onClick={() => command({ kind: 'action', action: 'select' })}>Select</button>
-      <button type="button" disabled={!paired} onClick={() => command({ kind: 'action', action: 'start' })}>Start</button>
-      <button type="button" disabled={!paired} onClick={() => command({ kind: 'action', action: 'menu' })}>Menu</button>
-    </nav>
-    <p className="oe-phone-note">{paired ? 'Look at the TV. The phone only controls movement and actions.' : 'Open Ocean Estate on the TV, choose Menu → Connect Phone, and scan the QR code.'}</p>
+    {paired && menuOpen
+      ? <section className="oe-phone-destination-menu" aria-label="Choose a destination">
+          <div className="oe-phone-destination-heading"><div><strong>Go somewhere</strong><small>Choose a place in the house</small></div><button type="button" onClick={() => setMenuOpen(false)}>Close</button></div>
+          <div className="oe-phone-destination-list">
+            {destinations.map((d, index) => <button type="button" key={d.name} onClick={() => chooseDestination(d.name)}>
+              <span>{String(index + 1).padStart(2, '0')}</span>{d.name}
+            </button>)}
+          </div>
+        </section>
+      : <>
+        <div className="oe-phone-pads">
+          <div className="oe-phone-pad" aria-label="Drag to walk" onPointerDown={e => beginPad(e, 'move')} onPointerMove={e => movePad(e, 'move')} onPointerUp={e => endPad(e, 'move')} onPointerCancel={e => endPad(e, 'move')}><span>MOVE</span><small>Drag to walk</small><i>✦</i></div>
+          <div className="oe-phone-pad" aria-label="Drag to look around" onPointerDown={e => beginPad(e, 'look')} onPointerMove={e => movePad(e, 'look')} onPointerUp={e => endPad(e, 'look')} onPointerCancel={e => endPad(e, 'look')}><span>LOOK</span><small>Drag to turn</small><i>✦</i></div>
+        </div>
+        <nav className="oe-phone-actions" aria-label="TV actions">
+          <button type="button" disabled={!paired} onClick={() => command({ kind: 'action', action: 'back' })}>Back</button>
+          <button type="button" disabled={!paired} onClick={() => command({ kind: 'action', action: 'select' })}>Select</button>
+          <button type="button" disabled={!paired} onClick={() => command({ kind: 'action', action: 'start' })}>Start</button>
+          <button type="button" disabled={!paired} onClick={openPhoneMenu}>Menu</button>
+        </nav>
+      </>}
+    <p className="oe-phone-note">{fullscreenHint || (paired ? 'The 3D house stays on your TV. Menu opens destinations here.' : 'Open Ocean Estate on the TV, choose Menu → Connect Phone, and scan the QR code.')}</p>
   </main>
 }

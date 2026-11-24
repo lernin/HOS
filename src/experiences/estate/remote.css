@@ -18,3 +18,17 @@
 .oe-phone-note{padding:3px 20px calc(15px + env(safe-area-inset-bottom));text-align:center;font-size:12px;line-height:1.5;color:#788b7b;margin:0}
 @media(max-width:370px){.oe-phone-header{font-size:10px}.oe-phone-pads{gap:7px;padding:6px}.oe-phone-actions{gap:5px}.oe-phone-actions button{font-size:12px}}
 @media(orientation:landscape){.oe-phone-pads{min-height:0}.oe-phone-header{padding-top:10px}.oe-phone-actions button{min-height:42px}.oe-phone-note{padding-bottom:8px}}
+
+/* Phone-local destinations occupy the same viewport as the two control pads. */
+.oe-phone-destination-menu{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;padding:10px 12px 0;gap:10px}
+.oe-phone-destination-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.oe-phone-destination-heading strong{display:block;font:500 23px/1.2 Georgia,serif;color:#e7eedf}
+.oe-phone-destination-heading small{display:block;margin-top:4px;font-size:11px;color:#9eafa2}
+.oe-phone-destination-heading button{flex-shrink:0;border:1px solid #4a5f50;color:#ecf0e9;background:#203127;border-radius:10px;min-width:72px;min-height:45px;font:14px system-ui,sans-serif}
+.oe-phone-destination-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;display:grid;grid-template-columns:1fr;align-content:start;gap:8px;padding:2px 0 12px}
+.oe-phone-destination-list button{display:flex;align-items:center;gap:12px;text-align:left;min-height:52px;padding:12px 14px;background:#17221b;color:#e7f1e5;border:1px solid #384d3c;border-radius:10px;font:15px/1.3 system-ui,sans-serif;touch-action:manipulation}
+.oe-phone-destination-list button span{font:11px monospace;color:#94b49a}
+.oe-phone-destination-list button:active{background:#3c5a43}
+@media(min-width:540px){.oe-phone-destination-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:810px){.oe-phone-destination-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-height:420px){.oe-phone-destination-menu{padding-top:2px;gap:6px}.oe-phone-destination-list button{min-height:45px;padding:9px 12px}.oe-phone-destination-heading strong{font-size:20px}}
