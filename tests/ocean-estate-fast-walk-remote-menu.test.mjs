@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { BASE_WALK_SPEED, MAX_WALK_SPEED, clampWalkingSpeed } from '../src/experiences/estate/walkingSpeed.ts'
-import { remoteDestinationNames, findRemoteDestination } from '../src/experiences/estate/remoteNavigation.ts'
-import { destinations } from '../src/experiences/estate/plan.ts'
+import { findRemoteDestination } from '../src/experiences/estate/remoteNavigation.ts'
 
 test('fast walking has a 5x maximum without changing the default', () => {
   assert.equal(BASE_WALK_SPEED, 2.4)
@@ -17,19 +16,18 @@ test('fast walking has a 5x maximum without changing the default', () => {
   assert.equal(clampWalkingSpeed(8.5), 8.5)
 })
 
-test('phone menu exposes current canonical Estate destination list only', () => {
-  assert.deepEqual(remoteDestinationNames, destinations.map(d => d.name))
-  assert.ok(remoteDestinationNames.length > 9)
-  assert.equal(new Set(remoteDestinationNames).size, remoteDestinationNames.length)
-})
+const canonical = [{ name: 'Entrance', x: 1 }, { name: 'Great room', x: 7 }, { name: 'Pool', x: 3 }]
 
-test('remote navigation accepts only the exact canonical destination name', () => {
-  const target = findRemoteDestination('Great room')
-  assert.equal(target?.name, 'Great room')
-  assert.equal(target?.x, destinations.find(d => d.name === 'Great room')?.x)
-  assert.equal(findRemoteDestination('great room'), null)
-  assert.equal(findRemoteDestination('javascript:alert(1)'), null)
-  assert.equal(findRemoteDestination('__proto__'), null)
-  assert.equal(findRemoteDestination({ name: 'Great room', x: 9999 }), null)
-  assert.equal(findRemoteDestination('Ocean lookout '), null)
+test('phone menu accepts only exact canonical Estate destination names', () => {
+  const target = findRemoteDestination(canonical, 'Great room')
+  assert.equal(target, canonical[1])
+  assert.equal(findRemoteDestination(canonical, 'Pool'), canonical[2])
+  assert.equal(findRemoteDestination(canonical, 'great room'), null)
+  assert.equal(findRemoteDestination(canonical, 'javascript:alert(1)'), null)
+  assert.equal(findRemoteDestination(canonical, '__proto__'), null)
+  assert.equal(findRemoteDestination(canonical, { name: 'Great room', x: 9999 }), null)
+  assert.equal(findRemoteDestination(canonical, 'Pool '), null)
+  assert.equal(findRemoteDestination(canonical, 0), null)
+  assert.equal(findRemoteDestination(canonical, null), null)
+  assert.equal(findRemoteDestination([], 'Pool'), null)
 })
