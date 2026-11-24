@@ -13,7 +13,7 @@ function twoDecimals(value: number): number {
 export function effectivePixelRatio(devicePixelRatio: number, quality: number, scale: number): number {
   const preset = quality === 0 ? .85 : quality === 2 ? 1.35 : 1
   const device = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1
-  return twoDecimals(Math.min(device, preset) * Math.max(MIN_AUTO_RESOLUTION, Math.min(1, scale)))
+  return Math.min(device, preset) * Math.max(MIN_AUTO_RESOLUTION, Math.min(1, scale))
 }
 
 export function initialAdaptiveScale(ceiling: number, enabled: boolean): number {
