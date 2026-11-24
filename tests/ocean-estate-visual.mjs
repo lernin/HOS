@@ -31,6 +31,12 @@ try{
  await touch.goto('http://127.0.0.1:4173/tests/ocean-estate-preview.html',{waitUntil:'load'});await touch.getByRole('button',{name:'Step inside'}).waitFor({state:'visible',timeout:120000});await touch.screenshot({path:`${output}/phone-landscape-arrival.png`,timeout:120000});await touch.getByRole('button',{name:'Step inside'}).tap();await touch.getByRole('button',{name:'Estate menu'}).waitFor({state:'visible',timeout:5000})
  await touch.getByRole('button',{name:'Estate menu'}).tap();
  const auto=touch.getByRole('checkbox',{name:'Automatic resolution'}),shadows=touch.getByRole('checkbox',{name:'Sun shadows'}),accents=touch.getByRole('checkbox',{name:'Interior accent lights'}),hudToggle=touch.getByRole('checkbox',{name:'Show FPS overlay'});
+ const speedControl=touch.locator('.oe-settings label').filter({hasText:'Walking pace'})
+ const fastSlider=speedControl.locator('input[type="range"]')
+ assert.equal(await fastSlider.getAttribute('max'),'12','fast walking control reaches 5× normal')
+ await fastSlider.fill('12')
+ assert.match(await speedControl.locator('output').innerText(),/5\.0×/,'5× pace is visible')
+ await fastSlider.fill('2.4')
  assert.equal(await auto.isChecked(),true,'auto resolution is initially enabled');
  assert.equal(await shadows.isChecked(),true,'sun shadows preserve initial visual quality');
  assert.equal(await accents.isChecked(),true,'accent lighting preserves initial room quality');
