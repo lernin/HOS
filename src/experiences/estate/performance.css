@@ -1,0 +1,13 @@
+/* Preview-only GPU tuning controls. All settings sit inside Ocean Estate's existing menu. */
+.oe-performance-menu{margin:18px 0;padding:19px 0 12px;border-top:1px solid #c4c5a63f;border-bottom:1px solid #c4c5a63f}
+.oe-performance-menu h3{margin:0 0 9px;letter-spacing:.13em;color:#cabe99;font-weight:500;font-size:12px;text-transform:uppercase}
+.oe-performance-menu p{color:#d9d3c4;font-size:13px;line-height:1.5;margin:8px 0}
+.oe-performance-menu>small{display:block;opacity:.8;font-size:12px;line-height:1.45;margin-top:-8px}
+.oe-performance-menu .oe-perf-switch{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;margin:10px 0;cursor:pointer}
+.oe-performance-menu input[type=checkbox]{width:23px;height:23px;accent-color:#d5bc88;flex-shrink:0}
+.oe-performance-menu .oe-perf-readout{font-size:12px;border:1px solid #c2c5a633;border-radius:6px;padding:12px;margin-top:14px;background:#152a2255}
+.oe-performance-hud{position:absolute;top:84px;left:25px;z-index:4;display:flex;align-items:center;gap:10px;background:#14251ed9;border:1px solid #e7dcc252;border-radius:5px;color:#f1eedf;padding:8px 12px;pointer-events:none;line-height:1.15;text-shadow:0 1px 3px #101811}
+.oe-performance-hud strong{font:600 15px/1.15 Arial,sans-serif;min-width:52px}
+.oe-performance-hud span{font:12px/1.15 Arial,sans-serif;white-space:nowrap;color:#d4cdb8}
+@media(max-width:680px){.oe-performance-hud{top:66px;left:14px;padding:6px 9px;gap:7px}.oe-performance-hud strong{font-size:12px;min-width:40px}.oe-performance-hud span{font-size:10px}}
+@media(max-height:530px) and (min-width:681px){.oe-performance-hud{top:52px}}

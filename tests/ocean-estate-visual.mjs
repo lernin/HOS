@@ -29,7 +29,18 @@ try{
  const mobile=await browser.newContext({viewport:{width:915,height:412},deviceScaleFactor:1,isMobile:true,hasTouch:true});const touch=await mobile.newPage();const gesture=await mobile.newCDPSession(touch)
  touch.on('pageerror',e=>errors.push(e.message));touch.on('console',recordConsole)
  await touch.goto('http://127.0.0.1:4173/tests/ocean-estate-preview.html',{waitUntil:'load'});await touch.getByRole('button',{name:'Step inside'}).waitFor({state:'visible',timeout:120000});await touch.screenshot({path:`${output}/phone-landscape-arrival.png`,timeout:120000});await touch.getByRole('button',{name:'Step inside'}).tap();await touch.getByRole('button',{name:'Estate menu'}).waitFor({state:'visible',timeout:5000})
- await touch.getByRole('button',{name:'Estate menu'}).tap();await touch.getByLabel('Light',{exact:true}).selectOption('evening');await touch.getByLabel('Design editing',{exact:true}).selectOption('on');await touch.getByLabel('Design editing',{exact:true}).selectOption('off');await touch.screenshot({path:`${output}/phone-landscape-settings.png`,timeout:120000});await touch.getByRole('button',{name:/Back to exploring/}).tap();await touch.waitForTimeout(120)
+ await touch.getByRole('button',{name:'Estate menu'}).tap();
+ const auto=touch.getByRole('checkbox',{name:'Automatic resolution'}),shadows=touch.getByRole('checkbox',{name:'Sun shadows'}),accents=touch.getByRole('checkbox',{name:'Interior accent lights'}),hudToggle=touch.getByRole('checkbox',{name:'Show FPS overlay'});
+ assert.equal(await auto.isChecked(),true,'auto resolution is initially enabled');
+ assert.equal(await shadows.isChecked(),true,'sun shadows preserve initial visual quality');
+ assert.equal(await accents.isChecked(),true,'accent lighting preserves initial room quality');
+ assert.equal(await hudToggle.isChecked(),true,'FPS is visible for performance review');
+ await auto.uncheck();await shadows.uncheck();await accents.uncheck();
+ const resolution=touch.locator('.oe-performance-menu input[type=range]');await resolution.press('Home');
+ assert.equal(await touch.locator('.oe-performance-menu output').innerText(),'50%','manual rendering resolution is adjustable');
+ assert.equal(await auto.isChecked(),false);assert.equal(await shadows.isChecked(),false);assert.equal(await accents.isChecked(),false);
+ await resolution.press('End');await auto.check();await shadows.check();await accents.check();
+ await touch.getByLabel('Light',{exact:true}).selectOption('evening');await touch.getByLabel('Design editing',{exact:true}).selectOption('on');await touch.getByLabel('Design editing',{exact:true}).selectOption('off');await touch.screenshot({path:`${output}/phone-landscape-settings.png`,timeout:120000});await touch.getByRole('button',{name:/Back to exploring/}).tap();await touch.waitForTimeout(120)
  const yaw=Number(await touch.locator('.oe-root').getAttribute('data-camera-yaw'));assert.ok(await dragLook(touch,gesture,130),'touch drag dispatched');await touch.waitForFunction(y=>Math.abs(Number(document.querySelector('.oe-root').dataset.cameraYaw)-y)>.1,yaw,{timeout:10000})
  await touch.getByRole('button',{name:'Estate menu'}).tap();assert.ok(await visible(touch.getByRole('heading',{name:'Go somewhere'})),'destination choices live in the single menu');assert.ok(await visible(touch.getByRole('button',{name:/Great room/})),'menu exposes destinations without a walking-screen button cluster');assert.ok(await visible(touch.getByText('Ocean sound',{exact:true})),'sound control lives in the menu');await touch.getByRole('button',{name:'Close settings'}).tap();await touch.waitForTimeout(120)
  assert.equal(await touch.locator('body').evaluate(e=>e.scrollWidth<=innerWidth),true,'landscape phone horizontal overflow');await touch.screenshot({path:`${output}/phone-landscape-touch.png`,timeout:120000});await mobile.close()
