@@ -51,7 +51,7 @@ export function useEstateTvRemote(enabled: boolean, onInput: (packet: EstateRemo
       emit('accept', { id: peer })
     })
     ch.on('broadcast', { event: 'input' }, ({ payload }: { payload: Packet }) => {
-      if (!active || !peer || payload?.id !== peer || !Number.isSafeInteger(payload.seq) || (payload.seq as number) <= lastSeq) return
+      if (!active || !peer || payload?.id !== peer || !(typeof payload.seq === 'number' && Number.isSafeInteger(payload.seq)) || (payload.seq as number) <= lastSeq) return
       const parsed = parsePacket(payload)
       if (!parsed) return
       lastSeq = payload.seq as number
