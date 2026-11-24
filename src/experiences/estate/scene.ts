@@ -8,8 +8,9 @@ import { createNavigator, moveSafely, walkable } from './navigation'
 import { destinations, EYE, FLOOR, floorAt, locationAt, resolveFloorRay, spawn, type Point, type EstateTourView, type EstateTourViews } from './plan'
 import { createEstateEditor, type EditableRoomId, type EditableSurface, type EditorMaterial } from './editor'
 import { addMossRockSet } from './moss-rocks'
-export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number}
-export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean}
+import { advanceAdaptiveScale, clampResolutionCeiling, effectivePixelRatio, initialAdaptiveScale } from './performance'
+export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number;resolutionCeiling?:number;adaptiveResolution?:boolean;shadows?:boolean;accentLights?:boolean}
+export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean;renderScale?:number}
 export type EstatePick={kind:'floor'}|{kind:'art';art:EstateArtChoice}
 type ArtPhase='entering'|'active'|'exiting'
 type ArtInspect={
@@ -78,6 +79,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
     let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
+    let resolutionCeiling=-1,autoResolution: boolean|null=null,renderScale=1,goodWindows=0,shadowsEnabled: boolean|null=null,accentLightsEnabled: boolean|null=null
     let arrivalYaw:number|null=null,arrivalPitch:number|null=null,arrivalStarted=0,arrivalLookBaseline=0
     let journeyView:{yaw:number;pitch:number;fov:number;lead:number}|null=null,viewFov=69
     let tourViews:EstateTourViews={...initialTourViews}
@@ -168,7 +170,25 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     observer=new ResizeObserver(resize);observer.observe(canvas);resize()
     function lighting(){const evening=input.lighting==='evening',day=input.lighting==='daylight';sky.set(evening?'#293c51':day?'#b1ccd8':'#b7c5c4');(scene.fog as T.FogExp2).color.copy(sky);hemi.intensity=evening?.22:day?1:.75;sun.intensity=evening?.07:day?3:3.6;sun.color.set(day?'#fff1db':'#ffe0ad');renderer.toneMappingExposure=evening?1.12:1.06;scene.environmentIntensity=evening?.12:.3;skyDome?.preset(input.lighting);fills.forEach(light=>{light.intensity=evening?48:day?7:9});lastShadow={x:999,z:999};renderer.shadowMap.needsUpdate=true;dirty=true}
     function tick(now:number){if(disposed)return;frame=requestAnimationFrame(tick);const dt=Math.min(.04,(now-last)/1000);last=now
-      if(quality!==input.quality){quality=input.quality;renderer.setPixelRatio(Math.min(devicePixelRatio,quality===0?.85:quality===2?1.35:1));renderer.shadowMap.enabled=true;renderer.shadowMap.needsUpdate=true;resize()}
+      const ceiling=input.resolutionCeiling===undefined?1:clampResolutionCeiling(input.resolutionCeiling)
+      const auto=input.adaptiveResolution===true
+      if(quality!==input.quality||resolutionCeiling!==ceiling||autoResolution!==auto){
+        const modeChanged=autoResolution!==auto
+        quality=input.quality;resolutionCeiling=ceiling;autoResolution=auto
+        renderScale=modeChanged?initialAdaptiveScale(ceiling,auto):auto?Math.min(renderScale,ceiling):ceiling
+        goodWindows=0
+        renderer.setPixelRatio(effectivePixelRatio(devicePixelRatio,quality,renderScale))
+        resize()
+      }
+      const nextShadows=input.shadows!==false
+      if(shadowsEnabled!==nextShadows){
+        shadowsEnabled=nextShadows;sun.castShadow=nextShadows;renderer.shadowMap.enabled=nextShadows
+        renderer.shadowMap.needsUpdate=true;lastShadow={x:999,z:999};dirty=true
+      }
+      const nextAccents=input.accentLights!==false
+      if(accentLightsEnabled!==nextAccents){
+        accentLightsEnabled=nextAccents;fills.forEach(light=>{light.visible=nextAccents});dirty=true
+      }
       if(preset!==input.lighting){preset=input.lighting;lighting()}
       if(!input.paused&&!inspectView&&!artInspect){
         let dx=0,dz=0,turnWalkScale=1;const manual=Math.hypot(input.x,input.z)>.01
@@ -233,11 +253,25 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
         const y=(floorAt(position)??FLOOR)+EYE;camera.position.set(position.x,T.MathUtils.damp(camera.position.y,y,10,dt),position.z);camera.rotation.set(pitch,yaw,0,'YXZ')
         dirty=true
       }else{vx=0;vz=0}
-      if(Math.hypot(position.x-lastShadow.x,position.z-lastShadow.z)>12){lastShadow={...position};sun.position.set(-55,input.lighting==='daylight'?70:30,-80);sun.target.position.set(0,6,0);renderer.shadowMap.needsUpdate=true}
+      if(shadowsEnabled&&Math.hypot(position.x-lastShadow.x,position.z-lastShadow.z)>12){lastShadow={...position};sun.position.set(-55,input.lighting==='daylight'?70:30,-80);sun.target.position.set(0,6,0);renderer.shadowMap.needsUpdate=true}
       // Architectural fixture positions and brightness do not track the camera.
       if(inspectView){camera.position.copy(inspectView.position);camera.lookAt(inspectView.target)}else if(artInspect)updateArtCamera(now)
       if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}
-      if(now-lastReport>500){report({location:locationAt(position),moving:!artInspect&&(path.length>0||Math.hypot(vx,vz)>.1),destination:!artInspect&&path.length?destination:'',fps:Math.round(frameCount/((now-lastReport)/1000)),position:{...position},touring:!artInspect&&tour});frameCount=0;lastReport=now}
+      if(now-lastReport>500){
+        const fps=Math.round(frameCount/((now-lastReport)/1000))
+        // Idle/paused/hidden windows do not provide a meaningful FPS sample.
+        if(auto&& !input.paused && !document.hidden && !artInspect && frameCount>0){
+          const adjusted=advanceAdaptiveScale(renderScale,ceiling,fps,goodWindows)
+          goodWindows=adjusted.goodWindows
+          if(adjusted.scale!==renderScale){
+            renderScale=adjusted.scale
+            renderer.setPixelRatio(effectivePixelRatio(devicePixelRatio,quality,renderScale))
+            resize()
+          }
+        }
+        report({location:locationAt(position),moving:!artInspect&&(path.length>0||Math.hypot(vx,vz)>.1),destination:!artInspect&&path.length?destination:'',fps,position:{...position},touring:!artInspect&&tour,renderScale})
+        frameCount=0;lastReport=now
+      }
     }
     renderer.render(scene,camera);frame=requestAnimationFrame(tick)
     return {dispose,stop,reset,pick,closeArt,panArt,zoomArt,resetArtView,
