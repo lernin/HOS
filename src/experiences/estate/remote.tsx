@@ -124,7 +124,7 @@ export function EstateRemoteQR({ value }: { value: string }) {
 
 // The phone runs a light remote-only page. It never mounts the Three.js estate.
 export function EstatePhoneRemote() {
-  const [room] = useState(() => location.hash.slice(1))
+  const [room, setRoom] = useState(() => location.hash.slice(1))
   const [clientId] = useState(() => secret(16))
   const [status, setStatus] = useState('Connecting to the TV…')
   const [paired, setPaired] = useState(false)
@@ -136,6 +136,11 @@ export function EstatePhoneRemote() {
   const moveTouch = useRef<{ id: number; x: number; y: number } | null>(null)
   const lookTouch = useRef<{ id: number; x: number; y: number } | null>(null)
   const lastLook = useRef(0)
+  useEffect(() => {
+    const onHash = () => setRoom(location.hash.slice(1))
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
   const send = (event: string, payload: object) => {
     if (!channel.current) return
     void channel.current.send({ type: 'broadcast', event, payload }).catch(() => {
@@ -146,6 +151,11 @@ export function EstatePhoneRemote() {
     if (pairedRef.current && document.visibilityState === 'visible') send('input', { id: clientId, seq: ++seq.current, ...packet })
   }
   useEffect(() => {
+    pairedRef.current = false
+    setPaired(false)
+    move.current = { x: 0, z: 0 }
+    seq.current = 0
+    lastTv.current = 0
     if (!validRoom(room)) { setStatus('Invalid pairing link. Scan the TV QR code again.'); return }
     let active = true
     const ch = supabase.channel(channelName(room), { config: { broadcast: { self: false } } })
