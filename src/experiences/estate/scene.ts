@@ -9,6 +9,7 @@ import { destinations, EYE, FLOOR, floorAt, locationAt, resolveFloorRay, spawn, 
 import { createEstateEditor, type EditableRoomId, type EditableSurface, type EditorMaterial } from './editor'
 import { addMossRockSet } from './moss-rocks'
 import { advanceAdaptiveScale, clampResolutionCeiling, effectivePixelRatio, initialAdaptiveScale } from './performance'
+import { effectiveWalkingSpeed } from './walkingSpeed'
 export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number;resolutionCeiling?:number;adaptiveResolution?:boolean;shadows?:boolean;accentLights?:boolean}
 export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean;renderScale?:number}
 export type EstatePick={kind:'floor'}|{kind:'art';art:EstateArtChoice}
@@ -242,7 +243,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
           }
         }
         if(tour&&!path.length&&now>dwell){const d=destinations[tourIndex%destinations.length];tourIndex++;if(!go(d,d.name)){tour=false}else dwell=Infinity}
-        const speed=input.speed*(input.fast?1.45:1)*turnWalkScale,damp=1-Math.exp(-dt*4.8);vx+=(dx*speed-vx)*damp;vz+=(dz*speed-vz)*damp
+        const speed=effectiveWalkingSpeed(input.speed,input.fast)*turnWalkScale,damp=1-Math.exp(-dt*4.8);vx+=(dx*speed-vx)*damp;vz+=(dz*speed-vz)*damp
         const next=moveSafely(position,vx*dt,vz*dt);if(Math.hypot(next.x-position.x,next.z-position.z)<.00005&&!path.length){vx=0;vz=0}position=next
         const cameraDelta=Math.atan2(Math.sin(input.yaw-yaw),Math.cos(input.yaw-yaw))
         const guidedTurn=(path.length>0||arrivalYaw!==null)&&!input.looking&&now-input.lookedAt>=2800
