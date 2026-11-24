@@ -158,7 +158,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const remote = useEstateTvRemote(remoteEnabled, packet => {
     if (packet.kind === 'move') {
       if (input.current.paused || artOpen.current) { input.current.x = 0; input.current.z = 0; return }
-      if (packet.x || packet.z) { engine.current?.stop(); setHelp(false) }
+      if ((packet.x || packet.z) && !input.current.x && !input.current.z) { engine.current?.stop(); setHelp(false) }
       input.current.x = packet.x; input.current.z = packet.z
     } else if (packet.kind === 'look') {
       if (input.current.paused || artOpen.current) return
