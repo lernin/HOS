@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { BASE_WALK_SPEED, MAX_WALK_SPEED, clampWalkingSpeed } from '../src/experiences/estate/walkingSpeed.ts'
+import { BASE_WALK_SPEED, MAX_WALK_SPEED, clampWalkingSpeed, effectiveWalkingSpeed } from '../src/experiences/estate/walkingSpeed.ts'
 import { findRemoteDestination } from '../src/experiences/estate/remoteNavigation.ts'
 
 test('fast walking has a 5x maximum without changing the default', () => {
@@ -14,6 +14,9 @@ test('fast walking has a 5x maximum without changing the default', () => {
   assert.equal(clampWalkingSpeed(13), 12)
   assert.equal(clampWalkingSpeed(0), 1)
   assert.equal(clampWalkingSpeed(8.5), 8.5)
+  assert.equal(effectiveWalkingSpeed(12, true), 12)
+  assert.equal(effectiveWalkingSpeed(2.4, true), 3.48)
+  assert.equal(effectiveWalkingSpeed(12, false), 12)
 })
 
 const canonical = [{ name: 'Entrance', x: 1 }, { name: 'Great room', x: 7 }, { name: 'Pool', x: 3 }]
