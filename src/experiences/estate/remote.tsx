@@ -178,9 +178,10 @@ export function EstatePhoneRemote() {
       if (s === 'SUBSCRIBED') { setStatus('Waiting for Ocean Estate…'); join() }
       if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT' || s === 'CLOSED') disconnected('Connection lost — check internet')
     })
+    let lastJoin = 0
     const tick = window.setInterval(() => {
       if (!active || document.hidden) return
-      if (!pairedRef.current) join()
+      if (!pairedRef.current) { if (Date.now() - lastJoin > 1200) { lastJoin = Date.now(); join() } }
       else if (Date.now() - lastTv.current > 4000) disconnected('TV connection lost — reconnecting')
       else emit('input', { id: clientId, seq: ++seq.current, kind: 'move', ...move.current })
     }, 140)
