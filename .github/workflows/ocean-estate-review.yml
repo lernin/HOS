@@ -34,7 +34,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node --test tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
-      - run: npm install --no-save --package-lock=false playwright@1.55.0
+      # Use the version in package-lock.json; the old 1.55 pin cannot run on Ubuntu 26.04.
       - run: npx playwright install --with-deps chromium
       - name: Render estate and verify landscape phone interactions
         run: |
@@ -43,6 +43,7 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/tests/ocean-estate-visual.html >/dev/null; then break; fi
             sleep 1
           done
+          node tests/ocean-estate-remote.mjs
           node tests/ocean-estate-visual.mjs
           node tests/ocean-estate-plan-parity.mjs
           ESTATE_PLAN_TEST_URL=http://127.0.0.1:4173 node tests/ocean-estate-plan-viewport.mjs
