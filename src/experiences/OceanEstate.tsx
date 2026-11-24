@@ -168,6 +168,15 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       input.current.yaw -= packet.dx * .003 * prefs.sensitivity
       input.current.pitch = Math.max(-1.05, Math.min(.95, input.current.pitch - packet.dy * .003 * prefs.sensitivity))
       input.current.lookedAt = performance.now(); setHelp(false)
+    } else if (packet.kind === 'destination') {
+      const target = findRemoteDestination(destinations, packet.name)
+      if (!target || !engine.current) return
+      if (artOpen.current) { setNotice('Close artwork before choosing a destination.'); return }
+      dialog.current?.close()
+      if (!started || paused) begin()
+      else { input.current.paused = false; stop() }
+      if (engine.current.go(target, target.name)) { setHelp(false); setNotice('Heading to ' + target.name) }
+      else setNotice('That route is unavailable from here.')
     } else if (packet.kind === 'action') {
       if (packet.action === 'start') { dialog.current?.close(); if (!started || paused) begin() }
       if (packet.action === 'menu') { if (dialog.current?.open) dialog.current.close(); else openSettings() }
