@@ -7,6 +7,7 @@ import type { LightPreset } from './estate/environment'
 import { estateEditorMaterials, estateEditorPreview, type EditableRoomId, type EditableSurface } from './estate/editor'
 import { loadEstateMaterialCatalog } from './estate/catalog'
 import './estate/estate.css'
+import { EstateRemoteQR, useEstateTvRemote } from './estate/remote'
 type Prefs={speed:number;sensitivity:number;turnSpeed:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number}
 const defaults:Prefs={speed:2.4,sensitivity:1,turnSpeed:28,quality:1,lighting:'golden',mode:'explore',volume:.35}
 function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:keyof Prefs,lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:num('speed',1,4) as number,sensitivity:num('sensitivity',.3,2) as number,turnSpeed:num('turnSpeed',15,60) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number}}catch{return defaults}}
@@ -44,6 +45,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const [art,setArt]=useState<EstateArtChoice|null>(null),[artInfo,setArtInfo]=useState(false),[artZoom,setArtZoom]=useState(1),[artClosing,setArtClosing]=useState(false)
   const [editMode,setEditMode]=useState(false),[editTour,setEditTour]=useState(()=>{try{return localStorage.getItem('ocean-estate-edit-tour-v1')==='on'}catch{return false}}),[editTarget,setEditTarget]=useState<string|null>(null),[tourViews,setTourViews]=useState(readTourViews),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
   const [materialCatalog,setMaterialCatalog]=useState(estateEditorMaterials)
+  const [remoteEnabled,setRemoteEnabled]=useState(false)
   const [markers,setMarkers]=useState<Record<EditableSurface,{x:number;y:number;visible:boolean}>>({floor:{x:0,y:0,visible:false},walls:{x:0,y:0,visible:false}})
   const clearTouch=()=>{touchPointers.current.clear();input.current.x=0;input.current.z=0;input.current.looking=false}
   const stop=()=>{input.current.x=0;input.current.z=0;input.current.fast=false;keys.current.clear();pointer.current=null;clearTouch();engine.current?.stop()}
@@ -153,6 +155,27 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
         lastRightTap.current={time:now,x:e.clientX,y:e.clientY}
       }else handleWorldTap(e.clientX,e.clientY)
     }return}const p=pointer.current;if(!p||p.id!==e.pointerId)return;if(allowTap&&!p.dragged)handleWorldTap(e.clientX,e.clientY);pointer.current=null;input.current.looking=false;input.current.lookedAt=performance.now();input.current.z=0}
+  const remote = useEstateTvRemote(remoteEnabled, packet => {
+    if (packet.kind === 'move') {
+      if (input.current.paused || artOpen.current) { input.current.x = 0; input.current.z = 0; return }
+      if ((packet.x || packet.z) && !input.current.x && !input.current.z) { engine.current?.stop(); setHelp(false) }
+      input.current.x = packet.x; input.current.z = packet.z
+    } else if (packet.kind === 'look') {
+      if (input.current.paused || artOpen.current) return
+      input.current.yaw -= packet.dx * .003 * prefs.sensitivity
+      input.current.pitch = Math.max(-1.05, Math.min(.95, input.current.pitch - packet.dy * .003 * prefs.sensitivity))
+      input.current.lookedAt = performance.now(); setHelp(false)
+    } else if (packet.kind === 'action') {
+      if (packet.action === 'start') { dialog.current?.close(); if (!started || paused) begin() }
+      if (packet.action === 'menu') { if (dialog.current?.open) dialog.current.close(); else openSettings() }
+      if (packet.action === 'select' && !dialog.current?.open && !artOpen.current) handleWorldTap(innerWidth / 2, innerHeight / 2)
+      if (packet.action === 'back') {
+        if (dialog.current?.open) dialog.current.close()
+        else if (artOpen.current) void exitArt()
+        else { stop(); input.current.paused = true; setPaused(true) }
+      }
+    }
+  })
   return <main className="oe-root" aria-label="Ocean Estate" data-player-x={state.position.x.toFixed(3)} data-player-z={state.position.z.toFixed(3)} data-camera-yaw={input.current.yaw.toFixed(3)} data-touch-help={help?'on':'off'}>
     <canvas ref={canvas} className="oe-canvas" aria-label="Explorable oceanfront estate" onContextMenu={e=>e.preventDefault()}
       onPointerDown={worldPointerDown}
@@ -189,6 +212,15 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     {notice&&<div className="oe-notice" role="status">{notice}</div>}
     {(!started||paused||error)&&<div className="oe-entry"><section><span className="oe-eyebrow">THE HORIZON RESIDENCE</span><h1>{started&&paused?'Stay a while.':<>A home.<br/>An ocean.<br/>All yours to explore.</>}</h1><p>{error||(started&&paused?'Your walk is paused.':'Warm stone, quiet gardens, and a view that never ends.')}</p>{error?<button className="oe-primary" onClick={()=>{setStarted(false);setPaused(false);setAttempt(n=>n+1)}}>Reopen estate ↗</button>:ready?<button className="oe-primary" onClick={begin}>{started?'Continue exploring':'Step inside'} <span>↗</span></button>:<div className="oe-loading" role="status"><i/>{progress}</div>}<div className="oe-entry-note">Left thumb moves. Right thumb looks. Tap the floor to walk.</div></section></div>}
     <dialog ref={dialog} className="oe-settings" onClose={closeSettings}><form method="dialog"><header><span>YOUR STAY</span><button aria-label="Close settings">×</button></header></form><h2>A little more comfortable.</h2>
+      <section className="oe-remote-panel" aria-label="Phone remote pairing"><h3>Phone remote</h3>
+        {!remoteEnabled ? <><p>Use your phone as a controller while Ocean Estate stays on the TV.</p><button type="button" className="oe-remote-toggle" onClick={()=>setRemoteEnabled(true)}>Connect Phone · Show QR code</button></> : <>
+          <p className={remote.paired?'oe-remote-connected':''} role="status">{remote.status}</p>
+          <EstateRemoteQR value={location.origin + '/estate-remote#' + remote.room}/>
+          <p>Scan with your phone camera. On your phone, drag MOVE to walk and LOOK to turn. Use Menu to return to the estate.</p>
+          <a href={location.origin + '/estate-remote#' + remote.room} target="_blank" rel="noopener noreferrer">Open phone controller link</a>
+          <div className="oe-remote-actions"><button type="button" onClick={remote.rotate}>New pairing code</button><button type="button" onClick={()=>setRemoteEnabled(false)}>Disconnect phone</button></div>
+        </>}
+      </section>
       <section className="oe-menu-section"><h3>Go somewhere</h3><div className="oe-menu-places">{destinations.map((d,i)=><button type="button" className="oe-menu-place" key={d.name} onClick={()=>goFromMenu(d)}><span>{String(i+1).padStart(2,'0')}</span>{d.name}</button>)}</div><button type="button" className="oe-menu-tour" onClick={tourFromMenu}>{editTour?'Start editing tour stops':'Take a quiet tour'} <span>→</span></button><button type="button" className="oe-menu-tour" onClick={openPlan}>Open Estate Plan <span>→</span></button></section>
       <div className="oe-menu-sound"><span><strong>Ocean sound</strong><small>Ambient water and coast</small></span><button type="button" onClick={()=>{const next=!sound;setSound(next);if(!next)audio.current?.pause()}}>{sound?'On':'Off'}</button></div>
       <label>Tour editing<select aria-label="Tour editing" value={editTour?'on':'off'} onChange={e=>toggleEditTour(e.target.value==='on')}><option value="off">Off · enjoy the tour</option><option value="on">On · adjust and save tour stops</option></select></label>
