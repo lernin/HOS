@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'preview/ocean-estate-*'
+      - 'release/estate-portrait-20261125'
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx
@@ -11,7 +12,7 @@ on:
       - tests/ocean-estate*
       - .github/workflows/ocean-estate-review.yml
   pull_request:
-    branches: [main]
+    branches: [main, 'release/ocean-estate-smooth-20261121']
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx
@@ -34,6 +35,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node --test tests/ocean-estate-motion.test.mjs tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
+      - run: node --experimental-strip-types --test tests/ocean-estate-performance.test.mjs tests/ocean-estate-fast-walk-remote-menu.test.mjs tests/ocean-estate-portrait-mode.test.mjs
       - run: npx playwright install --with-deps chromium
       - name: Render estate and verify landscape phone interactions
         run: |
@@ -42,6 +44,8 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/tests/ocean-estate-visual.html >/dev/null; then break; fi
             sleep 1
           done
+          node tests/ocean-estate-portrait-browser.mjs
+          node tests/ocean-estate-remote.mjs
           node tests/ocean-estate-visual.mjs
           node tests/ocean-estate-plan-parity.mjs
           ESTATE_PLAN_TEST_URL=http://127.0.0.1:4173 node tests/ocean-estate-plan-viewport.mjs
