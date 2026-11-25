@@ -234,6 +234,12 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     {notice&&<div className="oe-notice" role="status">{notice}</div>}
     {(!started||paused||error)&&<div className="oe-entry"><section><span className="oe-eyebrow">THE HORIZON RESIDENCE</span><h1>{started&&paused?'Stay a while.':<>A home.<br/>An ocean.<br/>All yours to explore.</>}</h1><p>{error||(started&&paused?'Your walk is paused.':'Warm stone, quiet gardens, and a view that never ends.')}</p>{error?<button className="oe-primary" onClick={()=>{setStarted(false);setPaused(false);setAttempt(n=>n+1)}}>Reopen estate ↗</button>:ready?<button className="oe-primary" onClick={begin}>{started?'Continue exploring':'Step inside'} <span>↗</span></button>:<div className="oe-loading" role="status"><i/>{progress}</div>}<div className="oe-entry-note">Left thumb moves. Right thumb looks. Tap the floor to walk.</div></section></div>}
     <dialog ref={dialog} className="oe-settings" onClose={closeSettings}><form method="dialog"><header><span>YOUR STAY</span><button aria-label="Close settings">×</button></header></form><h2>A little more comfortable.</h2>
+      <section className="oe-portrait-setting" aria-label="Screen orientation">
+        <h3>Screen orientation</h3>
+        <label className="oe-portrait-switch"><span>Portrait exploration<small>Walk and look around with your phone upright, or rotate it sideways any time.</small></span>
+          <input type="checkbox" checked={prefs.portraitExplore} onChange={e=>{const enabled=e.target.checked;setPrefs(p=>({...p,portraitExplore:enabled}));if(!enabled)dialog.current?.close()}}/>
+        </label>
+      </section>
       <section className="oe-remote-panel" aria-label="Phone remote pairing"><h3>Phone remote</h3>
         {!remoteEnabled ? <><p>Use your phone as a controller while Ocean Estate stays on the TV.</p><button type="button" className="oe-remote-toggle" onClick={()=>setRemoteEnabled(true)}>Connect Phone · Show QR code</button></> : <>
           <p className={remote.paired?'oe-remote-connected':''} role="status">{remote.status}</p>
@@ -250,12 +256,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       {editTour&&<p className="oe-tour-storage-note">Choose a destination or start the tour. At each stop, move and look around, then tap Save viewpoint. Saved stops are remembered on this device.</p>}
       <label>Design editing<select aria-label="Design editing" value={editMode?'on':'off'} onChange={e=>{const on=e.target.value==='on';setEditMode(on);engine.current?.setEditSelection(null,null);setHelp(false)}}><option value="off">Off · just explore</option><option value="on">On · tap walls or floors</option></select></label>
       <label>Light<select aria-label="Light" value={prefs.lighting} onChange={e=>setPrefs(p=>({...p,lighting:e.target.value as LightPreset}))}><option value="daylight">Daylight</option><option value="golden">Golden hour</option><option value="evening">Evening</option></select></label>
-      <section className="oe-portrait-setting" aria-label="Screen orientation">
-        <h3>Screen orientation</h3>
-        <label className="oe-portrait-switch"><span>Portrait exploration<small>Walk and look around with your phone upright, or rotate it sideways any time.</small></span>
-          <input type="checkbox" checked={prefs.portraitExplore} onChange={e=>{const enabled=e.target.checked;setPrefs(p=>({...p,portraitExplore:enabled}));if(!enabled)dialog.current?.close()}}/>
-        </label>
-      </section>
+
       <label>Navigation<select aria-label="Navigation" value={prefs.mode} onChange={e=>setPrefs(p=>({...p,mode:e.target.value as Prefs['mode']}))}><option value="explore">Explore · tap to walk</option><option value="walk">Walk · hold to move</option></select></label>
       <label>Walking pace<output>{(prefs.speed/BASE_WALK_SPEED).toFixed(1)}× · {prefs.speed.toFixed(1)} m/s</output><input type="range" min="1" max={MAX_WALK_SPEED} step=".1" value={prefs.speed} onChange={e=>setPrefs(p=>({...p,speed:clampWalkingSpeed(+e.target.value)}))}/></label>
       <label>Guided turn speed<output>{Math.round(prefs.turnSpeed)}°/s maximum</output><input type="range" min="15" max="60" step="1" value={prefs.turnSpeed} onChange={e=>setPrefs(p=>({...p,turnSpeed:+e.target.value}))}/></label>
