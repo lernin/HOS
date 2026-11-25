@@ -2,6 +2,7 @@ import * as T from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { heightAt, paths, placements, move, spawn, type Placement } from './world'
 import { addWoodlandEstateVista } from '../combined/vistas'
+import { WOODLAND_MODEL_KINDS, loadWoodlandModelBuffer } from '../combined/woodlandWarmup'
 export type Input={x:number;z:number;yaw:number;pitch:number;paused:boolean;moveAcceleration:number;viewMode:number;combined?:boolean;initialPosition?:{x:number;z:number;yaw:number}}
 export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal:AbortSignal,progress:(n:number)=>void){
   const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
@@ -68,10 +69,10 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     }
     // Keep a compacted-earth shoulder, then lay a visibly textured old-stone walking ribbon over it.
     for(const line of paths){trailMesh(line,3.08,.026,'#766548',1);trailMesh(line,2.5,.043,'#cfc1a0',.98,cobbleTexture)}
-    const all=placements().filter(p=>!(input.combined&&Math.abs(p.x+8)<5&&p.z>103&&p.z<120)),solids=all.filter(p=>p.solid),kinds=['tree','tree-b','pine','bush','fern','grass','rock','clover'],loader=new GLTFLoader(),batches:T.InstancedMesh[]=[],flowerBatches:T.InstancedMesh[]=[]
+    const all=placements().filter(p=>!(input.combined&&Math.abs(p.x+8)<5&&p.z>103&&p.z<120)),solids=all.filter(p=>p.solid),kinds=WOODLAND_MODEL_KINDS,loader=new GLTFLoader(),batches:T.InstancedMesh[]=[],flowerBatches:T.InstancedMesh[]=[]
     for(let n=0;n<kinds.length;n++){
-      const kind=kinds[n],response=await fetch(`/woodland/${kind}.glb`,{signal});if(!response.ok)throw Error(`Could not load ${kind}`)
-      const gltf=await loader.parseAsync(await response.arrayBuffer(),'');track(gltf.scene);if(signal.aborted){geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());throw new DOMException('Aborted','AbortError')}
+      const kind=kinds[n],modelBytes=await loadWoodlandModelBuffer(kind,signal,Boolean(input.combined))
+      const gltf=await loader.parseAsync(modelBytes,'');track(gltf.scene);if(signal.aborted){geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());throw new DOMException('Aborted','AbortError')}
       gltf.scene.updateMatrixWorld(true);const box=new T.Box3().setFromObject(gltf.scene),size=box.getSize(new T.Vector3()),center=box.getCenter(new T.Vector3()),cells=new Map<string,Placement[]>()
       for(const p of all.filter(p=>p.kind===kind)){const key=`${Math.floor(p.x/64)},${Math.floor(p.z/64)}`;if(!cells.has(key))cells.set(key,[]);cells.get(key)!.push(p)}
       gltf.scene.traverse(obj=>{if(!(obj instanceof T.Mesh))return
