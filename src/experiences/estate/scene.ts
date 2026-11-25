@@ -11,8 +11,9 @@ import { createEstateEditor, type EditableRoomId, type EditableSurface, type Edi
 import { addMossRockSet } from './moss-rocks'
 import { advanceAdaptiveScale, clampResolutionCeiling, effectivePixelRatio, initialAdaptiveScale } from './performance'
 import { effectiveWalkingSpeed } from './walkingSpeed'
-export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number;resolutionCeiling?:number;adaptiveResolution?:boolean;shadows?:boolean;accentLights?:boolean}
-export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean;renderScale?:number}
+import { countEstateFrustumCandidates, type EstateSceneMetrics } from './sceneDiagnostics'
+export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number;resolutionCeiling?:number;adaptiveResolution?:boolean;shadows?:boolean;accentLights?:boolean;showDiagnostics?:boolean}
+export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean;renderScale?:number;sceneDiagnostics?:EstateSceneMetrics}
 export type EstatePick={kind:'floor'}|{kind:'art';art:EstateArtChoice}
 type ArtPhase='entering'|'active'|'exiting'
 type ArtInspect={
@@ -82,6 +83,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     progress('Finding the garden paths…');const navigator=createNavigator()
     let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,guidedPace=1,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
     let resolutionCeiling=-1,autoResolution: boolean|null=null,renderScale=1,goodWindows=0,shadowsEnabled: boolean|null=null,accentLightsEnabled: boolean|null=null
+    let lastDiagnosticAt=0,lastSceneDiagnostics:EstateSceneMetrics|undefined
     let arrivalYaw:number|null=null,arrivalPitch:number|null=null,arrivalStarted=0,arrivalLookBaseline=0
     let journeyView:{yaw:number;pitch:number;fov:number;lead:number}|null=null,viewFov=69
     let tourViews:EstateTourViews={...initialTourViews}
@@ -263,7 +265,20 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
       if(shadowsEnabled&&Math.hypot(position.x-lastShadow.x,position.z-lastShadow.z)>12){lastShadow={...position};sun.position.set(-55,input.lighting==='daylight'?70:30,-80);sun.target.position.set(0,6,0);renderer.shadowMap.needsUpdate=true}
       // Architectural fixture positions and brightness do not track the camera.
       if(inspectView){camera.position.copy(inspectView.position);camera.lookAt(inspectView.target)}else if(artInspect)updateArtCamera(now)
-      if(dirty){water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++}
+      if(dirty){
+        water?.update(now*.001,input.lighting);renderer.render(scene,camera);dirty=false;frameCount++
+        // Optional, sampling only after a real render. No hidden geometry is
+        // made visible or drawn for the diagnostic itself.
+        if(input.showDiagnostics&&now-lastDiagnosticAt>=750){
+          const counts=countEstateFrustumCandidates(scene,camera)
+          lastSceneDiagnostics={
+            calls:renderer.info.render.calls,triangles:renderer.info.render.triangles,
+            ...counts,geometries:renderer.info.memory.geometries,
+            textures:renderer.info.memory.textures,pixelRatio:renderer.getPixelRatio(),
+          }
+          lastDiagnosticAt=now
+        }
+      }
       if(now-lastReport>500){
         const fps=Math.round(frameCount/((now-lastReport)/1000))
         // Idle/paused/hidden windows do not provide a meaningful FPS sample.
@@ -276,7 +291,7 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
             resize()
           }
         }
-        report({location:locationAt(position),moving:!artInspect&&(path.length>0||Math.hypot(vx,vz)>.1),destination:!artInspect&&path.length?destination:'',fps,position:{...position},touring:!artInspect&&tour,renderScale})
+        report({location:locationAt(position),moving:!artInspect&&(path.length>0||Math.hypot(vx,vz)>.1),destination:!artInspect&&path.length?destination:'',fps,position:{...position},touring:!artInspect&&tour,renderScale,sceneDiagnostics:input.showDiagnostics?lastSceneDiagnostics:undefined})
         frameCount=0;lastReport=now
       }
     }
