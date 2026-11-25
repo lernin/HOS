@@ -38,7 +38,7 @@ function readTourViews():EstateTourViews{
   }catch{return {...canonicalTourViews}}
 }
 const axis=(n:number)=>Math.abs(n)<.12?0:Math.max(-1,Math.min(1,n))
-export function OceanEstate({onBack,onPlan,combined=false,onForest,combinedArrival=false}:{onBack:()=>void;onPlan:()=>void;combined?:boolean;onForest?:()=>void;combinedArrival?:boolean}){
+export function OceanEstate({onBack,onPlan,combined=false,onForest,onForestApproach,combinedArrival=false}:{onBack:()=>void;onPlan:()=>void;combined?:boolean;onForest?:()=>void;onForestApproach?:()=>void;combinedArrival?:boolean}){
   const entry=combined?{x:1,z:combinedArrival?54:47,yaw:combinedArrival?0:Math.PI}:spawn
   const canvas=useRef<HTMLCanvasElement>(null),engine=useRef<Awaited<ReturnType<typeof createEstate>>|null>(null),audio=useRef<ReturnType<typeof estateAudio>|null>(null),dialog=useRef<HTMLDialogElement>(null)
   const input=useRef<EstateInput>({yaw:entry.yaw,pitch:-.025,x:0,z:0,paused:true,speed:BASE_WALK_SPEED,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180,combined,initialPosition:entry,resolutionCeiling:defaults.resolutionCeiling,adaptiveResolution:defaults.adaptiveResolution,shadows:defaults.shadows,accentLights:defaults.accentLights})
@@ -74,6 +74,13 @@ export function OceanEstate({onBack,onPlan,combined=false,onForest,combinedArriv
   },[])
   useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),2400);return()=>clearTimeout(t)},[notice])
   useEffect(()=>{if(!started||art)return;setShowLocation(true);const t=setTimeout(()=>setShowLocation(false),1800);return()=>clearTimeout(t)},[state.location,started,art])
+  // Begin a bounded network-only warmup when the child reaches the driveway.
+  // The Estate stays the only running 3D scene; no forest geometry is mounted.
+  useEffect(()=>{
+    if(combined&&ready&&onForestApproach&&state.position.z>=49&&
+       Math.abs(state.position.x-ESTATE_GATE.x)<14)onForestApproach()
+  },[combined,ready,onForestApproach,state.position.x,state.position.z])
+
   // The Estate remains the ONLY active renderer until the gate is crossed.
   useEffect(()=>{
     if(!combined||!onForest||!started||paused||art||!state.moving)return
