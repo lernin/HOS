@@ -11,7 +11,8 @@ import { createEstateEditor, type EditableRoomId, type EditableSurface, type Edi
 import { addMossRockSet } from './moss-rocks'
 import { advanceAdaptiveScale, clampResolutionCeiling, effectivePixelRatio, initialAdaptiveScale } from './performance'
 import { effectiveWalkingSpeed } from './walkingSpeed'
-export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number;resolutionCeiling?:number;adaptiveResolution?:boolean;shadows?:boolean;accentLights?:boolean}
+import { addEstateForestVista } from '../combined/vistas'
+export type EstateInput={yaw:number;pitch:number;x:number;z:number;paused:boolean;speed:number;quality:number;lighting:LightPreset;lookedAt:number;looking:boolean;fast:boolean;maxTurnSpeed:number;resolutionCeiling?:number;adaptiveResolution?:boolean;shadows?:boolean;accentLights?:boolean;combined?:boolean;initialPosition?:{x:number;z:number;yaw:number}}
 export type EstateState={location:string;moving:boolean;destination:string;fps:number;position:Point;touring:boolean;renderScale?:number}
 export type EstatePick={kind:'floor'}|{kind:'art';art:EstateArtChoice}
 type ArtPhase='entering'|'active'|'exiting'
@@ -66,21 +67,23 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     scene.add(light)
     return light
   })
-  const kit=createEstateKit(scene);let water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,artInstallation:ReturnType<typeof decorateArt>|undefined,editor:ReturnType<typeof createEstateEditor>|undefined,mossRocks:Awaited<ReturnType<typeof addMossRockSet>>|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
+  const kit=createEstateKit(scene);let forestVista:ReturnType<typeof addEstateForestVista>|undefined,water:ReturnType<typeof waters>|undefined,skyDome:ReturnType<typeof atmosphere>|undefined,contacts:ReturnType<typeof contactShadows>|undefined,env:T.WebGLRenderTarget|undefined,artInstallation:ReturnType<typeof decorateArt>|undefined,editor:ReturnType<typeof createEstateEditor>|undefined,mossRocks:Awaited<ReturnType<typeof addMossRockSet>>|undefined,frame=0,disposed=false,observer:ResizeObserver|undefined
   const raycaster=new T.Raycaster(),hit=new T.Vector3()
   const marker=new T.Mesh(new T.RingGeometry(.17,.24,36),new T.MeshBasicMaterial({color:'#e7d3a6',side:T.DoubleSide,transparent:true,opacity:.85,depthWrite:false}));marker.rotation.x=-Math.PI/2;marker.visible=false;scene.add(marker)
   let artInspect:ArtInspect|null=null,artExitResolve:(()=>void)|undefined
-  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();artExitResolve?.();editor?.dispose();artInstallation?.dispose();mossRocks?.dispose();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
+  function dispose(){if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer?.disconnect();artExitResolve?.();editor?.dispose();artInstallation?.dispose();mossRocks?.dispose();forestVista?.dispose();kit.dispose();water?.dispose();skyDome?.dispose();contacts?.dispose();env?.dispose();marker.geometry.dispose();marker.material.dispose();sun.shadow.map?.dispose();renderer.dispose();signal.removeEventListener('abort',dispose)}
   signal.addEventListener('abort',dispose,{once:true})
   try{
     progress('Opening the house…');architecture(kit);furnish(kit);artInstallation=decorateArt(scene,kit)
     await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));if(signal.aborted)throw new DOMException('Aborted','AbortError')
     progress('Planting the coast…');landscape(kit);kit.finish();
+    if(input.combined)forestVista=addEstateForestVista(scene)
     progress('Setting the mossy stones…');try{mossRocks=await addMossRockSet(scene,signal)}catch(error){if(signal.aborted)throw error;console.warn('Ocean Estate moss rock set failed to load',error)}
     editor=createEstateEditor(scene,renderer,camera,canvas);water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
-    let position:Point={x:spawn.x,z:spawn.z},path:Point[]=[],destination='',yaw=spawn.yaw as number,pitch=-.025,vx=0,vz=0,guidedPace=1,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
+    const entryPoint=input.combined&&input.initialPosition?input.initialPosition:spawn
+    let position:Point={x:entryPoint.x,z:entryPoint.z},path:Point[]=[],destination='',yaw=entryPoint.yaw as number,pitch=-.025,vx=0,vz=0,guidedPace=1,tour=false,tourIndex=0,dwell=0,quality=-1,preset='',last=performance.now(),lastReport=last,frameCount=0,lastShadow={x:999,z:999},dirty=true
     let resolutionCeiling=-1,autoResolution: boolean|null=null,renderScale=1,goodWindows=0,shadowsEnabled: boolean|null=null,accentLightsEnabled: boolean|null=null
     let arrivalYaw:number|null=null,arrivalPitch:number|null=null,arrivalStarted=0,arrivalLookBaseline=0
     let journeyView:{yaw:number;pitch:number;fov:number;lead:number}|null=null,viewFov=69
