@@ -9,10 +9,28 @@ page.on('pageerror',e=>errors.push(e.message));page.on('console',recordConsole)
 const visible=locator=>locator.isVisible().catch(()=>false)
 async function dragLook(p,gesture,dx){
  const box=await p.locator('.oe-canvas').boundingBox();if(!box)return false
- const x=box.x+box.width*.55,y=box.y+box.height*.48,end=x+dx
+ // A mobile overlay may cover part of the canvas. Start on a hit-testable spot,
+ // not merely inside the canvas bounding box.
+ const point=await p.evaluate(box=>{
+   for(const [fx,fy] of [[.55,.48],[.7,.6],[.65,.7],[.4,.6]]){
+     const x=box.x+box.width*fx,y=box.y+box.height*fy
+     if(document.elementFromPoint(x,y)?.matches('.oe-canvas'))return{x,y}
+   }
+   return null
+ },box)
+ assert.ok(point,'a visible, touchable part of the Estate canvas is available')
+ const {x,y}=point
  await gesture.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]})
- for(let i=1;i<=6;i++)await gesture.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+(end-x)*i/6,y}]})
- await gesture.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await p.waitForTimeout(120);return true
+ // SwiftShader can process multiple instantaneous CDP moves in one frame.
+ // Space the events so React receives an actual mobile drag rather than a tap.
+ await p.waitForTimeout(80)
+ for(let i=1;i<=6;i++){
+   await gesture.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+dx*i/6,y}]})
+   await p.waitForTimeout(65)
+ }
+ await gesture.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]})
+ await p.waitForTimeout(150)
+ return true
 }
 try{
  await page.goto('http://127.0.0.1:4173/tests/ocean-estate-visual.html',{waitUntil:'load'});await page.waitForSelector('body.ready',{timeout:120000})
@@ -47,7 +65,31 @@ try{
  assert.equal(await auto.isChecked(),false);assert.equal(await shadows.isChecked(),false);assert.equal(await accents.isChecked(),false);
  await resolution.press('End');await auto.check();await shadows.check();await accents.check();
  await touch.getByLabel('Light',{exact:true}).selectOption('evening');await touch.getByLabel('Design editing',{exact:true}).selectOption('on');await touch.getByLabel('Design editing',{exact:true}).selectOption('off');await touch.screenshot({path:`${output}/phone-landscape-settings.png`,timeout:120000});await touch.getByRole('button',{name:/Back to exploring/}).tap();await touch.waitForTimeout(120)
- const yaw=Number(await touch.locator('.oe-root').getAttribute('data-camera-yaw'));assert.ok(await dragLook(touch,gesture,130),'touch drag dispatched');await touch.waitForFunction(y=>Math.abs(Number(document.querySelector('.oe-root').dataset.cameraYaw)-y)>.1,yaw,{timeout:10000})
+ const yaw=Number(await touch.locator('.oe-root').getAttribute('data-camera-yaw'))
+ await touch.locator('.oe-canvas').evaluate(canvas=>{
+   const received={down:0,move:0,up:0}
+   window.__estateTouchSmoke=received
+   for(const type of ['pointerdown','pointermove','pointerup']){
+     canvas.addEventListener(type,event=>{
+       if(event.pointerType==='touch')received[type.slice(7)]++
+     },{capture:true})
+   }
+ })
+ assert.ok(await dragLook(touch,gesture,130),'touch drag dispatched')
+ const received=await touch.evaluate(()=>window.__estateTouchSmoke)
+ assert.ok(received.down>0&&received.move>0&&received.up>0,
+   'canvas must receive genuine touch pointer events: '+JSON.stringify(received))
+ try{
+   await touch.waitForFunction(y=>Math.abs(Number(document.querySelector('.oe-root').dataset.cameraYaw)-y)>.1,yaw,{timeout:12000})
+ }catch(error){
+   console.error('Estate drag diagnostics',await touch.evaluate(before=>({
+     before,after:document.querySelector('.oe-root')?.dataset.cameraYaw,
+     touchEvents:window.__estateTouchSmoke,
+     canvasHit:document.elementFromPoint(innerWidth*.55,innerHeight*.48)?.className,
+     menuOpen:document.querySelector('.oe-settings')?.getAttribute('open')
+   }),yaw))
+   throw error
+ }
  await touch.getByRole('button',{name:'Estate menu'}).tap();assert.ok(await visible(touch.getByRole('heading',{name:'Go somewhere'})),'destination choices live in the single menu');assert.ok(await visible(touch.getByRole('button',{name:/Great room/})),'menu exposes destinations without a walking-screen button cluster');assert.ok(await visible(touch.getByText('Ocean sound',{exact:true})),'sound control lives in the menu');await touch.getByRole('button',{name:'Close settings'}).tap();await touch.waitForTimeout(120)
  assert.equal(await touch.locator('body').evaluate(e=>e.scrollWidth<=innerWidth),true,'landscape phone horizontal overflow');await touch.screenshot({path:`${output}/phone-landscape-touch.png`,timeout:120000});await mobile.close()
 
