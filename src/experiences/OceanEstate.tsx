@@ -12,6 +12,7 @@ import { EstateRemoteQR, useEstateTvRemote } from './estate/remote'
 import { BASE_WALK_SPEED, MAX_WALK_SPEED, clampWalkingSpeed } from './estate/walkingSpeed'
 import { findRemoteDestination } from './estate/remoteNavigation'
 import { readPortraitPreference } from './estate/portraitMode'
+import { ESTATE_GATE, estateCrossing } from './combined/gates'
 type Prefs={speed:number;sensitivity:number;turnSpeed:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number;resolutionCeiling:number;adaptiveResolution:boolean;shadows:boolean;accentLights:boolean;showFps:boolean;portraitExplore:boolean}
 const defaults:Prefs={speed:BASE_WALK_SPEED,sensitivity:1,turnSpeed:28,quality:1,lighting:'golden',mode:'explore',volume:.35,resolutionCeiling:1,adaptiveResolution:true,shadows:true,accentLights:true,showFps:true,portraitExplore:false}
 function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:'speed'|'sensitivity'|'turnSpeed'|'quality'|'volume'|'resolutionCeiling',lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:clampWalkingSpeed(p.speed),sensitivity:num('sensitivity',.3,2) as number,turnSpeed:num('turnSpeed',15,60) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number,resolutionCeiling:num('resolutionCeiling',.5,1) as number,adaptiveResolution:p.adaptiveResolution!==false,shadows:p.shadows!==false,accentLights:p.accentLights!==false,showFps:p.showFps!==false,portraitExplore:readPortraitPreference(p.portraitExplore)}}catch{return defaults}}
@@ -37,15 +38,16 @@ function readTourViews():EstateTourViews{
   }catch{return {...canonicalTourViews}}
 }
 const axis=(n:number)=>Math.abs(n)<.12?0:Math.max(-1,Math.min(1,n))
-export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
+export function OceanEstate({onBack,onPlan,combined=false,onForest,combinedArrival=false}:{onBack:()=>void;onPlan:()=>void;combined?:boolean;onForest?:()=>void;combinedArrival?:boolean}){
+  const entry=combined?{x:1,z:combinedArrival?54:47,yaw:combinedArrival?0:Math.PI}:spawn
   const canvas=useRef<HTMLCanvasElement>(null),engine=useRef<Awaited<ReturnType<typeof createEstate>>|null>(null),audio=useRef<ReturnType<typeof estateAudio>|null>(null),dialog=useRef<HTMLDialogElement>(null)
-  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:BASE_WALK_SPEED,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180,resolutionCeiling:defaults.resolutionCeiling,adaptiveResolution:defaults.adaptiveResolution,shadows:defaults.shadows,accentLights:defaults.accentLights})
+  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:BASE_WALK_SPEED,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180,combined,initialPosition:entry,resolutionCeiling:defaults.resolutionCeiling,adaptiveResolution:defaults.adaptiveResolution,shadows:defaults.shadows,accentLights:defaults.accentLights})
   const pointer=useRef<{id:number;x:number;y:number;startX:number;startY:number;dragged:boolean}|null>(null),keys=useRef(new Set<string>())
   const touchPointers=useRef(new Map<number,TouchPoint>())
   const lastRightTap=useRef<{time:number;x:number;y:number}|null>(null)
   const artPointers=useRef(new Map<number,{x:number;y:number}>()),pinchDistance=useRef<number|null>(null),artOpen=useRef(false),artClosingRef=useRef(false)
   const [prefs,setPrefs]=useState(readPrefs),[ready,setReady]=useState(false),[progress,setProgress]=useState('Opening Ocean Estate…'),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[started,setStarted]=useState(false),[paused,setPaused]=useState(false),[sound,setSound]=useState(false),[notice,setNotice]=useState(''),[help,setHelp]=useState(true),[showLocation,setShowLocation]=useState(true)
-  const [state,setState]=useState<EstateState>({location:'Arrival steps',position:spawn,moving:false,destination:'',fps:0,touring:false})
+  const [state,setState]=useState<EstateState>({location:'Arrival court',position:{x:entry.x,z:entry.z},moving:false,destination:'',fps:0,touring:false})
   const [art,setArt]=useState<EstateArtChoice|null>(null),[artInfo,setArtInfo]=useState(false),[artZoom,setArtZoom]=useState(1),[artClosing,setArtClosing]=useState(false)
   const [editMode,setEditMode]=useState(false),[editTour,setEditTour]=useState(()=>{try{return localStorage.getItem('ocean-estate-edit-tour-v1')==='on'}catch{return false}}),[editTarget,setEditTarget]=useState<string|null>(null),[tourViews,setTourViews]=useState(readTourViews),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
   const [materialCatalog,setMaterialCatalog]=useState(estateEditorMaterials)
@@ -72,6 +74,12 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   },[])
   useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),2400);return()=>clearTimeout(t)},[notice])
   useEffect(()=>{if(!started||art)return;setShowLocation(true);const t=setTimeout(()=>setShowLocation(false),1800);return()=>clearTimeout(t)},[state.location,started,art])
+  // The Estate remains the ONLY active renderer until the gate is crossed.
+  useEffect(()=>{
+    if(!combined||!onForest||!started||paused||art||!state.moving)return
+    if(estateCrossing(state.position,true)){stop();input.current.paused=true;onForest()}
+  },[combined,onForest,started,paused,art,state.position.x,state.position.z,state.moving])
+
   useEffect(()=>{if(!editMode||!activeRoom||!started||paused||picker||art){setMarkers({floor:{x:0,y:0,visible:false},walls:{x:0,y:0,visible:false}});return}
     const update=()=>{const e=engine.current;if(!e)return;setMarkers({floor:e.projectEditMarker(activeRoom,'floor'),walls:e.projectEditMarker(activeRoom,'walls')})};update();const t=window.setInterval(update,80);return()=>window.clearInterval(t)
   },[editMode,activeRoom,started,paused,picker,art])
@@ -205,6 +213,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       </div>
     </section>}
     <header className="oe-header"><button className="oe-back" onClick={back} aria-label="Back to The Lab">←</button><div className="oe-wordmark">{!started||paused?'OCEAN ESTATE':''}</div><button className="oe-icon" aria-label="Estate menu" onClick={openSettings}>☷</button></header>
+    {combined&&started&&!paused&&state.position.z>52&&Math.abs(state.position.x-ESTATE_GATE.x)<10&&<button type="button" className="combined-gate-action" onClick={()=>onForest?.()}>Enter Woodland Walk →</button>}
     {started&&!error&&!art&&prefs.showFps&&<aside className="oe-performance-hud" aria-label="Frame rate and render resolution"><strong>{state.fps} FPS</strong><span>{Math.round((state.renderScale??prefs.resolutionCeiling)*100)}% render</span></aside>}
     {started&&!error&&!art&&<>
       <div className={`oe-location oe-location-fade${showLocation?' visible':''}`}><h1>{state.location}</h1></div>
@@ -249,6 +258,9 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
           <div className="oe-remote-actions"><button type="button" onClick={remote.rotate}>New pairing code</button><button type="button" onClick={()=>setRemoteEnabled(false)}>Disconnect phone</button></div>
         </>}
       </section>
+      {combined&&<section className="combined-estate-path"><h3>The connecting trail</h3><p>Follow the driveway north into the trees. The full forest loads only after leaving the estate.</p>
+        <button type="button" onClick={()=>{if(engine.current?.go(ESTATE_GATE,'Woodland trail')){dialog.current?.close();setHelp(false)}else setNotice('Walk toward the round driveway first.')}}>Follow path to Woodland Walk →</button>
+      </section>}
       <section className="oe-menu-section"><h3>Go somewhere</h3><div className="oe-menu-places">{destinations.map((d,i)=><button type="button" className="oe-menu-place" key={d.name} onClick={()=>goFromMenu(d)}><span>{String(i+1).padStart(2,'0')}</span>{d.name}</button>)}</div><button type="button" className="oe-menu-tour" onClick={tourFromMenu}>{editTour?'Start editing tour stops':'Take a quiet tour'} <span>→</span></button><button type="button" className="oe-menu-tour" onClick={openPlan}>Open Estate Plan <span>→</span></button></section>
       <div className="oe-menu-sound"><span><strong>Ocean sound</strong><small>Ambient water and coast</small></span><button type="button" onClick={()=>{const next=!sound;setSound(next);if(!next)audio.current?.pause()}}>{sound?'On':'Off'}</button></div>
       <label>Tour editing<select aria-label="Tour editing" value={editTour?'on':'off'} onChange={e=>toggleEditTour(e.target.value==='on')}><option value="off">Off · enjoy the tour</option><option value="on">On · adjust and save tour stops</option></select></label>
