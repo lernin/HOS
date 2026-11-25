@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import * as T from 'three'
-import { countEstateFrustumCandidates, formatEstateDiagnosticsReport, type EstateDiagnosticSnapshot } from '../src/experiences/estate/sceneDiagnostics.ts'
+import { countEstateFrustumCandidates, formatEstateDiagnosticsReport } from '../src/experiences/estate/sceneDiagnostics.ts'
 
 test('frustum estimates count nearby visible mesh candidates, not obscured geometry', () => {
   const scene = new T.Scene()
@@ -28,7 +28,7 @@ test('frustum estimates count nearby visible mesh candidates, not obscured geome
 })
 
 test('diagnostic report makes scene vs GPU metrics and sampling context explicit', () => {
-  const captured: EstateDiagnosticSnapshot = {
+  const captured = {
     at: '2026-11-25T02:00:00.000Z', location: 'Pool', x: 3, z: -22,
     fps: 41, calls: 125, triangles: 234567, sceneMeshes: 310,
     frustumCandidates: 72, geometries: 88, textures: 9, pixelRatio: .6, renderScale: .6,
