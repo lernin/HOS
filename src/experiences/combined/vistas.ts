@@ -41,7 +41,7 @@ export function addEstateForestVista(scene:T.Scene){
   trunks.count=crowns.count=count
   trunks.castShadow=crowns.castShadow=false
   root.add(trunks,crowns)
-  return {dispose:()=>{dispose();trunk.dispose();crown.dispose();bark.dispose();needles.dispose()}}
+  return {dispose:()=>{dispose();trunks.dispose();crowns.dispose();trunk.dispose();crown.dispose();bark.dispose();needles.dispose()}}
 }
 
 // Woodland Walk is still the full existing forest. Only this small estate
