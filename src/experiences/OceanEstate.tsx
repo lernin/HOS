@@ -41,7 +41,7 @@ const axis=(n:number)=>Math.abs(n)<.12?0:Math.max(-1,Math.min(1,n))
 export function OceanEstate({onBack,onPlan,combined=false,onForest,combinedArrival=false}:{onBack:()=>void;onPlan:()=>void;combined?:boolean;onForest?:()=>void;combinedArrival?:boolean}){
   const entry=combined?{x:1,z:combinedArrival?54:47,yaw:combinedArrival?0:Math.PI}:spawn
   const canvas=useRef<HTMLCanvasElement>(null),engine=useRef<Awaited<ReturnType<typeof createEstate>>|null>(null),audio=useRef<ReturnType<typeof estateAudio>|null>(null),dialog=useRef<HTMLDialogElement>(null)
-  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:BASE_WALK_SPEED,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180,combined,initialPosition:entry,resolutionCeiling:defaults.resolutionCeiling,adaptiveResolution:defaults.adaptiveResolution,shadows:defaults.shadows,accentLights:defaults.accentLights})
+  const input=useRef<EstateInput>({yaw:entry.yaw,pitch:-.025,x:0,z:0,paused:true,speed:BASE_WALK_SPEED,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180,combined,initialPosition:entry,resolutionCeiling:defaults.resolutionCeiling,adaptiveResolution:defaults.adaptiveResolution,shadows:defaults.shadows,accentLights:defaults.accentLights})
   const pointer=useRef<{id:number;x:number;y:number;startX:number;startY:number;dragged:boolean}|null>(null),keys=useRef(new Set<string>())
   const touchPointers=useRef(new Map<number,TouchPoint>())
   const lastRightTap=useRef<{time:number;x:number;y:number}|null>(null)
