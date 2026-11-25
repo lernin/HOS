@@ -68,7 +68,7 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     }
     // Keep a compacted-earth shoulder, then lay a visibly textured old-stone walking ribbon over it.
     for(const line of paths){trailMesh(line,3.08,.026,'#766548',1);trailMesh(line,2.5,.043,'#cfc1a0',.98,cobbleTexture)}
-    const all=placements(),solids=all.filter(p=>p.solid),kinds=['tree','tree-b','pine','bush','fern','grass','rock','clover'],loader=new GLTFLoader(),batches:T.InstancedMesh[]=[],flowerBatches:T.InstancedMesh[]=[]
+    const all=placements().filter(p=>!(input.combined&&Math.abs(p.x+8)<5&&p.z>103&&p.z<120)),solids=all.filter(p=>p.solid),kinds=['tree','tree-b','pine','bush','fern','grass','rock','clover'],loader=new GLTFLoader(),batches:T.InstancedMesh[]=[],flowerBatches:T.InstancedMesh[]=[]
     for(let n=0;n<kinds.length;n++){
       const kind=kinds[n],response=await fetch(`/woodland/${kind}.glb`,{signal});if(!response.ok)throw Error(`Could not load ${kind}`)
       const gltf=await loader.parseAsync(await response.arrayBuffer(),'');track(gltf.scene);if(signal.aborted){geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());throw new DOMException('Aborted','AbortError')}
