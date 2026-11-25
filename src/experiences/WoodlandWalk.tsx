@@ -66,7 +66,7 @@ export function WoodlandWalk({onBack,combined=false,onEstate}:{onBack:()=>void;c
   const resetLook=()=>{targetLook.current={yaw:spawn.yaw,pitch:0};lookVelocity.current={yaw:0,pitch:0};flickVelocity.current={yaw:0,pitch:0};input.current.yaw=spawn.yaw;input.current.pitch=0}
 
   useEffect(()=>{const controller=new AbortController();setError('');setLoaded(0)
-    void createWoodland(canvas.current!,input.current,controller.signal,setLoaded).then(value=>{if(controller.signal.aborted)value.dispose();else world.current=value}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the woodland.')})
+    void createWoodland(canvas.current!,input.current,controller.signal,setLoaded).then(value=>{if(controller.signal.aborted)value.dispose();else{world.current=value;if(combined){input.current.paused=false;setStarted(true)}}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the woodland.')})
     return()=>{controller.abort();world.current=null}
   },[attempt])
   useEffect(()=>()=>{if(auditionTimer.current)window.clearTimeout(auditionTimer.current);audio.current?.dispose()},[])
