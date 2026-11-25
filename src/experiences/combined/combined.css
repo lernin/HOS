@@ -14,3 +14,6 @@
 .combined-estate-path button{width:100%;min-height:48px;padding:12px;margin-top:8px;border:1px solid #efe0b08a;border-radius:5px;background:#455e4d;color:#fcf3d7!important;font-size:14px}
 @media(max-width:700px){.combined-brand{top:5px;left:50%;padding:4px 8px}.combined-brand>small{font-size:8px}.combined-gate-action{bottom:100px;max-width:90vw;white-space:normal;text-align:center}.combined-woodland-gate{bottom:164px}}
 @media(max-height:500px){.combined-brand{top:4px}.combined-gate-action{bottom:66px}.combined-woodland-gate{bottom:136px}}
+
+.combined-preview-jump{pointer-events:auto!important;touch-action:manipulation;border:1px solid #c9dec880;background:#354c3ce8;color:#f8f1db;border-radius:6px;min-height:30px;padding:5px 10px;margin-top:3px;cursor:pointer;font:11px Arial,sans-serif}
+.combined-preview-jump:focus-visible{outline:2px solid #fae7b5;outline-offset:2px}
