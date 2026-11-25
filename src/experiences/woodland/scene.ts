@@ -1,20 +1,23 @@
 import * as T from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { heightAt, paths, placements, move, spawn, type Placement } from './world'
-export type Input={x:number;z:number;yaw:number;pitch:number;paused:boolean;moveAcceleration:number;viewMode:number}
+import { addWoodlandEstateVista } from '../combined/vistas'
+export type Input={x:number;z:number;yaw:number;pitch:number;paused:boolean;moveAcceleration:number;viewMode:number;combined?:boolean;initialPosition?:{x:number;z:number;yaw:number}}
 export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal:AbortSignal,progress:(n:number)=>void){
   const renderer=new T.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'})
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.outputColorSpace=T.SRGBColorSpace
   renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap
   const scene=new T.Scene();scene.background=new T.Color('#bbdce6');scene.fog=new T.Fog('#b7d4cf',60,145)
+  if(input.combined)estateVista=addWoodlandEstateVista(scene)
   const camera=new T.PerspectiveCamera(68,1,.1,320);camera.rotation.order='YXZ'
   scene.add(new T.HemisphereLight('#e6f4ff','#587741',2.1))
   const sun=new T.DirectionalLight('#fff0c9',3);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-70,right:70,top:70,bottom:-70,near:1,far:150});sun.shadow.bias=-.0003;sun.shadow.normalBias=.04;scene.add(sun,sun.target)
   const geometries=new Set<T.BufferGeometry>(),materials=new Set<T.Material>(),textures=new Set<T.Texture>()
   function track(root:T.Object3D){root.traverse(o=>{if(o instanceof T.Mesh){geometries.add(o.geometry);for(const m of Array.isArray(o.material)?o.material:[o.material]){materials.add(m);for(const v of Object.values(m))if(v instanceof T.Texture)textures.add(v)}}})}
+  let estateVista:ReturnType<typeof addWoodlandEstateVista>|undefined
   let disposed=false,frame=0
-  const dispose=()=>{if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer.disconnect();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());sun.shadow.map?.dispose();renderer.dispose()}
+  const dispose=()=>{if(disposed)return;disposed=true;cancelAnimationFrame(frame);observer.disconnect();estateVista?.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());sun.shadow.map?.dispose();renderer.dispose()}
   const resize=()=>{const w=canvas.clientWidth,h=canvas.clientHeight;if(w&&h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}}
   const observer=new ResizeObserver(resize);observer.observe(canvas);resize()
   signal.addEventListener('abort',dispose,{once:true})
@@ -141,7 +144,8 @@ export async function createWoodland(canvas:HTMLCanvasElement,input:Input,signal
     const bgNormal=new T.Color('#bbdce6'),bgCute=new T.Color('#cfe7d7'),fogNormal=new T.Color('#b7d4cf'),fogCute=new T.Color('#c7dfce')
     const fpPos=new T.Vector3(),overviewPos=new T.Vector3(),lookTarget=new T.Vector3(),up=new T.Vector3(0,1,0)
     const fpQuat=new T.Quaternion(),overviewQuat=new T.Quaternion(),lookMatrix=new T.Matrix4(),styleDummy=new T.Object3D()
-    let position={x:spawn.x,z:spawn.z},previous=performance.now(),moveSpeed=0,avatarYaw=spawn.yaw,lastStyle=-1,wasFlying=false
+    const entryPoint=input.combined&&input.initialPosition?input.initialPosition:spawn
+    let position={x:entryPoint.x,z:entryPoint.z},previous=performance.now(),moveSpeed=0,avatarYaw=entryPoint.yaw,lastStyle=-1,wasFlying=false
 
     const groundClear=(x:number,z:number)=>Math.hypot(x,z)<193&&!solids.some(p=>p.solid>0&&Math.hypot(p.x-x,p.z-z)<p.solid+.35)
     const safeLanding=(x:number,z:number)=>{
