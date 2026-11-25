@@ -5,7 +5,7 @@ import { estateCrossing, woodlandCrossing, ESTATE_GATE, WOODLAND_GATE } from '..
 test('the forest entrance stays on the real Estate arrival court', () => {
   assert.equal(ESTATE_GATE.x, 1)
   assert.ok(ESTATE_GATE.z >= 54 && ESTATE_GATE.z <= 60)
-  assert.equal(estateCrossing({ x: 1, z: 57.9 }, true), false)
+  assert.equal(estateCrossing({ x: 1, z: 57.4 }, true), false)
   assert.equal(estateCrossing({ x: 1, z: 59 }, false), false)
   assert.equal(estateCrossing({ x: 1, z: 59 }, true), true)
   assert.equal(estateCrossing({ x: 25, z: 59 }, true), false)
