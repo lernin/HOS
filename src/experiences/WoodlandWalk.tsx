@@ -44,7 +44,7 @@ function wanderFromDrag(dx:number,dy:number){
 export function WoodlandWalk({onBack,combined=false,onEstate}:{onBack:()=>void;combined?:boolean;onEstate?:()=>void}){
   const entry=combined?{x:WOODLAND_GATE.x,z:WOODLAND_GATE.z-3,yaw:0,pitch:0}:spawn
   const canvas=useRef<HTMLCanvasElement>(null),dialog=useRef<HTMLDialogElement>(null)
-  const input=useRef<Input>({x:0,z:0,yaw:spawn.yaw,pitch:0,paused:true,moveAcceleration:2,viewMode:0,combined,initialPosition:entry})
+  const input=useRef<Input>({x:0,z:0,yaw:entry.yaw,pitch:0,paused:true,moveAcceleration:2,viewMode:0,combined,initialPosition:entry})
   const targetLook=useRef({yaw:entry.yaw,pitch:0}),lookVelocity=useRef({yaw:0,pitch:0}),flickVelocity=useRef({yaw:0,pitch:0})
   const world=useRef<Awaited<ReturnType<typeof createWoodland>>|null>(null),audio=useRef<ReturnType<typeof forestAudio>|null>(null)
   const auditionTimer=useRef<number|null>(null)
