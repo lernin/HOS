@@ -7,9 +7,14 @@ import type { LightPreset } from './estate/environment'
 import { estateEditorMaterials, estateEditorPreview, type EditableRoomId, type EditableSurface } from './estate/editor'
 import { loadEstateMaterialCatalog } from './estate/catalog'
 import './estate/estate.css'
-type Prefs={speed:number;sensitivity:number;turnSpeed:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number}
-const defaults:Prefs={speed:2.4,sensitivity:1,turnSpeed:28,quality:1,lighting:'golden',mode:'explore',volume:.35}
-function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:keyof Prefs,lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:num('speed',1,4) as number,sensitivity:num('sensitivity',.3,2) as number,turnSpeed:num('turnSpeed',15,60) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number}}catch{return defaults}}
+import './estate/performance.css'
+import { EstateRemoteQR, useEstateTvRemote } from './estate/remote'
+import { BASE_WALK_SPEED, MAX_WALK_SPEED, clampWalkingSpeed } from './estate/walkingSpeed'
+import { findRemoteDestination } from './estate/remoteNavigation'
+import { readPortraitPreference } from './estate/portraitMode'
+type Prefs={speed:number;sensitivity:number;turnSpeed:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number;resolutionCeiling:number;adaptiveResolution:boolean;shadows:boolean;accentLights:boolean;showFps:boolean;portraitExplore:boolean}
+const defaults:Prefs={speed:BASE_WALK_SPEED,sensitivity:1,turnSpeed:28,quality:1,lighting:'golden',mode:'explore',volume:.35,resolutionCeiling:1,adaptiveResolution:true,shadows:true,accentLights:true,showFps:true,portraitExplore:false}
+function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:'speed'|'sensitivity'|'turnSpeed'|'quality'|'volume'|'resolutionCeiling',lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:clampWalkingSpeed(p.speed),sensitivity:num('sensitivity',.3,2) as number,turnSpeed:num('turnSpeed',15,60) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number,resolutionCeiling:num('resolutionCeiling',.5,1) as number,adaptiveResolution:p.adaptiveResolution!==false,shadows:p.shadows!==false,accentLights:p.accentLights!==false,showFps:p.showFps!==false,portraitExplore:readPortraitPreference(p.portraitExplore)}}catch{return defaults}}
 type RoomSelections=Record<EditableRoomId,Record<EditableSurface,string|null>>
 type TouchPoint={side:'left'|'right';x:number;y:number;startX:number;startY:number;dragged:boolean;hadMulti:boolean}
 const selectionDefaults:RoomSelections={foyer:{floor:null,walls:null},'great-room':{floor:null,walls:null}}
@@ -34,7 +39,7 @@ function readTourViews():EstateTourViews{
 const axis=(n:number)=>Math.abs(n)<.12?0:Math.max(-1,Math.min(1,n))
 export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const canvas=useRef<HTMLCanvasElement>(null),engine=useRef<Awaited<ReturnType<typeof createEstate>>|null>(null),audio=useRef<ReturnType<typeof estateAudio>|null>(null),dialog=useRef<HTMLDialogElement>(null)
-  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:2.4,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180})
+  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:BASE_WALK_SPEED,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180,resolutionCeiling:defaults.resolutionCeiling,adaptiveResolution:defaults.adaptiveResolution,shadows:defaults.shadows,accentLights:defaults.accentLights})
   const pointer=useRef<{id:number;x:number;y:number;startX:number;startY:number;dragged:boolean}|null>(null),keys=useRef(new Set<string>())
   const touchPointers=useRef(new Map<number,TouchPoint>())
   const lastRightTap=useRef<{time:number;x:number;y:number}|null>(null)
@@ -44,6 +49,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const [art,setArt]=useState<EstateArtChoice|null>(null),[artInfo,setArtInfo]=useState(false),[artZoom,setArtZoom]=useState(1),[artClosing,setArtClosing]=useState(false)
   const [editMode,setEditMode]=useState(false),[editTour,setEditTour]=useState(()=>{try{return localStorage.getItem('ocean-estate-edit-tour-v1')==='on'}catch{return false}}),[editTarget,setEditTarget]=useState<string|null>(null),[tourViews,setTourViews]=useState(readTourViews),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
   const [materialCatalog,setMaterialCatalog]=useState(estateEditorMaterials)
+  const [remoteEnabled,setRemoteEnabled]=useState(false)
   const [markers,setMarkers]=useState<Record<EditableSurface,{x:number;y:number;visible:boolean}>>({floor:{x:0,y:0,visible:false},walls:{x:0,y:0,visible:false}})
   const clearTouch=()=>{touchPointers.current.clear();input.current.x=0;input.current.z=0;input.current.looking=false}
   const stop=()=>{input.current.x=0;input.current.z=0;input.current.fast=false;keys.current.clear();pointer.current=null;clearTouch();engine.current?.stop()}
@@ -54,7 +60,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress,tourViews).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
   useEffect(()=>{const e=engine.current;if(!e)return;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface])},[materialCatalog])
   useEffect(()=>()=>audio.current?.dispose(),[])
-  useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,maxTurnSpeed:prefs.turnSpeed*Math.PI/180,quality:prefs.quality,lighting:prefs.lighting});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
+  useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,maxTurnSpeed:prefs.turnSpeed*Math.PI/180,quality:prefs.quality,lighting:prefs.lighting,resolutionCeiling:prefs.resolutionCeiling,adaptiveResolution:prefs.adaptiveResolution,shadows:prefs.shadows,accentLights:prefs.accentLights});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
   useEffect(()=>{const pause=()=>{if(artOpen.current)void exitArt();stop();input.current.paused=true;audio.current?.pause();setPaused(true)};const visibility=()=>{if(document.hidden)pause()}
     const key=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(e.type==='keyup')keys.current.delete(k);if(input.current.paused)return;if(e.target instanceof HTMLElement&&['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return
       if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','escape','shift'].includes(k))e.preventDefault();else return
@@ -153,14 +159,53 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
         lastRightTap.current={time:now,x:e.clientX,y:e.clientY}
       }else handleWorldTap(e.clientX,e.clientY)
     }return}const p=pointer.current;if(!p||p.id!==e.pointerId)return;if(allowTap&&!p.dragged)handleWorldTap(e.clientX,e.clientY);pointer.current=null;input.current.looking=false;input.current.lookedAt=performance.now();input.current.z=0}
-  return <main className="oe-root" aria-label="Ocean Estate" data-player-x={state.position.x.toFixed(3)} data-player-z={state.position.z.toFixed(3)} data-camera-yaw={input.current.yaw.toFixed(3)} data-touch-help={help?'on':'off'}>
+  const remote = useEstateTvRemote(remoteEnabled, packet => {
+    if (packet.kind === 'move') {
+      if (input.current.paused || artOpen.current) { input.current.x = 0; input.current.z = 0; return }
+      if ((packet.x || packet.z) && !input.current.x && !input.current.z) { engine.current?.stop(); setHelp(false) }
+      input.current.x = packet.x; input.current.z = packet.z
+    } else if (packet.kind === 'look') {
+      if (input.current.paused || artOpen.current) return
+      input.current.yaw -= packet.dx * .003 * prefs.sensitivity
+      input.current.pitch = Math.max(-1.05, Math.min(.95, input.current.pitch - packet.dy * .003 * prefs.sensitivity))
+      input.current.lookedAt = performance.now(); setHelp(false)
+    } else if (packet.kind === 'destination') {
+      const target = findRemoteDestination(destinations, packet.name)
+      if (!target || !engine.current) return
+      if (artOpen.current) { setNotice('Close artwork before choosing a destination.'); return }
+      dialog.current?.close()
+      if (!started || paused) begin()
+      else { input.current.paused = false; stop() }
+      if (engine.current.go(target, target.name)) { setHelp(false); setNotice('Heading to ' + target.name) }
+      else setNotice('That route is unavailable from here.')
+    } else if (packet.kind === 'action') {
+      if (packet.action === 'start') { dialog.current?.close(); if (!started || paused) begin() }
+      if (packet.action === 'menu') { if (dialog.current?.open) dialog.current.close(); else openSettings() }
+      if (packet.action === 'select' && !dialog.current?.open && !artOpen.current) handleWorldTap(innerWidth / 2, innerHeight / 2)
+      if (packet.action === 'back') {
+        if (dialog.current?.open) dialog.current.close()
+        else if (artOpen.current) void exitArt()
+        else { stop(); input.current.paused = true; setPaused(true) }
+      }
+    }
+  })
+  return <main className="oe-root" aria-label="Ocean Estate" data-portrait-explore={prefs.portraitExplore?"on":"off"} data-player-x={state.position.x.toFixed(3)} data-player-z={state.position.z.toFixed(3)} data-camera-yaw={input.current.yaw.toFixed(3)} data-touch-help={help?'on':'off'}>
     <canvas ref={canvas} className="oe-canvas" aria-label="Explorable oceanfront estate" onContextMenu={e=>e.preventDefault()}
       onPointerDown={worldPointerDown}
       onPointerMove={worldPointerMove}
       onPointerUp={e=>worldPointerEnd(e)}
       onPointerCancel={e=>worldPointerEnd(e,false)}
       onLostPointerCapture={e=>worldPointerEnd(e,false)}/>
+    {!prefs.portraitExplore&&<section className="oe-portrait-gate" aria-label="Portrait exploration choice">
+      <div><span className="oe-portrait-eyebrow">OCEAN ESTATE · PREVIEW</span>
+        <h2>Explore your way.</h2>
+        <p>Turn sideways for the original wide view, or try walking through the house with your phone upright.</p>
+        <button type="button" onClick={()=>setPrefs(p=>({...p,portraitExplore:true}))}>Explore in portrait</button>
+        <small>You can change this later in Estate Settings.</small>
+      </div>
+    </section>}
     <header className="oe-header"><button className="oe-back" onClick={back} aria-label="Back to The Lab">←</button><div className="oe-wordmark">{!started||paused?'OCEAN ESTATE':''}</div><button className="oe-icon" aria-label="Estate menu" onClick={openSettings}>☷</button></header>
+    {started&&!error&&!art&&prefs.showFps&&<aside className="oe-performance-hud" aria-label="Frame rate and render resolution"><strong>{state.fps} FPS</strong><span>{Math.round((state.renderScale??prefs.resolutionCeiling)*100)}% render</span></aside>}
     {started&&!error&&!art&&<>
       <div className={`oe-location oe-location-fade${showLocation?' visible':''}`}><h1>{state.location}</h1></div>
       {editMode&&<div className="oe-edit-badge"><span>EDIT MODE</span>{activeRoom?<strong>{roomName(activeRoom)} · tap a floor or wall</strong>:<strong>Walk into the foyer or great room</strong>}</div>}
@@ -189,6 +234,21 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     {notice&&<div className="oe-notice" role="status">{notice}</div>}
     {(!started||paused||error)&&<div className="oe-entry"><section><span className="oe-eyebrow">THE HORIZON RESIDENCE</span><h1>{started&&paused?'Stay a while.':<>A home.<br/>An ocean.<br/>All yours to explore.</>}</h1><p>{error||(started&&paused?'Your walk is paused.':'Warm stone, quiet gardens, and a view that never ends.')}</p>{error?<button className="oe-primary" onClick={()=>{setStarted(false);setPaused(false);setAttempt(n=>n+1)}}>Reopen estate ↗</button>:ready?<button className="oe-primary" onClick={begin}>{started?'Continue exploring':'Step inside'} <span>↗</span></button>:<div className="oe-loading" role="status"><i/>{progress}</div>}<div className="oe-entry-note">Left thumb moves. Right thumb looks. Tap the floor to walk.</div></section></div>}
     <dialog ref={dialog} className="oe-settings" onClose={closeSettings}><form method="dialog"><header><span>YOUR STAY</span><button aria-label="Close settings">×</button></header></form><h2>A little more comfortable.</h2>
+      <section className="oe-portrait-setting" aria-label="Screen orientation">
+        <h3>Screen orientation</h3>
+        <label className="oe-portrait-switch"><span>Portrait exploration<small>Walk and look around with your phone upright, or rotate it sideways any time.</small></span>
+          <input type="checkbox" checked={prefs.portraitExplore} onChange={e=>{const enabled=e.target.checked;setPrefs(p=>({...p,portraitExplore:enabled}));if(!enabled)dialog.current?.close()}}/>
+        </label>
+      </section>
+      <section className="oe-remote-panel" aria-label="Phone remote pairing"><h3>Phone remote</h3>
+        {!remoteEnabled ? <><p>Use your phone as a controller while Ocean Estate stays on the TV.</p><button type="button" className="oe-remote-toggle" onClick={()=>setRemoteEnabled(true)}>Connect Phone · Show QR code</button></> : <>
+          <p className={remote.paired?'oe-remote-connected':''} role="status">{remote.status}</p>
+          <EstateRemoteQR value={location.origin + '/estate-remote#' + remote.room}/>
+          <p>Scan with your phone camera. On your phone, drag MOVE to walk and LOOK to turn. Use Menu to return to the estate.</p>
+          <a href={location.origin + '/estate-remote#' + remote.room} target="_blank" rel="noopener noreferrer">Open phone controller link</a>
+          <div className="oe-remote-actions"><button type="button" onClick={remote.rotate}>New pairing code</button><button type="button" onClick={()=>setRemoteEnabled(false)}>Disconnect phone</button></div>
+        </>}
+      </section>
       <section className="oe-menu-section"><h3>Go somewhere</h3><div className="oe-menu-places">{destinations.map((d,i)=><button type="button" className="oe-menu-place" key={d.name} onClick={()=>goFromMenu(d)}><span>{String(i+1).padStart(2,'0')}</span>{d.name}</button>)}</div><button type="button" className="oe-menu-tour" onClick={tourFromMenu}>{editTour?'Start editing tour stops':'Take a quiet tour'} <span>→</span></button><button type="button" className="oe-menu-tour" onClick={openPlan}>Open Estate Plan <span>→</span></button></section>
       <div className="oe-menu-sound"><span><strong>Ocean sound</strong><small>Ambient water and coast</small></span><button type="button" onClick={()=>{const next=!sound;setSound(next);if(!next)audio.current?.pause()}}>{sound?'On':'Off'}</button></div>
       <label>Tour editing<select aria-label="Tour editing" value={editTour?'on':'off'} onChange={e=>toggleEditTour(e.target.value==='on')}><option value="off">Off · enjoy the tour</option><option value="on">On · adjust and save tour stops</option></select></label>
@@ -196,10 +256,24 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       {editTour&&<p className="oe-tour-storage-note">Choose a destination or start the tour. At each stop, move and look around, then tap Save viewpoint. Saved stops are remembered on this device.</p>}
       <label>Design editing<select aria-label="Design editing" value={editMode?'on':'off'} onChange={e=>{const on=e.target.value==='on';setEditMode(on);engine.current?.setEditSelection(null,null);setHelp(false)}}><option value="off">Off · just explore</option><option value="on">On · tap walls or floors</option></select></label>
       <label>Light<select aria-label="Light" value={prefs.lighting} onChange={e=>setPrefs(p=>({...p,lighting:e.target.value as LightPreset}))}><option value="daylight">Daylight</option><option value="golden">Golden hour</option><option value="evening">Evening</option></select></label>
+
       <label>Navigation<select aria-label="Navigation" value={prefs.mode} onChange={e=>setPrefs(p=>({...p,mode:e.target.value as Prefs['mode']}))}><option value="explore">Explore · tap to walk</option><option value="walk">Walk · hold to move</option></select></label>
-      <label>Walking pace<output>{prefs.speed.toFixed(1)}</output><input type="range" min="1" max="4" step=".1" value={prefs.speed} onChange={e=>setPrefs(p=>({...p,speed:+e.target.value}))}/></label>
+      <label>Walking pace<output>{(prefs.speed/BASE_WALK_SPEED).toFixed(1)}× · {prefs.speed.toFixed(1)} m/s</output><input type="range" min="1" max={MAX_WALK_SPEED} step=".1" value={prefs.speed} onChange={e=>setPrefs(p=>({...p,speed:clampWalkingSpeed(+e.target.value)}))}/></label>
       <label>Guided turn speed<output>{Math.round(prefs.turnSpeed)}°/s maximum</output><input type="range" min="15" max="60" step="1" value={prefs.turnSpeed} onChange={e=>setPrefs(p=>({...p,turnSpeed:+e.target.value}))}/></label>
       <label>Look sensitivity<output>{prefs.sensitivity.toFixed(1)}×</output><input type="range" min=".3" max="2" step=".1" value={prefs.sensitivity} onChange={e=>setPrefs(p=>({...p,sensitivity:+e.target.value}))}/></label>
+      <section className="oe-performance-menu" aria-label="Performance tuning">
+        <h3>Performance</h3>
+        <p>Keep the house fullscreen while drawing fewer pixels. Lower percentages usually improve smoothness.</p>
+        <label className="oe-perf-switch"><span>Automatic resolution</span><input type="checkbox" checked={prefs.adaptiveResolution} onChange={e=>setPrefs(p=>({...p,adaptiveResolution:e.target.checked}))}/></label>
+        <label>Render resolution ceiling <output>{Math.round(prefs.resolutionCeiling*100)}%</output>
+          <input type="range" min=".5" max="1" step=".05" value={prefs.resolutionCeiling} onChange={e=>setPrefs(p=>({...p,resolutionCeiling:+e.target.value}))}/>
+        </label>
+        <small>{prefs.adaptiveResolution?'Auto may reduce below this ceiling to keep motion smooth.':'Manual: always use this percentage of the graphics preset.'}</small>
+        <label className="oe-perf-switch"><span>Sun shadows</span><input type="checkbox" checked={prefs.shadows} onChange={e=>setPrefs(p=>({...p,shadows:e.target.checked}))}/></label>
+        <label className="oe-perf-switch"><span>Interior accent lights</span><input type="checkbox" checked={prefs.accentLights} onChange={e=>setPrefs(p=>({...p,accentLights:e.target.checked}))}/></label>
+        <label className="oe-perf-switch"><span>Show FPS overlay</span><input type="checkbox" checked={prefs.showFps} onChange={e=>setPrefs(p=>({...p,showFps:e.target.checked}))}/></label>
+        <p className="oe-perf-readout">Recent rendering: <strong>{state.fps} FPS</strong> · actual resolution {Math.round((state.renderScale??prefs.resolutionCeiling)*100)}% of preset</p>
+      </section>
       <label>Graphics<select aria-label="Graphics" value={prefs.quality} onChange={e=>setPrefs(p=>({...p,quality:+e.target.value}))}><option value={0}>Lighter</option><option value={1}>Balanced</option><option value={2}>Detailed</option></select></label>
       <label>Ocean volume<output>{Math.round(prefs.volume*100)}%</output><input type="range" min="0" max="1" step=".05" value={prefs.volume} onChange={e=>setPrefs(p=>({...p,volume:+e.target.value}))}/></label>
       <button className="oe-reset" onClick={()=>{engine.current?.reset();setEditTarget(null);dialog.current?.close()}}>Return to the entrance</button><form method="dialog"><button className="oe-primary">Back to exploring ↗</button></form>

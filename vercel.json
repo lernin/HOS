@@ -22,6 +22,7 @@
     { "source": "/api/brush-recipe", "destination": "/api/brush?action=recipe" },
     { "source": "/materials-studio", "destination": "/materials-studio/app.html" },
     { "source": "/stax-shape-lab", "destination": "/" },
+    { "source": "/estate-remote", "destination": "/" },
     { "source": "/ocean-estate", "destination": "/" },
     { "source": "/ocean-estate-plan", "destination": "/" },
     { "source": "/waterfall-village-v2", "destination": "/" },
