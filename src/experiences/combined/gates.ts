@@ -11,7 +11,7 @@ function valid(point: GatePoint): boolean {
 // on the north side of the round arrival court. The original Estate scene
 // collision model remains unchanged.
 export function estateCrossing(point: GatePoint, moving: boolean): boolean {
-  return moving && valid(point) && point.z >= ESTATE_GATE.z - .4 &&
+  return moving && valid(point) && point.z >= ESTATE_GATE.z - 1.4 &&
     Math.abs(point.x - ESTATE_GATE.x) <= 8
 }
 
