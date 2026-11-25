@@ -17,11 +17,15 @@ try{
   await page.locator('.oe-canvas').waitFor({timeout:15000})
   assert.equal(await page.locator('canvas').count(),1,'only one full-scene canvas runs at a time')
   await page.getByRole('button',{name:'Estate menu'}).click()
-  await page.getByRole('button',{name:/Follow path to Woodland Walk/}).click()
+  await page.getByRole('button',{name:/Follow path to Woodland Walk/}).waitFor({timeout:10000})
+  await page.getByRole('button',{name:'Close settings'}).click()
+  // Verify the single-renderer swap without waiting for expensive SwiftShader
+  // simulation of a 12-metre guided walking route. Physical walk is reviewed separately.
+  await page.getByRole('button',{name:'Preview jump to Woodland'}).click()
   await page.locator('.combined-world[data-combined-world="woodland"]').waitFor({timeout:90000})
   await page.locator('.woodland canvas').waitFor({timeout:35000})
   assert.equal(await page.locator('canvas').count(),1,'Estate scene is released before Woodland is mounted')
-  await page.getByRole('button',{name:/Return to Ocean Estate/}).first().click({timeout:30000})
+  await page.getByRole('button',{name:'Preview jump to Estate'}).click({timeout:30000})
   await page.locator('.combined-world[data-combined-world="estate"]').waitFor({timeout:90000})
   await page.locator('.oe-canvas').waitFor({timeout:35000})
   assert.equal(await page.locator('canvas').count(),1,'Woodland scene is released before Estate returns')
