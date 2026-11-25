@@ -13,7 +13,7 @@ try {
     isMobile: true, hasTouch: true,
   })
   const page = await context.newPage()
-  await page.goto(base + '/ocean-estate', { waitUntil: 'domcontentloaded' })
+  await page.goto(base + '/tests/ocean-estate-preview.html', { waitUntil: 'domcontentloaded' })
   await page.locator('main.oe-root').waitFor({ timeout: 30000 })
   const gate = page.getByRole('region', { name: 'Portrait exploration choice' })
   await gate.waitFor({ state: 'visible', timeout: 30000 })
