@@ -1,0 +1,19 @@
+.combined-world{position:fixed;inset:0;background:#13251e;color:#f6f2e7;font-family:Arial,Helvetica,sans-serif;overflow:hidden;isolation:isolate}
+.combined-brand{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:28;display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 12px;border:1px solid #fff4;background:#172b23d9;border-radius:8px;box-shadow:0 6px 24px #0005;pointer-events:none;white-space:nowrap;text-shadow:0 1px 5px #000}
+.combined-brand>span{font-size:10px;letter-spacing:.2em;color:#f0d49a;font-weight:bold}
+.combined-brand>small{font-size:9px;letter-spacing:.08em;opacity:.9}
+.combined-crossing{position:fixed;inset:0;z-index:99;background:#0b1f17;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;padding:28px}
+.combined-crossing>span{font-size:12px;letter-spacing:.22em;color:#d2ba8b}
+.combined-crossing>strong{font:normal clamp(22px,4vw,38px) Georgia,serif;color:#f2eadb}
+.combined-crossing>small{font:12px Arial,sans-serif;opacity:.8}
+.combined-gate-action{position:fixed;z-index:19;left:50%;bottom:max(126px,env(safe-area-inset-bottom) + 105px);transform:translateX(-50%);background:#1f4034e8;color:#f6f2dc!important;padding:13px 20px;border:1px solid #e0ddad8f;border-radius:8px;min-height:48px;box-shadow:0 7px 28px #0006;font:600 13px Arial,sans-serif;white-space:nowrap;touch-action:manipulation}
+.combined-woodland-gate{bottom:max(174px,env(safe-area-inset-bottom) + 150px)}
+.combined-estate-path{padding:14px 0;margin:12px 0;border-top:1px solid #ffffff36;border-bottom:1px solid #ffffff36}
+.combined-estate-path h3{margin:2px 0 8px;letter-spacing:.1em;text-transform:uppercase;font-size:12px;color:#d3c59c}
+.combined-estate-path p{line-height:1.5;font-size:12px;color:#e7e1d4}
+.combined-estate-path button{width:100%;min-height:48px;padding:12px;margin-top:8px;border:1px solid #efe0b08a;border-radius:5px;background:#455e4d;color:#fcf3d7!important;font-size:14px}
+@media(max-width:700px){.combined-brand{top:5px;left:50%;padding:4px 8px}.combined-brand>small{font-size:8px}.combined-gate-action{bottom:100px;max-width:90vw;white-space:normal;text-align:center}.combined-woodland-gate{bottom:164px}}
+@media(max-height:500px){.combined-brand{top:4px}.combined-gate-action{bottom:66px}.combined-woodland-gate{bottom:136px}}
+
+.combined-preview-jump{pointer-events:auto!important;touch-action:manipulation;border:1px solid #c9dec880;background:#354c3ce8;color:#f8f1db;border-radius:6px;min-height:30px;padding:5px 10px;margin-top:3px;cursor:pointer;font:11px Arial,sans-serif}
+.combined-preview-jump:focus-visible{outline:2px solid #fae7b5;outline-offset:2px}
