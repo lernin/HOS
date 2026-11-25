@@ -37,6 +37,7 @@ export function CombinedWorld(){
     <div className="combined-brand" aria-label="Combined worlds preview">
       <span>COMBINED</span>
       <small>{world==='estate'?'OCEAN ESTATE + WOODLAND':world==='woodland'?'WOODLAND + OCEAN ESTATE':'CROSSING'}</small>
+      {world&&<button type="button" className="combined-preview-jump" aria-label={world==='estate'?'Preview jump to Woodland':'Preview jump to Estate'} onClick={()=>changeWorld(world==='estate'?'woodland':'estate')}>{world==='estate'?'Preview forest →':'Preview estate →'}</button>}
     </div>
   </main>
 }
