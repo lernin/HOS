@@ -12,9 +12,10 @@ import { EstateRemoteQR, useEstateTvRemote } from './estate/remote'
 import { BASE_WALK_SPEED, MAX_WALK_SPEED, clampWalkingSpeed } from './estate/walkingSpeed'
 import { findRemoteDestination } from './estate/remoteNavigation'
 import { readPortraitPreference } from './estate/portraitMode'
-type Prefs={speed:number;sensitivity:number;turnSpeed:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number;resolutionCeiling:number;adaptiveResolution:boolean;shadows:boolean;accentLights:boolean;showFps:boolean;portraitExplore:boolean}
-const defaults:Prefs={speed:BASE_WALK_SPEED,sensitivity:1,turnSpeed:28,quality:1,lighting:'golden',mode:'explore',volume:.35,resolutionCeiling:1,adaptiveResolution:true,shadows:true,accentLights:true,showFps:true,portraitExplore:false}
-function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:'speed'|'sensitivity'|'turnSpeed'|'quality'|'volume'|'resolutionCeiling',lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:clampWalkingSpeed(p.speed),sensitivity:num('sensitivity',.3,2) as number,turnSpeed:num('turnSpeed',15,60) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number,resolutionCeiling:num('resolutionCeiling',.5,1) as number,adaptiveResolution:p.adaptiveResolution!==false,shadows:p.shadows!==false,accentLights:p.accentLights!==false,showFps:p.showFps!==false,portraitExplore:readPortraitPreference(p.portraitExplore)}}catch{return defaults}}
+import { formatEstateDiagnosticsReport, type EstateDiagnosticSnapshot } from './estate/sceneDiagnostics'
+type Prefs={speed:number;sensitivity:number;turnSpeed:number;quality:number;lighting:LightPreset;mode:'explore'|'walk';volume:number;resolutionCeiling:number;adaptiveResolution:boolean;shadows:boolean;accentLights:boolean;showFps:boolean;portraitExplore:boolean;showSceneDiagnostics:boolean}
+const defaults:Prefs={speed:BASE_WALK_SPEED,sensitivity:1,turnSpeed:28,quality:1,lighting:'golden',mode:'explore',volume:.35,resolutionCeiling:1,adaptiveResolution:true,shadows:true,accentLights:true,showFps:true,portraitExplore:false,showSceneDiagnostics:false}
+function readPrefs():Prefs{try{const p=JSON.parse(localStorage.getItem('ocean-estate-v1')||'{}'),num=(key:'speed'|'sensitivity'|'turnSpeed'|'quality'|'volume'|'resolutionCeiling',lo:number,hi:number)=>typeof p[key]==='number'&&Number.isFinite(p[key])?Math.max(lo,Math.min(hi,p[key])):defaults[key];return {speed:clampWalkingSpeed(p.speed),sensitivity:num('sensitivity',.3,2) as number,turnSpeed:num('turnSpeed',15,60) as number,quality:[0,1,2].includes(p.quality)?p.quality:1,lighting:['daylight','golden','evening'].includes(p.lighting)?p.lighting:'golden',mode:p.mode==='walk'?'walk':'explore',volume:num('volume',0,1) as number,resolutionCeiling:num('resolutionCeiling',.5,1) as number,adaptiveResolution:p.adaptiveResolution!==false,shadows:p.shadows!==false,accentLights:p.accentLights!==false,showFps:p.showFps!==false,portraitExplore:readPortraitPreference(p.portraitExplore),showSceneDiagnostics:p.showSceneDiagnostics===true}}catch{return defaults}}
 type RoomSelections=Record<EditableRoomId,Record<EditableSurface,string|null>>
 type TouchPoint={side:'left'|'right';x:number;y:number;startX:number;startY:number;dragged:boolean;hadMulti:boolean}
 const selectionDefaults:RoomSelections={foyer:{floor:null,walls:null},'great-room':{floor:null,walls:null}}
@@ -39,18 +40,38 @@ function readTourViews():EstateTourViews{
 const axis=(n:number)=>Math.abs(n)<.12?0:Math.max(-1,Math.min(1,n))
 export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   const canvas=useRef<HTMLCanvasElement>(null),engine=useRef<Awaited<ReturnType<typeof createEstate>>|null>(null),audio=useRef<ReturnType<typeof estateAudio>|null>(null),dialog=useRef<HTMLDialogElement>(null)
-  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:BASE_WALK_SPEED,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180,resolutionCeiling:defaults.resolutionCeiling,adaptiveResolution:defaults.adaptiveResolution,shadows:defaults.shadows,accentLights:defaults.accentLights})
+  const input=useRef<EstateInput>({yaw:spawn.yaw,pitch:-.025,x:0,z:0,paused:true,speed:BASE_WALK_SPEED,quality:1,lighting:'golden',lookedAt:0,looking:false,fast:false,maxTurnSpeed:28*Math.PI/180,resolutionCeiling:defaults.resolutionCeiling,adaptiveResolution:defaults.adaptiveResolution,shadows:defaults.shadows,accentLights:defaults.accentLights,showDiagnostics:defaults.showSceneDiagnostics})
   const pointer=useRef<{id:number;x:number;y:number;startX:number;startY:number;dragged:boolean}|null>(null),keys=useRef(new Set<string>())
   const touchPointers=useRef(new Map<number,TouchPoint>())
   const lastRightTap=useRef<{time:number;x:number;y:number}|null>(null)
   const artPointers=useRef(new Map<number,{x:number;y:number}>()),pinchDistance=useRef<number|null>(null),artOpen=useRef(false),artClosingRef=useRef(false)
   const [prefs,setPrefs]=useState(readPrefs),[ready,setReady]=useState(false),[progress,setProgress]=useState('Opening Ocean Estate…'),[error,setError]=useState(''),[attempt,setAttempt]=useState(0),[started,setStarted]=useState(false),[paused,setPaused]=useState(false),[sound,setSound]=useState(false),[notice,setNotice]=useState(''),[help,setHelp]=useState(true),[showLocation,setShowLocation]=useState(true)
   const [state,setState]=useState<EstateState>({location:'Arrival steps',position:spawn,moving:false,destination:'',fps:0,touring:false})
+  const [diagnosticCaptures,setDiagnosticCaptures]=useState<EstateDiagnosticSnapshot[]>([])
   const [art,setArt]=useState<EstateArtChoice|null>(null),[artInfo,setArtInfo]=useState(false),[artZoom,setArtZoom]=useState(1),[artClosing,setArtClosing]=useState(false)
   const [editMode,setEditMode]=useState(false),[editTour,setEditTour]=useState(()=>{try{return localStorage.getItem('ocean-estate-edit-tour-v1')==='on'}catch{return false}}),[editTarget,setEditTarget]=useState<string|null>(null),[tourViews,setTourViews]=useState(readTourViews),[selections,setSelections]=useState<RoomSelections>(readSelections),[picker,setPicker]=useState<{room:EditableRoomId;surface:EditableSurface;original:string|null;current:string|null}|null>(null)
   const [materialCatalog,setMaterialCatalog]=useState(estateEditorMaterials)
   const [remoteEnabled,setRemoteEnabled]=useState(false)
   const [markers,setMarkers]=useState<Record<EditableSurface,{x:number;y:number;visible:boolean}>>({floor:{x:0,y:0,visible:false},walls:{x:0,y:0,visible:false}})
+  function captureSceneSample(){
+    const metrics=state.sceneDiagnostics
+    if(!metrics){setNotice('Walk or look around to collect a render sample.');return}
+    const sample:EstateDiagnosticSnapshot={
+      ...metrics,at:new Date().toISOString(),location:state.location,
+      x:state.position.x,z:state.position.z,fps:state.fps,
+      renderScale:state.renderScale??prefs.resolutionCeiling,
+    }
+    setDiagnosticCaptures(previous=>[...previous.slice(-11),sample])
+    setNotice('Scene sample captured: '+state.location)
+  }
+  function copySceneReport(){
+    const report=formatEstateDiagnosticsReport(diagnosticCaptures)
+    if(!navigator.clipboard?.writeText){setNotice('Copy not supported in this browser.');return}
+    void navigator.clipboard.writeText(report).then(
+      ()=>setNotice('Scene diagnostics copied.'),
+      ()=>setNotice('Copy failed; try a secure browser tab.'),
+    )
+  }
   const clearTouch=()=>{touchPointers.current.clear();input.current.x=0;input.current.z=0;input.current.looking=false}
   const stop=()=>{input.current.x=0;input.current.z=0;input.current.fast=false;keys.current.clear();pointer.current=null;clearTouch();engine.current?.stop()}
   const activeRoom:EditableRoomId|null=state.location==='Grand foyer'?'foyer':state.location==='Great room'?'great-room':null
@@ -60,7 +81,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
   useEffect(()=>{const controller=new AbortController();setReady(false);setError('');void createEstate(canvas.current!,input.current,controller.signal,setState,setProgress,tourViews).then(e=>{if(controller.signal.aborted)e.dispose();else{engine.current=e;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface]);setReady(true)}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'This device could not open the estate.')});return()=>{controller.abort();engine.current?.dispose();engine.current=null}},[attempt])
   useEffect(()=>{const e=engine.current;if(!e)return;e.registerRoomMaterials(materialCatalog);for(const room of ['foyer','great-room'] as EditableRoomId[])for(const surface of ['floor','walls'] as EditableSurface[])e.setRoomMaterial(room,surface,selections[room][surface])},[materialCatalog])
   useEffect(()=>()=>audio.current?.dispose(),[])
-  useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,maxTurnSpeed:prefs.turnSpeed*Math.PI/180,quality:prefs.quality,lighting:prefs.lighting,resolutionCeiling:prefs.resolutionCeiling,adaptiveResolution:prefs.adaptiveResolution,shadows:prefs.shadows,accentLights:prefs.accentLights});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
+  useEffect(()=>{Object.assign(input.current,{speed:prefs.speed,maxTurnSpeed:prefs.turnSpeed*Math.PI/180,quality:prefs.quality,lighting:prefs.lighting,resolutionCeiling:prefs.resolutionCeiling,adaptiveResolution:prefs.adaptiveResolution,shadows:prefs.shadows,accentLights:prefs.accentLights,showDiagnostics:prefs.showSceneDiagnostics});audio.current?.volume(prefs.volume);try{localStorage.setItem('ocean-estate-v1',JSON.stringify(prefs))}catch{/* In-memory preferences still work. */}},[prefs])
   useEffect(()=>{const pause=()=>{if(artOpen.current)void exitArt();stop();input.current.paused=true;audio.current?.pause();setPaused(true)};const visibility=()=>{if(document.hidden)pause()}
     const key=(e:KeyboardEvent)=>{const k=e.key.toLowerCase();if(e.type==='keyup')keys.current.delete(k);if(input.current.paused)return;if(e.target instanceof HTMLElement&&['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return
       if(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','escape','shift'].includes(k))e.preventDefault();else return
@@ -206,6 +227,29 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
     </section>}
     <header className="oe-header"><button className="oe-back" onClick={back} aria-label="Back to The Lab">←</button><div className="oe-wordmark">{!started||paused?'OCEAN ESTATE':''}</div><button className="oe-icon" aria-label="Estate menu" onClick={openSettings}>☷</button></header>
     {started&&!error&&!art&&prefs.showFps&&<aside className="oe-performance-hud" aria-label="Frame rate and render resolution"><strong>{state.fps} FPS</strong><span>{Math.round((state.renderScale??prefs.resolutionCeiling)*100)}% render</span></aside>}
+    {started&&!error&&!art&&prefs.showSceneDiagnostics&&<details className="oe-scene-diagnostics" open>
+      <summary>Scene diagnostics · {state.location}</summary>
+      {state.sceneDiagnostics?<>
+        <div className="oe-diagnostics-stats">
+          <span>Rendered FPS</span><strong>{state.fps}</strong>
+          <span>Draw calls</span><strong>{state.sceneDiagnostics.calls.toLocaleString()}</strong>
+          <span>Drawn triangles</span><strong>{state.sceneDiagnostics.triangles.toLocaleString()}</strong>
+          <span>Frustum mesh batches</span><strong>{state.sceneDiagnostics.frustumCandidates} / {state.sceneDiagnostics.sceneMeshes}</strong>
+          <span>Loaded geometries</span><strong>{state.sceneDiagnostics.geometries}</strong>
+          <span>Loaded textures</span><strong>{state.sceneDiagnostics.textures}</strong>
+          <span>Pixel ratio</span><strong>{state.sceneDiagnostics.pixelRatio.toFixed(2)}</strong>
+        </div>
+        <p>Frustum counts estimate camera visibility, not what walls block. Draw calls and triangles are renderer counts; geometries and textures are loaded, not all drawn.</p>
+        <div className="oe-diagnostics-actions">
+          <button type="button" onClick={captureSceneSample}>Capture</button>
+          <button type="button" disabled={!diagnosticCaptures.length} onClick={copySceneReport}>Copy report ({diagnosticCaptures.length})</button>
+          <button type="button" disabled={!diagnosticCaptures.length} onClick={()=>setDiagnosticCaptures([])}>Clear</button>
+        </div>
+        {diagnosticCaptures.length>0&&<ol className="oe-diagnostics-samples">{diagnosticCaptures.map((entry,i)=>
+          <li key={entry.at+i}>{entry.location}: {entry.calls} calls · {entry.triangles.toLocaleString()} triangles</li>
+        )}</ol>}
+      </>:<p>Walk or look around to collect your first sample.</p>}
+    </details>}
     {started&&!error&&!art&&<>
       <div className={`oe-location oe-location-fade${showLocation?' visible':''}`}><h1>{state.location}</h1></div>
       {editMode&&<div className="oe-edit-badge"><span>EDIT MODE</span>{activeRoom?<strong>{roomName(activeRoom)} · tap a floor or wall</strong>:<strong>Walk into the foyer or great room</strong>}</div>}
@@ -272,6 +316,8 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
         <label className="oe-perf-switch"><span>Sun shadows</span><input type="checkbox" checked={prefs.shadows} onChange={e=>setPrefs(p=>({...p,shadows:e.target.checked}))}/></label>
         <label className="oe-perf-switch"><span>Interior accent lights</span><input type="checkbox" checked={prefs.accentLights} onChange={e=>setPrefs(p=>({...p,accentLights:e.target.checked}))}/></label>
         <label className="oe-perf-switch"><span>Show FPS overlay</span><input type="checkbox" checked={prefs.showFps} onChange={e=>setPrefs(p=>({...p,showFps:e.target.checked}))}/></label>
+        <label className="oe-perf-switch"><span>Scene diagnostics (preview)</span><input type="checkbox" checked={prefs.showSceneDiagnostics} onChange={e=>setPrefs(p=>({...p,showSceneDiagnostics:e.target.checked}))}/></label>
+        <small>Measure pool, spa, garage, and bedroom views. Tap Capture, then Copy report to compare.</small>
         <p className="oe-perf-readout">Recent rendering: <strong>{state.fps} FPS</strong> · actual resolution {Math.round((state.renderScale??prefs.resolutionCeiling)*100)}% of preset</p>
       </section>
       <label>Graphics<select aria-label="Graphics" value={prefs.quality} onChange={e=>setPrefs(p=>({...p,quality:+e.target.value}))}><option value={0}>Lighter</option><option value={1}>Balanced</option><option value={2}>Detailed</option></select></label>

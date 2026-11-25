@@ -11,3 +11,16 @@
 .oe-performance-hud span{font:12px/1.15 Arial,sans-serif;white-space:nowrap;color:#d4cdb8}
 @media(max-width:680px){.oe-performance-hud{top:66px;left:14px;padding:6px 9px;gap:7px}.oe-performance-hud strong{font-size:12px;min-width:40px}.oe-performance-hud span{font-size:10px}}
 @media(max-height:530px) and (min-width:681px){.oe-performance-hud{top:52px}}
+
+/* Reversible lab instrumentation. No scene objects or geometry are changed. */
+.oe-scene-diagnostics{position:absolute;top:84px;right:18px;z-index:7;width:min(290px,calc(100vw - 36px));max-height:min(76dvh,500px);overflow-y:auto;overscroll-behavior:contain;background:#11241fec;border:1px solid #cfddbf70;border-radius:8px;color:#f1f1e9;padding:11px 12px;box-shadow:0 8px 24px #0006;font:12px/1.45 Arial,sans-serif}
+.oe-scene-diagnostics summary{font-weight:600;cursor:pointer;touch-action:manipulation;padding:4px 0;overflow-wrap:anywhere}
+.oe-diagnostics-stats{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 9px;margin:11px 0 9px;align-items:start}
+.oe-diagnostics-stats span{opacity:.85}.oe-diagnostics-stats strong{text-align:right;font-variant-numeric:tabular-nums;color:#e4e4cd}
+.oe-scene-diagnostics p{font-size:11px;opacity:.85;line-height:1.45;margin:9px 0}
+.oe-diagnostics-actions{display:flex;flex-wrap:wrap;gap:6px;margin:11px 0 4px}
+.oe-diagnostics-actions button{flex:1 1 auto;min-height:40px;background:#314a3f;color:#f5f1e7;border:1px solid #d6ddbd55;border-radius:5px;font:12px Arial,sans-serif;padding:8px 9px;touch-action:manipulation}
+.oe-diagnostics-actions button:disabled{opacity:.35}
+.oe-diagnostics-samples{margin:12px 0 0;padding-left:19px;max-height:90px;overflow:auto;font-size:10px;line-height:1.7;color:#d1ddce}
+@media (max-width:680px){.oe-scene-diagnostics{top:112px;right:10px;width:min(236px,calc(100vw - 20px));max-height:55dvh;padding:9px 10px;font-size:11px}.oe-diagnostics-actions button{font-size:11px}}
+@media (max-height:500px){.oe-scene-diagnostics{top:56px;max-height:70dvh}}
