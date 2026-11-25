@@ -77,8 +77,8 @@ export async function createEstate(canvas:HTMLCanvasElement,input:EstateInput,si
     progress('Opening the house…');architecture(kit);furnish(kit);artInstallation=decorateArt(scene,kit)
     await new Promise<void>(resolve=>requestAnimationFrame(()=>resolve()));if(signal.aborted)throw new DOMException('Aborted','AbortError')
     progress('Planting the coast…');landscape(kit);kit.finish();
-    if(input.combined)forestVista=addEstateForestVista(scene)
     progress('Setting the mossy stones…');try{mossRocks=await addMossRockSet(scene,signal)}catch(error){if(signal.aborted)throw error;console.warn('Ocean Estate moss rock set failed to load',error)}
+    if(input.combined)forestVista=addEstateForestVista(scene)
     editor=createEstateEditor(scene,renderer,camera,canvas);water=waters(scene);skyDome=atmosphere(scene);contacts=contactShadows(scene)
     const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment();env=pmrem.fromScene(room,.04);scene.environment=env.texture;scene.environmentIntensity=.42;room.dispose();pmrem.dispose()
     progress('Finding the garden paths…');const navigator=createNavigator()
