@@ -253,7 +253,7 @@ export function OceanEstate({onBack,onPlan}:{onBack:()=>void;onPlan:()=>void}){
       <section className="oe-portrait-setting" aria-label="Screen orientation">
         <h3>Screen orientation</h3>
         <label className="oe-portrait-switch"><span>Portrait exploration<small>Walk and look around with your phone upright, or rotate it sideways any time.</small></span>
-          <input type="checkbox" checked={prefs.portraitExplore} onChange={e=>setPrefs(p=>({...p,portraitExplore:e.target.checked}))}/>
+          <input type="checkbox" checked={prefs.portraitExplore} onChange={e=>{const enabled=e.target.checked;setPrefs(p=>({...p,portraitExplore:enabled}));if(!enabled)dialog.current?.close()}}/>
         </label>
       </section>
       <label>Navigation<select aria-label="Navigation" value={prefs.mode} onChange={e=>setPrefs(p=>({...p,mode:e.target.value as Prefs['mode']}))}><option value="explore">Explore · tap to walk</option><option value="walk">Walk · hold to move</option></select></label>
