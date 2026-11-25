@@ -11,7 +11,7 @@ on:
       - tests/ocean-estate*
       - .github/workflows/ocean-estate-review.yml
   pull_request:
-    branches: [main, 'feature/ocean-estate-tv-phone-remote-20261124', 'feature/estate-performance-preview-20261124']
+    branches: [main, 'feature/ocean-estate-tv-phone-remote-20261124', 'feature/estate-performance-preview-20261124', 'feature/estate-fast-walk-phone-menu-20261124']
     paths:
       - src/experiences/estate/**
       - src/experiences/OceanEstate.tsx
@@ -36,6 +36,7 @@ jobs:
       - run: node --test tests/ocean-estate.test.mjs tests/ocean-estate-geometry.test.mjs tests/waterfall-village.test.mjs
       - run: node --experimental-strip-types --test tests/ocean-estate-performance.test.mjs
       - run: node --experimental-strip-types --test tests/ocean-estate-fast-walk-remote-menu.test.mjs
+      - run: node --experimental-strip-types --test tests/ocean-estate-portrait-mode.test.mjs
       # Use the version in package-lock.json; the old 1.55 pin cannot run on Ubuntu 26.04.
       - run: npx playwright install --with-deps chromium
       - name: Render estate and verify landscape phone interactions
@@ -46,6 +47,7 @@ jobs:
             sleep 1
           done
           node tests/ocean-estate-remote.mjs
+          node tests/ocean-estate-portrait-browser.mjs
           node tests/ocean-estate-visual.mjs
           node tests/ocean-estate-plan-parity.mjs
           ESTATE_PLAN_TEST_URL=http://127.0.0.1:4173 node tests/ocean-estate-plan-viewport.mjs
